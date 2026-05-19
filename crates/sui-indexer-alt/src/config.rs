@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::num::NonZeroUsize;
+
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
@@ -52,7 +54,7 @@ pub struct IndexerConfig {
 pub struct IngestionLayer {
     pub ingest_concurrency: Option<ConcurrencyConfig>,
     pub retry_interval_ms: Option<u64>,
-    pub streaming_backoff_initial_batch_size: Option<usize>,
+    pub streaming_backoff_initial_batch_size: Option<NonZeroUsize>,
     pub streaming_backoff_max_batch_size: Option<usize>,
     pub streaming_connection_timeout_ms: Option<u64>,
     pub streaming_statement_timeout_ms: Option<u64>,
@@ -129,6 +131,7 @@ pub struct PipelineLayer {
     // All concurrent pipelines
     pub cp_bloom_blocks: Option<ConcurrentLayer>,
     pub cp_blooms: Option<ConcurrentLayer>,
+    pub cp_digests: Option<ConcurrentLayer>,
     pub cp_sequence_numbers: Option<ConcurrentLayer>,
     pub ev_emit_mod: Option<ConcurrentLayer>,
     pub ev_struct_inst: Option<ConcurrentLayer>,
@@ -314,6 +317,7 @@ impl PipelineLayer {
         PipelineLayer {
             cp_blooms: Some(Default::default()),
             cp_bloom_blocks: Some(Default::default()),
+            cp_digests: Some(Default::default()),
             sum_displays: Some(Default::default()),
             cp_sequence_numbers: Some(Default::default()),
             ev_emit_mod: Some(Default::default()),
@@ -445,6 +449,7 @@ impl Merge for PipelineLayer {
         Ok(PipelineLayer {
             cp_blooms: self.cp_blooms.merge(other.cp_blooms)?,
             cp_bloom_blocks: self.cp_bloom_blocks.merge(other.cp_bloom_blocks)?,
+            cp_digests: self.cp_digests.merge(other.cp_digests)?,
             sum_displays: self.sum_displays.merge(other.sum_displays)?,
             cp_sequence_numbers: self.cp_sequence_numbers.merge(other.cp_sequence_numbers)?,
             ev_emit_mod: self.ev_emit_mod.merge(other.ev_emit_mod)?,

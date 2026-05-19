@@ -1,7 +1,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ast::Exp, refinement::Refine};
+use crate::{
+    ast::Exp,
+    refinement::{
+        Refine,
+        utils::{peek, peek_mut},
+    },
+};
 
 pub fn refine(exp: &mut Exp) -> bool {
     let r1 = LoopRemoveTrailingContinue.refine(exp);
@@ -16,22 +22,23 @@ struct LoopRemoveTrailingContinue;
 
 impl Refine for LoopRemoveTrailingContinue {
     fn refine_custom(&mut self, exp: &mut Exp) -> bool {
-        let Exp::Loop(body) = exp else {
+        let Exp::Loop(loop_label, body) = exp else {
             return false;
         };
+        let loop_label = *loop_label;
 
-        match &mut **body {
+        match peek_mut(body) {
             Exp::Seq(seq) if !seq.is_empty() => {
-                if matches!(seq.last(), Some(Exp::Continue)) {
+                // Only drop a trailing continue if it targets this loop (label matches).
+                if matches!(seq.last().map(peek), Some(Exp::Continue(l)) if *l == loop_label) {
                     seq.pop();
                     true
                 } else {
                     false
                 }
             }
-            body @ Exp::Continue => {
-                // A loop that immediately breaks is a no-op
-                *body = Exp::Seq(vec![]);
+            Exp::Continue(l) if *l == loop_label => {
+                *peek_mut(body) = Exp::Seq(vec![]);
                 true
             }
             _ => false,
@@ -46,22 +53,22 @@ struct WhileRemoveTrailingContinue;
 
 impl Refine for WhileRemoveTrailingContinue {
     fn refine_custom(&mut self, exp: &mut Exp) -> bool {
-        let Exp::While(_, body) = exp else {
+        let Exp::While(loop_label, _, body) = exp else {
             return false;
         };
+        let loop_label = *loop_label;
 
-        match &mut **body {
+        match peek_mut(body) {
             Exp::Seq(seq) if !seq.is_empty() => {
-                if matches!(seq.last(), Some(Exp::Continue)) {
+                if matches!(seq.last().map(peek), Some(Exp::Continue(l)) if *l == loop_label) {
                     seq.pop();
                     true
                 } else {
                     false
                 }
             }
-            body @ Exp::Continue => {
-                // A loop that immediately breaks is a no-op
-                *body = Exp::Seq(vec![]);
+            Exp::Continue(l) if *l == loop_label => {
+                *peek_mut(body) = Exp::Seq(vec![]);
                 true
             }
             _ => false,

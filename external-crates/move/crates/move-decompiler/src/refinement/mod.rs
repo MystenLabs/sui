@@ -3,20 +3,39 @@
 
 use crate::ast::Exp;
 
+mod collect_uses;
 mod flatten_seq;
+mod fuse_let;
+mod hoist_arm_assignments;
 mod introduce_while;
 mod loop_to_seq;
+mod reconstruct_match;
+mod recover_asserts;
 mod remove_trailing_continue;
 mod remove_trailing_return;
+mod simplify_if;
+mod strip_loop_labels;
+mod utils;
+
+pub use collect_uses::{collect_local_names, collect_uses};
 
 pub type Refinement = fn(&mut Exp) -> bool;
 
 const REFINEMENTS: &[Refinement] = &[
     flatten_seq::refine,
+    fuse_let::refine,
+    hoist_arm_assignments::refine,
     introduce_while::refine,
     loop_to_seq::refine,
+    reconstruct_match::refine,
+    // Strip spurious trailing `continue`/`return` markers first — they're structurer
+    // artifacts that would otherwise make `simplify_if`'s `always_terminates` predicate
+    // fire on arms whose true Move-level shape doesn't actually terminate.
     remove_trailing_continue::refine,
     remove_trailing_return::refine,
+    simplify_if::refine,
+    recover_asserts::refine,
+    strip_loop_labels::refine,
 ];
 
 // -------------------------------------------------------------------------------------------------
@@ -54,9 +73,9 @@ trait Refine {
             return true;
         }
         match exp {
-            E::Loop(e) => self.refine(e),
+            E::Loop(_, e) => self.refine(e),
             E::Seq(es) => self.refine_seq(es),
-            E::While(e0, e1) => {
+            E::While(_, e0, e1) => {
                 or!(self.refine(e0), self.refine(e1))
             }
             E::IfElse(e0, e1, e2) => {
@@ -73,22 +92,31 @@ trait Refine {
                 }
                 changed
             }
+            E::Match(e, _, es) => {
+                let mut changed = self.refine(e);
+                for (_, _, e) in es.iter_mut() {
+                    changed |= self.refine(e);
+                }
+                changed
+            }
             E::Return(es) => self.refine_seq(es),
             E::Assign(_, e) => self.refine(e),
             E::LetBind(_, e) => self.refine(e),
+            E::Declare(_) => false,
             E::Call(_, es) => self.refine_seq(es),
             E::Abort(e) => self.refine(e),
             E::Primitive { op: _, args } => self.refine_seq(args),
             E::Data { op: _, args } => self.refine_seq(args),
             E::Borrow(_, e) => self.refine(e),
-            E::Break => false,
-            E::Continue => false,
+            E::Break(_) => false,
+            E::Continue(_) => false,
             E::Value(_) => false,
             E::Variable(_) => false,
             E::Constant(_) => false,
             E::VecUnpack(_, e) => self.refine(e),
             E::Unpack(_, _, e) => self.refine(e),
             E::UnpackVariant(_, _, _, e) => self.refine(e),
+            E::Block(_, body) => self.refine(body),
             E::Unstructured(nodes) => {
                 use crate::ast::UnstructuredNode;
                 let mut changed = false;

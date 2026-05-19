@@ -37,6 +37,21 @@ const MAX_PROTOCOL_VERSION: u64 = 124;
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
 
+const MAINNET_USDC: &str =
+    "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC";
+const MAINNET_USDSUI: &str =
+    "0x44f838219cf67b058f3b37907b655f226153c18e33dfcd0da559a844fea9b1c1::usdsui::USDSUI";
+const MAINNET_SUI_USDE: &str =
+    "0x41d587e5336f1c86cad50d38a7136db99333bb9bda91cea4ba69115defeb1402::sui_usde::SUI_USDE";
+const MAINNET_USDY: &str =
+    "0x960b531667636f39e85867775f52f6b1f220a058c4de786905bdf761e06a56bb::usdy::USDY";
+const MAINNET_FDUSD: &str =
+    "0xf16e6b723f242ec745dfd7634ad072c42d5c1d9ac9d62a39c381303eaa57693a::fdusd::FDUSD";
+const MAINNET_AUSD: &str =
+    "0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2::ausd::AUSD";
+const MAINNET_USDB: &str =
+    "0xe14726c336e81b32328e92afc37345d159f5b550b09fa92bd43640cfdd0a0cfd::usdb::USDB";
+
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
@@ -327,6 +342,14 @@ const TESTNET_USDC: &str =
 // Version 124: Add timestamp_based_epoch_close feature flag and enable in tests.
 //              Fix native call double-pop in gas meter stack height tracking (gas_model v14).
 //              Limit public inputs in groth16::prepare_verifying_key.
+//              Enable address balances, free tier (gasless), and coin reservations on mainnet.
+//              Enables enable_accumulators, enable_address_balance_gas_payments,
+//              enable_authenticated_event_streams, enable_coin_reservation_obj_refs,
+//              enable_object_funds_withdraw, convert_withdrawal_compatibility_ptb_arguments,
+//              split_checkpoints_in_consensus_handler, include_checkpoint_artifacts_digest_in_summary,
+//              and enable_gasless on mainnet to bring it in line with testnet.
+//              Configure mainnet gasless allowlist with stablecoin types and $0.01 minimum
+//              transfer per stable.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1083,6 +1106,13 @@ struct FeatureFlags {
     // MAX_PUBLIC_INPUTS public inputs.
     #[serde(skip_serializing_if = "is_false")]
     limit_groth16_pvk_inputs: bool,
+
+    // If true, the funds-accumulator address-balance change invariant
+    // (`TemporaryStore::check_address_balance_changes`) is enforced as a consensus check —
+    // violations abort the tx via the conservation-recovery flow. When false, the check still
+    // runs but a violation panics so unexpected violations surface during rollout.
+    #[serde(skip_serializing_if = "is_false")]
+    enforce_address_balance_change_invariant: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1960,7 +1990,6 @@ pub struct ProtocolConfig {
     gasless_max_computation_units: Option<u64>,
 
     /// Allowed token types for gasless transactions, with minimum transfer sizes per token.
-    #[skip_accessor]
     gasless_allowed_token_types: Option<Vec<(String, u64)>>,
 
     /// Maximum number of unused Pure inputs allowed in a gasless transaction.
@@ -2813,6 +2842,10 @@ impl ProtocolConfig {
 
     pub fn limit_groth16_pvk_inputs(&self) -> bool {
         self.feature_flags.limit_groth16_pvk_inputs
+    }
+
+    pub fn enforce_address_balance_change_invariant(&self) -> bool {
+        self.feature_flags.enforce_address_balance_change_invariant
     }
 }
 
@@ -4897,6 +4930,39 @@ impl ProtocolConfig {
                     }
                     cfg.gas_model_version = Some(14);
                     cfg.feature_flags.limit_groth16_pvk_inputs = true;
+
+                    // Bring mainnet in line with testnet: enable address balances, the
+                    // gasless "free tier", coin reservations, and the rest of the
+                    // accumulator/withdraw stack. These are all already enabled on
+                    // testnet and devnet, so setting them unconditionally is a no-op
+                    // there.
+                    cfg.feature_flags.enable_accumulators = true;
+                    cfg.feature_flags.enable_address_balance_gas_payments = true;
+                    cfg.feature_flags.enable_authenticated_event_streams = true;
+                    cfg.feature_flags.enable_coin_reservation_obj_refs = true;
+                    cfg.feature_flags.enable_object_funds_withdraw = true;
+                    cfg.feature_flags
+                        .convert_withdrawal_compatibility_ptb_arguments = true;
+                    cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
+                    cfg.feature_flags
+                        .include_checkpoint_artifacts_digest_in_summary = true;
+                    cfg.feature_flags.enable_gasless = true;
+
+                    // Set the mainnet allow-list. Testnet already has its USDC entry
+                    // from v119, so only set this on mainnet to avoid clobbering the
+                    // testnet value. $0.01 minimum transfer per stable; all listed
+                    // tokens have 6 decimals.
+                    if chain == Chain::Mainnet {
+                        cfg.gasless_allowed_token_types = Some(vec![
+                            (MAINNET_USDC.to_string(), 10_000),
+                            (MAINNET_USDSUI.to_string(), 10_000),
+                            (MAINNET_SUI_USDE.to_string(), 10_000),
+                            (MAINNET_USDY.to_string(), 10_000),
+                            (MAINNET_FDUSD.to_string(), 10_000),
+                            (MAINNET_AUSD.to_string(), 10_000),
+                            (MAINNET_USDB.to_string(), 10_000),
+                        ]);
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -5303,10 +5369,6 @@ impl ProtocolConfig {
         self.feature_flags.enable_gasless = false;
         self.gasless_max_computation_units = None;
         self.gasless_allowed_token_types = None;
-    }
-
-    pub fn set_gasless_allowed_token_types_for_testing(&mut self, types: Vec<(String, u64)>) {
-        self.gasless_allowed_token_types = Some(types);
     }
 
     pub fn enable_multi_epoch_transaction_expiration_for_testing(&mut self) {
@@ -5756,5 +5818,129 @@ mod test {
         let testnet = LazyLock::force(&TESTNET_LINKAGE_AMENDMENTS);
         assert!(!mainnet.is_empty(), "mainnet amendments must not be empty");
         assert!(!testnet.is_empty(), "testnet amendments must not be empty");
+    }
+
+    #[test]
+    fn render_scalar_fields_use_precision_safe_encoding() {
+        use mysten_common::rpc_format::Unmetered;
+
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let rendered = config
+            .render::<serde_json::Value, _>(&mut Unmetered)
+            .expect("render should succeed");
+
+        let max_args = rendered
+            .get("max_arguments")
+            .and_then(|v| v.as_ref())
+            .expect("max_arguments set at max version");
+        assert!(
+            max_args.is_number(),
+            "u32 should render as number, got {max_args:?}",
+        );
+
+        let max_tx_size = rendered
+            .get("max_tx_size_bytes")
+            .and_then(|v| v.as_ref())
+            .expect("max_tx_size_bytes set at max version");
+        assert!(
+            max_tx_size.is_string(),
+            "u64 should render as string, got {max_tx_size:?}",
+        );
+    }
+
+    #[test]
+    fn render_includes_non_scalar_gasless_allowlist_as_json() {
+        use mysten_common::rpc_format::Unmetered;
+        use serde_json::json;
+
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.set_gasless_allowed_token_types_for_testing(vec![
+            ("0xa::usdc::USDC".to_string(), 10_000),
+            ("0xb::usdt::USDT".to_string(), 0),
+        ]);
+
+        let rendered = config
+            .render::<serde_json::Value, _>(&mut Unmetered)
+            .expect("render should succeed under Unmetered budget");
+        let allowlist = rendered
+            .get("gasless_allowed_token_types")
+            .expect("entry should be present")
+            .as_ref()
+            .expect("entry should be Some after the testing setter");
+
+        // u64 values render as strings to preserve JS precision; the tuple becomes a 2-element
+        // JSON array.
+        assert_eq!(
+            allowlist,
+            &json!([["0xa::usdc::USDC", "10000"], ["0xb::usdt::USDT", "0"],]),
+        );
+    }
+
+    #[test]
+    fn render_targets_prost_value_for_grpc() {
+        use mysten_common::rpc_format::Unmetered;
+        use prost_types::value::Kind;
+
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.set_gasless_allowed_token_types_for_testing(vec![(
+            "0xa::usdc::USDC".to_string(),
+            10_000,
+        )]);
+
+        let rendered = config
+            .render::<prost_types::Value, _>(&mut Unmetered)
+            .expect("render to prost Value should succeed");
+        let allowlist = rendered
+            .get("gasless_allowed_token_types")
+            .expect("entry should be present")
+            .as_ref()
+            .expect("entry should be Some");
+
+        // Outer ListValue with one inner ListValue carrying [coin_type_string, amount_string].
+        let Some(Kind::ListValue(outer)) = &allowlist.kind else {
+            panic!(
+                "expected ListValue at the top level, got {:?}",
+                allowlist.kind
+            );
+        };
+        assert_eq!(outer.values.len(), 1, "one allowlisted entry");
+        let Some(Kind::ListValue(entry)) = &outer.values[0].kind else {
+            panic!("expected each entry to be a ListValue");
+        };
+        assert_eq!(entry.values.len(), 2, "entry has (coin_type, amount)");
+
+        let Some(Kind::StringValue(coin_type)) = &entry.values[0].kind else {
+            panic!("expected coin_type as StringValue");
+        };
+        assert_eq!(coin_type, "0xa::usdc::USDC");
+
+        // u64 amount renders as a string, not a NumberValue — this is the precision-safe path.
+        let Some(Kind::StringValue(amount)) = &entry.values[1].kind else {
+            panic!(
+                "expected minimum_transfer_amount as StringValue (precision-safe u64); got {:?}",
+                entry.values[1].kind,
+            );
+        };
+        assert_eq!(amount, "10000");
+    }
+
+    #[test]
+    fn render_emits_none_for_unset_protocol_versions() {
+        use mysten_common::rpc_format::Unmetered;
+
+        let config = ProtocolConfig::get_for_version(1.into(), Chain::Unknown);
+        let rendered = config
+            .render::<serde_json::Value, _>(&mut Unmetered)
+            .expect("render should succeed");
+        // The gasless allowlist key is present in every version's keyset, but with `None` value
+        // for versions that predate the feature. That matches `attr_map`'s existing semantics
+        // for scalar fields.
+        let entry = rendered
+            .get("gasless_allowed_token_types")
+            .expect("key should be present for every protocol version");
+        assert!(
+            entry.is_none(),
+            "value should be None for pre-feature protocol version",
+        );
     }
 }

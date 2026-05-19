@@ -150,7 +150,7 @@ export default {
       items: [
         'develop/transaction-payment/gas-in-sui',
         'develop/transaction-payment/local-fee-markets',
-        'develop/transaction-payment/gasless-transactions',
+        'develop/transaction-payment/gasless-stablecoin-transfers',
         'develop/transaction-payment/sponsor-txn',
         'develop/transaction-payment/gas-smashing',
       ],
@@ -253,6 +253,41 @@ export default {
         'getting-started/onboarding/app-frontends',
         'getting-started/onboarding/next-steps',
       ],
+    },
+    {
+      type: 'category',
+      label: 'Example Apps',
+      link: { type: 'doc', id: 'getting-started/examples/index'},
+      items: [
+        {
+          type: 'category',
+          label: 'Move Patterns',
+          items: [
+            'getting-started/examples/capability-pattern',
+            'getting-started/examples/derived-objects',
+            'getting-started/examples/scenario-testing',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Frontend Apps',
+          items: [
+            'getting-started/examples/dapp-kit-frontend',
+            'getting-started/examples/nft-app',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Digital Assets',
+          items: [
+            'getting-started/examples/lootbox-ctf',
+            'getting-started/examples/merchant-ctf',
+            'getting-started/examples/staking-ctf',
+          ],
+        },
+        'getting-started/examples/event-indexer',
+        'getting-started/examples/plinko',
+      ]
     },
     'getting-started/tooling',
     'getting-started/dev-cheat-sheet',
@@ -471,14 +506,70 @@ export default {
       ],
     },
     'onchain-finance/payment-kit',
+	'onchain-finance/payment-intents',
   ],
 
-  suiStackSidebar: [
+suiStackSidebar: [
     'sui-stack',
     'sui-stack/on-chain-primitives/access-time',
     'sui-stack/on-chain-primitives/randomness-onchain',
     'sui-stack/sagat',
-    'sui-stack/indexer-walrus',
+    {
+      type: 'category',
+      label: 'Walrus',
+      link: { type: 'doc', id: 'sui-stack/walrus/index' },
+      items: [
+        {
+          type: 'link',
+          label: 'Walrus Docs',
+          href: 'https://docs.wal.app',
+        },
+        'sui-stack/walrus/sui-stack-walrus',
+        'sui-stack/walrus/indexer-walrus',
+        'sui-stack/walrus/only-fins',
+        'sui-stack/walrus/sui-stack-walrus-sites',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Seal',
+      link: { type: 'doc', id: 'sui-stack/seal/index' },
+      items: [
+        {
+          type: 'link',
+          label: 'Seal Docs',
+          href: 'https://seal-docs.wal.app',
+        },
+        'sui-stack/seal/sui-stack-seal',
+        'sui-stack/seal/sui-chat-app',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'SuiNS',
+      link: { type: 'doc', id: 'sui-stack/suins/index' },
+      items: [
+        {
+          type: 'link',
+          label: 'SuiNS Docs',
+          href: 'https://docs.suins.io',
+        },
+        'sui-stack/suins/sui-stack-suins',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Enoki',
+      items: [
+        {
+          type: 'link',
+          label: 'Enoki Docs',
+          href: 'https://docs.enoki.mystenlabs.com/',
+        },
+        'sui-stack/enoki/solitaire',
+        'sui-stack/enoki/ticketing-poc',
+      ],
+    },
     {
       type: 'category',
       label: 'Nautilus',
@@ -488,8 +579,30 @@ export default {
         'sui-stack/nautilus/nautilus-design',
         'sui-stack/nautilus/using-nautilus',
         'sui-stack/nautilus/customize-nautilus',
+        'sui-stack/nautilus/nautilus-weather-oracle',
         'sui-stack/nautilus/seal',
         'sui-stack/nautilus/community-dev-tools',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'DeepBook',
+	  items: [
+		{
+          type: 'link',
+          label: 'DeepBookV3',
+          href: 'https://docs.sui.io/onchain-finance/deepbookv3/deepbook',
+        },
+		{
+          type: 'link',
+          label: 'DeepBook Margin',
+          href: 'https://docs.sui.io/onchain-finance/deepbook-margin/design',
+        },
+		{
+          type: 'link',
+          label: 'DeepBook Predict',
+          href: 'https://docs.sui.io/onchain-finance/deepbook-predict/design',
+        },
       ],
     },
     {
@@ -499,7 +612,7 @@ export default {
       items: [
         'sui-stack/zklogin-integration/zklogin',
         'sui-stack/zklogin-integration/developer-account',
-        'sui-stack/zklogin-integration/zklogin-example',
+        'sui-stack/zklogin-integration/zklogin-demo',
       ],
     },
     {

@@ -21,9 +21,9 @@ use crate::{
         CachedPackageInfo, DefaultDependency, ManifestDependencyInfo, ParsedManifest, Publication,
     },
 };
-use crate::{dependency::FetchedDependency, schema::ReplacementDependency};
+use crate::{dependency::fetch, schema::ReplacementDependency};
 use crate::{
-    dependency::{CombinedDependency, PinnedDependencyInfo},
+    dependency::{CombinedDependency, PinnedDependency},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::manifest::Digest,
@@ -77,7 +77,7 @@ impl<F: MoveFlavor> Package<F> {
     ) -> PackageResult<Self> {
         debug!("loading package {:?}", dep);
         let flavor = &*config.flavor;
-        let path = FetchedDependency::fetch(&dep, config.allow_dirty).await?;
+        let path = fetch::fetch(&dep, config.allow_dirty, &config.chain_id).await?;
 
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
@@ -142,7 +142,7 @@ impl<F: MoveFlavor> Package<F> {
 
         debug!(
             "successfully loaded {:?}",
-            result.dep_for_self.unfetched_path()
+            result.dep_for_self.unfetched_path(&config.chain_id)
         );
         Ok(result)
     }
@@ -337,11 +337,11 @@ pub async fn cache_package<F: MoveFlavor>(
     // pin
     let root = Pinned::Root(dummy_path.clone());
     let flavor = Arc::new(flavor);
-    let deps = PinnedDependencyInfo::pin(&root, vec![combined], env.id(), &*flavor).await?;
+    let deps = PinnedDependency::pin(&root, vec![combined], env, &*flavor).await?;
 
     // load
     let package = Package::<F>::load(
-        deps[0].as_ref().clone(),
+        deps[0].pinned().clone(),
         env,
         &mtx,
         &PackageConfig::persistent(dummy_path.path(), env.clone(), vec![], flavor),
@@ -351,6 +351,7 @@ pub async fn cache_package<F: MoveFlavor>(
     // summarize
     Ok(CachedPackageInfo {
         name: package.name().clone(),
+        path: package.path().path().to_path_buf(),
         addresses: package.publication().map(|p| p.addresses.clone()),
         chain_id: env.id.clone(),
     })
@@ -597,14 +598,17 @@ mod tests {
             .add_published("a", OriginalID::from(1), PublishedID::from(2))
             .build();
 
-        let path = scenario.path_for("a");
+        let pkg_path = scenario.path_for("a");
         let env = default_environment();
-        let dep = &ManifestDependencyInfo::Local(LocalDepInfo { local: path });
+        let dep = &ManifestDependencyInfo::Local(LocalDepInfo {
+            local: pkg_path.clone(),
+        });
 
         let info = cache_package::<Vanilla>(&env, dep, Vanilla).await.unwrap();
 
         let CachedPackageInfo {
             name,
+            path,
             addresses,
             chain_id,
         } = info;
@@ -615,6 +619,7 @@ mod tests {
         } = addresses.unwrap();
 
         assert_eq!(name.as_str(), "a");
+        assert_eq!(path, pkg_path);
         assert_eq!(published_at, PublishedID::from(2));
         assert_eq!(original_id, OriginalID::from(1));
         assert_eq!(chain_id, DEFAULT_ENV_ID);

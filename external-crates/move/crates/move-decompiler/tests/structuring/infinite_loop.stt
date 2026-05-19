@@ -1,0 +1,8 @@
+// A function whose body is a single infinite loop with no exit. Node 0 reaches no sink in
+// the original CFG, so `add_infinite_loop_post_dominators` adds an impossible edge
+// `return_ -> 0` so post-domination is defined and structuring can wrap it as a `Loop`.
+//
+//   ->0
+//    \_|
+
+code,0,0

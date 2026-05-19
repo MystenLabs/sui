@@ -9,7 +9,15 @@
 use std::num::NonZeroUsize;
 use std::time::Duration;
 
+use fastcrypto::encoding::Base64 as FastCryptoBase64;
+use fastcrypto::encoding::Encoding as _;
 use rand::rngs::OsRng;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::body_partial_json;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 use simulacrum::Simulacrum;
 use simulacrum::store::SimulatorStore;
@@ -30,7 +38,13 @@ use sui_types::object::ObjectInner;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::storage::RpcIndexes;
-use sui_types::transaction::{GasData, Transaction, TransactionData, TransactionKind};
+use sui_types::transaction::GasData;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+use sui_types::transaction::TransactionKind;
+
+use crate::seed::SeedEntry;
+use crate::seed::SeedManifest;
 
 use super::*;
 
@@ -101,6 +115,42 @@ fn make_gas_object(id: ObjectID, version: u64, owner: Owner) -> Object {
         storage_rebate: 0,
     }
     .into()
+}
+
+fn object_at_checkpoint_response(object: &Object) -> serde_json::Value {
+    serde_json::json!({
+        "data": {
+            "checkpoint": {
+                "query": {
+                    "object": {
+                        "address": object.id().to_string(),
+                        "version": object.version().value(),
+                        "objectBcs": FastCryptoBase64::from_bytes(
+                            &bcs::to_bytes(object).expect("object should serialize"),
+                        )
+                        .encoded(),
+                    }
+                }
+            }
+        }
+    })
+}
+
+async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object) {
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(serde_json::json!({
+            "variables": {
+                "sequenceNumber": checkpoint,
+                "address": object.id().to_string(),
+                "version": object.version().value(),
+            }
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(object_at_checkpoint_response(object)),
+        )
+        .mount(server)
+        .await;
 }
 
 #[test]
@@ -251,6 +301,42 @@ fn test_owned_objects_tracks_address_owner_transfers() {
 }
 
 #[test]
+fn test_owned_objects_tracks_consensus_address_owner_writes() {
+    let (_temp, mut store) = test_data_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let object = make_gas_object(
+        object_id,
+        1,
+        Owner::ConsensusAddressOwner {
+            start_version: SequenceNumber::from_u64(1),
+            owner,
+        },
+    );
+
+    store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
+
+    let infos: Vec<_> = RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
+        .expect("owned-object iterator should build")
+        .map(|result| result.expect("owned-object entry should decode"))
+        .collect();
+    assert_eq!(infos.len(), 1);
+    assert_eq!(infos[0].owner, owner);
+    assert_eq!(infos[0].object_id, object_id);
+    assert_eq!(infos[0].version, SequenceNumber::from_u64(1));
+    assert_eq!(infos[0].balance, Some(1_000_000));
+
+    let immutable = make_gas_object(object_id, 2, Owner::Immutable);
+    store.update_objects(BTreeMap::from([(object_id, immutable)]), vec![]);
+    assert_eq!(
+        RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
+            .expect("owned-object iterator should build")
+            .count(),
+        0,
+    );
+}
+
+#[test]
 fn test_owned_objects_removes_non_address_owned_transitions() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -266,19 +352,19 @@ fn test_owned_objects_removes_non_address_owned_transitions() {
 }
 
 #[test]
-fn test_seeded_owned_object_metadata_lists_without_bcs_until_deleted() {
+fn test_owned_object_info_uses_index_metadata_until_deleted() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
+    let object = make_gas_object(object_id, 7, Owner::AddressOwner(owner));
 
     store
         .local()
         .write_owned_object_entries(&[OwnedObjectEntry {
             owner,
-            object_id,
-            version: SequenceNumber::from_u64(7),
+            object_ref: object.compute_object_reference(),
             object_type: GasCoin::type_(),
-            balance: Some(123),
+            balance: Some(1_000_000),
         }])
         .unwrap();
 
@@ -289,15 +375,8 @@ fn test_seeded_owned_object_metadata_lists_without_bcs_until_deleted() {
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].object_id, object_id);
     assert_eq!(infos[0].version, SequenceNumber::from_u64(7));
-    assert_eq!(infos[0].balance, Some(123));
-    assert!(
-        store
-            .local()
-            .get_latest_object(&object_id)
-            .expect("local lookup should not fail")
-            .is_none(),
-        "seed metadata should not require local BCS",
-    );
+    assert_eq!(infos[0].object_type, GasCoin::type_());
+    assert_eq!(infos[0].balance, Some(1_000_000));
 
     store.update_objects(
         BTreeMap::new(),
@@ -316,8 +395,151 @@ fn test_seeded_owned_object_metadata_lists_without_bcs_until_deleted() {
     );
 }
 
+#[tokio::test]
+async fn test_owned_object_query_lazily_initializes_complete_index_from_seed_manifest() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let checkpoint = 42;
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let object = make_gas_object(object_id, 7, Owner::AddressOwner(owner));
+
+    let server = MockServer::start().await;
+    mock_seed_object(&server, checkpoint, &object).await;
+
+    let store =
+        DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), checkpoint);
+    store
+        .local()
+        .write_seed_manifest(&SeedManifest {
+            network: "custom".to_owned(),
+            checkpoint,
+            entries: vec![SeedEntry {
+                object_ref: object.compute_object_reference(),
+            }],
+        })
+        .expect("seed manifest should write");
+
+    assert!(!store.local().owned_object_index_exists());
+
+    let infos: Vec<_> = RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
+        .expect("owned-object iterator should initialize from seed")
+        .map(|result| result.expect("owned-object entry should decode"))
+        .collect();
+
+    assert_eq!(infos.len(), 1);
+    assert_eq!(infos[0].object_id, object_id);
+    assert_eq!(infos[0].version, SequenceNumber::from_u64(7));
+    assert_eq!(infos[0].object_type, GasCoin::type_());
+    assert_eq!(infos[0].balance, Some(1_000_000));
+
+    let entries = store
+        .local()
+        .get_owned_object_entries()
+        .expect("owned-object index should read");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].object_type, GasCoin::type_());
+    assert_eq!(entries[0].balance, Some(1_000_000));
+    assert_eq!(
+        store
+            .local()
+            .get_object_at_version(&object_id, 7)
+            .expect("seeded object should be cached"),
+        Some(object),
+    );
+}
+
+#[tokio::test]
+async fn test_local_execution_before_owned_query_preserves_other_seeded_entries() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let checkpoint = 42;
+    let owner = SuiAddress::random_for_testing_only();
+    let recipient = SuiAddress::random_for_testing_only();
+    let first_id = ObjectID::random();
+    let second_id = ObjectID::random();
+    let first = make_gas_object(first_id, 1, Owner::AddressOwner(owner));
+    let second = make_gas_object(second_id, 1, Owner::AddressOwner(owner));
+    let transferred = make_gas_object(first_id, 2, Owner::AddressOwner(recipient));
+
+    let server = MockServer::start().await;
+    mock_seed_object(&server, checkpoint, &first).await;
+    mock_seed_object(&server, checkpoint, &second).await;
+
+    let mut store =
+        DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), checkpoint);
+    store
+        .local()
+        .write_seed_manifest(&SeedManifest {
+            network: "custom".to_owned(),
+            checkpoint,
+            entries: vec![
+                SeedEntry {
+                    object_ref: first.compute_object_reference(),
+                },
+                SeedEntry {
+                    object_ref: second.compute_object_reference(),
+                },
+            ],
+        })
+        .expect("seed manifest should write");
+
+    store.update_objects(BTreeMap::from([(first_id, transferred)]), vec![]);
+
+    let owner_infos: Vec<_> =
+        RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
+            .expect("owned-object iterator should build")
+            .map(|result| result.expect("owned-object entry should decode"))
+            .collect();
+    assert_eq!(owner_infos.len(), 1);
+    assert_eq!(owner_infos[0].object_id, second_id);
+    assert_eq!(owner_infos[0].version, SequenceNumber::from_u64(1));
+
+    let recipient_infos: Vec<_> =
+        RpcIndexes::owned_objects_iter(&store, recipient, Some(GasCoin::type_()), None)
+            .expect("owned-object iterator should build")
+            .map(|result| result.expect("owned-object entry should decode"))
+            .collect();
+    assert_eq!(recipient_infos.len(), 1);
+    assert_eq!(recipient_infos[0].object_id, first_id);
+    assert_eq!(recipient_infos[0].version, SequenceNumber::from_u64(2));
+}
+
 #[test]
-fn test_local_deletion_removes_owned_object_and_blocks_remote_resurrection() {
+fn test_missing_owned_index_after_local_checkpoint_advancement_fails_closed() {
+    let (_temp, store) = test_data_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let object = make_gas_object(ObjectID::random(), 1, Owner::AddressOwner(owner));
+    let data =
+        sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(1).build_checkpoint();
+    let checkpoint =
+        sui_types::messages_checkpoint::VerifiedCheckpoint::new_unchecked(data.summary);
+
+    store
+        .local()
+        .write_seed_manifest(&SeedManifest {
+            network: "custom".to_owned(),
+            checkpoint: 0,
+            entries: vec![SeedEntry {
+                object_ref: object.compute_object_reference(),
+            }],
+        })
+        .expect("seed manifest should write");
+    store
+        .local()
+        .write_checkpoint_summary(&checkpoint)
+        .expect("advanced checkpoint should write");
+
+    let err = match RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None) {
+        Ok(_) => panic!("owned-object iterator should fail closed"),
+        Err(err) => err,
+    };
+    assert!(
+        err.to_string()
+            .contains("owned-object index is missing while local checkpoints have advanced")
+    );
+}
+
+#[test]
+fn test_local_deletion_removes_current_object_but_preserves_historical_lookup() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
@@ -346,36 +568,34 @@ fn test_local_deletion_removes_owned_object_and_blocks_remote_resurrection() {
             .unwrap(),
         object,
     );
-    assert!(
+    assert_eq!(
         sui_types::storage::ObjectStore::get_object_by_key(
             &store,
             &object_id,
             SequenceNumber::from_u64(1),
         )
-        .is_none(),
-        "execution-facing exact-version lookup must reject locally deleted objects",
+        .expect("execution-facing exact-version lookup should read local history"),
+        object,
     );
 }
 
 #[test]
-fn test_local_wrap_removes_owned_object_and_blocks_direct_current_reads() {
+fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
 
     store.update_objects(BTreeMap::from([(object_id, object.clone())]), vec![]);
-    store.apply_object_updates(
+    let result = store.apply_object_updates(
         BTreeMap::new(),
         vec![RemovedObject {
-            object_ref: (
-                object_id,
-                SequenceNumber::from_u64(2),
-                ObjectDigest::OBJECT_DIGEST_WRAPPED,
-            ),
+            object_id,
+            version: SequenceNumber::from_u64(2),
             kind: RemovedObjectKind::Wrapped,
         }],
     );
+    assert!(result.is_ok(), "object updates should apply: {result:?}");
 
     assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 0);
     assert!(
@@ -390,19 +610,19 @@ fn test_local_wrap_removes_owned_object_and_blocks_direct_current_reads() {
             .unwrap(),
         object,
     );
-    assert!(
+    assert_eq!(
         sui_types::storage::ObjectStore::get_object_by_key(
             &store,
             &object_id,
             SequenceNumber::from_u64(1),
         )
-        .is_none(),
-        "execution-facing exact-version lookup must reject locally wrapped objects",
+        .expect("execution-facing exact-version lookup should read local history"),
+        object,
     );
 }
 
 #[test]
-fn test_unwrapped_write_clears_wrapped_marker_and_reindexes_owner() {
+fn test_unwrapped_write_clears_wrapped_latest_and_reindexes_owner() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let recipient = SuiAddress::random_for_testing_only();
@@ -410,22 +630,25 @@ fn test_unwrapped_write_clears_wrapped_marker_and_reindexes_owner() {
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
 
     store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
-    store.apply_object_updates(
+    let result = store.apply_object_updates(
         BTreeMap::new(),
         vec![RemovedObject {
-            object_ref: (
-                object_id,
-                SequenceNumber::from_u64(2),
-                ObjectDigest::OBJECT_DIGEST_WRAPPED,
-            ),
+            object_id,
+            version: SequenceNumber::from_u64(2),
             kind: RemovedObjectKind::Wrapped,
         }],
     );
+    assert!(result.is_ok(), "object updates should apply: {result:?}");
 
     let unwrapped = make_gas_object(object_id, 3, Owner::AddressOwner(recipient));
-    store.apply_object_updates(BTreeMap::from([(object_id, unwrapped.clone())]), vec![]);
+    let result =
+        store.apply_object_updates(BTreeMap::from([(object_id, unwrapped.clone())]), vec![]);
+    assert!(result.is_ok(), "object updates should apply: {result:?}");
 
-    assert!(!store.local().is_object_wrapped(&object_id).unwrap());
+    assert_eq!(
+        store.local().object_latest_state(&object_id).unwrap(),
+        Some(ObjectLatestState::Live),
+    );
     assert_eq!(
         DataStore::get_object(&store, &object_id)
             .expect("current object read should not error")
@@ -439,7 +662,7 @@ fn test_unwrapped_write_clears_wrapped_marker_and_reindexes_owner() {
 }
 
 #[test]
-fn test_terminal_deleted_marker_prevents_reindexing_written_object() {
+fn test_terminal_deleted_latest_prevents_reindexing_written_object() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
@@ -447,17 +670,15 @@ fn test_terminal_deleted_marker_prevents_reindexing_written_object() {
     let written_again = make_gas_object(object_id, 3, Owner::AddressOwner(owner));
 
     store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
-    store.apply_object_updates(
+    let result = store.apply_object_updates(
         BTreeMap::from([(object_id, written_again)]),
         vec![RemovedObject {
-            object_ref: (
-                object_id,
-                SequenceNumber::from_u64(2),
-                ObjectDigest::OBJECT_DIGEST_DELETED,
-            ),
+            object_id,
+            version: SequenceNumber::from_u64(2),
             kind: RemovedObjectKind::Deleted,
         }],
     );
+    assert!(result.is_ok(), "object updates should apply: {result:?}");
 
     assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 0);
     assert!(
@@ -468,13 +689,25 @@ fn test_terminal_deleted_marker_prevents_reindexing_written_object() {
 }
 
 #[test]
-fn test_removed_objects_from_effects_marks_unwrapped_then_deleted_as_deleted() {
+fn test_removed_objects_from_effects_preserves_removal_kind() {
     let owner = SuiAddress::random_for_testing_only();
-    let object_id = ObjectID::random();
-    let object_ref = (
-        object_id,
+    let deleted_id = ObjectID::random();
+    let deleted_ref = (
+        deleted_id,
         SequenceNumber::from_u64(2),
         ObjectDigest::OBJECT_DIGEST_DELETED,
+    );
+    let unwrapped_then_deleted_id = ObjectID::random();
+    let unwrapped_then_deleted_ref = (
+        unwrapped_then_deleted_id,
+        SequenceNumber::from_u64(3),
+        ObjectDigest::OBJECT_DIGEST_DELETED,
+    );
+    let wrapped_id = ObjectID::random();
+    let wrapped_ref = (
+        wrapped_id,
+        SequenceNumber::from_u64(4),
+        ObjectDigest::OBJECT_DIGEST_WRAPPED,
     );
     let gas_ref = (
         ObjectID::random(),
@@ -491,9 +724,9 @@ fn test_removed_objects_from_effects_marks_unwrapped_then_deleted_as_deleted() {
         vec![],
         vec![],
         vec![],
-        vec![],
-        vec![object_ref],
-        vec![],
+        vec![deleted_ref],
+        vec![unwrapped_then_deleted_ref],
+        vec![wrapped_ref],
         (gas_ref, Owner::AddressOwner(owner)),
         None,
         vec![],
@@ -501,10 +734,23 @@ fn test_removed_objects_from_effects_marks_unwrapped_then_deleted_as_deleted() {
 
     assert_eq!(
         removed_objects_from_effects(&effects),
-        vec![RemovedObject {
-            object_ref,
-            kind: RemovedObjectKind::Deleted,
-        }],
+        vec![
+            RemovedObject {
+                object_id: deleted_id,
+                version: deleted_ref.1,
+                kind: RemovedObjectKind::Deleted,
+            },
+            RemovedObject {
+                object_id: unwrapped_then_deleted_id,
+                version: unwrapped_then_deleted_ref.1,
+                kind: RemovedObjectKind::UnwrappedThenDeleted,
+            },
+            RemovedObject {
+                object_id: wrapped_id,
+                version: wrapped_ref.1,
+                kind: RemovedObjectKind::Wrapped,
+            },
+        ],
     );
 }
 

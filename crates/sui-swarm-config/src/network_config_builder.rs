@@ -24,10 +24,15 @@ use sui_types::object::Object;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
+use consensus_config::ObserverParameters;
+
 use crate::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT, ValidatorGenesisConfigBuilder};
 use crate::genesis_config::{GenesisConfig, ValidatorGenesisConfig};
 use crate::network_config::NetworkConfig;
 use crate::node_config_builder::ValidatorConfigBuilder;
+
+pub type ValidatorObserverConfigCallback =
+    Arc<dyn Fn(usize) -> Option<ObserverParameters> + Send + Sync + 'static>;
 
 pub struct KeyPairWrapper {
     pub account_key_pair: AccountKeyPair,
@@ -111,6 +116,7 @@ pub struct ConfigBuilder<R = OsRng> {
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
     #[cfg(msim)]
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
+    validator_observer_config: Option<ValidatorObserverConfigCallback>,
 }
 
 impl ConfigBuilder {
@@ -155,6 +161,7 @@ impl ConfigBuilder {
             state_sync_config: None,
             #[cfg(msim)]
             execution_time_observer_config: None,
+            validator_observer_config: None,
         }
     }
 
@@ -333,6 +340,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_validator_observer_config(mut self, c: ValidatorObserverConfigCallback) -> Self {
+        self.validator_observer_config = Some(c);
+        self
+    }
+
     pub fn with_authority_overload_config(mut self, c: AuthorityOverloadConfig) -> Self {
         self.authority_overload_config = Some(c);
         self
@@ -375,6 +387,7 @@ impl<R> ConfigBuilder<R> {
             state_sync_config: self.state_sync_config,
             #[cfg(msim)]
             execution_time_observer_config: self.execution_time_observer_config,
+            validator_observer_config: self.validator_observer_config,
         }
     }
 
@@ -588,6 +601,11 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         FundsWithdrawSchedulerTypeConfig::PerValidator(func) => func(idx),
                     };
                     builder = builder.with_funds_withdraw_scheduler_type(scheduler_type);
+                }
+                if let Some(observer_config_fn) = &self.validator_observer_config
+                    && let Some(observer_config) = observer_config_fn(idx)
+                {
+                    builder = builder.with_observer_config(observer_config);
                 }
                 if let Some(num_unpruned_validators) = self.num_unpruned_validators
                     && idx < num_unpruned_validators

@@ -151,6 +151,8 @@ impl TryConstructTransaction for Stake {
                     address_balance_withdrawal: actual_deficit,
                     fss_object_count: None,
                     redeem_token_amount: None,
+                    redeem_plan: None,
+                    bind_epoch: None,
                 })
             }
             _ => {
@@ -190,6 +192,8 @@ impl TryConstructTransaction for Stake {
                     address_balance_withdrawal,
                     fss_object_count: None,
                     redeem_token_amount: None,
+                    redeem_plan: None,
+                    bind_epoch: None,
                 })
             }
         }

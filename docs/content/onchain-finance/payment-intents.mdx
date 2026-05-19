@@ -1,0 +1,117 @@
+---
+title: Payment Intents
+description: Use programmable transaction blocks to compile multi-step payment workflows into a single atomic transaction.
+keywords: [PTB, programmable transaction block, payment intent, atomic transaction, sponsored gas]
+---
+
+A **payment intent** is a single atomic transaction that bundles multiple, heterogeneous payment operations. Rather than signing a separate transaction for each onchain action, you compose multiple operations into one batch: swaps, deposits, transfers, and balance reads. A payment intent is a form of [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks). All operations execute as a unit. If any operation fails, the entire batch reverts and no state changes onchain.
+
+A traditional payment flow on most chains requires one transaction per action. To swap, deposit, and transfer in sequence, you sign three times, pay gas three times, and risk partial completion if one transaction fails after another succeeds.
+
+A payment intent collapses the same flow into one signed transaction with the following properties:
+
+- **Atomic execution:** All operations succeed together or none apply. There is no intermediate state to clean up.
+
+- **Single signature:** You approve the full intent once, not once per step.
+
+- **One gas payment:** The whole batch shares a gas budget. The transaction sponsor pays once. The sponsor can be your app, a relayer, or the user.
+
+- **Parallel reads:** Resolution steps that do not depend on each other run concurrently before the payment intent is built. These include balance lookups, route quotes, and contact resolution.
+
+The underlying PTB gives a payment intent the following guarantees:
+
+- **Determinism:** The compiled payment intent is the source of truth. The natural-language intent is a convenience, but the bytes you sign describe the exact onchain effect.
+
+- **Composability:** Outputs of earlier commands feed into later ones without leaving the transaction. You do not need to wait for one transaction to confirm before building the next.
+
+- **Sponsored gas:** Apps can pay gas on behalf of users. A three-operation payment intent that costs around 0.005 USD is sponsorable at scale, which removes the need for users to hold SUI just to pay fees.
+
+- **Fast finality:** Sui consensus commits transactions in under a second, so a multi-step intent feels like a single action to the user.
+
+## Anatomy of a payment intent
+
+A payment intent moves through three phases:
+
+1. **Resolve.** The app reads onchain and offchain context in parallel, including token balances, swap routes, pool yields, and contact addresses.
+
+1. **Plan.** The app arranges the resolved values into an ordered sequence of PTB commands. Order matters because later commands can consume outputs from earlier ones.
+
+1. **Execute.** The user signs once. The payment intent submits to the network and either commits all commands or reverts all of them.
+
+## Swap, save, send example
+
+Consider this request:
+
+> Swap 10% into SUI, save 50% of my remaining USDC, then send 100 USDC to a contact named Alice.
+
+Starting balance: 2,000 USDC.
+
+### Resolution
+
+The app dispatches five reads in parallel:
+
+| **Read** | **Result** |
+|---|---|
+| Wallet balance | 2,000 USDC |
+| Cetus route for USDC to SUI | 200 USDC swaps to 212.77 SUI at 0.03% slippage |
+| NAVI USDsui pool | 8.4% APY, 48M USD TVL |
+| Contact resolution for Alice | `0xa4bb…b27c`, verified |
+| Gas estimate | 0.005 USD, sponsored |
+
+### Plan
+
+The planner orders the operations so that later math uses the correct inputs:
+
+1. Swap 200 USDC to SUI through Cetus. This is 10% of the starting balance.
+
+1. Swap 900 USDC to USDsui and deposit into the NAVI pool. This is 50% of the 1,800 USDC that remains after step 1, not 50% of the original 2,000.
+
+1. Transfer 100 USDC to `0xa4bb…b27c`.
+
+If you reorder these operations, you get a different result. Computing the 50% before the swap saves 1,000 USDC instead of 900. The planning phase makes the order explicit before signing.
+
+### Execute
+
+The three operations compile into one payment intent. You sign once and the network commits the batch in roughly 0.6 seconds. The final balances are:
+
+- **Available USDC:** 800 USD, instantly spendable.
+
+- **Earning USDsui:** 900 USD in the NAVI pool at 8.4% APY, accruing from the next block.
+
+- **Held SUI:** 212.77 SUI at the executed price.
+
+Because the payment intent is atomic, a failure in any leg reverts all three operations. Failures include a slippage breach on the swap, a paused pool, or an invalid recipient. You never end up in a state where the swap completes but the deposit does not.
+
+## Comparison with single-action chains
+
+On a chain that does not support transaction batching, the same swap, save, send flow requires three independent transactions. Each pays its own gas, each can fail independently, and the user signs three times. Mid-flow failure leaves you in a partial state that you have to detect and reconcile.
+
+A payment intent removes that class of bug from the application. The transaction either fully succeeds or fully reverts, and the user sees one outcome.
+
+## Additional examples
+
+The pattern generalizes to any chain of payment operations. The intents below each compile to a single payment intent.
+
+### Deposit autosplit
+
+> When a deposit arrives, keep 1,000 USDC liquid, deposit 60% of the rest into a yield pool, and convert the remainder to SUI.
+
+The trigger is an inbound transfer. The payment intent reads the new balance, subtracts the reserve, splits the remainder, and routes each portion. One signature covers the recurring rule.
+
+### Bill batch
+
+> Pay rent, utilities, and my phone bill on the first of the month.
+
+Three transfers to three resolved contacts, batched atomically. If any recipient address fails validation, no payment goes out and you can fix the issue before retrying.
+
+### Rebalance
+
+> Sell enough SUI to bring my portfolio back to 70% USDC, 30% SUI.
+
+The payment intent reads current balances and prices, computes the delta, and executes a single swap. The read and the swap are part of the same atomic unit, so the price you swap at is the price you read.
+
+### Conditional send
+
+> If my USDC balance is above 5,000, send 500 to savings.
+
+A balance check and a conditional transfer compose into one payment intent. The check runs onchain at execution time, not at planning time, so the decision uses fresh state.

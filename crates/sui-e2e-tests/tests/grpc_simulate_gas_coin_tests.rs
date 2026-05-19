@@ -74,14 +74,7 @@ fn build_no_gas_coin_ptb(
 
 #[sim_test]
 async fn test_has_ab_has_coins_uses_gas_coin() {
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
     let (sender, _) = test_env.get_sender_and_gas(0);
@@ -128,24 +121,11 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
     // First element should be a coin reservation (identified by magic in digest)
     let first_payment = &gas_payment[0];
 
-    // Coin reservation is not enabled on mainnet yet, so if the override is enabled we should NOT
-    // see a coin reservation digest.
-    if sui_simulator::has_mainnet_protocol_config_override() {
-        // Assert this here so that when it gets enabled in mainnet this will fail so you know to
-        // remove the override check and update the test expectations here.
-        assert!(
-            !ParsedDigest::is_coin_reservation_digest(&first_payment.2),
-            "Mainnet override should disable coin reservation, got digest: {:?}",
-            first_payment.2
-        );
-        return; // Skip the rest of the test since the mainnet override disables coin reservation
-    } else {
-        assert!(
-            ParsedDigest::is_coin_reservation_digest(&first_payment.2),
-            "First gas payment should be a coin reservation, got digest: {:?}",
-            first_payment.2
-        );
-    }
+    assert!(
+        ParsedDigest::is_coin_reservation_digest(&first_payment.2),
+        "First gas payment should be a coin reservation, got digest: {:?}",
+        first_payment.2
+    );
 
     // Verify the entire address balance is reserved, not just the gas budget
     // Note: The actual balance may be slightly less than ab_amount due to gas
@@ -181,15 +161,7 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
 
 #[sim_test]
 async fn test_has_ab_has_coins_no_gas_coin() {
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
     let (sender, _) = test_env.get_sender_and_gas(0);
@@ -295,15 +267,7 @@ async fn test_has_ab_no_coins() {
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::transaction::TransactionExpiration;
 
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
 
@@ -424,15 +388,7 @@ async fn test_has_ab_no_coins() {
 
 #[sim_test]
 async fn test_no_ab_has_coins() {
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let (sender, _gas) = test_env.get_sender_and_gas(0);
     let recipient = SuiAddress::random_for_testing_only();
@@ -494,15 +450,7 @@ async fn test_no_ab_has_coins() {
 
 #[sim_test]
 async fn test_insufficient_funds() {
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
     let (sender, _) = test_env.get_sender_and_gas(0);
@@ -613,14 +561,7 @@ async fn test_combined_ab_and_coins_needed() {
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::crypto::{AccountKeyPair, SuiKeyPair, get_key_pair};
 
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
 
@@ -706,22 +647,11 @@ async fn test_combined_ab_and_coins_needed() {
 
     let response = result.unwrap();
 
-    // Not enabled on mainnet yet, so mainnet override should still fail as the overrides above
-    // aren't applied to the RPC.
-    if sui_simulator::has_mainnet_protocol_config_override() {
-        assert!(
-            response.transaction.effects.status().is_err(),
-            "Expected execution to fail due to insufficient funds with mainnet override, got: {:?}",
-            response.transaction.effects.status()
-        );
-        return; // Skip the rest of the test since the mainnet override disables coin reservation
-    } else {
-        assert!(
-            response.transaction.effects.status().is_ok(),
-            "Expected successful execution with combined funds, got: {:?}",
-            response.transaction.effects.status()
-        );
-    }
+    assert!(
+        response.transaction.effects.status().is_ok(),
+        "Expected successful execution with combined funds, got: {:?}",
+        response.transaction.effects.status()
+    );
 
     // Verify coin reservation is used to combine both sources
     let gas_payment = response.transaction.transaction.gas_data().payment.clone();
@@ -745,15 +675,7 @@ async fn test_ab_only_budget_exceeds_half_balance() {
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::transaction::TransactionExpiration;
 
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
 
@@ -876,15 +798,7 @@ async fn test_resolve_handles_coin_reservation_in_gas_payment() {
         SimulateTransactionRequest, Transaction, TransactionKind,
     };
 
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
     let (sender, _) = test_env.get_sender_and_gas(0);
@@ -985,15 +899,7 @@ async fn test_resolve_handles_coin_reservation_in_ptb_input() {
         Transaction, TransactionKind,
     };
 
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
     let (sender, _) = test_env.get_sender_and_gas(0);
@@ -1085,15 +991,7 @@ async fn test_estimated_budget_excludes_mock_gas_coin_storage_for_address_balanc
         Transaction, TransactionKind, TransferObjects,
     };
 
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
     let recipient = SuiAddress::random_for_testing_only();

@@ -4,7 +4,7 @@ description: The `sui-indexer-alt-framework` is a powerful Rust framework for bu
 keywords: [ indexer, custom indexer, data processing, blockchain indexer, sui-indexer-alt-framework ]
 ---
 
-Sui generates rich, complex data, including transactions, events, object changes, and more. While Sui provides standard APIs to access this data, many applications need customized data processing for workflows like tracking specific events, aggregating analytics, building dashboards, or creating specialized databases. Custom indexers let you extract, transform, and store the specific blockchain data you need. Instead of querying Sui APIs repeatedly or building complex filtering logic, you process the raw blockchain data once and store it in your preferred format.
+Sui generates rich, complex data, including transactions, events, object changes, and more. While Sui provides standard APIs to access this data, many applications need customized data processing for workflows like tracking specific events, aggregating analytics, building dashboards, or creating specialized databases. Custom indexers let you extract, transform, and store the specific blockchain data you need. Instead of querying Sui APIs repeatedly or building complex filtering logic, you process the raw blockchain data once and store it in your preferred format and storage layer.
 
 Custom indexers enable use cases such as tracking DEX trading volumes, monitoring NFT collection activity, building analytics dashboards, or aggregating cross-chain data. You build custom indexers using the `sui-indexer-alt-framework`, a Rust framework that provides production-ready components for data ingestion, processing, and storage while giving you full control over your indexing logic.
 
@@ -42,7 +42,7 @@ The indexing framework supports multiple data sources to give you flexibility in
 
 **Polling-based sources** that periodically check for new checkpoints:
 
-- **Remote stores** can connect to public checkpoint repositories such as [`https://checkpoints.mainnet.sui.io`](https://checkpoints.mainnet.sui.io/), but these HTTPS endpoints retain only the most recent 30 days of checkpoints and should be used only as fallback sources. For Mainnet backfills older than 30 days, use `gs://mysten-mainnet-checkpoints-use4` with `--remote-store-gcs`.
+- **Remote stores** can connect to public checkpoint repositories such as [`https://checkpoints.mainnet.sui.io`](https://checkpoints.mainnet.sui.io/) and [`https://checkpoints.testnet.sui.io`](https://checkpoints.testnet.sui.io/), but these HTTPS endpoints retain only the most recent 30 days of checkpoints and should be used only as fallback sources. For full-retention backfills, use `gs://mysten-mainnet-checkpoints-use4` or `gs://mysten-testnet-checkpoints-use4` with `--remote-store-gcs` and Requester Pays enabled.
 
 - **Local files** process checkpoint files produced by a local full node. This method offers the lowest latency but is recommended only for testing because the node does not automatically clean up these files.
 
@@ -70,7 +70,7 @@ Both the indexing framework and your code manage the processing layer, which is 
 
 ### Storage layer
 
-The indexing framework abstracts database operations through a flexible storage layer. PostgreSQL comes with built-in support using Diesel ORM, providing production-ready database operations, connection pooling, migrations, and watermark management out of the box. For custom database implementations, you can implement the framework's storage interfaces to use any database, for example, [MongoDB](https://www.mongodb.com/) for document storage or [ClickHouse](https://clickhouse.com/) for analytics.
+The indexing framework abstracts database operations through a flexible storage layer. PostgreSQL comes with built-in support using Diesel ORM, providing production-ready database operations, connection pooling, migrations, and watermark management out of the box. PostgreSQL is the default supported path, not a requirement. For custom database implementations, you can implement the framework's storage interfaces to use any database, for example, [MongoDB](https://www.mongodb.com/) for document storage or [ClickHouse](https://clickhouse.com/) for analytics.
 
 ## Building custom indexers
 

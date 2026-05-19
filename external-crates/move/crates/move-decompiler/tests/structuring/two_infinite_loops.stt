@@ -1,0 +1,13 @@
+// An if/else whose arms each fall into a separate infinite loop that never re-converges.
+// The original CFG has two disjoint terminal SCCs ({1} and {2}); `add_infinite_loop_post_dominators`
+// picks the highest-rank input node from each terminal SCC (here 1 and 2 respectively) and adds
+// an impossible edge to each, so both regions get post-dominators.
+//
+//       0
+//      / \
+//   ->1   2<-
+//    \_|  |_/
+
+cond,0,1,2
+code,1,1
+code,2,2

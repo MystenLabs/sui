@@ -54,32 +54,33 @@ impl CheckpointFetcher for LedgerGrpcReader {
     }
 }
 
-/// Recover the gap `lo..=hi` by reading checkpoints from kv-rpc, processing them through the
-/// existing streaming pipeline, and broadcasting in order. Each chunk waits for the kv-rpc
-/// indexer to reach the chunk's upper bound before fetching, so partial progress is broadcast
-/// as the indexer catches up rather than waiting for the entire gap to be available.
+/// Recover the gap `lo..=hi_inclusive` by reading checkpoints from kv-rpc, processing them
+/// through the existing streaming pipeline, and broadcasting in order. Each chunk waits for the
+/// kv-rpc indexer to reach the chunk's upper bound before fetching, so partial progress is
+/// broadcast as the indexer catches up rather than waiting for the entire gap to be available.
 pub(crate) async fn recover_gap<F: CheckpointFetcher>(
     fetcher: &F,
     watermarks_rx: &watch::Receiver<Arc<Watermarks>>,
     sender: &broadcast::Sender<Arc<ProcessedCheckpoint>>,
     lo: u64,
-    hi: u64,
+    hi_inclusive: u64,
     chunk_size: usize,
 ) -> anyhow::Result<()> {
-    if lo > hi {
+    if lo > hi_inclusive {
         return Ok(());
     }
 
     let mask = checkpoint_field_mask();
     let chunk_size = chunk_size.max(1) as u64;
     let mut cursor = lo;
+    let mut watermarks_rx = watermarks_rx.clone();
 
-    while cursor <= hi {
-        let chunk_hi = (cursor + chunk_size - 1).min(hi);
+    while cursor <= hi_inclusive {
+        let chunk_hi_inclusive = (cursor + chunk_size - 1).min(hi_inclusive);
 
-        wait_for_pipelines_catching_up_at(chunk_hi, watermarks_rx).await?;
+        wait_for_pipelines_catching_up_at(chunk_hi_inclusive, &mut watermarks_rx).await?;
 
-        let chunk = fetch_chunk(fetcher, &mask, cursor..=chunk_hi).await?;
+        let chunk = fetch_chunk(fetcher, &mask, cursor..=chunk_hi_inclusive).await?;
 
         for proto in chunk {
             let processed = process_checkpoint(proto)?;
@@ -87,7 +88,7 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
             let _ = sender.send(Arc::new(processed));
         }
 
-        cursor = chunk_hi + 1;
+        cursor = chunk_hi_inclusive + 1;
     }
 
     Ok(())
@@ -100,21 +101,21 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
 /// to the DB and need `kv_packages` to be ready.
 async fn wait_for_pipelines_catching_up_at(
     target: u64,
-    watermarks_rx: &watch::Receiver<Arc<Watermarks>>,
+    watermarks_rx: &mut watch::Receiver<Arc<Watermarks>>,
 ) -> anyhow::Result<()> {
-    let mut rx = watermarks_rx.clone();
-    rx.wait_for(|w| {
-        let pipelines = w.per_pipeline();
-        let caught_up = |name| {
-            pipelines
-                .get(name)
-                .is_some_and(|p| p.hi().checkpoint() >= target)
-        };
-        caught_up(LEDGER_GRPC_PIPELINE) && caught_up(KV_PACKAGES_PIPELINE)
-    })
-    .await
-    .ok()
-    .context("Watermark task shut down before pipelines caught up")?;
+    watermarks_rx
+        .wait_for(|w| {
+            let pipelines = w.per_pipeline();
+            let caught_up = |name| {
+                pipelines
+                    .get(name)
+                    .is_some_and(|p| p.hi().checkpoint() >= target)
+            };
+            caught_up(LEDGER_GRPC_PIPELINE) && caught_up(KV_PACKAGES_PIPELINE)
+        })
+        .await
+        .ok()
+        .context("Watermark task shut down before pipelines caught up")?;
     Ok(())
 }
 
@@ -175,9 +176,9 @@ async fn fetch_one_with_retry<F: CheckpointFetcher>(
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::sync::Mutex;
     use std::time::Duration;
 
+    use dashmap::DashMap;
     use sui_rpc::proto::sui::rpc::v2 as grpc;
     use sui_sdk_types::Bitmap;
     use sui_sdk_types::Bls12381Signature;
@@ -251,18 +252,18 @@ mod tests {
     }
 
     struct MockFetcher {
-        state: Mutex<HashMap<u64, (FetcherBehavior, usize)>>,
+        state: DashMap<u64, (FetcherBehavior, usize)>,
     }
 
     impl MockFetcher {
         fn new(setup: HashMap<u64, FetcherBehavior>) -> Self {
             Self {
-                state: Mutex::new(setup.into_iter().map(|(k, v)| (k, (v, 0))).collect()),
+                state: setup.into_iter().map(|(k, v)| (k, (v, 0))).collect(),
             }
         }
 
         fn calls_for(&self, seq: u64) -> usize {
-            self.state.lock().unwrap().get(&seq).map_or(0, |(_, c)| *c)
+            self.state.get(&seq).map_or(0, |g| g.1)
         }
     }
 
@@ -273,8 +274,8 @@ mod tests {
             _mask: &FieldMask,
         ) -> anyhow::Result<Option<ProtoCheckpoint>> {
             let (behavior, calls) = {
-                let mut state = self.state.lock().unwrap();
-                let entry = state
+                let mut entry = self
+                    .state
                     .get_mut(&seq)
                     .unwrap_or_else(|| panic!("MockFetcher: unconfigured key {seq}"));
                 entry.1 += 1;
@@ -306,14 +307,14 @@ mod tests {
     }
 
     fn recovery_watermarks(
-        hi: u64,
+        hi_inclusive: u64,
     ) -> (
         watch::Sender<Arc<Watermarks>>,
         watch::Receiver<Arc<Watermarks>>,
     ) {
         watch::channel(Arc::new(Watermarks::for_test(&[
-            (LEDGER_GRPC_PIPELINE, hi),
-            (KV_PACKAGES_PIPELINE, hi),
+            (LEDGER_GRPC_PIPELINE, hi_inclusive),
+            (KV_PACKAGES_PIPELINE, hi_inclusive),
         ])))
     }
 

@@ -22,7 +22,9 @@ use crate::{
         ObserverBlockStream, ObserverNetworkClient, PeerId,
         metrics_layer::MetricsCallbackMaker,
         to_host_port_str,
-        tonic_network::{Channel, MAX_FETCH_RESPONSE_BYTES, chunk_blocks},
+        tonic_network::{
+            Channel, MAX_FETCH_RESPONSE_BYTES, chunk_blocks, max_fetch_blocks_response_bytes,
+        },
         tonic_tls::certificate_server_name,
     },
 };
@@ -285,6 +287,8 @@ impl ObserverNetworkClient for TonicObserverClient {
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         let mut client = self.get_client(peer, timeout).await?;
+        let max_allowed_bytes =
+            max_fetch_blocks_response_bytes(&self.context, &block_refs, &fetch_after_rounds);
         let mut request = Request::new(FetchBlocksRequest {
             block_refs: block_refs
                 .iter()
@@ -313,13 +317,6 @@ impl ObserverNetworkClient for TonicObserverClient {
             })?
             .into_inner();
 
-        // Allow twice the max total size of transactions in the fetched blocks.
-        let max_allowed_bytes = block_refs.len()
-            * self
-                .context
-                .protocol_config
-                .max_transactions_in_block_bytes() as usize
-            * 2;
         let mut blocks = vec![];
         let mut total_fetched_bytes = 0;
         loop {

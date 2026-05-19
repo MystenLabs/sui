@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
    ┌─ tests/move_check/borrows/copy_field_invalid.move:13:9
    │
 12 │         let f = &mut s.f;
@@ -13,7 +13,7 @@ error[E07002]: mutable ownership violated
 13 │         copy s;
    │         ^^^^^^ Invalid copy of variable 's'
 
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
    ┌─ tests/move_check/borrows/copy_field_invalid.move:19:9
    │
 18 │         let f = id_mut(&mut s.f);

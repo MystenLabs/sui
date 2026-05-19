@@ -1,18 +1,23 @@
 FROM rust:1.92-bullseye AS chef
 WORKDIR sui
-ARG GIT_REVISION
-ENV GIT_REVISION=$GIT_REVISION
 RUN apt-get update && apt-get install -y cmake clang libpq5 ca-certificates libpq-dev postgresql
 
 # Build application
-FROM chef AS builder 
+FROM chef AS builder
 
+# COPYs ordered least- to most-frequently-changing for deeper layer cache hits.
+COPY rust-toolchain.toml ./
+COPY .cargo .cargo
 COPY Cargo.toml Cargo.lock ./
+COPY external-crates external-crates
+COPY sui-execution sui-execution
 COPY consensus consensus
 COPY crates crates
-COPY sui-execution sui-execution
-COPY external-crates external-crates
-RUN cargo build --release \
+
+# GIT_REVISION declared late so SHA changes don't invalidate the COPYs above.
+ARG GIT_REVISION
+ENV GIT_REVISION=$GIT_REVISION
+RUN cargo build --locked --release \
     --bin sui-oracle \
     --bin sui-metric-checker
 RUN mkdir /sui/bin/

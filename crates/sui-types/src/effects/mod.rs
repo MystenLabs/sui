@@ -4,15 +4,11 @@
 pub use self::effects_v2::TransactionEffectsV2;
 use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
-use crate::committee::{Committee, EpochId};
-use crate::crypto::{
-    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, EmptySignInfo,
-    default_hash,
-};
+use crate::committee::EpochId;
+use crate::crypto::{AuthoritySignInfo, EmptySignInfo, default_hash};
 use crate::digests::{
     ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
 };
-use crate::error::SuiResult;
 use crate::event::Event;
 use crate::execution::SharedInput;
 use crate::execution_status::{ExecutionStatus, MoveLocation};
@@ -28,7 +24,7 @@ pub use object_change::{
     EffectsObjectChange, ObjectIn, ObjectOut,
 };
 use serde::{Deserialize, Serialize};
-use shared_crypto::intent::{Intent, IntentScope};
+use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
 pub use test_effects_builder::TestEffectsBuilder;
 
@@ -448,28 +444,10 @@ pub struct TransactionEffectsDebugSummary {
 pub type TransactionEffectsEnvelope<S> = Envelope<TransactionEffects, S>;
 pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
-pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
 pub type TrustedSignedTransactionEffects = TrustedEnvelope<TransactionEffects, AuthoritySignInfo>;
 pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEffects, S>;
 pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<AuthoritySignInfo>;
-pub type VerifiedCertifiedTransactionEffects =
-    VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
-
-impl CertifiedTransactionEffects {
-    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
-        self.auth_sig().verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::TransactionEffects),
-            committee,
-        )
-    }
-
-    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCertifiedTransactionEffects> {
-        self.verify_authority_signatures(committee)?;
-        Ok(VerifiedCertifiedTransactionEffects::new_from_verified(self))
-    }
-}
 
 #[cfg(test)]
 #[path = "../unit_tests/effects_tests.rs"]

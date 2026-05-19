@@ -3,7 +3,7 @@ use std::fmt::Display;
 use anyhow::ensure;
 use serde::{Deserialize, Serialize};
 
-use super::{EnvironmentID, LocalDepInfo, ManifestGitDependency, OnChainDepInfo};
+use super::{EnvironmentID, EnvironmentName, LocalDepInfo, ManifestGitDependency, OnChainDepInfo};
 
 pub const EXTERNAL_RESOLVE_ARG: &str = "--resolve-deps";
 pub const EXTERNAL_RESOLVE_METHOD: &str = "resolve";
@@ -25,6 +25,7 @@ pub enum ResolverDependencyInfo {
 #[derive(Serialize, Debug)]
 pub struct ResolveRequest {
     pub env: EnvironmentID,
+    pub env_name: EnvironmentName,
     pub data: toml::Value,
 }
 
@@ -53,5 +54,35 @@ impl From<ResolverName> for String {
 impl Display for ResolverName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use indoc::indoc;
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    /// Serializing a [ResolveRequest] produces the expected JSON wire format.
+    #[test]
+    fn serialize_resolve_request() {
+        let req = ResolveRequest {
+            env: "id123".to_string(),
+            env_name: "testnet".to_string(),
+            data: toml::Value::String("foo".into()),
+        };
+        let rendered = serde_json::to_string_pretty(&req).unwrap();
+        assert_eq!(
+            rendered,
+            indoc!(
+                r#"
+                {
+                  "env": "id123",
+                  "env_name": "testnet",
+                  "data": "foo"
+                }"#
+            )
+        );
     }
 }

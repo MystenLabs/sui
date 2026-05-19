@@ -20,12 +20,15 @@ use sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::error::SuiError;
+use sui_types::error::SuiErrorKind;
 use sui_types::execution_status::ExecutionFailure;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::transaction::InputObjectKind;
 use sui_types::transaction::InputObjects;
 use sui_types::transaction::ObjectReadResult;
 use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::TransactionExpiration;
 use sui_types::transaction::TransactionKind;
 use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::transaction_executor::TransactionChecks;
@@ -111,10 +114,12 @@ pub fn simulate_transaction(
                 let mut gasless_tx = transaction.clone();
                 gasless_tx.gas_data_mut().price = 0;
                 gasless_tx.gas_data_mut().budget = 0;
+                // All gassless txns have to have a correct `ValidDuring` TransactionExpiration.
+                set_valid_during_transaction_expiration(service, &mut gasless_tx)?;
 
                 let simulation_result = executor
                     .simulate_transaction(gasless_tx.clone(), checks, false)
-                    .map_err(anyhow::Error::from)?;
+                    .map_err(simulation_error_to_rpc_error)?;
 
                 if !is_gasless_post_execution_failure(simulation_result.effects.status()) {
                     transaction = gasless_tx;
@@ -151,7 +156,7 @@ pub fn simulate_transaction(
                         TransactionChecks::Enabled,
                         true, /* allow mock gas coin */
                     )
-                    .map_err(anyhow::Error::from)?;
+                    .map_err(simulation_error_to_rpc_error)?;
 
                 let estimate = estimate_gas_budget_from_gas_cost(
                     simulation_result.effects.gas_cost_summary(),
@@ -193,7 +198,7 @@ pub fn simulate_transaction(
 
         executor
             .simulate_transaction(transaction.clone(), checks, !perform_gas_selection)
-            .map_err(anyhow::Error::from)?
+            .map_err(simulation_error_to_rpc_error)?
     };
 
     let SimulateTransactionResult {
@@ -298,6 +303,18 @@ pub fn simulate_transaction(
         response.suggested_gas_price = suggested_gas_price;
     }
     Ok(response)
+}
+
+fn simulation_error_to_rpc_error(error: SuiError) -> RpcError {
+    match error.as_inner() {
+        SuiErrorKind::UserInputError { .. } => {
+            RpcError::new(tonic::Code::InvalidArgument, error.to_string())
+        }
+        SuiErrorKind::UnsupportedFeatureError { .. } => {
+            RpcError::new(tonic::Code::InvalidArgument, error.to_string())
+        }
+        _ => RpcError::new(tonic::Code::Internal, error.to_string()),
+    }
 }
 
 fn to_command_output(
@@ -435,6 +452,31 @@ fn mock_gas_storage_cost(
         .unwrap_or(0)
 }
 
+/// Populate a `ValidDuring` expiration covering the current epoch and the next one.
+fn set_valid_during_transaction_expiration(
+    service: &RpcService,
+    transaction: &mut sui_types::transaction::TransactionData,
+) -> Result<()> {
+    // Early return if the TransactionExpiration is already set to `ValidDuring`
+    if matches!(
+        transaction.expiration(),
+        TransactionExpiration::ValidDuring { .. }
+    ) {
+        return Ok(());
+    }
+
+    let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
+    *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
+        min_epoch: Some(current_epoch),
+        max_epoch: Some(current_epoch.saturating_add(1)),
+        min_timestamp: None,
+        max_timestamp: None,
+        chain: service.chain_id,
+        nonce: rand::random(),
+    };
+    Ok(())
+}
+
 fn select_gas(
     service: &RpcService,
     transaction: &mut sui_types::transaction::TransactionData,
@@ -451,7 +493,6 @@ fn select_gas(
     use sui_types::gas_coin::GasCoin;
     use sui_types::transaction::Command;
     use sui_types::transaction::TransactionDataAPI;
-    use sui_types::transaction::TransactionExpiration;
 
     let reader = &service.reader;
 
@@ -495,17 +536,8 @@ fn select_gas(
         // Address balance
         transaction.gas_data_mut().payment.clear();
 
-        let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
-
         if matches!(transaction.expiration(), TransactionExpiration::None) {
-            *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
-                min_epoch: Some(current_epoch),
-                max_epoch: Some(current_epoch.saturating_add(1)),
-                min_timestamp: None,
-                max_timestamp: None,
-                chain: service.chain_id,
-                nonce: rand::random(),
-            };
+            set_valid_during_transaction_expiration(service, transaction)?;
         }
 
         budget
@@ -578,16 +610,8 @@ fn select_gas(
             selected_gas.insert(0, coin_reservation);
             selected_gas_value += ab_value;
 
-            // Set expiration for address balance usage if not already set
             if matches!(transaction.expiration(), TransactionExpiration::None) {
-                *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
-                    min_epoch: Some(current_epoch),
-                    max_epoch: Some(current_epoch.saturating_add(1)),
-                    min_timestamp: None,
-                    max_timestamp: None,
-                    chain: service.chain_id,
-                    nonce: rand::random(),
-                };
+                set_valid_during_transaction_expiration(service, transaction)?;
             }
         }
 
@@ -709,4 +733,52 @@ fn is_gasless_post_execution_failure(status: &ExecutionStatus) -> bool {
             ..
         })
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_types::base_types::ObjectID;
+    use sui_types::error::UserInputError;
+
+    #[test]
+    fn maps_simulation_user_input_errors_to_invalid_argument() {
+        let error = SuiErrorKind::UserInputError {
+            error: UserInputError::ObjectNotFound {
+                object_id: ObjectID::ZERO,
+                version: None,
+            },
+        }
+        .into();
+
+        let status = simulation_error_to_rpc_error(error).into_status_proto();
+
+        assert_eq!(status.code, tonic::Code::InvalidArgument as i32);
+        assert!(
+            status
+                .message
+                .contains("Error checking transaction input objects")
+        );
+    }
+
+    #[test]
+    fn maps_simulation_unsupported_feature_errors_to_invalid_argument() {
+        let error = SuiErrorKind::UnsupportedFeatureError {
+            error: "not supported".to_string(),
+        }
+        .into();
+
+        let status = simulation_error_to_rpc_error(error).into_status_proto();
+
+        assert_eq!(status.code, tonic::Code::InvalidArgument as i32);
+    }
+
+    #[test]
+    fn maps_uncategorized_simulation_errors_to_internal() {
+        let error = SuiErrorKind::Unknown("boom".to_string()).into();
+
+        let status = simulation_error_to_rpc_error(error).into_status_proto();
+
+        assert_eq!(status.code, tonic::Code::Internal as i32);
+    }
 }

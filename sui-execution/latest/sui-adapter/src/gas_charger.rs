@@ -202,7 +202,7 @@ pub mod checked {
             }
         }
 
-        fn gas_payment_location(&self) -> Option<PaymentLocation> {
+        pub(crate) fn gas_payment_location(&self) -> Option<PaymentLocation> {
             match &self.payment {
                 PaymentMetadata::Unmetered | PaymentMetadata::Gasless => None,
                 PaymentMetadata::Smash(metadata) => Some(metadata.gas_charge_location),

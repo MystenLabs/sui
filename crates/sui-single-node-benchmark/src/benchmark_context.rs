@@ -21,7 +21,7 @@ use sui_types::digests::ChainIdentifier;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::gas_coin::GAS;
 use sui_types::transaction::DEFAULT_VALIDATOR_GAS_PRICE;
-use sui_types::transaction::{Argument, Command, Transaction};
+use sui_types::transaction::{Argument, Command, Transaction, TransactionKey};
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
 use tracing::{info, warn};
 
@@ -243,9 +243,8 @@ impl BenchmarkContext {
     ) {
         let assigned_versions = assigned_versions.into_map();
         if print_sample_tx {
-            // We must use the first transaction in case there are shared objects and the transactions
-            // must be executed in order.
-            self.execute_sample_transaction(&transactions[0]).await;
+            self.execute_sample_transaction(&transactions, &assigned_versions)
+                .await;
         }
 
         let tx_count = transactions.len();
@@ -309,8 +308,10 @@ impl BenchmarkContext {
         assigned_versions: AssignedTxAndVersions,
         print_sample_tx: bool,
     ) {
+        let assigned_versions = assigned_versions.into_map();
         if print_sample_tx {
-            self.execute_sample_transaction(&transactions[0]).await;
+            self.execute_sample_transaction(&transactions, &assigned_versions)
+                .await;
         }
 
         let tx_count = transactions.len();
@@ -355,16 +356,31 @@ impl BenchmarkContext {
     }
 
     /// Print out a sample transaction and its effects so that we can get a rough idea
-    /// what we are measuring.
-    async fn execute_sample_transaction(&self, sample_transaction: &Transaction) {
+    /// what we are measuring. Effects are produced against a throwaway in-memory
+    /// snapshot of validator state so the real benchmark loop can still execute
+    /// the same transaction afterwards.
+    async fn execute_sample_transaction(
+        &self,
+        transactions: &[Transaction],
+        assigned_versions: &HashMap<TransactionKey, AssignedVersions>,
+    ) {
+        // We must use the first transaction in case there are shared objects
+        // and the transactions must be executed in order.
+        let sample = &transactions[0];
+        let versions = assigned_versions
+            .get(&sample.key())
+            .cloned()
+            .unwrap_or_default();
+
         info!(
             "Sample transaction digest={:?}: {:?}",
-            sample_transaction.digest(),
-            sample_transaction.data()
+            sample.digest(),
+            sample.data()
         );
+        let sandbox = self.validator.create_in_memory_store();
         let effects = self
-            .validator()
-            .execute_dry_run(sample_transaction.clone())
+            .validator
+            .execute_transaction_in_memory(sandbox, sample.clone(), &versions)
             .await;
         info!("Sample effects: {:?}\n\n", effects);
         assert!(effects.status().is_ok());
@@ -376,7 +392,9 @@ impl BenchmarkContext {
         assigned_versions: AssignedTxAndVersions,
         checkpoint_size: usize,
     ) {
-        self.execute_sample_transaction(&transactions[0]).await;
+        let assigned_versions = assigned_versions.into_map();
+        self.execute_sample_transaction(&transactions, &assigned_versions)
+            .await;
 
         info!("Executing all transactions to generate effects");
         let tx_count = transactions.len();
@@ -450,10 +468,9 @@ impl BenchmarkContext {
         &self,
         store: InMemoryObjectStore,
         transactions: Vec<Transaction>,
-        assigned_versions: AssignedTxAndVersions,
+        assigned_versions: HashMap<TransactionKey, AssignedVersions>,
     ) -> Vec<TransactionEffects> {
         let is_consensus_tx = transactions.iter().any(|tx| tx.is_consensus_tx());
-        let assigned_versions = assigned_versions.into_map();
         if is_consensus_tx {
             // With shared objects, we must execute each transaction in order.
             let mut effects = Vec::new();

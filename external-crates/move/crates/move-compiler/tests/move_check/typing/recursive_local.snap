@@ -19,7 +19,7 @@ error[E04005]: expected a single type
   │         │    
   │         Invalid type for local
 
-error[E04008]: invalid type. recursive type found
+error[E04008]: recursive type not allowed
   ┌─ tests/move_check/typing/recursive_local.move:5:9
   │
 4 │         let x;

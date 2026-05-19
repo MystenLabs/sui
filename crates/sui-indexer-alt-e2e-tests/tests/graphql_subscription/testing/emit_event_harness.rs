@@ -62,3 +62,25 @@ pub async fn emit_with_value(
     add_emit_with_value_call(&mut ptb, package_id, value);
     execute_ptb(cluster, ptb).await.0
 }
+
+/// Emit a `TestEvent` and create a `TestObject` in the same transaction. Used by tests
+/// that need an event subscription yield to also reference object changes via
+/// `event { transaction { effects { objectChanges } } }`.
+pub async fn emit_and_create(
+    cluster: &mut test_cluster::TestCluster,
+    package_id: ObjectID,
+    value: u64,
+) -> String {
+    let sender = cluster.wallet.active_address().unwrap();
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let value_arg = ptb.pure(value).unwrap();
+    let test_object = ptb.programmable_move_call(
+        package_id,
+        ident_str!("emit_test_event").to_owned(),
+        ident_str!("emit_and_create").to_owned(),
+        vec![],
+        vec![value_arg],
+    );
+    ptb.transfer_arg(sender, test_object);
+    execute_ptb(cluster, ptb).await.0
+}

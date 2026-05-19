@@ -5,10 +5,14 @@ source: crates/move-decompiler/tests/tests.rs
 
 module basic::funs;
 
+// -- uses -- 
+
+use 0x0::structs::S;
+
 // -- functions -- 
 
 public fun f() {}
 
-public fun f_s(l0: &basic::structs::S): &basic::structs::S {
+public fun f_s(l0: &S): &S {
     return l0
 }

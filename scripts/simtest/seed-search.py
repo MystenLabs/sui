@@ -202,14 +202,25 @@ def print_reachability_summary(binary_path, reached_assertions, sometimes_assert
 def parse_package_name(package_id):
     """Extract the package name from a cargo `package_id` string.
 
-    Handles both modern (`path+file:///abs#name@1.0.0`, `registry+...#name@1.0.0`)
-    and legacy (`name version (source)`) formats.
+    Cargo emits several `package_id` shapes:
+      - `path+file:///abs/path#name@version`  (name differs from dir basename)
+      - `path+file:///abs/path#version`       (name matches dir basename — shortened)
+      - `registry+https://...#name@version`
+      - legacy `name version (source)`
     """
     if not package_id:
         return None
+    # `#name@version` form — name is the group between '#' and '@'.
     m = re.search(r'#([^@/]+)@', package_id)
     if m:
         return m.group(1)
+    # `path+file:///abs/path#version` form — fall back to the directory basename.
+    m = re.match(r'^path\+file://(.+?)#', package_id)
+    if m:
+        basename = os.path.basename(m.group(1).rstrip('/'))
+        if basename:
+            return basename
+    # Legacy `name version (source)` form.
     m = re.match(r'^([^\s]+)\s', package_id)
     if m:
         return m.group(1)

@@ -20,6 +20,7 @@ use sui_indexer_alt_schema::transactions::BalanceChange as StoredBalanceChange;
 use sui_rpc::proto::sui::rpc::v2::BalanceChange as GrpcBalanceChange;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffects as NativeTransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::execution_status::ExecutionStatus as NativeExecutionStatus;
 use sui_types::signature::GenericSignature;
@@ -119,6 +120,21 @@ impl EffectsContents {
                 .map(|effects| match effects.status() {
                     NativeExecutionStatus::Success => ExecutionStatus::Success,
                     NativeExecutionStatus::Failure(_) => ExecutionStatus::Failure,
+                })
+                .map_err(RpcError::from),
+        )
+    }
+
+    /// The schema version of the effects struct.
+    async fn version(&self) -> Option<Result<i32, RpcError>> {
+        let content = self.contents.as_ref()?;
+
+        Some(
+            content
+                .effects()
+                .map(|effects| match effects {
+                    NativeTransactionEffects::V1(_) => 1i32,
+                    NativeTransactionEffects::V2(_) => 2,
                 })
                 .map_err(RpcError::from),
         )
@@ -541,6 +557,16 @@ impl EffectsContents {
         if self.contents.is_some() {
             return Ok(self.clone());
         }
+
+        // Streaming fast path: if the scope is backed by a streamed checkpoint containing this
+        // transaction, hydrate from the in-memory payload instead of hitting the DB.
+        if let Some(tx) = self.scope.streamed_transaction_by_digest(digest) {
+            return Ok(Self {
+                scope: self.scope.clone(),
+                contents: Some(Arc::new(tx.contents.clone())),
+            });
+        }
+
         let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
             return Ok(self.clone());
         };

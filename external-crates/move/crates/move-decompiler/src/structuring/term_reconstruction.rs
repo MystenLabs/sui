@@ -7,6 +7,11 @@ use move_stackless_bytecode_2::ast::{DataOp, RValue, RegId, Trivial};
 
 use std::collections::{BTreeMap, HashSet};
 
+/// Reconstruct one basic block's instructions as an `Exp`.
+///
+/// `let_binds` is the per-block "already let-bound in this block" set: the first StoreLoc of a
+/// local emits `let X = e`, subsequent stores `X = e`. Lifting that `let` to a wider scope when
+/// the block sits inside an IfElse/Switch/Loop arm is `hoist_declarations`'s job.
 pub fn exp(
     block: move_stackless_bytecode_2::ast::BasicBlock,
     let_binds: &mut HashSet<RegId>,
@@ -26,7 +31,7 @@ pub fn exp(
                 rhs: RValue::Call { target, args },
             } => {
                 let args = trivials(&mut map, args);
-                let call = Out::Exp::Call(target, args);
+                let call = Out::Exp::Call((Out::ModuleRef::Qualified(target.0), target.1), args);
                 match &lhs[..] {
                     [] => {
                         seq.push(call);
@@ -64,7 +69,11 @@ pub fn exp(
                     let module_id = ty.struct_.defining_module;
                     let name = ty.struct_.name;
                     let rhs = Box::new(trivials(&mut map, args.clone()).remove(0));
-                    seq.push(Out::Exp::Unpack((module_id, name), unpack_fields, rhs));
+                    seq.push(Out::Exp::Unpack(
+                        Out::TypeRef::Qualified(Out::ModuleRef::Qualified(module_id), name),
+                        unpack_fields,
+                        rhs,
+                    ));
                 }
                 DataOp::UnpackVariant(_)
                 | DataOp::UnpackVariantImmRef(_)
@@ -89,7 +98,10 @@ pub fn exp(
                     let rhs = Box::new(trivials(&mut map, args.clone()).remove(0));
                     seq.push(Out::Exp::UnpackVariant(
                         unpack_kind,
-                        (module_id, enum_, variant),
+                        (
+                            Out::TypeRef::Qualified(Out::ModuleRef::Qualified(module_id), enum_),
+                            variant,
+                        ),
                         unpack_fields,
                         rhs,
                     ));
@@ -207,7 +219,7 @@ fn trivial(map: &mut BTreeMap<RegId, Out::Exp>, triv: Trivial) -> Out::Exp {
     }
 }
 
-fn local_name(id: usize) -> String {
+pub(crate) fn local_name(id: usize) -> String {
     format!("l{}", id)
 }
 

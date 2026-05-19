@@ -343,6 +343,22 @@ pub async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitR
         .stderr(Stdio::piped());
     cmd.env("GIT_CONFIG_GLOBAL", "");
 
+    // Sanitize Git environment variables that may leak from the parent process.
+    // When the Move build is invoked from within a Git context (e.g. CI, hooks,
+    // worktrees), these variables can cause child git operations to target the
+    // wrong repository or use the wrong index.
+    for var in [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_CEILING_DIRECTORIES",
+        "GIT_COMMON_DIR",
+    ] {
+        cmd.env_remove(var);
+    }
+
     if let Some(cwd) = cwd {
         cmd.current_dir(cwd);
     }
@@ -350,6 +366,14 @@ pub async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitR
     debug!("running `{}`", display_cmd(&cmd));
     debug!("  in directory `{:?}`", cmd.as_std().get_current_dir());
 
+    // Under simtest, no tokio runtime is available during initial package fetching, so
+    // run the command synchronously via the inner `std::process::Command`.
+    #[cfg(msim)]
+    let output = cmd
+        .as_std_mut()
+        .output()
+        .map_err(|e| GitError::io_error(&cmd, &cwd, e))?;
+    #[cfg(not(msim))]
     let output = cmd
         .output()
         .await

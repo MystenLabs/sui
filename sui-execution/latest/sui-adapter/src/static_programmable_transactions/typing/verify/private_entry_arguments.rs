@@ -10,11 +10,8 @@ use crate::sp;
 use crate::static_programmable_transactions::{env::Env, typing::ast as T};
 use move_binary_format::file_format::Visibility;
 use mysten_common::ZipDebugEqIteratorExt;
-use sui_types::error::SafeIndex;
-use sui_types::{
-    error::{ExecutionError, command_argument_error},
-    execution_status::CommandArgumentError,
-};
+use sui_types::error::{ExecutionErrorTrait, SafeIndex};
+use sui_types::execution_status::{CommandArgumentError, ExecutionErrorKind};
 
 /// Marks if a clique is hot or not
 #[derive(Clone, Copy, Debug)]
@@ -61,7 +58,7 @@ struct Context {
 }
 
 impl Temperature {
-    fn add(self, other: Temperature) -> Result<Temperature, ExecutionError> {
+    fn add<E: ExecutionErrorTrait>(self, other: Temperature) -> Result<Temperature, E> {
         Ok(match (self, other) {
             (Temperature::AlwaysHot, _) | (_, Temperature::AlwaysHot) => Temperature::AlwaysHot,
             (Temperature::Count(a), Temperature::Count(b)) => Temperature::Count(
@@ -71,7 +68,7 @@ impl Temperature {
         })
     }
 
-    fn sub(self, b: usize) -> Result<Temperature, ExecutionError> {
+    fn sub<E: ExecutionErrorTrait>(self, b: usize) -> Result<Temperature, E> {
         Ok(match self {
             Temperature::AlwaysHot => Temperature::AlwaysHot,
             Temperature::Count(a) => Temperature::Count(
@@ -104,7 +101,7 @@ impl Cliques {
     }
 
     /// Returns the root of the clique (resolving any merges/forwards)
-    fn root(&self, id: CliqueID) -> Result<CliqueID, ExecutionError> {
+    fn root<E: ExecutionErrorTrait>(&self, id: CliqueID) -> Result<CliqueID, E> {
         let mut visited = BTreeSet::from([id]);
         let mut cur = id;
         loop {
@@ -122,8 +119,8 @@ impl Cliques {
     }
 
     /// Returns the temperature of the clique (at the root)
-    fn temp(&self, id: CliqueID) -> Result<Temperature, ExecutionError> {
-        let root = self.root(id)?;
+    fn temp<E: ExecutionErrorTrait>(&self, id: CliqueID) -> Result<Temperature, E> {
+        let root = self.root::<E>(id)?;
         let Clique::Root(temp) = *self.0.safe_get(root)? else {
             invariant_violation!("Clique {root} should be a root");
         };
@@ -131,8 +128,8 @@ impl Cliques {
     }
 
     /// Returns a mutable reference to the temperature of the clique (at the root)
-    fn temp_mut(&mut self, id: CliqueID) -> Result<&mut Temperature, ExecutionError> {
-        let root = self.root(id)?;
+    fn temp_mut<E: ExecutionErrorTrait>(&mut self, id: CliqueID) -> Result<&mut Temperature, E> {
+        let root = self.root::<E>(id)?;
         let Clique::Root(temp) = self.0.safe_get_mut(root)? else {
             invariant_violation!("Clique {root} should be a root");
         };
@@ -141,21 +138,24 @@ impl Cliques {
 
     /// Modifies the temperature of this clique (at the root) via `f`, whose first parameter is the
     /// current temperature
-    fn modify_temp(
+    fn modify_temp<E: ExecutionErrorTrait>(
         &mut self,
         id: CliqueID,
-        f: impl FnOnce(Temperature) -> Result<Temperature, ExecutionError>,
-    ) -> Result<(), ExecutionError> {
-        let temp = self.temp_mut(id)?;
+        f: impl FnOnce(Temperature) -> Result<Temperature, E>,
+    ) -> Result<(), E> {
+        let temp = self.temp_mut::<E>(id)?;
         *temp = f(*temp)?;
         Ok(())
     }
 
     /// Merges the given cliques into one clique
-    fn merge(&mut self, clique_ids: BTreeSet<CliqueID>) -> Result<CliqueID, ExecutionError> {
+    fn merge<E: ExecutionErrorTrait>(
+        &mut self,
+        clique_ids: BTreeSet<CliqueID>,
+    ) -> Result<CliqueID, E> {
         let roots: BTreeSet<CliqueID> = clique_ids
             .iter()
-            .map(|&id| self.root(id))
+            .map(|&id| self.root::<E>(id))
             .collect::<Result<_, _>>()?;
         Ok(match roots.len() {
             0 => self.next(),
@@ -164,9 +164,9 @@ impl Cliques {
                 let merged = self.next();
                 let mut merged_temp = Temperature::Count(0);
                 for &root in &roots {
-                    let temp = self.temp(root)?;
+                    let temp = self.temp::<E>(root)?;
                     *self.0.safe_get_mut(root)? = Clique::Merged(merged);
-                    merged_temp = merged_temp.add(temp)?;
+                    merged_temp = merged_temp.add::<E>(temp)?;
                 }
                 *self.0.safe_get_mut(merged)? = Clique::Root(merged_temp);
                 // For efficiency, forward all the non-roots to the merged root
@@ -189,33 +189,40 @@ impl Cliques {
     }
 
     /// Creates a new value in the given `clique` and bumps the hot count if `heats` is true
-    fn new_value(&mut self, clique: CliqueID, heats: bool) -> Result<Value, ExecutionError> {
+    fn new_value<E: ExecutionErrorTrait>(
+        &mut self,
+        clique: CliqueID,
+        heats: bool,
+    ) -> Result<Value, E> {
         if heats {
-            self.modify_temp(clique, |t| t.add(Temperature::Count(1)))?;
+            self.modify_temp::<E>(clique, |t| t.add::<E>(Temperature::Count(1)))?;
         }
         Ok(Value::Normal { clique, heats })
     }
 
     /// Releases a value, decrementing the hot count of its clique if it `heats`.
-    fn release_value(&mut self, value: Value) -> Result<Option<CliqueID>, ExecutionError> {
+    fn release_value<E: ExecutionErrorTrait>(
+        &mut self,
+        value: Value,
+    ) -> Result<Option<CliqueID>, E> {
         let (clique, heats) = match value {
             Value::TxContext => return Ok(None),
             Value::Normal { clique, heats } => (clique, heats),
         };
         if heats {
-            self.modify_temp(clique, |t| t.sub(1))?;
+            self.modify_temp::<E>(clique, |t| t.sub::<E>(1))?;
         }
         Ok(Some(clique))
     }
 
     /// Returns true if the clique is hot, always hot or a positive hot count
-    fn is_hot(&self, clique: CliqueID) -> Result<bool, ExecutionError> {
-        Ok(self.temp(clique)?.is_hot())
+    fn is_hot<E: ExecutionErrorTrait>(&self, clique: CliqueID) -> Result<bool, E> {
+        Ok(self.temp::<E>(clique)?.is_hot())
     }
 
     /// Marks the given clique as always hot
-    fn mark_always_hot(&mut self, clique: CliqueID) -> Result<(), ExecutionError> {
-        self.modify_temp(clique, |_| Ok(Temperature::AlwaysHot))
+    fn mark_always_hot<E: ExecutionErrorTrait>(&mut self, clique: CliqueID) -> Result<(), E> {
+        self.modify_temp::<E>(clique, |_| Ok(Temperature::AlwaysHot))
     }
 }
 
@@ -249,7 +256,7 @@ impl Context {
     }
 
     // Checks if all values are released and that all hot counts are zero
-    fn finish(self) -> Result<(), ExecutionError> {
+    fn finish<E: ExecutionErrorTrait>(self) -> Result<(), E> {
         let Context {
             mut cliques,
             tx_context,
@@ -277,10 +284,10 @@ impl Context {
                 Value::Normal { clique, .. } => clique,
             };
             clique_ids.insert(*clique);
-            cliques.release_value(value)?;
+            cliques.release_value::<E>(value)?;
         }
         for id in clique_ids {
-            match cliques.temp(id)? {
+            match cliques.temp::<E>(id)? {
                 Temperature::AlwaysHot => (),
                 Temperature::Count(c) => {
                     assert_invariant!(c == 0, "All hot counts should be zero at end")
@@ -290,7 +297,10 @@ impl Context {
         Ok(())
     }
 
-    fn location(&mut self, location: &T::Location) -> Result<&mut Option<Value>, ExecutionError> {
+    fn location<E: ExecutionErrorTrait>(
+        &mut self,
+        location: &T::Location,
+    ) -> Result<&mut Option<Value>, E> {
         Ok(match location {
             T::Location::GasCoin => &mut self.gas_coin,
             T::Location::ObjectInput(i) => self.objects.safe_get_mut(*i as usize)?,
@@ -305,16 +315,16 @@ impl Context {
         })
     }
 
-    fn usage(&mut self, usage: &T::Usage) -> Result<Value, ExecutionError> {
+    fn usage<E: ExecutionErrorTrait>(&mut self, usage: &T::Usage) -> Result<Value, E> {
         match usage {
             T::Usage::Move(location) => {
-                let Some(value) = self.location(location)?.take() else {
+                let Some(value) = self.location::<E>(location)?.take() else {
                     invariant_violation!("Move of moved value");
                 };
                 Ok(value)
             }
             T::Usage::Copy { location, .. } => {
-                let Some(location) = self.location(location)?.as_ref() else {
+                let Some(location) = self.location::<E>(location)?.as_ref() else {
                     invariant_violation!("Copy of moved value");
                 };
                 let (clique, heats) = match location {
@@ -323,30 +333,33 @@ impl Context {
                     }
                     Value::Normal { clique, heats } => (*clique, *heats),
                 };
-                self.cliques.new_value(clique, heats)
+                self.cliques.new_value::<E>(clique, heats)
             }
         }
     }
 
-    fn argument(&mut self, sp!(_, (arg, _ty)): &T::Argument) -> Result<Value, ExecutionError> {
+    fn argument<E: ExecutionErrorTrait>(
+        &mut self,
+        sp!(_, (arg, _ty)): &T::Argument,
+    ) -> Result<Value, E> {
         Ok(match arg {
-            T::Argument__::Use(usage) => self.usage(usage)?,
+            T::Argument__::Use(usage) => self.usage::<E>(usage)?,
             T::Argument__::Read(usage) | T::Argument__::Freeze(usage) => {
                 // This is equivalent to just the `usage` but we go through the steps of
                 // creating a new value and releasing the old one for "correctness" and clarity
-                let value = self.usage(usage)?;
+                let value = self.usage::<E>(usage)?;
                 let (clique, heats) = match &value {
                     Value::TxContext => {
                         invariant_violation!("Cannot read or freeze TxContext");
                     }
                     Value::Normal { clique, heats } => (*clique, *heats),
                 };
-                let new_value = self.cliques.new_value(clique, heats)?;
-                self.cliques.release_value(value)?;
+                let new_value = self.cliques.new_value::<E>(clique, heats)?;
+                self.cliques.release_value::<E>(value)?;
                 new_value
             }
             T::Argument__::Borrow(_, location) => {
-                let Some(location) = self.location(location)?.as_ref() else {
+                let Some(location) = self.location::<E>(location)?.as_ref() else {
                     invariant_violation!("Borrow of moved value");
                 };
                 let (clique, heats) = match location {
@@ -358,7 +371,7 @@ impl Context {
                 };
                 // Create a new value (representing the reference to this value)
                 // that is in the same clique and has the same heat
-                self.cliques.new_value(clique, heats)?
+                self.cliques.new_value::<E>(clique, heats)?
             }
         })
     }
@@ -379,7 +392,10 @@ impl Context {
 /// - A non-public `entry` function cannot have any inputs that are in a `hot` clique.
 /// - Note that command inputs are released before checking the rules, so an `entry` function can
 ///   consume a hot potato value if it is the last "heating" value in its clique.
-pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
+pub fn verify<Mode: ExecutionMode>(
+    env: &Env<Mode>,
+    txn: &T::Transaction,
+) -> Result<(), Mode::Error> {
     let mut context = Context::new(txn);
     for c in &txn.commands {
         let result_values = command::<Mode>(env, &mut context, c)
@@ -390,15 +406,15 @@ pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<()
         );
         context.results.push(result_values);
     }
-    context.finish()?;
+    context.finish::<Mode::Error>()?;
     Ok(())
 }
 
 fn command<Mode: ExecutionMode>(
-    env: &Env,
+    env: &Env<Mode>,
     context: &mut Context,
     sp!(_, c): &T::Command,
-) -> Result<Vec<Option<Value>>, ExecutionError> {
+) -> Result<Vec<Option<Value>>, Mode::Error> {
     let T::Command_ {
         command,
         result_type,
@@ -417,10 +433,12 @@ fn command<Mode: ExecutionMode>(
     }
     let merged_clique = context
         .cliques
-        .merge(argument_cliques.into_iter().map(|(_, c)| c).collect())?;
+        .merge::<Mode::Error>(argument_cliques.into_iter().map(|(_, c)| c).collect())?;
     let consumes_shared_objects = !consumed_shared_objects.is_empty();
     if consumes_shared_objects {
-        context.cliques.mark_always_hot(merged_clique)?;
+        context
+            .cliques
+            .mark_always_hot::<Mode::Error>(merged_clique)?;
     }
     assert_invariant!(
         drop_values.len() == result_type.len(),
@@ -441,27 +459,27 @@ fn command<Mode: ExecutionMode>(
 }
 
 /// Returns the index of the first hot argument, if any
-fn arguments<'a>(
-    env: &Env,
+fn arguments<'a, Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     args: impl IntoIterator<Item = &'a T::Argument>,
-) -> Result<Vec<(u16, CliqueID)>, ExecutionError> {
+) -> Result<Vec<(u16, CliqueID)>, Mode::Error> {
     let mut arguments = vec![];
     for arg in args {
-        if let Some(clique) = argument(env, context, arg)? {
+        if let Some(clique) = argument::<Mode>(env, context, arg)? {
             arguments.push((arg.idx, clique));
         }
     }
     Ok(arguments)
 }
 
-fn argument(
-    _env: &Env,
+fn argument<Mode: ExecutionMode>(
+    _env: &Env<Mode>,
     context: &mut Context,
     arg: &T::Argument,
-) -> Result<Option<CliqueID>, ExecutionError> {
-    let value = context.argument(arg)?;
-    context.cliques.release_value(value)
+) -> Result<Option<CliqueID>, Mode::Error> {
+    let value = context.argument::<Mode::Error>(arg)?;
+    context.cliques.release_value::<Mode::Error>(value)
 }
 
 /// Checks a move call for
@@ -472,11 +490,11 @@ fn argument(
 ///
 /// Returns true iff any return type is a hot potato
 fn move_call<Mode: ExecutionMode>(
-    _env: &Env,
+    _env: &Env<Mode>,
     context: &mut Context,
     call: &T::MoveCall,
     argument_cliques: &[(u16, CliqueID)],
-) -> Result<(), ExecutionError> {
+) -> Result<(), Mode::Error> {
     let T::MoveCall {
         function,
         arguments: _,
@@ -487,15 +505,17 @@ fn move_call<Mode: ExecutionMode>(
     if is_entry && is_non_public && !Mode::allow_arbitrary_values() {
         let mut hot_argument: Option<u16> = None;
         for (idx, clique) in argument_cliques {
-            if context.cliques.is_hot(*clique)? {
+            if context.cliques.is_hot::<Mode::Error>(*clique)? {
                 hot_argument = Some(*idx);
                 break;
             }
         }
         if let Some(idx) = hot_argument {
-            return Err(command_argument_error(
-                CommandArgumentError::InvalidArgumentToPrivateEntryFunction,
-                idx as usize,
+            return Err(Mode::Error::from_kind(
+                ExecutionErrorKind::command_argument_error(
+                    CommandArgumentError::InvalidArgumentToPrivateEntryFunction,
+                    idx,
+                ),
             ));
         }
     }

@@ -16,7 +16,6 @@ use crate::{
     ObjectProviderCache, SuiRpcModule, get_balance_changes_from_effect, get_object_changes,
     with_tracing,
 };
-use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactionOrchestrator;
@@ -27,7 +26,6 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::signature::GenericSignature;
@@ -269,32 +267,20 @@ impl TransactionExecutionApi {
     pub fn prepare_dry_run_transaction_block(
         &self,
         tx_bytes: Base64,
-    ) -> Result<(TransactionData, TransactionDigest, Vec<InputObjectKind>), SuiRpcInputError> {
+    ) -> Result<(TransactionData, Vec<InputObjectKind>), SuiRpcInputError> {
         let tx_data: TransactionData = self.convert_bytes(tx_bytes)?;
         let input_objs = tx_data.input_objects()?;
-        let intent_msg = IntentMessage::new(
-            Intent {
-                version: IntentVersion::V0,
-                scope: IntentScope::TransactionData,
-                app_id: AppId::Sui,
-            },
-            tx_data,
-        );
-        let txn_digest = TransactionDigest::new(default_hash(&intent_msg.value));
-        Ok((intent_msg.value, txn_digest, input_objs))
+        Ok((tx_data, input_objs))
     }
 
     async fn dry_run_transaction_block(
         &self,
         tx_bytes: Base64,
     ) -> Result<DryRunTransactionBlockResponse, Error> {
-        let (txn_data, txn_digest, input_objs) =
-            self.prepare_dry_run_transaction_block(tx_bytes)?;
+        let (txn_data, input_objs) = self.prepare_dry_run_transaction_block(tx_bytes)?;
         let sender = txn_data.sender();
-        let (resp, written_objects, transaction_effects, mock_gas) = self
-            .state
-            .dry_exec_transaction(txn_data.clone(), txn_digest)
-            .await?;
+        let (resp, written_objects, transaction_effects, mock_gas) =
+            self.state.dry_exec_transaction(txn_data.clone()).await?;
         let object_cache = ObjectProviderCache::new_with_cache(self.state.clone(), written_objects);
         let balance_changes = get_balance_changes_from_effect(
             &object_cache,

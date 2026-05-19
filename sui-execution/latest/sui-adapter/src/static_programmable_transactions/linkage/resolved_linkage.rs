@@ -10,7 +10,7 @@ use crate::{
 };
 use move_vm_runtime::shared::linkage_context::LinkageContext;
 use std::{borrow::Borrow, collections::BTreeMap, rc::Rc};
-use sui_types::{base_types::ObjectID, error::ExecutionError};
+use sui_types::{base_types::ObjectID, error::ExecutionErrorTrait};
 
 #[derive(Clone, Debug)]
 pub struct ExecutableLinkage(pub Rc<ResolvedLinkage>);
@@ -23,12 +23,13 @@ impl ExecutableLinkage {
     /// Given a list of object IDs, generate a `ResolvedLinkage` for them.
     /// Since this linkage analysis should only be used for types, all packages are resolved
     /// "upwards" (i.e., later versions of the package are preferred).
-    pub fn type_linkage<I>(
+    pub fn type_linkage<I, E>(
         config: ResolutionConfig,
         ids: I,
         store: &dyn PackageStore,
-    ) -> Result<Self, ExecutionError>
+    ) -> Result<Self, E>
     where
+        E: ExecutionErrorTrait,
         I: IntoIterator,
         I::Item: Borrow<ObjectID>,
     {
@@ -39,12 +40,13 @@ impl ExecutableLinkage {
         )))
     }
 
-    pub fn linkage_context(&self) -> Result<LinkageContext, ExecutionError> {
+    pub fn linkage_context<E: ExecutionErrorTrait>(&self) -> Result<LinkageContext, E> {
         LinkageContext::new(self.0.linkage.iter().map(|(k, v)| (**k, **v)).collect()).map_err(|e| {
             make_invariant_violation!(
                 "Failed to create linkage context from resolved linkage: {:?}",
                 e
             )
+            .into()
         })
     }
 }

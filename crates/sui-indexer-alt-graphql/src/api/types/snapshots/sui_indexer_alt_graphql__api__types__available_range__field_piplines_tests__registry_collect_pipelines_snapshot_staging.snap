@@ -1691,6 +1691,9 @@ TransactionEffects.checkpoint
 TransactionEffects.status
   => {}
 
+TransactionEffects.version
+  => {}
+
 TransactionEffects.lamportVersion
   => {}
 

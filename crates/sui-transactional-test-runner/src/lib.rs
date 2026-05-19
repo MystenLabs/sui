@@ -128,7 +128,6 @@ pub trait TransactionalAdapter: Send + Sync + ReadStore {
     async fn dry_run_transaction_block(
         &self,
         transaction_block: TransactionData,
-        transaction_digest: TransactionDigest,
     ) -> SuiResult<DryRunTransactionBlockResponse>;
 
     async fn dev_inspect_transaction_block(
@@ -212,10 +211,9 @@ impl TransactionalAdapter for ValidatorWithFullnode {
     async fn dry_run_transaction_block(
         &self,
         transaction_block: TransactionData,
-        transaction_digest: TransactionDigest,
     ) -> SuiResult<DryRunTransactionBlockResponse> {
         self.fullnode
-            .dry_exec_transaction(transaction_block, transaction_digest)
+            .dry_exec_transaction(transaction_block)
             .await
             .map(|result| result.0)
     }
@@ -499,7 +497,6 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
     async fn dry_run_transaction_block(
         &self,
         _transaction_block: TransactionData,
-        _transaction_digest: TransactionDigest,
     ) -> SuiResult<DryRunTransactionBlockResponse> {
         unimplemented!("dry_run_transaction_block not supported in simulator mode")
     }

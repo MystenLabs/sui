@@ -453,7 +453,7 @@ pub enum SuiClientCommands {
         name = "test-publish",
         after_long_help = "The `test-publish` command is used to publish packages ephemerally, i.e. without recording the published addresses in the main `Published.toml` file. Running `sui client test-publish --pubfile-path <pubfile> --build-env <env>` will build the package for environment <env>, but will publish it on the current network, taking the dependency addresses from <pubfile>. It will also record the publication information for the package in <pubfile>. \n\
                 \n\
-                See https://docs.sui.io/guides/developer/sui-101/move-package-management for more information."
+                See https://docs.sui.io/guides/developer/packages/move-package-management for more information."
     )]
     TestPublish(TestPublishArgs),
 
@@ -465,7 +465,7 @@ pub enum SuiClientCommands {
         name = "test-upgrade",
         after_long_help = "The `test-upgrade` command is used to upgrade ephemeral packages, for packages published using `test-publish` command. This does not write publication info to `Published.toml` file. Running `sui client test-upgrade --pubfile-path <pubfile> --build-env <env>` will build the package for environment <env>, but will publish it on the current network, taking the dependency addresses from <pubfile>. It will also record the publication information for the package in <pubfile>. \n\
             \n\
-            See https://docs.sui.io/guides/developer/sui-101/move-package-management for more information."
+            See https://docs.sui.io/guides/developer/packages/move-package-management for more information."
     )]
     TestUpgrade(TestUpgradeArgs),
 
@@ -947,7 +947,6 @@ impl SuiClientCommands {
                 verify_no_test_mode(&args.build_config)?;
                 verify_no_pubfile_path(&args.build_config, "upgrade")?;
                 verify_no_build_env(&args.build_config, "upgrade")?;
-                let _ = context.cache_chain_id().await?;
                 upgrade_command(args, context, false).await?
             }
 
@@ -960,7 +959,6 @@ impl SuiClientCommands {
                 verify_no_test_mode(&args.build_config)?;
                 verify_no_pubfile_path(&args.build_config, "publish")?;
                 verify_no_build_env(&args.build_config, "publish")?;
-                let _ = context.cache_chain_id().await?;
                 let mut root_package = load_root_pkg_for_publish_upgrade(
                     context,
                     &args.build_config,

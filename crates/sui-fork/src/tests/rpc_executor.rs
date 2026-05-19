@@ -14,26 +14,38 @@ use std::time::Duration;
 
 use rand::rngs::OsRng;
 
+use move_core_types::identifier::Identifier;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
 use sui_protocol_config::Chain;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::crypto::{AccountKeyPair, KeypairTraits, get_key_pair};
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::KeypairTraits;
+use sui_types::crypto::get_key_pair;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiErrorKind;
 use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::gas_coin::GAS;
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::{Object, Owner};
+use sui_types::object::Object;
+use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{GasData, Transaction, TransactionData, TransactionKind};
-use sui_types::transaction_driver_types::{
-    EffectsFinalityInfo, ExecuteTransactionRequestV3, TransactionSubmissionError,
-};
-use sui_types::transaction_executor::{TransactionChecks, TransactionExecutor};
+use sui_types::transaction::Argument;
+use sui_types::transaction::GasData;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+use sui_types::transaction::TransactionKind;
+use sui_types::transaction_driver_types::EffectsFinalityInfo;
+use sui_types::transaction_driver_types::ExecuteTransactionRequestV3;
+use sui_types::transaction_driver_types::TransactionSubmissionError;
+use sui_types::transaction_executor::TransactionChecks;
+use sui_types::transaction_executor::TransactionExecutor;
 
 use crate::context::Context;
 use crate::rpc::executor::ForkedTransactionExecutor;
@@ -142,6 +154,32 @@ impl TestHarness {
         let tx_data = self.build_transfer_tx_data(amount);
         Transaction::from_data_and_signer(tx_data, vec![&self.sender_key])
     }
+
+    fn build_send_gas_funds_tx(&self, recipient: SuiAddress) -> Transaction {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let recipient = builder.pure(recipient).unwrap();
+            builder.programmable_move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                Identifier::new("coin").unwrap(),
+                Identifier::new("send_funds").unwrap(),
+                vec![GAS::type_tag()],
+                vec![Argument::GasCoin, recipient],
+            );
+            builder.finish()
+        };
+        let tx_data = TransactionData::new_with_gas_data(
+            TransactionKind::ProgrammableTransaction(pt),
+            self.sender,
+            GasData {
+                payment: vec![self.gas_object.compute_object_reference()],
+                owner: self.sender,
+                price: self.reference_gas_price,
+                budget: 100_000_000,
+            },
+        );
+        Transaction::from_data_and_signer(tx_data, vec![&self.sender_key])
+    }
 }
 
 #[tokio::test]
@@ -155,6 +193,38 @@ async fn test_tx_execution_publishes_checkpoint() {
         .execute_transaction(request, None)
         .await
         .expect("execute_transaction should succeed");
+
+    let EffectsFinalityInfo::Checkpointed(_epoch, checkpoint_seq) = response.effects.finality_info
+    else {
+        panic!("forked execution should report checkpointed finality");
+    };
+
+    let checkpoint =
+        tokio::time::timeout(Duration::from_secs(5), harness.checkpoint_receiver.recv())
+            .await
+            .expect("timed out waiting for published checkpoint")
+            .expect("checkpoint channel closed");
+
+    assert_eq!(*checkpoint.summary.sequence_number(), checkpoint_seq);
+}
+
+#[tokio::test]
+async fn test_send_gas_funds_publishes_checkpoint() {
+    let mut harness = TestHarness::new();
+    let signed_tx = harness.build_send_gas_funds_tx(SuiAddress::random_for_testing_only());
+
+    let request = ExecuteTransactionRequestV3::new_v2(signed_tx);
+    let response = harness
+        .executor
+        .execute_transaction(request, None)
+        .await
+        .expect("send_funds should execute and publish a checkpoint");
+
+    assert!(
+        response.effects.effects.status().is_ok(),
+        "send_funds failed: {:?}",
+        response.effects.effects.status(),
+    );
 
     let EffectsFinalityInfo::Checkpointed(_epoch, checkpoint_seq) = response.effects.finality_info
     else {

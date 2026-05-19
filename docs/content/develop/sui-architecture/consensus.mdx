@@ -52,9 +52,9 @@ If the total execution cost of transactions in a consensus commit exceeds a thre
 
 ### Transaction throughput
 
-In a controlled environment using 10 nodes, Mysticeti handles 300,000 transactions per second (TPS) before latency crosses the 1-second marker. With 50 nodes, test results show 400,000 TPS before latency exceeds 1 second. In the same tests, other top performing consensus mechanisms do not reach 150,000 TPS and their observed latency starts at about 2 seconds.
+The following figures are benchmark results from controlled testing described in the [MYSTICETI: Reaching the Latency Limits with Uncertified DAGs](/paper/mysticeti.pdf) whitepaper and do not represent production metrics. In a controlled environment using 10 nodes, Mysticeti handles 300,000 transactions per second (TPS) before latency crosses the 1-second marker. With 50 nodes, test results show 400,000 TPS before latency exceeds 1 second. In the same tests, other top performing consensus mechanisms do not reach 150,000 TPS and their observed latency starts at about 2 seconds.
 
-On average, testing shows Mysticeti reaches consensus commitment in about **0.5 seconds** with a sustained throughput of **200,000 TPS**.
+On average, benchmark testing shows Mysticeti reaches consensus commitment in about **0.5 seconds** with a sustained throughput of **200,000 TPS**.
 
 ![Throughput and latency graph](./images/thruput_latency.png)
 

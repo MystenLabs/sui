@@ -73,8 +73,9 @@ passkey-client.workspace = true
 passkey-types.workspace = true
 jsonrpsee.workspace = true
 telemetry-subscribers.workspace = true
+async-stream.workspace = true
+bytes.workspace = true
 tokio-stream.workspace = true
-tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 tonic.workspace = true
 futures.workspace = true
 

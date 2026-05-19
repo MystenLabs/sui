@@ -12,7 +12,6 @@ use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_move_build::BuildConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::get_authority_key_pair;
-use sui_types::digests::TransactionDigest;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiError;
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
@@ -167,9 +166,8 @@ impl Executor {
     }
 
     pub fn dry_run_transaction(&self, tx_data: TransactionData) -> Result<(), SuiError> {
-        let digest = TransactionDigest::random();
         self.rt
-            .block_on(self.state.dry_exec_transaction(tx_data, digest))
+            .block_on(self.state.dry_exec_transaction(tx_data))
             .map(|_| ())
     }
 

@@ -7,9 +7,10 @@ use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use async_stream::stream;
+use bytes::BytesMut;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
-use futures::SinkExt;
 use prometheus::Registry;
 use serde_json::Value;
 use serde_json::json;
@@ -29,9 +30,6 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio_stream::StreamExt;
-use tokio_tungstenite::connect_async;
-use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::tungstenite::http::Request;
 
 use super::proxy;
 use super::proxy::ProxyController;
@@ -159,7 +157,10 @@ impl SubscriptionTestCluster {
             Self {
                 validator,
                 db,
-                subscription_url: format!("ws://{}/graphql", graphql_listen_address),
+                subscription_url: format!(
+                    "http://{}/graphql/subscriptions",
+                    graphql_listen_address
+                ),
                 service,
                 indexer,
                 ingestion_dir,
@@ -194,72 +195,78 @@ impl SubscriptionTestCluster {
         query: &str,
         variables: Option<Value>,
     ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>> {
-        let request = Request::builder()
-            .uri(&self.subscription_url)
-            .header("Sec-WebSocket-Protocol", "graphql-transport-ws")
-            .header("Connection", "Upgrade")
-            .header("Upgrade", "websocket")
-            .header("Sec-WebSocket-Version", "13")
-            .header("Host", "localhost")
-            .header(
-                "Sec-WebSocket-Key",
-                tokio_tungstenite::tungstenite::handshake::client::generate_key(),
-            )
-            .body(())
-            .unwrap();
-
-        let (ws, _) = connect_async(request)
-            .await
-            .expect("Failed to connect WebSocket");
-
-        // Use futures::StreamExt::split (tokio_stream doesn't have split).
-        let (mut sink, stream) = futures::StreamExt::split(ws);
-
-        sink.send(Message::Text(
-            json!({"type": "connection_init"}).to_string().into(),
-        ))
-        .await
-        .expect("Failed to send connection_init");
-
-        // Wrap with tokio_stream timeout, then wait for ack.
-        let mut stream = Box::pin(stream.timeout(SUBSCRIPTION_TIMEOUT));
-
-        let ack = stream
-            .next()
-            .await
-            .expect("Stream ended")
-            .expect("Timeout waiting for ack")
-            .expect("WS error");
-        let ack: Value = serde_json::from_str(ack.to_text().unwrap()).unwrap();
-        assert_eq!(ack["type"], "connection_ack");
-
         let mut payload = json!({ "query": query });
         if let Some(vars) = variables {
             payload["variables"] = vars;
         }
-        sink.send(Message::Text(
-            json!({
-                "id": "1",
-                "type": "subscribe",
-                "payload": payload
-            })
-            .to_string()
-            .into(),
-        ))
-        .await
-        .expect("Failed to send subscribe");
 
-        // Return a stream that extracts payloads from "next" messages.
-        Box::pin(stream.map(|result| {
-            let msg = result.expect("Timeout").expect("WS error");
-            let text = match msg {
-                Message::Text(t) => t,
-                other => panic!("Expected text message, got: {other:?}"),
-            };
-            let msg: Value = serde_json::from_str(&text).unwrap();
-            assert_eq!(msg["type"], "next", "Expected 'next' message, got: {msg}");
-            msg["payload"].clone()
-        }))
+        let response = reqwest::Client::new()
+            .post(&self.subscription_url)
+            .header("Accept", "text/event-stream")
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .await
+            .expect("Failed to POST subscription request");
+
+        assert!(
+            response.status().is_success(),
+            "Subscription request failed: {}",
+            response.status(),
+        );
+
+        Box::pin(
+            parse_sse_events(response.bytes_stream())
+                .timeout(SUBSCRIPTION_TIMEOUT)
+                .map(|result| result.expect("Timed out waiting for SSE event")),
+        )
+    }
+}
+
+/// Parse a graphql-sse byte stream into a stream of GraphQL response payloads.
+///
+/// Reads `event: next` frames, parses their `data:` field as JSON, and yields each one.
+/// Stops when the server sends `event: complete` or closes the connection.
+fn parse_sse_events(
+    body: impl futures::Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send + 'static,
+) -> impl tokio_stream::Stream<Item = Value> + Send + 'static {
+    stream! {
+        let mut body = Box::pin(body);
+        let mut buffer = BytesMut::new();
+        let mut current_event: Option<String> = None;
+        let mut current_data = String::new();
+
+        while let Some(chunk) = futures::StreamExt::next(&mut body).await {
+            let chunk = chunk.expect("SSE body error");
+            buffer.extend_from_slice(&chunk);
+
+            while let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
+                let line_bytes = buffer.split_to(pos + 1);
+                let line = std::str::from_utf8(&line_bytes[..line_bytes.len() - 1])
+                    .expect("Invalid UTF-8 in SSE stream")
+                    .trim_end_matches('\r');
+
+                if line.is_empty() {
+                    if current_event.as_deref() == Some("complete") {
+                        return;
+                    }
+                    if current_event.as_deref() == Some("next") && !current_data.is_empty() {
+                        let value: Value = serde_json::from_str(&current_data)
+                            .expect("Invalid JSON in SSE data field");
+                        yield value;
+                    }
+                    current_event = None;
+                    current_data.clear();
+                } else if let Some(rest) = line.strip_prefix("event:") {
+                    current_event = Some(rest.trim().to_string());
+                } else if let Some(rest) = line.strip_prefix("data:") {
+                    if !current_data.is_empty() {
+                        current_data.push('\n');
+                    }
+                    current_data.push_str(rest.strip_prefix(' ').unwrap_or(rest));
+                }
+            }
+        }
     }
 }
 
