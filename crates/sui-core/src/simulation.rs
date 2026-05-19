@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 
-use move_core_types::language_storage::TypeTag;
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, TransactionDigest};
 use sui_types::coin_reservation::{CoinReservationResolverTrait, ParsedDigest};
 use sui_types::digests::ChainIdentifier;
@@ -21,7 +19,6 @@ use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::gas::SuiGasStatus;
 use sui_types::metrics::{BytecodeVerifierMetrics, ExecutionMetrics};
 use sui_types::object::{MoveObject, OBJECT_START_VERSION, Object, Owner};
-use sui_types::signature::GenericSignature;
 use sui_types::storage::{BackingPackageStore, BackingStore, TrackingBackingStore};
 use sui_types::transaction::{
     InputObjectKind, InputObjects, ObjectReadResult, ReceivingObjects, TransactionData,
@@ -31,7 +28,7 @@ use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChec
 
 use crate::accumulators::funds_read::AccountFundsRead;
 use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
-use crate::authority::DEV_INSPECT_GAS_COIN_VALUE;
+use crate::authority::{DEV_INSPECT_GAS_COIN_VALUE, pre_object_load_checks};
 
 /// Unconditional dependencies needed by transaction simulation.
 ///
@@ -125,11 +122,16 @@ pub fn simulate_transaction_with_context<R: SimulateTransactionReader + ?Sized>(
         };
 
     let declared_withdrawals = pre_object_load_checks(
-        context,
         &transaction,
         &[],
         &input_object_kinds,
         &receiving_object_refs,
+        context.protocol_config,
+        context.transaction_deny_config,
+        context.package_store,
+        context.chain_identifier,
+        context.coin_reservation_resolver,
+        context.account_funds_read,
     )?;
     let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
     let tx_digest = transaction.digest();
@@ -309,45 +311,4 @@ pub fn simulate_transaction_with_context<R: SimulateTransactionReader + ?Sized>(
         unchanged_loaded_runtime_objects,
         suggested_gas_price: reader.suggested_gas_price(&transaction),
     })
-}
-
-fn pre_object_load_checks(
-    context: &SimulateTransactionContext<'_>,
-    tx_data: &TransactionData,
-    tx_signatures: &[GenericSignature],
-    input_object_kinds: &[InputObjectKind],
-    receiving_objects_refs: &[ObjectRef],
-) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
-    // Note: the deny checks may do redundant package loads but:
-    // - they only load packages when there is an active package deny map
-    // - the loads are cached anyway
-    sui_transaction_checks::deny::check_transaction_for_signing(
-        tx_data,
-        tx_signatures,
-        input_object_kinds,
-        receiving_objects_refs,
-        context.transaction_deny_config,
-        context.package_store,
-    )?;
-
-    let declared_withdrawals = tx_data.process_funds_withdrawals_for_signing(
-        context.chain_identifier,
-        context.coin_reservation_resolver,
-    )?;
-
-    context
-        .account_funds_read
-        .check_amounts_available(&declared_withdrawals)?;
-
-    if context.protocol_config.gasless_verify_remaining_balance()
-        && tx_data.is_gasless_transaction()
-    {
-        let min_amounts =
-            sui_types::transaction::get_gasless_allowed_token_types(context.protocol_config);
-        context
-            .account_funds_read
-            .check_remaining_amounts_after_withdrawal(&declared_withdrawals, &min_amounts)?;
-    }
-
-    Ok(declared_withdrawals)
 }

@@ -71,6 +71,7 @@ use std::{
 };
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
+use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
@@ -133,7 +134,7 @@ use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::balance::Balance;
-use sui_types::coin_reservation;
+use sui_types::coin_reservation::{self, CoinReservationResolverTrait};
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{AuthoritySignInfo, Signer};
 use sui_types::deny_list_v1::check_coin_deny_list_v1;
@@ -994,6 +995,46 @@ impl SimulateTransactionReader for AuthoritySimulateTransactionReader<'_> {
     }
 }
 
+/// Runs deny list checks and processes funds withdrawals. Called before loading input
+/// objects, since these checks don't depend on object state.
+pub(crate) fn pre_object_load_checks(
+    tx_data: &TransactionData,
+    tx_signatures: &[GenericSignature],
+    input_object_kinds: &[InputObjectKind],
+    receiving_objects_refs: &[ObjectRef],
+    protocol_config: &ProtocolConfig,
+    transaction_deny_config: &TransactionDenyConfig,
+    package_store: &dyn BackingPackageStore,
+    chain_identifier: ChainIdentifier,
+    coin_reservation_resolver: &dyn CoinReservationResolverTrait,
+    account_funds_read: &dyn AccountFundsRead,
+) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
+    // Note: the deny checks may do redundant package loads but:
+    // - they only load packages when there is an active package deny map
+    // - the loads are cached anyway
+    sui_transaction_checks::deny::check_transaction_for_signing(
+        tx_data,
+        tx_signatures,
+        input_object_kinds,
+        receiving_objects_refs,
+        transaction_deny_config,
+        package_store,
+    )?;
+
+    let declared_withdrawals = tx_data
+        .process_funds_withdrawals_for_signing(chain_identifier, coin_reservation_resolver)?;
+
+    account_funds_read.check_amounts_available(&declared_withdrawals)?;
+
+    if protocol_config.gasless_verify_remaining_balance() && tx_data.is_gasless_transaction() {
+        let min_amounts = sui_types::transaction::get_gasless_allowed_token_types(protocol_config);
+        account_funds_read
+            .check_remaining_amounts_after_withdrawal(&declared_withdrawals, &min_amounts)?;
+    }
+
+    Ok(declared_withdrawals)
+}
+
 /// The authority state encapsulates all state, drives execution, and ensures safety.
 ///
 /// Note the authority operations can be accessed through a read ref (&) and do not
@@ -1055,48 +1096,6 @@ impl AuthorityState {
         self.checkpoint_store.get_epoch_state_commitments(epoch)
     }
 
-    /// Runs deny list checks and processes funds withdrawals. Called before loading input
-    /// objects, since these checks don't depend on object state.
-    fn pre_object_load_checks(
-        &self,
-        tx_data: &TransactionData,
-        tx_signatures: &[GenericSignature],
-        input_object_kinds: &[InputObjectKind],
-        receiving_objects_refs: &[ObjectRef],
-        protocol_config: &ProtocolConfig,
-    ) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
-        // Note: the deny checks may do redundant package loads but:
-        // - they only load packages when there is an active package deny map
-        // - the loads are cached anyway
-        sui_transaction_checks::deny::check_transaction_for_signing(
-            tx_data,
-            tx_signatures,
-            input_object_kinds,
-            receiving_objects_refs,
-            &self.config.transaction_deny_config,
-            self.get_backing_package_store().as_ref(),
-        )?;
-
-        let declared_withdrawals = tx_data.process_funds_withdrawals_for_signing(
-            self.chain_identifier,
-            self.coin_reservation_resolver.as_ref(),
-        )?;
-
-        self.execution_cache_trait_pointers
-            .account_funds_read
-            .check_amounts_available(&declared_withdrawals)?;
-
-        if protocol_config.gasless_verify_remaining_balance() && tx_data.is_gasless_transaction() {
-            let min_amounts =
-                sui_types::transaction::get_gasless_allowed_token_types(protocol_config);
-            self.execution_cache_trait_pointers
-                .account_funds_read
-                .check_remaining_amounts_after_withdrawal(&declared_withdrawals, &min_amounts)?;
-        }
-
-        Ok(declared_withdrawals)
-    }
-
     fn handle_transaction_deny_checks(
         &self,
         transaction: &VerifiedTransaction,
@@ -1108,12 +1107,17 @@ impl AuthorityState {
         let input_object_kinds = tx_data.input_objects()?;
         let receiving_objects_refs = tx_data.receiving_objects();
 
-        self.pre_object_load_checks(
+        pre_object_load_checks(
             tx_data,
             transaction.tx_signatures(),
             &input_object_kinds,
             &receiving_objects_refs,
             epoch_store.protocol_config(),
+            &self.config.transaction_deny_config,
+            self.get_backing_package_store().as_ref(),
+            self.chain_identifier,
+            self.coin_reservation_resolver.as_ref(),
+            self.get_account_funds_read().as_ref(),
         )?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
