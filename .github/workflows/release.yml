@@ -244,20 +244,41 @@ jobs:
         run: |
           echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
           echo "versionless_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'// | sed s/'testnet\-v'//)" >> $GITHUB_ENV
-      - uses: mislav/bump-homebrew-formula-action@b3327118b2153c82da63fd9cbf58942146ee99f0 # pin@v3
+
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@8eb7f2efa6ab636da09aef605b497fd5b8a7587d # pin@master 2026-05-16
         with:
-          formula-name: sui
-          create-pullrequest: true
-          tag-name: "${{ env.sui_tag }}"
-          commit-message: |
-            {{formulaName}} ${{ env.versionless_tag }}
+          # Explicitly fetch homebrew-core so `brew bump-formula-pr sui`
+          # finds the formula without relying on its retry-and-install fallback.
+          core: true
 
-            Created by https://github.com/mislav/bump-homebrew-formula-action
-
-            From release: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      - name: Bump sui formula on Homebrew/homebrew-core
         env:
-          # https://github.com/settings/tokens/new?scopes=public_repo,workflow
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
+          # PAT with public_repo,workflow scopes — same secret previously used as COMMITTER_TOKEN
+          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
+          HOMEBREW_NO_INSTALL_FROM_API: "1"
+          HOMEBREW_NO_ANALYTICS: "1"
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          # Derive commit author from the PAT owner so the homebrew-core PR
+          # shows the right "Verified" attribution and survives token rotation
+          # without editing this file.
+          user_info=$(curl -fsSL -H "Authorization: Bearer ${HOMEBREW_GITHUB_API_TOKEN}" \
+            -H "Accept: application/vnd.github+json" https://api.github.com/user)
+          gh_login=$(echo "$user_info" | jq -r '.login')
+          gh_id=$(echo "$user_info" | jq -r '.id')
+          git config --global user.name "${gh_login}"
+          git config --global user.email "${gh_id}+${gh_login}@users.noreply.github.com"
+
+          # Sui's formula in Homebrew/homebrew-core is URL+sha256 style, not tag+revision,
+          # so pass --url/--version (brew bump-formula-pr cannot switch styles).
+          url="https://github.com/MystenLabs/sui/archive/refs/tags/${{ env.sui_tag }}.tar.gz"
+          brew bump-formula-pr \
+            --no-browse \
+            --url="${url}" \
+            --version="${{ env.versionless_tag }}" \
+            --message="From release: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            sui
 
   # Tag all sui images with release tag, so that they can be easily found
   tag-docker-hub-images:
