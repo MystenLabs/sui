@@ -500,6 +500,7 @@ fn render_full_checkpoint(
                 effects,
                 events: tx.events,
                 unchanged_loaded_runtime_objects: tx.unchanged_loaded_runtime_objects,
+                execution_error_metadata: None,
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
