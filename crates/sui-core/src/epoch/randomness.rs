@@ -322,9 +322,8 @@ pub struct RandomnessManager {
 }
 
 impl RandomnessManager {
+    
     // Returns None in case of invalid input or other failure to initialize DKG.
-    // When `authority_key_pair` is Some, creates an active Party (validator).
-    // When None, creates a read-only Observer (fullnode).
     pub async fn try_new(
         epoch_store_weak: Weak<AuthorityPerEpochStore>,
         consensus_adapter: Box<dyn SubmitToConsensus>,
