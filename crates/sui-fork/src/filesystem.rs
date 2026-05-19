@@ -43,6 +43,7 @@ use anyhow::ensure;
 
 use move_core_types::language_storage::StructTag;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::CheckpointContentsDigest;
