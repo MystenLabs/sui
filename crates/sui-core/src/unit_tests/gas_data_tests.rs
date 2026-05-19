@@ -356,7 +356,7 @@ fn assert_simulate_err(
 // =============================================================================
 
 #[tokio::test]
-async fn test_simulate_transaction_result_payloads() {
+async fn test_simulate_transaction_returns_objects_with_real_gas() {
     let env = setup_test_env().await;
     let data = build_transfer(&env, TEST_GAS_BUDGET, env.rgp);
 
@@ -380,12 +380,16 @@ async fn test_simulate_transaction_result_payloads() {
             .iter()
             .any(|object| object.id() == env.gas_object_ref.0)
     );
+}
 
-    let mut no_payment = data;
+#[tokio::test]
+async fn test_simulate_transaction_without_payment_fails_without_mock_gas() {
+    let env = setup_test_env().await;
+    let mut no_payment = build_transfer(&env, TEST_GAS_BUDGET, env.rgp);
     no_payment.gas_data_mut().payment.clear();
     let without_mock =
         env.fullnode
-            .simulate_transaction(no_payment.clone(), TransactionChecks::Enabled, false);
+            .simulate_transaction(no_payment, TransactionChecks::Enabled, false);
     assert_simulate_err(
         without_mock,
         |e| {
@@ -398,7 +402,13 @@ async fn test_simulate_transaction_result_payloads() {
         },
         "InvalidWithdrawReservation",
     );
+}
 
+#[tokio::test]
+async fn test_simulate_transaction_with_mock_gas_returns_mock_object() {
+    let env = setup_test_env().await;
+    let mut no_payment = build_transfer(&env, TEST_GAS_BUDGET, env.rgp);
+    no_payment.gas_data_mut().payment.clear();
     let with_mock = env
         .fullnode
         .simulate_transaction(no_payment, TransactionChecks::Enabled, true)
@@ -412,7 +422,11 @@ async fn test_simulate_transaction_result_payloads() {
             .any(|object| object.id() == ObjectID::MAX),
         "mock gas does not exist in storage, so simulation must carry it in the result object set",
     );
+}
 
+#[tokio::test]
+async fn test_simulate_transaction_returns_events_when_effects_have_event_digest() {
+    let env = setup_test_env().await;
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/publish_with_event");
     let modules = BuildConfig::new_for_testing()
