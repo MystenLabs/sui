@@ -244,20 +244,27 @@ jobs:
         run: |
           echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
           echo "versionless_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'// | sed s/'testnet\-v'//)" >> $GITHUB_ENV
-      - uses: mislav/bump-homebrew-formula-action@b3327118b2153c82da63fd9cbf58942146ee99f0 # pin@v3
-        with:
-          formula-name: sui
-          create-pullrequest: true
-          tag-name: "${{ env.sui_tag }}"
-          commit-message: |
-            {{formulaName}} ${{ env.versionless_tag }}
 
-            Created by https://github.com/mislav/bump-homebrew-formula-action
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
 
-            From release: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      - name: Bump sui formula on Homebrew/homebrew-core
         env:
-          # https://github.com/settings/tokens/new?scopes=public_repo,workflow
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
+          # PAT with public_repo,workflow scopes — same secret previously used as COMMITTER_TOKEN
+          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
+          HOMEBREW_NO_INSTALL_FROM_API: "1"
+          HOMEBREW_NO_ANALYTICS: "1"
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          brew bump-formula-pr \
+            --no-browse \
+            --no-fork \
+            --tag="${{ env.sui_tag }}" \
+            --message="From release: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            sui
 
   # Tag all sui images with release tag, so that they can be easily found
   tag-docker-hub-images:
