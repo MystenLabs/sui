@@ -1,19 +1,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// Rewrite `IfElse(t, e0;continue 'L, Some(e0';continue 'L))` — both arms continuing to the
-// same loop — into `Seq([IfElse(t, e0, Some(e0')), continue 'L])`. The continue is moved
-// outside the `IfElse` and lives in a trailing position where `remove_trailing_continue`
-// can drop it (when at a loop tail).
+// Hoist a shared trailing `continue` out of both arms of an `IfElse`:
+// `if (t) { e0; continue 'L; } else { e0'; continue 'L; }` => `if (t) { e0 } else { e0' }; continue 'L;`
 //
-// Applies anywhere, not just at a loop tail: hoisting a shared trailing continue out of
-// matching arms is always a sound normalization. Whether the relocated continue ultimately
-// disappears is the trailing-continue pass's concern.
+// Applies anywhere; the relocated continue is `remove_trailing_continue`'s concern.
 //
-// Locality: the two arms must continue to the *same* label. We don't constrain that label
-// to be the immediate enclosing loop — the AST already encodes which loop each continue
-// targets, and preserving the label keeps semantics intact wherever the rewritten
-// expression sits in the tree.
+// Preconditions:
+//   - Both arms end in `Continue` for the same label.
 
 use crate::{
     ast::Exp,

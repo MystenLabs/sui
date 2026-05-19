@@ -52,6 +52,25 @@ pub(super) fn negate(exp: &mut Exp) {
     }
 }
 
+/// Unify `Exp::Loop(label, body)` and `Exp::While(label, _, body)`: if `exp` is one of them
+/// and its body is a `Seq`, return the loop's label and a mutable reference to the body's
+/// items. Returns `None` otherwise (including loops whose body has been collapsed to a
+/// single non-`Seq` `Exp`).
+///
+/// `introduce_while` runs before the swap refinements, so by the time they look any
+/// already-promoted `While` would be invisible without this helper. We need to match both.
+pub(super) fn loop_body_seq_mut(exp: &mut Exp) -> Option<(Option<Label>, &mut Vec<Exp>)> {
+    let (label, body) = match exp {
+        Exp::Loop(label, body) => (*label, body),
+        Exp::While(label, _, body) => (*label, body),
+        _ => return None,
+    };
+    match body.as_mut() {
+        Exp::Seq(seq) => Some((label, seq)),
+        _ => None,
+    }
+}
+
 // -------------------------------------------------------------------------------------------------
 // IfElse / continue tail-position helpers
 //

@@ -1,26 +1,21 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// Swap the tail of a loop body shaped as `[…, IfElse(t, e0;continue, ∅), e1]` into
-// `[…, IfElse(t, e0, Some(e1)), continue]`. `e1` was the implicit else of the original
-// `IfElse` (reached when `t` is false and the if falls through); promote it into the
-// actual else-arm so the source structure makes the branching explicit, and lift the
-// `continue` to a trailing position where `remove_trailing_continue` can drop it.
+// Promote a sibling fallthrough into the empty else-arm of an `IfElse` at loop tail:
+// `if (t) { e0; continue; } e1` => `if (t) { e0 } else { e1 }; continue;`
 //
-// Preconditions (analogous to `swap_continue_break`, just without the trailing `break`):
-//   - Pattern at the tail of a `Loop` body (last two items). `e1` is the last item.
-//   - The last item is *not* a `Break` — that's `swap_continue_break`'s shape; we don't
-//     want both rules grabbing the same input.
-//   - The `IfElse` has no else-arm (or an empty one) — `hoist_dual_continue` handles the
-//     case where both arms continue.
-//   - The inner `continue` targets the immediate enclosing loop, via label equality.
+// Preconditions:
+//   - Pattern sits at the tail of the loop's body `Seq` (last two items).
+//   - The last item is not a `Break` (that's `swap_continue_break`'s shape).
+//   - The `IfElse` has no else-arm (or an empty one).
+//   - The inner `continue` targets the immediate enclosing loop.
 
 use crate::{
     ast::Exp,
     refinement::{
         Refine,
         utils::{
-            else_is_empty_or_missing, ends_with_continue, seq_or_singleton,
+            else_is_empty_or_missing, ends_with_continue, loop_body_seq_mut, seq_or_singleton,
             strip_trailing_continue_into_seq,
         },
     },
@@ -34,11 +29,7 @@ struct SwapContinueFallthrough;
 
 impl Refine for SwapContinueFallthrough {
     fn refine_custom(&mut self, exp: &mut Exp) -> bool {
-        let Exp::Loop(loop_label, body) = exp else {
-            return false;
-        };
-        let loop_label = *loop_label;
-        let Exp::Seq(seq) = body.as_mut() else {
+        let Some((loop_label, seq)) = loop_body_seq_mut(exp) else {
             return false;
         };
         if seq.len() < 2 {

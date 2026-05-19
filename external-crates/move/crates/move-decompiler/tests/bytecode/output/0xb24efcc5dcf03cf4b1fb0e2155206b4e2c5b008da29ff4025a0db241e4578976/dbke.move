@@ -116,7 +116,6 @@ public fun elf<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut CBM, l2: &mut Balance
             if (l26 < clock::timestamp_ms(l3)) {
                 event::emit(EE { e: ct::e_order_expired(), l: 348u64 });
                 l28 = l28 + 1u64;
-                continue
             } else {
                 let l34 = *(&(&l9)[l28]);
                 let l47 = *(&(&l10)[l28]);
