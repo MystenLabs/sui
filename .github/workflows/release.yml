@@ -259,10 +259,13 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          # Sui's formula in Homebrew/homebrew-core is URL+sha256 style, not tag+revision,
+          # so pass --url/--version (brew bump-formula-pr cannot switch styles).
+          url="https://github.com/MystenLabs/sui/archive/refs/tags/${{ env.sui_tag }}.tar.gz"
           brew bump-formula-pr \
             --no-browse \
-            --no-fork \
-            --tag="${{ env.sui_tag }}" \
+            --url="${url}" \
+            --version="${{ env.versionless_tag }}" \
             --message="From release: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             sui
 
