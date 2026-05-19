@@ -41,6 +41,20 @@ COPY --from=builder /sui/target/${PROFILE}/stress /usr/local/bin/stress
 COPY docker/stress/entrypoint.sh /docker/stress/entrypoint.sh
 RUN chmod +x /docker/stress/entrypoint.sh
 
+# sui-benchmark workloads (composite/adversarial/party/slow/max_package) read
+# their Move source packages at runtime via BENCHMARK_MOVE_BASE_DIR (or the
+# env!("CARGO_MANIFEST_DIR") fallback in crates/sui-benchmark/src/workloads/
+# mod.rs). The previous runtime `git clone` made these visible incidentally;
+# now we ship only what those workloads actually publish. Each workload's
+# Move.toml has `Sui = { local = "../../../../../sui-framework/packages/
+# sui-framework" }`, which (relative to the Move.toml's parent dir) resolves
+# to /sui/crates/sui-framework/packages/sui-framework — so that tree plus its
+# move-stdlib dep must also be present. Total cost: ~2 MB.
+ENV BENCHMARK_MOVE_BASE_DIR=/sui/crates/sui-benchmark
+COPY crates/sui-benchmark/src/workloads/data /sui/crates/sui-benchmark/src/workloads/data
+COPY crates/sui-framework/packages/sui-framework /sui/crates/sui-framework/packages/sui-framework
+COPY crates/sui-framework/packages/move-stdlib /sui/crates/sui-framework/packages/move-stdlib
+
 ARG BUILD_DATE
 ARG GIT_REVISION
 LABEL build-date=$BUILD_DATE
