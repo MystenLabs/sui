@@ -834,7 +834,7 @@ impl LocalExec {
             required_objects: all_required_objects,
             local_exec_temporary_store: Some(inner_store),
             local_exec_effects: effects,
-            local_exec_status: Some(result),
+            local_exec_status: Some(result.map_err(ExecutionError::from)),
         })
     }
 
@@ -1015,7 +1015,7 @@ impl LocalExec {
             required_objects,
             local_exec_temporary_store: None, // We dont capture it for cert exec run
             local_exec_effects: effects,
-            local_exec_status: Some(exec_res),
+            local_exec_status: Some(exec_res.map_err(ExecutionError::from)),
         })
     }
 
