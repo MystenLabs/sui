@@ -6,11 +6,11 @@ The forking tool can execute transactions against forked state but cannot answer
 "what objects does address X own?" unless the fork has durable ownership metadata.
 For example, if a user would like to execute a transaction, the forked network does not have
 yet the ownership information - which gas coins it owns. To enable this, seeding
-records object ownership metadata at startup so the owned-object index can be initialized
-when it is first needed.
+records object reference metadata at startup so the owned-object index can be
+initialized when it is first needed.
 
-Seeding resolves object refs (id, version, digest) plus owner at startup,
-establishing the minimal manifest needed to build a complete ownership index later.
+Seeding resolves object refs (id, version, digest) at startup, establishing
+the minimal manifest needed to build a complete ownership index later.
 
 Object contents are NOT fetched during seeding. Content fetching is deferred
 until an actual object read or lazy owned-object index initialization needs the
@@ -31,7 +31,7 @@ Two new flags on the `start` command:
 ```
 
 Both can be combined. Addresses and explicit object IDs are resolved into seed
-entries with owner plus object ref. Results are merged and deduped by object ID.
+entries with object refs. Results are merged and deduped by object ID.
 It is important to note if addresses is passed, the checkpoint must be within
 the last 1h.
 
@@ -53,8 +53,7 @@ One file is written to `{data_dir}/{network}/forked_at_{checkpoint}/`:
     "checkpoint": 12345678,
     "entries": [
         {
-            "object_ref": ["0x...", 42, "..."],
-            "owner": "0x..."
+            "object_ref": ["0x...", 42, "..."]
         }
     ]
 }
@@ -92,10 +91,6 @@ query($sequenceNumber: UInt53, $address: SuiAddress!, $first: Int, $after: Strin
             address
             version
             digest
-            owner {
-              ... on AddressOwner { address { address } }
-              ... on ConsensusAddressOwner { address { address } }
-            }
           }
           pageInfo { hasNextPage endCursor }
         }
@@ -107,9 +102,8 @@ query($sequenceNumber: UInt53, $address: SuiAddress!, $first: Int, $after: Strin
 
 - Page size: 50
 - Paginate with cursor loop (same pattern as `events_query`)
-- Only collect `AddressOwner` and `ConsensusAddressOwner` entries. Other owner
-  variants are handled by the query fallback and skipped; they are not
-  controlled by the seeded address for the initial index.
+- Collect every returned node as an object ref. `Address.objects` is the source
+  of truth for address-owned membership and the manifest does not persist owner.
 
 ### Individual objects query
 
@@ -130,8 +124,9 @@ query($keys: [ObjectKey!]!) {
 }
 ```
 
-The query returns the same minimal seed entry shape as address seeding. Object
-type, balance, and full BCS are not part of the seed manifest.
+The query returns object refs for seed entries after confirming address
+ownership. Object type, balance, owner, and full BCS are not part of the seed
+manifest.
 
 ## Implementation Details
 
@@ -141,7 +136,6 @@ type, balance, and full BCS are not part of the seed manifest.
 #[derive(Serialize, Deserialize)]
 struct SeedEntry {
     object_ref: ObjectRef,
-    owner: SuiAddress,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -188,8 +182,8 @@ state once the fork has started executing.
    instead of rebuilding stale seed state over local mutations.
 
 During initialization, each seed entry is fetched at the exact seeded version and fork checkpoint,
-validated against the manifest owner/ref, written to the local object cache, and converted into a
-complete owned-object index entry with object type and optional coin balance.
+validated against the manifest ref, written to the local object cache, and converted into a
+complete owned-object index entry with owner, object type, and optional coin balance.
 
 **When a seeded object is deleted/mutated post-fork**:
 - `update_objects()` removes the old index entry, adds the new address-owned entry, or removes the

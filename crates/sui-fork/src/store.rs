@@ -582,7 +582,7 @@ impl DataStore {
                         seed_entry.object_ref.0,
                     )
                 })?;
-                if entry.owner != seed_entry.owner || entry.object_ref != seed_entry.object_ref {
+                if entry.object_ref != seed_entry.object_ref {
                     bail!(
                         "seeded object {} metadata does not match fetched object at fork checkpoint {}",
                         seed_entry.object_ref.0,

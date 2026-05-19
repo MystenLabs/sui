@@ -245,7 +245,6 @@ pub(crate) mod address_owned_objects_query {
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub(crate) struct AddressOwnedObject {
         pub(crate) object_ref: ObjectRef,
-        pub(crate) owner: SuiAddressType,
     }
 
     #[derive(cynic::QueryVariables)]
@@ -321,37 +320,6 @@ pub(crate) mod address_owned_objects_query {
         address: SuiAddress,
         version: Option<u64>,
         digest: Option<String>,
-        owner: Option<Owner>,
-    }
-
-    #[derive(cynic::InlineFragments)]
-    #[cynic(schema_module = "crate::gql::queries::schema")]
-    pub(crate) enum Owner {
-        AddressOwner(AddressOwner),
-        ConsensusAddressOwner(ConsensusAddressOwner),
-        #[cynic(fallback)]
-        Other,
-    }
-
-    #[derive(cynic::QueryFragment)]
-    #[cynic(schema_module = "crate::gql::queries::schema")]
-    pub(crate) struct AddressOwner {
-        address: Option<OwnerAddress>,
-    }
-
-    #[derive(cynic::QueryFragment)]
-    #[cynic(schema_module = "crate::gql::queries::schema")]
-    pub(crate) struct ConsensusAddressOwner {
-        address: Option<OwnerAddress>,
-    }
-
-    #[derive(cynic::QueryFragment)]
-    #[cynic(
-        graphql_type = "Address",
-        schema_module = "crate::gql::queries::schema"
-    )]
-    pub(crate) struct OwnerAddress {
-        address: SuiAddress,
     }
 
     #[derive(cynic::Scalar, Debug, Clone)]
@@ -398,9 +366,7 @@ pub(crate) mod address_owned_objects_query {
             };
 
             for node in objects.nodes {
-                if let Some(entry) = decode_move_object(node)? {
-                    entries.push(entry);
-                }
+                entries.push(decode_move_object(node)?);
             }
 
             if !objects.page_info.has_next_page {
@@ -412,16 +378,7 @@ pub(crate) mod address_owned_objects_query {
         Ok(entries)
     }
 
-    fn decode_move_object(node: MoveObject) -> Result<Option<AddressOwnedObject>, Error> {
-        let owner = match node.owner {
-            Some(Owner::AddressOwner(owner)) => {
-                parse_owner_address(owner.address, &node.address.0)?
-            }
-            Some(Owner::ConsensusAddressOwner(owner)) => {
-                parse_owner_address(owner.address, &node.address.0)?
-            }
-            _ => return Ok(None),
-        };
+    fn decode_move_object(node: MoveObject) -> Result<AddressOwnedObject, Error> {
         let object_id = node
             .address
             .0
@@ -436,22 +393,9 @@ pub(crate) mod address_owned_objects_query {
             .version
             .ok_or_else(|| anyhow!("seed object {object_id} is missing version"))?;
 
-        Ok(Some(AddressOwnedObject {
+        Ok(AddressOwnedObject {
             object_ref: (object_id, SequenceNumber::from_u64(version), digest),
-            owner,
-        }))
-    }
-
-    fn parse_owner_address(
-        address: Option<OwnerAddress>,
-        object_id: &str,
-    ) -> Result<SuiAddressType, Error> {
-        address
-            .context("address seed entry is missing owner address")?
-            .address
-            .0
-            .parse::<SuiAddressType>()
-            .with_context(|| format!("invalid seed owner for object {object_id}"))
+        })
     }
 
     #[cfg(test)]
@@ -519,43 +463,16 @@ pub(crate) mod address_owned_objects_query {
             })
         }
 
-        fn address_owned_node(object: &Object, owner: SuiAddressType) -> serde_json::Value {
+        fn address_object_node(object: &Object) -> serde_json::Value {
             serde_json::json!({
                 "address": object.id().to_string(),
                 "version": object.version().value(),
                 "digest": object.digest().to_string(),
-                "owner": {
-                    "__typename": "AddressOwner",
-                    "address": { "address": owner.to_string() },
-                }
-            })
-        }
-
-        fn consensus_owned_node(object: &Object, owner: SuiAddressType) -> serde_json::Value {
-            serde_json::json!({
-                "address": object.id().to_string(),
-                "version": object.version().value(),
-                "digest": object.digest().to_string(),
-                "owner": {
-                    "__typename": "ConsensusAddressOwner",
-                    "address": { "address": owner.to_string() },
-                }
-            })
-        }
-
-        fn immutable_node(object: &Object) -> serde_json::Value {
-            serde_json::json!({
-                "address": object.id().to_string(),
-                "version": object.version().value(),
-                "digest": object.digest().to_string(),
-                "owner": {
-                    "__typename": "Immutable",
-                }
             })
         }
 
         #[tokio::test]
-        async fn query_paginates_and_includes_consensus_address_owned_objects() {
+        async fn query_paginates_address_owned_object_refs_without_owner() {
             let server = MockServer::start().await;
             let owner = SuiAddressType::random_for_testing_only();
             let first = Object::with_id_owner_version_for_testing(
@@ -571,12 +488,6 @@ pub(crate) mod address_owned_objects_query {
                     owner,
                 },
             );
-            let immutable = Object::with_id_owner_version_for_testing(
-                ObjectID::random(),
-                SequenceNumber::from_u64(9),
-                SuiOwner::Immutable,
-            );
-
             Mock::given(method("POST"))
                 .and(path("/"))
                 .and(body_partial_json(serde_json::json!({
@@ -584,7 +495,7 @@ pub(crate) mod address_owned_objects_query {
                 })))
                 .respond_with(
                     ResponseTemplate::new(200).set_body_json(address_objects_response(
-                        vec![address_owned_node(&first, owner)],
+                        vec![address_object_node(&first)],
                         true,
                         Some("cursor-1"),
                     )),
@@ -598,10 +509,7 @@ pub(crate) mod address_owned_objects_query {
                 })))
                 .respond_with(
                     ResponseTemplate::new(200).set_body_json(address_objects_response(
-                        vec![
-                            consensus_owned_node(&second, owner),
-                            immutable_node(&immutable),
-                        ],
+                        vec![address_object_node(&second)],
                         false,
                         None,
                     )),
@@ -617,9 +525,7 @@ pub(crate) mod address_owned_objects_query {
 
             assert_eq!(entries.len(), 2);
             assert_eq!(entries[0].object_ref, first.compute_object_reference());
-            assert_eq!(entries[0].owner, owner);
             assert_eq!(entries[1].object_ref, second.compute_object_reference());
-            assert_eq!(entries[1].owner, owner);
 
             let requests = server
                 .received_requests()
@@ -633,8 +539,9 @@ pub(crate) mod address_owned_objects_query {
                 .and_then(serde_json::Value::as_str)
                 .expect("query string should be present");
             assert!(query.contains("address(address: $address)"));
-            assert!(query.contains("... on AddressOwner"));
-            assert!(query.contains("... on ConsensusAddressOwner"));
+            assert!(query.contains("version"));
+            assert!(query.contains("digest"));
+            assert!(!query.contains("owner"));
             assert!(!query.contains("contents"));
             assert!(!query.contains("balance"));
         }
@@ -815,7 +722,7 @@ pub(crate) mod object_seed_query {
         let Some(object) = object else {
             return Ok(ObjectSeedMetadata::Missing);
         };
-        let owner = match object.owner {
+        match object.owner {
             Some(Owner::AddressOwner(owner)) => parse_owner_address(owner.address, &object_id)?,
             Some(Owner::ConsensusAddressOwner(owner)) => {
                 parse_owner_address(owner.address, &object_id)?
@@ -833,7 +740,6 @@ pub(crate) mod object_seed_query {
 
         Ok(ObjectSeedMetadata::AddressOwned(AddressOwnedObject {
             object_ref: (object_id, SequenceNumber::from_u64(version), digest),
-            owner,
         }))
     }
 
@@ -980,7 +886,6 @@ pub(crate) mod object_seed_query {
                 entries[0],
                 ObjectSeedMetadata::AddressOwned(AddressOwnedObject {
                     object_ref: first.compute_object_reference(),
-                    owner,
                 })
             );
             assert_eq!(entries[1], ObjectSeedMetadata::Missing);
@@ -988,7 +893,6 @@ pub(crate) mod object_seed_query {
                 entries[2],
                 ObjectSeedMetadata::AddressOwned(AddressOwnedObject {
                     object_ref: second.compute_object_reference(),
-                    owner,
                 })
             );
 

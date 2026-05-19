@@ -4,8 +4,8 @@
 //! Fork manifest and seed resolution for lazy owned-object index initialization.
 //!
 //! The manifest is written for every initialized fork directory. Address and explicit object
-//! seeds resolve lightweight owner/object-ref metadata at the fork checkpoint. Full object BCS is
-//! fetched later when an object read or lazy owned-object index initialization needs it.
+//! seeds resolve lightweight object-ref metadata at the fork checkpoint. Full object BCS is fetched
+//! later when an object read or lazy owned-object index initialization needs it.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -36,11 +36,10 @@ pub struct SeedInput {
     pub object_ids: Vec<ObjectID>,
 }
 
-/// Object reference and owner used to seed lazy owned-object index initialization.
+/// Object reference used to seed lazy owned-object index initialization.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct SeedEntry {
     pub(crate) object_ref: ObjectRef,
-    pub(crate) owner: SuiAddress,
 }
 
 /// Durable manifest for fork metadata and optional pre-fork seed metadata.
@@ -72,7 +71,6 @@ impl From<AddressOwnedObject> for SeedEntry {
     fn from(object: AddressOwnedObject) -> Self {
         Self {
             object_ref: object.object_ref,
-            owner: object.owner,
         }
     }
 }
@@ -443,7 +441,6 @@ mod tests {
             manifest.entries[0].object_ref,
             object.compute_object_reference()
         );
-        assert_eq!(manifest.entries[0].owner, owner);
         assert!(
             store
                 .local()
@@ -518,7 +515,6 @@ mod tests {
             manifest.entries[0].object_ref,
             object.compute_object_reference()
         );
-        assert_eq!(manifest.entries[0].owner, owner);
         assert!(
             store
                 .local()

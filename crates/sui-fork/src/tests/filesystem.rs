@@ -477,7 +477,6 @@ fn test_seed_manifest_round_trips_and_is_immutable() {
         checkpoint: 42,
         entries: vec![SeedEntry {
             object_ref: object.compute_object_reference(),
-            owner,
         }],
     };
 

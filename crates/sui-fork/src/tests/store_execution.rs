@@ -415,7 +415,6 @@ async fn test_owned_object_query_lazily_initializes_complete_index_from_seed_man
             checkpoint,
             entries: vec![SeedEntry {
                 object_ref: object.compute_object_reference(),
-                owner,
             }],
         })
         .expect("seed manifest should write");
@@ -475,11 +474,9 @@ async fn test_local_execution_before_owned_query_preserves_other_seeded_entries(
             entries: vec![
                 SeedEntry {
                     object_ref: first.compute_object_reference(),
-                    owner,
                 },
                 SeedEntry {
                     object_ref: second.compute_object_reference(),
-                    owner,
                 },
             ],
         })
@@ -523,7 +520,6 @@ fn test_missing_owned_index_after_local_checkpoint_advancement_fails_closed() {
             checkpoint: 0,
             entries: vec![SeedEntry {
                 object_ref: object.compute_object_reference(),
-                owner,
             }],
         })
         .expect("seed manifest should write");
