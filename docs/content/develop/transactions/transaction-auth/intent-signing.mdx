@@ -83,7 +83,9 @@ Under the hood, the `new_secure` method in Rust and the `signData` method in Typ
 
 ## Authority signature
 
-The authority signature is created using the protocol key. Like a user signature, it commits to the Blake2b-256 hash of the BCS serialization of an `IntentMessage`, not to the raw message bytes. Authority signatures use the internal intent scopes, such as `TransactionEffects`, `ProofOfPossession`, and `SenderSignedTransaction`. For all available intent scopes, see the `IntentScope` enum in [`crates/shared-crypto/src/intent.rs`](https://github.com/MystenLabs/sui/blob/main/crates/shared-crypto/src/intent.rs).
+The authority signature is created using the protocol key. It does not use the external Blake2b-256 prehash that user signatures use. Instead, `AuthoritySignature::new_secure` BCS-serializes the `IntentMessage`, appends the 8-byte epoch, and passes the resulting `BCS(IntentMessage) || epoch` bytes directly to the BLS signer. In other words, the authority signs `intent || message || epoch`. Verification reconstructs the same bytes from the `IntentMessage` and the epoch, then checks them against the authority protocol public key, so the epoch is bound into every authority signature.
+
+Authority signatures use the internal intent scopes, such as `TransactionEffects`, `ProofOfPossession`, and `SenderSignedTransaction`. For all available intent scopes, see the `IntentScope` enum in [`crates/shared-crypto/src/intent.rs`](https://github.com/MystenLabs/sui/blob/main/crates/shared-crypto/src/intent.rs).
 
 ### Generating proof of possession for an authority
 
