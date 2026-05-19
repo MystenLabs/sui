@@ -2072,7 +2072,7 @@ impl AuthorityState {
             _,
             mut effects,
             timings,
-            execution_error_result,
+            execution_error_opt,
             execution_error_metadata,
         ) = self.execute_transaction_to_effects(
             &**epoch_store.executor(),
@@ -2099,7 +2099,7 @@ impl AuthorityState {
             self.is_fullnode(epoch_store),
         );
 
-        let execution_error_opt = execution_error_result.err();
+        let execution_error_opt = execution_error_opt.err();
 
         let object_funds_checker = self.object_funds_checker.load();
         if let Some(object_funds_checker) = object_funds_checker.as_ref()
