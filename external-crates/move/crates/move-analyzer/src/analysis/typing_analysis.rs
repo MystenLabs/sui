@@ -1057,11 +1057,21 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
             );
         }
 
-        match &fdef.body.value {
-            T::FunctionBody_::Defined(seq) => {
+        if fdef.macro_.is_some() {
+            if let Some(seq) = self
+                .compiler_analysis_info
+                .macro_function_bodies
+                .get(&fdef.loc)
+            {
                 self.visit_seq(fdef.body.loc, seq);
             }
-            T::FunctionBody_::Macro | T::FunctionBody_::Native => {}
+        } else {
+            match &fdef.body.value {
+                T::FunctionBody_::Defined(seq) => {
+                    self.visit_seq(fdef.body.loc, seq);
+                }
+                T::FunctionBody_::Macro | T::FunctionBody_::Native => {}
+            }
         }
         // process return types
         self.visit_type(None, &fdef.signature.return_type);

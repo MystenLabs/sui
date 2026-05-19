@@ -25,9 +25,7 @@ simple_visitor!(
         _function_name: FunctionName,
         fdef: &T::Function,
     ) -> bool {
-        if fdef.macro_.is_none()
-            && let T::FunctionBody_::Defined((_, seq)) = &fdef.body.value
-        {
+        if let T::FunctionBody_::Defined((_, seq)) = &fdef.body.value {
             tail_block(self, seq);
         };
         true

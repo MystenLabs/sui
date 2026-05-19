@@ -32,6 +32,8 @@ use std::{
 #[derive(Debug, Clone, Default)]
 pub struct IDEInfo {
     pub(crate) annotations: Vec<(Loc, IDEAnnotation)>,
+    /// Typed macro function bodies keyed by function definition location.
+    macro_function_bodies: BTreeMap<Loc, T::Sequence>,
 }
 
 #[derive(Debug, Clone)]
@@ -181,12 +183,22 @@ impl IDEInfo {
         self.annotations.push((loc, info));
     }
 
+    pub fn add_macro_function_body(&mut self, loc: Loc, seq: T::Sequence) {
+        self.macro_function_bodies.insert(loc, seq);
+    }
+
+    pub fn macro_function_bodies(&self) -> &BTreeMap<Loc, T::Sequence> {
+        &self.macro_function_bodies
+    }
+
     pub fn extend(&mut self, mut other: Self) {
         self.annotations.append(&mut other.annotations);
+        self.macro_function_bodies
+            .extend(other.macro_function_bodies);
     }
 
     pub fn is_empty(&self) -> bool {
-        self.annotations.is_empty()
+        self.annotations.is_empty() && self.macro_function_bodies.is_empty()
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, (Loc, IDEAnnotation)> {

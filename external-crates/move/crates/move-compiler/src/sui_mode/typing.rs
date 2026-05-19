@@ -292,7 +292,7 @@ fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
         body,
         warning_filter: _,
         index: _,
-        macro_,
+        macro_: _,
         attributes,
         entry,
     } = fdef;
@@ -303,9 +303,7 @@ fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
     if name.0.value == INIT_FUNCTION_NAME {
         init_visibility(context, name, *visibility, *entry);
     }
-    if macro_.is_none()
-        && let sp!(_, T::FunctionBody_::Defined(seq)) = body
-    {
+    if let sp!(_, T::FunctionBody_::Defined(seq)) = body {
         context.visit_seq(body.loc, seq)
     }
     context.in_test = prev_in_test;

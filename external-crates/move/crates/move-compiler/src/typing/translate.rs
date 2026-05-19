@@ -474,11 +474,11 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     function_signature(context, macro_, &signature);
     expand::function_signature(context, &mut signature);
     let body = if macro_.is_some() {
+        let body_loc = n_body.loc;
         if context.env().ide_mode() {
-            ide_macro_body(context, n_body)
-        } else {
-            sp(n_body.loc, T::FunctionBody_::Macro)
+            ide_macro_body(context, loc, n_body)
         }
+        sp(body_loc, T::FunctionBody_::Macro)
     } else {
         function_body(context, n_body)
     };
@@ -529,34 +529,33 @@ fn function_signature(context: &mut Context, macro_: Option<Loc>, sig: &N::Funct
 /// Best-effort typing of a macro function body in IDE mode. Uses declared parameter types
 /// (already in scope from function_signature) to type the body, generating IDE annotations
 /// (DotAutocompleteInfo, etc.). Diagnostics from this best-effort pass are discarded.
-///
-/// The returned body is kept as `FunctionBody_::Defined` through typing so IDE consumers can
-/// inspect it, but the function remains marked as `macro_` and is filtered out during HLIR
-/// translation rather than compiled as a regular function.
-fn ide_macro_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::FunctionBody {
-    let mut context = context.fork_for_ide_macro_body_typing();
-    let mut b_ = match nb_ {
-        N::FunctionBody_::Native => T::FunctionBody_::Native,
-        N::FunctionBody_::Defined(es) => {
-            let seq = sequence(&mut context, es);
-            let ety = sequence_type(&seq);
-            let ret_ty = context.return_type.clone().unwrap();
-            let (_, seq_items) = &seq;
-            let sloc = seq_items.back().unwrap().loc;
-            subtype(
-                &mut context,
-                sloc,
-                || "Invalid return expression",
-                ety,
-                &ret_ty,
-            );
-            T::FunctionBody_::Defined(seq)
-        }
+/// Speculatively typed macro function body is added to the current context's IDEInfo.
+fn ide_macro_body(context: &mut Context, function_loc: Loc, sp!(_, nb_): N::FunctionBody) {
+    let N::FunctionBody_::Defined(es) = nb_ else {
+        return;
     };
-    core::solve_constraints(&mut context);
-    expand::function_body_(&mut context, &mut b_);
-    finalize_ide_info(&mut context);
-    sp(loc, b_)
+
+    let reporter = context.reporter.clone_for_ide_macro_body_typing();
+    let old_reporter = std::mem::replace(&mut context.reporter, reporter);
+    let old_ide_typing_macro_body = context.ide_typing_macro_body;
+    context.ide_typing_macro_body = true;
+
+    let seq = sequence(context, es);
+    let ety = sequence_type(&seq);
+    let ret_ty = context.return_type.clone().unwrap();
+    let (_, seq_items) = &seq;
+    let sloc = seq_items.back().unwrap().loc;
+    subtype(context, sloc, || "Invalid return expression", ety, &ret_ty);
+    let mut b_ = T::FunctionBody_::Defined(seq);
+    core::solve_constraints(context);
+    expand::function_body_(context, &mut b_);
+    if let T::FunctionBody_::Defined(seq) = b_ {
+        context.ide_info.add_macro_function_body(function_loc, seq);
+    }
+    finalize_ide_info(context);
+
+    context.ide_typing_macro_body = old_ide_typing_macro_body;
+    context.reporter = old_reporter;
 }
 
 fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::FunctionBody {

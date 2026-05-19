@@ -5,7 +5,7 @@
 //! to a represenatation that can be used for computing symbols.
 
 use crate::{
-    compiler_info::{CompilerAnalysisInfo, CompilerAutocompleteInfo, process_ide_annotations},
+    compiler_info::{CompilerAnalysisInfo, CompilerAutocompleteInfo, process_ide_info},
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
     symbols::{
         def_info::DefInfo,
@@ -743,7 +743,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 let (compiler, typed_program) = compiler.into_ast();
                 typed_ast = Some(typed_program.clone());
                 let (analysis_info, autocomplete_info) =
-                    process_ide_annotations(compiler.compilation_env().ide_information().clone());
+                    process_ide_info(compiler.compilation_env().ide_information().clone());
                 // Don't update caching_result here - will be merged in conditional below
                 compiler_analysis_info_opt = Some(analysis_info);
 
@@ -1188,6 +1188,9 @@ fn merge_compiler_analysis_info(
 
     // Remove entries from modified files
     result.macro_info.retain(|loc, _| !is_modified(loc));
+    result
+        .macro_function_bodies
+        .retain(|loc, _| !is_modified(loc));
     result.expanded_lambdas.retain(|loc| !is_modified(loc));
     result.ellipsis_binders.retain(|loc| !is_modified(loc));
     result.string_values.retain(|loc, _| !is_modified(loc));
@@ -1202,6 +1205,9 @@ fn merge_compiler_analysis_info(
             .or_default()
             .append(&mut entries);
     }
+    result
+        .macro_function_bodies
+        .extend(new_info.macro_function_bodies);
     result.expanded_lambdas.extend(new_info.expanded_lambdas);
     result.ellipsis_binders.extend(new_info.ellipsis_binders);
     result.string_values.extend(new_info.string_values);

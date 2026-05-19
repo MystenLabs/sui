@@ -406,8 +406,8 @@ impl<'env> DiagnosticReporter<'env> {
         }
     }
 
-    /// Creates a reporter for IDE macro-body typing that shares IDE information with the
-    /// original reporter but sends diagnostics to a fresh sink that will be discarded.
+    /// Creates a reporter for speculative IDE macro-body typing that shares IDE information with
+    /// the original reporter but sends diagnostics to a fresh sink that will be discarded.
     pub fn clone_for_ide_macro_body_typing(&self) -> Self {
         Self {
             flags: self.flags,
