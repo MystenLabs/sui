@@ -392,11 +392,13 @@ impl BigTableClient {
     /// at positions `≥ position`). Desc: lookup the cp containing
     /// `position` itself (symmetric).
     ///
-    /// Returns `Ok(None)` only at the domain edge (asc `position == 0`,
-    /// no preceding tx). Callers drop the watermark frame silently in
-    /// that case. Lookup miss is surfaced as Internal — requests clamp
-    /// their cp range to `checkpoint_hi_exclusive` up front, so a miss
-    /// indicates inconsistency between the bitmap and `tx_seq_digest`.
+    /// Returns `Ok(None)` (caller drops the watermark) when the boundary
+    /// tx has no cp: ascending `position == 0` (no preceding tx), or a
+    /// frontier sitting just outside indexed history (e.g. a descending
+    /// scan starting at the ledger tip). A watermark is a best-effort
+    /// progress hint, so an unresolvable one is dropped rather than
+    /// failing the query — divergence that affects returned items still
+    /// surfaces loudly at the item-fetch path.
     pub(crate) async fn resolve_wm_cp(
         &self,
         direction: ScanDirection,
@@ -413,17 +415,7 @@ impl BigTableClient {
         };
         let lookup_tx_seq = decode(lookup_position);
         let pairs = self.resolve_tx_checkpoints(&[lookup_tx_seq]).await?;
-        let cp = pairs.into_iter().next().map(|(_, cp)| cp).ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Internal,
-                format!(
-                    "tx_seq {lookup_tx_seq} (from {direction:?} bitmap watermark {position}) \
-                     has no recorded cp in tx_seq_digest; bitmap and tx_seq_digest indexes \
-                     are inconsistent"
-                ),
-            )
-        })?;
-        Ok(Some(cp))
+        Ok(pairs.into_iter().next().map(|(_, cp)| cp))
     }
 
     /// Build a resolver closure for tx-bitmap watermarks (identity
