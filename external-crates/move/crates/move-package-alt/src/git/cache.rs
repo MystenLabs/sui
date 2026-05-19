@@ -366,6 +366,14 @@ pub async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitR
     debug!("running `{}`", display_cmd(&cmd));
     debug!("  in directory `{:?}`", cmd.as_std().get_current_dir());
 
+    // Under simtest, no tokio runtime is available during initial package fetching, so
+    // run the command synchronously via the inner `std::process::Command`.
+    #[cfg(msim)]
+    let output = cmd
+        .as_std_mut()
+        .output()
+        .map_err(|e| GitError::io_error(&cmd, &cwd, e))?;
+    #[cfg(not(msim))]
     let output = cmd
         .output()
         .await
