@@ -39,6 +39,7 @@ use std::path::PathBuf;
 use anyhow::Context as _;
 use anyhow::Error;
 use anyhow::bail;
+use anyhow::ensure;
 
 use move_core_types::language_storage::StructTag;
 use sui_types::base_types::ObjectID;
@@ -919,30 +920,29 @@ fn parse_object_latest_metadata(
     content: &str,
     path: &Path,
 ) -> anyhow::Result<ObjectLatestMetadata> {
-    let content = content.trim();
-    let mut parts = content.split(',');
-    let version = parts.next().unwrap_or_default();
-    anyhow::ensure!(
-        !version.is_empty(),
-        "Missing object latest version in: {}",
-        path.display()
-    );
+    parse_object_latest_inner(content).with_context(|| {
+        format!(
+            "parsing object latest metadata from {content:?}, file: {}",
+            path.display()
+        )
+    })
+}
 
-    let state = match parts.next() {
-        None => ObjectLatestState::Live,
-        Some(state) => ObjectLatestState::from_suffix(state)
-            .with_context(|| format!("Failed to parse object latest file: {}", path.display()))?,
+// Inner function to parse checkpoint `latest` files, which are expected to be numeric-only without
+// state suffixes.
+fn parse_object_latest_inner(content: &str) -> anyhow::Result<ObjectLatestMetadata> {
+    let (version, state) = if let Some((version, suffix)) = content.trim().split_once(',') {
+        ensure!(!suffix.is_empty(), "state is empty");
+
+        let state = ObjectLatestState::from_suffix(suffix).context("cannot parse state")?;
+
+        (version, state)
+    } else {
+        (content.trim(), ObjectLatestState::Live)
     };
 
-    anyhow::ensure!(
-        parts.next().is_none(),
-        "Unexpected extra object latest data in: {}",
-        path.display()
-    );
-
-    let version = version
-        .parse::<u64>()
-        .with_context(|| format!("Failed to parse object latest version: {}", path.display()))?;
+    ensure!(!version.is_empty(), "version is empty");
+    let version: u64 = version.parse().context("version should be a u64")?;
 
     Ok(ObjectLatestMetadata { version, state })
 }
