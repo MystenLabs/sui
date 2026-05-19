@@ -14839,6 +14839,7 @@ dependencies = [
  "serde_json",
  "shared-crypto",
  "sui-config",
+ "sui-futures",
  "sui-keys",
  "sui-rpc-api",
  "sui-sdk",
