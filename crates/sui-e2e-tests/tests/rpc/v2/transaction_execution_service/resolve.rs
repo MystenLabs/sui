@@ -153,7 +153,7 @@ async fn simulate_transaction_read_mask_selects_command_outputs_without_transact
     transaction.bcs = Some(Bcs::serialize(&transaction_data).unwrap());
 
     let mut request = SimulateTransactionRequest::new(transaction);
-    request.set_checks(ProtoTransactionChecks::Disabled);
+    request.set_checks(ProtoTransactionChecks::Enabled);
     request.read_mask = Some(FieldMask {
         paths: vec!["command_outputs".to_owned()],
     });
