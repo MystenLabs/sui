@@ -41,7 +41,7 @@ use syn::{Data, DeriveInput, Fields, Type, parse_macro_input};
 /// ```
 ///
 /// Every field (scalar and non-scalar) is also emitted into a typed
-/// `render<F: Format, M: Meter>(&self, meter: &mut M) -> Result<BTreeMap<String, Option<F>>, MeterError>`
+/// `render<F: Format>(&self, meter: &mut impl Meter) -> Result<BTreeMap<String, Option<F>>, MeterError>`
 /// method, where each value is produced via `mysten_common::rpc_format::ToFormat`. This is the
 /// path RPC code should use to expose protocol config to clients; the same call site can target
 /// `serde_json::Value`, `prost_types::Value`, or any other `Format` impl by choosing `F`.
@@ -126,16 +126,15 @@ pub fn accessors_macro(input: TokenStream) -> TokenStream {
             /// The value is `Some(...)` when the field is set in this protocol version and
             /// `None` when the field isn't configured at this version (matching `attr_map`'s
             /// existing semantics for scalars).
-            pub fn render<F, M>(
+            pub fn render<F>(
                 &self,
-                meter: &mut M,
+                meter: &mut impl ::mysten_common::rpc_format::Meter,
             ) -> ::std::result::Result<
                 std::collections::BTreeMap<String, Option<F>>,
                 ::mysten_common::rpc_format::MeterError,
             >
             where
                 F: ::mysten_common::rpc_format::Format,
-                M: ::mysten_common::rpc_format::Meter,
             {
                 let mut map = std::collections::BTreeMap::new();
                 #(#render_arms)*
