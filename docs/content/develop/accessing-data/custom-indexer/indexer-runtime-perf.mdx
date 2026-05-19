@@ -24,6 +24,8 @@ The indexing framework provides multiple levels of configuration to optimize per
 Control how checkpoint data is fetched and distributed:
 
 ```rust
+use std::num::NonZeroUsize;
+
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 
 let ingestion_config = IngestionConfig {
@@ -43,7 +45,7 @@ let ingestion_config = IngestionConfig {
 
     // gRPC streaming configuration (applies when --streaming-url is provided)
     // Initial batch size after streaming connection failure (default: 10)
-    streaming_backoff_initial_batch_size: 20,
+    streaming_backoff_initial_batch_size: NonZeroUsize::new(20).unwrap(),
 
     // Maximum batch size after repeated streaming failures (default: 10000)
     streaming_backoff_max_batch_size: 20000,

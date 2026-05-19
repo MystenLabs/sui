@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -59,7 +60,7 @@ pub struct IngestionConfig {
     pub retry_interval_ms: u64,
 
     /// Initial number of checkpoints to process using ingestion after a streaming connection failure.
-    pub streaming_backoff_initial_batch_size: usize,
+    pub streaming_backoff_initial_batch_size: NonZeroUsize,
 
     /// Maximum number of checkpoints to process using ingestion after repeated streaming connection failures.
     pub streaming_backoff_max_batch_size: usize,
@@ -228,10 +229,11 @@ impl Default for IngestionConfig {
                 dead_band: None,
             },
             retry_interval_ms: 200,
-            streaming_backoff_initial_batch_size: 10, // 10 checkpoints, ~ 2 seconds
-            streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
-            streaming_connection_timeout_ms: 5000,    // 5 seconds
-            streaming_statement_timeout_ms: 5000,     // 5 seconds
+            streaming_backoff_initial_batch_size: NonZeroUsize::new(10)
+                .expect("default initial streaming backoff is non-zero"), // 10 checkpoints, ~ 2 seconds
+            streaming_backoff_max_batch_size: 10000, // 10000 checkpoints, ~ 40 minutes
+            streaming_connection_timeout_ms: 5000,   // 5 seconds
+            streaming_statement_timeout_ms: 5000,    // 5 seconds
         }
     }
 }
@@ -523,5 +525,14 @@ mod tests {
         );
         let result = latest_checkpoint_number(&mut streaming, &client).await;
         assert_eq!(result.unwrap(), FALLBACK);
+    }
+
+    #[test]
+    fn reject_zero_initial_streaming_backoff_batch_size() {
+        let mut config = serde_json::to_value(IngestionConfig::default()).unwrap();
+        config["streaming_backoff_initial_batch_size"] = serde_json::json!(0);
+
+        let error = serde_json::from_value::<IngestionConfig>(config).unwrap_err();
+        assert!(error.to_string().contains("nonzero"));
     }
 }
