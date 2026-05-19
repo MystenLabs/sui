@@ -12,7 +12,11 @@ This page describes a few recommended security best practices when developing ap
 
 #### Audit your contracts
 
-Ensure transactions operate on smart contracts you trust and have audited. Sui smart contracts are defined as immutable objects to prevent modification. 
+Ensure transactions operate on smart contracts you trust and have audited. Sui smart contracts are defined as immutable objects to prevent modification.
+
+#### Rely on Move's built-in safety
+
+Move's strong static typing, resource-oriented model, and bytecode safety checks help prevent common vulnerabilities such as reentrancy and integer overflows. Build on these guarantees rather than working around them.
 
 #### Random calls must be last in a PTB
 
@@ -141,3 +145,13 @@ No other party can operate on your owned assets without it.
 #### Verify recipient addresses carefully.
 
 Sending objects to an incorrect address might have irrevocable effects.
+
+## General network security
+
+#### Understand the validator trust assumption
+
+Sui maintains its security properties as long as more than 2/3 of validators by stake operate correctly. The network uses Byzantine fault tolerant broadcast and consensus, so it tolerates a minority of faulty or malicious validators.
+
+#### Treat all onchain activity as public
+
+Every transaction and object on Sui is public and auditable, so anyone can inspect the activity of an address. To protect user privacy, consider using multiple addresses to separate unrelated activity.
