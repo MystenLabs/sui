@@ -34,10 +34,9 @@ public fun cao_s<T0, T1>(l0: &mut Pool<T0, T1>, l1: &mut BalanceManager, l2: &Tr
     let l7 = sq::css(l4, l5, true, false, l6);
     if (l7 != ct::e_no_error()) {
         return l7
-    } else {
-        pool::cancel_all_orders(l0, l1, l2, l3, l6);
-        return 0u64
-    }
+    };
+    pool::cancel_all_orders(l0, l1, l2, l3, l6);
+    return 0u64
 }
 
 public fun caw<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut BalanceManager, l2: &TradeProof, l3: &Clock, l4: u64, l5: &mut TxContext): Coin<T2> {
@@ -150,7 +149,6 @@ public fun elf<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut CBM, l2: &mut Balance
                     if (l49 == 0u64) {
                         event::emit(EE { e: ct::e_invalid_price(), l: 379u64 });
                         l28 = l28 + 1u64;
-                        continue
                     } else {
                         l37 = l49;
                         l34 = constants::post_only();
@@ -183,7 +181,6 @@ public fun elf<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut CBM, l2: &mut Balance
                         l23 = l23 - l36;
                         l28 + 1u64
                     };
-                    continue
                 }
             }
         }
@@ -193,108 +190,92 @@ public fun elf<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut CBM, l2: &mut Balance
 fun sp(l0: &vector<u64>, l1: &vector<u64>, l2: u64, l3: u64, l4: bool): u64 {
     if (l3 % l2 != 0u64) {
         return 0u64
-    } else {
-        let l5;
-        let l6 = l4;
-        if (*(&l6)) {
-            if (l1.len() == 0u64) {
-                return l3
-            } else {
-                let l8 = *(&l1[0u64]);
-                if (l3 < l8) {
-                    return l3
-                } else {
-                    let l9 = l8 - l2;
-                    if (l9 < l2) {
-                        return 0u64
-                    } else {
-                        l5 = l9;
-                    }
-                }
-            }
-        } else {
-            if (l0.len() == 0u64) {
-                return l3
-            } else {
-                let l7 = *(&l0[0u64]);
-                if (l3 > l7) {
-                    return l3
-                } else {
-                    let l10 = l7 + l2;
-                    if (l10 > constants::max_u64() - l2) {
-                        return 0u64
-                    } else {
-                        l5 = l10;
-                    }
-                }
-            }
+    };
+    let l6 = l4;
+    let l5 = if (*(&l6)) {
+        if (l1.len() == 0u64) {
+            return l3
         };
-        return l5
-    }
+        let l8 = *(&l1[0u64]);
+        if (l3 < l8) {
+            return l3
+        };
+        let l9 = l8 - l2;
+        if (l9 < l2) {
+            return 0u64
+        };
+        l9
+    } else {
+        if (l0.len() == 0u64) {
+            return l3
+        };
+        let l7 = *(&l0[0u64]);
+        if (l3 > l7) {
+            return l3
+        };
+        let l10 = l7 + l2;
+        if (l10 > constants::max_u64() - l2) {
+            return 0u64
+        };
+        l10
+    };
+    return l5
 }
 
 fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64, l6: u64, l7: u64, l8: u64, l9: bool, l10: bool, l11: bool): ( u64, u64) {
     if (l7 == 0u64) {
         return (0u64, ct::e_invalid_price())
+    };
+    if (l7 % l4 != 0u64) {
+        return (0u64, ct::e_invalid_price())
+    };
+    let l12 = if (!(l9)) {
+        l1 < l6
     } else {
-        if (l7 % l4 != 0u64) {
-            return (0u64, ct::e_invalid_price())
+        false
+    };
+    if (l12) {
+        return (0u64, ct::e_insufficient_base_balance())
+    };
+    if (l8 < l6) {
+        return (0u64, ct::e_insufficient_quantity())
+    };
+    let l16 = l9;
+    let l15 = if (*(&l16)) {
+        let l25 = l2as u128 * constants::float_scaling_u128() / l7as u128as u64;
+        let l21 = l25 % l5 + l5;
+        if (l25 < l21) {
+            return (0u64, ct::e_insufficient_quote_balance())
+        };
+        let l22 = l25 - l21;
+        if (l22 < l6) {
+            return (0u64, ct::e_insufficient_quote_balance())
+        };
+        let l19 = u64::max(l6, u64::min(l8, l22as u64));
+        l19 - l19 % l5
+    } else {
+        let l20 = u64::max(l6, u64::min(l8, l1));
+        l20 - l20 % l5
+    };
+    let l26 = l15;
+    let l17 = l11;
+    let l14 = if (*(&l17)) {
+        let (reg_89, reg_90) = pool::get_order_deep_required(l0, l26, l7);
+        let l23 = reg_90;
+        let l24 = reg_89;
+        let l18 = l10;
+        let l13 = if (*(&l18)) {
+            l23
         } else {
-            let l12 = if (!(l9)) {
-                l1 < l6
-            } else {
-                false
-            };
-            if (l12) {
-                return (0u64, ct::e_insufficient_base_balance())
-            } else {
-                if (l8 < l6) {
-                    return (0u64, ct::e_insufficient_quantity())
-                } else {
-                    let l15;
-                    let l16 = l9;
-                    if (*(&l16)) {
-                        let l25 = l2as u128 * constants::float_scaling_u128() / l7as u128as u64;
-                        let l21 = l25 % l5 + l5;
-                        if (l25 < l21) {
-                            return (0u64, ct::e_insufficient_quote_balance())
-                        } else {
-                            let l22 = l25 - l21;
-                            if (l22 < l6) {
-                                return (0u64, ct::e_insufficient_quote_balance())
-                            } else {
-                                let l19 = u64::max(l6, u64::min(l8, l22as u64));
-                                l15 = l19 - l19 % l5;
-                            }
-                        }
-                    } else {
-                        let l20 = u64::max(l6, u64::min(l8, l1));
-                        l15 = l20 - l20 % l5;
-                    };
-                    let l26 = l15;
-                    let l17 = l11;
-                    let l14 = if (*(&l17)) {
-                        let (reg_89, reg_90) = pool::get_order_deep_required(l0, l26, l7);
-                        let l23 = reg_90;
-                        let l24 = reg_89;
-                        let l18 = l10;
-                        let l13 = if (*(&l18)) {
-                            l23
-                        } else {
-                            l24
-                        };
-                        l13
-                    } else {
-                        0u64
-                    };
-                    if (l14 > l3) {
-                        return (0u64, ct::e_insufficient_deep_balance())
-                    } else {
-                        return (l26, 0u64)
-                    }
-                }
-            }
-        }
-    }
+            l24
+        };
+        l13
+    } else {
+        0u64
+    };
+    if (l14 > l3) {
+        return (0u64, ct::e_insufficient_deep_balance())
+    };
+    return (l26, 0u64)
 }
 
