@@ -139,7 +139,9 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, ExecutionErrorContext, SuiErrorKind, UserInputError};
+use sui_types::error::{
+    ExecutionError, ExecutionErrorContext, ExecutionErrorMetadata, SuiErrorKind, UserInputError,
+};
 use sui_types::event::EventID;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionErrorKind;
@@ -1461,7 +1463,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         mut execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> ExecutionOutput<(TransactionEffects, Option<ExecutionErrorContext>)> {
+    ) -> ExecutionOutput<(TransactionEffects, Option<ExecutionError>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
 
@@ -1640,10 +1642,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
         execution_env: ExecutionEnv,
-    ) -> (
-        VerifiedSignedTransactionEffects,
-        Option<ExecutionErrorContext>,
-    ) {
+    ) -> (VerifiedSignedTransactionEffects, Option<ExecutionError>) {
         let epoch_store = self.epoch_store_for_testing();
         let (effects, execution_error_opt) = self
             .try_execute_immediately(
@@ -1661,10 +1660,7 @@ impl AuthorityState {
         &self,
         executable: &VerifiedExecutableTransaction,
         execution_env: ExecutionEnv,
-    ) -> (
-        VerifiedSignedTransactionEffects,
-        Option<ExecutionErrorContext>,
-    ) {
+    ) -> (VerifiedSignedTransactionEffects, Option<ExecutionError>) {
         let epoch_store = self.epoch_store_for_testing();
         let (effects, execution_error_opt) = self
             .try_execute_immediately(executable, execution_env, &epoch_store)
@@ -1740,7 +1736,7 @@ impl AuthorityState {
     ) -> ExecutionOutput<(
         TransactionOutputs,
         Vec<ExecutionTiming>,
-        Option<ExecutionErrorContext>,
+        Option<ExecutionError>,
     )> {
         let _scope = monitored_scope("Execution::process_certificate");
         let tx_digest = *certificate.digest();
@@ -1917,8 +1913,12 @@ impl AuthorityState {
         SuiGasStatus,
         TransactionEffects,
         Vec<ExecutionTiming>,
-        Result<(), ExecutionErrorContext>,
+        Result<(), ExecutionError>,
+        Option<ExecutionErrorMetadata>,
     ) {
+        // Fullnodes retain source errors and VM metadata as sidecar data for richer user-facing
+        // error reporting. Validators use the lean execution path and intentionally return no
+        // sidecar metadata so effects stay independent of non-consensus data.
         if is_fullnode {
             let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
                 .execute_transaction_to_effects_and_execution_error(
@@ -1939,12 +1939,18 @@ impl AuthorityState {
                     &mut None,
                 );
 
+            let execution_error_metadata = execution_error
+                .as_ref()
+                .err()
+                .and_then(ExecutionErrorContext::metadata_with_source);
+
             (
                 inner_temp_store,
                 gas_status,
                 effects,
                 timings,
-                execution_error,
+                execution_error.map_err(ExecutionError::from),
+                execution_error_metadata,
             )
         } else {
             let (inner_temp_store, gas_status, effects, timings, execution_failure) = executor
@@ -1971,7 +1977,8 @@ impl AuthorityState {
                 gas_status,
                 effects,
                 timings,
-                execution_failure.map_err(ExecutionErrorContext::from),
+                execution_failure.map_err(ExecutionError::from),
+                None,
             )
         }
     }
@@ -1996,7 +2003,7 @@ impl AuthorityState {
     ) -> ExecutionOutput<(
         TransactionOutputs,
         Vec<ExecutionTiming>,
-        Option<ExecutionErrorContext>,
+        Option<ExecutionError>,
     )> {
         let _scope = monitored_scope("Execution::prepare_certificate");
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
@@ -2060,31 +2067,37 @@ impl AuthorityState {
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
         #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, timings, execution_error_result) = self
-            .execute_transaction_to_effects(
-                &**epoch_store.executor(),
-                &tracking_store,
-                protocol_config,
-                // TODO: would be nice to pass the whole NodeConfig here, but it creates a
-                // cyclic dependency w/ sui-adapter
-                self.config
-                    .expensive_safety_check_config
-                    .enable_deep_per_tx_sui_conservation_check(),
-                execution_params,
-                &epoch_store.epoch_start_config().epoch_data().epoch_id(),
-                epoch_store
-                    .epoch_start_config()
-                    .epoch_data()
-                    .epoch_start_timestamp(),
-                input_objects,
-                gas_data,
-                gas_status,
-                kind,
-                rewritten_inputs,
-                signer,
-                tx_digest,
-                self.is_fullnode(epoch_store),
-            );
+        let (
+            inner_temp_store,
+            _,
+            mut effects,
+            timings,
+            execution_error_result,
+            execution_error_metadata,
+        ) = self.execute_transaction_to_effects(
+            &**epoch_store.executor(),
+            &tracking_store,
+            protocol_config,
+            // TODO: would be nice to pass the whole NodeConfig here, but it creates a
+            // cyclic dependency w/ sui-adapter
+            self.config
+                .expensive_safety_check_config
+                .enable_deep_per_tx_sui_conservation_check(),
+            execution_params,
+            &epoch_store.epoch_start_config().epoch_data().epoch_id(),
+            epoch_store
+                .epoch_start_config()
+                .epoch_data()
+                .epoch_start_timestamp(),
+            input_objects,
+            gas_data,
+            gas_status,
+            kind,
+            rewritten_inputs,
+            signer,
+            tx_digest,
+            self.is_fullnode(epoch_store),
+        );
 
         let execution_error_opt = execution_error_result.err();
 
@@ -2197,10 +2210,6 @@ impl AuthorityState {
                 &tracking_store.into_read_objects(),
             );
 
-        let execution_error_metadata = execution_error_opt
-            .as_ref()
-            .and_then(ExecutionErrorContext::metadata_with_source);
-
         // index certificate
         let _ = self
             .post_process_one_tx(certificate, &effects, &inner_temp_store, epoch_store)
@@ -2252,10 +2261,7 @@ impl AuthorityState {
                 epoch_store,
             )
             .unwrap();
-        Ok((
-            transaction_outputs,
-            execution_error_opt.map(ExecutionError::from),
-        ))
+        Ok((transaction_outputs, execution_error_opt))
     }
 
     #[instrument(skip_all)]

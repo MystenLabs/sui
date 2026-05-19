@@ -5466,10 +5466,7 @@ async fn test_validator_execution_does_not_store_error_metadata() {
         })
     ));
 
-    assert_eq!(
-        validator_execution_error.and_then(|error| error.metadata_with_source()),
-        None
-    );
+    assert!(validator_execution_error.is_some());
     assert_eq!(
         validator
             .get_transaction_cache_reader()
@@ -5477,19 +5474,21 @@ async fn test_validator_execution_does_not_store_error_metadata() {
         None,
     );
 
-    let fullnode_metadata = fullnode_execution_error
-        .and_then(|error| error.metadata_with_source())
+    let fullnode_source = fullnode_execution_error
+        .as_ref()
+        .and_then(|error| std::error::Error::source(error))
+        .map(ToString::to_string)
+        .unwrap();
+    assert!(fullnode_source.contains("bad_function"));
+    let fullnode_metadata = fullnode
+        .get_transaction_cache_reader()
+        .get_execution_error_metadata(executable.digest())
         .unwrap();
     assert!(
         fullnode_metadata
+            .attributes
             .get("source")
             .is_some_and(|source| source.contains("bad_function"))
-    );
-    assert_eq!(
-        fullnode
-            .get_transaction_cache_reader()
-            .get_execution_error_metadata(executable.digest()),
-        Some(fullnode_metadata),
     );
 }
 

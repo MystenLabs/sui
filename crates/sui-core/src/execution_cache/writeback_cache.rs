@@ -233,6 +233,8 @@ struct UncommittedData {
 
     unchanged_loaded_runtime_objects: DashMap<TransactionDigest, Vec<ObjectKey>>,
 
+    /// Error metadata originating from `ExecutionErrorContext`, retained with transaction
+    /// data until pruning. Includes source errors and VM-level details when available.
     execution_error_metadata: DashMap<TransactionDigest, ExecutionErrorMetadata>,
 
     executed_effects_digests: DashMap<TransactionDigest, TransactionEffectsDigest>,
@@ -995,7 +997,7 @@ impl WritebackCache {
             .insert(tx_digest, unchanged_loaded_runtime_objects.clone());
 
         if let Some(metadata) = execution_error_metadata
-            && !metadata.is_empty()
+            && !metadata.attributes.is_empty()
         {
             self.metrics.record_cache_write("execution_error_metadata");
             self.dirty

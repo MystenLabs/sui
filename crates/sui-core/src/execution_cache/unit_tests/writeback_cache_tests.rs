@@ -23,6 +23,7 @@ use sui_types::{
 };
 use sui_types::{
     effects::{TestEffectsBuilder, TransactionEffectsAPI},
+    error::ExecutionErrorMetadata,
     event::Event,
 };
 use tokio::sync::RwLock;
@@ -556,11 +557,12 @@ async fn test_committed() {
 async fn test_execution_error_metadata_round_trip() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
-        let mut metadata = BTreeMap::new();
-        metadata.insert(
-            "source".to_string(),
-            "Object runtime cached objects limit reached".to_string(),
-        );
+        let metadata = ExecutionErrorMetadata {
+            attributes: BTreeMap::from([(
+                "source".to_string(),
+                "Object runtime cached objects limit reached".to_string(),
+            )]),
+        };
         s.outputs.execution_error_metadata = Some(metadata.clone());
 
         let tx = s.do_tx().await;
@@ -590,7 +592,7 @@ async fn test_execution_error_metadata_round_trip() {
 async fn test_empty_execution_error_metadata_is_ignored() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
-        s.outputs.execution_error_metadata = Some(BTreeMap::new());
+        s.outputs.execution_error_metadata = Some(ExecutionErrorMetadata::default());
 
         let tx = s.do_tx().await;
         assert!(!s.cache.dirty.execution_error_metadata.contains_key(&tx));

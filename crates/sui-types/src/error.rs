@@ -1166,7 +1166,38 @@ impl std::fmt::Debug for SuiError {
 }
 
 pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
-pub type ExecutionErrorMetadata = BTreeMap<String, String>;
+
+#[derive(Clone, Eq, PartialEq, JsonSchema, Serialize, Deserialize, prost::Message)]
+pub struct ExecutionErrorMetadata {
+    #[prost(btree_map = "string, string", tag = "1")]
+    pub attributes: BTreeMap<String, String>,
+}
+
+#[cfg(test)]
+mod execution_error_metadata_tests {
+    use super::ExecutionErrorMetadata;
+    use prost::Message;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn execution_error_metadata_protobuf_round_trip() {
+        let metadata = ExecutionErrorMetadata {
+            attributes: BTreeMap::from([(
+                "source".to_string(),
+                "Object runtime cached objects limit reached".to_string(),
+            )]),
+        };
+
+        let encoded = metadata.encode_to_vec();
+        let decoded = ExecutionErrorMetadata::decode(encoded.as_slice()).unwrap();
+
+        assert_eq!(decoded, metadata);
+        assert_eq!(
+            decoded.attributes.get("source").map(String::as_str),
+            Some("Object runtime cached objects limit reached")
+        );
+    }
+}
 
 /// A trait for execution errors that provides common methods for accessing error information and creating new errors.
 pub trait ExecutionErrorTrait:
@@ -1311,10 +1342,12 @@ impl ExecutionErrorContext {
     pub fn metadata_with_source(&self) -> Option<ExecutionErrorMetadata> {
         let mut metadata = self.metadata.clone();
         if let Some(source) = self.source.as_ref() {
-            metadata.insert("source".to_string(), source.to_string());
+            metadata
+                .attributes
+                .insert("source".to_string(), source.to_string());
         }
 
-        (!metadata.is_empty()).then_some(metadata)
+        (!metadata.attributes.is_empty()).then_some(metadata)
     }
 
     pub fn to_execution_status(&self) -> (ExecutionErrorKind, Option<CommandIndex>) {
@@ -1387,7 +1420,7 @@ impl From<ExecutionError> for ExecutionErrorContext {
         } = *inner;
         Self {
             kind,
-            metadata: BTreeMap::new(),
+            metadata: ExecutionErrorMetadata::default(),
             source,
             command,
         }

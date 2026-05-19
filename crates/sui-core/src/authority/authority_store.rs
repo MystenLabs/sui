@@ -872,7 +872,7 @@ impl AuthorityStore {
         }
 
         if let Some(metadata) = execution_error_metadata
-            && !metadata.is_empty()
+            && !metadata.attributes.is_empty()
         {
             write_batch.insert_batch(
                 &self.perpetual_tables.execution_error_metadata,
