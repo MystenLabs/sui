@@ -39,8 +39,8 @@ the checkpoint must be within the last 1h.
 When restarting a fork with the same `--data-dir` and `--checkpoint`, the existing
 seeding information that is stored on disk will be reused. If `--address` or `--object` is
 provided, the tool will error with a message indicating that a seed manifest already exists.
-The durable owned-object index and local deleted markers remain authoritative over the manifest
-after the fork has executed local transactions.
+The owned-object index and local object `latest` state remain authoritative over the
+manifest after the fork has executed local transactions.
 
 ## Generated files
 
@@ -174,9 +174,9 @@ async fn resolve_seeds(
 
 ## Composition with owned_objects_design.md
 
-The seed manifest is the immutable pre-fork baseline. The durable
-`indices/owned_objects` file and object tombstones are the current local state
-once the fork has started executing.
+The seed manifest is the immutable pre-fork baseline. The
+`indices/owned_objects` file and object `latest` metadata are the current local
+state once the fork has started executing.
 
 **Index rebuild on startup** (two sources):
 1. If `indices/owned_objects` exists, use it as-is and do not rewrite it from the manifest.
@@ -191,12 +191,12 @@ once the fork has started executing.
   read masks fetch BCS lazily
 
 **When a seeded object is deleted/mutated post-fork**:
-- `update_objects()` removes the old index entry, adds the new address-owned entry,
-  or removes the entry for wrapped/shared/immutable/object-owned transitions
-- local deleted markers prevent current-object reads from falling back to the remote endpoint
+- `update_objects()` removes the old index entry, adds the new address-owned entry, or removes the
+  entry for wrapped/shared/immutable/object-owned transitions
+- local object `latest` removal state prevents current-object reads from falling back to the remote endpoint
 
 **Key invariant**: Seed manifest is immutable after creation. Post-fork state is tracked entirely
-through the durable owned-object index, object BCS files, and deleted markers.
+through the owned-object index, object BCS files, and object `latest` state.
 
 ## Edge cases
 

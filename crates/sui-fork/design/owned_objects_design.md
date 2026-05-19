@@ -12,7 +12,8 @@ existing object-version cache.
 
 ## Goals
 
-- Keep `objects/<object_id>/latest` as the highest cached object version.
+- Keep live `objects/<object_id>/latest` files numeric-only while encoding local
+  removed current state as version-first metadata.
 - Prevent locally deleted objects from being resurrected by remote fallback.
 - Track live `Owner::AddressOwner` objects created or changed by local
   execution.
@@ -33,24 +34,12 @@ objects/
     <version>
 ```
 
-`latest` remains a cache marker for the highest object version written to disk.
-It is not deleted when local execution deletes an object, because exact-version
-reads must still be able to load historical versions.
-
-Local execution can now add:
-
-```text
-objects/
-  <object_id>/
-    removed
-```
-
-The `removed` file is an explicit local tombstone. It is a human-readable text
-file containing the removal kind plus object reference, such as
-`deleted <version> <digest>` or `wrapped <version> <digest>`. When present,
-current-object reads return `None` and do not fall back to the remote GraphQL
-endpoint. Exact-version reads ignore this marker and can still load
-`objects/<object_id>/<version>`.
+`latest` is a human-readable current-state marker. Live objects keep the
+existing numeric-only format, `<version>`. Local execution encodes removals in
+the same file as `<version>,deleted` or `<version>,wrapped`. When `latest`
+contains deleted or wrapped state, current-object reads return `None` and do
+not fall back to the remote GraphQL endpoint. Exact-version reads ignore this
+state and can still load `objects/<object_id>/<version>`.
 
 The owned-object index is stored separately:
 
@@ -78,18 +67,20 @@ object-owned, and package objects are excluded.
 ## Write Path
 
 Remote object cache writes only call `write_object`. They write version files
-and update `latest`; they do not clear removal markers or update the owned
-index.
+and update numeric live `latest` metadata; they preserve existing deleted or
+wrapped `latest` state and do not update the owned index.
 
 Local execution flows through `DataStore::update_objects`:
 
 1. For each deleted object ID:
-   - write `objects/<object_id>/removed` with kind `deleted`
+   - write `objects/<object_id>/latest` as `<version>,deleted`
    - remove the object ID from `indices/owned_objects`
+   - reject direct deletion if the current local latest state is `wrapped`; the
+     effects path must report `unwrapped_then_deleted` for an unwrap-and-delete
+     transaction
 2. For each written object:
    - write `objects/<object_id>/<version>`
-   - update `objects/<object_id>/latest`
-   - clear `objects/<object_id>/removed` only if it is kind `wrapped`
+   - update `objects/<object_id>/latest` to numeric-only live state unless the object is deleted
    - upsert the owned index entry if the object is `Owner::AddressOwner`
    - remove any existing owned index entry otherwise
 3. Rewrite `indices/owned_objects` via temp-file then rename.
@@ -100,8 +91,8 @@ writes the sorted vector back.
 
 ## Read Path
 
-`DataStore::get_object` checks the local removal marker before reading from disk
-or falling back to GraphQL. This keeps post-fork removals authoritative.
+`DataStore::get_object` checks object `latest` state before reading from disk or
+falling back to GraphQL. This keeps post-fork removals authoritative.
 
 `DataStore::get_object_at_version` remains exact-version only. It can return
 historical cached object versions even if the current object is marked removed.
@@ -124,7 +115,7 @@ Unsupported index methods return empty iterators or `None`.
 
 - The current-object read path cannot resurrect locally deleted objects from the
   remote endpoint.
-- The owned-object index is durable and sorted, but it is not a complete live
+- The owned-object index is sorted, but it is not a complete live
   object database.
 - Owned-object reads and local object/index updates are coordinated by an
   in-process snapshot guard shared by cloned `DataStore` handles. This does not
@@ -133,14 +124,14 @@ Unsupported index methods return empty iterators or `None`.
 - The index only covers locally materialized post-fork writes.
 - Aggregate balance APIs are out of scope for this first version.
 - Crash recovery is limited to atomic replacement of the index file. A future
-  version can rebuild the index by scanning object files and removal markers if
-  stronger recovery is needed.
+  version can rebuild the index by scanning object files and object `latest`
+  metadata if stronger recovery is needed.
 
 ## Test Coverage
 
 The design should be validated with tests for:
 
-- removal markers blocking latest/current reads while preserving exact-version
+- object `latest` removal state blocking current reads while preserving exact-version
   reads
 - owned index upsert, removal, persistence, and sort order
 - address writes appearing in `owned_objects`

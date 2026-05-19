@@ -69,8 +69,8 @@ use crate::TransactionInfo;
 use crate::TransactionRead;
 use crate::VersionQuery;
 use crate::filesystem::FilesystemStore;
+use crate::filesystem::ObjectLatestState;
 use crate::filesystem::OwnedObjectEntry;
-use crate::filesystem::RemovedObjectKind;
 
 /// A data store for Sui data, combining a shared local filesystem cache with a remote GraphQL
 /// endpoint for historical reads. Pre-fork data is fetched on demand and cached locally; post-fork
@@ -94,10 +94,22 @@ struct DataStoreInner {
     local_snapshot_lock: RwLock<()>,
 }
 
-/// Object reference paired with the current-state removal kind that produced it.
+/// Source of an object removal emitted by transaction effects.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RemovedObjectKind {
+    /// The object moved directly from live to deleted.
+    Deleted,
+    /// The object moved directly from live to wrapped.
+    Wrapped,
+    /// The object was unwrapped and deleted in the same transaction.
+    UnwrappedThenDeleted,
+}
+
+/// Object version paired with the current-state removal kind that produced it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct RemovedObject {
-    object_ref: ObjectRef,
+    object_id: ObjectID,
+    version: SequenceNumber,
     kind: RemovedObjectKind,
 }
 
@@ -327,7 +339,12 @@ impl DataStore {
     /// Local-first lookup for the latest known version of an object. Falls back to a remote
     /// `AtCheckpoint(forked_at_checkpoint)` query and caches the result on disk.
     fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
-        if self.inner.local.is_object_currently_removed(object_id)? {
+        if self
+            .inner
+            .local
+            .object_latest_state(object_id)?
+            .is_some_and(ObjectLatestState::is_removed)
+        {
             return Ok(None);
         }
 
@@ -501,7 +518,7 @@ impl DataStore {
         None
     }
 
-    /// Persist local object writes and current-state tombstones, then update the address-owned
+    /// Persist local object writes and current-state removals, then update the address-owned
     /// index from the same diff.
     fn apply_object_updates(
         &mut self,
@@ -513,7 +530,7 @@ impl DataStore {
             .expect("failed to lock local snapshot for object update");
         let removed_object_ids: Vec<_> = removed_objects
             .iter()
-            .map(|removed| removed.object_ref.0)
+            .map(|removed| removed.object_id)
             .collect();
 
         for removed in &removed_objects {
@@ -521,35 +538,36 @@ impl DataStore {
                 RemovedObjectKind::Deleted => self
                     .inner
                     .local
-                    .mark_object_deleted(&removed.object_ref)
-                    .expect("failed to mark object deleted on disk"),
+                    .mark_object_as_deleted(removed.object_id, removed.version)
+                    .expect("failed to write deleted object latest state on disk"),
                 RemovedObjectKind::Wrapped => self
                     .inner
                     .local
-                    .mark_object_wrapped(&removed.object_ref)
-                    .expect("failed to mark object wrapped on disk"),
+                    .mark_object_as_wrapped(removed.object_id, removed.version)
+                    .expect("failed to write wrapped object latest state on disk"),
+                RemovedObjectKind::UnwrappedThenDeleted => self
+                    .inner
+                    .local
+                    .mark_object_as_unwrapped_then_deleted(removed.object_id, removed.version)
+                    .expect("failed to write unwrapped-then-deleted object latest state on disk"),
             }
         }
 
         for object in written_objects.values() {
             self.inner
                 .local
-                .write_object(object)
+                .write_live_object(object)
                 .expect("failed to write object to disk");
-            self.inner
-                .local
-                .clear_object_wrapped(&object.id())
-                .expect("failed to clear object wrapped marker");
         }
 
         let indexable_written_objects: Vec<_> = written_objects
             .values()
             .filter(|object| {
-                !self
-                    .inner
+                self.inner
                     .local
-                    .is_object_deleted(&object.id())
-                    .expect("failed to read object removal marker")
+                    .object_latest_state(&object.id())
+                    .expect("failed to read object latest state")
+                    != Some(ObjectLatestState::Deleted)
             })
             .collect();
 
@@ -670,23 +688,34 @@ fn struct_tag_filter_matches(filter: &StructTag, candidate: &StructTag) -> bool 
             || filter.type_params.as_slice() == candidate.type_params.as_slice())
 }
 
-/// Extract removal kinds before passing removals through `update_objects`, whose trait signature
-/// does not distinguish deleted, wrapped, or unwrapped-then-deleted objects.
+/// Preserve effect removal categories before passing removals through `update_objects`, whose trait
+/// signature does not distinguish deleted, wrapped, or unwrapped-then-deleted objects.
 fn removed_objects_from_effects(effects: &TransactionEffects) -> Vec<RemovedObject> {
     effects
         .deleted()
         .into_iter()
-        .chain(effects.unwrapped_then_deleted())
         .map(|object_ref| RemovedObject {
-            object_ref,
+            object_id: object_ref.0,
+            version: object_ref.1,
             kind: RemovedObjectKind::Deleted,
         })
+        .chain(
+            effects
+                .unwrapped_then_deleted()
+                .into_iter()
+                .map(|object_ref| RemovedObject {
+                    object_id: object_ref.0,
+                    version: object_ref.1,
+                    kind: RemovedObjectKind::UnwrappedThenDeleted,
+                }),
+        )
         .chain(
             effects
                 .wrapped()
                 .into_iter()
                 .map(|object_ref| RemovedObject {
-                    object_ref,
+                    object_id: object_ref.0,
+                    version: object_ref.1,
                     kind: RemovedObjectKind::Wrapped,
                 }),
         )
@@ -998,8 +1027,9 @@ impl SimulatorStore for DataStore {
     ) {
         let removed_objects = deleted_objects
             .into_iter()
-            .map(|object_ref| RemovedObject {
-                object_ref,
+            .map(|(object_id, version, _digest)| RemovedObject {
+                object_id,
+                version,
                 kind: RemovedObjectKind::Deleted,
             })
             .collect();

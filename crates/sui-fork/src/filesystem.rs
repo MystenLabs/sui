@@ -11,8 +11,7 @@
 //! Under either root:
 //!     - objects/
 //!         - {object_id}/
-//!            - latest                  (text: latest persisted version number)
-//!            - removed                 (text marker: removed kind + object ref)
+//!            - latest                  (text: version[,deleted|,wrapped])
 //!            - {version}                (BCS-encoded Object)
 //!     - indices/
 //!         - owned_objects              (BCS-encoded `Vec<OwnedObjectEntry>`)
@@ -33,24 +32,21 @@
 use std::env;
 use std::ffi::OsString;
 use std::fs;
-use std::io::ErrorKind;
 use std::io::Write as _;
 use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::Context as _;
 use anyhow::Error;
-use anyhow::anyhow;
 use anyhow::bail;
+use anyhow::ensure;
 
 use move_core_types::language_storage::StructTag;
 use sui_types::base_types::ObjectID;
-use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::CheckpointContentsDigest;
 use sui_types::digests::CheckpointDigest;
-use sui_types::digests::ObjectDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEvents;
@@ -79,8 +75,6 @@ const INDICES_DIR: &str = "indices";
 const CHECKPOINTS_DIR: &str = "checkpoints";
 /// Per-chain transaction storage directory.
 const TRANSACTIONS_DIR: &str = "transactions";
-/// Filename marking the current local removal state for an object.
-const REMOVED_FILE: &str = "removed";
 /// BCS-encoded owned-object index filename.
 const OWNED_OBJECTS_INDEX_FILE: &str = "owned_objects";
 /// Filename for the BCS-encoded transaction data within a transaction directory.
@@ -102,26 +96,64 @@ const LATEST_FILE: &str = "latest";
 /// JSON file containing immutable fork metadata and optional pre-fork seed metadata.
 const SEED_MANIFEST_FILE: &str = "seed_manifest.json";
 
-/// Current-state removal kind for an object affected by local execution.
+/// Current state encoded in an object `latest` file.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum RemovedObjectKind {
+pub(crate) enum ObjectLatestState {
+    /// The current object is live; the latest file is numeric-only.
+    Live,
+    /// The current object was deleted locally and must not fall back to remote state.
     Deleted,
+    /// The current object was wrapped locally and can become live again through an unwrap write.
     Wrapped,
 }
 
-impl RemovedObjectKind {
-    fn marker_text(self) -> &'static str {
-        match self {
-            Self::Deleted => "deleted",
-            Self::Wrapped => "wrapped",
-        }
-    }
-
-    fn from_marker_text(value: &str) -> anyhow::Result<Self> {
+impl ObjectLatestState {
+    /// Parse the optional state suffix after `<version>,`.
+    fn from_suffix(value: &str) -> anyhow::Result<Self> {
         match value {
             "deleted" => Ok(Self::Deleted),
             "wrapped" => Ok(Self::Wrapped),
-            _ => bail!("Unknown object removal marker kind: {value}"),
+            "" => bail!("Missing object latest state"),
+            _ => bail!("Unknown object latest state: {value}"),
+        }
+    }
+
+    /// Return the serialized state suffix; live latest files intentionally have no suffix.
+    fn suffix(self) -> Option<&'static str> {
+        match self {
+            Self::Live => None,
+            Self::Deleted => Some("deleted"),
+            Self::Wrapped => Some("wrapped"),
+        }
+    }
+
+    /// Return whether this state blocks current-object reads and remote fallback.
+    pub(crate) fn is_removed(self) -> bool {
+        matches!(self, Self::Deleted | Self::Wrapped)
+    }
+}
+
+/// Parsed metadata from an object `latest` file.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ObjectLatestMetadata {
+    version: u64,
+    state: ObjectLatestState,
+}
+
+impl ObjectLatestMetadata {
+    /// Construct numeric-only latest metadata for a live object version.
+    fn live(version: u64) -> Self {
+        Self {
+            version,
+            state: ObjectLatestState::Live,
+        }
+    }
+
+    /// Render the exact payload stored in `objects/<id>/latest`.
+    fn format(self) -> String {
+        match self.state.suffix() {
+            Some(state) => format!("{},{}", self.version, state),
+            None => self.version.to_string(),
         }
     }
 }
@@ -381,18 +413,18 @@ impl FilesystemStore {
 
     /// Get the latest object version available on disk for the given object ID.
     pub(crate) fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
-        if self.is_object_currently_removed(object_id)? {
-            return Ok(None);
-        }
-
         let object_dir = self.objects_dir().join(object_id.to_string());
 
         if !object_dir.exists() {
             return Ok(None);
         }
 
-        let latest_version = self.read_latest_file(&object_dir)?;
-        let version_file = object_dir.join(latest_version.to_string());
+        let latest = self.read_object_latest_metadata(&object_dir)?;
+        if latest.state.is_removed() {
+            return Ok(None);
+        }
+
+        let version_file = object_dir.join(latest.version.to_string());
         self.read_bcs_file(&version_file).map(Some)
     }
 
@@ -413,171 +445,162 @@ impl FilesystemStore {
         self.read_bcs_file(&version_file).map(Some)
     }
 
-    /// Write the given object to disk under the objects directory, using the object ID and version
-    /// as the path. It will also update the latest file to point to this version.
+    /// Write an object fetched from remote/cache paths. Existing deleted or wrapped current-state
+    /// metadata is preserved so remote reads cannot resurrect local removals.
     pub(crate) fn write_object(&self, object: &Object) -> anyhow::Result<()> {
         let object_dir = self.objects_dir().join(object.id().to_string());
         let version = object.version().value();
         let version_file = object_dir.join(version.to_string());
         self.write_bcs_file(&version_file, object)?;
 
-        let latest_version = if object_dir.join(LATEST_FILE).exists() {
-            std::cmp::max(self.read_latest_file(&object_dir)?, version)
-        } else {
-            version
+        let Some(latest) = self.read_object_latest_metadata_if_exists(&object_dir)? else {
+            return self
+                .write_object_latest_metadata(&object_dir, ObjectLatestMetadata::live(version));
         };
-        let latest_file = object_dir.join(LATEST_FILE);
-        fs::write(latest_file, latest_version.to_string())
-            .with_context(|| format!("Failed to write latest file for object {}", object.id()))
-    }
-
-    /// Mark an object as deleted by local execution. Historical version files remain on disk and
-    /// can still be read by exact version, but current reads must not resurrect the object.
-    pub(crate) fn mark_object_deleted(&self, object_ref: &ObjectRef) -> anyhow::Result<()> {
-        self.write_object_removed_marker(RemovedObjectKind::Deleted, object_ref)
-    }
-
-    /// Mark an object as wrapped by local execution. Historical version files remain on disk and
-    /// can still be read by exact version; a later live write can clear this marker.
-    pub(crate) fn mark_object_wrapped(&self, object_ref: &ObjectRef) -> anyhow::Result<()> {
-        if self.is_object_deleted(&object_ref.0)? {
+        if latest.state.is_removed() {
             return Ok(());
         }
-        self.write_object_removed_marker(RemovedObjectKind::Wrapped, object_ref)
+
+        self.write_object_latest_metadata(
+            &object_dir,
+            ObjectLatestMetadata::live(std::cmp::max(latest.version, version)),
+        )
     }
 
-    /// Clear the local deletion marker. Normal live writes do not call this because post-fork
-    /// deletions are terminal; it is available for tests and explicit cache repair.
-    pub(crate) fn clear_object_deleted(&self, object_id: &ObjectID) -> anyhow::Result<()> {
-        self.clear_object_removed_marker_kind(object_id, RemovedObjectKind::Deleted)
-    }
+    /// Write an object produced by local execution. Wrapped state is cleared by a live write, while
+    /// deleted state remains terminal.
+    pub(crate) fn write_live_object(&self, object: &Object) -> anyhow::Result<()> {
+        let object_dir = self.objects_dir().join(object.id().to_string());
+        let version = object.version().value();
+        let version_file = object_dir.join(version.to_string());
+        self.write_bcs_file(&version_file, object)?;
 
-    /// Clear the local wrapped marker for an object that has become live again.
-    pub(crate) fn clear_object_wrapped(&self, object_id: &ObjectID) -> anyhow::Result<()> {
-        self.clear_object_removed_marker_kind(object_id, RemovedObjectKind::Wrapped)
-    }
-
-    /// Return whether local execution has deleted the object.
-    pub(crate) fn is_object_deleted(&self, object_id: &ObjectID) -> anyhow::Result<bool> {
-        Ok(self.object_removed_kind(object_id)? == Some(RemovedObjectKind::Deleted))
-    }
-
-    /// Return whether local execution has wrapped the object.
-    pub(crate) fn is_object_wrapped(&self, object_id: &ObjectID) -> anyhow::Result<bool> {
-        Ok(self.object_removed_kind(object_id)? == Some(RemovedObjectKind::Wrapped))
-    }
-
-    /// Return whether local execution has made the object inaccessible by direct current ID
-    /// lookup.
-    pub(crate) fn is_object_currently_removed(&self, object_id: &ObjectID) -> anyhow::Result<bool> {
-        Ok(self.object_removed_kind(object_id)?.is_some())
-    }
-
-    /// Write the current removal marker file for the given object reference.
-    fn write_object_removed_marker(
-        &self,
-        kind: RemovedObjectKind,
-        object_ref: &ObjectRef,
-    ) -> anyhow::Result<()> {
-        let object_id = object_ref.0;
-        let object_dir = self.objects_dir().join(object_id.to_string());
-        fs::create_dir_all(&object_dir)
-            .with_context(|| format!("Failed to create directory: {}", object_dir.display()))?;
-        let contents = format!(
-            "{} {} {}\n",
-            kind.marker_text(),
-            object_ref.1.value(),
-            object_ref.2
-        );
-        fs::write(object_dir.join(REMOVED_FILE), contents)
-            .with_context(|| format!("Failed to mark object {} removed", object_id))
-    }
-
-    /// Clear the current removal marker if it matches `kind`.
-    fn clear_object_removed_marker_kind(
-        &self,
-        object_id: &ObjectID,
-        kind: RemovedObjectKind,
-    ) -> anyhow::Result<()> {
         if self
-            .read_object_removed_marker_kind(object_id)?
-            .is_some_and(|removed_kind| removed_kind == kind)
+            .read_object_latest_metadata_if_exists(&object_dir)?
+            .is_some_and(|latest| latest.state == ObjectLatestState::Deleted)
         {
-            self.clear_object_removed_marker(object_id)?;
+            return Ok(());
         }
-        Ok(())
+
+        self.write_object_latest_metadata(&object_dir, ObjectLatestMetadata::live(version))
     }
 
-    /// Return the current removal kind.
-    fn object_removed_kind(
+    /// Mark an object as deleted in `latest`. This rejects direct deletes over wrapped state
+    /// because wrapped objects must first be unwrapped.
+    pub(crate) fn mark_object_as_deleted(
         &self,
-        object_id: &ObjectID,
-    ) -> anyhow::Result<Option<RemovedObjectKind>> {
-        self.read_object_removed_marker_kind(object_id)
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> anyhow::Result<()> {
+        self.mark_object_removed(object_id, version, ObjectLatestState::Deleted)
     }
 
-    /// Read the canonical `removed` marker.
-    fn read_object_removed_marker_kind(
+    /// Mark an object as wrapped in `latest`. Deleted state stays terminal and is not replaced.
+    pub(crate) fn mark_object_as_wrapped(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> anyhow::Result<()> {
+        self.mark_object_removed(object_id, version, ObjectLatestState::Wrapped)
+    }
+
+    /// Shared writer for direct deleted and wrapped latest-state transitions.
+    fn mark_object_removed(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+        state: ObjectLatestState,
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(state.is_removed(), "object latest removal state expected");
+        let object_dir = self.objects_dir().join(object_id.to_string());
+
+        if let Some(latest) = self.read_object_latest_metadata_if_exists(&object_dir)? {
+            match (latest.state, state) {
+                (ObjectLatestState::Deleted, ObjectLatestState::Wrapped) => return Ok(()),
+                (ObjectLatestState::Wrapped, ObjectLatestState::Deleted) => {
+                    bail!("cannot delete wrapped object {object_id} without unwrapping it first");
+                }
+                _ => {}
+            }
+        }
+
+        self.write_object_latest_metadata(
+            &object_dir,
+            ObjectLatestMetadata {
+                version: version.value(),
+                state,
+            },
+        )
+    }
+
+    /// Mark an object as deleted after it was unwrapped and deleted in one transaction. This
+    /// explicit path is the only removal write that may move wrapped latest state to deleted.
+    pub(crate) fn mark_object_as_unwrapped_then_deleted(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> anyhow::Result<()> {
+        let object_dir = self.objects_dir().join(object_id.to_string());
+
+        self.write_object_latest_metadata(
+            &object_dir,
+            ObjectLatestMetadata {
+                version: version.value(),
+                state: ObjectLatestState::Deleted,
+            },
+        )
+    }
+
+    /// Return the current object latest state, if the object has local latest metadata.
+    pub(crate) fn object_latest_state(
         &self,
         object_id: &ObjectID,
-    ) -> anyhow::Result<Option<RemovedObjectKind>> {
-        let path = self
-            .objects_dir()
-            .join(object_id.to_string())
-            .join(REMOVED_FILE);
-        if !path.exists() {
+    ) -> anyhow::Result<Option<ObjectLatestState>> {
+        let object_dir = self.objects_dir().join(object_id.to_string());
+        self.read_object_latest_metadata_if_exists(&object_dir)
+            .map(|latest| latest.map(|latest| latest.state))
+    }
+
+    /// Read object latest metadata when present, returning `None` for objects without local state.
+    fn read_object_latest_metadata_if_exists(
+        &self,
+        object_dir: &Path,
+    ) -> anyhow::Result<Option<ObjectLatestMetadata>> {
+        let latest_path = object_dir.join(LATEST_FILE);
+        if !latest_path.exists() {
             return Ok(None);
         }
-
-        let content = fs::read_to_string(&path)
-            .with_context(|| format!("Failed to read object removed marker: {}", path.display()))?;
-        let mut parts = content.split_whitespace();
-        let kind = parts
-            .next()
-            .ok_or_else(|| anyhow!("Missing object removal kind in: {}", path.display()))
-            .and_then(RemovedObjectKind::from_marker_text)?;
-        let _version = parts
-            .next()
-            .ok_or_else(|| anyhow!("Missing object removal version in: {}", path.display()))?
-            .parse::<u64>()
-            .with_context(|| {
-                format!(
-                    "Failed to parse object removal version in: {}",
-                    path.display()
-                )
-            })?;
-        let _digest = parts
-            .next()
-            .ok_or_else(|| anyhow!("Missing object removal digest in: {}", path.display()))?
-            .parse::<ObjectDigest>()
-            .with_context(|| {
-                format!(
-                    "Failed to parse object removal digest in: {}",
-                    path.display()
-                )
-            })?;
-        anyhow::ensure!(
-            parts.next().is_none(),
-            "Unexpected extra object removal marker data in: {}",
-            path.display()
-        );
-
-        Ok(Some(kind))
+        self.read_object_latest_metadata(object_dir).map(Some)
     }
 
-    /// Clear the removal marker for the given object ID. If the file does not exist, this is a
-    /// no-op.
-    fn clear_object_removed_marker(&self, object_id: &ObjectID) -> anyhow::Result<()> {
-        let path = self
-            .objects_dir()
-            .join(object_id.to_string())
-            .join(REMOVED_FILE);
-        match fs::remove_file(&path) {
-            Ok(()) => Ok(()),
-            Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
-            Err(err) => Err(err)
-                .with_context(|| format!("Failed to clear object marker: {}", path.display())),
+    /// Read and parse the required object latest file for a known local object directory.
+    fn read_object_latest_metadata(
+        &self,
+        object_dir: &Path,
+    ) -> anyhow::Result<ObjectLatestMetadata> {
+        let latest_path = object_dir.join(LATEST_FILE);
+        if !latest_path.exists() {
+            bail!(
+                "Latest file not found in directory: {}",
+                object_dir.display()
+            );
         }
+        let content = fs::read_to_string(&latest_path)
+            .with_context(|| format!("Failed to read latest file: {}", latest_path.display()))?;
+        parse_object_latest_metadata(&content, &latest_path)
+    }
+
+    /// Persist object latest metadata using the version-first text format.
+    fn write_object_latest_metadata(
+        &self,
+        object_dir: &Path,
+        latest: ObjectLatestMetadata,
+    ) -> anyhow::Result<()> {
+        fs::create_dir_all(object_dir)
+            .with_context(|| format!("Failed to create directory: {}", object_dir.display()))?;
+        let latest_file = object_dir.join(LATEST_FILE);
+        fs::write(&latest_file, latest.format())
+            .with_context(|| format!("Failed to write latest file: {}", latest_file.display()))
     }
 
     /// Read the owned-object index. Missing index files represent an empty index.
@@ -637,7 +660,7 @@ impl FilesystemStore {
             .with_context(|| format!("Failed to replace owned-object index: {}", path.display()))
     }
 
-    /// Return whether the durable owned-object index has already been initialized.
+    /// Return whether the owned-object index has already been initialized.
     pub(crate) fn owned_object_index_exists(&self) -> bool {
         self.owned_objects_index_path().exists()
     }
@@ -697,7 +720,7 @@ impl FilesystemStore {
             checkpoint_dir.display()
         );
 
-        self.read_latest_file(&checkpoint_dir)
+        self.read_numeric_latest_file(&checkpoint_dir)
     }
 
     /// Get the highest checkpoint sequence number available on disk, returning `None` when
@@ -710,7 +733,7 @@ impl FilesystemStore {
             return Ok(None);
         }
 
-        self.read_latest_file(&checkpoint_dir).map(Some)
+        self.read_numeric_latest_file(&checkpoint_dir).map(Some)
     }
 
     /// Path to the per-sequence directory holding `summary`.
@@ -826,7 +849,7 @@ impl FilesystemStore {
         if !checkpoints_dir.join(LATEST_FILE).exists() {
             return Ok(None);
         }
-        let sequence = self.read_latest_file(&checkpoints_dir)?;
+        let sequence = self.read_numeric_latest_file(&checkpoints_dir)?;
         self.get_checkpoint_by_sequence_number(sequence)
     }
 
@@ -842,7 +865,7 @@ impl FilesystemStore {
             .with_context(|| format!("Failed to create directory: {}", dir.display()))?;
         let path = dir.join(LATEST_FILE);
         let current = if path.exists() {
-            Some(self.read_latest_file(&dir)?)
+            Some(self.read_numeric_latest_file(&dir)?)
         } else {
             None
         };
@@ -876,9 +899,8 @@ impl FilesystemStore {
         Ok(())
     }
 
-    /// Read the latest file that contains a number representing the latest checkpoint sequence or
-    /// object version.
-    fn read_latest_file(&self, dir: &Path) -> Result<u64, Error> {
+    /// Read a numeric-only latest file, used for checkpoint metadata.
+    fn read_numeric_latest_file(&self, dir: &Path) -> Result<u64, Error> {
         let latest_path = dir.join(LATEST_FILE);
         if !latest_path.exists() {
             bail!("Latest file not found in directory: {}", dir.display());
@@ -890,6 +912,39 @@ impl FilesystemStore {
             .parse::<u64>()
             .with_context(|| format!("Failed to parse latest file: {}", latest_path.display()))
     }
+}
+
+/// Parse `objects/<id>/latest`, keeping live files numeric-only while accepting deleted/wrapped
+/// state suffixes for current-state removals.
+fn parse_object_latest_metadata(
+    content: &str,
+    path: &Path,
+) -> anyhow::Result<ObjectLatestMetadata> {
+    parse_object_latest_inner(content).with_context(|| {
+        format!(
+            "parsing object latest metadata from {content:?}, file: {}",
+            path.display()
+        )
+    })
+}
+
+// Inner function to parse checkpoint `latest` files, which are expected to be numeric-only without
+// state suffixes.
+fn parse_object_latest_inner(content: &str) -> anyhow::Result<ObjectLatestMetadata> {
+    let (version, state) = if let Some((version, suffix)) = content.trim().split_once(',') {
+        ensure!(!suffix.is_empty(), "state is empty");
+
+        let state = ObjectLatestState::from_suffix(suffix).context("cannot parse state")?;
+
+        (version, state)
+    } else {
+        (content.trim(), ObjectLatestState::Live)
+    };
+
+    ensure!(!version.is_empty(), "version is empty");
+    let version: u64 = version.parse().context("version should be a u64")?;
+
+    Ok(ObjectLatestMetadata { version, state })
 }
 
 fn remove_owned_entry(entries: &mut Vec<OwnedObjectEntry>, object_id: ObjectID) {

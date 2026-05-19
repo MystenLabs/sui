@@ -407,11 +407,8 @@ fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
     store.apply_object_updates(
         BTreeMap::new(),
         vec![RemovedObject {
-            object_ref: (
-                object_id,
-                SequenceNumber::from_u64(2),
-                ObjectDigest::OBJECT_DIGEST_WRAPPED,
-            ),
+            object_id,
+            version: SequenceNumber::from_u64(2),
             kind: RemovedObjectKind::Wrapped,
         }],
     );
@@ -441,7 +438,7 @@ fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
 }
 
 #[test]
-fn test_unwrapped_write_clears_wrapped_marker_and_reindexes_owner() {
+fn test_unwrapped_write_clears_wrapped_latest_and_reindexes_owner() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let recipient = SuiAddress::random_for_testing_only();
@@ -452,11 +449,8 @@ fn test_unwrapped_write_clears_wrapped_marker_and_reindexes_owner() {
     store.apply_object_updates(
         BTreeMap::new(),
         vec![RemovedObject {
-            object_ref: (
-                object_id,
-                SequenceNumber::from_u64(2),
-                ObjectDigest::OBJECT_DIGEST_WRAPPED,
-            ),
+            object_id,
+            version: SequenceNumber::from_u64(2),
             kind: RemovedObjectKind::Wrapped,
         }],
     );
@@ -464,7 +458,10 @@ fn test_unwrapped_write_clears_wrapped_marker_and_reindexes_owner() {
     let unwrapped = make_gas_object(object_id, 3, Owner::AddressOwner(recipient));
     store.apply_object_updates(BTreeMap::from([(object_id, unwrapped.clone())]), vec![]);
 
-    assert!(!store.local().is_object_wrapped(&object_id).unwrap());
+    assert_eq!(
+        store.local().object_latest_state(&object_id).unwrap(),
+        Some(ObjectLatestState::Live),
+    );
     assert_eq!(
         DataStore::get_object(&store, &object_id)
             .expect("current object read should not error")
@@ -478,7 +475,7 @@ fn test_unwrapped_write_clears_wrapped_marker_and_reindexes_owner() {
 }
 
 #[test]
-fn test_terminal_deleted_marker_prevents_reindexing_written_object() {
+fn test_terminal_deleted_latest_prevents_reindexing_written_object() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
@@ -489,11 +486,8 @@ fn test_terminal_deleted_marker_prevents_reindexing_written_object() {
     store.apply_object_updates(
         BTreeMap::from([(object_id, written_again)]),
         vec![RemovedObject {
-            object_ref: (
-                object_id,
-                SequenceNumber::from_u64(2),
-                ObjectDigest::OBJECT_DIGEST_DELETED,
-            ),
+            object_id,
+            version: SequenceNumber::from_u64(2),
             kind: RemovedObjectKind::Deleted,
         }],
     );
@@ -507,13 +501,25 @@ fn test_terminal_deleted_marker_prevents_reindexing_written_object() {
 }
 
 #[test]
-fn test_removed_objects_from_effects_marks_unwrapped_then_deleted_as_deleted() {
+fn test_removed_objects_from_effects_preserves_removal_kind() {
     let owner = SuiAddress::random_for_testing_only();
-    let object_id = ObjectID::random();
-    let object_ref = (
-        object_id,
+    let deleted_id = ObjectID::random();
+    let deleted_ref = (
+        deleted_id,
         SequenceNumber::from_u64(2),
         ObjectDigest::OBJECT_DIGEST_DELETED,
+    );
+    let unwrapped_then_deleted_id = ObjectID::random();
+    let unwrapped_then_deleted_ref = (
+        unwrapped_then_deleted_id,
+        SequenceNumber::from_u64(3),
+        ObjectDigest::OBJECT_DIGEST_DELETED,
+    );
+    let wrapped_id = ObjectID::random();
+    let wrapped_ref = (
+        wrapped_id,
+        SequenceNumber::from_u64(4),
+        ObjectDigest::OBJECT_DIGEST_WRAPPED,
     );
     let gas_ref = (
         ObjectID::random(),
@@ -530,9 +536,9 @@ fn test_removed_objects_from_effects_marks_unwrapped_then_deleted_as_deleted() {
         vec![],
         vec![],
         vec![],
-        vec![],
-        vec![object_ref],
-        vec![],
+        vec![deleted_ref],
+        vec![unwrapped_then_deleted_ref],
+        vec![wrapped_ref],
         (gas_ref, Owner::AddressOwner(owner)),
         None,
         vec![],
@@ -540,10 +546,23 @@ fn test_removed_objects_from_effects_marks_unwrapped_then_deleted_as_deleted() {
 
     assert_eq!(
         removed_objects_from_effects(&effects),
-        vec![RemovedObject {
-            object_ref,
-            kind: RemovedObjectKind::Deleted,
-        }],
+        vec![
+            RemovedObject {
+                object_id: deleted_id,
+                version: deleted_ref.1,
+                kind: RemovedObjectKind::Deleted,
+            },
+            RemovedObject {
+                object_id: unwrapped_then_deleted_id,
+                version: unwrapped_then_deleted_ref.1,
+                kind: RemovedObjectKind::UnwrappedThenDeleted,
+            },
+            RemovedObject {
+                object_id: wrapped_id,
+                version: wrapped_ref.1,
+                kind: RemovedObjectKind::Wrapped,
+            },
+        ],
     );
 }
 
