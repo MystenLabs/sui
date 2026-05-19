@@ -170,6 +170,11 @@ impl EpochState {
                 tx_digest,
                 &mut None,
             );
-        Ok((inner_temp_store, gas_status, effects, result))
+        Ok((
+            inner_temp_store,
+            gas_status,
+            effects,
+            result.map_err(sui_types::error::ExecutionError::from),
+        ))
     }
 }
