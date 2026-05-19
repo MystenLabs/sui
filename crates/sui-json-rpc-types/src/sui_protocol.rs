@@ -78,11 +78,13 @@ pub struct ProtocolConfigResponse {
 
 impl From<ProtocolConfig> for ProtocolConfigResponse {
     fn from(config: ProtocolConfig) -> Self {
+        // Render emits explicit `Null`s for fields unset at this protocol version; filter them
+        // out so the public `configs` map only carries values that are actually configured.
         let mut configs = config
             .render::<serde_json::Value>(&mut mysten_common::rpc_format::Unmetered)
             .expect("render to serde_json::Value should succeed")
             .into_iter()
-            .filter_map(|(k, maybe_v)| maybe_v.map(move |v| (k, v)))
+            .filter(|(_, v)| !v.is_null())
             .collect::<BTreeMap<String, serde_json::Value>>();
 
         // Merge feature flags into `configs` so it stands alone as a complete view.
