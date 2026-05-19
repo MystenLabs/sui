@@ -780,3 +780,11 @@ tonic-reflection = { git = "https://github.com/hyperium/tonic.git", rev = "d6ce6
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
+
+# TEMPORARY local-dev patch: build against the local sui-rust-sdk checkout that
+# adds the `transaction_offset` field to `TransactionItem`/`EventItem`. Remove
+# once that change lands and the `rev` pins above are bumped to the published commit.
+[patch."https://github.com/MystenLabs/sui-rust-sdk.git"]
+sui-rpc = { path = "/Users/nick/workplace/sui-rust-sdk/crates/sui-rpc" }
+sui-sdk-types = { path = "/Users/nick/workplace/sui-rust-sdk/crates/sui-sdk-types" }
+sui-crypto = { path = "/Users/nick/workplace/sui-rust-sdk/crates/sui-crypto" }

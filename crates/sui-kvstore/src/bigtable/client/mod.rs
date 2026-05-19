@@ -1019,13 +1019,14 @@ impl BigTableClient {
         let mut by_seq: HashMap<u64, TxSeqDigestData> = HashMap::with_capacity(rows.len());
         for (row_key, cells) in &rows {
             let tx_seq = tx_seq_digest::decode_key(row_key.as_ref())?;
-            let (digest, event_count, checkpoint_number) = tx_seq_digest::decode(cells)?;
+            let (digest, event_count, tx_offset, checkpoint_number) = tx_seq_digest::decode(cells)?;
             by_seq.insert(
                 tx_seq,
                 TxSeqDigestData {
                     tx_sequence_number: tx_seq,
                     digest,
                     event_count,
+                    tx_offset,
                     checkpoint_number,
                 },
             );
@@ -1060,11 +1061,12 @@ impl BigTableClient {
             while let Some(row) = rows.next().await {
                 let (row_key, cells) = row?;
                 let tx_sequence_number = tx_seq_digest::decode_key(row_key.as_ref())?;
-                let (digest, event_count, checkpoint_number) = tx_seq_digest::decode(&cells)?;
+                let (digest, event_count, tx_offset, checkpoint_number) = tx_seq_digest::decode(&cells)?;
                 yield TxSeqDigestData {
                     tx_sequence_number,
                     digest,
                     event_count,
+                    tx_offset,
                     checkpoint_number,
                 };
             }

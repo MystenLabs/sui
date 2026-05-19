@@ -36,9 +36,16 @@ impl Processor for TxSeqDigestPipeline {
                 let tx_seq = tx_lo + i as u64;
                 let digest = tx.transaction.digest();
                 let event_count = tx.events.as_ref().map(|e| e.data.len() as u32).unwrap_or(0);
+                // `i` is the transaction's zero-based position within this checkpoint.
+                let tx_offset = i as u32;
                 tables::make_entry(
                     tables::tx_seq_digest::encode_key(tx_seq),
-                    tables::tx_seq_digest::encode(&digest, event_count, checkpoint_number),
+                    tables::tx_seq_digest::encode(
+                        &digest,
+                        event_count,
+                        tx_offset,
+                        checkpoint_number,
+                    ),
                     Some(timestamp_ms),
                 )
             })

@@ -116,7 +116,7 @@ async fn write_tx_seq_digest(
 ) -> Result<()> {
     let entry = tables::make_entry(
         tables::tx_seq_digest::encode_key(tx_seq),
-        tables::tx_seq_digest::encode(digest, 0, checkpoint_number),
+        tables::tx_seq_digest::encode(digest, 0, 0, checkpoint_number),
         None,
     );
     client
@@ -133,6 +133,7 @@ fn tx_seq_digest_data(
         tx_sequence_number,
         digest,
         event_count: 0,
+        tx_offset: 0,
         checkpoint_number,
     }
 }

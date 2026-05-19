@@ -57,7 +57,7 @@ const CHUNK_MAX: usize = 100;
 
 pub(crate) type ListTransactionsStream =
     BoxStream<'static, Result<ListTransactionsResponse, RpcError>>;
-type TransactionWithObjectsStreamItem = (u64, TransactionData, ObjectMap);
+type TransactionWithObjectsStreamItem = (u64, u32, TransactionData, ObjectMap);
 
 pub(crate) async fn list_transactions(
     ctx: QueryContext,
@@ -235,9 +235,9 @@ pub(crate) async fn list_transactions(
         let object_cache = ObjectCache::new(Arc::new(BigTableObjectFetcher::new(client.clone())));
         let tx_with_keys = tx_stream
             .map_ok(|m| {
-                m.map_item(|(seq, tx)| {
+                m.map_item(|(seq, offset, tx)| {
                     let keys: Vec<ObjectKey> = compute_object_keys(&tx).into_iter().collect();
-                    ((seq, tx), keys)
+                    ((seq, offset, tx), keys)
                 })
             })
             .boxed();
@@ -257,12 +257,16 @@ pub(crate) async fn list_transactions(
                 }
             },
         )
-        .map_ok(|m| m.map_item(|((seq, tx), objects)| (seq, tx, objects)))
+        .map_ok(|m| m.map_item(|((seq, offset, tx), objects)| (seq, offset, tx, objects)))
         .boxed()
     } else {
         // No object lookup needed — emit each tx with an empty ObjectMap.
         tx_stream
-            .map_ok(|m| m.map_item(|(seq, tx)| (seq, tx, Arc::new(HashMap::new()) as ObjectMap)))
+            .map_ok(|m| {
+                m.map_item(|(seq, offset, tx)| {
+                    (seq, offset, tx, Arc::new(HashMap::new()) as ObjectMap)
+                })
+            })
             .boxed()
     };
 
@@ -277,7 +281,7 @@ pub(crate) async fn list_transactions(
         let mut scan_limit_hit = false;
         while let Some(item) = txn_with_objects_stream.next().await {
             match item {
-                Ok(ResolvedWatermarked::Item((tx_seq, tx_data, objects))) => {
+                Ok(ResolvedWatermarked::Item((tx_seq, tx_offset, tx_data, objects))) => {
                     checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, tx_data.checkpoint_number, &options);
                     let wm = item_watermark(&options, tx_data.checkpoint_number, tx_seq, checkpoint_boundary);
                     let render_started = Instant::now();
@@ -285,7 +289,7 @@ pub(crate) async fn list_transactions(
                     ctx.observe_response_render(render_started.elapsed());
                     emitted += 1;
                     let yield_started = Instant::now();
-                    yield transaction_item_response(wm, executed);
+                    yield transaction_item_response(wm, executed, tx_offset);
                     ctx.observe_stream_item_yield_wait(yield_started.elapsed());
                 }
                 Ok(ResolvedWatermarked::Watermark { position, cp }) => {
@@ -484,33 +488,33 @@ async fn fetch_transactions(
     client: BigTableClient,
     columns: Arc<[&'static str]>,
     rows: Vec<TxSeqDigestData>,
-) -> Result<BoxStream<'static, Result<(u64, TransactionData), anyhow::Error>>, anyhow::Error> {
+) -> Result<BoxStream<'static, Result<(u64, u32, TransactionData), anyhow::Error>>, anyhow::Error> {
     if rows.is_empty() {
         return Ok(futures::stream::empty().boxed());
     }
     let column_filter = BigTableClient::column_filter(&columns);
     let digests: Vec<TransactionDigest> = rows.iter().map(|row| row.digest).collect();
-    // Map each digest back to its tx_sequence_number so the output can carry
-    // (seq, tx) pairs as the BigTable response arrives.
-    let seq_by_digest: HashMap<TransactionDigest, u64> = rows
+    // Map each digest back to its (tx_sequence_number, within-checkpoint offset)
+    // so the output can carry them alongside the tx body as it arrives.
+    let meta_by_digest: HashMap<TransactionDigest, (u64, u32)> = rows
         .iter()
-        .map(|row| (row.digest, row.tx_sequence_number))
+        .map(|row| (row.digest, (row.tx_sequence_number, row.tx_offset)))
         .collect();
     let tx_stream = client
         .get_transactions_stream(digests.clone(), Some(column_filter))
         .await?;
     Ok(async_stream::try_stream! {
-        let mut emitter: InputOrderEmitter<TransactionDigest, (u64, TransactionData)> =
+        let mut emitter: InputOrderEmitter<TransactionDigest, (u64, u32, TransactionData)> =
             InputOrderEmitter::new(digests);
         futures::pin_mut!(tx_stream);
         while let Some(row) = tx_stream.next().await {
             let (digest, tx) = row?;
-            let seq = seq_by_digest.get(&digest).copied().ok_or_else(|| {
+            let (seq, offset) = meta_by_digest.get(&digest).copied().ok_or_else(|| {
                 anyhow::anyhow!("list_transactions: unexpected transaction body row {digest}")
             })?;
             for v in emitter.push(
                 digest,
-                (seq, tx),
+                (seq, offset, tx),
                 "list_transactions: transaction body lookup",
             )? {
                 yield v;
@@ -546,7 +550,7 @@ fn transaction_response_from_tx_seq_digest(
         transaction.checkpoint = Some(row.checkpoint_number);
     }
 
-    transaction_item_response(watermark, transaction)
+    transaction_item_response(watermark, transaction, row.tx_offset)
 }
 
 /// Determine the tx_sequence_number scan window from the logical checkpoint
@@ -605,10 +609,12 @@ async fn checkpoint_to_tx_boundary(
 fn transaction_item_response(
     watermark: Watermark,
     transaction: ExecutedTransaction,
+    tx_offset: u32,
 ) -> ListTransactionsResponse {
     let mut item = TransactionItem::default();
     item.transaction = Some(transaction);
     item.watermark = Some(watermark);
+    item.transaction_offset = Some(tx_offset as u64);
 
     let mut response = ListTransactionsResponse::default();
     response.response = Some(list_transactions_response::Response::Item(item));
@@ -685,6 +691,7 @@ mod tests {
             tx_sequence_number: 42,
             digest: TransactionDigest::new([7; 32]),
             event_count: 3,
+            tx_offset: 5,
             checkpoint_number: 9,
         };
         let options = options();
@@ -711,6 +718,11 @@ mod tests {
         assert_eq!(
             digest_wm.checkpoint_lo, None,
             "ascending scan must not set checkpoint_lo"
+        );
+        assert_eq!(
+            digest_only.transaction_offset,
+            Some(row.tx_offset as u64),
+            "within-checkpoint offset should propagate to the item"
         );
         let transaction = digest_only.transaction.expect("executed transaction");
         assert_eq!(transaction.digest, Some(row.digest.to_string()));
