@@ -478,6 +478,7 @@ async fn render_event(
     item.event_index = Some(event_ref.event_idx);
     item.transaction_digest = Some(tx.digest.to_string());
     item.event = Some(proto_event);
+    item.transaction_offset = event_ref.tx_seq_digest.map(|row| row.tx_offset as u64);
 
     Ok(RenderedEvent {
         item,
@@ -736,6 +737,7 @@ mod tests {
             tx_sequence_number,
             digest: TransactionDigest::new([tx_sequence_number as u8; 32]),
             event_count,
+            tx_offset: 0,
             checkpoint_number: 7,
         }
     }
