@@ -369,7 +369,7 @@ fn render_execution_error_metadata(
         return;
     };
 
-    error.metadata = metadata.clone();
+    error.metadata = metadata.attributes.clone();
 }
 
 fn object_type_to_string(object_type: sui_types::base_types::ObjectType) -> String {
@@ -398,10 +398,12 @@ mod tests {
 
     #[test]
     fn render_execution_error_metadata_respects_read_mask() {
-        let metadata = ExecutionErrorMetadata::from([(
-            "source".to_owned(),
-            "Loaded runtime object limit exceeded".to_owned(),
-        )]);
+        let metadata = ExecutionErrorMetadata {
+            attributes: std::collections::BTreeMap::from([(
+                "source".to_owned(),
+                "Loaded runtime object limit exceeded".to_owned(),
+            )]),
+        };
         let mask = FieldMaskTree::from(FieldMask::from_paths([TransactionEffects::path_builder()
             .status()
             .error()
@@ -410,12 +412,17 @@ mod tests {
         let mut effects = effects_with_error();
         render_execution_error_metadata(&mut effects, Some(&metadata), &mask);
 
-        assert_eq!(effects.status().error().metadata(), &metadata,);
+        assert_eq!(effects.status().error().metadata(), &metadata.attributes,);
     }
 
     #[test]
     fn render_execution_error_metadata_does_not_leak_into_other_error_masks() {
-        let metadata = ExecutionErrorMetadata::from([("source".to_owned(), "hidden".to_owned())]);
+        let metadata = ExecutionErrorMetadata {
+            attributes: std::collections::BTreeMap::from([(
+                "source".to_owned(),
+                "hidden".to_owned(),
+            )]),
+        };
         let mask = FieldMaskTree::from(FieldMask::from_paths([TransactionEffects::path_builder()
             .status()
             .error()

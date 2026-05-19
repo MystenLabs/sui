@@ -1331,6 +1331,20 @@ pub struct ExecutionErrorContext {
 }
 
 impl ExecutionErrorContext {
+    fn with_debug_fake_metadata(mut metadata: ExecutionErrorMetadata) -> ExecutionErrorMetadata {
+        // TEMPORARY DEBUG: fake metadata so failed transactions exercise storage and RPC rendering.
+        metadata
+            .attributes
+            .insert("debug_fake_metadata".to_string(), "true".to_string());
+        metadata
+            .attributes
+            .insert("runtime_object_limit".to_string(), "2048".to_string());
+        metadata
+            .attributes
+            .insert("runtime_objects_loaded".to_string(), "2049".to_string());
+        metadata
+    }
+
     pub fn kind(&self) -> &ExecutionErrorKind {
         &self.kind
     }
@@ -1364,7 +1378,7 @@ impl ExecutionErrorTrait for ExecutionErrorContext {
         let ExecutionFailure { error, command } = failure;
         Self {
             kind: error,
-            metadata,
+            metadata: ExecutionErrorContext::with_debug_fake_metadata(metadata),
             source,
             command,
         }
@@ -1420,7 +1434,9 @@ impl From<ExecutionError> for ExecutionErrorContext {
         } = *inner;
         Self {
             kind,
-            metadata: ExecutionErrorMetadata::default(),
+            metadata: ExecutionErrorContext::with_debug_fake_metadata(
+                ExecutionErrorMetadata::default(),
+            ),
             source,
             command,
         }

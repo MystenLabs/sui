@@ -127,7 +127,7 @@ impl Merge<&crate::full_checkpoint_content::ExecutedTransaction> for ExecutedTra
                     .as_mut()
                     .and_then(|status| status.error.as_mut())
             {
-                error.metadata = metadata.clone();
+                error.metadata = metadata.attributes.clone();
             }
             self.effects = Some(effects);
         }
@@ -237,8 +237,10 @@ impl TryFrom<&ExecutedTransaction> for crate::full_checkpoint_content::ExecutedT
                 .effects()
                 .status()
                 .error_opt()
-                .map(|error| error.metadata().clone())
-                .filter(|metadata| !metadata.is_empty()),
+                .map(|error| crate::error::ExecutionErrorMetadata {
+                    attributes: error.metadata().clone(),
+                })
+                .filter(|metadata| !metadata.attributes.is_empty()),
         })
     }
 }

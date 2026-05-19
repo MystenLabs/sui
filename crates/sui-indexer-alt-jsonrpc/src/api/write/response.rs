@@ -27,6 +27,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::effects::ObjectChange;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::error::ExecutionErrorMetadata;
 use sui_types::event::Event;
 use sui_types::object::Object;
 use sui_types::object::Owner;
@@ -101,8 +102,10 @@ pub(super) async fn dry_run(
         .effects()
         .status()
         .error_opt()
-        .map(|error| error.metadata().clone())
-        .filter(|metadata| !metadata.is_empty());
+        .map(|error| ExecutionErrorMetadata {
+            attributes: error.metadata().clone(),
+        })
+        .filter(|metadata| !metadata.attributes.is_empty());
 
     Ok(DryRunTransactionBlockResponse {
         effects: effects_response(&effects)?,

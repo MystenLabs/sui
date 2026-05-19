@@ -773,7 +773,7 @@ pub struct SimulateTransactionResponse {
 }
 
 fn execution_error_metadata_is_empty(metadata: &ExecutionErrorMetadata) -> bool {
-    metadata.is_empty()
+    metadata.attributes.is_empty()
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
@@ -862,7 +862,9 @@ fn executed_transaction_try_from_proto(
         .effects()
         .status()
         .error_opt()
-        .map(|error| error.metadata().clone())
+        .map(|error| ExecutionErrorMetadata {
+            attributes: error.metadata().clone(),
+        })
         .unwrap_or_default();
     let events = executed_transaction
         .events
