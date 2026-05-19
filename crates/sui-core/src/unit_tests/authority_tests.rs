@@ -57,7 +57,7 @@ use sui_types::{
     base_types::{FullObjectRef, dbg_addr},
     crypto::{AccountKeyPair, AuthorityKeyPair},
     crypto::{Signature, get_key_pair},
-    object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION, Owner},
+    object::{GAS_VALUE_FOR_TESTING, MoveObject, OBJECT_START_VERSION, Owner},
     transaction::PlainTransactionWithClaims,
 };
 use sui_types::{SUI_CLOCK_OBJECT_SHARED_VERSION, digests::Digest};
