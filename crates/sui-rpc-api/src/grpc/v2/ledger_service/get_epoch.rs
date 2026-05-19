@@ -201,12 +201,15 @@ pub fn protocol_config_to_proto(config: sui_protocol_config::ProtocolConfig) -> 
     // Set deprecated feature flags to the exact feature_map the protocol config gives us
     message.set_feature_flags(config.feature_map());
 
-    // Load configs (today this is just the `attributes`), rendered to a `Value`
+    // Load configs (today this is just the `attributes`), rendered to a `Value`. Render emits
+    // explicit `NullValue`s for fields unset at this protocol version; filter them out so the
+    // public `configs` map only carries values that are actually configured.
     let mut configs = config
         .render::<prost_types::Value>(&mut mysten_common::rpc_format::Unmetered)
         .expect("render to prost Value should succeed")
         .into_iter()
-        .filter_map(|(k, maybe_v)| maybe_v.map(move |v| (k, v)))
+        // filter out NULLs
+        .filter(|(_, v)| !matches!(v.kind, None | Some(Kind::NullValue(_))))
         .collect::<std::collections::BTreeMap<_, _>>();
 
     // For backwards compatibility, render attributes to strings, complex types are json
