@@ -544,6 +544,190 @@ proof fn lemma_greedy_valid<S, Addr>(
     }
 }
 
+// ---------------------------------------------------------------------------
+// CT5: Completeness
+// ---------------------------------------------------------------------------
+
+/// A `Seq<int>` is a valid injective assignment: each signer maps to a
+/// distinct, unused signature that is cryptographically valid for that signer.
+pub open spec fn is_valid_assignment<S, Addr>(
+    sigs: &[S],
+    signers: Seq<(Addr, Vec<Addr>)>,
+    epoch: u64,
+    used: Set<int>,
+    f: Seq<int>,
+) -> bool {
+    &&& f.len() == signers.len()
+    &&& forall|k: int|
+            #![trigger f[k]]
+            0 <= k < f.len()
+            ==> 0 <= f[k] < sigs@.len()
+                && !used.contains(f[k])
+                && spec_is_valid_for(&sigs@[f[k]], signers[k].1@.to_set(), epoch)
+    &&& forall|k1: int, k2: int|
+            0 <= k1 < f.len() && 0 <= k2 < f.len() && k1 != k2
+            ==> f[k1] != f[k2]
+}
+
+/// If a valid witness position `j` exists in [start, sigs.len()), then
+/// `spec_first_valid_unused_from` with that start returns Some.
+proof fn lemma_first_valid_unused_some_from<S, Addr>(
+    sigs: &[S],
+    aliases: Set<Addr>,
+    epoch: u64,
+    used: Set<int>,
+    start: int,
+    j: int,
+)
+    requires
+        start <= j < sigs@.len() as int,
+        !used.contains(j),
+        spec_is_valid_for(&sigs@[j], aliases, epoch),
+    ensures
+        spec_first_valid_unused_from(sigs, aliases, epoch, used, start) matches Some(_)
+    decreases j - start
+{
+    if start == j {
+    } else if !used.contains(start) && spec_is_valid_for(&sigs@[start], aliases, epoch) {
+    } else {
+        lemma_first_valid_unused_some_from::<S, Addr>(
+            sigs, aliases, epoch, used, start + 1, j,
+        );
+    }
+}
+
+/// **CT5 — Completeness**: if a valid injective assignment exists, the greedy
+/// algorithm finds one.
+///
+/// Requires the **unique-validity** condition: each signature is
+/// `spec_is_valid_for` at most one signer's alias set.  This is necessary —
+/// without it the greedy can fail (see the counter-example in the proof notes
+/// below).  Under the no-collision precondition plus singleton alias sets
+/// (the common Sui case), unique-validity holds automatically.
+///
+/// **Counter-example showing no-collision alone is insufficient:**
+/// signer0.aliases={A,B}, signer1.aliases={A}, sig0.addresses={A},
+/// sig1.addresses={B}.  No-collision holds, f=[1,0] is valid, but the greedy
+/// assigns sig0 to signer0 (via A, first match) and then fails signer1
+/// (only sig0 had address A, but it is now used).
+proof fn lemma_greedy_complete<S, Addr>(
+    sigs: &[S],
+    signers: Seq<(Addr, Vec<Addr>)>,
+    epoch: u64,
+    used: Set<int>,
+)
+    requires
+        // A valid injective assignment exists
+        exists|f: Seq<int>| is_valid_assignment::<S, Addr>(sigs, signers, epoch, used, f),
+        // Unique-validity: each signature is spec_is_valid_for at most one signer
+        forall|i: int, k1: int, k2: int|
+            #![trigger spec_is_valid_for(&sigs@[i], signers[k1].1@.to_set(), epoch),
+                       spec_is_valid_for(&sigs@[i], signers[k2].1@.to_set(), epoch)]
+            0 <= i < sigs@.len()
+            && 0 <= k1 < signers.len()
+            && 0 <= k2 < signers.len()
+            && k1 != k2
+            ==> !(spec_is_valid_for(&sigs@[i], signers[k1].1@.to_set(), epoch)
+                  && spec_is_valid_for(&sigs@[i], signers[k2].1@.to_set(), epoch)),
+    ensures
+        spec_greedy_helper(sigs, signers, epoch, used) matches Some(_)
+    decreases signers.len()
+{
+    let f = choose|f: Seq<int>| is_valid_assignment::<S, Addr>(sigs, signers, epoch, used, f);
+
+    if signers.len() == 0 {
+        // spec_greedy_helper returns Some(seq![])
+    } else {
+        let aliases0 = signers[0].1@.to_set();
+
+        // f[0] is an unused witness for signer0
+        assert(0 <= f[0] < sigs@.len() as int);
+        assert(!used.contains(f[0]));
+        assert(spec_is_valid_for(&sigs@[f[0]], aliases0, epoch));
+
+        // spec_first_valid_unused returns Some (f[0] is a witness)
+        lemma_first_valid_unused_some_from::<S, Addr>(sigs, aliases0, epoch, used, 0, f[0]);
+        let j_g = spec_first_valid_unused(sigs, aliases0, epoch, used)->Some_0;
+
+        // j_g is valid for signer0 and not in used
+        lemma_first_valid_from_is_valid::<S, Addr>(sigs, aliases0, epoch, used, 0);
+        lemma_first_valid_from_not_in_used::<S, Addr>(sigs, aliases0, epoch, used, 0);
+        assert(spec_is_valid_for(&sigs@[j_g], aliases0, epoch));
+        assert(!used.contains(j_g));
+
+        // Under unique-validity, j_g is valid for signer0 ⟹ NOT valid for any k ≥ 1.
+        // Thus j_g ∉ {f[1], ..., f[n-1]}: if f[k] = j_g for some k≥1, j_g would be
+        // valid for signers[k], contradicting unique-validity.
+        assert forall|k: int| 1 <= k < signers.len() implies f[k] != j_g by {
+            if f[k] == j_g {
+                assert(spec_is_valid_for(&sigs@[j_g], signers[k].1@.to_set(), epoch));
+                assert(!(spec_is_valid_for(&sigs@[j_g], signers[0].1@.to_set(), epoch)
+                         && spec_is_valid_for(&sigs@[j_g], signers[k].1@.to_set(), epoch)));
+            }
+        };
+
+        // f.skip(1) is a valid assignment for signers.skip(1) with used.insert(j_g)
+        let f_tail = f.skip(1);
+        assert(is_valid_assignment::<S, Addr>(
+            sigs, signers.skip(1), epoch, used.insert(j_g), f_tail,
+        )) by {
+            assert(f_tail.len() == signers.skip(1).len());
+
+            assert forall|k: int| 0 <= k < f_tail.len() implies
+                0 <= f_tail[k] < sigs@.len() as int
+                && !used.insert(j_g).contains(f_tail[k])
+                && spec_is_valid_for(&sigs@[f_tail[k]], signers.skip(1)[k].1@.to_set(), epoch)
+            by {
+                assert(f_tail[k] == f[k + 1]);
+                assert(!used.contains(f[k + 1]));
+                assert(f[k + 1] != j_g);
+                assert(signers.skip(1)[k] == signers[k + 1]);
+            };
+
+            assert forall|k1: int, k2: int|
+                0 <= k1 < f_tail.len() && 0 <= k2 < f_tail.len() && k1 != k2
+                implies f_tail[k1] != f_tail[k2]
+            by {
+                assert(f_tail[k1] == f[k1 + 1]);
+                assert(f_tail[k2] == f[k2 + 1]);
+            };
+        };
+
+        // Unique-validity for signers.skip(1) (sub-sequence of original)
+        assert(forall|i: int, k1: int, k2: int|
+            #![trigger spec_is_valid_for(&sigs@[i], signers.skip(1)[k1].1@.to_set(), epoch),
+                       spec_is_valid_for(&sigs@[i], signers.skip(1)[k2].1@.to_set(), epoch)]
+            0 <= i < sigs@.len()
+            && 0 <= k1 < signers.skip(1).len()
+            && 0 <= k2 < signers.skip(1).len()
+            && k1 != k2
+            ==> !(spec_is_valid_for(&sigs@[i], signers.skip(1)[k1].1@.to_set(), epoch)
+                  && spec_is_valid_for(&sigs@[i], signers.skip(1)[k2].1@.to_set(), epoch))
+        ) by {
+            assert forall|i: int, k1: int, k2: int|
+                #![trigger spec_is_valid_for(&sigs@[i], signers.skip(1)[k1].1@.to_set(), epoch),
+                           spec_is_valid_for(&sigs@[i], signers.skip(1)[k2].1@.to_set(), epoch)]
+                0 <= i < sigs@.len()
+                && 0 <= k1 < signers.skip(1).len()
+                && 0 <= k2 < signers.skip(1).len()
+                && k1 != k2
+                implies !(spec_is_valid_for(&sigs@[i], signers.skip(1)[k1].1@.to_set(), epoch)
+                          && spec_is_valid_for(&sigs@[i], signers.skip(1)[k2].1@.to_set(), epoch))
+            by {
+                assert(signers.skip(1)[k1] == signers[k1 + 1]);
+                assert(signers.skip(1)[k2] == signers[k2 + 1]);
+            };
+        };
+
+        // Inductive step: recursive call also returns Some
+        lemma_greedy_complete::<S, Addr>(sigs, signers.skip(1), epoch, used.insert(j_g));
+
+        // Both first_valid_unused and the recursion return Some ⟹ spec_greedy_helper returns Some
+        let rest = spec_greedy_helper(sigs, signers.skip(1), epoch, used.insert(j_g))->Some_0;
+        assert(spec_greedy_helper(sigs, signers, epoch, used) == Some(seq![j_g as u8] + rest));
+    }
+}
+
 /// spec_greedy_helper with known first_valid_unused=Some(j) and recursive=Some(rest)
 /// returns Some(seq![j as u8] + rest). Body empty: follows from the open spec fn definition.
 proof fn lemma_greedy_helper_unfold<S, Addr>(
