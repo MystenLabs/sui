@@ -639,12 +639,9 @@ public fun is_valid_bet(l0: u64, l1: u64, l2: Option<u64>, l3: u64, l4: vector<u
                 continue
             };
             assert!(l22, C0);
-            unstructured {
-                goto 'label_289;
-            }
+            break
         }
     };
-    /* block 289 */;
     if (l0 == C17) {
         let l29 = 0u64;
         let l23 = false;
@@ -665,12 +662,9 @@ public fun is_valid_bet(l0: u64, l1: u64, l2: Option<u64>, l3: u64, l4: vector<u
                 continue
             };
             assert!(l23, C0);
-            unstructured {
-                goto 'label_364;
-            }
+            break
         }
     };
-    /* block 364 */;
     if (l0 == C3) {
         assert!(option::is_some(&l2), C1);
         assert!(vector::contains(&C19, option::borrow(&l2)), C1)

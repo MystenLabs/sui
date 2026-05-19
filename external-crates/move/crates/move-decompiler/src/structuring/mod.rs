@@ -714,7 +714,6 @@ fn structure_acyclic_region(
             enclosing_loop_exits.as_ref(),
             &graph.cfg,
         );
-
         for orphan in hoist_order(graph, start, &orphans) {
             let body = structured_blocks.remove(&orphan).unwrap();
             if elision_sound && let Some(target) = entry_label(&body) {
@@ -748,7 +747,10 @@ fn hoist_order(graph: &Graph, _start: NodeIndex, orphans: &[NodeIndex]) -> Vec<N
         .iter()
         .filter_map(|(&n, &d)| (d == 0).then_some(n))
         .collect();
-    ready.sort_by_key(|n| n.index());
+    // Sort descending so `pop()` returns the *smallest* index first — orphans typically
+    // appear in CFG-flow order by index, and the orphan-hoist requires earlier-CFG ones
+    // to be hoisted first so that later orphans' Jumps are visible in `exp` for elision.
+    ready.sort_by_key(|n| std::cmp::Reverse(n.index()));
     let mut out = Vec::new();
     while let Some(n) = ready.pop() {
         out.push(n);
@@ -757,7 +759,7 @@ fn hoist_order(graph: &Graph, _start: NodeIndex, orphans: &[NodeIndex]) -> Vec<N
                 *d -= 1;
                 if *d == 0 {
                     ready.push(succ);
-                    ready.sort_by_key(|n: &NodeIndex| n.index());
+                    ready.sort_by_key(|n: &NodeIndex| std::cmp::Reverse(n.index()));
                 }
             }
         }

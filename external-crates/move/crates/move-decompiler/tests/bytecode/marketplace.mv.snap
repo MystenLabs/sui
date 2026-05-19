@@ -453,20 +453,14 @@ public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2
                 l32 = *(&(&vector::remove(l34, l39)).last_points_claimed_at);
             };
             if (freeze(l34).len() == 0u64) {
-                unstructured {
-                    goto 'label_217;
-                }
-            } else {
-                unstructured {
-                    goto 'label_217;
-                }
-            }
+                break
+            };
+            break
         }
     } else {
         assert!(linked_table::contains(&l29.bids, l5), C17);
         l32 = *(&(&linked_table::remove(&mut l29.bids, l5)).last_points_claimed_at);
     };
-    /* block 217 */;
     let l36 = dynamic_object_field::borrow_mut(&mut l1.id, l45);
     assert!(linked_table::contains(&l36.listings, l5), C11);
     let (reg_158, reg_159);
@@ -487,27 +481,20 @@ public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2
                 let l22 = vector::remove(l35, l40);
             };
             if (freeze(l35).len() == 0u64) {
+                std::vector::destroy_empty(linked_table::remove(&mut l36.collection_bids, l7));
                 break
             };
-            unstructured {
-                goto 'label_383;
-            };
-            std::vector::destroy_empty(linked_table::remove(&mut l36.collection_bids, l7));
-            unstructured {
-                goto 'label_383;
-            }
+            break
         }
     } else {
         assert!(object::uid_to_inner(&(&linked_table::remove(&mut (linked_table::borrow_mut(&mut l36.bids, l5)).bids, l7)).id) == l6, C26)
     };
-    let (l38, l48);
-    /* block 383 */;
-    l48 = x2_balance::value(&l24);
+    let l48 = x2_balance::value(&l24);
     debug::print(&string::utf8(C57));
     debug::print(&l48);
     *(&mut l36.lifetime_volume) = *(&l36.lifetime_volume) + x2_balance::value(&l24)as u128;
     marketplace::update_collection_avg_price(l36, x2_balance::value(&l24));
-    l38 = x2_balance::value(&l24) * *(&l1.commission_pct) / 100u64;
+    let l38 = x2_balance::value(&l24) * *(&l1.commission_pct) / 100u64;
     debug::print(&string::utf8(C58));
     debug::print(&l38);
     kiosk::return_purchase_cap(l2, l49);
@@ -679,23 +666,16 @@ public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlace
                 l29 = *(&(&vector::remove(l31, l36)).last_points_claimed_at);
             };
             if (freeze(l31).len() == 0u64) {
-                unstructured {
-                    goto 'label_190;
-                }
-            } else {
-                unstructured {
-                    goto 'label_190;
-                }
-            }
+                break
+            };
+            break
         }
     } else {
         assert!(linked_table::contains(&l26.bids, l5), C17);
         l29 = *(&(&linked_table::remove(&mut l26.bids, l5)).last_points_claimed_at);
     };
-    let (l21, l33);
-    /* block 190 */;
-    l33 = dynamic_object_field::borrow_mut(&mut l1.id, l39);
-    l21 = x2_balance::zero();
+    let l33 = dynamic_object_field::borrow_mut(&mut l1.id, l39);
+    let l21 = x2_balance::zero();
     if (l9) {
         let l32 = linked_table::borrow_mut(&mut l33.collection_bids, l6);
         let l37 = 0u64;
@@ -708,15 +688,10 @@ public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlace
                 let l18 = vector::remove(l32, l37);
             };
             if (freeze(l32).len() == 0u64) {
+                std::vector::destroy_empty(linked_table::remove(&mut l33.collection_bids, l6));
                 break
             };
-            unstructured {
-                goto 'label_321;
-            };
-            std::vector::destroy_empty(linked_table::remove(&mut l33.collection_bids, l6));
-            unstructured {
-                goto 'label_321;
-            }
+            break
         }
     } else {
         assert!(linked_table::contains(&l33.bids, l5), C17);
@@ -724,17 +699,15 @@ public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlace
         assert!(linked_table::contains(&l19.bids, l6), C17);
         let l20 = linked_table::remove(&mut l19.bids, l6);
     };
-    let (l35, l42, l47);
-    /* block 321 */;
     *(&mut l33.lifetime_volume) = *(&l33.lifetime_volume) + x2_balance::value(&l21)as u128;
     marketplace::update_collection_avg_price(l33, x2_balance::value(&l21));
-    l35 = x2_balance::value(&l21) * *(&l1.commission_pct) / 100u64;
+    let l35 = x2_balance::value(&l21) * *(&l1.commission_pct) / 100u64;
     let l17 = x2_balance::value(&l21) - l8;
     kiosk::list(l2, l4, l5, l17);
     let (reg_244, reg_245) = kiosk::purchase(l2, l5, coin::from_balance(x2_balance::split(&mut l21, l17), l13));
-    l47 = reg_245;
+    let l47 = reg_245;
     royalty_rule::pay(l10, &mut l47, coin::from_balance(x2_balance::split(&mut l21, l8), l13));
-    l42 = x2_balance::value(&l21);
+    let l42 = x2_balance::value(&l21);
     helpers::destroy_or_transfer_balance(l21, l43, l13);
     kiosk::lock(l3, &l1.escrow_kiosk_cap, freeze(l10), reg_244);
     let l40 = PendingClaim { buyer: l6, nft_type: l39, price: l42 - l35 };
@@ -983,18 +956,12 @@ public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>
                 let l22 = vector::remove(l20, l30);
             };
             if (freeze(l20).len() == 0u64) {
+                std::vector::destroy_empty(linked_table::remove(&mut l28.collection_bids, l27));
                 break
             };
-            unstructured {
-                goto 'label_166;
-            };
-            std::vector::destroy_empty(linked_table::remove(&mut l28.collection_bids, l27));
-            unstructured {
-                goto 'label_166;
-            }
+            break
         }
     };
-    /* block 166 */;
     debug::print(&string::utf8(C46));
     debug::print(&x2_balance::value(&l40));
     helpers::destroy_or_transfer_balance(l40, l27, l6);
@@ -1017,14 +984,9 @@ public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>
                 l34 = *(&(&l23).last_points_claimed_at);
             };
             if (freeze(l25).len() == 0u64) {
-                unstructured {
-                    goto 'label_321;
-                }
-            } else {
-                unstructured {
-                    goto 'label_321;
-                }
-            }
+                break
+            };
+            break
         }
     } else {
         let l36 = *(option::borrow(&l1));
@@ -1033,10 +995,8 @@ public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>
         l26 = *(&(&l24).bid_price);
         l34 = *(&(&l24).last_points_claimed_at);
     };
-    let l9;
-    /* block 321 */;
     let l41 = l43 - l34;
-    l9 = if (*(&l28.ion_points_enabled)) {
+    let l32 = if (*(&l28.ion_points_enabled)) {
         let l42 = helpers::calculate_time_multiplier(l41, false);
         let l39 = helpers::calculate_bid_proximity_multiplier(l26, *(&l28.avg_sale_price));
         let l29 = if (*(&l28.ion_collection_multiplier) == 0u64) {
@@ -1061,7 +1021,6 @@ public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>
     } else {
         0u64
     };
-    let l32 = l9;
     debug::print(&string::utf8(C47));
     debug::print(&l32);
     debug::print(&string::utf8(C48));
@@ -1423,26 +1382,27 @@ public fun get_trait_bid_details(l0: &MarketPlaceStore, l1: address, l2: ID): (
     };
     let l8 = linked_table::borrow(&l0.user_activity, l1);
     let l3 = *(linked_table::front(&l8.trait_bids));
-    'loop_30: loop {
-        if (option::is_some(&l3)) {
-            let l5 = option::borrow(&l3);
-            let l7 = linked_table::borrow(&l8.trait_bids, *l5);
-            let l4 = 0u64;
-            let l6;
-            loop {
-                if (l4 >= l7.len()) {
-                    l3 = *(linked_table::next(&l8.trait_bids, *l5));
-                    continue 'loop_30
-                };
-                l6 = &l7[l4];
-                if (*(&l6.bid_id) == l2) {
-                    break
-                };
+    loop {
+        if (!(option::is_some(&l3))) {
+            return (ascii::string(C2), 0u64, option::none(), option::none(), option::none(), option::none(), option::none(), option::none(), 0u64, 0u64)
+        };
+        let l5 = option::borrow(&l3);
+        let l7 = linked_table::borrow(&l8.trait_bids, *l5);
+        let l4 = 0u64;
+        loop {
+            if (l4 >= l7.len()) {
+                l3 = *(linked_table::next(&l8.trait_bids, *l5));
+                break
+            };
+            let l6 = &l7[l4];
+            if (*(&l6.bid_id) == l2) {
+                
+            } else {
                 l4 = l4 + 1u64;
+                continue
             };
             return (*(&l6.nft_type), *(&l6.bid_price), *(&l6.trait_key1), *(&l6.trait_value1), *(&l6.trait_key2), *(&l6.trait_value2), *(&l6.trait_key3), *(&l6.trait_value3), *(&l6.bid_at), *(&l6.last_points_claimed_at))
-        };
-        return (ascii::string(C2), 0u64, option::none(), option::none(), option::none(), option::none(), option::none(), option::none(), 0u64, 0u64)
+        }
     }
 }
 

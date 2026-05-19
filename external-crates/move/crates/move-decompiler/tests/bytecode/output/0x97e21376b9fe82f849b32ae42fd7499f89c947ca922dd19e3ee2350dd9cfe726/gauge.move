@@ -216,18 +216,12 @@ public fun deposit_position<T0, T1, T2>(l0: &GlobalConfig, l1: &DistributionConf
                 }
             };
             if (l8 >= l18.len()) {
+                (table::borrow_mut(&mut l2.stakes, l13)).push_back(l11);
                 break
             };
-            unstructured {
-                goto 'label_192;
-            };
-            (table::borrow_mut(&mut l2.stakes, l13)).push_back(l11);
-            unstructured {
-                goto 'label_192;
-            }
+            break
         }
     };
-    /* block 192 */;
     object_table::add(&mut l2.staked_positions, l11, l4);
     if (!(table::contains(&l2.rewards, l11))) {
         table::add(&mut l2.rewards, l11, RewardProfile { growth_inside: pool::get_magma_distribution_growth_inside(freeze(l3), l16, l17, 0u128), amount: 0u64, last_update_time: clock::timestamp_ms(l5) / 1000u64 })
