@@ -246,7 +246,11 @@ jobs:
           echo "versionless_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'// | sed s/'testnet\-v'//)" >> $GITHUB_ENV
 
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@master
+        uses: Homebrew/actions/setup-homebrew@8eb7f2efa6ab636da09aef605b497fd5b8a7587d # pin@master 2026-05-16
+        with:
+          # Explicitly fetch homebrew-core so `brew bump-formula-pr sui`
+          # finds the formula without relying on its retry-and-install fallback.
+          core: true
 
       - name: Bump sui formula on Homebrew/homebrew-core
         env:
