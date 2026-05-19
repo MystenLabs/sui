@@ -31,7 +31,7 @@ The public endpoints at `https://fullnode.<network>.sui.io` and `https://graphql
 
 ### gRPC
 
-gRPC is the recommended high-performance API for backend services. It supports `FieldMask`-based projection so you only fetch the fields you need, and includes streaming for checkpoints, transactions, and events. For a complete tutorial including `grpcurl`, TypeScript, Go, and Python examples, see [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
+gRPC is the recommended high-performance API for backend services. It supports `FieldMask`-based projection so you only fetch the fields you need, and includes checkpoint subscriptions that stream finalized checkpoints along with the transaction and event data you select through the response mask. For a complete tutorial including `grpcurl`, TypeScript, Go, and Python examples, see [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
 
 For the Rust client, use the [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) crate (gRPC) for new code. The legacy [`sui-sdk` JSON-RPC client](/references/rust-sdk) remains available for migration purposes only.
 
@@ -74,6 +74,12 @@ Sui supports two ways to hold fungible value at an address:
 
 When you query a balance, account for both representations. In the GraphQL schema, `Balance.totalBalance` returns the sum across coin objects and the address-balance accumulator. `Balance.coinBalance` and `Balance.addressBalance` expose each component separately, so you can reconcile against your own bookkeeping.
 
+:::caution
+
+Exchange ledgers must account for both coin objects and address-balance accumulators. An address's funds can move between the two without a transfer between addresses, especially while users hold a mix of legacy coin objects and newer address balances. Reconcile by summing `Balance.coinBalance` and `Balance.addressBalance`, not by tracking only one.
+
+:::
+
 Query balances for an address using the `address(address:).balances(...)` connection in GraphQL. The [GraphQL query guide](/develop/accessing-data/graphql/query-with-graphql) shows the pagination pattern and how to scope queries to a specific checkpoint for consistent reads. For a streaming or fully typed client, use the [gRPC API](/develop/accessing-data/grpc/using-grpc) and select the balance fields through a `FieldMask`.
 
 ## Tracking transactions and events
@@ -86,7 +92,7 @@ Use checkpoints as the canonical, ordered stream of finalized activity:
 
 - **Transactions are final before they are included in a checkpoint.** Checkpoints group finalized transactions for ordered downstream consumption.
 
-For real-time pipelines, subscribe to the checkpoint and transaction streams over [gRPC](/develop/accessing-data/grpc/using-grpc). For ad hoc queries and replays, paginate over checkpoints, transactions, and events with [GraphQL](/develop/accessing-data/graphql/query-with-graphql), which supports cursor-based pagination and checkpoint-scoped consistency.
+For real-time pipelines, subscribe to the checkpoint stream over [gRPC](/develop/accessing-data/grpc/using-grpc), and read each checkpoint's transaction and event data from the response through a `FieldMask`. For ad hoc queries and replays, paginate over checkpoints, transactions, and events with [GraphQL](/develop/accessing-data/graphql/query-with-graphql), which supports cursor-based pagination and checkpoint-scoped consistency.
 
 For event consumption patterns, including filtering by sender, recipient, package, or event type, see [Using Events](/develop/accessing-data/using-events). That page covers event queries through both gRPC and GraphQL.
 
@@ -100,7 +106,7 @@ A few points that matter for exchange flows:
 
 - **Coin selection.** When you pay from coin objects, the network performs [gas smashing](/develop/transaction-payment/gas-smashing) automatically if you pass multiple gas coins. You do not need to merge coins offline before paying.
 
-- **Address balance gas payments.** With the [address balances](/onchain-finance/asset-custody/address-balances/using-address-balances) feature, the gas payment can be drawn directly from the sender or sponsor address balance, removing the need to manage gas coin objects entirely. Transactions that use address-balance gas payments must set a `ValidDuring` expiration with both a minimum and maximum epoch.
+- **Address balance gas payments.** When the [address balances](/onchain-finance/asset-custody/address-balances/using-address-balances) feature is enabled on the target network, the gas payment can be drawn directly from the sender or sponsor address balance, removing the need to manage gas coin objects entirely. Transactions that use address-balance gas payments must set a `ValidDuring` expiration with both a minimum and maximum epoch. Before relying on this in production, verify the feature is enabled on each target network using the [protocol-config feature flag check](/onchain-finance/asset-custody/address-balances/using-address-balances#paying-for-gas-from-address-balances).
 
 - **Sponsored transactions.** For user-facing flows, you can sponsor a user's transaction so they pay no gas. See [Sponsored Transactions](/develop/transaction-payment/sponsor-txn).
 
@@ -122,9 +128,29 @@ Sui uses Delegated Proof-of-Stake (DPoS). SUI holders stake to a validator's sta
 
 - The total voting power across all validators is fixed at 10,000, with a per-validator cap of 1,000 (10%). The quorum threshold for confirming a transaction is 6,667 (greater than 2/3).
 
-Stakes are represented onchain by `StakedSui` objects owned by the staker. Adding stake, withdrawing stake, and reading active and pending stakes go through the [`sui_system` Move module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move). Refer to that module for the current entry function signatures, and to the [`staking_pool` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/staking_pool.move) for the `StakedSui` type and reward accounting. These signatures are the source of truth, because they change with system package upgrades.
+Stakes are represented onchain by `StakedSui` objects owned by the staker.
 
-To build the staking and unstaking transactions, construct a PTB that calls the relevant `sui_system` entry function. The [TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the helpers you need to assemble the call. Confirm the function signature you target against the linked Move source before you ship.
+To **build staking and unstaking transactions**, construct a PTB that calls the relevant entry function in the [`sui_system` Move module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move). Refer to that module for the current entry function signatures, and to the [`staking_pool` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/staking_pool.move) for the `StakedSui` type and reward accounting. These signatures are the source of truth, because they change with system package upgrades. The [TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the helpers you need to assemble the call. Confirm the function signature you target against the linked Move source before you ship.
+
+To **read stake state** for an address, such as active stakes, pending stakes, and accrued rewards, query through [GraphQL](/develop/accessing-data/graphql/query-with-graphql) or [gRPC](/develop/accessing-data/grpc/using-grpc) rather than reading the Move module directly.
+
+## Designing deposits and withdrawals
+
+Treat deposit and withdrawal pipelines as event-driven and idempotent. The following checklist covers the design points that matter most for an exchange:
+
+- **Use checkpoint sequence numbers as your cursor.** Persist the last fully processed checkpoint, and resume from the next sequence number on restart. Checkpoints do not fork, so once you process a checkpoint, it does not change.
+
+- **Make every credit and debit idempotent.** Key your ledger entries by `(transaction digest, event sequence)` for event-driven credits, or by `(transaction digest, object change)` for object-based credits. Replaying the same checkpoint must not produce duplicate ledger entries.
+
+- **Define a finality policy.** Sui transactions are final before they are included in a checkpoint, and checkpoints themselves are final. For exchange purposes, treating inclusion in a finalized checkpoint as the point of finality is the standard choice.
+
+- **Support reprocessing and backfill.** Build the pipeline so you can replay a range of checkpoints to recover from a bug or a missed window. This depends on the idempotency keys above.
+
+- **Reconcile against onchain balances.** Periodically read `Balance.totalBalance`, and `Balance.coinBalance` and `Balance.addressBalance` separately, for each tracked address, and compare against your internal ledger. Investigate any drift.
+
+- **Plan for both coin objects and address balances.** Withdrawals can be paid from either, and a user's holdings can sit in either at any time. Build your withdrawal logic to handle both, and use PTBs rather than legacy JSON-RPC transfer methods.
+
+- **Validate addresses on input.** Reject malformed addresses early, and confirm `0x` prefix handling matches your display layer.
 
 ## Production considerations
 
@@ -134,6 +160,6 @@ To build the staking and unstaking transactions, construct a PTB that calls the 
 
 - **Snapshots.** Start a new full node from a recent snapshot rather than syncing from genesis. See [Sui Snapshots](/operators/snapshots).
 
-- **Security.** Treat exchange custody keys and any administrative capabilities (for example, capability objects governing your deposit or withdrawal flow) as high-value assets. Use multisig or hardware custody, and review the [security best practices](/develop/security/best-practices) guide.
+- **Custody and key management.** Treat exchange custody keys and any administrative capabilities (for example, capability objects governing your deposit or withdrawal flow) as high-value assets. Separate hot, warm, and cold keys by role, so an online compromise does not expose the keys with the most privilege. Hold warm and cold keys in a [multisig](/develop/transactions/transaction-auth/multisig) address or hardware custody, and sign cold-key transactions using [Offline Signing](/develop/transactions/transaction-auth/offline-signing). Keep Testnet and Mainnet keys strictly separate, so a test key can never sign a production transaction.
 
 - **API stability.** Pin SDK versions and verify your code against the linked references each time you upgrade. Watch the [release notes](/references/release-notes) for breaking changes that affect balances, events, or transaction shapes.
