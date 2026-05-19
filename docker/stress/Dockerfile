@@ -55,6 +55,10 @@ COPY crates/sui-benchmark/src/workloads/data /sui/crates/sui-benchmark/src/workl
 COPY crates/sui-framework/packages/sui-framework /sui/crates/sui-framework/packages/sui-framework
 COPY crates/sui-framework/packages/move-stdlib /sui/crates/sui-framework/packages/move-stdlib
 
+# publish_basics_package callers (shared_counter etc.) read examples/move/basics at runtime.
+ENV MOVE_EXAMPLES_DIR=/sui/examples/move
+COPY examples/move/basics /sui/examples/move/basics
+
 ARG BUILD_DATE
 ARG GIT_REVISION
 LABEL build-date=$BUILD_DATE
