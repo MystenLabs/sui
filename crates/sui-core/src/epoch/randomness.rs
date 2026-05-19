@@ -72,73 +72,12 @@ impl VersionedProcessedMessage {
         }
     }
 
-    pub fn unwrap_v1_ref(&self) -> &dkg_v1::ProcessedMessage<PkG, EncG> {
+    pub fn as_v1(&self) -> Option<&dkg_v1::ProcessedMessage<PkG, EncG>> {
         if let VersionedProcessedMessage::V1(msg) = self {
-            msg
+            Some(msg)
         } else {
-            panic!("BUG: expected message version is 1")
+            None
         }
-    }
-
-    pub fn process_party(
-        party: Arc<dkg_v1::Party<PkG, EncG>>,
-        message: VersionedDkgMessage,
-    ) -> FastCryptoResult<VersionedProcessedMessage> {
-        // All inputs are verified in add_message, so we can assume they are of the correct version.
-        let processed = party.process_message(message.unwrap_v1(), &mut rand::thread_rng())?;
-        Ok(VersionedProcessedMessage::V1(processed))
-    }
-
-    pub fn process_observer(
-        observer: Arc<dkg_v1::Observer<PkG, EncG>>,
-        message: VersionedDkgMessage,
-    ) -> FastCryptoResult<VersionedProcessedMessage> {
-        let raw_msg = message.unwrap_v1();
-        observer.process_message(raw_msg.clone())?;
-        Ok(VersionedProcessedMessage::V1(dkg_v1::ProcessedMessage {
-            message: raw_msg,
-            shares: vec![],
-            complaint: None,
-        }))
-    }
-
-    pub fn merge_party(
-        party: Arc<dkg_v1::Party<PkG, EncG>>,
-        messages: Vec<Self>,
-    ) -> FastCryptoResult<(VersionedDkgConfirmation, VersionedUsedProcessedMessages)> {
-        // All inputs were created by this validator, so we can assume they are of the correct version.
-        let (conf, msgs) = party.merge(
-            &messages
-                .into_iter()
-                .map(|vm| vm.unwrap_v1())
-                .collect::<Vec<_>>(),
-        )?;
-        Ok((
-            VersionedDkgConfirmation::V1(conf),
-            VersionedUsedProcessedMessages::V1(msgs),
-        ))
-    }
-
-    pub fn merge_observer(
-        observer: &dkg_v1::Observer<PkG, EncG>,
-        messages: Vec<Self>,
-    ) -> FastCryptoResult<VersionedUsedProcessedMessages> {
-        let raw_messages: Vec<_> = messages
-            .into_iter()
-            .map(|pm| pm.unwrap_v1().message)
-            .collect();
-        let used = observer.merge(raw_messages)?;
-        Ok(VersionedUsedProcessedMessages::V1(
-            dkg_v1::UsedProcessedMessages(
-                used.into_iter()
-                    .map(|m| dkg_v1::ProcessedMessage {
-                        message: m,
-                        shares: vec![],
-                        complaint: None,
-                    })
-                    .collect(),
-            ),
-        ))
     }
 }
 
@@ -149,47 +88,197 @@ pub enum VersionedUsedProcessedMessages {
 }
 
 impl VersionedUsedProcessedMessages {
-    pub fn unwrap_v1_ref(&self) -> &dkg_v1::UsedProcessedMessages<PkG, EncG> {
+    pub fn as_v1(&self) -> Option<&dkg_v1::UsedProcessedMessages<PkG, EncG>> {
         if let VersionedUsedProcessedMessages::V1(msg) = self {
-            msg
+            Some(msg)
         } else {
-            panic!("BUG: invalid VersionedUsedProcessedMessages version")
+            None
+        }
+    }
+}
+
+/// Distinguishes between an active DKG participant (validator) and a read-only observer (fullnode).
+enum DkgRole {
+    Party(dkg_v1::Party<PkG, EncG>),
+    Observer(dkg_v1::Observer<PkG, EncG>),
+}
+
+impl DkgRole {
+    /// Creates a new DkgRole. When `authority_key_pair` is Some, creates an active Party
+    /// (validator). When None, creates a read-only Observer (fullnode).
+    ///
+    /// * `authority_key_pair` - The validator's BLS key pair used to derive the DKG private key.
+    ///   When None, an Observer is created that can follow DKG but not produce shares.
+    /// * `nodes` - The reduced set of DKG participants with their public keys and weights.
+    /// * `t` - The threshold number of shares required to reconstruct randomness.
+    /// * `random_oracle` - Epoch-specific oracle used to derive deterministic challenges during DKG.
+    fn try_new(
+        authority_key_pair: Option<&AuthorityKeyPair>,
+        nodes: nodes::Nodes<EncG>,
+        t: u16,
+        random_oracle: fastcrypto_tbls::random_oracle::RandomOracle,
+    ) -> Option<Self> {
+        let total_weight = nodes.total_weight();
+        let num_nodes = nodes.num_nodes();
+
+        if let Some(authority_key_pair) = authority_key_pair {
+            let randomness_private_key = bls12381::Scalar::from_byte_array(
+                authority_key_pair
+                    .copy()
+                    .private()
+                    .as_bytes()
+                    .try_into()
+                    .expect("key length should match"),
+            )
+            .expect("should work to convert BLS key to Scalar");
+            let party = match dkg_v1::Party::<PkG, EncG>::new(
+                fastcrypto_tbls::ecies_v1::PrivateKey::<bls12381::G2Element>::from(
+                    randomness_private_key,
+                ),
+                nodes,
+                t,
+                random_oracle,
+                &mut rand::thread_rng(),
+            ) {
+                Ok(party) => party,
+                Err(err) => {
+                    error!("random beacon: error while initializing Party: {err:?}");
+                    return None;
+                }
+            };
+            let name: AuthorityName = authority_key_pair.public().into();
+            info!(
+                "random beacon: Party initialized with authority={name}, total_weight={total_weight}, t={t}, num_nodes={num_nodes}",
+            );
+            Some(DkgRole::Party(party))
+        } else {
+            let observer = match dkg_v1::Observer::<PkG, EncG>::new(nodes, t, random_oracle) {
+                Ok(observer) => observer,
+                Err(err) => {
+                    error!("random beacon: error while initializing Observer: {err:?}");
+                    return None;
+                }
+            };
+            info!(
+                "random beacon: Observer initialized with total_weight={total_weight}, t={t}, num_nodes={num_nodes}",
+            );
+            Some(DkgRole::Observer(observer))
         }
     }
 
-    fn complete_dkg_party<'a>(
-        &self,
-        party: Arc<dkg_v1::Party<PkG, EncG>>,
-        confirmations: impl Iterator<Item = &'a VersionedDkgConfirmation>,
-    ) -> FastCryptoResult<Output<PkG, EncG>> {
-        // All inputs are verified in add_confirmation, so we can assume they are of the correct version.
-        let rng = &mut StdRng::from_rng(OsRng).expect("RNG construction should not fail");
-        let VersionedUsedProcessedMessages::V1(msg) = self else {
-            panic!("BUG: invalid VersionedUsedProcessedMessages version")
-        };
-        party.complete(
-            msg,
-            &confirmations
-                .map(|vm| vm.unwrap_v1())
-                .cloned()
-                .collect::<Vec<_>>(),
-            rng,
-        )
+    fn is_party(&self) -> bool {
+        matches!(self, DkgRole::Party(_))
     }
 
-    fn complete_dkg_observer<'a>(
+    fn is_observer(&self) -> bool {
+        matches!(self, DkgRole::Observer(_))
+    }
+
+    /// Processes a received DKG message according to the role.
+    fn process_message(
         &self,
-        observer: &dkg_v1::Observer<PkG, EncG>,
+        message: VersionedDkgMessage,
+    ) -> FastCryptoResult<VersionedProcessedMessage> {
+        match self {
+            DkgRole::Party(party) => {
+                let processed =
+                    party.process_message(message.unwrap_v1(), &mut rand::thread_rng())?;
+                Ok(VersionedProcessedMessage::V1(processed))
+            }
+            DkgRole::Observer(observer) => {
+                let raw_msg = message.unwrap_v1();
+                observer.process_message(raw_msg.clone())?;
+                Ok(VersionedProcessedMessage::V1(dkg_v1::ProcessedMessage {
+                    message: raw_msg,
+                    shares: vec![],
+                    complaint: None,
+                }))
+            }
+        }
+    }
+
+    /// Merges processed DKG messages. For Party, produces a confirmation and used messages.
+    /// For Observer, produces only used messages, confirmation is None, as observer nodes do
+    /// not have any voting rights.
+    fn merge_messages(
+        &self,
+        messages: Vec<VersionedProcessedMessage>,
+    ) -> FastCryptoResult<(
+        Option<VersionedDkgConfirmation>,
+        VersionedUsedProcessedMessages,
+    )> {
+        match self {
+            DkgRole::Party(party) => {
+                let (conf, msgs) = party.merge(
+                    &messages
+                        .into_iter()
+                        .map(|vm| vm.unwrap_v1())
+                        .collect::<Vec<_>>(),
+                )?;
+                Ok((
+                    Some(VersionedDkgConfirmation::V1(conf)),
+                    VersionedUsedProcessedMessages::V1(msgs),
+                ))
+            }
+            DkgRole::Observer(observer) => {
+                let raw_messages: Vec<_> = messages
+                    .into_iter()
+                    .map(|pm| pm.unwrap_v1().message)
+                    .collect();
+                let used = observer.merge(raw_messages)?;
+                Ok((
+                    None,
+                    VersionedUsedProcessedMessages::V1(dkg_v1::UsedProcessedMessages(
+                        used.into_iter()
+                            .map(|m| dkg_v1::ProcessedMessage {
+                                message: m,
+                                shares: vec![],
+                                complaint: None,
+                            })
+                            .collect(),
+                    )),
+                ))
+            }
+        }
+    }
+
+    /// Completes DKG from used messages and confirmations. The output contains the shared public key which can be used
+    /// from there after to validate the randomness round signatures. For the observer case the output will contain the public
+    /// key but no shares, as again the node does not participate in the voting process.
+    fn complete_dkg<'a>(
+        &self,
+        used_messages: &VersionedUsedProcessedMessages,
         confirmations: impl Iterator<Item = &'a VersionedDkgConfirmation>,
     ) -> FastCryptoResult<Output<PkG, EncG>> {
-        let raw_messages: Vec<_> = self
-            .unwrap_v1_ref()
-            .0
-            .iter()
-            .map(|pm| pm.message.clone())
-            .collect();
-        let confirmations: Vec<_> = confirmations.map(|c| c.unwrap_v1().clone()).collect();
-        observer.complete(&raw_messages, &confirmations)
+        match self {
+            DkgRole::Party(party) => {
+                let rng = &mut StdRng::from_rng(OsRng).expect("RNG construction should not fail");
+                let msg = used_messages
+                    .as_v1()
+                    .expect("expected V1 used processed messages");
+                party.complete(
+                    msg,
+                    &confirmations
+                        .map(|vm| vm.as_v1().expect("expected V1 confirmation"))
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                    rng,
+                )
+            }
+            DkgRole::Observer(observer) => {
+                let raw_messages: Vec<_> = used_messages
+                    .as_v1()
+                    .expect("expected V1 used processed messages")
+                    .0
+                    .iter()
+                    .map(|pm| pm.message.clone())
+                    .collect();
+                let confirmations: Vec<_> = confirmations
+                    .map(|c| c.as_v1().expect("expected V1 confirmation").clone())
+                    .collect();
+                observer.complete(&raw_messages, &confirmations)
+            }
+        }
     }
 }
 
@@ -221,8 +310,7 @@ pub struct RandomnessManager {
 
     // State for DKG.
     dkg_start_time: OnceCell<Instant>,
-    party: Option<Arc<dkg_v1::Party<PkG, EncG>>>,
-    observer: Option<Arc<dkg_v1::Observer<PkG, EncG>>>,
+    role: Arc<DkgRole>,
     enqueued_messages: BTreeMap<PartyId, JoinHandle<Option<VersionedProcessedMessage>>>,
     processed_messages: BTreeMap<PartyId, VersionedProcessedMessage>,
     used_messages: OnceCell<VersionedUsedProcessedMessages>,
@@ -319,58 +407,18 @@ impl RandomnessManager {
                 return None;
             }
         };
-        let total_weight = nodes.total_weight();
-        let num_nodes = nodes.num_nodes();
-        let prefix_str = format!(
+        let random_oracle = fastcrypto_tbls::random_oracle::RandomOracle::new(&format!(
             "dkg {} {}",
             Hex::encode(epoch_store.get_chain_identifier().as_bytes()),
             committee.epoch()
-        );
-        let random_oracle = fastcrypto_tbls::random_oracle::RandomOracle::new(prefix_str.as_str());
+        ));
 
-        let (party, observer) = if let Some(authority_key_pair) = authority_key_pair {
-            let randomness_private_key = bls12381::Scalar::from_byte_array(
-                authority_key_pair
-                    .copy()
-                    .private()
-                    .as_bytes()
-                    .try_into()
-                    .expect("key length should match"),
-            )
-            .expect("should work to convert BLS key to Scalar");
-            let party = match dkg_v1::Party::<PkG, EncG>::new(
-                fastcrypto_tbls::ecies_v1::PrivateKey::<bls12381::G2Element>::from(
-                    randomness_private_key,
-                ),
-                nodes,
-                t,
-                random_oracle,
-                &mut rand::thread_rng(),
-            ) {
-                Ok(party) => party,
-                Err(err) => {
-                    error!("random beacon: error while initializing Party: {err:?}");
-                    return None;
-                }
-            };
-            let name: AuthorityName = authority_key_pair.public().into();
-            info!(
-                "random beacon: Party initialized with authority={name}, total_weight={total_weight}, t={t}, num_nodes={num_nodes}, oracle initial_prefix={prefix_str:?}",
-            );
-            (Some(Arc::new(party)), None)
-        } else {
-            let observer = match dkg_v1::Observer::<PkG, EncG>::new(nodes, t, random_oracle) {
-                Ok(observer) => observer,
-                Err(err) => {
-                    error!("random beacon: error while initializing Observer: {err:?}");
-                    return None;
-                }
-            };
-            info!(
-                "random beacon: Observer initialized with total_weight={total_weight}, t={t}, num_nodes={num_nodes}, oracle initial_prefix={prefix_str:?}",
-            );
-            (None, Some(Arc::new(observer)))
-        };
+        let role = Arc::new(DkgRole::try_new(
+            authority_key_pair,
+            nodes,
+            t,
+            random_oracle,
+        )?);
 
         // Load existing data from store.
         let highest_completed_round = tables
@@ -384,8 +432,7 @@ impl RandomnessManager {
             network_handle: network_handle.clone(),
             authority_info,
             dkg_start_time: OnceCell::new(),
-            party,
-            observer,
+            role,
             enqueued_messages: BTreeMap::new(),
             processed_messages: BTreeMap::new(),
             used_messages: OnceCell::new(),
@@ -411,7 +458,7 @@ impl RandomnessManager {
             rm.dkg_output
                 .set(Some(dkg_output.clone()))
                 .expect("setting new OnceCell should succeed");
-            if let Some(party) = &rm.party {
+            if let DkgRole::Party(party) = rm.role.as_ref() {
                 network_handle.update_epoch(
                     committee.epoch(),
                     rm.authority_info.clone(),
@@ -469,7 +516,7 @@ impl RandomnessManager {
         );
 
         // Re-send partial signatures for incomplete rounds (validators only).
-        if rm.party.is_some() {
+        if rm.role.is_party() {
             let first_incomplete_round = highest_completed_round
                 .map(|r| r + 1)
                 .unwrap_or(RandomnessRound(0));
@@ -491,11 +538,13 @@ impl RandomnessManager {
     /// Sends the initial dkg::Message to begin the randomness DKG protocol.
     /// For observers, this is a no-op (observers don't send messages).
     pub async fn start_dkg(&mut self) -> SuiResult {
-        if self.is_observer() {
-            // Observers only observe — they don't create or send DKG messages.
-            info!("random beacon: observer started observing DKG");
-            return Ok(());
-        }
+        let party = match self.role.as_ref() {
+            DkgRole::Observer(_) => {
+                info!("random beacon: observer started observing DKG");
+                return Ok(());
+            }
+            DkgRole::Party(party) => party,
+        };
 
         if self.used_messages.initialized() || self.dkg_output.initialized() {
             // DKG already started (or completed or failed).
@@ -503,16 +552,12 @@ impl RandomnessManager {
         }
 
         let _ = self.dkg_start_time.set(Instant::now());
-        let party = self
-            .party
-            .clone()
-            .expect("At this point we expect to have a Party initialised");
 
         let epoch_store = self.epoch_store()?;
         let dkg_version = epoch_store.protocol_config().dkg_version();
         info!("random beacon: starting DKG, version {dkg_version}");
 
-        let msg = match VersionedDkgMessage::create(dkg_version, party.clone()) {
+        let msg = match VersionedDkgMessage::create(dkg_version, party) {
             Ok(msg) => msg,
             Err(FastCryptoError::IgnoredMessage) => {
                 info!(
@@ -612,35 +657,29 @@ impl RandomnessManager {
 
         let messages: Vec<_> = self.processed_messages.values().cloned().collect();
 
-        if let Some(observer) = &self.observer {
-            match VersionedProcessedMessage::merge_observer(observer, messages) {
-                Ok(used_msgs) => {
-                    info!(
-                        "random beacon: observer merged {} DKG messages",
-                        used_msgs.unwrap_v1_ref().0.len()
-                    );
-                    if self.used_messages.set(used_msgs.clone()).is_err() {
-                        error!("BUG: used_messages should only ever be set once");
-                    }
-                    consensus_output.insert_dkg_used_messages(used_msgs);
-                }
-                Err(FastCryptoError::NotEnoughInputs) => (), // wait for more input
-                Err(e) => debug!("random beacon: observer error merging DKG Messages: {e:?}"),
-            }
-        } else {
-            // Once we have enough Messages, send a Confirmation.
-            let party = self.party.clone().expect("party must be set for validator");
-            match VersionedProcessedMessage::merge_party(party, messages) {
-                Ok((conf, used_msgs)) => {
+        match self.role.merge_messages(messages) {
+            Ok((conf, used_msgs)) => {
+                if let Some(conf) = &conf {
                     info!(
                         "random beacon: sending DKG Confirmation with {} complaints",
                         conf.num_of_complaints()
                     );
-                    if self.used_messages.set(used_msgs.clone()).is_err() {
-                        error!("BUG: used_messages should only ever be set once");
-                    }
-                    consensus_output.insert_dkg_used_messages(used_msgs);
+                } else {
+                    info!(
+                        "random beacon: observer merged {} DKG messages",
+                        used_msgs
+                            .as_v1()
+                            .expect("expected V1 used processed messages")
+                            .0
+                            .len()
+                    );
+                }
+                if self.used_messages.set(used_msgs.clone()).is_err() {
+                    error!("BUG: used_messages should only ever be set once");
+                }
+                consensus_output.insert_dkg_used_messages(used_msgs);
 
+                if let Some(conf) = conf {
                     let transaction = ConsensusTransaction::new_randomness_dkg_confirmation(
                         epoch_store.name,
                         &conf,
@@ -665,9 +704,9 @@ impl RandomnessManager {
                             .set(elapsed as i64);
                     }
                 }
-                Err(FastCryptoError::NotEnoughInputs) => (), // wait for more input
-                Err(e) => debug!("random beacon: error while merging DKG Messages: {e:?}"),
             }
+            Err(FastCryptoError::NotEnoughInputs) => (), // wait for more input
+            Err(e) => debug!("random beacon: error while merging DKG Messages: {e:?}"),
         }
 
         Ok(())
@@ -687,12 +726,9 @@ impl RandomnessManager {
                 .used_messages
                 .get()
                 .expect("checked above that `used_messages` is initialized");
-            let complete_result = if let Some(observer) = &self.observer {
-                used_messages.complete_dkg_observer(observer, self.confirmations.values())
-            } else {
-                let party = self.party.clone().expect("party must be set for validator");
-                used_messages.complete_dkg_party(party, self.confirmations.values())
-            };
+            let complete_result = self
+                .role
+                .complete_dkg(used_messages, self.confirmations.values());
 
             let epoch = epoch_store.committee().epoch();
             let num_confirmations = self.confirmations.len();
@@ -715,39 +751,44 @@ impl RandomnessManager {
                         .set(epoch_elapsed as i64);
                     epoch_store.metrics.epoch_random_beacon_dkg_failed.set(0);
 
-                    if let Some(party) = &self.party {
-                        let num_shares = output.shares.as_ref().map_or(0, |shares| shares.len());
-                        let elapsed = self.dkg_start_time.get().map(|t| t.elapsed().as_millis());
-                        info!(
-                            "random beacon: DKG complete for Party epoch={epoch} commit_round={round} \
-                             num_messages={num_messages} num_confirmations={num_confirmations} \
-                             num_shares={num_shares} epoch_elapsed_ms={epoch_elapsed} dkg_elapsed_ms={elapsed:?}"
-                        );
-                        epoch_store
-                            .metrics
-                            .epoch_random_beacon_dkg_num_shares
-                            .set(num_shares as i64);
-
-                        if let Some(elapsed) = elapsed {
+                    match self.role.as_ref() {
+                        DkgRole::Party(party) => {
+                            let num_shares =
+                                output.shares.as_ref().map_or(0, |shares| shares.len());
+                            let elapsed =
+                                self.dkg_start_time.get().map(|t| t.elapsed().as_millis());
+                            info!(
+                                "random beacon: DKG complete for Party epoch={epoch} commit_round={round} \
+                                 num_messages={num_messages} num_confirmations={num_confirmations} \
+                                 num_shares={num_shares} epoch_elapsed_ms={epoch_elapsed} dkg_elapsed_ms={elapsed:?}"
+                            );
                             epoch_store
                                 .metrics
-                                .epoch_random_beacon_dkg_completion_time_ms
-                                .set(elapsed as i64);
-                        }
+                                .epoch_random_beacon_dkg_num_shares
+                                .set(num_shares as i64);
 
-                        self.network_handle.update_epoch(
-                            epoch_store.committee().epoch(),
-                            self.authority_info.clone(),
-                            output,
-                            party.t(),
-                            None,
-                        );
-                    } else {
-                        info!(
-                            "random beacon: DKG complete for Observer epoch={epoch} commit_round={round} \
-                             num_messages={num_messages} num_confirmations={num_confirmations} \
-                             epoch_elapsed_ms={epoch_elapsed}"
-                        );
+                            if let Some(elapsed) = elapsed {
+                                epoch_store
+                                    .metrics
+                                    .epoch_random_beacon_dkg_completion_time_ms
+                                    .set(elapsed as i64);
+                            }
+
+                            self.network_handle.update_epoch(
+                                epoch_store.committee().epoch(),
+                                self.authority_info.clone(),
+                                output,
+                                party.t(),
+                                None,
+                            );
+                        }
+                        DkgRole::Observer(_) => {
+                            info!(
+                                "random beacon: DKG complete for Observer epoch={epoch} commit_round={round} \
+                                 num_messages={num_messages} num_confirmations={num_confirmations} \
+                                 epoch_elapsed_ms={epoch_elapsed}"
+                            );
+                        }
                     }
                 }
                 Err(FastCryptoError::NotEnoughInputs) => (), // wait for more input
@@ -795,36 +836,17 @@ impl RandomnessManager {
             return Ok(());
         }
 
-        if let Some(observer) = &self.observer {
-            let observer = observer.clone();
-            self.enqueued_messages.insert(
-                msg.sender(),
-                tokio::task::spawn(async move {
-                    match VersionedProcessedMessage::process_observer(observer, msg) {
-                        Ok(processed) => Some(processed),
-                        Err(err) => {
-                            debug!("random beacon: observer error validating DKG Message: {err:?}");
-                            None
-                        }
-                    }
-                }),
-            );
-        } else {
-            let party = self.party.clone().expect("party must be set for validator");
-            // TODO: Could save some CPU by not processing messages if we already have enough to merge.
-            self.enqueued_messages.insert(
-                msg.sender(),
-                tokio::task::spawn_blocking(
-                    move || match VersionedProcessedMessage::process_party(party, msg) {
-                        Ok(processed) => Some(processed),
-                        Err(err) => {
-                            debug!("random beacon: error while processing DKG Message: {err:?}");
-                            None
-                        }
-                    },
-                ),
-            );
-        }
+        let sender = msg.sender();
+        let role = self.role.clone();
+        // TODO: Could save some CPU by not processing messages if we already have enough to merge.
+        let handle = tokio::task::spawn_blocking(move || match role.process_message(msg) {
+            Ok(processed) => Some(processed),
+            Err(err) => {
+                debug!("random beacon: error while processing DKG Message: {err:?}");
+                None
+            }
+        });
+        self.enqueued_messages.insert(sender, handle);
         Ok(())
     }
 
@@ -903,11 +925,10 @@ impl RandomnessManager {
 
     /// Starts the process of generating the given RandomnessRound (validators only).
     pub fn generate_randomness(&self, epoch: EpochId, randomness_round: RandomnessRound) {
-        if self.is_observer() {
-            return;
+        if self.role.is_party() {
+            self.network_handle
+                .send_partial_signatures(epoch, randomness_round);
         }
-        self.network_handle
-            .send_partial_signatures(epoch, randomness_round);
     }
 
     pub fn dkg_status(&self) -> DkgStatus {
@@ -921,7 +942,7 @@ impl RandomnessManager {
     /// Generates a new RandomnessReporter for reporting observed rounds to this RandomnessManager.
     /// Returns None for observers (they don't generate partial signatures).
     pub fn reporter(&self) -> Option<RandomnessReporter> {
-        if self.is_observer() {
+        if self.role.is_observer() {
             return None;
         }
         Some(RandomnessReporter {
@@ -930,10 +951,6 @@ impl RandomnessManager {
             network_handle: self.network_handle.clone(),
             highest_completed_round: self.highest_completed_round.clone(),
         })
-    }
-
-    fn is_observer(&self) -> bool {
-        self.observer.is_some()
     }
 
     #[cfg(test)]
@@ -1043,473 +1060,350 @@ mod tests {
     use sui_types::messages_consensus::ConsensusTransactionKind;
     use tokio::sync::mpsc;
 
-    #[tokio::test]
-    async fn test_dkg_v1() {
-        test_dkg(1).await;
+    use arc_swap::Guard;
+
+    /// Test harness that sets up validators (and optionally an observer) with mock consensus,
+    /// ready for DKG message exchange.
+    struct DkgTestSetup {
+        epoch_stores: Vec<Guard<Arc<AuthorityPerEpochStore>>>,
+        randomness_managers: Vec<RandomnessManager>,
+        rx_consensus: mpsc::Receiver<Vec<ConsensusTransaction>>,
+        num_validators: usize,
     }
 
-    async fn test_dkg(version: u64) {
+    impl DkgTestSetup {
+        async fn new(include_observer: bool) -> Self {
+            let network_config =
+                sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                    .committee_size(NonZeroUsize::new(4).unwrap())
+                    .with_reference_gas_price(500)
+                    .build();
+
+            let mut protocol_config =
+                ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+            protocol_config.set_random_beacon_dkg_version_for_testing(1);
+
+            let num_validators = network_config.validator_configs.len();
+            let mut epoch_stores = Vec::new();
+            let mut randomness_managers = Vec::new();
+            let (tx_consensus, rx_consensus) = mpsc::channel(100);
+
+            for validator in network_config.validator_configs.iter() {
+                let mut mock_consensus_client = MockConsensusClient::new();
+                let tx_consensus = tx_consensus.clone();
+                mock_consensus_client
+                    .expect_submit()
+                    .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
+                        tx_consensus.try_send(transactions.to_vec()).unwrap();
+                        true
+                    })
+                    .returning(|_, _| {
+                        Ok((
+                            Vec::new(),
+                            with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                        ))
+                    });
+
+                let state = TestAuthorityBuilder::new()
+                    .with_protocol_config(protocol_config.clone())
+                    .with_genesis_and_keypair(
+                        &network_config.genesis,
+                        validator.protocol_key_pair(),
+                    )
+                    .build()
+                    .await;
+                let consensus_adapter = Arc::new(ConsensusAdapter::new(
+                    Arc::new(mock_consensus_client),
+                    CheckpointStore::new_for_tests(),
+                    state.name,
+                    100_000,
+                    100_000,
+                    ConsensusAdapterMetrics::new_test(),
+                    Arc::new(tokio::sync::Notify::new()),
+                ));
+                let epoch_store = state.epoch_store_for_testing();
+                let randomness_manager = RandomnessManager::try_new(
+                    Arc::downgrade(&epoch_store),
+                    Box::new(consensus_adapter.clone()),
+                    sui_network::randomness::Handle::new_stub(),
+                    Some(validator.protocol_key_pair()),
+                )
+                .await
+                .unwrap();
+
+                epoch_stores.push(epoch_store);
+                randomness_managers.push(randomness_manager);
+            }
+
+            if include_observer {
+                let observer_epoch_store = epoch_stores[0].clone();
+                let mut mock_observer_consensus = MockConsensusClient::new();
+                mock_observer_consensus
+                    .expect_submit()
+                    .returning(|_, _| panic!("observer should not submit to consensus"));
+                let observer_adapter = Arc::new(ConsensusAdapter::new(
+                    Arc::new(mock_observer_consensus),
+                    CheckpointStore::new_for_tests(),
+                    observer_epoch_store.name,
+                    100_000,
+                    100_000,
+                    ConsensusAdapterMetrics::new_test(),
+                    Arc::new(tokio::sync::Notify::new()),
+                ));
+                let observer_manager = RandomnessManager::try_new(
+                    Arc::downgrade(&observer_epoch_store),
+                    Box::new(observer_adapter),
+                    sui_network::randomness::Handle::new_stub(),
+                    None,
+                )
+                .await
+                .unwrap();
+
+                epoch_stores.push(observer_epoch_store.into());
+                randomness_managers.push(observer_manager);
+            }
+
+            Self {
+                epoch_stores,
+                randomness_managers,
+                rx_consensus,
+                num_validators,
+            }
+        }
+
+        /// Runs start_dkg on all managers and collects the DKG messages from validators.
+        async fn start_dkg_and_collect_messages(&mut self) -> Vec<VersionedDkgMessage> {
+            let mut dkg_messages = Vec::new();
+            for randomness_manager in self.randomness_managers.iter_mut() {
+                randomness_manager.start_dkg().await.unwrap();
+            }
+            for _ in 0..self.num_validators {
+                let mut dkg_message = self.rx_consensus.recv().await.unwrap();
+                assert!(dkg_message.len() == 1);
+                match dkg_message.remove(0).kind {
+                    ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
+                        let msg: VersionedDkgMessage = bcs::from_bytes(&bytes)
+                            .expect("DKG message deserialization should not fail");
+                        dkg_messages.push(msg);
+                    }
+                    _ => panic!("wrong type of message sent"),
+                }
+            }
+            dkg_messages
+        }
+
+        /// Distributes DKG messages to all managers and advances DKG at the given round.
+        async fn distribute_messages_and_advance(
+            &mut self,
+            dkg_messages: &[VersionedDkgMessage],
+            advance_round: Round,
+        ) {
+            for i in 0..self.randomness_managers.len() {
+                let mut output = ConsensusCommitOutput::new(0);
+                output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
+                    index: ExecutionIndices {
+                        last_committed_round: 0,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                });
+                for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
+                    self.randomness_managers[i]
+                        .add_message(&self.epoch_stores[j].name, dkg_message)
+                        .unwrap();
+                }
+                self.randomness_managers[i]
+                    .advance_dkg(&mut output, advance_round)
+                    .await
+                    .unwrap();
+                let mut batch = self.epoch_stores[i].db_batch_for_test();
+                output
+                    .write_to_batch(&self.epoch_stores[i], &mut batch)
+                    .unwrap();
+                batch.write().unwrap();
+            }
+        }
+
+        /// Collects DKG confirmations from validators and distributes them to all managers.
+        async fn collect_and_distribute_confirmations(&mut self) {
+            let mut dkg_confirmations = Vec::new();
+            for _ in 0..self.num_validators {
+                let mut dkg_confirmation = self.rx_consensus.recv().await.unwrap();
+                assert!(dkg_confirmation.len() == 1);
+                match dkg_confirmation.remove(0).kind {
+                    ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
+                        let msg: VersionedDkgConfirmation = bcs::from_bytes(&bytes)
+                            .expect("DKG confirmation deserialization should not fail");
+                        dkg_confirmations.push(msg);
+                    }
+                    _ => panic!("wrong type of message sent"),
+                }
+            }
+            for i in 0..self.randomness_managers.len() {
+                let mut output = ConsensusCommitOutput::new(0);
+                output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
+                    index: ExecutionIndices {
+                        last_committed_round: 1,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                });
+                for (j, dkg_confirmation) in dkg_confirmations.iter().cloned().enumerate() {
+                    self.randomness_managers[i]
+                        .add_confirmation(&mut output, &self.epoch_stores[j].name, dkg_confirmation)
+                        .unwrap();
+                }
+                self.randomness_managers[i]
+                    .advance_dkg(&mut output, 0)
+                    .await
+                    .unwrap();
+                let mut batch = self.epoch_stores[i].db_batch_for_test();
+                output
+                    .write_to_batch(&self.epoch_stores[i], &mut batch)
+                    .unwrap();
+                batch.write().unwrap();
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dkg() {
         telemetry_subscribers::init_for_testing();
 
-        let network_config =
-            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
-                .committee_size(NonZeroUsize::new(4).unwrap())
-                .with_reference_gas_price(500)
-                .build();
+        let mut setup = DkgTestSetup::new(false).await;
+        let dkg_messages = setup.start_dkg_and_collect_messages().await;
+        setup
+            .distribute_messages_and_advance(&dkg_messages, 0)
+            .await;
+        setup.collect_and_distribute_confirmations().await;
 
-        let mut protocol_config =
-            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_random_beacon_dkg_version_for_testing(version);
-
-        let mut epoch_stores = Vec::new();
-        let mut randomness_managers = Vec::new();
-        let (tx_consensus, mut rx_consensus) = mpsc::channel(100);
-
-        for validator in network_config.validator_configs.iter() {
-            // Send consensus messages to channel.
-            let mut mock_consensus_client = MockConsensusClient::new();
-            let tx_consensus = tx_consensus.clone();
-            mock_consensus_client
-                .expect_submit()
-                .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
-                    tx_consensus.try_send(transactions.to_vec()).unwrap();
-                    true
-                })
-                .returning(|_, _| {
-                    Ok((
-                        Vec::new(),
-                        with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
-                    ))
-                });
-
-            let state = TestAuthorityBuilder::new()
-                .with_protocol_config(protocol_config.clone())
-                .with_genesis_and_keypair(&network_config.genesis, validator.protocol_key_pair())
-                .build()
-                .await;
-            let consensus_adapter = Arc::new(ConsensusAdapter::new(
-                Arc::new(mock_consensus_client),
-                CheckpointStore::new_for_tests(),
-                state.name,
-                100_000,
-                100_000,
-                ConsensusAdapterMetrics::new_test(),
-                Arc::new(tokio::sync::Notify::new()),
-            ));
-            let epoch_store = state.epoch_store_for_testing();
-            let randomness_manager = RandomnessManager::try_new(
-                Arc::downgrade(&epoch_store),
-                Box::new(consensus_adapter.clone()),
-                sui_network::randomness::Handle::new_stub(),
-                Some(validator.protocol_key_pair()),
-                RandomnessRoundReceiverHandle::new_for_testing(),
-            )
-            .await
-            .unwrap();
-
-            epoch_stores.push(epoch_store);
-            randomness_managers.push(randomness_manager);
-        }
-
-        // Generate and distribute Messages.
-        let mut dkg_messages = Vec::new();
-        for randomness_manager in randomness_managers.iter_mut() {
-            randomness_manager.start_dkg().await.unwrap();
-
-            let mut dkg_message = rx_consensus.recv().await.unwrap();
-            assert!(dkg_message.len() == 1);
-            match dkg_message.remove(0).kind {
-                ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
-                    let msg: VersionedDkgMessage = bcs::from_bytes(&bytes)
-                        .expect("DKG message deserialization should not fail");
-                    dkg_messages.push(msg);
-                }
-                _ => panic!("wrong type of message sent"),
-            }
-        }
-        for i in 0..randomness_managers.len() {
-            let mut output = ConsensusCommitOutput::new(0);
-            output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
-                index: ExecutionIndices {
-                    last_committed_round: 0,
-                    ..Default::default()
-                },
-                ..Default::default()
-            });
-            for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
-                randomness_managers[i]
-                    .add_message(&epoch_stores[j].name, dkg_message)
-                    .unwrap();
-            }
-            randomness_managers[i]
-                .advance_dkg(&mut output, 0)
-                .await
-                .unwrap();
-            let mut batch = epoch_stores[i].db_batch_for_test();
-            output.write_to_batch(&epoch_stores[i], &mut batch).unwrap();
-            batch.write().unwrap();
-        }
-
-        // Generate and distribute Confirmations.
-        let mut dkg_confirmations = Vec::new();
-        for _ in 0..randomness_managers.len() {
-            let mut dkg_confirmation = rx_consensus.recv().await.unwrap();
-            assert!(dkg_confirmation.len() == 1);
-            match dkg_confirmation.remove(0).kind {
-                ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
-                    let msg: VersionedDkgConfirmation = bcs::from_bytes(&bytes)
-                        .expect("DKG message deserialization should not fail");
-                    dkg_confirmations.push(msg);
-                }
-                _ => panic!("wrong type of message sent"),
-            }
-        }
-        for i in 0..randomness_managers.len() {
-            let mut output = ConsensusCommitOutput::new(0);
-            output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
-                index: ExecutionIndices {
-                    last_committed_round: 1,
-                    ..Default::default()
-                },
-                ..Default::default()
-            });
-            for (j, dkg_confirmation) in dkg_confirmations.iter().cloned().enumerate() {
-                randomness_managers[i]
-                    .add_confirmation(&mut output, &epoch_stores[j].name, dkg_confirmation)
-                    .unwrap();
-            }
-            randomness_managers[i]
-                .advance_dkg(&mut output, 0)
-                .await
-                .unwrap();
-            let mut batch = epoch_stores[i].db_batch_for_test();
-            output.write_to_batch(&epoch_stores[i], &mut batch).unwrap();
-            batch.write().unwrap();
-        }
-
-        // Verify DKG completed.
-        for randomness_manager in &randomness_managers {
-            assert_eq!(DkgStatus::Successful, randomness_manager.dkg_status());
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Successful, rm.dkg_status());
         }
     }
 
     #[tokio::test]
-    async fn test_dkg_expiration_v1() {
-        test_dkg_expiration(1).await;
-    }
-
-    async fn test_dkg_expiration(version: u64) {
+    async fn test_dkg_expiration() {
         telemetry_subscribers::init_for_testing();
 
-        let network_config =
-            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
-                .committee_size(NonZeroUsize::new(4).unwrap())
-                .with_reference_gas_price(500)
-                .build();
+        let mut setup = DkgTestSetup::new(false).await;
+        let dkg_messages = setup.start_dkg_and_collect_messages().await;
+        // Pass u64::MAX as round to trigger DKG timeout.
+        setup
+            .distribute_messages_and_advance(&dkg_messages, u64::MAX)
+            .await;
 
-        let mut epoch_stores = Vec::new();
-        let mut randomness_managers = Vec::new();
-        let (tx_consensus, mut rx_consensus) = mpsc::channel(100);
-
-        let mut protocol_config =
-            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_random_beacon_dkg_version_for_testing(version);
-
-        for validator in network_config.validator_configs.iter() {
-            // Send consensus messages to channel.
-            let mut mock_consensus_client = MockConsensusClient::new();
-            let tx_consensus = tx_consensus.clone();
-            mock_consensus_client
-                .expect_submit()
-                .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
-                    tx_consensus.try_send(transactions.to_vec()).unwrap();
-                    true
-                })
-                .returning(|_, _| {
-                    Ok((
-                        Vec::new(),
-                        with_block_status(consensus_core::BlockStatus::Sequenced(BlockRef::MIN)),
-                    ))
-                });
-
-            let state = TestAuthorityBuilder::new()
-                .with_protocol_config(protocol_config.clone())
-                .with_genesis_and_keypair(&network_config.genesis, validator.protocol_key_pair())
-                .build()
-                .await;
-            let consensus_adapter = Arc::new(ConsensusAdapter::new(
-                Arc::new(mock_consensus_client),
-                CheckpointStore::new_for_tests(),
-                state.name,
-                100_000,
-                100_000,
-                ConsensusAdapterMetrics::new_test(),
-                Arc::new(tokio::sync::Notify::new()),
-            ));
-            let epoch_store = state.epoch_store_for_testing();
-            let randomness_manager = RandomnessManager::try_new(
-                Arc::downgrade(&epoch_store),
-                Box::new(consensus_adapter.clone()),
-                sui_network::randomness::Handle::new_stub(),
-                Some(validator.protocol_key_pair()),
-                RandomnessRoundReceiverHandle::new_for_testing(),
-            )
-            .await
-            .unwrap();
-
-            epoch_stores.push(epoch_store);
-            randomness_managers.push(randomness_manager);
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Failed, rm.dkg_status());
         }
-
-        // Generate and distribute Messages.
-        let mut dkg_messages = Vec::new();
-        for randomness_manager in randomness_managers.iter_mut() {
-            randomness_manager.start_dkg().await.unwrap();
-
-            let mut dkg_message = rx_consensus.recv().await.unwrap();
-            assert!(dkg_message.len() == 1);
-            match dkg_message.remove(0).kind {
-                ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
-                    let msg: VersionedDkgMessage = bcs::from_bytes(&bytes)
-                        .expect("DKG message deserialization should not fail");
-                    dkg_messages.push(msg);
-                }
-                _ => panic!("wrong type of message sent"),
-            }
-        }
-        for i in 0..randomness_managers.len() {
-            let mut output = ConsensusCommitOutput::new(0);
-            output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
-                index: ExecutionIndices {
-                    last_committed_round: 0,
-                    ..Default::default()
-                },
-                ..Default::default()
-            });
-            for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
-                randomness_managers[i]
-                    .add_message(&epoch_stores[j].name, dkg_message)
-                    .unwrap();
-            }
-            randomness_managers[i]
-                .advance_dkg(&mut output, u64::MAX)
-                .await
-                .unwrap();
-            let mut batch = epoch_stores[i].db_batch_for_test();
-            output.write_to_batch(&epoch_stores[i], &mut batch).unwrap();
-            batch.write().unwrap();
-        }
-
-        // Verify DKG failed.
-        for randomness_manager in &randomness_managers {
-            assert_eq!(DkgStatus::Failed, randomness_manager.dkg_status());
-        }
-    }
-
-    #[tokio::test]
-    async fn test_dkg_observer_v1() {
-        test_dkg_observer(1).await;
     }
 
     /// Verifies that an Observer completes DKG alongside validators and derives the same
     /// shared public key (vss_pk), but without receiving any private key shares.
-    async fn test_dkg_observer(version: u64) {
+    #[tokio::test]
+    async fn test_dkg_observer() {
         telemetry_subscribers::init_for_testing();
 
-        let network_config =
-            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
-                .committee_size(NonZeroUsize::new(4).unwrap())
-                .with_reference_gas_price(500)
-                .build();
+        let mut setup = DkgTestSetup::new(true).await;
+        let observer_idx = setup.randomness_managers.len() - 1;
 
-        let mut protocol_config =
-            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_random_beacon_dkg_version_for_testing(version);
+        let dkg_messages = setup.start_dkg_and_collect_messages().await;
+        setup
+            .distribute_messages_and_advance(&dkg_messages, 0)
+            .await;
 
-        let num_validators = network_config.validator_configs.len();
-        let mut epoch_stores = Vec::new();
-        let mut randomness_managers = Vec::new();
-        let (tx_consensus, mut rx_consensus) = mpsc::channel(100);
-
-        for validator in network_config.validator_configs.iter() {
-            let mut mock_consensus_client = MockConsensusClient::new();
-            let tx_consensus = tx_consensus.clone();
-            mock_consensus_client
-                .expect_submit()
-                .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
-                    tx_consensus.try_send(transactions.to_vec()).unwrap();
-                    true
-                })
-                .returning(|_, _| {
-                    Ok((
-                        Vec::new(),
-                        with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
-                    ))
-                });
-
-            let state = TestAuthorityBuilder::new()
-                .with_protocol_config(protocol_config.clone())
-                .with_genesis_and_keypair(&network_config.genesis, validator.protocol_key_pair())
-                .build()
-                .await;
-            let consensus_adapter = Arc::new(ConsensusAdapter::new(
-                Arc::new(mock_consensus_client),
-                CheckpointStore::new_for_tests(),
-                state.name,
-                100_000,
-                100_000,
-                ConsensusAdapterMetrics::new_test(),
-                Arc::new(tokio::sync::Notify::new()),
-            ));
-            let epoch_store = state.epoch_store_for_testing();
-            let randomness_manager = RandomnessManager::try_new(
-                Arc::downgrade(&epoch_store),
-                Box::new(consensus_adapter.clone()),
-                sui_network::randomness::Handle::new_stub(),
-                Some(validator.protocol_key_pair()),
-            )
-            .await
-            .unwrap();
-
-            epoch_stores.push(epoch_store);
-            randomness_managers.push(randomness_manager);
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Pending, rm.dkg_status());
         }
 
-        // Append an Observer as the last entry, reusing a validator's epoch store (same committee).
-        {
-            let observer_epoch_store = epoch_stores[0].clone();
-            let mut mock_observer_consensus = MockConsensusClient::new();
-            mock_observer_consensus
-                .expect_submit()
-                .returning(|_, _| panic!("observer should not submit to consensus"));
-            let observer_adapter = Arc::new(ConsensusAdapter::new(
-                Arc::new(mock_observer_consensus),
-                CheckpointStore::new_for_tests(),
-                observer_epoch_store.name,
-                100_000,
-                100_000,
-                ConsensusAdapterMetrics::new_test(),
-                Arc::new(tokio::sync::Notify::new()),
-            ));
-            let observer_manager = RandomnessManager::try_new(
-                Arc::downgrade(&observer_epoch_store),
-                Box::new(observer_adapter),
-                sui_network::randomness::Handle::new_stub(),
-                None,
-            )
-            .await
-            .unwrap();
+        setup.collect_and_distribute_confirmations().await;
 
-            epoch_stores.push(observer_epoch_store.into());
-            randomness_managers.push(observer_manager);
-        }
-        let observer_idx = randomness_managers.len() - 1;
-
-        // Generate DKG Messages from validators. The observer's start_dkg is a no-op.
-        let mut dkg_messages = Vec::new();
-        for randomness_manager in randomness_managers.iter_mut() {
-            randomness_manager.start_dkg().await.unwrap();
-        }
-        for _ in 0..num_validators {
-            let mut dkg_message = rx_consensus.recv().await.unwrap();
-            assert!(dkg_message.len() == 1);
-            match dkg_message.remove(0).kind {
-                ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
-                    let msg: VersionedDkgMessage = bcs::from_bytes(&bytes)
-                        .expect("DKG message deserialization should not fail");
-                    dkg_messages.push(msg);
-                }
-                _ => panic!("wrong type of message sent"),
-            }
-        }
-
-        // Distribute messages to all participants (validators + observer).
-        for i in 0..randomness_managers.len() {
-            let mut output = ConsensusCommitOutput::new(0);
-            output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
-                index: ExecutionIndices {
-                    last_committed_round: 0,
-                    ..Default::default()
-                },
-                ..Default::default()
-            });
-            for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
-                randomness_managers[i]
-                    .add_message(&epoch_stores[j].name, dkg_message)
-                    .unwrap();
-            }
-            randomness_managers[i]
-                .advance_dkg(&mut output, 0)
-                .await
-                .unwrap();
-            let mut batch = epoch_stores[i].db_batch_for_test();
-            output.write_to_batch(&epoch_stores[i], &mut batch).unwrap();
-            batch.write().unwrap();
-        }
-
-        // Verify DKG is not yet complete for any participant after the message phase.
-        for randomness_manager in &randomness_managers {
-            assert_eq!(DkgStatus::Pending, randomness_manager.dkg_status());
-        }
-
-        // Collect Confirmations (only validators produce these).
-        let mut dkg_confirmations = Vec::new();
-        for _ in 0..num_validators {
-            let mut dkg_confirmation = rx_consensus.recv().await.unwrap();
-            assert!(dkg_confirmation.len() == 1);
-            match dkg_confirmation.remove(0).kind {
-                ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
-                    let msg: VersionedDkgConfirmation = bcs::from_bytes(&bytes)
-                        .expect("DKG confirmation deserialization should not fail");
-                    dkg_confirmations.push(msg);
-                }
-                _ => panic!("wrong type of message sent"),
-            }
-        }
-
-        // Distribute confirmations to all participants (validators + observer).
-        for i in 0..randomness_managers.len() {
-            let mut output = ConsensusCommitOutput::new(0);
-            output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
-                index: ExecutionIndices {
-                    last_committed_round: 1,
-                    ..Default::default()
-                },
-                ..Default::default()
-            });
-            for (j, dkg_confirmation) in dkg_confirmations.iter().cloned().enumerate() {
-                randomness_managers[i]
-                    .add_confirmation(&mut output, &epoch_stores[j].name, dkg_confirmation)
-                    .unwrap();
-            }
-            randomness_managers[i]
-                .advance_dkg(&mut output, 0)
-                .await
-                .unwrap();
-            let mut batch = epoch_stores[i].db_batch_for_test();
-            output.write_to_batch(&epoch_stores[i], &mut batch).unwrap();
-            batch.write().unwrap();
-        }
-
-        // Verify all participants completed DKG.
-        for randomness_manager in &randomness_managers {
-            assert_eq!(DkgStatus::Successful, randomness_manager.dkg_status());
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Successful, rm.dkg_status());
         }
 
         // Verify the observer derived the same vss_pk as validators, but without shares.
-        let observer_output = randomness_managers[observer_idx]
+        let observer_output = setup.randomness_managers[observer_idx]
             .dkg_output()
             .expect("observer should have DKG output");
-        let validator_output = randomness_managers[0]
+        let validator_output = setup.randomness_managers[0]
             .dkg_output()
             .expect("validator should have DKG output");
         assert_eq!(observer_output.vss_pk, validator_output.vss_pk);
         assert!(observer_output.shares.is_none());
 
-        // Verify validators have private key shares.
-        for rm in &randomness_managers[..num_validators] {
+        for rm in &setup.randomness_managers[..setup.num_validators] {
             let output = rm.dkg_output().expect("validator should have DKG output");
             assert!(output.shares.is_some());
         }
+    }
+
+    /// Builds a minimal set of DKG Nodes from a network config's validator key pairs.
+    fn build_dkg_nodes(
+        network_config: &sui_swarm_config::network_config::NetworkConfig,
+    ) -> (nodes::Nodes<EncG>, u16) {
+        let dkg_nodes: Vec<_> = network_config
+            .validator_configs
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let pk = bls12381::G2Element::from_byte_array(
+                    v.protocol_key_pair()
+                        .public()
+                        .as_bytes()
+                        .try_into()
+                        .expect("key length should match"),
+                )
+                .expect("should work to convert BLS key to G2Element");
+                nodes::Node::<EncG> {
+                    id: i as u16,
+                    pk: fastcrypto_tbls::ecies_v1::PublicKey::from(pk),
+                    weight: 1,
+                }
+            })
+            .collect();
+        let num_nodes = dkg_nodes.len();
+        // threshold = ceil(num_nodes / 3) works for a minimal committee
+        let t = num_nodes.div_ceil(3) as u16;
+        nodes::Nodes::new(dkg_nodes).map(|n| (n, t)).unwrap()
+    }
+
+    #[test]
+    fn test_dkg_role_try_new_party() {
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .committee_size(NonZeroUsize::new(4).unwrap())
+                .with_reference_gas_price(500)
+                .build();
+
+        let (nodes, t) = build_dkg_nodes(&network_config);
+        let random_oracle =
+            fastcrypto_tbls::random_oracle::RandomOracle::new("test_dkg_role_party");
+
+        let role = DkgRole::try_new(
+            Some(network_config.validator_configs[0].protocol_key_pair()),
+            nodes,
+            t,
+            random_oracle,
+        );
+        assert!(role.is_some());
+        assert!(role.unwrap().is_party());
+    }
+
+    #[test]
+    fn test_dkg_role_try_new_observer() {
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .committee_size(NonZeroUsize::new(4).unwrap())
+                .with_reference_gas_price(500)
+                .build();
+
+        let (nodes, t) = build_dkg_nodes(&network_config);
+        let random_oracle =
+            fastcrypto_tbls::random_oracle::RandomOracle::new("test_dkg_role_observer");
+
+        let role = DkgRole::try_new(None, nodes, t, random_oracle);
+        assert!(role.is_some());
+        assert!(role.unwrap().is_observer());
     }
 }
