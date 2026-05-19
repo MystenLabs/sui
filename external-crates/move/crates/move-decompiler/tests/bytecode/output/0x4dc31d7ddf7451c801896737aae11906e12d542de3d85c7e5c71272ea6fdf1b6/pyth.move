@@ -57,39 +57,24 @@ public fun update_2(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             l15 = false;
         }
     };
-    /* block 76 */;
-    if (l15) {
-        return
-    };
-    let l19 = vaa::parse_and_verify(l6, l7, l9);
-    let l17 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l19, l9);
-    l17 = pyth::update_single_price_feed(l0, l17, l2, coin::split(l8, state::get_base_update_fee(l0), l10), l9);
-    hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l17, l4, coin::split(l8, state::get_base_update_fee(l0), l10), l9));
-    return;
     l16 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
     l18 = option::get_with_default(&l3, l14);
     if (l16 > l13) {
         if (l16 - l13 >= l18) {
             l15 = false;
-            unstructured {
-                goto 'label_76;
-            }
-        } else {
-            unstructured {
-                goto 'label_76;
-            }
         }
     } else {
         if (l13 - l16 >= l18) {
             l15 = false;
-            unstructured {
-                goto 'label_76;
-            }
-        } else {
-            unstructured {
-                goto 'label_76;
-            }
         }
+    };
+    if (l15) {
+        
+    } else {
+        let l19 = vaa::parse_and_verify(l6, l7, l9);
+        let l17 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l19, l9);
+        l17 = pyth::update_single_price_feed(l0, l17, l2, coin::split(l8, state::get_base_update_fee(l0), l10), l9);
+        hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l17, l4, coin::split(l8, state::get_base_update_fee(l0), l10), l9))
     }
 }
 
@@ -108,16 +93,6 @@ public fun update_3(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             l18 = false;
         }
     };
-    /* block 109 */;
-    if (l18) {
-        return
-    };
-    let l22 = vaa::parse_and_verify(l8, l9, l11);
-    let l20 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l22, l11);
-    l20 = pyth::update_single_price_feed(l0, l20, l2, coin::split(l10, state::get_base_update_fee(l0), l12), l11);
-    l20 = pyth::update_single_price_feed(l0, l20, l4, coin::split(l10, state::get_base_update_fee(l0), l12), l11);
-    hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l20, l6, coin::split(l10, state::get_base_update_fee(l0), l12), l11));
-    return;
     l19 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
     l21 = option::get_with_default(&l5, l17);
     if (l19 > l16) {
@@ -140,25 +115,21 @@ public fun update_3(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l19 > l16) {
         if (l19 - l16 >= l21) {
             l18 = false;
-            unstructured {
-                goto 'label_109;
-            }
-        } else {
-            unstructured {
-                goto 'label_109;
-            }
         }
     } else {
         if (l16 - l19 >= l21) {
             l18 = false;
-            unstructured {
-                goto 'label_109;
-            }
-        } else {
-            unstructured {
-                goto 'label_109;
-            }
         }
+    };
+    /* block 109 */;
+    if (l18) {
+        
+    } else {
+        let l22 = vaa::parse_and_verify(l8, l9, l11);
+        let l20 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l22, l11);
+        l20 = pyth::update_single_price_feed(l0, l20, l2, coin::split(l10, state::get_base_update_fee(l0), l12), l11);
+        l20 = pyth::update_single_price_feed(l0, l20, l4, coin::split(l10, state::get_base_update_fee(l0), l12), l11);
+        hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l20, l6, coin::split(l10, state::get_base_update_fee(l0), l12), l11))
     }
 }
 
@@ -177,17 +148,6 @@ public fun update_4(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             l21 = false;
         }
     };
-    /* block 142 */;
-    if (l21) {
-        return
-    };
-    let l25 = vaa::parse_and_verify(l10, l11, l13);
-    let l23 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l25, l13);
-    l23 = pyth::update_single_price_feed(l0, l23, l2, coin::split(l12, state::get_base_update_fee(l0), l14), l13);
-    l23 = pyth::update_single_price_feed(l0, l23, l4, coin::split(l12, state::get_base_update_fee(l0), l14), l13);
-    l23 = pyth::update_single_price_feed(l0, l23, l6, coin::split(l12, state::get_base_update_fee(l0), l14), l13);
-    hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l23, l8, coin::split(l12, state::get_base_update_fee(l0), l14), l13));
-    return;
     l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
     l24 = option::get_with_default(&l7, l20);
     if (l22 > l19) {
@@ -227,25 +187,22 @@ public fun update_4(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l22 > l19) {
         if (l22 - l19 >= l24) {
             l21 = false;
-            unstructured {
-                goto 'label_142;
-            }
-        } else {
-            unstructured {
-                goto 'label_142;
-            }
         }
     } else {
         if (l19 - l22 >= l24) {
             l21 = false;
-            unstructured {
-                goto 'label_142;
-            }
-        } else {
-            unstructured {
-                goto 'label_142;
-            }
         }
+    };
+    /* block 142 */;
+    if (l21) {
+        
+    } else {
+        let l25 = vaa::parse_and_verify(l10, l11, l13);
+        let l23 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l25, l13);
+        l23 = pyth::update_single_price_feed(l0, l23, l2, coin::split(l12, state::get_base_update_fee(l0), l14), l13);
+        l23 = pyth::update_single_price_feed(l0, l23, l4, coin::split(l12, state::get_base_update_fee(l0), l14), l13);
+        l23 = pyth::update_single_price_feed(l0, l23, l6, coin::split(l12, state::get_base_update_fee(l0), l14), l13);
+        hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l23, l8, coin::split(l12, state::get_base_update_fee(l0), l14), l13))
     }
 }
 
@@ -264,18 +221,6 @@ public fun update_5(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             l24 = false;
         }
     };
-    /* block 175 */;
-    if (l24) {
-        return
-    };
-    let l28 = vaa::parse_and_verify(l12, l13, l15);
-    let l26 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l28, l15);
-    l26 = pyth::update_single_price_feed(l0, l26, l2, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
-    l26 = pyth::update_single_price_feed(l0, l26, l4, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
-    l26 = pyth::update_single_price_feed(l0, l26, l6, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
-    l26 = pyth::update_single_price_feed(l0, l26, l8, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
-    hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l26, l10, coin::split(l14, state::get_base_update_fee(l0), l16), l15));
-    return;
     l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
     l27 = option::get_with_default(&l9, l23);
     if (l25 > l22) {
@@ -332,25 +277,23 @@ public fun update_5(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l25 > l22) {
         if (l25 - l22 >= l27) {
             l24 = false;
-            unstructured {
-                goto 'label_175;
-            }
-        } else {
-            unstructured {
-                goto 'label_175;
-            }
         }
     } else {
         if (l22 - l25 >= l27) {
             l24 = false;
-            unstructured {
-                goto 'label_175;
-            }
-        } else {
-            unstructured {
-                goto 'label_175;
-            }
         }
+    };
+    /* block 175 */;
+    if (l24) {
+        
+    } else {
+        let l28 = vaa::parse_and_verify(l12, l13, l15);
+        let l26 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l28, l15);
+        l26 = pyth::update_single_price_feed(l0, l26, l2, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
+        l26 = pyth::update_single_price_feed(l0, l26, l4, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
+        l26 = pyth::update_single_price_feed(l0, l26, l6, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
+        l26 = pyth::update_single_price_feed(l0, l26, l8, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
+        hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l26, l10, coin::split(l14, state::get_base_update_fee(l0), l16), l15))
     }
 }
 
@@ -369,19 +312,6 @@ public fun update_6(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             l27 = false;
         }
     };
-    /* block 208 */;
-    if (l27) {
-        return
-    };
-    let l31 = vaa::parse_and_verify(l14, l15, l17);
-    let l29 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l31, l17);
-    l29 = pyth::update_single_price_feed(l0, l29, l2, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
-    l29 = pyth::update_single_price_feed(l0, l29, l4, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
-    l29 = pyth::update_single_price_feed(l0, l29, l6, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
-    l29 = pyth::update_single_price_feed(l0, l29, l8, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
-    l29 = pyth::update_single_price_feed(l0, l29, l10, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
-    hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l29, l12, coin::split(l16, state::get_base_update_fee(l0), l18), l17));
-    return;
     l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
     l30 = option::get_with_default(&l11, l26);
     if (l28 > l25) {
@@ -455,25 +385,24 @@ public fun update_6(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l28 > l25) {
         if (l28 - l25 >= l30) {
             l27 = false;
-            unstructured {
-                goto 'label_208;
-            }
-        } else {
-            unstructured {
-                goto 'label_208;
-            }
         }
     } else {
         if (l25 - l28 >= l30) {
             l27 = false;
-            unstructured {
-                goto 'label_208;
-            }
-        } else {
-            unstructured {
-                goto 'label_208;
-            }
         }
+    };
+    /* block 208 */;
+    if (l27) {
+        
+    } else {
+        let l31 = vaa::parse_and_verify(l14, l15, l17);
+        let l29 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l31, l17);
+        l29 = pyth::update_single_price_feed(l0, l29, l2, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
+        l29 = pyth::update_single_price_feed(l0, l29, l4, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
+        l29 = pyth::update_single_price_feed(l0, l29, l6, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
+        l29 = pyth::update_single_price_feed(l0, l29, l8, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
+        l29 = pyth::update_single_price_feed(l0, l29, l10, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
+        hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l29, l12, coin::split(l16, state::get_base_update_fee(l0), l18), l17))
     }
 }
 
@@ -492,20 +421,6 @@ public fun update_7(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             l30 = false;
         }
     };
-    /* block 241 */;
-    if (l30) {
-        return
-    };
-    let l34 = vaa::parse_and_verify(l16, l17, l19);
-    let l32 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l34, l19);
-    l32 = pyth::update_single_price_feed(l0, l32, l2, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
-    l32 = pyth::update_single_price_feed(l0, l32, l4, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
-    l32 = pyth::update_single_price_feed(l0, l32, l6, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
-    l32 = pyth::update_single_price_feed(l0, l32, l8, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
-    l32 = pyth::update_single_price_feed(l0, l32, l10, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
-    l32 = pyth::update_single_price_feed(l0, l32, l12, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
-    hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l32, l14, coin::split(l18, state::get_base_update_fee(l0), l20), l19));
-    return;
     l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l12)));
     l33 = option::get_with_default(&l13, l29);
     if (l31 > l28) {
@@ -596,25 +511,25 @@ public fun update_7(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l31 > l28) {
         if (l31 - l28 >= l33) {
             l30 = false;
-            unstructured {
-                goto 'label_241;
-            }
-        } else {
-            unstructured {
-                goto 'label_241;
-            }
         }
     } else {
         if (l28 - l31 >= l33) {
             l30 = false;
-            unstructured {
-                goto 'label_241;
-            }
-        } else {
-            unstructured {
-                goto 'label_241;
-            }
         }
+    };
+    /* block 241 */;
+    if (l30) {
+        
+    } else {
+        let l34 = vaa::parse_and_verify(l16, l17, l19);
+        let l32 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l34, l19);
+        l32 = pyth::update_single_price_feed(l0, l32, l2, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
+        l32 = pyth::update_single_price_feed(l0, l32, l4, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
+        l32 = pyth::update_single_price_feed(l0, l32, l6, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
+        l32 = pyth::update_single_price_feed(l0, l32, l8, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
+        l32 = pyth::update_single_price_feed(l0, l32, l10, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
+        l32 = pyth::update_single_price_feed(l0, l32, l12, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
+        hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l32, l14, coin::split(l18, state::get_base_update_fee(l0), l20), l19))
     }
 }
 
@@ -633,21 +548,6 @@ public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             l33 = false;
         }
     };
-    /* block 274 */;
-    if (l33) {
-        return
-    };
-    let l37 = vaa::parse_and_verify(l18, l19, l21);
-    let l35 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l37, l21);
-    l35 = pyth::update_single_price_feed(l0, l35, l2, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-    l35 = pyth::update_single_price_feed(l0, l35, l4, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-    l35 = pyth::update_single_price_feed(l0, l35, l6, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-    l35 = pyth::update_single_price_feed(l0, l35, l8, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-    l35 = pyth::update_single_price_feed(l0, l35, l10, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-    l35 = pyth::update_single_price_feed(l0, l35, l12, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-    l35 = pyth::update_single_price_feed(l0, l35, l14, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-    hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l35, l16, coin::split(l20, state::get_base_update_fee(l0), l22), l21));
-    return;
     l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l14)));
     l36 = option::get_with_default(&l15, l32);
     if (l34 > l31) {
@@ -755,25 +655,26 @@ public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l34 > l31) {
         if (l34 - l31 >= l36) {
             l33 = false;
-            unstructured {
-                goto 'label_274;
-            }
-        } else {
-            unstructured {
-                goto 'label_274;
-            }
         }
     } else {
         if (l31 - l34 >= l36) {
             l33 = false;
-            unstructured {
-                goto 'label_274;
-            }
-        } else {
-            unstructured {
-                goto 'label_274;
-            }
         }
+    };
+    /* block 274 */;
+    if (l33) {
+        
+    } else {
+        let l37 = vaa::parse_and_verify(l18, l19, l21);
+        let l35 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l37, l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l2, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l4, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l6, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l8, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l10, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l12, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l14, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l35, l16, coin::split(l20, state::get_base_update_fee(l0), l22), l21))
     }
 }
 

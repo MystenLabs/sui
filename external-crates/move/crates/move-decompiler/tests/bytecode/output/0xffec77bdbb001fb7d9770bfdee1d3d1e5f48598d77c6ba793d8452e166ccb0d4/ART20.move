@@ -271,7 +271,7 @@ public entry fun batch_burn_art20(l0: vector<NFT>, l1: &mut CollectionCap, l2: v
     assert!(*(&l1.current_supply) >= l9, C4);
     let l14 = tx_context::sender(freeze(l3));
     let l11 = 0u64;
-    'loop_70: while (l11 < l9) {
+    while (l11 < l9) {
         let l15 = (&mut l0).pop_back();
         assert!(*(&(&l15).collection_id) == object::uid_to_inner(&l1.id), C5);
         let l8 = false;
@@ -287,10 +287,9 @@ public entry fun batch_burn_art20(l0: vector<NFT>, l1: &mut CollectionCap, l2: v
                 l8 = true;
             };
             assert!(l8, C6);
-            break;
             xf_ART20::burn_single_art20(l15, l1, freeze(l3));
             l11 = l11 + 1u64;
-            continue 'loop_70
+            break
         }
     };
     while (&l2.len() > 0u64) {
@@ -335,7 +334,7 @@ public entry fun batch_burn_art20_by_asset_ids(l0: &mut CollectionCap, l1: vecto
         table::add(&mut l21, l9, true);
         let l14 = false;
         let l24 = vector[];
-        'loop_112: while (!(vector::is_empty(&l1))) {
+        while (!(vector::is_empty(&l1))) {
             let l20 = (&mut l1).pop_back();
             if (!(l14) && *(&(&l20).collection_id) == l13 && *(&(&l20).asset_id) == l9) {
                 assert!(l22 == *(&(&l20).creator), C3);
@@ -352,13 +351,12 @@ public entry fun batch_burn_art20_by_asset_ids(l0: &mut CollectionCap, l1: vecto
                         l12 = true;
                     };
                     assert!(l12, C6);
-                    break;
                     *(&mut l0.current_supply) = xf_ART20::safe_sub(*(&l0.current_supply), 1u64);
                     event::emit(BurnEvent { owner: l22, id: object::uid_to_inner(&(&l20).id) });
                     let NFT { id: reg_147, artinals_id: reg_148, creator: reg_149, name: reg_150, description: reg_151, uri: reg_152, logo_uri: reg_153, asset_id: reg_154, max_supply: reg_155, collection_id: reg_156, category: reg_157 } = l20;
                     object::delete(reg_147 : 0x2::object::UID);
                     l14 = true;
-                    continue 'loop_112
+                    break
                 }
             } else {
                 (&mut l24).push_back(l20)
@@ -953,7 +951,7 @@ public fun get_nfts_by_asset_ids(l0: &CollectionCap, l1: &vector<NFT>, l2: vecto
     let l14 = vector[];
     let l4 = &l2.len();
     let l9 = 0u64;
-    'loop_16: while (l9 < l4) {
+    while (l9 < l4) {
         let l5 = *(&(&l2)[l9]);
         let l7 = false;
         let l12 = l1.len();
@@ -974,7 +972,7 @@ public fun get_nfts_by_asset_ids(l0: &CollectionCap, l1: &vector<NFT>, l2: vecto
                 (&mut l14).push_back(l5)
             };
             l9 = l9 + 1u64;
-            continue 'loop_16
+            break
         }
     };
     return (l13, l15, l8, l14)
@@ -1054,18 +1052,12 @@ public entry fun mint_additional_art20(l0: &mut CollectionCap, l1: u64, l2: &mut
                 l10 = true;
             };
             if (!(l10)) {
+                transfer::transfer(UserBalance { id: object::new(l5), collection_id: l11, balance: l1 }, l14);
                 break
             };
-            unstructured {
-                goto 'label_132;
-            };
-            transfer::transfer(UserBalance { id: object::new(l5), collection_id: l11, balance: l1 }, l14);
-            unstructured {
-                goto 'label_132;
-            }
+            break
         }
     };
-    /* block 132 */;
     let l13 = 0u64;
     while (l13 < l1) {
         *(&mut l2.last_id) = *(&l2.last_id) + 1u64;
@@ -1189,14 +1181,11 @@ public entry fun set_collection_value_source(l0: &mut CollectionCap, l1: vector<
                 l10 = false;
             };
             assert!(l10, C16);
-            unstructured {
-                goto 'label_105;
-            }
+            break
         }
     } else {
         assert!(string::length(&l9) == 64u64, C17)
     };
-    /* block 105 */;
     if (option::is_none(&l0.value_source)) {
         *(&mut l0.value_source) = option::some(l9)
     } else {
@@ -1242,7 +1231,7 @@ public entry fun transfer_art20(l0: vector<NFT>, l1: vector<address>, l2: &Colle
     let l7 = vector[];
     let l12 = object::uid_to_inner(&l2.id);
     let l14 = 0u64;
-    'loop_101: while (l14 < l19) {
+    while (l14 < l19) {
         let l17 = *(&(&l1)[l14]);
         xf_ART20::check_deny_list_restrictions(l2, l17);
         let l18 = UserBalance { id: object::new(l5), collection_id: l12, balance: 1u64 };
@@ -1261,14 +1250,13 @@ public entry fun transfer_art20(l0: vector<NFT>, l1: vector<address>, l2: &Colle
                 l11 = true;
             };
             assert!(l11, C6);
-            break;
             (&mut l23).push_back(object::uid_to_inner(&(&l21).id));
             (&mut l7).push_back(1u64);
             event::emit(TransferEvent { from: l20, to: l17, id: object::uid_to_inner(&(&l21).id), royalty: 0u64, asset_id: *(&(&l21).asset_id) });
             transfer::transfer(l21, l17);
             transfer::transfer(l18, l17);
             l14 = l14 + 1u64;
-            continue 'loop_101
+            break
         }
     };
     while (&l3.len() > 0u64) {
@@ -1335,11 +1323,11 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
                 l13 = true;
             };
             assert!(l13, C6);
-            break;
             (&mut l26).push_back(l21);
             (&mut l9).push_back(1u64);
             transfer::transfer(vector::remove(&mut l1, l17), l4);
             l15 = true;
+            break
         };
         assert!(l15, C15);
         l16 = l16 + 1u64;

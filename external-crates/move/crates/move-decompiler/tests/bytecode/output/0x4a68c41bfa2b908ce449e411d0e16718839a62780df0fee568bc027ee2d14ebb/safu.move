@@ -285,27 +285,22 @@ public(friend) fun get_user_share(l0: &Registry, l1: u64, l2: address): Option<S
         let l6 = big_vector::borrow_slice(&l9.share, l7);
         let l4 = 0u64;
         loop {
-            if (l4 < l5) {
-                if (*(&(big_vector::borrow_from_slice(l6, l4 % l8)).user) == l2) {
-                    return option::some(*(big_vector::borrow_from_slice(l6, l4 % l8)))
-                };
-                if (l4 + 1u64 < l5 && l4 + 1u64 % l8 == 0u64) {
-                    l7 = big_vector::get_slice_idx(l6) + 1u64;
-                    l6 = big_vector::borrow_slice(&l9.share, l7);
-                };
-                l4 = l4 + 1u64;
-            } else {
+            if (l4 >= l5) {
                 if (l4 == l5) {
-                    break
+                    return option::none()
                 };
-                unstructured {
-                    goto 'label_99;
-                }
-            }
-        };
-        return option::none()
+                break
+            };
+            if (*(&(big_vector::borrow_from_slice(l6, l4 % l8)).user) == l2) {
+                return option::some(*(big_vector::borrow_from_slice(l6, l4 % l8)))
+            };
+            if (l4 + 1u64 < l5 && l4 + 1u64 % l8 == 0u64) {
+                l7 = big_vector::get_slice_idx(l6) + 1u64;
+                l6 = big_vector::borrow_slice(&l9.share, l7);
+            };
+            l4 = l4 + 1u64;
+        }
     };
-    /* block 99 */;
     return option::none()
 }
 
