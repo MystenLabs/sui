@@ -128,9 +128,10 @@ impl<T> Watermarked<T> {
 }
 
 /// Per-request bucket-scan accounting, delivered via the `on_metrics`
-/// callback passed to `eval_bitmap_query_stream`. Fires exactly once
-/// when the eval pipeline is dropped (natural end, error, or consumer
-/// cancel).
+/// callback passed to `eval_bitmap_query_stream`. Fires once when the
+/// eval pipeline is dropped (natural end, error, or consumer cancel).
+/// The sole exception is the budget-misconfig early-out, which errors
+/// before any scan is set up and emits nothing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BitmapScanMetrics {
     /// Buckets actually evaluated (charged against the per-request
@@ -376,6 +377,9 @@ where
 {
     let leaves = query.leaf_count();
     if (budget as usize) < leaves {
+        // Misconfig guard: short-circuit before any scan setup. No
+        // `on_metrics` here — there's no scan to account for, and the
+        // error surfaces on its own. `on_metrics` is dropped uncalled.
         return async_stream::stream! {
             yield Err(anyhow::anyhow!(
                 "bitmap scan budget {budget} is insufficient for {leaves} leaf streams; \
@@ -1686,7 +1690,12 @@ mod tests {
             err.to_string().contains("insufficient for"),
             "expected misconfig error, got {err:?}"
         );
-        assert_eq!(metrics.lock().unwrap().unwrap().buckets_evaluated, 0);
+        // The misconfig guard short-circuits before any scan setup, so
+        // no scan metrics are emitted (the callback is dropped uncalled).
+        assert!(
+            metrics.lock().unwrap().is_none(),
+            "misconfig early-out should not emit scan metrics"
+        );
     }
 
     #[tokio::test]
