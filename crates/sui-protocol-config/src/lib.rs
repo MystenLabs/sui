@@ -5826,7 +5826,7 @@ mod test {
 
         let config = ProtocolConfig::get_for_max_version_UNSAFE();
         let rendered = config
-            .render::<serde_json::Value, _>(&mut Unmetered)
+            .render::<serde_json::Value>(&mut Unmetered)
             .expect("render should succeed");
 
         let max_args = rendered
@@ -5860,7 +5860,7 @@ mod test {
         ]);
 
         let rendered = config
-            .render::<serde_json::Value, _>(&mut Unmetered)
+            .render::<serde_json::Value>(&mut Unmetered)
             .expect("render should succeed under Unmetered budget");
         let allowlist = rendered
             .get("gasless_allowed_token_types")
@@ -5888,7 +5888,7 @@ mod test {
         )]);
 
         let rendered = config
-            .render::<prost_types::Value, _>(&mut Unmetered)
+            .render::<prost_types::Value>(&mut Unmetered)
             .expect("render to prost Value should succeed");
         let allowlist = rendered
             .get("gasless_allowed_token_types")
@@ -5930,7 +5930,7 @@ mod test {
 
         let config = ProtocolConfig::get_for_version(1.into(), Chain::Unknown);
         let rendered = config
-            .render::<serde_json::Value, _>(&mut Unmetered)
+            .render::<serde_json::Value>(&mut Unmetered)
             .expect("render should succeed");
         // The gasless allowlist key is present in every version's keyset, but with `None` value
         // for versions that predate the feature. That matches `attr_map`'s existing semantics
