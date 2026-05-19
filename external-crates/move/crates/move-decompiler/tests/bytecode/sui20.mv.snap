@@ -231,23 +231,14 @@ public fun mint(l0: &mut Global, l1: &Clock, l2: String, l3: u64, l4: Coin<SUI>,
             let l11 = &l7.users.len();
             if (l11 == l10 && l10 < C0) {
                 (&mut l7.users).push_back(l15);
-                unstructured {
-                    goto 'label_241;
-                }
-            } else {
-                if (l11 > C0) {
-                    break
-                };
-                unstructured {
-                    goto 'label_241;
-                }
+                break
             };
-            unstructured {
-                goto 'label_241;
-            }
+            if (l11 > C0) {
+                break
+            };
+            break
         }
     };
-    /* block 241 */;
     x2_transfer::public_transfer(Sui20 { id: object::new(l5), tick: *(&(&l7.meta).tick), amount: l3 }, l15);
     return l4
 }

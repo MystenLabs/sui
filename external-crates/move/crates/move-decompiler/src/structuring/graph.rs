@@ -211,14 +211,9 @@ impl Graph {
         &self,
         mut loop_nodes: HashSet<NodeIndex>,
         mut succ_nodes: HashSet<NodeIndex>,
-        loop_header: NodeIndex,
+        _loop_header: NodeIndex,
     ) -> (HashSet<NodeIndex>, HashSet<NodeIndex>) {
         let mut new_nodes = succ_nodes.clone();
-        let dom_nodes = self
-            .dom_tree
-            .get(loop_header)
-            .all_children()
-            .collect::<HashSet<_>>();
 
         while succ_nodes.len() > 1 && !new_nodes.is_empty() {
             new_nodes.clear();
@@ -234,10 +229,17 @@ impl Graph {
                 {
                     loop_nodes.insert(node);
                     succ_nodes.remove(&node);
+                    // When absorbing `node` into the body, its outgoing CFG edges to nodes
+                    // not in `loop_nodes` are now exit edges of the (enlarged) body. Don't
+                    // filter by dom_tree subtree of the header — a legitimate loop break
+                    // target (a label owned by an outer scope) is not dominated by the loop
+                    // header but is the loop's true successor; dropping it would leave
+                    // `succ_nodes` empty so `insert_breaks` couldn't rewrite the break Jump
+                    // and the goto leaks out as residue.
                     let nodes = self
                         .cfg
                         .neighbors_directed(node, petgraph::Direction::Outgoing)
-                        .filter(|node| !loop_nodes.contains(node) && dom_nodes.contains(node));
+                        .filter(|node| !loop_nodes.contains(node));
                     new_nodes.extend(nodes);
                 }
             }

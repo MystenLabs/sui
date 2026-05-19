@@ -176,19 +176,16 @@ public fun cancel_limit_order(l0: &mut OrderManager, l1: u64, l2: &Clock, l3: &m
                     loop {
                         if (l7 < l9) {
                             if (*(&(&l0.active_orders)[l7]) == l12) {
-                                break
-                            };
-                            l7 = l7 + 1u64;
-                            continue
+                                
+                            } else {
+                                l7 = l7 + 1u64;
+                                continue
+                            }
                         };
-                        break;
                         event::emit(OCOOrderCancelledEvent { oco_group_id: l15, cancelled_order_id: l12, user: *(&l0.owner), cancelled_at: l6 });
-                        unstructured {
-                            goto 'label_188;
-                        }
+                        break
                     }
                 };
-                /* block 188 */;
                 table::add(&mut l0.receipts, l12, l13)
             }
         }
@@ -315,16 +312,14 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
     loop {
         if (l9 < l5) {
             if (*(&(&l0.active_orders)[l9]) == l11) {
-                break
-            };
-            l9 = l9 + 1u64;
-            continue
+                
+            } else {
+                l9 = l9 + 1u64;
+                continue
+            }
         };
-        break;
         event::emit(OCOOrderCancelledEvent { oco_group_id: l14, cancelled_order_id: l11, user: *(&l0.owner), cancelled_at: l7 });
-        unstructured {
-            goto 'label_205;
-        }
+        break
     }
 }
 
@@ -422,19 +417,16 @@ public fun handle_oco_fill(l0: &mut OrderManager, l1: u64, l2: &Clock, l3: &mut 
         loop {
             if (l9 < l11) {
                 if (*(&(&l0.active_orders)[l9]) == l1) {
-                    break
-                };
-                l9 = l9 + 1u64;
-                continue
+                    
+                } else {
+                    l9 = l9 + 1u64;
+                    continue
+                }
             };
-            break;
             event::emit(OCOOrderFilledEvent { oco_group_id: l16, filled_order_id: l1, cancelled_order_id: l13, user: *(&l0.owner), filled_at: l5 });
-            unstructured {
-                goto 'label_225;
-            }
+            break
         }
-    };
-    /* block 225 */
+    }
 }
 
 public entry fun handle_oco_fill_entry(l0: &mut OrderManager, l1: OrderReceipt, l2: &Clock, l3: &mut TxContext) {

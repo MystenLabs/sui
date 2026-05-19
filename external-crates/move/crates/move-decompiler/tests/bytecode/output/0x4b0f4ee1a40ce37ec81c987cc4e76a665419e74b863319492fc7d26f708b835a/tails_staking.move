@@ -728,10 +728,7 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
     let l4 = 0u64;
     let (l12, l5, l7);
     loop {
-        if (l4 >= l6) {
-            /* block 151 */;
-            abort C12
-        };
+        assert!(l4 < l6, C12);
         l12 = big_vector::borrow_from_slice_mut(l8, l4 % l11);
         if (*(&l12.user) == l2) {
             l5 = 0u64;
@@ -745,24 +742,16 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
         };
         l4 = l4 + 1u64;
     };
-    let l13;
-    loop {
-        if (l5 < l7) {
-            if (*(&l14[*(&(&l12.tails)[l5]) - 1u64]) == l1) {
-                l13 = object_table::remove(&mut l0.tails, l1);
-                if (vector::is_empty(&l12.tails)) {
-                    break
-                };
-                break
+    while (l5 < l7) {
+        if (*(&l14[*(&(&l12.tails)[l5]) - 1u64]) == l1) {
+            let l13 = object_table::remove(&mut l0.tails, l1);
+            if (vector::is_empty(&l12.tails)) {
+                
             };
-            l5 = l5 + 1u64;
-        } else {
-            unstructured {
-                goto 'label_151;
-            }
-        }
-    };
-    return l13
+            return l13
+        };
+        l5 = l5 + 1u64;
+    }
 }
 
 entry fun update_tails_staking_registry_config(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64, l3: u64, l4: &TxContext) {
