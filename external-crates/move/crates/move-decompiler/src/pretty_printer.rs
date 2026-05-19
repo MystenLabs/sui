@@ -619,7 +619,12 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                 D::text("let").concat_space(lhs_doc)
             }
             Exp::Call((m, f), args) => {
-                D::text(format!("{m}::{f}")).concat(exp_list(context, args).parens())
+                let head = if m.is_builtin() {
+                    D::text(format!("{f}"))
+                } else {
+                    D::text(format!("{m}::{f}"))
+                };
+                head.concat(exp_list(context, args).parens())
             }
             Exp::Abort(e) => D::text("abort").concat_space(recur(context, e)),
             Exp::Borrow(mutable, e) => {

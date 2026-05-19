@@ -20,9 +20,8 @@ module while_cases {
             if (l0) {
                 l1 = l1 + 1u64;
                 continue;
-            } else {
-                break;
             }
+            break;
         }
     }
 
@@ -32,10 +31,8 @@ module while_cases {
             if (l0 % 2u64 == 0u64) {
                 l0 = l0 + 1u64;
                 continue;
-            } else {
-                l0 = l0 + 2u64;
-                continue;
             }
+            l0 = l0 + 2u64;
         }
     }
 
@@ -51,13 +48,11 @@ module while_cases {
                 if (l1 % 2u64 == 0u64) {
                     l1 = l1 + 1u64;
                     continue;
-                } else {
-                    l1 = l1 + 2u64;
-                    continue;
                 }
-            } else {
-                break;
+                l1 = l1 + 2u64;
+                continue;
             }
+            break;
         }
     }
 
@@ -66,9 +61,13 @@ module while_cases {
         let l1 = 0u64;
         let l2 = 0u64;
         while(l0 < 10u64) {
-            while(l1 < 10u64) {
-                l2 = l2 + l0 * l1 + l1;
-                l1 = l1 + 1u64;
+            loop {
+                if (l1 < 10u64) {
+                    l2 = l2 + l0 * l1 + l1;
+                    l1 = l1 + 1u64;
+                    continue;
+                }
+                break;
             }
             l0 = l0 + 1u64;
         }
@@ -85,9 +84,8 @@ module while_cases {
             if (l0) {
                 l1 = l1 + 1u64;
                 continue;
-            } else {
-                break;
             }
+            break;
         }
     }
 
