@@ -325,7 +325,6 @@ pub struct RandomnessManager {
 }
 
 impl RandomnessManager {
-    
     // Returns None in case of invalid input or other failure to initialize DKG.
     pub async fn try_new(
         epoch_store_weak: Weak<AuthorityPerEpochStore>,
