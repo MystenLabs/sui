@@ -2,7 +2,7 @@
 title: Security Best Practices
 sidebar_label: Best Practices
 description: Overview of security best practices on Sui.
-keywords: [ security, security best practices ]
+keywords: [ security, security best practices, smart contract security, access control, package upgrades, key management ]
 ---
 
 This page describes a few recommended security best practices when developing applications on Sui. These recommendations are not comprehensive for all application types, use cases, or architectures. Do your own research and have production applications audited thoroughly.
@@ -11,19 +11,43 @@ This page describes a few recommended security best practices when developing ap
 
 #### Audit your contracts
 
-Ensure transactions operate on smart contracts you trust and have audited. Sui smart contracts are defined as immutable objects to prevent modification.
+Ensure transactions operate on smart contracts you trust and have audited. Sui packages are immutable once published. If a package is upgradeable, the `UpgradeCap` controls publication of newer versions, so audit both the current package and its upgrade policy.
 
-#### Rely on Move's built-in safety
+#### Govern package upgrades
 
-Move's strong static typing, resource-oriented model, and bytecode safety checks help prevent common vulnerabilities such as reentrancy and integer overflows. Build on these guarantees rather than working around them.
+An upgradeable package can publish a new onchain version at any time, and the new version controls all future behavior. Treat the `UpgradeCap` as a security-critical capability:
 
-#### Random calls must be last in a PTB
+- Protect the `UpgradeCap` with the same care as an admin capability. Whoever holds it can change your package.
 
-This prevents `test-and-abort` attacks where an attacker inspects the result and aborts if unfavorable.
+- Apply a [custom upgrade policy](/develop/publish-upgrade-packages/custom-policies), a multisig, or a timelock so that no single key can ship an [upgrade](/develop/publish-upgrade-packages/upgrade) silently.
 
-#### Mark functions as entry
+- Call `make_immutable` on the `UpgradeCap` when you no longer need upgrades. This permanently freezes the package.
 
-This prevents other Move modules from calling randomness-consuming functions unexpectedly.
+#### Verify packages and dependencies
+
+Before you trust a package, verify its exact onchain package ID, the IDs of its dependencies, and its upgrade policy. Do not rely on package names or frontend constants alone, because those can point anywhere. A dependency that is still upgradeable can change after your audit.
+
+#### Rely on Move's safety as a foundation, not a guarantee
+
+Move's type system, resource model, bytecode verifier, and checked arithmetic reduce entire classes of bugs. They do not replace business-logic review, invariant testing, access control checks, or economic analysis. Treat the language guarantees as a foundation, and still review the logic that sits on top of them.
+
+#### Validate invariants and object relationships
+
+Many Sui bugs use a valid object in the wrong relationship. Inside every privileged function, validate amounts, object IDs, dynamic field keys, ownership expectations, and the relationships between objects, such as a capability matching the object it governs. Check zero and overflow edge cases even though Move arithmetic is checked, because an unexpected abort can still be a denial of service.
+
+#### Emit events for privileged actions
+
+Emit [events](/develop/accessing-data/using-events) for admin changes, allowlist updates, mint and burn operations, denylist actions, configuration changes, oracle updates, and emergency pauses. Events make privileged activity auditable and let offchain monitoring detect unexpected behavior quickly.
+
+## Onchain randomness
+
+#### Limit what follows a random call in a PTB
+
+Sui restricts which commands can follow a `MoveCall` that consumes `Random` in the same [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks). Do not depend on post-random commands other than the allowed object transfers and coin merges. This prevents `test-and-abort` attacks, where an attacker inspects the result and aborts the transaction if the outcome is unfavorable.
+
+#### Mark randomness-consuming functions as private `entry`
+
+Declare functions that consume randomness as `entry` functions that are not `public`. A non-`public` `entry` function can be called directly from a transaction but not from another Move module. This prevents other modules from composing your randomness-consuming function into a larger call that enables a test-and-abort attack.
 
 #### Never accept `RandomGenerator` as a parameter
 
@@ -31,9 +55,11 @@ Always create the generator internally to prevent manipulation.
 
 #### Balance gas across outcome paths
 
-Design functions so all outcomes consume similar gas, preventing attackers from setting a gas budget that only succeeds on favorable outcomes.
+Design functions so all outcomes consume similar gas. Otherwise an attacker can set a gas budget that only succeeds on favorable outcomes.
 
-#### Consider a two-transaction commit-reveal pattern for high-stakes applications.
+#### Consider a two-transaction commit-reveal pattern
+
+For high-stakes applications, consider a two-transaction commit-reveal pattern to further reduce the influence a caller has over a random outcome.
 
 ## Seal (Encryption and Access Control)
 
@@ -45,7 +71,7 @@ Use envelope encryption for sensitive or large data: encrypt data with your own 
 
 #### Ensure correct access policy
 
-The Move code in `seal_approve*` functions must accurately express your intended access rules. Upgradeable packages allow policy changes at any time. 
+The Move code in `seal_approve*` functions must accurately express your intended access rules. If the package containing `seal_approve*` remains upgradeable, whoever controls its upgrade path can change future access policy. Govern that upgrade path like a security-critical capability.
 
 ## Nautilus
 
@@ -59,29 +85,37 @@ Review all libraries used in the enclave.
 
 #### Use short timestamps
 
-Reduces the replay attack window.
+Short timestamps reduce the replay attack window.
 
-#### Monitor PCRs
+#### Verify and enforce expected PCRs
 
-Alert on unexpected PCR values.
+Before you trust enclave output, verify that the platform configuration registers (PCRs) match the values you expect for your enclave image. Reject output from an enclave with unexpected PCRs, and alert on any drift.
 
-#### Don't rely solely on TEE guarantees.
+#### Protect signed enclave payloads
+
+Apply signed payload hygiene to every message the enclave signs. Use domain or intent separation so a signature for one purpose cannot be replayed for another. Check timestamp freshness, and include a nonce or request ID wherever replay matters.
+
+#### Don't rely solely on TEE guarantees
+
+A trusted execution environment reduces risk but does not remove it. Combine it with the other practices on this page.
 
 ## Coin and capability security
 
 #### Protect TreasuryCap
 
-It controls minting and burning permissions.
+The `TreasuryCap` controls minting and burning permissions.
 
 #### Protect MetadataCap
 
-It controls coin branding.
+The `MetadataCap` controls coin branding.
 
 #### Protect DenyCapV2
 
-It can restrict coin usage.
+The `DenyCapV2` can restrict coin usage, which is a powerful compliance and centralization control. Whoever holds it can block addresses from transacting with the coin. Govern it transparently, and document who can use it.
 
-#### Set supply model early and understand the implications of fixed, burn-only, or flexible supply.
+#### Set supply model early
+
+Set the supply model early, and understand the implications of a fixed, burn-only, or flexible supply.
 
 ## Access control
 
@@ -119,13 +153,13 @@ Treat admin capabilities as high-value assets:
 
 Design a way to revoke a compromised or outdated capability before you publish the package. Common options include:
 
-- A function that destroys a capability the holder still controls.
-
 - An onchain registry that records valid capability IDs, where privileged functions check the registry and reject revoked IDs.
 
-- A version or epoch field on the capability that you can advance to invalidate older capabilities.
+- A version or epoch field that privileged functions check, which you can advance to invalidate older capabilities.
 
-Without a revocation path, a leaked capability remains valid for the life of the package.
+- A function that destroys a capability, which only helps when the holder still controls the capability and cooperates.
+
+For a capability that is lost or held in someone else's custody after a compromise, you cannot rely on destroying it. A registry check or version check is the only revocation mechanism that works without the holder's cooperation. Without one, a leaked capability remains valid for the life of the package.
 
 #### Validate capability and object relationships
 
@@ -135,15 +169,53 @@ When a capability governs a specific object, store the object's ID in the capabi
 
 Anyone can submit a transaction that references a [shared object](/develop/objects/object-ownership/shared). A `public` function that takes a shared object runs for any caller unless the function itself checks authorization. Never assume access to a shared object is restricted. Require a capability, validate the sender, or check object ownership inside every privileged function that touches shared state.
 
-## Key management
+## Oracle and offchain data
 
-#### Keep your private signature key private. 
+#### Validate offchain data before you use it
 
-No other party can operate on your owned assets without it. 
+If your contracts consume offchain data, such as price feeds, validate it before you act on it. Check the freshness of the data, confirm the source, and verify any signatures. Apply replay protection so an old data point cannot be submitted again. Define explicit failure behavior for when the data is missing, stale, or invalid, so a feed outage does not produce an unsafe result.
 
-#### Verify recipient addresses carefully.
+## Emergency controls
+
+#### Consider pause and rate-limit mechanisms
+
+For high-value applications, consider a pause, kill-switch, or rate-limit mechanism that can contain an active incident. Document who can trigger each control and how you prevent abuse, because an emergency control is itself a privileged operation. Gate it with a capability, and emit an event whenever someone uses it.
+
+## Frontend and transaction signing
+
+#### Show human-readable transaction intent
+
+Show users a human-readable description of what a transaction does before they sign it. Avoid blind signing, where the user approves opaque bytes. Dry-run or simulate the transaction when possible, so the user and your app can see the expected effects first.
+
+#### Verify package IDs in the client
+
+Verify the exact package IDs your frontend calls. Do not trust a package only because of its name or a constant compiled into an older build. Pin the IDs you audited, and check them at runtime.
+
+#### Domain-separate offchain signed messages
+
+When your app signs messages offchain, such as personal messages, include a domain separator and an intent so a signature created for one context cannot be replayed in another. See [Intent Signing](/develop/transactions/transaction-auth/intent-signing) for how Sui separates signing domains.
+
+## User and operator key management
+
+#### Keep your private signature key private
+
+No other party can operate on your owned assets without your private signature key.
+
+#### Verify recipient addresses carefully
 
 Sending objects to an incorrect address might have irrevocable effects.
+
+#### Use multisig or hardware custody for privileged keys
+
+Hold admin keys and capabilities in a [multisig](/develop/transactions/transaction-auth/multisig) address, a hardware wallet, or a dedicated custody setup. Avoid keeping privileged keys in a single hot wallet.
+
+#### Separate keys by role and network
+
+Use separate keys for the deployer, the admin, and routine operations, so a compromise of one role does not grant the others. Keep Testnet and Mainnet keys separate, so a test key can never sign a production transaction.
+
+#### Document recovery and rotation procedures
+
+Write down how to recover and rotate every privileged key before you launch. A documented procedure is what lets you respond quickly when a key is lost or compromised.
 
 ## General network security
 
