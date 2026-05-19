@@ -13,6 +13,7 @@ mod reconstruct_match;
 mod remove_trailing_continue;
 mod remove_trailing_return;
 mod strip_loop_labels;
+mod utils;
 
 pub use collect_uses::{collect_local_names, collect_uses};
 

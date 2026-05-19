@@ -51,9 +51,9 @@ public fun increase_speed(l0: &mut Action, l1: u64) {
 }
 
 public fun speed(l0: &Action): u64 {
+    let l1;
     let l3 = l0;
     let l2 = l3;
-    let l1;
     match (l2) {
         Stop => {
             abort 0u64
@@ -66,5 +66,6 @@ public fun speed(l0: &Action): u64 {
             let Action::ChangeSpeed { pos0: reg_16 } = &l3;
             l1 = *reg_16 : &u64;
         }
-    }
+    };
+    return l1
 }

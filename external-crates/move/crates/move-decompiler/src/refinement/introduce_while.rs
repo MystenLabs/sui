@@ -1,9 +1,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ast::Exp, refinement::Refine};
-
-use move_stackless_bytecode_2::ast::PrimitiveOp;
+use crate::{
+    ast::Exp,
+    refinement::{Refine, utils::negate},
+};
 
 pub fn refine(exp: &mut Exp) -> bool {
     let r1 = IntroduceWhile0.refine(exp);
@@ -89,26 +90,6 @@ impl Refine for IntroduceWhile1 {
                 true
             }
             _ => false,
-        }
-    }
-}
-
-// ------------------------------------------------------------------------------------------------
-// Helpers
-
-// Optimize the given expression by applying a series of local rewrites.
-fn negate(exp: &mut Exp) {
-    // TODO: simplify double negation, De Morgan, etc.
-    use Exp as E;
-    match exp {
-        E::Primitive { op, args } if *op == PrimitiveOp::Not && args.len() == 1 => {
-            *exp = args.pop().unwrap();
-        }
-        _ => {
-            *exp = Exp::Primitive {
-                op: PrimitiveOp::Not,
-                args: vec![exp.clone()],
-            };
         }
     }
 }

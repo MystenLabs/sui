@@ -22,10 +22,11 @@ pub struct Graph {
     pub loop_heads: HashSet<NodeIndex>,
     pub back_edges: HashMap<NodeIndex, HashSet<NodeIndex>>,
     pub post_dominators: Dominators<NodeIndex>,
-    /// For each node, the set of enclosing loop heads whose bodies contain it. Empty for
-    /// top-level nodes. Built once in `Graph::new` and read by `structure_acyclic_region`
-    /// to compare the loop scope of `start` against that of `post_dominator`.
-    pub loop_scopes: HashMap<NodeIndex, HashSet<NodeIndex>>,
+    /// For each non-loop-head node, the succ_nodes of every loop whose body contains it.
+    /// `structure_acyclic_region`'s orphan hoist consults this so it doesn't eat an
+    /// enclosing-loop successor that `structure_loop` will append after the `Loop` form;
+    /// `structure_code_node`'s `next` fusion consults it for the same reason.
+    pub loop_exits: HashMap<NodeIndex, HashSet<NodeIndex>>,
 }
 
 impl Graph {
@@ -73,28 +74,22 @@ impl Graph {
             back_edges,
             post_dominators,
             return_,
-            loop_scopes: HashMap::new(),
+            loop_exits: HashMap::new(),
         };
-        // For each loop head, compute its body and record membership. Precomputing here
-        // turns the per-call scope-equality check in `structure_acyclic_region` into O(1).
-        let mut loop_scopes: HashMap<NodeIndex, HashSet<NodeIndex>> = HashMap::new();
+        // Populate `loop_exits` from the loops' bodies after the graph is otherwise built so
+        // `find_loop_nodes` has the dom-tree and back-edges available.
+        let mut loop_exits: HashMap<NodeIndex, HashSet<NodeIndex>> = HashMap::new();
         for &lh in &graph.loop_heads {
-            let (body, _) = graph.find_loop_nodes(lh);
-            for node in body {
-                loop_scopes.entry(node).or_default().insert(lh);
+            let (body, succs) = graph.find_loop_nodes(lh);
+            for body_node in &body {
+                loop_exits
+                    .entry(*body_node)
+                    .or_default()
+                    .extend(succs.iter().copied());
             }
         }
-        graph.loop_scopes = loop_scopes;
+        graph.loop_exits = loop_exits;
         graph
-    }
-
-    /// The set of loop heads whose bodies contain `node`. Empty for top-level nodes. Two
-    /// nodes share a loop scope iff this returns equal sets for them.
-    pub fn loop_scope_of(&self, node: NodeIndex) -> &HashSet<NodeIndex> {
-        static EMPTY: std::sync::OnceLock<HashSet<NodeIndex>> = std::sync::OnceLock::new();
-        self.loop_scopes
-            .get(&node)
-            .unwrap_or_else(|| EMPTY.get_or_init(HashSet::new))
     }
 
     pub fn update_latch_nodes(&mut self, node: NodeIndex, latch: NodeIndex) {
@@ -169,8 +164,13 @@ impl Graph {
             }
         }
 
+        // Iterate `loop_nodes` in sorted order — it's a HashSet so iteration order is
+        // otherwise non-deterministic, and that order leaks into `refine_loop_nodes`'s
+        // greedy fixpoint, which can produce different SCC-boundary refinements run-to-run.
+        let mut loop_nodes_sorted: Vec<NodeIndex> = loop_nodes.iter().copied().collect();
+        loop_nodes_sorted.sort_by_key(|n| n.index());
         let mut succ_nodes = HashSet::new();
-        for node in &loop_nodes {
+        for node in &loop_nodes_sorted {
             for successor in self
                 .cfg
                 .neighbors_directed(*node, petgraph::Direction::Outgoing)
@@ -200,7 +200,11 @@ impl Graph {
 
         while succ_nodes.len() > 1 && !new_nodes.is_empty() {
             new_nodes.clear();
-            for node in succ_nodes.clone() {
+            // Sort for determinism: HashSet iteration order leaks into the refinement's
+            // greedy frontier expansion.
+            let mut sorted_succs: Vec<NodeIndex> = succ_nodes.iter().copied().collect();
+            sorted_succs.sort_by_key(|n| n.index());
+            for node in sorted_succs {
                 if self
                     .cfg
                     .neighbors_directed(node, petgraph::Direction::Incoming)
@@ -268,13 +272,16 @@ fn find_loop_heads_and_back_edges<N, E>(
     (loop_heads, back_edges)
 }
 
+/// Vanilla post-dominator analysis. `structure_acyclic_region` consults the result only to
+/// identify a Switch/IfElse's convergence point so we emit a `Jump` rather than embedding
+/// the join into one of the arms — the owned-children hoist then places the join as a
+/// sibling. No filter on `Code(_, _, None)` sinks: the hoist handles assertion / early-return
+/// patterns directly via the per-scope sibling placement.
 fn compute_post_dominators<N, E>(
     config: &Config,
     cfg: &petgraph::Graph<N, E>,
     input: &BTreeMap<D::Label, D::Input>,
 ) -> (NodeIndex, Dominators<NodeIndex>) {
-    // Build a reversed copy of the CFG and add a synthetic `return_` node. Dominators rooted
-    // at `return_` in this graph are post-dominators of the original.
     let mut rev = petgraph::graph::DiGraph::<(), ()>::from_edges(
         cfg.edge_references().map(|e| (e.target(), e.source())),
     );
@@ -283,8 +290,7 @@ fn compute_post_dominators<N, E>(
         println!("Return node: {return_:?}");
     }
 
-    // Wire `return_` to each original sink (a node with no outgoing edges in the original CFG,
-    // which is a node with no incoming edges in the reversed graph).
+    // Wire `return_` to each original sink (no outgoing edges in cfg = no incoming in rev).
     for node in rev.node_indices() {
         if node == return_ || !input.contains_key(&node) {
             continue;
@@ -294,11 +300,6 @@ fn compute_post_dominators<N, E>(
             .count()
             == 0
         {
-            if !matches!(input.get(&node), Some(D::Input::Code(_, _, None)))
-                && config.debug_print.control_flow_graph
-            {
-                println!("Node {node:?} with no outs");
-            }
             rev.add_edge(return_, node, ());
         }
     }
@@ -312,18 +313,10 @@ fn compute_post_dominators<N, E>(
 }
 
 /// Add *impossible edges* (the folk-literature name for synthetic edges introduced to make
-/// post-domination total) from `return_` to one representative of each terminal region of the
+/// post-domination total) from `return_` to one representative of each terminal SCC of the
 /// original CFG — an infinite loop or abort-cycle that never reaches a real exit. Without
 /// them, `simple_fast` leaves `immediate_dominator` undefined for nodes in those regions and
 /// structuring later crashes on `.unwrap()`.
-///
-/// We identify terminal regions as terminal SCCs of the original CFG: a strongly-connected
-/// component is *terminal* when every outgoing edge from any of its nodes stays inside the
-/// SCC, so execution that enters never leaves. (The singleton-sink case slips through this
-/// check vacuously and gets a redundant impossible edge — already wired up by the sinks pass
-/// — but `simple_fast` handles the duplicate fine.) For each terminal SCC we pick the
-/// highest-indexed input node as the representative; any node in the SCC would suffice to
-/// make the whole SCC post-dominator-defined.
 fn add_infinite_loop_post_dominators<N, E>(
     config: &Config,
     rev: &mut DiGraph<(), ()>,

@@ -5,11 +5,7 @@ if (0) {
     if (1) {
         if (2) {
             { 3 }
-        } else {
-            jump<APD> NodeIndex(4);
         }
-    } else {
-        jump<APD> NodeIndex(4);
     }
 }
 { 4 }
