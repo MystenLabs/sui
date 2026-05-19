@@ -238,6 +238,7 @@ fn rewrite_self_types(exp: &mut Exp, current_mid: ModuleId<Symbol>) {
                 rewrite_self_types(a, current_mid);
             }
         }
+        Exp::Block(_, body) => rewrite_self_types(body, current_mid),
         Exp::Break(_)
         | Exp::Continue(_)
         | Exp::Declare(_)
@@ -448,6 +449,7 @@ fn collect_local_names_exp(exp: &Exp, out: &mut BTreeSet<Symbol>) {
                 }
             }
         }
+        Exp::Block(_, body) => collect_local_names_exp(body, out),
     }
 }
 
@@ -540,6 +542,7 @@ fn count_type_refs_exp(exp: &Exp, out: &mut BTreeMap<(ModuleId<Symbol>, Symbol),
                 count_type_refs_exp(a, out);
             }
         }
+        Exp::Block(_, body) => count_type_refs_exp(body, out),
         Exp::Break(_)
         | Exp::Continue(_)
         | Exp::Declare(_)
@@ -647,6 +650,7 @@ fn count_module_refs_exp(
                 count_module_refs_exp(a, type_uses, out);
             }
         }
+        Exp::Block(_, body) => count_module_refs_exp(body, type_uses, out),
         Exp::Break(_)
         | Exp::Continue(_)
         | Exp::Declare(_)
@@ -725,6 +729,7 @@ fn rewrite(
                 rewrite(a, uses, type_uses);
             }
         }
+        Exp::Block(_, body) => rewrite(body, uses, type_uses),
         Exp::Break(_)
         | Exp::Continue(_)
         | Exp::Declare(_)

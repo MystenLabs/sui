@@ -1,7 +1,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ast::Exp, refinement::Refine};
+use crate::{
+    ast::Exp,
+    refinement::{
+        Refine,
+        utils::{peek, peek_mut},
+    },
+};
 
 pub fn refine(exp: &mut Exp) -> bool {
     let r1 = LoopRemoveTrailingContinue.refine(exp);
@@ -21,10 +27,10 @@ impl Refine for LoopRemoveTrailingContinue {
         };
         let loop_label = *loop_label;
 
-        match &mut **body {
+        match peek_mut(body) {
             Exp::Seq(seq) if !seq.is_empty() => {
                 // Only drop a trailing continue if it targets this loop (label matches).
-                if matches!(seq.last(), Some(Exp::Continue(l)) if *l == loop_label) {
+                if matches!(seq.last().map(peek), Some(Exp::Continue(l)) if *l == loop_label) {
                     seq.pop();
                     true
                 } else {
@@ -32,7 +38,7 @@ impl Refine for LoopRemoveTrailingContinue {
                 }
             }
             Exp::Continue(l) if *l == loop_label => {
-                **body = Exp::Seq(vec![]);
+                *peek_mut(body) = Exp::Seq(vec![]);
                 true
             }
             _ => false,
@@ -52,9 +58,9 @@ impl Refine for WhileRemoveTrailingContinue {
         };
         let loop_label = *loop_label;
 
-        match &mut **body {
+        match peek_mut(body) {
             Exp::Seq(seq) if !seq.is_empty() => {
-                if matches!(seq.last(), Some(Exp::Continue(l)) if *l == loop_label) {
+                if matches!(seq.last().map(peek), Some(Exp::Continue(l)) if *l == loop_label) {
                     seq.pop();
                     true
                 } else {
@@ -62,7 +68,7 @@ impl Refine for WhileRemoveTrailingContinue {
                 }
             }
             Exp::Continue(l) if *l == loop_label => {
-                **body = Exp::Seq(vec![]);
+                *peek_mut(body) = Exp::Seq(vec![]);
                 true
             }
             _ => false,

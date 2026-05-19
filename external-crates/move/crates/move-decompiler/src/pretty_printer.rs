@@ -199,18 +199,63 @@ fn function(context: &Context, fun: &Function) -> Doc {
     let header = fun_header_doc(fun);
     let code = &fun.code;
 
+    // Notice for input blocks the structurer received but never emitted. Prepending it
+    // inside the function braces puts the warning right above the recovered source so a
+    // reader of the decompiled file can't miss it.
+    let unstructured_notice: Option<Doc> = if fun.unstructured_blocks.is_empty() {
+        None
+    } else {
+        let ids = fun
+            .unstructured_blocks
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        Some(D::text(format!(
+            "// Did not structure and emit blocks {ids}"
+        )))
+    };
+
     // Three cases for the body to avoid double-bracing:
     // - empty Seq (e.g., from a refined-away trailing `return`) -> just `{}`
-    // - non-empty Seq -> already renders as `{ ... }`, use it as-is
+    // - non-empty Seq, or a `Block` wrapping one -> already renders as `{ ... }` via the
+    //   Block-aware `exp` path
     // - any other Exp -> wrap in our own braces
-    match code {
-        Exp::Seq(seq) if seq.is_empty() => header.concat_space(Doc::text("{}")),
-        Exp::Seq(_) => header.concat_space(exp(context, code)),
-        _ => header
+    let inner = peek_block(code);
+    match (inner, unstructured_notice) {
+        // No notice: keep the existing fast paths so the rendering is bit-identical to
+        // before for cleanly-structured functions.
+        (Exp::Seq(seq), None) if seq.is_empty() => header.concat_space(Doc::text("{}")),
+        (Exp::Seq(_), None) => header.concat_space(exp(context, code)),
+        (_, None) => header
             .concat_space(Doc::text("{"))
             .concat(Doc::nest(Doc::line().concat(exp(context, code)), 4))
             .concat(Doc::line())
             .concat(Doc::text("}")),
+        // Notice present: we always wrap in our own braces so the notice can sit at the
+        // top of the body.
+        (Exp::Seq(seq), Some(notice)) if seq.is_empty() => header
+            .concat_space(Doc::text("{"))
+            .concat(Doc::nest(Doc::line().concat(notice), 4))
+            .concat(Doc::line())
+            .concat(Doc::text("}")),
+        (_, Some(notice)) => {
+            let body = notice.concat(Doc::line()).concat(exp(context, code));
+            header
+                .concat_space(Doc::text("{"))
+                .concat(Doc::nest(Doc::line().concat(body), 4))
+                .concat(Doc::line())
+                .concat(Doc::text("}"))
+        }
+    }
+}
+
+/// Look through any number of `Exp::Block` wrappers — used by the function-body dispatcher
+/// to decide which braces strategy applies based on the underlying shape.
+fn peek_block(exp: &Exp) -> &Exp {
+    match exp {
+        Exp::Block(_, body) => peek_block(body),
+        _ => exp,
     }
 }
 
@@ -231,6 +276,7 @@ fn fun_header_doc(fun: &Function) -> Doc {
         parameters,
         returns,
         code: _,
+        unstructured_blocks: _,
     } = fun;
 
     let mut prefix_parts: Vec<Doc> = Vec::new();
@@ -549,15 +595,36 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
         D::braces(D::line().concat(body.indent(4)).concat(D::line()))
     }
 
-    // Render a list of statements separated by lines.
+    // Render a list of statements separated by lines. `Block(N, body)` items get a leading
+    // `/* block N */` comment; if `body` is a `Seq`, its items are inlined as siblings (no
+    // nested braces), so the comment marks the start of the block and the statements continue
+    // until the next block marker or the end of the enclosing sequence.
     fn stmts<'a, I>(context: &Context, it: I) -> Doc
     where
         I: IntoIterator<Item = &'a Exp>,
     {
-        D::intersperse(
-            it.into_iter().map(|e| recur(context, e)),
-            D::text(";").concat(D::line()),
-        )
+        let mut docs: Vec<Doc> = Vec::new();
+        for e in it {
+            push_stmt(context, e, &mut docs);
+        }
+        D::intersperse(docs, D::text(";").concat(D::line()))
+    }
+
+    fn push_stmt(context: &Context, e: &Exp, out: &mut Vec<Doc>) {
+        match e {
+            Exp::Block(id, body) => {
+                out.push(D::text(format!("/* block {id} */")));
+                match &**body {
+                    Exp::Seq(vs) => {
+                        for v in vs {
+                            push_stmt(context, v, out);
+                        }
+                    }
+                    inner => push_stmt(context, inner, out),
+                }
+            }
+            _ => out.push(recur(context, e)),
+        }
     }
 
     // Expression-ish printers --------------------------------------------
@@ -731,30 +798,48 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
             Exp::Unstructured(nodes) => {
                 D::text("unstructured").concat_space(unstructured_block(context, nodes))
             }
+            // Expression-position Block: emit an inline `/* block N */` comment and recur
+            // into the body. Statement-position rendering goes through `stmts` / `push_stmt`,
+            // which keeps the comment on its own line above the inlined body items.
+            Exp::Block(id, body) => {
+                D::text(format!("/* block {id} */")).concat_space(recur(context, body))
+            }
         }
     }
 
     fn e_block(context: &Context, e: &Exp) -> Doc {
-        // If it's already a block/seq, print its statements;
-        // otherwise, treat the single expression as a statement.
-        match e {
+        // Peel `Block` wrappers, collecting `/* block N */` comments to lead the brace-block,
+        // then delegate the inner shape (Seq → stmts; single Exp → statement).
+        let mut headers: Vec<Doc> = Vec::new();
+        let mut inner = e;
+        while let Exp::Block(id, body) = inner {
+            headers.push(D::text(format!("/* block {id} */")));
+            inner = body;
+        }
+        match inner {
             Exp::Seq(vs) => {
                 let final_semi = matches!(
                     vs.last(),
                     Some(Exp::LetBind(_, _) | Exp::Assign(_, _) | Exp::Declare(_))
                 );
-                let mut stmts = stmts(context, vs);
-                if final_semi {
-                    stmts = stmts.concat(D::text(";"));
+                let mut docs = headers;
+                for v in vs {
+                    push_stmt(context, v, &mut docs);
                 }
-                braces_block(stmts)
+                let mut body = D::intersperse(docs, D::text(";").concat(D::line()));
+                if final_semi {
+                    body = body.concat(D::text(";"));
+                }
+                braces_block(body)
             }
             other => {
                 let final_semi = matches!(
                     other,
                     Exp::LetBind(_, _) | Exp::Assign(_, _) | Exp::Declare(_)
                 );
-                let mut body = recur(context, other);
+                let mut docs = headers;
+                docs.push(recur(context, other));
+                let mut body = D::intersperse(docs, D::text(";").concat(D::line()));
                 if final_semi {
                     body = body.concat(D::text(";"));
                 }

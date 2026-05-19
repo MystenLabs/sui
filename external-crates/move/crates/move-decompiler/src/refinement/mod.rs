@@ -116,6 +116,7 @@ trait Refine {
             E::VecUnpack(_, e) => self.refine(e),
             E::Unpack(_, _, e) => self.refine(e),
             E::UnpackVariant(_, _, _, e) => self.refine(e),
+            E::Block(_, body) => self.refine(body),
             E::Unstructured(nodes) => {
                 use crate::ast::UnstructuredNode;
                 let mut changed = false;

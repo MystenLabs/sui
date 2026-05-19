@@ -1,7 +1,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ast::Exp, refinement::Refine};
+use crate::{
+    ast::Exp,
+    refinement::{
+        Refine,
+        utils::{peek, peek_mut},
+    },
+};
 
 pub fn refine(exp: &mut Exp) -> bool {
     LoopToSeq.refine(exp)
@@ -18,13 +24,14 @@ impl Refine for LoopToSeq {
             return false;
         };
         let loop_label = *loop_label;
-        let Exp::Seq(seq) = &mut **body else {
+        // Peek through any outer `Block` to reach the body's Seq.
+        let Exp::Seq(seq) = peek_mut(body) else {
             return false;
         };
 
         // Only fire when the trailing break exits *this* loop (label matches). If it has
         // another loop's label, we can't drop it — it'd change meaning.
-        if matches!(seq.last(), Some(Exp::Break(l)) if *l == loop_label) {
+        if matches!(seq.last().map(peek), Some(Exp::Break(l)) if *l == loop_label) {
             // If there is a continue, we cannot drop the break.
             if seq
                 .iter()
