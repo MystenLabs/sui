@@ -260,8 +260,15 @@ jobs:
           HOMEBREW_NO_ANALYTICS: "1"
           HOMEBREW_NO_AUTO_UPDATE: "1"
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Derive commit author from the PAT owner so the homebrew-core PR
+          # shows the right "Verified" attribution and survives token rotation
+          # without editing this file.
+          user_info=$(curl -fsSL -H "Authorization: Bearer ${HOMEBREW_GITHUB_API_TOKEN}" \
+            -H "Accept: application/vnd.github+json" https://api.github.com/user)
+          gh_login=$(echo "$user_info" | jq -r '.login')
+          gh_id=$(echo "$user_info" | jq -r '.id')
+          git config --global user.name "${gh_login}"
+          git config --global user.email "${gh_id}+${gh_login}@users.noreply.github.com"
 
           # Sui's formula in Homebrew/homebrew-core is URL+sha256 style, not tag+revision,
           # so pass --url/--version (brew bump-formula-pr cannot switch styles).
