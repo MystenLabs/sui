@@ -37,6 +37,7 @@ pub(crate) fn code(
     blocks: &mut IR::BytecodeBlocks,
     colors: &mut BlockColors,
 ) {
+    debug_assert_color_alignment(blocks, colors);
     let mut count = 0;
     for optimization in OPTIMIZATIONS.iter().cycle() {
         // if we have fully cycled through the list of optimizations without a change,
@@ -47,11 +48,33 @@ pub(crate) fn code(
         }
 
         // reset the count if something has changed
+        debug_assert_color_alignment(blocks, colors);
         if optimization(f, loop_heads, locals, blocks, colors) {
             count = 0
         } else {
             count += 1
         }
+        debug_assert_color_alignment(blocks, colors);
+    }
+}
+
+/// Verifies that macro-color metadata lines up with bytecode instructions.
+/// Macro colors are stored in a parallel per-block structure mirroring bytecode
+/// instruction storage. Optimizations mutate both structures, so their shape
+/// must remain identical: one color entry per instruction in each block.
+fn debug_assert_color_alignment(blocks: &IR::BytecodeBlocks, colors: &BlockColors) {
+    debug_assert!(
+        blocks.len() == colors.len(),
+        "color metadata block count mismatch: bytecode has {} blocks, colors has {} blocks",
+        blocks.len(),
+        colors.len(),
+    );
+    for ((label, block), block_colors) in blocks.iter().zip(colors.iter()) {
+        debug_assert!(
+            block.len() == block_colors.len(),
+            "color metadata length mismatch in block {:?}",
+            label,
+        );
     }
 }
 

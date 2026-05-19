@@ -1302,7 +1302,17 @@ fn function_body(
         &mut block_colors,
     );
 
+    let instruction_count = bytecode_blocks
+        .iter()
+        .map(|(_, block)| block.len())
+        .sum::<usize>();
     let flat_colors: Vec<ExpansionColor> = block_colors.into_iter().flatten().collect();
+    debug_assert!(
+        instruction_count == flat_colors.len(),
+        "color metadata instruction count mismatch: bytecode has {} instructions, colors has {} entries",
+        instruction_count,
+        flat_colors.len(),
+    );
     context.function_color_data.insert(f.0.value, flat_colors);
 
     (locals, bytecode_blocks)
