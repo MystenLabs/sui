@@ -6,7 +6,7 @@ keywords: [ security, security best practices ]
 draft: true
 ---
 
-This page describes a few recommended security best practices when developing applications on Sui. These recommendations are not comprehensive for all application types, use cases, or architectures. It is recommended that you do your own research and have production applications audited throughoughly. 
+This page describes a few recommended security best practices when developing applications on Sui. These recommendations are not comprehensive for all application types, use cases, or architectures. Do your own research and have production applications audited thoroughly.
 
 ## Smart contract security
 
@@ -80,7 +80,59 @@ It can restrict coin usage.
 
 #### Set supply model early and understand the implications of fixed, burn-only, or flexible supply.
 
-## Key kanagement
+## Access control
+
+Access control determines who can call privileged functions in your package, such as minting, withdrawals, or configuration changes. Move gives you several mechanisms to enforce authorization. Choose them deliberately, because a missing or weak check can expose privileged operations to any caller.
+
+For implementation patterns and code examples, see the [Access control](/develop/write-move/move-best-practices) section of the Move best practices guide and the [Capability Pattern](/getting-started/examples/capability-pattern) example.
+
+#### Prefer capability objects over address allowlists
+
+A capability object is a struct with the `key` ability that acts as a permission token. Holding the object proves authorization, so a function can gate access by requiring a reference to the capability. This approach composes well, because another protocol can hold the capability on behalf of a user, and you avoid maintaining an onchain list of addresses. Use capability objects such as `AdminCap` or `MintCap` as your default access control mechanism.
+
+#### Manage address allowlists deliberately
+
+Some designs still need an address allowlist, for example a set of accounts that can claim an airdrop. When you use one, store it in a well-defined object, restrict updates to a privileged function, and emit an [event](/develop/accessing-data/using-events) whenever an entry changes. Events give offchain services and auditors a record of every membership change. Without them, allowlist changes are difficult to monitor.
+
+#### Do not rely on `tx_context::sender()` alone
+
+`tx_context::sender()` returns the address that signed the transaction. Using it as the only authorization check ties a function to a single signer and breaks composability, because another contract cannot call the function on behalf of a user. Prefer capability objects or explicit object ownership checks when composability matters. Reserve `tx_context::sender()` for cases where the signer is genuinely the only valid actor.
+
+#### Require explicit capabilities for privileged functions
+
+Make every privileged function take the relevant capability as a parameter, such as `AdminCap` for configuration, `TreasuryCap` for minting, or `DenyCapV2` for usage restrictions. Move's type system enforces this at transaction construction time, because a caller cannot produce a `&AdminCap` reference without owning the object. Place the capability as the second parameter to keep method associativity, as described in the [Admin capability](/develop/write-move/move-best-practices) section of the Move best practices guide.
+
+#### Protect and rotate admin capabilities
+
+Treat admin capabilities as high-value assets:
+
+- Do not transfer admin capabilities casually. Each transfer grants full privileges to the recipient.
+
+- Hold admin capabilities in a [multisig](/develop/transactions/transaction-auth/multisig) address or a dedicated custody setup rather than a single hot wallet.
+
+- Plan a rotation path before you publish. If a capability holder is compromised, you need a way to issue a new capability and stop honoring the old one.
+
+#### Include a revocation path
+
+Design a way to revoke a compromised or outdated capability before you publish the package. Common options include:
+
+- A function that destroys a capability the holder still controls.
+
+- An onchain registry that records valid capability IDs, where privileged functions check the registry and reject revoked IDs.
+
+- A version or epoch field on the capability that you can advance to invalidate older capabilities.
+
+Without a revocation path, a leaked capability remains valid for the life of the package.
+
+#### Validate capability and object relationships
+
+When a capability governs a specific object, store the object's ID in the capability (or the capability's ID in the object) and check that they match inside the function. For example, a capability that manages one vault should only operate on that vault. Without this check, a caller could pass a valid capability for a different object and act outside your intended scope.
+
+#### Enforce authorization on shared object functions
+
+Anyone can submit a transaction that references a [shared object](/develop/objects/object-ownership/shared). A `public` function that takes a shared object runs for any caller unless the function itself checks authorization. Never assume access to a shared object is restricted. Require a capability, validate the sender, or check object ownership inside every privileged function that touches shared state.
+
+## Key management
 
 #### Keep your private signature key private. 
 
