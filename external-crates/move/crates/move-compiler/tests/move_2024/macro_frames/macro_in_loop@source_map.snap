@@ -1,0 +1,62 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+source 0x..680da:
+   1 | // Copyright (c) Mysten Labs, Inc.
+   2 | // SPDX-License-Identifier: Apache-2.0
+   3 | 
+   4 | // Tests macro call inside a while-loop body.
+   5 | module A::m {
+   6 |     macro fun inc($x: u64): u64 {
+   7 |         $x + 1
+   8 |     }
+   9 | 
+  10 |     public fun test(): u64 {
+  11 |         let mut i = 0;
+  12 |         while (i < 10) {
+  13 |             i = inc!(i);
+  14 |         };
+  15 |         i
+  16 |     }
+  17 | }
+
+module 41::m
+
+function test:
+  location: 10:5-16:6 `public fun test(): u64 { ...`
+  definition: 10:16-10:20 `test`
+  returns:
+    0: 10:24-10:27 `u64`
+  locals:
+    0 i#1#0: 11:17-11:18 `i`
+  code_map:
+    0: 11:21-11:22 `0`
+    1: 11:13-11:18 `mut i`
+    2: 12:16-12:17 `i`
+    3: 12:20-12:22 `10`
+    4: 12:18-12:19 `<`
+    5: 12:9-14:10 `while (i < 10) { ...`
+    7: 13:22-13:23 `i`
+    8: 7:14-7:15 `1`
+    9: 7:12-7:13 `+`
+    10: 13:13-13:14 `i`
+    11: 12:9-14:10 `while (i < 10) { ...`
+    12: 15:9-15:10 `i`
+  macro_frame_info:
+    [0] MacroBody(41::m::inc)
+        parent: -
+        source: 6:5-8:6 `macro fun inc($x: u64): u64 { ...`
+        call: 13:17-13:24 `inc!(i)`
+    [1] Argument
+        parent: 0
+        source: 13:22-13:23 `i`
+        call: 7:9-7:11 `$x`
+  macro_color_map:
+    0 -> -
+    7 -> 1
+    8 -> 0
+    10 -> -

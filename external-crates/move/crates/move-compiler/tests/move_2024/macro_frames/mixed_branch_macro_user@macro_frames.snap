@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/mixed_branch_macro_user.move:14:13
+   │
+ 9 │         $x
+   │         -- [1] Argument
+   ·
+14 │             id!(v)
+   │             ^^^^^^ [0] MacroBody(0x41::m::id)
+   │
+   = Frame transitions (test):
+       14: `id!(v)`
+           [] -> [0:MacroBody(id), 1:Argument]
+       13: `if (b) {`
+           [0:MacroBody(id), 1:Argument] -> []
