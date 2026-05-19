@@ -410,9 +410,12 @@ fn test_owned_object_index_upserts_removes_and_stays_sorted() {
     let first = make_object_with_owner(first_id, 1, Owner::AddressOwner(owner));
     let second = make_object_with_owner(second_id, 1, Owner::AddressOwner(owner));
 
+    assert!(!store.owned_object_index_exists().unwrap());
     store
         .apply_owned_object_index_updates(&[], [&second, &first])
         .unwrap();
+    assert!(store.owned_object_index_exists().unwrap());
+
     let entries = store.get_owned_object_entries().unwrap();
     assert_eq!(entries.len(), 2);
     assert!(
@@ -438,6 +441,22 @@ fn test_owned_object_index_upserts_removes_and_stays_sorted() {
             .any(|entry| entry.object_ref == second.compute_object_reference())
     );
 
+    let owner_entries = store
+        .get_owned_object_entries_for_owner(owner, None)
+        .unwrap();
+    assert_eq!(owner_entries, entries);
+
+    let owner_entries_from_cursor = store
+        .get_owned_object_entries_for_owner(owner, Some(entries[1].object_ref.0))
+        .unwrap();
+    assert_eq!(owner_entries_from_cursor.len(), 1);
+    assert_eq!(owner_entries_from_cursor[0], entries[1]);
+
+    let next_owner_entries = store
+        .get_owned_object_entries_for_owner(next_owner, None)
+        .unwrap();
+    assert!(next_owner_entries.is_empty());
+
     let transferred = make_object_with_owner(first_id, 2, Owner::AddressOwner(next_owner));
     store
         .apply_owned_object_index_updates(&[], [&transferred])
@@ -458,6 +477,20 @@ fn test_owned_object_index_upserts_removes_and_stays_sorted() {
         sui_types::gas_coin::GasCoin::type_()
     );
     assert_eq!(first_entry.balance, Some(1_000_000));
+    let remaining_owner_entries = store
+        .get_owned_object_entries_for_owner(owner, None)
+        .unwrap();
+    assert_eq!(remaining_owner_entries.len(), 1);
+    assert_eq!(remaining_owner_entries[0].object_ref.0, second_id);
+    assert_eq!(
+        store
+            .get_owned_object_entries_for_owner(next_owner, Some(first_id))
+            .unwrap()
+            .into_iter()
+            .map(|entry| entry.object_ref)
+            .collect::<Vec<_>>(),
+        vec![transferred.compute_object_reference()],
+    );
 
     store
         .apply_owned_object_index_updates(&[second_id], std::iter::empty::<&Object>())

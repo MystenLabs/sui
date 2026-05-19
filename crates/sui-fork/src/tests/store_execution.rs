@@ -419,7 +419,7 @@ async fn test_owned_object_query_lazily_initializes_complete_index_from_seed_man
         })
         .expect("seed manifest should write");
 
-    assert!(!store.local().owned_object_index_exists());
+    assert!(!store.local().owned_object_index_exists().unwrap());
 
     let infos: Vec<_> = RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
         .expect("owned-object iterator should initialize from seed")

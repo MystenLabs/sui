@@ -14881,6 +14881,7 @@ dependencies = [
  "clap",
  "cynic",
  "cynic-codegen",
+ "eyre",
  "fastcrypto",
  "itertools 0.13.0",
  "move-core-types",
@@ -14902,6 +14903,7 @@ dependencies = [
  "tonic-prost",
  "tracing",
  "tracing-subscriber",
+ "typed-store",
  "typed-store-error",
  "wiremock",
 ]

@@ -525,12 +525,12 @@ impl DataStore {
     }
 
     fn ensure_owned_object_index_initialized(&self) -> anyhow::Result<()> {
-        if self.inner.local.owned_object_index_exists() {
+        if self.inner.local.owned_object_index_exists()? {
             return Ok(());
         }
 
         let _local_snapshot_guard = self.write_local_snapshot()?;
-        if self.inner.local.owned_object_index_exists() {
+        if self.inner.local.owned_object_index_exists()? {
             return Ok(());
         }
 
@@ -725,22 +725,15 @@ impl DataStore {
     ) -> StorageResult<Vec<OwnedObjectInfo>> {
         self.ensure_owned_object_index_initialized()
             .map_err(|e| StorageError::custom(e.to_string()))?;
-        let entries = {
-            let _local_snapshot_guard = self.read_local_snapshot()?;
-            self.inner
-                .local
-                .get_owned_object_entries()
-                .map_err(|e| StorageError::custom(e.to_string()))?
-        };
         let cursor_object_id = cursor.map(|cursor| cursor.object_id);
+        let entries = self
+            .inner
+            .local
+            .get_owned_object_entries_for_owner(owner, cursor_object_id)
+            .map_err(|e| StorageError::custom(e.to_string()))?;
 
         Ok(entries
             .into_iter()
-            .filter(|entry| entry.owner == owner)
-            // `RpcIndexes` cursors are lower bounds. The v2 RPC layer stores
-            // the first not-yet-returned item in the page token and expects
-            // the next iterator to include it.
-            .filter(|entry| cursor_object_id.is_none_or(|id| entry.object_ref.0 >= id))
             .filter(|entry| {
                 object_type
                     .as_ref()

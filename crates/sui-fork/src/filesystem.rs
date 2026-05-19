@@ -14,7 +14,7 @@
 //!            - latest                  (text: version[,deleted|,wrapped])
 //!            - {version}                (BCS-encoded Object)
 //!     - indices/
-//!         - owned_objects              (BCS-encoded `Vec<OwnedObjectEntry>`)
+//!         - owned_objects_db/          (typed-store owned-object index)
 //!     - checkpoints/
 //!         - latest                     (text: highest persisted sequence number)
 //!         - {seq}/
@@ -35,6 +35,8 @@ use std::fs;
 use std::io::Write as _;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use anyhow::Error;
@@ -59,6 +61,12 @@ use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::VerifiedTransaction;
+use typed_store::DBMapUtils;
+use typed_store::Map;
+use typed_store::metrics::SamplingInterval;
+use typed_store::rocks::DBBatch;
+use typed_store::rocks::DBMap;
+use typed_store::rocks::MetricConf;
 
 use crate::Node;
 use crate::seed::SeedManifest;
@@ -76,8 +84,10 @@ const INDICES_DIR: &str = "indices";
 const CHECKPOINTS_DIR: &str = "checkpoints";
 /// Per-chain transaction storage directory.
 const TRANSACTIONS_DIR: &str = "transactions";
-/// BCS-encoded owned-object index filename.
-const OWNED_OBJECTS_INDEX_FILE: &str = "owned_objects";
+/// Typed-store owned-object index directory under `indices`.
+const OWNED_OBJECTS_INDEX_DB_DIR: &str = "owned_objects_db";
+/// Current owned-object index schema version.
+const OWNED_OBJECT_INDEX_VERSION: u64 = 1;
 /// Filename for the BCS-encoded transaction data within a transaction directory.
 const TX_DATA_FILE: &str = "data";
 /// Filename for the BCS-encoded transaction effects within a transaction directory.
@@ -169,6 +179,7 @@ pub(crate) struct OwnedObjectEntry {
 }
 
 impl OwnedObjectEntry {
+    /// Build index metadata for live address-owned Move objects.
     pub(crate) fn from_object(object: &Object) -> Option<Self> {
         let owner = match &object.owner {
             Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => *owner,
@@ -184,10 +195,49 @@ impl OwnedObjectEntry {
     }
 }
 
+/// Ordered owner index key. Scans over this table group rows by owner, then by object ID, which
+/// lets RPC pagination seek directly to `(owner, cursor_object_id)`.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, serde::Deserialize, serde::Serialize)]
+struct OwnedObjectOwnerKey {
+    /// Address whose object list contains `object_id`.
+    owner: SuiAddress,
+    /// Object ID used for deterministic ordering and cursor lower bounds within one owner.
+    object_id: ObjectID,
+}
+
+impl From<&OwnedObjectEntry> for OwnedObjectOwnerKey {
+    fn from(entry: &OwnedObjectEntry) -> Self {
+        Self {
+            owner: entry.owner,
+            object_id: entry.object_ref.0,
+        }
+    }
+}
+
+/// Singleton metadata row used to distinguish an initialized-empty index from a missing index.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+struct OwnedObjectIndexMetadata {
+    /// Schema version of the typed-store owned-object index.
+    version: u64,
+}
+
+/// Typed-store tables for the owned-object index.
+#[derive(DBMapUtils)]
+struct OwnedObjectIndexTables {
+    /// Initialization marker and schema version.
+    meta: DBMap<(), OwnedObjectIndexMetadata>,
+    /// Canonical row per object ID, used when update paths only know the object ID.
+    by_object: DBMap<ObjectID, OwnedObjectEntry>,
+    /// Owner-ordered rows used by `list_owned_objects` and RPC pagination.
+    by_owner: DBMap<OwnedObjectOwnerKey, OwnedObjectEntry>,
+}
+
 /// Local filesystem-backed store for Sui data.
 #[derive(Clone)]
 pub(crate) struct FilesystemStore {
     root: PathBuf,
+    /// DBMap-backed owned-object index. Clones share one table handle for this store root.
+    owned_index: Arc<OwnedObjectIndexTables>,
 }
 
 impl FilesystemStore {
@@ -202,12 +252,50 @@ impl FilesystemStore {
             Some(dir) => dir,
             None => Self::default_root(node, forked_at_checkpoint)?,
         };
-        Ok(Self { root })
+        Ok(Self::new_with_root(root))
     }
 
     /// Create a filesystem store with an explicit root directory.
     pub(crate) fn new_with_root(root: PathBuf) -> Self {
-        Self { root }
+        let owned_index = Self::open_owned_object_index(&root);
+        Self { root, owned_index }
+    }
+
+    /// Open the owned-object index tables under `indices/owned_objects_db`.
+    ///
+    /// typed-store starts Tokio-backed metrics tasks while opening RocksDB tables, so synchronous
+    /// call sites need a temporary runtime until construction can move fully under Tokio.
+    fn open_owned_object_index(root: &Path) -> Arc<OwnedObjectIndexTables> {
+        let path = root.join(INDICES_DIR).join(OWNED_OBJECTS_INDEX_DB_DIR);
+        if tokio::runtime::Handle::try_current().is_ok() {
+            return Self::open_owned_object_index_at(path);
+        }
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .expect("tokio runtime should build for typed-store open");
+        runtime.block_on(async move { Self::open_owned_object_index_at(path) })
+    }
+
+    /// Open the typed-store table set at a concrete path.
+    fn open_owned_object_index_at(path: PathBuf) -> Arc<OwnedObjectIndexTables> {
+        Arc::new(OwnedObjectIndexTables::open_tables_read_write(
+            path,
+            Self::owned_object_index_metric_conf(),
+            None,
+            None,
+        ))
+    }
+
+    /// Use a stable DB name while disabling interval-based sampling for synchronous tests.
+    fn owned_object_index_metric_conf() -> MetricConf {
+        MetricConf {
+            db_name: "sui-fork-owned-index".to_owned(),
+            read_sample_interval: SamplingInterval::new(Duration::ZERO, 0),
+            write_sample_interval: SamplingInterval::new(Duration::ZERO, 0),
+            iter_sample_interval: SamplingInterval::new(Duration::ZERO, 0),
+        }
     }
 
     /// Resolve the default base path for on-disk storage.
@@ -280,11 +368,6 @@ impl FilesystemStore {
         self.root.join(OBJECTS_DIR)
     }
 
-    /// Return the directory path for secondary indices.
-    fn indices_dir(&self) -> PathBuf {
-        self.root.join(INDICES_DIR)
-    }
-
     /// Return the directory path for storing checkpoint data.
     fn checkpoints_dir(&self) -> PathBuf {
         self.root.join(CHECKPOINTS_DIR)
@@ -298,11 +381,6 @@ impl FilesystemStore {
     /// Return the directory for a specific transaction.
     fn tx_dir(&self, digest: &TransactionDigest) -> PathBuf {
         self.transactions_dir().join(digest.to_string())
-    }
-
-    /// Return the file path for the owned-object index.
-    fn owned_objects_index_path(&self) -> PathBuf {
-        self.indices_dir().join(OWNED_OBJECTS_INDEX_FILE)
     }
 
     /// Return the path to the seed manifest for this fork directory.
@@ -603,13 +681,40 @@ impl FilesystemStore {
             .with_context(|| format!("Failed to write latest file: {}", latest_file.display()))
     }
 
-    /// Read the owned-object index. Missing index files represent an empty index.
+    /// Read all entries from the owned-object index.
     pub(crate) fn get_owned_object_entries(&self) -> anyhow::Result<Vec<OwnedObjectEntry>> {
-        let path = self.owned_objects_index_path();
-        if !path.exists() {
-            return Ok(Vec::new());
-        }
-        self.read_bcs_file(&path)
+        self.owned_index
+            .by_object
+            .safe_iter()
+            .map(|entry| entry.map(|(_, entry)| entry).map_err(Into::into))
+            .collect()
+    }
+
+    /// Read entries for one owner.
+    ///
+    /// The cursor is an inclusive object-ID lower bound because the v2 RPC page token stores the
+    /// first not-yet-returned object, not the last returned object.
+    pub(crate) fn get_owned_object_entries_for_owner(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<ObjectID>,
+    ) -> anyhow::Result<Vec<OwnedObjectEntry>> {
+        let lower = OwnedObjectOwnerKey {
+            owner,
+            object_id: cursor.unwrap_or(ObjectID::ZERO),
+        };
+
+        self.owned_index
+            .by_owner
+            .safe_iter_with_bounds(Some(lower), None)
+            .take_while(|entry| {
+                let Ok((key, _)) = entry else {
+                    return true;
+                };
+                key.owner == owner
+            })
+            .map(|entry| entry.map(|(_, entry)| entry).map_err(Into::into))
+            .collect()
     }
 
     /// Apply local execution ownership changes to the owned-object index.
@@ -618,51 +723,107 @@ impl FilesystemStore {
         removed_object_ids: &[ObjectID],
         written_objects: impl IntoIterator<Item = &'a Object>,
     ) -> anyhow::Result<()> {
-        let mut entries = self.get_owned_object_entries()?;
+        let mut batch = self.owned_index.by_object.batch();
 
         for object_id in removed_object_ids {
-            remove_owned_entry(&mut entries, *object_id);
+            self.delete_owned_entry(&mut batch, *object_id)?;
         }
 
         for object in written_objects {
             match OwnedObjectEntry::from_object(object) {
-                Some(entry) => upsert_owned_entry(&mut entries, entry),
-                None => remove_owned_entry(&mut entries, object.id()),
+                Some(entry) => self.upsert_owned_entry(&mut batch, entry)?,
+                None => self.delete_owned_entry(&mut batch, object.id())?,
             }
         }
 
-        self.write_owned_object_entries(&entries)
+        self.mark_owned_object_index_initialized(&mut batch)?;
+        batch.write()?;
+        Ok(())
     }
 
-    /// Persist the owned-object index to disk. The entire index is rewritten on each update, but
-    /// this is expected to be small and updated infrequently enough that this should not be a
-    /// bottleneck.
+    /// Replace the owned-object index with `entries`.
     pub(crate) fn write_owned_object_entries(
         &self,
         entries: &[OwnedObjectEntry],
     ) -> anyhow::Result<()> {
-        let path = self.owned_objects_index_path();
-        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+        let mut batch = self.owned_index.by_object.batch();
+
+        for existing in self.get_owned_object_entries()? {
+            self.delete_owned_entry(&mut batch, existing.object_ref.0)?;
         }
 
-        let tmp_path = path.with_extension("tmp");
-        let bytes = bcs::to_bytes(entries).with_context(|| {
-            format!(
-                "Failed to serialize owned-object index for: {}",
-                path.display()
-            )
-        })?;
-        fs::write(&tmp_path, bytes)
-            .with_context(|| format!("Failed to write index file: {}", tmp_path.display()))?;
-        fs::rename(&tmp_path, &path)
-            .with_context(|| format!("Failed to replace owned-object index: {}", path.display()))
+        for entry in entries {
+            self.upsert_owned_entry(&mut batch, entry.clone())?;
+        }
+
+        self.mark_owned_object_index_initialized(&mut batch)?;
+        batch.write()?;
+        Ok(())
     }
 
     /// Return whether the owned-object index has already been initialized.
-    pub(crate) fn owned_object_index_exists(&self) -> bool {
-        self.owned_objects_index_path().exists()
+    pub(crate) fn owned_object_index_exists(&self) -> anyhow::Result<bool> {
+        match self.owned_index.meta.get(&())? {
+            Some(metadata) if metadata.version == OWNED_OBJECT_INDEX_VERSION => Ok(true),
+            Some(metadata) => bail!(
+                "unsupported owned-object index version: {}",
+                metadata.version
+            ),
+            None => Ok(false),
+        }
+    }
+
+    /// Mark the owned-object index initialized in the same batch as the index rows.
+    ///
+    /// This marker is written for empty indexes too, so readers can tell an initialized-empty
+    /// index from one that still needs lazy seed initialization.
+    fn mark_owned_object_index_initialized(&self, batch: &mut DBBatch) -> anyhow::Result<()> {
+        batch.insert_batch(
+            &self.owned_index.meta,
+            [(
+                (),
+                OwnedObjectIndexMetadata {
+                    version: OWNED_OBJECT_INDEX_VERSION,
+                },
+            )],
+        )?;
+        Ok(())
+    }
+
+    /// Remove an object's rows from both lookup tables.
+    ///
+    /// Removal starts from `by_object` because execution diffs often know only the object ID; the
+    /// stored entry provides the previous owner key needed to clean up `by_owner`.
+    fn delete_owned_entry(&self, batch: &mut DBBatch, object_id: ObjectID) -> anyhow::Result<()> {
+        if let Some(existing) = self.owned_index.by_object.get(&object_id)? {
+            batch.delete_batch(&self.owned_index.by_object, [object_id])?;
+            batch.delete_batch(
+                &self.owned_index.by_owner,
+                [OwnedObjectOwnerKey::from(&existing)],
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Insert or replace an owned-object row in both lookup tables.
+    ///
+    /// Deleting the prior row first handles owner transfers, where the old `by_owner` key is not
+    /// derivable from the new entry.
+    fn upsert_owned_entry(
+        &self,
+        batch: &mut DBBatch,
+        entry: OwnedObjectEntry,
+    ) -> anyhow::Result<()> {
+        self.delete_owned_entry(batch, entry.object_ref.0)?;
+        batch.insert_batch(
+            &self.owned_index.by_object,
+            [(entry.object_ref.0, entry.clone())],
+        )?;
+        batch.insert_batch(
+            &self.owned_index.by_owner,
+            [(OwnedObjectOwnerKey::from(&entry), entry)],
+        )?;
+        Ok(())
     }
 
     /// Return whether the immutable seed manifest exists for this fork directory.
@@ -945,19 +1106,6 @@ fn parse_object_latest_inner(content: &str) -> anyhow::Result<ObjectLatestMetada
     let version: u64 = version.parse().context("version should be a u64")?;
 
     Ok(ObjectLatestMetadata { version, state })
-}
-
-fn remove_owned_entry(entries: &mut Vec<OwnedObjectEntry>, object_id: ObjectID) {
-    if let Ok(index) = entries.binary_search_by_key(&object_id, |entry| entry.object_ref.0) {
-        entries.remove(index);
-    }
-}
-
-fn upsert_owned_entry(entries: &mut Vec<OwnedObjectEntry>, entry: OwnedObjectEntry) {
-    match entries.binary_search_by_key(&entry.object_ref.0, |existing| existing.object_ref.0) {
-        Ok(index) => entries[index] = entry,
-        Err(index) => entries.insert(index, entry),
-    }
 }
 
 /// Append a single `{key} {value}\n` line to `path`, creating the file and
