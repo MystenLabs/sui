@@ -402,6 +402,7 @@ fn module(
             compilation_env.mapped_files(),
         );
     }
+    compact_macro_color_maps(&mut source_map);
     canonicalize_handles::in_module(&mut module, &address_names(dependency_orderings.keys()));
     let function_infos = module_function_infos(&module, &source_map, &collected_function_infos);
     let module = NamedCompiledModule {
@@ -807,6 +808,20 @@ fn populate_macro_frame_info(
                 (offset as F::CodeOffset, index)
             })
             .collect();
+    }
+}
+
+/// Compact stored macro-color maps into segment maps after diagnostics have
+/// consumed the full per-instruction color data.
+fn compact_macro_color_maps(source_map: &mut SourceMap) {
+    for (_, fsm) in source_map.function_source_maps_mut() {
+        let mut compact = Vec::new();
+        for (offset, frame_idx) in std::mem::take(&mut fsm.macro_color_map) {
+            if compact.last().map(|(_, last)| *last) != Some(frame_idx) {
+                compact.push((offset, frame_idx));
+            }
+        }
+        fsm.macro_color_map = compact;
     }
 }
 

@@ -51,5 +51,4 @@ function test:
   macro_color_map:
     0 -> 1
     1 -> 2
-    2 -> 2
     3 -> -

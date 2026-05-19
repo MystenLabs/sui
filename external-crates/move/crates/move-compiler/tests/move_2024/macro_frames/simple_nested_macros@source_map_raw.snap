@@ -28,7 +28,6 @@ info:
       "macro_color_map": [
         [0, 1],
         [1, 2],
-        [2, 2],
         [3, null]
       ],
       "macro_frame_info": [
