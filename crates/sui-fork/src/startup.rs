@@ -115,9 +115,7 @@ pub async fn initialize(
     // 2. Download and persist the startup checkpoint (summary + contents),
     //    then read the summary back through the cache-aware getter.
     data_store.download_and_persist_startup_checkpoint()?;
-    let manifest =
-        crate::seed::prepare_seed_manifest(&data_store, node.network_name(), &seed_input).await?;
-    crate::seed::initialize_owned_index_from_seed(&data_store, &manifest)?;
+    crate::seed::prepare_seed_manifest(&data_store, node.network_name(), &seed_input).await?;
     let checkpoint = data_store
         .get_highest_verified_checkpoint()?
         .ok_or_else(|| anyhow!("checkpoint {} not found", forked_at_checkpoint))?;

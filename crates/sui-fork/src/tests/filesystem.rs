@@ -418,10 +418,25 @@ fn test_owned_object_index_upserts_removes_and_stays_sorted() {
     assert!(
         entries
             .windows(2)
-            .all(|window| window[0].object_id < window[1].object_id)
+            .all(|window| window[0].object_ref.0 < window[1].object_ref.0)
     );
     assert!(entries.iter().all(|entry| entry.owner == owner));
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry.object_type == sui_types::gas_coin::GasCoin::type_())
+    );
     assert!(entries.iter().all(|entry| entry.balance == Some(1_000_000)));
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.object_ref == first.compute_object_reference())
+    );
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.object_ref == second.compute_object_reference())
+    );
 
     let transferred = make_object_with_owner(first_id, 2, Owner::AddressOwner(next_owner));
     store
@@ -431,17 +446,25 @@ fn test_owned_object_index_upserts_removes_and_stays_sorted() {
         .get_owned_object_entries()
         .unwrap()
         .into_iter()
-        .find(|entry| entry.object_id == first_id)
+        .find(|entry| entry.object_ref.0 == first_id)
         .unwrap();
     assert_eq!(first_entry.owner, next_owner);
-    assert_eq!(first_entry.version, SequenceNumber::from_u64(2));
+    assert_eq!(
+        first_entry.object_ref,
+        transferred.compute_object_reference()
+    );
+    assert_eq!(
+        first_entry.object_type,
+        sui_types::gas_coin::GasCoin::type_()
+    );
+    assert_eq!(first_entry.balance, Some(1_000_000));
 
     store
         .apply_owned_object_index_updates(&[second_id], std::iter::empty::<&Object>())
         .unwrap();
     let entries = store.get_owned_object_entries().unwrap();
     assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0].object_id, first_id);
+    assert_eq!(entries[0].object_ref.0, first_id);
 }
 
 #[test]
@@ -453,12 +476,7 @@ fn test_seed_manifest_round_trips_and_is_immutable() {
         network: "testnet".to_owned(),
         checkpoint: 42,
         entries: vec![SeedEntry {
-            object_id: object.id(),
-            version: object.version(),
-            digest: object.digest(),
-            owner,
-            object_type: object.struct_tag().unwrap(),
-            balance: object.as_coin_maybe().map(|coin| coin.value()),
+            object_ref: object.compute_object_reference(),
         }],
     };
 

@@ -56,7 +56,7 @@ enum Command {
         #[arg(long)]
         data_dir: Option<PathBuf>,
 
-        /// Address whose owned objects should seed the initial owned-object index
+        /// Address whose owned objects should be recorded in the seed manifest
         #[arg(long = "address")]
         addresses: Vec<SuiAddress>,
 

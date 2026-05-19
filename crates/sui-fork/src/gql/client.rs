@@ -9,6 +9,7 @@ use cynic::Operation;
 use reqwest::header::USER_AGENT;
 
 use sui_protocol_config::Chain;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointContents;
@@ -24,6 +25,7 @@ use crate::ObjectRead;
 use crate::TransactionInfo;
 use crate::TransactionRead;
 use crate::gql::AddressOwnedObject;
+use crate::gql::ObjectSeedMetadata;
 use crate::gql::queries;
 
 macro_rules! block_on {
@@ -137,6 +139,15 @@ impl GraphQLClient {
         checkpoint: CheckpointSequenceNumber,
     ) -> Result<Vec<AddressOwnedObject>, Error> {
         queries::address_owned_objects_query::query(address, checkpoint, self).await
+    }
+
+    /// Fetch lightweight metadata for explicit object seeds at a checkpoint.
+    pub(crate) async fn get_object_seed_metadata_at_checkpoint(
+        &self,
+        object_ids: &[ObjectID],
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Vec<ObjectSeedMetadata>, Error> {
+        queries::object_seed_query::query(object_ids, checkpoint, self).await
     }
 
     /// Get the latest checkpoint sequence number from GraphQL RPC.
