@@ -85,7 +85,7 @@ At startup, the user has the choice to seed addresses or objects, recording enou
 
 
 If the user provides both `--address` and `--object`, the tool combines the object refs resolved from both sources and persists them to `seed_manifest.json`.
-The seed manifest is reused on restart and is the source for lazy owned-object index initialization.
+The seed manifest is reused on restart if needed, and is the source for lazy owned-object index initialization.
 
 ```json
 {
@@ -94,7 +94,6 @@ The seed manifest is reused on restart and is the source for lazy owned-object i
     "entries": [
         {
             "object_ref": ["0xabcdef1234567890abcdef1234567890abcdef12", 42, "..."],
-            "owner": "0x1234567890abcdef1234567890abcdef12345678"
         }
     ]
 }
