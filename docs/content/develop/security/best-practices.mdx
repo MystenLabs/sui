@@ -47,7 +47,7 @@ Sui restricts which commands can follow a `MoveCall` that consumes `Random` in t
 
 #### Mark randomness-consuming functions as private `entry`
 
-Declare functions that consume randomness as `entry` functions that are not `public`. A non-`public` `entry` function can be called directly from a transaction but not from another Move module. This prevents other modules from composing your randomness-consuming function into a larger call that enables a test-and-abort attack.
+Declare functions that consume randomness as private `entry` functions. A private `entry` function can be called directly from a transaction but not from another Move module. This prevents other modules from composing your randomness-consuming function into a larger call that enables a test-and-abort attack.
 
 #### Never accept `RandomGenerator` as a parameter
 
