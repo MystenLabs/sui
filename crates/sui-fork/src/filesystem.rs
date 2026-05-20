@@ -741,8 +741,12 @@ impl FilesystemStore {
         Ok(())
     }
 
-    /// Replace the owned-object index with `entries`.
-    pub(crate) fn write_owned_object_entries(
+    /// Initialize the owned-object index from a complete snapshot.
+    ///
+    /// This replaces any existing rows and writes the metadata marker in the same batch, including
+    /// when `entries` is empty. Do not use for updating the index. Use
+    /// `apply_owned_object_index_updates` instead.
+    pub(crate) fn write_owned_object_entries_for_initialization(
         &self,
         entries: &[OwnedObjectEntry],
     ) -> anyhow::Result<()> {

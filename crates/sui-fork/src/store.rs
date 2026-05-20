@@ -599,7 +599,9 @@ impl DataStore {
         }
 
         let entries: Vec<_> = entries.into_values().collect();
-        self.inner.local.write_owned_object_entries(&entries)
+        self.inner
+            .local
+            .write_owned_object_entries_for_initialization(&entries)
     }
 
     /// Persist local object writes and current-state removals, then update the address-owned

@@ -360,7 +360,7 @@ fn test_owned_object_info_uses_index_metadata_until_deleted() {
 
     store
         .local()
-        .write_owned_object_entries(&[OwnedObjectEntry {
+        .write_owned_object_entries_for_initialization(&[OwnedObjectEntry {
             owner,
             object_ref: object.compute_object_reference(),
             object_type: GasCoin::type_(),
