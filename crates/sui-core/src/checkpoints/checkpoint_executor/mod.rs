@@ -382,7 +382,7 @@ impl CheckpointExecutor {
             mysten_metrics::monitored_scope("CheckpointExecutor::parallel_step");
 
         // Note: only `execute_transactions_from_synced_checkpoint` has end-of-epoch logic.
-        let ckpt_state = if self.state.is_fullnode(&self.epoch_store)
+        let ckpt_state = if !self.epoch_store.node_role().runs_consensus()
             || checkpoint.is_last_checkpoint_of_epoch()
         {
             self.execute_transactions_from_synced_checkpoint(checkpoint, &mut pipeline_handle)
