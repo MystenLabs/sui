@@ -56,6 +56,8 @@ use crate::v2::get_transaction::transaction_columns;
 use crate::v2alpha::watermark::advance_checkpoint_boundary;
 use crate::v2alpha::watermark::boundary_watermark;
 use crate::v2alpha::watermark::item_watermark;
+use crate::v2alpha::watermark::reached_range_end;
+use crate::v2alpha::watermark::terminal_boundary_watermark;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::error_contains;
@@ -119,6 +121,8 @@ pub(crate) async fn list_checkpoints(
         .instrument(debug_span!("resolve_cp_range"))
         .await?;
     let end_reason = cp_range.end_reason;
+    let end_checkpoint = cp_range.end_checkpoint;
+    let end_position = cp_range.end_position;
     let cp_range = cp_range.range;
 
     if cp_range.is_empty() {
@@ -130,7 +134,23 @@ pub(crate) async fn list_checkpoints(
             elapsed_ms = started.elapsed().as_millis(),
             "list_checkpoints: empty range"
         );
-        return Ok(stream::once(async move { Ok(end_response(end_reason)) }).boxed());
+        // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
+        // range; still surface the terminal boundary so the client learns the
+        // final checkpoint is complete without waiting for the next item.
+        let terminal = reached_range_end(end_reason).then(|| {
+            watermark_response(terminal_boundary_watermark(
+                &options,
+                end_checkpoint,
+                end_position,
+            ))
+        });
+        return Ok(stream::iter(
+            terminal
+                .into_iter()
+                .chain([end_response(end_reason)])
+                .map(Ok),
+        )
+        .boxed());
     }
 
     let needs_full = needs_transactions_or_objects(&read_mask);
@@ -231,6 +251,9 @@ pub(crate) async fn list_checkpoints(
             } else {
                 end_reason
             };
+            if reached_range_end(reason) {
+                yield watermark_response(terminal_boundary_watermark(&options, end_checkpoint, end_position));
+            }
             yield end_response(reason);
             info!(
                 filtered,
@@ -372,6 +395,9 @@ pub(crate) async fn list_checkpoints(
         } else {
             end_reason
         };
+        if reached_range_end(reason) {
+            yield watermark_response(terminal_boundary_watermark(&options, end_checkpoint, end_position));
+        }
         yield end_response(reason);
         info!(
             filtered,

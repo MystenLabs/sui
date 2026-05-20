@@ -222,10 +222,8 @@ pub(crate) async fn list_events(
             async move {
                 match item? {
                     Watermarked::Item((event_ref, tx)) => {
-                        let rendered = render_event(
-                            event_ref, tx, &read_mask, &resolver, wants_json,
-                        )
-                        .await?;
+                        let rendered =
+                            render_event(event_ref, tx, &read_mask, &resolver, wants_json).await?;
                         Ok::<Watermarked<RenderedEvent>, anyhow::Error>(Watermarked::Item(rendered))
                     }
                     Watermarked::Watermark(p) => Ok(Watermarked::Watermark(p)),
