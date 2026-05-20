@@ -723,8 +723,6 @@ pub trait RpcIndexes: Send + Sync {
     fn get_highest_indexed_checkpoint_seq_number(&self)
     -> Result<Option<CheckpointSequenceNumber>>;
 
-    fn ledger_history_tx_seq_floor(&self) -> Result<Option<u64>>;
-
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>>;
 
     fn ledger_tx_seq_digest_multi_get(
