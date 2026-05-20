@@ -643,9 +643,9 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "487f8bc739
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "487f8bc739e535391a56e1aa1193084da9d64ce8" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "528bb56e67250c16017935cba94eee511200f656", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "528bb56e67250c16017935cba94eee511200f656", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "528bb56e67250c16017935cba94eee511200f656", features = [ "unstable" ] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5b41bc701525f1b94f1fe63008d4841bc6fb1065", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5b41bc701525f1b94f1fe63008d4841bc6fb1065", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5b41bc701525f1b94f1fe63008d4841bc6fb1065", features = [ "unstable" ] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -780,11 +780,3 @@ tonic-reflection = { git = "https://github.com/hyperium/tonic.git", rev = "d6ce6
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
-
-# TEMPORARY local-dev patch: build against the local sui-rust-sdk checkout that
-# adds the `transaction_offset` field to `TransactionItem`/`EventItem`. Remove
-# once that change lands and the `rev` pins above are bumped to the published commit.
-[patch."https://github.com/MystenLabs/sui-rust-sdk.git"]
-sui-rpc = { path = "/Users/nick/workplace/sui-rust-sdk/crates/sui-rpc" }
-sui-sdk-types = { path = "/Users/nick/workplace/sui-rust-sdk/crates/sui-sdk-types" }
-sui-crypto = { path = "/Users/nick/workplace/sui-rust-sdk/crates/sui-crypto" }
