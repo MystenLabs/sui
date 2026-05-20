@@ -69,6 +69,16 @@ fn parse_env_usize(name: &str, minimum: usize) -> Option<usize> {
     })
 }
 
+fn parse_env_bool(name: &str) -> Option<bool> {
+    env::var(name).ok().map(|value| {
+        let parsed = value
+            .parse::<bool>()
+            .unwrap_or_else(|_| panic!("Failed to parse {name}"));
+        println!("Using {name} from env variable {parsed}");
+        parsed
+    })
+}
+
 pub fn default_max_dirty_keys() -> usize {
     parse_env_usize("TH_DEFAULT_MAX_DIRTY_KEYS", 1).unwrap_or(1024)
 }
@@ -107,7 +117,7 @@ fn thdb_config() -> Config {
     let num_flusher_threads = 1;
     #[cfg(not(debug_assertions))]
     let num_flusher_threads = 4;
-    Config {
+    let mut config = Config {
         frag_size,
         // run snapshot every 64 Gb written to wal
         snapshot_written_bytes: parse_env_usize("TH_SNAPSHOT_WRITTEN_BYTES", 1)
@@ -122,7 +132,13 @@ fn thdb_config() -> Config {
         commit_pool_size,
         num_flusher_threads,
         ..Config::default()
+    };
+
+    if parse_env_bool("TH_AUTOSHARD").unwrap_or(false) {
+        config.with_index_auto_sharding();
     }
+
+    config
 }
 
 #[cfg(not(debug_assertions))]
