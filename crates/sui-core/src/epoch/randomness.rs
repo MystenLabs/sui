@@ -1125,6 +1125,7 @@ mod tests {
                     Box::new(consensus_adapter.clone()),
                     sui_network::randomness::Handle::new_stub(),
                     Some(validator.protocol_key_pair()),
+                    RandomnessRoundReceiverHandle::new_for_testing(),
                 )
                 .await
                 .unwrap();
@@ -1153,6 +1154,7 @@ mod tests {
                     Box::new(observer_adapter),
                     sui_network::randomness::Handle::new_stub(),
                     None,
+                    RandomnessRoundReceiverHandle::new_for_testing(),
                 )
                 .await
                 .unwrap();
