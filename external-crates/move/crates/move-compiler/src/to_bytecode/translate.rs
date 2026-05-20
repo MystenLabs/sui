@@ -4,10 +4,11 @@
 
 use super::{canonicalize_handles, context::*, optimize};
 use crate::{
+    PreCompiledProgramInfo,
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    diagnostics::{filter::FilterStack, DiagnosticReporter, Diagnostics},
+    diagnostics::{DiagnosticReporter, Diagnostics, filter::FilterStack},
     expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
     hlir::{
         ast::{self as H, Value_, Var, Visibility},
@@ -29,7 +30,6 @@ use crate::{
         unique_map::UniqueMap,
         *,
     },
-    PreCompiledProgramInfo,
 };
 use move_binary_format::file_format as F;
 use move_bytecode_source_map::source_map::SourceMap;
@@ -1632,9 +1632,9 @@ fn convert_unpack_type(unpack_type: H::UnpackType) -> IR::UnpackType {
 
 #[growing_stack]
 fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
-    use Value_ as V;
     use H::UnannotatedExp_ as E;
     use IR::Bytecode_ as B;
+    use Value_ as V;
     let saved_color = context.color.clone();
     context.color = e.exp.color.clone().unwrap_or_else(|| saved_color.clone());
     let csp!(loc, _, e_) = e.exp;
@@ -1861,8 +1861,8 @@ fn module_call(
 }
 
 fn unary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
-    use UnaryOp_ as O;
     use IR::Bytecode_ as B;
+    use UnaryOp_ as O;
     push_instr(
         context,
         code,

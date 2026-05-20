@@ -10,7 +10,7 @@ use crate::{
     diagnostics::{Diagnostic, Diagnostics},
     hlir::{
         ast::*,
-        translate::{display_var, DisplayVar},
+        translate::{DisplayVar, display_var},
     },
     ice_assert,
     parser::ast::BinOp_,

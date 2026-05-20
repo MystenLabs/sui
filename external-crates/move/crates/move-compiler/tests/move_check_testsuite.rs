@@ -18,14 +18,15 @@ use move_command_line_common::{
     testing::{InstaOptions, OUT_EXT},
 };
 use move_compiler::{
+    Compiler, PASS_PARSER,
     command_line::compiler::move_check_for_errors,
-    diagnostics::filter::{empty_filter_scope, unused_for_test_filter_scope},
     compiled_unit::AnnotatedCompiledUnit,
+    diagnostics::filter::{empty_filter_scope, unused_for_test_filter_scope},
     diagnostics::*,
     editions::{Edition, Flavor},
     linters::{self, LintLevel},
     shared::{Flags, NumericalAddress, PackageConfig, PackagePaths, files::MappedFiles},
-    sui_mode, Compiler, PASS_PARSER,
+    sui_mode,
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
