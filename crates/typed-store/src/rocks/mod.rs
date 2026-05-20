@@ -1524,10 +1524,11 @@ impl DBBatch {
     }
 
     /// Like [`Self::schedule_delete_range`], but takes pre-encoded byte ranges
-    /// directly. Useful when the desired bounds do not correspond to any
-    /// serializable key — for example, when the caller needs an exclusive
-    /// upper bound that is the lexicographic successor of a real key in order
-    /// to express a closed range as a half-open one (see
+    /// directly: `from` is inclusive and `to` is exclusive, matching the
+    /// underlying RocksDB range tombstone. Useful when the desired bounds do
+    /// not correspond to any serializable key — for example, when the caller
+    /// needs an exclusive upper bound that is the lexicographic successor of a
+    /// real key in order to express a closed range as a half-open one (see
     /// `schedule_delete_all`).
     pub fn schedule_delete_range_raw<K, V>(
         &mut self,
