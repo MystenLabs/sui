@@ -57,6 +57,16 @@ module a::m {
         check(tmp);
     }
 
+    // Per-root tracking: both branches contribute a field-derived view of a
+    // different root, so the joined returned value marks both roots used.
+    public fun branch_join_field_returned(
+        c1: &OwnerCap,
+        c2: &OwnerCap,
+        cond: bool
+    ): &address {
+        if (cond) &c1.owns else &c2.owns
+    }
+
     // typical accessor patterns
     public fun get(c: &OwnerCap): address { c.owns }
     public fun get_mut(c: &mut OwnerCap): &mut address { &mut c.owns }
