@@ -55,7 +55,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::list_events_response;
 const DEFAULT_LIMIT_ITEMS: u32 = 50;
 const MAX_LIMIT_ITEMS: u32 = 1000;
 const EVENT_READ_MASK_DEFAULT: &str = "event_type";
-const CHUNK_MAX: usize = 100;
+const CHUNK_MAX: usize = 32;
 
 pub(crate) type ListEventsStream = BoxStream<'static, Result<ListEventsResponse, RpcError>>;
 
