@@ -167,6 +167,23 @@ impl BitmapScanBudget {
             .is_ok()
     }
 
+    /// Charge a leaf's mandatory first bucket: decrements the shared pool
+    /// when it can, but ALWAYS succeeds. The runtime guards `budget >=
+    /// leaf_count`, but a *shared* atomic with concurrent leaves gives no
+    /// ordering guarantee — a sparse term can drain the pool before a
+    /// slower sibling leaf charges its first bucket, leaving that leaf's
+    /// merged-watermark slot `None` forever (cursorless `SCAN_LIMIT`).
+    /// Reserving the first bucket per leaf makes the `leaf_count` floor's
+    /// promise — "every leaf emits its first watermark" — actually hold.
+    /// Charging-when-possible keeps `buckets_evaluated` accurate in the
+    /// common `budget >> leaves` case; it only undercounts a first bucket
+    /// taken after the pool was already exhausted by other leaves.
+    fn take_first(&self) {
+        let _ = self.remaining.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |b| {
+            Some(b.saturating_sub(1))
+        });
+    }
+
     fn buckets_evaluated(&self) -> u64 {
         self.initial
             .saturating_sub(self.remaining.load(Ordering::SeqCst))
@@ -332,9 +349,11 @@ impl BitmapQuery {
         })
     }
 
-    /// Total leaf literal count across every term. The per-request
-    /// budget must be at least this many so every leaf can emit its
-    /// first watermark.
+    /// Total leaf literal count across every term. The per-request budget
+    /// must be at least this many — a sanity floor enforced before any
+    /// scan. Each leaf's first bucket is then reserved (always allowed) so
+    /// every leaf emits its first watermark regardless of how the shared
+    /// budget races; see [`BitmapScanBudget::take_first`].
     pub fn leaf_count(&self) -> usize {
         self.terms.iter().map(|t| t.literals.len()).sum()
     }
@@ -534,6 +553,16 @@ where
 /// silent EOF, which `subtract_two` would mistake for "no more excludes."
 /// Charge is post-poll so `budget == leaves` doesn't spuriously trip at
 /// natural EOF.
+///
+/// The post-poll timing also underwrites forward progress under
+/// `SCAN_LIMIT`: a bucket's `pre` and `post` are both emitted before the
+/// *next* bucket's charge can trip the limit. So a leaf that scans at
+/// least one bucket always surfaces an *advancing* `post` watermark, not
+/// just the first bucket's `pre` — which is clamped back to `range.start`
+/// (below) and would otherwise resume the client at their own request
+/// floor. Downstream `resolve_watermarks` flushes that in-flight `post`
+/// ahead of the `BitmapScanLimitExceeded`, so a truncated scan still
+/// hands back real progress.
 fn budget_limited_bucket_stream<S>(
     inner: S,
     budget: BitmapScanBudget,
@@ -551,9 +580,16 @@ where
     };
     async_stream::try_stream! {
         futures::pin_mut!(inner);
+        let mut first = true;
         while let Some(item) = inner.next().await {
             let item = item?;
-            if !budget.try_take() {
+            if first {
+                // Reserved: a leaf's first bucket is always allowed so it
+                // always emits its first watermark, regardless of how the
+                // shared budget raced. See `BitmapScanBudget::take_first`.
+                budget.take_first();
+                first = false;
+            } else if !budget.try_take() {
                 Err(anyhow::Error::new(BitmapScanLimitExceeded))?;
             }
             let (bucket_id, _) = &item;
@@ -1276,6 +1312,77 @@ mod tests {
 
     fn exclude(value: &[u8]) -> BitmapLiteral {
         BitmapLiteral::exclude(test_key(value)).unwrap()
+    }
+
+    /// Nested multi-term starvation. `term1 = (a AND b)` has disjoint
+    /// includes, so its intersect drops `a`'s buckets one by one, draining
+    /// the *shared* budget. `term2 = c` is a sibling whose only data sits
+    /// ahead of the request floor. With a synchronous source the top union
+    /// fully drains `term1` (burning the budget) before `c` is polled, so
+    /// without a per-leaf first-bucket reservation `c`'s merged-watermark
+    /// slot stays `None`, the union's min-merge stays `None`, and the
+    /// stream ends with a *cursorless* `SCAN_LIMIT` — no resume point, the
+    /// client livelocks. The reservation guarantees `c` emits its first
+    /// watermark, so a forward-progress frontier surfaces before the error.
+    #[tokio::test]
+    async fn nested_term_starvation_emits_frontier_before_scan_limit() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([
+                (
+                    test_key(b"a"),
+                    vec![
+                        (0, vec![1]),
+                        (1, vec![1]),
+                        (2, vec![1]),
+                        (3, vec![1]),
+                        (4, vec![1]),
+                    ],
+                ),
+                (test_key(b"b"), vec![(50, vec![1])]),
+                (test_key(b"c"), vec![(40, vec![7])]),
+            ])),
+        };
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), include(b"b")]).unwrap(),
+            BitmapTerm::new(vec![include(b"c")]).unwrap(),
+        ])
+        .unwrap();
+
+        // Budget == leaf_count: the runtime floor, the tightest starvation.
+        let stream = eval_bitmap_query_stream(
+            source,
+            query,
+            0..(60 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            3,
+            |_| {},
+        );
+        // Collect rather than try_collect: short-circuiting on Err would
+        // drop the pre-error watermark under test.
+        let all: Vec<Result<Watermarked<u64>>> = stream.collect().await;
+
+        let last_ok = all
+            .iter()
+            .rev()
+            .find_map(|r| r.as_ref().ok())
+            .expect("a frontier watermark must surface before the (otherwise cursorless) error");
+        match last_ok {
+            Watermarked::Watermark(p) => assert!(
+                *p > 0,
+                "frontier must reflect real progress past the request floor (got {p})"
+            ),
+            Watermarked::Item(_) => panic!("disjoint intersect must not emit items here"),
+        }
+        let err = all
+            .last()
+            .expect("non-empty")
+            .as_ref()
+            .expect_err("scan must terminate with an error");
+        assert!(
+            error_contains::<BitmapScanLimitExceeded>(err).is_some(),
+            "expected BitmapScanLimitExceeded, got {err:?}"
+        );
     }
 
     #[test]

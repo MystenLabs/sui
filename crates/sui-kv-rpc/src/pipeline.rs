@@ -439,6 +439,16 @@ where
         futures::pin_mut!(fetch_results);
         let mut reassembler = Reassembler::<I, K, V>::new();
         while let Some(result) = fetch_results.next().await {
+            // `result?` propagates a terminal upstream/fetch error WITHOUT
+            // flushing a watermark `reassembler` may be holding. This is
+            // deliberate and is the opposite of `resolve_watermarks`'
+            // flush-on-error: there the in-flight watermark dominates
+            // already-emitted items, so flushing it is safe; here a held
+            // `pending_watermark` is set only mid-batch, so it dominates the
+            // in-flight batch this error just aborted. Emitting it would
+            // advance the client past items that never reached the wire.
+            // Dropping it is the correct resume point — the last on-wire
+            // cursor stands.
             for emission in reassembler.push(result?)? {
                 match emission {
                     ReassemblerEmission::Item(item) => yield Watermarked::Item(item),
