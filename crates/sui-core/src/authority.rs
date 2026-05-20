@@ -3886,15 +3886,17 @@ impl AuthorityState {
                 name,
                 config.transaction_deny_config.clone(),
                 config.peer_deny_sync_config.clone(),
+                epoch_store.committee().clone(),
                 store.perpetual_tables.clone(),
                 prometheus_registry,
             )
             .expect("Failed to initialize TransactionDenyConfigManager");
         // Drop any cached entries from peers no longer in the active committee.
-        if let Err(e) = transaction_deny_config_manager.prune_for_committee(epoch_store.committee())
+        if let Err(e) =
+            transaction_deny_config_manager.update_for_committee(epoch_store.committee().clone())
         {
             warn!(
-                "Initial prune_for_committee failed during AuthorityState init: {:?}",
+                "Initial update_for_committee failed during AuthorityState init: {:?}",
                 e
             );
         }
@@ -4289,14 +4291,14 @@ impl AuthorityState {
             .reconfigure(&new_epoch_store, self.get_account_funds_read());
         self.init_object_funds_checker().await;
 
-        // Drop entries for peers no longer in the active committee before tx
+        // Update the committee and drop entries for peers no longer in it before tx
         // processing resumes for the new epoch.
         if let Err(e) = self
             .transaction_deny_config_manager
-            .prune_for_committee(new_epoch_store.committee())
+            .update_for_committee(new_epoch_store.committee().clone())
         {
             warn!(
-                "TransactionDenyConfigManager prune_for_committee failed at reconfigure: {:?}",
+                "TransactionDenyConfigManager update_for_committee failed at reconfigure: {:?}",
                 e
             );
         }

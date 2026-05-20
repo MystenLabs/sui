@@ -11,21 +11,113 @@ use crate::dynamic_transaction_signing_checks::{
     DynamicCheckRunnerContext, DynamicCheckRunnerError,
 };
 
-/// Configuration for sharing recommended `TransactionDenyConfig` settings with peers via
-/// consensus. Operators define an allowlist of trusted peer authorities; updates from
-/// allowlisted peers are union/OR-merged with the local config to form the effective
-/// config used at signing time.
+/// Configuration for activating recommended `TransactionDenyConfig` rules shared by
+/// peers via consensus. The operator pre-defines named rulesets, each gated on a
+/// stake threshold among an eligible set of validators; a "default" bucket governs any
+/// rule elements that weren't pre-listed.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct PeerDenySyncConfig {
-    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub peer_allowlist: BTreeSet<AuthorityName>,
+    /// Pre-listed rulesets. Each activates only when eligible voting stake reaches
+    /// its threshold.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rulesets: Vec<SharedDenyRuleset>,
+
+    /// Governs rule elements proposed by peers that aren't part of any pre-listed
+    /// ruleset. Each proposed element is threshold-gated individually.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_threshold: Option<SharedDenyRuleThreshold>,
 
     #[serde(default)]
     pub broadcast_on_startup: bool,
 
     #[serde(default)]
     pub broadcast_on_epoch_change: bool,
+}
+
+/// A pre-listed ruleset becomes effective when validators holding at least
+/// `threshold.stake_threshold_percent` of the eligible stake have each proposed a
+/// superset of `rules`.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct SharedDenyRuleset {
+    /// Operator-chosen identifier used in metrics.
+    pub name: String,
+    pub rules: TransactionDenyRules,
+    #[serde(flatten)]
+    pub threshold: SharedDenyRuleThreshold,
+}
+
+/// Eligibility + stake threshold criteria for activating a proposed deny-rule.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct SharedDenyRuleThreshold {
+    pub eligibility: ValidatorEligibility,
+    /// Whole-number percent (0..=100) of eligible stake that must vote to activate.
+    pub stake_threshold_percent: u16,
+}
+
+/// Which validators' proposals count toward a deny-rule activation's stake threshold.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ValidatorEligibility {
+    /// Only the listed authorities are eligible.
+    Allowlist(BTreeSet<AuthorityName>),
+    /// All committee members except the listed authorities are eligible.
+    Denylist(BTreeSet<AuthorityName>),
+}
+
+impl ValidatorEligibility {
+    pub fn is_eligible(&self, name: &AuthorityName) -> bool {
+        match self {
+            ValidatorEligibility::Allowlist(set) => set.contains(name),
+            ValidatorEligibility::Denylist(set) => !set.contains(name),
+        }
+    }
+}
+
+impl Default for ValidatorEligibility {
+    fn default() -> Self {
+        // An empty denylist makes every committee member eligible.
+        ValidatorEligibility::Denylist(BTreeSet::new())
+    }
+}
+
+impl PeerDenySyncConfig {
+    /// Validate operator-provided settings. Called at manager construction.
+    pub fn validate(&self) -> Result<(), String> {
+        let mut names = BTreeSet::new();
+        for ruleset in &self.rulesets {
+            if ruleset.name.is_empty() {
+                return Err("rulesets entry has an empty name".to_string());
+            }
+            if !names.insert(ruleset.name.as_str()) {
+                return Err(format!("duplicate rulesets name: {}", ruleset.name));
+            }
+            if ruleset.rules.is_empty() {
+                return Err(format!("rulesets entry {} has empty rules", ruleset.name));
+            }
+            ruleset.threshold.validate(&ruleset.name)?;
+        }
+        if let Some(default) = &self.default_threshold {
+            default.validate("default_threshold")?;
+        }
+        Ok(())
+    }
+}
+
+impl SharedDenyRuleThreshold {
+    /// Validate this threshold's percent is within 0..=100. `label` is included in the
+    /// error message to identify which threshold failed.
+    pub fn validate(&self, label: &str) -> Result<(), String> {
+        if self.stake_threshold_percent > 100 {
+            return Err(format!(
+                "{label}: stake_threshold_percent must be 0..=100, got {}",
+                self.stake_threshold_percent,
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -105,20 +197,12 @@ impl TransactionDenyConfig {
         self.dynamic_transaction_checks.is_some()
     }
 
-    /// Build the effective merged config from a local config and an iterator of peer
-    /// rules. The local rules form the base; each peer rules entry is OR/union-merged on
-    /// top. `dynamic_transaction_checks` is taken verbatim from `local` (local-only).
-    pub fn from_local_and_peers<'a>(
-        local: &Self,
-        peer_rules: impl Iterator<Item = &'a TransactionDenyRules>,
-    ) -> Self {
-        let mut rules = local.rules.clone();
-        for peer in peer_rules {
-            rules.merge(peer);
-        }
+    /// Return a copy of this config with `rules` replaced, carrying
+    /// `dynamic_transaction_checks` over verbatim (it is local-only and never shared).
+    pub fn with_rules(&self, rules: TransactionDenyRules) -> Self {
         Self {
             rules,
-            dynamic_transaction_checks: local.dynamic_transaction_checks.clone(),
+            dynamic_transaction_checks: self.dynamic_transaction_checks.clone(),
         }
     }
 }
@@ -207,30 +291,44 @@ impl TransactionDenyConfigBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn obj(byte: u8) -> ObjectID {
-        ObjectID::new([byte; 32])
-    }
+    use sui_types::base_types::dbg_addr;
 
     #[test]
-    fn from_local_and_peers_preserves_dynamic_checks_from_local_only() {
+    fn with_rules_replaces_rules_and_keeps_dynamic_checks() {
+        let starlark =
+            "def predicate(tx_data, tx_signatures, input_objects, receiving_objects):\n    pass\n"
+                .to_string();
         let local = TransactionDenyConfigBuilder::new()
-            .add_denied_object(obj(1))
+            .add_denied_object(ObjectID::from_single_byte(1))
+            .add_dynamic_transaction_checks(starlark)
+            .expect("starlark should parse")
             .build();
-        let mut peer = TransactionDenyRules::default();
-        peer.object_deny_list.insert(obj(2));
-        peer.user_transaction_disabled = true;
 
-        let merged = TransactionDenyConfig::from_local_and_peers(&local, std::iter::once(&peer));
+        let mut new_rules = TransactionDenyRules::default();
+        new_rules
+            .object_deny_list
+            .insert(ObjectID::from_single_byte(2));
+        new_rules.user_transaction_disabled = true;
 
-        assert!(merged.get_object_deny_set().contains(&obj(1)));
-        assert!(merged.get_object_deny_set().contains(&obj(2)));
-        assert!(merged.user_transaction_disabled());
-        assert!(!merged.has_dynamic_transaction_checks());
+        let updated = local.with_rules(new_rules);
+
+        assert!(
+            !updated
+                .get_object_deny_set()
+                .contains(&ObjectID::from_single_byte(1))
+        );
+        assert!(
+            updated
+                .get_object_deny_set()
+                .contains(&ObjectID::from_single_byte(2))
+        );
+        assert!(updated.user_transaction_disabled());
+        // dynamic_transaction_checks is local-only and carried over verbatim.
+        assert!(updated.has_dynamic_transaction_checks());
     }
 
     #[test]
-    fn yaml_round_trip_preserves_existing_schema() {
+    fn transaction_deny_config_yaml_preserves_existing_schema() {
         // Older operator configs use kebab-case fields at the top level of
         // transaction-deny-config; the flatten attribute must keep that schema.
         let yaml = r#"
@@ -250,12 +348,12 @@ mod tests {
     /// `dynamic_transaction_checks` — a refactor that touches either is most likely
     /// to trip here.
     #[test]
-    fn yaml_full_round_trip_preserves_all_fields() {
+    fn transaction_deny_config_yaml_round_trip() {
         let cfg = TransactionDenyConfigBuilder::new()
-            .add_denied_object(obj(1))
-            .add_denied_object(obj(2))
-            .add_denied_package(obj(3))
-            .add_denied_address(SuiAddress::from_bytes([4u8; 32]).unwrap())
+            .add_denied_object(ObjectID::from_single_byte(1))
+            .add_denied_object(ObjectID::from_single_byte(2))
+            .add_denied_package(ObjectID::from_single_byte(3))
+            .add_denied_address(dbg_addr(4))
             .disable_user_transaction()
             .disable_gasless()
             .disable_shared_object_transaction()
@@ -284,7 +382,7 @@ mod tests {
     /// This test pins that backward compatibility down so a future refactor that
     /// changes the on-wire shape will fail loudly.
     #[test]
-    fn yaml_pre_refactor_schema_still_parses() {
+    fn transaction_deny_config_yaml_pre_refactor_schema_parses() {
         // Hand-rolled YAML that matches what the old Vec/HashSet code would emit:
         // sequences for the list fields, with concrete entries (not the empty-list
         // serialization a fresh BTreeSet would produce).
@@ -321,13 +419,13 @@ mod tests {
     /// they coexist correctly: a config with a populated Starlark program and
     /// flattened rule fields round-trips without one stomping on the other.
     #[test]
-    fn yaml_round_trip_with_dynamic_transaction_checks() {
+    fn transaction_deny_config_yaml_round_trip_with_dynamic_checks() {
         // A trivially-valid Starlark program that always passes.
         let starlark =
             "def predicate(tx_data, tx_signatures, input_objects, receiving_objects):\n    pass\n"
                 .to_string();
         let cfg = TransactionDenyConfigBuilder::new()
-            .add_denied_object(obj(1))
+            .add_denied_object(ObjectID::from_single_byte(1))
             .disable_package_publish()
             .add_dynamic_transaction_checks(starlark)
             .expect("starlark should parse");
@@ -339,5 +437,110 @@ mod tests {
         // Both flattened rule fields and the custom-serialized Starlark survive.
         assert_eq!(cfg.rules(), parsed.rules());
         assert!(parsed.has_dynamic_transaction_checks());
+    }
+
+    /// A populated `PeerDenySyncConfig` round-trips through YAML — pins down the
+    /// `#[serde(flatten)]` on the ruleset threshold and the `ValidatorEligibility` enum
+    /// representation, the two serde-fragile parts of the schema.
+    #[test]
+    fn peer_deny_sync_config_yaml_round_trip() {
+        let rules = TransactionDenyRules {
+            package_publish_disabled: true,
+            object_deny_list: std::iter::once(ObjectID::from_single_byte(7)).collect(),
+            ..Default::default()
+        };
+        let config = PeerDenySyncConfig {
+            rulesets: vec![SharedDenyRuleset {
+                name: "incident".to_string(),
+                rules,
+                threshold: SharedDenyRuleThreshold {
+                    eligibility: ValidatorEligibility::Denylist(BTreeSet::new()),
+                    stake_threshold_percent: 67,
+                },
+            }],
+            default_threshold: Some(SharedDenyRuleThreshold {
+                eligibility: ValidatorEligibility::Allowlist(BTreeSet::new()),
+                stake_threshold_percent: 50,
+            }),
+            broadcast_on_startup: true,
+            broadcast_on_epoch_change: false,
+        };
+
+        let yaml = serde_yaml::to_string(&config).expect("serialize");
+        let parsed: PeerDenySyncConfig = serde_yaml::from_str(&yaml).expect("deserialize");
+        assert_eq!(config, parsed);
+    }
+
+    #[test]
+    fn validate_rejects_malformed_rulesets() {
+        let nonempty = || TransactionDenyRules {
+            package_publish_disabled: true,
+            ..Default::default()
+        };
+        let ruleset = |name: &str, rules: TransactionDenyRules, percent: u16| SharedDenyRuleset {
+            name: name.to_string(),
+            rules,
+            threshold: SharedDenyRuleThreshold {
+                eligibility: ValidatorEligibility::default(),
+                stake_threshold_percent: percent,
+            },
+        };
+        let config = |rulesets, default_threshold| PeerDenySyncConfig {
+            rulesets,
+            default_threshold,
+            ..Default::default()
+        };
+
+        // A well-formed config validates.
+        assert!(
+            config(vec![ruleset("a", nonempty(), 50)], None)
+                .validate()
+                .is_ok()
+        );
+        // Empty name.
+        assert!(
+            config(vec![ruleset("", nonempty(), 50)], None)
+                .validate()
+                .is_err()
+        );
+        // Duplicate names.
+        assert!(
+            config(
+                vec![
+                    ruleset("dup", nonempty(), 50),
+                    ruleset("dup", nonempty(), 50)
+                ],
+                None,
+            )
+            .validate()
+            .is_err()
+        );
+        // Empty rules.
+        assert!(
+            config(
+                vec![ruleset("a", TransactionDenyRules::default(), 50)],
+                None
+            )
+            .validate()
+            .is_err()
+        );
+        // Threshold above 100 on a pre-listed ruleset.
+        assert!(
+            config(vec![ruleset("a", nonempty(), 101)], None)
+                .validate()
+                .is_err()
+        );
+        // Threshold above 100 on the default bucket.
+        assert!(
+            config(
+                vec![],
+                Some(SharedDenyRuleThreshold {
+                    eligibility: ValidatorEligibility::default(),
+                    stake_threshold_percent: 101,
+                }),
+            )
+            .validate()
+            .is_err()
+        );
     }
 }

@@ -2386,13 +2386,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &self,
         shared_transaction_deny_configs: Vec<SharedTransactionDenyConfig>,
     ) {
-        if shared_transaction_deny_configs.is_empty() {
-            return;
-        }
-        for msg in shared_transaction_deny_configs {
-            if let Err(e) = self.transaction_deny_config_manager.apply_update(msg) {
-                warn!("Failed to apply UpdateTransactionDenyConfig: {e:?}");
-            }
+        if let Err(e) = self
+            .transaction_deny_config_manager
+            .apply_updates(shared_transaction_deny_configs)
+        {
+            warn!("Failed to apply UpdateTransactionDenyConfig batch: {e:?}");
         }
     }
 

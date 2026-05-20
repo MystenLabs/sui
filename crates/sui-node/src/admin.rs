@@ -684,12 +684,6 @@ async fn submit_transaction_deny_config_update(
         );
     }
 
-    if let Some(rules) = rules.as_ref()
-        && let Err(e) = rules.check_share_limits()
-    {
-        return (StatusCode::BAD_REQUEST, format!("{e}\n"));
-    }
-
     let consensus_adapter = match state.node.consensus_adapter().await {
         Some(adapter) => adapter,
         None => {
@@ -702,7 +696,7 @@ async fn submit_transaction_deny_config_update(
 
     let (consensus_tx, generation) = match authority_state
         .transaction_deny_config_manager()
-        .build_share_consensus_tx(authority_state.name, rules)
+        .build_share_consensus_tx(rules)
     {
         Ok(pair) => pair,
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}\n")),
@@ -743,6 +737,7 @@ async fn transaction_deny_config_dump(State(state): State<Arc<AppState>>) -> (St
     let local = manager.local();
     let effective = manager.effective_config().load();
     let peers = manager.peer_configs_snapshot();
+    let evaluation = manager.evaluate_status();
 
     let peer_dump: serde_json::Map<String, serde_json::Value> = peers
         .iter()
@@ -756,6 +751,33 @@ async fn transaction_deny_config_dump(State(state): State<Arc<AppState>>) -> (St
         })
         .collect();
 
+    let prelisted_dump: Vec<serde_json::Value> = evaluation
+        .prelisted
+        .iter()
+        .map(|status| {
+            json!({
+                "name": status.name,
+                "stake_threshold_percent": status.stake_threshold_percent,
+                "eligible_stake": status.eligible_stake,
+                "voted_stake": status.voted_stake,
+                "voters": status
+                    .voters
+                    .iter()
+                    .map(|v| format!("{}", v.concise()))
+                    .collect::<Vec<_>>(),
+                "active": status.active,
+            })
+        })
+        .collect();
+
+    let default_dump = evaluation.default.as_ref().map(|d| {
+        json!({
+            "stake_threshold_percent": d.stake_threshold_percent,
+            "eligible_stake": d.eligible_stake,
+            "applied_elements": d.applied_elements,
+        })
+    });
+
     let body = json!({
         "local": {
             "rules": local.rules(),
@@ -765,6 +787,10 @@ async fn transaction_deny_config_dump(State(state): State<Arc<AppState>>) -> (St
         "effective": {
             "rules": effective.rules(),
             "has_dynamic_transaction_checks": effective.has_dynamic_transaction_checks(),
+        },
+        "voting": {
+            "prelisted": prelisted_dump,
+            "default": default_dump,
         },
     });
 

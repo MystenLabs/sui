@@ -84,6 +84,7 @@ use mysten_metrics::{RegistryService, spawn_monitored_task};
 use mysten_service::server_timing::server_timing_middleware;
 use sui_config::node::{DBCheckpointConfig, RunWithRange};
 use sui_config::node::{ForkCrashBehavior, ForkRecoveryConfig};
+use sui_config::transaction_deny_config::TransactionDenyRules;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -1746,34 +1747,41 @@ impl SuiNode {
                     None,
                 )?;
 
-                // Broadcast our local TransactionDenyConfig recommendation, if enabled.
+                // Reconcile our shared TransactionDenyConfig vote with the (possibly
+                // restart-edited) local config.
                 let sync_cfg = &self.config.peer_deny_sync_config;
+                let is_startup = broadcast_on_startup.is_some();
                 let should_broadcast = broadcast_on_startup
                     .take()
                     .unwrap_or(sync_cfg.broadcast_on_epoch_change);
-                if should_broadcast
-                    && cur_epoch_store
-                        .protocol_config()
-                        .share_transaction_deny_config_in_consensus()
+                if cur_epoch_store
+                    .protocol_config()
+                    .share_transaction_deny_config_in_consensus()
                 {
                     let manager = self.state.transaction_deny_config_manager();
-                    let local_rules = manager.local().rules().clone();
-                    let payload = (!local_rules.is_empty()).then_some(local_rules);
-                    match manager.build_share_consensus_tx(self.state.name, payload) {
-                        Ok((tx, _generation)) => {
-                            info!(?tx, "Broadcasting transaction deny config");
-                            if let Err(e) = components.consensus_adapter.submit(
-                                tx,
-                                None,
-                                &cur_epoch_store,
-                                None,
-                                None,
-                            ) {
-                                warn!("Failed to broadcast transaction deny config: {e:?}");
+                    let payload = deny_config_reconciliation_payload(
+                        manager.local().rules(),
+                        should_broadcast,
+                        is_startup,
+                        manager.persisted_broadcast_is_active().unwrap_or(false),
+                    );
+                    if let Some(rules) = payload {
+                        match manager.build_share_consensus_tx(rules) {
+                            Ok((tx, _generation)) => {
+                                info!(?tx, "Updating transaction deny config vote");
+                                if let Err(e) = components.consensus_adapter.submit(
+                                    tx,
+                                    None,
+                                    &cur_epoch_store,
+                                    None,
+                                    None,
+                                ) {
+                                    warn!("Failed to broadcast transaction deny config: {e:?}");
+                                }
                             }
-                        }
-                        Err(e) => {
-                            warn!("Failed to build deny config broadcast: {e:?}");
+                            Err(e) => {
+                                warn!("Failed to build deny config update: {e:?}");
+                            }
                         }
                     }
                 }
@@ -2616,6 +2624,33 @@ fn max_tx_per_checkpoint(_: &ProtocolConfig) -> usize {
     2
 }
 
+/// Decide the deny-config message (if any) to broadcast at a startup or epoch-change
+/// transition, reconciling our network vote with the current local config.
+///
+/// `None` means do nothing.
+/// `Some(Some(_))` (re-)broadcasts the local config.
+/// `Some(None)` withdraws.
+///
+/// An oversized local config can't go on the wire (the consensus validator would reject
+/// it), so it is treated as unshareable: on startup a stale prior vote is withdrawn
+/// rather than left to diverge from the local config.
+fn deny_config_reconciliation_payload(
+    local_rules: &TransactionDenyRules,
+    broadcast: bool,
+    is_startup: bool,
+    has_prior_broadcast: bool,
+) -> Option<Option<TransactionDenyRules>> {
+    let shareable = local_rules.is_empty() || local_rules.check_share_limits().is_ok();
+    if broadcast && shareable {
+        // An empty local config broadcasts a withdrawal.
+        Some((!local_rules.is_empty()).then(|| local_rules.clone()))
+    } else if is_startup && has_prior_broadcast {
+        Some(None)
+    } else {
+        None
+    }
+}
+
 #[derive(Default)]
 struct HttpServers {
     #[allow(unused)]
@@ -2632,6 +2667,58 @@ mod tests {
     use sui_config::node::{ForkCrashBehavior, ForkRecoveryConfig};
     use sui_core::checkpoints::{CheckpointMetrics, CheckpointStore};
     use sui_types::digests::{CheckpointDigest, TransactionDigest, TransactionEffectsDigest};
+
+    #[test]
+    fn deny_config_reconciliation_payload_decisions() {
+        let empty = TransactionDenyRules::default();
+        let populated = TransactionDenyRules {
+            package_publish_disabled: true,
+            ..Default::default()
+        };
+        let oversized = TransactionDenyRules {
+            zklogin_disabled_providers: std::iter::once(
+                "x".repeat(TransactionDenyRules::MAX_ZKLOGIN_PROVIDER_LENGTH + 1),
+            )
+            .collect(),
+            ..Default::default()
+        };
+
+        // broadcast=true: (re-)broadcast the current local config.
+        assert_eq!(
+            deny_config_reconciliation_payload(&populated, true, true, false),
+            Some(Some(populated.clone())),
+        );
+        // broadcast=true with an empty local config: broadcast a withdrawal.
+        assert_eq!(
+            deny_config_reconciliation_payload(&empty, true, true, false),
+            Some(None),
+        );
+        // Not broadcasting, startup, prior vote -> withdraw it.
+        assert_eq!(
+            deny_config_reconciliation_payload(&populated, false, true, true),
+            Some(None),
+        );
+        // Not broadcasting, startup, no prior vote -> nothing.
+        assert_eq!(
+            deny_config_reconciliation_payload(&populated, false, true, false),
+            None,
+        );
+        // Epoch change (not startup) without broadcast -> nothing, even with a prior vote.
+        assert_eq!(
+            deny_config_reconciliation_payload(&populated, false, false, true),
+            None,
+        );
+        // An oversized local config is unshareable: broadcast=true falls back to
+        // withdrawing a prior vote instead of attempting an (oversized) broadcast.
+        assert_eq!(
+            deny_config_reconciliation_payload(&oversized, true, true, true),
+            Some(None),
+        );
+        assert_eq!(
+            deny_config_reconciliation_payload(&oversized, true, true, false),
+            None,
+        );
+    }
 
     #[tokio::test]
     async fn test_fork_error_and_recovery_both_paths() {

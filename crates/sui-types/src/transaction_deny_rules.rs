@@ -77,8 +77,7 @@ impl TransactionDenyRules {
     pub const MAX_ZKLOGIN_PROVIDER_LENGTH: usize = 256;
 
     /// Union-merge another rules set into this one. Set fields are extended; boolean
-    /// fields are OR'd. Used to fold an allowlisted peer's recommendation into the
-    /// effective config.
+    /// fields are OR'd.
     pub fn merge(&mut self, other: &Self) {
         self.object_deny_list
             .extend(other.object_deny_list.iter().copied());
@@ -95,6 +94,102 @@ impl TransactionDenyRules {
         self.zklogin_sig_disabled |= other.zklogin_sig_disabled;
         self.zklogin_disabled_providers
             .extend(other.zklogin_disabled_providers.iter().cloned());
+    }
+
+    /// Returns true if `self` contains every rule in `other`: each set field of
+    /// `other` is a subset of `self`'s, and every boolean set in `other` is set in
+    /// `self`. A peer's proposal "votes for" a pre-listed config only when it is a
+    /// superset of that config's rules.
+    pub fn is_superset_of(&self, other: &Self) -> bool {
+        other.object_deny_list.is_subset(&self.object_deny_list)
+            && other.package_deny_list.is_subset(&self.package_deny_list)
+            && other.address_deny_list.is_subset(&self.address_deny_list)
+            && other
+                .zklogin_disabled_providers
+                .is_subset(&self.zklogin_disabled_providers)
+            && (self.package_publish_disabled || !other.package_publish_disabled)
+            && (self.package_upgrade_disabled || !other.package_upgrade_disabled)
+            && (self.shared_object_disabled || !other.shared_object_disabled)
+            && (self.user_transaction_disabled || !other.user_transaction_disabled)
+            && (self.gasless_disabled || !other.gasless_disabled)
+            && (self.receiving_objects_disabled || !other.receiving_objects_disabled)
+            && (self.zklogin_sig_disabled || !other.zklogin_sig_disabled)
+    }
+
+    /// Iterate the individual rule elements of this rules set: one item per deny-list
+    /// entry and one per `true` boolean flag.
+    pub fn elements(&self) -> impl Iterator<Item = DenyElement> + '_ {
+        self.object_deny_list
+            .iter()
+            .map(|o| DenyElement::Object(*o))
+            .chain(
+                self.package_deny_list
+                    .iter()
+                    .map(|p| DenyElement::Package(*p)),
+            )
+            .chain(
+                self.address_deny_list
+                    .iter()
+                    .map(|a| DenyElement::Address(*a)),
+            )
+            .chain(
+                self.zklogin_disabled_providers
+                    .iter()
+                    .map(|p| DenyElement::ZkLoginProvider(p.clone())),
+            )
+            .chain(
+                self.package_publish_disabled
+                    .then_some(DenyElement::PackagePublishDisabled),
+            )
+            .chain(
+                self.package_upgrade_disabled
+                    .then_some(DenyElement::PackageUpgradeDisabled),
+            )
+            .chain(
+                self.shared_object_disabled
+                    .then_some(DenyElement::SharedObjectDisabled),
+            )
+            .chain(
+                self.user_transaction_disabled
+                    .then_some(DenyElement::UserTransactionDisabled),
+            )
+            .chain(
+                self.gasless_disabled
+                    .then_some(DenyElement::GaslessDisabled),
+            )
+            .chain(
+                self.receiving_objects_disabled
+                    .then_some(DenyElement::ReceivingObjectsDisabled),
+            )
+            .chain(
+                self.zklogin_sig_disabled
+                    .then_some(DenyElement::ZkLoginSigDisabled),
+            )
+    }
+
+    /// Apply a single rule element to this rules set.
+    pub fn apply_element(&mut self, element: &DenyElement) {
+        match element {
+            DenyElement::Object(o) => {
+                self.object_deny_list.insert(*o);
+            }
+            DenyElement::Package(p) => {
+                self.package_deny_list.insert(*p);
+            }
+            DenyElement::Address(a) => {
+                self.address_deny_list.insert(*a);
+            }
+            DenyElement::ZkLoginProvider(p) => {
+                self.zklogin_disabled_providers.insert(p.clone());
+            }
+            DenyElement::PackagePublishDisabled => self.package_publish_disabled = true,
+            DenyElement::PackageUpgradeDisabled => self.package_upgrade_disabled = true,
+            DenyElement::SharedObjectDisabled => self.shared_object_disabled = true,
+            DenyElement::UserTransactionDisabled => self.user_transaction_disabled = true,
+            DenyElement::GaslessDisabled => self.gasless_disabled = true,
+            DenyElement::ReceivingObjectsDisabled => self.receiving_objects_disabled = true,
+            DenyElement::ZkLoginSigDisabled => self.zklogin_sig_disabled = true,
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -132,36 +227,47 @@ impl TransactionDenyRules {
     }
 }
 
+/// A single indivisible rule within a `TransactionDenyRules`: one deny-list entry or
+/// one boolean kill switch. The "default" deny-config bucket votes on these
+/// individually.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+pub enum DenyElement {
+    Object(ObjectID),
+    Package(ObjectID),
+    Address(SuiAddress),
+    ZkLoginProvider(String),
+    PackagePublishDisabled,
+    PackageUpgradeDisabled,
+    SharedObjectDisabled,
+    UserTransactionDisabled,
+    GaslessDisabled,
+    ReceivingObjectsDisabled,
+    ZkLoginSigDisabled,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn obj(byte: u8) -> ObjectID {
-        ObjectID::new([byte; 32])
-    }
-
-    fn addr(byte: u8) -> SuiAddress {
-        SuiAddress::from_bytes([byte; 32]).unwrap()
-    }
+    use crate::base_types::dbg_addr;
 
     #[test]
     fn merge_unions_sets_and_ors_bools() {
         let mut a = TransactionDenyRules::default();
-        a.object_deny_list.insert(obj(1));
-        a.address_deny_list.insert(addr(2));
+        a.object_deny_list.insert(ObjectID::from_single_byte(1));
+        a.address_deny_list.insert(dbg_addr(2));
         a.package_publish_disabled = true;
 
         let mut b = TransactionDenyRules::default();
-        b.object_deny_list.insert(obj(3));
-        b.address_deny_list.insert(addr(2));
+        b.object_deny_list.insert(ObjectID::from_single_byte(3));
+        b.address_deny_list.insert(dbg_addr(2));
         b.user_transaction_disabled = true;
         b.zklogin_disabled_providers.insert("Google".to_string());
 
         a.merge(&b);
 
         assert_eq!(a.object_deny_list.len(), 2);
-        assert!(a.object_deny_list.contains(&obj(1)));
-        assert!(a.object_deny_list.contains(&obj(3)));
+        assert!(a.object_deny_list.contains(&ObjectID::from_single_byte(1)));
+        assert!(a.object_deny_list.contains(&ObjectID::from_single_byte(3)));
         assert_eq!(a.address_deny_list.len(), 1);
         assert!(a.package_publish_disabled);
         assert!(a.user_transaction_disabled);
@@ -171,11 +277,68 @@ mod tests {
     #[test]
     fn entry_count_sums_set_lengths() {
         let mut r = TransactionDenyRules::default();
-        r.object_deny_list.insert(obj(1));
-        r.object_deny_list.insert(obj(2));
-        r.package_deny_list.insert(obj(3));
-        r.address_deny_list.insert(addr(4));
+        r.object_deny_list.insert(ObjectID::from_single_byte(1));
+        r.object_deny_list.insert(ObjectID::from_single_byte(2));
+        r.package_deny_list.insert(ObjectID::from_single_byte(3));
+        r.address_deny_list.insert(dbg_addr(4));
         r.zklogin_disabled_providers.insert("a".to_string());
         assert_eq!(r.entry_count(), 5);
+    }
+
+    #[test]
+    fn is_superset_of_sets_and_bools() {
+        let mut larger = TransactionDenyRules::default();
+        larger
+            .object_deny_list
+            .insert(ObjectID::from_single_byte(1));
+        larger
+            .object_deny_list
+            .insert(ObjectID::from_single_byte(2));
+        larger.package_publish_disabled = true;
+
+        let mut smaller = TransactionDenyRules::default();
+        smaller
+            .object_deny_list
+            .insert(ObjectID::from_single_byte(1));
+        smaller.package_publish_disabled = true;
+
+        assert!(larger.is_superset_of(&smaller));
+        assert!(larger.is_superset_of(&TransactionDenyRules::default()));
+        assert!(!smaller.is_superset_of(&larger));
+
+        // A boolean set in `other` but not `self` breaks the superset relation.
+        let mut other_bool = TransactionDenyRules::default();
+        other_bool
+            .object_deny_list
+            .insert(ObjectID::from_single_byte(1));
+        other_bool.user_transaction_disabled = true;
+        assert!(!larger.is_superset_of(&other_bool));
+    }
+
+    #[test]
+    fn elements_round_trips_through_apply_element() {
+        let mut original = TransactionDenyRules::default();
+        original
+            .object_deny_list
+            .insert(ObjectID::from_single_byte(1));
+        original
+            .package_deny_list
+            .insert(ObjectID::from_single_byte(2));
+        original.address_deny_list.insert(dbg_addr(3));
+        original
+            .zklogin_disabled_providers
+            .insert("Google".to_string());
+        original.package_publish_disabled = true;
+        original.user_transaction_disabled = true;
+        original.zklogin_sig_disabled = true;
+
+        let elements: Vec<DenyElement> = original.elements().collect();
+        assert_eq!(elements.len(), 7);
+
+        let mut rebuilt = TransactionDenyRules::default();
+        for element in &elements {
+            rebuilt.apply_element(element);
+        }
+        assert_eq!(rebuilt, original);
     }
 }

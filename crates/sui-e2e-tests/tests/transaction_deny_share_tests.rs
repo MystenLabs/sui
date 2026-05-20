@@ -1,25 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! End-to-end tests for the consensus-shared `TransactionDenyConfig` feature on a
-//! 4-validator cluster. Every test drives the system through public interfaces —
-//! `ConsensusAdapter::submit` for broadcasts and observable effects on transaction
-//! signing — so a future refactor that breaks the wire path will fail loudly here.
+//! End-to-end tests for the consensus-shared, threshold-gated `TransactionDenyConfig`
+//! feature on a 4-validator cluster (equal stake, 2500 each, 10000 total).
+//!
+//! Operators pre-define named rulesets, each gated on a stake threshold among an
+//! eligible set of validators; a "default" bucket threshold-gates each individual
+//! proposed rule element. Validators broadcast their proposed rules via consensus; a
+//! receiver activates a ruleset only when eligible voting stake exceeds its threshold.
+//!
+//! Every test drives the system through public interfaces — `ConsensusAdapter::submit`
+//! for broadcasts and observable effects on `effective_config` / `evaluate_status` /
+//! transaction signing — so a future refactor that breaks the wire path fails loudly.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use sui_config::transaction_deny_config::PeerDenySyncConfig;
+use sui_config::transaction_deny_config::{
+    PeerDenySyncConfig, SharedDenyRuleThreshold, SharedDenyRuleset, ValidatorEligibility,
+};
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{AuthorityName, FullObjectRef};
+use sui_types::base_types::{AuthorityName, FullObjectRef, ObjectID};
 use sui_types::messages_consensus::{
     ConsensusTransaction, SharedTransactionDenyConfig, SharedTransactionDenyConfigV1,
 };
 use sui_types::transaction_deny_rules::TransactionDenyRules;
 use test_cluster::{TestCluster, TestClusterBuilder};
+
+const PROPAGATION_TIMEOUT: Duration = Duration::from_secs(60);
 
 fn enable_protocol_flags() -> sui_protocol_config::OverrideGuard {
     sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
@@ -28,31 +39,60 @@ fn enable_protocol_flags() -> sui_protocol_config::OverrideGuard {
     })
 }
 
-/// Build a 4-validator cluster where each validator's allowlist is computed by
-/// `picker` against the full set of committee authority names.
-async fn build_cluster_with_allowlist<F>(picker: F) -> TestCluster
+// ===== Config-construction helpers =====
+
+/// A `TransactionDenyRules` denying the objects identified by `bytes`.
+fn rules_objs(bytes: &[u8]) -> TransactionDenyRules {
+    TransactionDenyRules {
+        object_deny_list: bytes
+            .iter()
+            .map(|b| ObjectID::from_single_byte(*b))
+            .collect(),
+        ..Default::default()
+    }
+}
+
+/// Eligibility that includes every committee member (empty denylist).
+fn all_eligible() -> ValidatorEligibility {
+    ValidatorEligibility::Denylist(BTreeSet::new())
+}
+
+fn prelisted(
+    name: &str,
+    rules: TransactionDenyRules,
+    eligibility: ValidatorEligibility,
+    threshold_percent: u16,
+) -> SharedDenyRuleset {
+    SharedDenyRuleset {
+        name: name.to_string(),
+        rules,
+        threshold: SharedDenyRuleThreshold {
+            eligibility,
+            stake_threshold_percent: threshold_percent,
+        },
+    }
+}
+
+// ===== Cluster builders =====
+
+/// Build a 4-validator cluster; each validator's `peer_deny_sync_config` is computed by
+/// `sync_picker` against the full set of committee authority names.
+async fn build_cluster<S>(sync_picker: S) -> TestCluster
 where
-    F: Fn(AuthorityName, &[AuthorityName]) -> BTreeSet<AuthorityName> + Send + Sync + 'static,
+    S: Fn(AuthorityName, &[AuthorityName]) -> PeerDenySyncConfig + Send + Sync + 'static,
 {
     TestClusterBuilder::new()
         .with_num_validators(4)
         .with_epoch_duration_ms(60_000)
-        .with_peer_deny_sync_config_per_validator(Arc::new(move |me, all| PeerDenySyncConfig {
-            peer_allowlist: picker(me, all),
-            broadcast_on_startup: false,
-            broadcast_on_epoch_change: false,
-        }))
+        .with_peer_deny_sync_config_per_validator(Arc::new(sync_picker))
         .build()
         .await
 }
 
-/// Trust every committee member.
-fn trust_all(_me: AuthorityName, all: &[AuthorityName]) -> BTreeSet<AuthorityName> {
-    all.iter().copied().collect()
-}
+// ===== Broadcast / propagation helpers =====
 
-/// Submit an `UpdateTransactionDenyConfig` from `sender_handle` through the same
-/// path the admin endpoint uses (manager-allocated monotonic generation +
+/// Submit an `UpdateTransactionDenyConfig` from `sender_handle` through the same path
+/// the admin endpoint uses (manager-allocated monotonic generation +
 /// `ConsensusAdapter::submit`). Returns the generation.
 async fn broadcast_via_consensus(
     sender_handle: &SuiNodeHandle,
@@ -62,7 +102,7 @@ async fn broadcast_via_consensus(
         .with_async(|node| async move {
             let manager = node.state().transaction_deny_config_manager().clone();
             let (consensus_tx, generation) = manager
-                .build_share_consensus_tx(node.state().name, rules)
+                .build_share_consensus_tx(rules)
                 .expect("build_share_consensus_tx");
             let epoch_store = node.state().load_epoch_store_one_call_per_task();
             let consensus_adapter = node
@@ -77,10 +117,9 @@ async fn broadcast_via_consensus(
         .await
 }
 
-/// Like `broadcast_via_consensus` but bypasses the manager's monotonic generation
-/// guard so a test can deliberately submit an out-of-order generation. Still uses
-/// the public `ConsensusAdapter::submit` path; only the message construction
-/// differs from production.
+/// Like `broadcast_via_consensus` but bypasses the manager's monotonic generation guard
+/// so a test can deliberately submit an out-of-order generation. Still uses the public
+/// `ConsensusAdapter::submit` path; only the message construction differs.
 async fn broadcast_via_consensus_with_explicit_generation(
     sender_handle: &SuiNodeHandle,
     generation: u64,
@@ -106,11 +145,9 @@ async fn broadcast_via_consensus_with_explicit_generation(
         .await
 }
 
-/// Wait until every receiving validator has accepted (or surpassed) `generation`
-/// from `authority`. The originator itself is excluded — self-broadcasts loop back
-/// via consensus and are dropped at apply_update time on principle. Panics on
-/// timeout; use a generous bound (rare-class consensus messages can take ~30s in
-/// this test cluster).
+/// Wait until every validator — including the originator, whose own broadcast loops
+/// back through consensus — has accepted (or surpassed) `generation` from `authority`.
+/// Panics on timeout.
 async fn wait_for_generation(
     handles: &[SuiNodeHandle],
     authority: AuthorityName,
@@ -119,29 +156,38 @@ async fn wait_for_generation(
 ) {
     let deadline = Instant::now() + timeout;
     loop {
-        let all = handles
-            .iter()
-            .filter(|h| h.with(|n| n.state().name) != authority)
-            .all(|h| {
-                h.with(|node| {
-                    node.state()
-                        .transaction_deny_config_manager()
-                        .peer_configs_snapshot()
-                        .get(&authority)
-                        .map(|m| m.generation() >= generation)
-                        .unwrap_or(false)
-                })
-            });
+        let all = handles.iter().all(|h| {
+            h.with(|node| {
+                node.state()
+                    .transaction_deny_config_manager()
+                    .peer_configs_snapshot()
+                    .get(&authority)
+                    .map(|m| m.generation() >= generation)
+                    .unwrap_or(false)
+            })
+        });
         if all {
             return;
         }
         if Instant::now() > deadline {
             panic!(
-                "Consensus did not propagate {authority:?} generation {generation} to all receiving validators within {timeout:?}",
+                "Consensus did not propagate {authority:?} generation {generation} to all \
+                 validators within {timeout:?}",
             );
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
+}
+
+/// Broadcast `rules` from `sender` and wait until every validator has it.
+async fn broadcast_and_wait(
+    handles: &[SuiNodeHandle],
+    sender: &SuiNodeHandle,
+    rules: Option<TransactionDenyRules>,
+) {
+    let generation = broadcast_via_consensus(sender, rules).await;
+    let authority = sender.with(|n| n.state().name);
+    wait_for_generation(handles, authority, generation, PROPAGATION_TIMEOUT).await;
 }
 
 /// Find the validator handle whose authority name matches `name`.
@@ -153,46 +199,61 @@ fn handle_for(handles: &[SuiNodeHandle], name: AuthorityName) -> SuiNodeHandle {
         .clone()
 }
 
-/// Iterate the validator handles that are *not* `originator`. Self-broadcasts loop
-/// back via consensus and are dropped at the originator's `apply_update`, so they
-/// never appear in the originator's own `peer_configs` or `effective_config`.
-/// Tests verifying broadcast-side effects must skip the originator.
-fn receivers<'a>(
-    handles: &'a [SuiNodeHandle],
-    originator: AuthorityName,
-) -> impl Iterator<Item = &'a SuiNodeHandle> + 'a {
-    handles
-        .iter()
-        .filter(move |h| h.with(|n| n.state().name) != originator)
+// ===== Observation helpers =====
+
+fn effective_denies_obj(handle: &SuiNodeHandle, id: ObjectID) -> bool {
+    handle.with(|node| {
+        node.state()
+            .transaction_deny_config_manager()
+            .effective_config()
+            .load()
+            .get_object_deny_set()
+            .contains(&id)
+    })
 }
 
-const PROPAGATION_TIMEOUT: Duration = Duration::from_secs(60);
+fn ruleset_is_active(handle: &SuiNodeHandle, name: &str) -> bool {
+    handle.with(|node| {
+        node.state()
+            .transaction_deny_config_manager()
+            .evaluate_status()
+            .prelisted
+            .iter()
+            .find(|p| p.name == name)
+            .expect("pre-listed ruleset name not found")
+            .active
+    })
+}
 
-/// Full lifecycle: a baseline transaction succeeds; a peer broadcasts a deny
-/// recommendation against the sender's address and the next transaction is
-/// rejected at signing time; a withdrawal restores signing.
+// ===== Tests =====
+
+/// Full lifecycle through real transaction execution: a baseline transfer succeeds; a
+/// pre-listed `user_transaction_disabled` ruleset is voted past its stake threshold by
+/// the whole committee and signing stops; withdrawing the votes restores signing.
 #[sim_test]
-async fn test_peer_recommendation_blocks_then_withdraws() {
+async fn test_lifecycle_blocks_then_withdraws() {
     let _guard = enable_protocol_flags();
-    let test_cluster = build_cluster_with_allowlist(trust_all).await;
-    let handles = test_cluster.all_validator_handles();
+    let kill_rules = TransactionDenyRules {
+        user_transaction_disabled: true,
+        ..Default::default()
+    };
+    let cfg_rules = kill_rules.clone();
+    let cluster = build_cluster(move |_me, _all| PeerDenySyncConfig {
+        rulesets: vec![prelisted("kill", cfg_rules.clone(), all_eligible(), 50)],
+        ..Default::default()
+    })
+    .await;
+    let handles = cluster.all_validator_handles();
 
-    let context = &test_cluster.wallet;
+    let context = &cluster.wallet;
     let gas_price = context.get_reference_gas_price().await.unwrap();
-    let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
-    let sender = accounts_and_objs[0].0;
-    let receiver = accounts_and_objs[1].0;
-
-    let broadcaster = handles[0].clone();
-    let broadcaster_authority = broadcaster.with(|n| n.state().name);
-
-    // Helper: build and submit a fresh sender→receiver transfer using whatever
-    // fastpath gas/object refs are currently owned by `sender`. We refresh the
-    // refs every time because each must-succeed transfer consumes them.
+    let accounts = context.get_all_accounts_and_gas_objects().await.unwrap();
+    let sender = accounts[0].0;
+    let receiver = accounts[1].0;
     let new_transfer = || async {
-        let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
-        let gas_object = accounts_and_objs[0].1[0];
-        let object_to_send = accounts_and_objs[0].1[1];
+        let accounts = context.get_all_accounts_and_gas_objects().await.unwrap();
+        let gas_object = accounts[0].1[0];
+        let object_to_send = accounts[0].1[1];
         context
             .sign_transaction(
                 &TestTransactionBuilder::new(sender, gas_object, gas_price)
@@ -202,145 +263,285 @@ async fn test_peer_recommendation_blocks_then_withdraws() {
             .await
     };
 
-    // Phase 1 — baseline: tx succeeds before any recommendation.
+    // Phase 1 — baseline succeeds before any votes.
     context
         .execute_transaction_must_succeed(new_transfer().await)
         .await;
 
-    // Phase 2 — broadcast a deny rule, wait for propagation, observe denial.
-    let rules = TransactionDenyRules {
-        address_deny_list: BTreeSet::from([sender]),
-        ..Default::default()
-    };
-    let gen_deny = broadcast_via_consensus(&broadcaster, Some(rules)).await;
-    wait_for_generation(
-        &handles,
-        broadcaster_authority,
-        gen_deny,
-        PROPAGATION_TIMEOUT,
-    )
-    .await;
+    // Phase 2 — all 4 validators vote for the kill ruleset. Each validator then sees the
+    // other 3 (7500 stake > 50% of 10000) and activates it.
+    for h in &handles {
+        broadcast_and_wait(&handles, h, Some(kill_rules.clone())).await;
+    }
     let err = context
         .execute_transaction_may_fail(new_transfer().await)
         .await
-        .expect_err("transaction must be denied while peer recommendation is active");
-    let msg = err.to_string();
+        .expect_err("transaction must be denied while the kill ruleset is active");
     assert!(
-        msg.contains("temporarily disabled") || msg.contains("denied"),
-        "unexpected error message: {msg}",
+        err.to_string().contains("temporarily disabled"),
+        "unexpected error message: {err}",
     );
 
-    // Phase 3 — withdraw, wait for propagation, observe signing restored.
-    let gen_withdraw = broadcast_via_consensus(&broadcaster, None).await;
-    wait_for_generation(
-        &handles,
-        broadcaster_authority,
-        gen_withdraw,
-        PROPAGATION_TIMEOUT,
-    )
-    .await;
+    // Phase 3 — all 4 withdraw; the ruleset drops below threshold everywhere.
+    for h in &handles {
+        broadcast_and_wait(&handles, h, None).await;
+    }
     context
         .execute_transaction_must_succeed(new_transfer().await)
         .await;
 }
 
-/// A recommendation from a non-allowlisted authority must not affect any
-/// validator's effective config or transaction signing. We send a marker from a
-/// trusted peer afterwards to establish a "consensus has caught up past the bad
-/// message" sync point, then assert the bad message was dropped.
+/// A pre-listed ruleset activates only once eligible voting stake reaches its
+/// threshold. With an all-eligible 60% ruleset: 2/4 validators (5000 = 50%) is not
+/// enough, 3/4 (7500 = 75%) is.
 #[sim_test]
-async fn test_recommendation_from_non_allowlisted_peer_is_ignored() {
+async fn test_prelisted_config_activates_at_threshold() {
     let _guard = enable_protocol_flags();
-
-    // Pick the "bad" authority deterministically: the lexicographically smallest
-    // committee member. The picker (running per-validator with the genesis
-    // committee slice) and the test code (running afterwards with
-    // `get_validator_pubkeys`) may see different slice orders, so we sort to
-    // ensure they agree on which authority is excluded.
-    let test_cluster = build_cluster_with_allowlist(|_me, all| {
-        let mut sorted = all.to_vec();
-        sorted.sort();
-        let bad = sorted[0];
-        all.iter().filter(|n| **n != bad).copied().collect()
+    let cluster = build_cluster(|_me, _all| PeerDenySyncConfig {
+        rulesets: vec![prelisted("c", rules_objs(&[1]), all_eligible(), 60)],
+        ..Default::default()
     })
     .await;
-    let handles = test_cluster.all_validator_handles();
-    let mut names = test_cluster.get_validator_pubkeys();
-    names.sort();
-    let bad_authority = names[0];
-    let marker_authority = names[1];
-    let bad_broadcaster = handle_for(&handles, bad_authority);
-    let marker_sender = handle_for(&handles, marker_authority);
+    let handles = cluster.all_validator_handles();
+    let observer = &handles[3];
 
-    let context = &test_cluster.wallet;
-    let gas_price = context.get_reference_gas_price().await.unwrap();
-    let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
-    let sender = accounts_and_objs[0].0;
-    let receiver = accounts_and_objs[1].0;
-    let gas_object = accounts_and_objs[0].1[0];
-    let object_to_send = accounts_and_objs[0].1[1];
+    // Two voters: 5000 stake = 50%, below the 60% threshold.
+    broadcast_and_wait(&handles, &handles[0], Some(rules_objs(&[1]))).await;
+    broadcast_and_wait(&handles, &handles[1], Some(rules_objs(&[1]))).await;
+    assert!(!ruleset_is_active(observer, "c"));
+    assert!(!effective_denies_obj(
+        observer,
+        ObjectID::from_single_byte(1)
+    ));
 
-    // Bad broadcaster: tries to deny `sender`.
-    let bad_rules = TransactionDenyRules {
-        address_deny_list: BTreeSet::from([sender]),
-        ..Default::default()
-    };
-    broadcast_via_consensus(&bad_broadcaster, Some(bad_rules)).await;
-
-    // Trusted marker sender: a benign empty recommendation. When this lands at all
-    // validators, the bad broadcast (submitted before this one) has had time to
-    // be sequenced and processed.
-    let marker_gen =
-        broadcast_via_consensus(&marker_sender, Some(TransactionDenyRules::default())).await;
-    wait_for_generation(&handles, marker_authority, marker_gen, PROPAGATION_TIMEOUT).await;
-
-    // Assert no validator accepted the bad broadcast.
-    for h in &handles {
-        let snap = h.with(|node| {
-            node.state()
-                .transaction_deny_config_manager()
-                .peer_configs_snapshot()
-        });
-        assert!(
-            !snap.contains_key(&bad_authority),
-            "non-allowlisted peer's update was accepted on at least one validator",
-        );
-    }
-
-    // The transfer succeeds since no validator denies `sender`.
-    let tx = context
-        .sign_transaction(
-            &TestTransactionBuilder::new(sender, gas_object, gas_price)
-                .transfer(FullObjectRef::from_fastpath_ref(object_to_send), receiver)
-                .build(),
-        )
-        .await;
-    context.execute_transaction_must_succeed(tx).await;
+    // Third voter: 7500 stake = 75% >= 60% — ruleset activates.
+    broadcast_and_wait(&handles, &handles[2], Some(rules_objs(&[1]))).await;
+    assert!(ruleset_is_active(observer, "c"));
+    assert!(effective_denies_obj(
+        observer,
+        ObjectID::from_single_byte(1)
+    ));
 }
 
-/// A stale-generation update must not overwrite the live recommendation. Marker
-/// from a different broadcaster gives us a sync point past the stale message.
+/// A single proposal counts as a vote for every pre-listed ruleset whose rules it is a
+/// superset of — including partially-overlapping and nested rulesets.
 #[sim_test]
-async fn test_stale_generation_is_rejected_e2e() {
+async fn test_superset_votes_for_overlapping_configs() {
     let _guard = enable_protocol_flags();
-    let test_cluster = build_cluster_with_allowlist(trust_all).await;
-    let handles = test_cluster.all_validator_handles();
-
-    let broadcaster = handles[0].clone();
-    let broadcaster_authority = broadcaster.with(|n| n.state().name);
-    let marker_sender = handles[1].clone();
-    let marker_authority = marker_sender.with(|n| n.state().name);
-
-    let context = &test_cluster.wallet;
-    let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
-    let sender = accounts_and_objs[0].0;
-
-    // Broadcast a real recommendation (live generation set by manager).
-    let live_rules = TransactionDenyRules {
-        address_deny_list: BTreeSet::from([sender]),
+    let cluster = build_cluster(|_me, _all| PeerDenySyncConfig {
+        rulesets: vec![
+            // `x` and `y` partially overlap on object 2; `z` is a superset of `x`.
+            prelisted("x", rules_objs(&[1, 2]), all_eligible(), 50),
+            prelisted("y", rules_objs(&[2, 3]), all_eligible(), 50),
+            prelisted("z", rules_objs(&[1, 2, 3]), all_eligible(), 50),
+        ],
         ..Default::default()
-    };
-    let live_gen = broadcast_via_consensus(&broadcaster, Some(live_rules.clone())).await;
+    })
+    .await;
+    let handles = cluster.all_validator_handles();
+    let observer = &handles[3];
+
+    // 3/4 validators each propose {1,2,3} — a superset of all three rulesets.
+    for h in handles.iter().take(3) {
+        broadcast_and_wait(&handles, h, Some(rules_objs(&[1, 2, 3]))).await;
+    }
+    for name in ["x", "y", "z"] {
+        assert!(
+            ruleset_is_active(observer, name),
+            "ruleset {name} should be active"
+        );
+    }
+    for id in [1, 2, 3] {
+        assert!(effective_denies_obj(
+            observer,
+            ObjectID::from_single_byte(id)
+        ));
+    }
+}
+
+/// `ValidatorEligibility` filters whose votes count: an `Allowlist` ruleset ignores
+/// non-allowlisted proposals, a `Denylist` ruleset ignores denylisted proposals — and
+/// both still activate once eligible votes reach the threshold.
+#[sim_test]
+async fn test_eligibility_filters_votes() {
+    let _guard = enable_protocol_flags();
+    // Two rulesets over the same rule: one allowlist-gated, one denylist-gated. The
+    // picker and the test both sort `all`, so they agree on the lexicographic indices.
+    let cluster = build_cluster(|_me, all| {
+        let mut sorted = all.to_vec();
+        sorted.sort();
+        PeerDenySyncConfig {
+            rulesets: vec![
+                // Eligible: names[0], names[1] (5000 stake); 60% needs 3000.
+                prelisted(
+                    "allow",
+                    rules_objs(&[1]),
+                    ValidatorEligibility::Allowlist([sorted[0], sorted[1]].into_iter().collect()),
+                    60,
+                ),
+                // Eligible: everyone but names[0] (7500 stake); 60% needs 4500.
+                prelisted(
+                    "deny",
+                    rules_objs(&[1]),
+                    ValidatorEligibility::Denylist([sorted[0]].into_iter().collect()),
+                    60,
+                ),
+            ],
+            ..Default::default()
+        }
+    })
+    .await;
+    let handles = cluster.all_validator_handles();
+    let mut names = cluster.get_validator_pubkeys();
+    names.sort();
+    let observer = handle_for(&handles, names[3]);
+
+    // names[2] votes: not allowlisted (`allow` ignores it); alone it is 2500 of `deny`'s
+    // 7500 eligible stake — both rulesets stay inactive.
+    broadcast_and_wait(
+        &handles,
+        &handle_for(&handles, names[2]),
+        Some(rules_objs(&[1])),
+    )
+    .await;
+    assert!(!ruleset_is_active(&observer, "allow"));
+    assert!(!ruleset_is_active(&observer, "deny"));
+
+    // names[0] votes: allowlisted but 2500 of 5000 is below 60%; denylisted, so `deny`
+    // ignores it entirely — both still inactive.
+    broadcast_and_wait(
+        &handles,
+        &handle_for(&handles, names[0]),
+        Some(rules_objs(&[1])),
+    )
+    .await;
+    assert!(!ruleset_is_active(&observer, "allow"));
+    assert!(!ruleset_is_active(&observer, "deny"));
+
+    // names[1] votes: `allow` reaches names[0]+names[1] = 5000 >= 3000; `deny` reaches
+    // names[1]+names[2] = 5000 >= 4500. Both activate.
+    broadcast_and_wait(
+        &handles,
+        &handle_for(&handles, names[1]),
+        Some(rules_objs(&[1])),
+    )
+    .await;
+    assert!(ruleset_is_active(&observer, "allow"));
+    assert!(ruleset_is_active(&observer, "deny"));
+}
+
+/// The "default" bucket threshold-gates each proposed rule element independently: a
+/// well-supported element activates while a less-proposed one in the same proposals
+/// does not.
+#[sim_test]
+async fn test_default_per_element_voting() {
+    let _guard = enable_protocol_flags();
+    let cluster = build_cluster(|_me, _all| PeerDenySyncConfig {
+        default_threshold: Some(SharedDenyRuleThreshold {
+            eligibility: all_eligible(),
+            stake_threshold_percent: 60,
+        }),
+        ..Default::default()
+    })
+    .await;
+    let handles = cluster.all_validator_handles();
+    let observer = &handles[3];
+
+    // 3 validators propose object 1; only one of them also proposes object 2.
+    broadcast_and_wait(&handles, &handles[0], Some(rules_objs(&[1, 2]))).await;
+    broadcast_and_wait(&handles, &handles[1], Some(rules_objs(&[1]))).await;
+    broadcast_and_wait(&handles, &handles[2], Some(rules_objs(&[1]))).await;
+
+    // Object 1: 7500 = 75% >= 60% — applied. Object 2: 2500 = 25% — not applied.
+    assert!(effective_denies_obj(
+        observer,
+        ObjectID::from_single_byte(1)
+    ));
+    assert!(!effective_denies_obj(
+        observer,
+        ObjectID::from_single_byte(2)
+    ));
+}
+
+/// A rule element counts toward both its pre-listed ruleset and the default bucket
+/// independently. Here the pre-listed ruleset's threshold is unreachable, but the
+/// default bucket still applies the element.
+#[sim_test]
+async fn test_element_counts_for_both_prelisted_and_default() {
+    let _guard = enable_protocol_flags();
+    let cluster = build_cluster(|_me, _all| PeerDenySyncConfig {
+        rulesets: vec![prelisted(
+            "c",
+            rules_objs(&[1]),
+            all_eligible(),
+            // 90% is unreachable with only 3/4 validators voting (7500 < 9000).
+            90,
+        )],
+        default_threshold: Some(SharedDenyRuleThreshold {
+            eligibility: all_eligible(),
+            stake_threshold_percent: 50,
+        }),
+        ..Default::default()
+    })
+    .await;
+    let handles = cluster.all_validator_handles();
+    let observer = &handles[3];
+
+    for h in handles.iter().take(3) {
+        broadcast_and_wait(&handles, h, Some(rules_objs(&[1]))).await;
+    }
+    // Pre-listed ruleset stays inactive (below 90%)...
+    assert!(!ruleset_is_active(observer, "c"));
+    // ...but object 1 is still denied because it crossed the default bucket's 50%.
+    assert!(effective_denies_obj(
+        observer,
+        ObjectID::from_single_byte(1)
+    ));
+}
+
+/// A validator's own broadcast loops back through consensus and counts toward its own
+/// thresholds, exactly like a peer's — there is no special "self" handling.
+#[sim_test]
+async fn test_own_broadcast_counts_as_a_vote() {
+    let _guard = enable_protocol_flags();
+    let cluster = build_cluster(|_me, _all| PeerDenySyncConfig {
+        rulesets: vec![prelisted("c", rules_objs(&[1]), all_eligible(), 60)],
+        ..Default::default()
+    })
+    .await;
+    let handles = cluster.all_validator_handles();
+    let broadcaster = &handles[0];
+
+    // handles[1] and handles[2] broadcast; observed on handles[0], that is 5000 stake
+    // (50%) — below the 60% threshold.
+    broadcast_and_wait(&handles, &handles[1], Some(rules_objs(&[1]))).await;
+    broadcast_and_wait(&handles, &handles[2], Some(rules_objs(&[1]))).await;
+    assert!(!ruleset_is_active(broadcaster, "c"));
+
+    // handles[0] broadcasts too; its own broadcast loops back, so its own evaluation
+    // now sees 3 voters (7500 = 75% >= 60%) and the ruleset activates.
+    broadcast_and_wait(&handles, broadcaster, Some(rules_objs(&[1]))).await;
+    assert!(ruleset_is_active(broadcaster, "c"));
+}
+
+/// A stale-generation update must not overwrite the live proposal. A marker broadcast
+/// from a different validator gives a sync point past the stale message.
+#[sim_test]
+async fn test_stale_generation_is_rejected() {
+    let _guard = enable_protocol_flags();
+    let cluster = build_cluster(|_me, _all| PeerDenySyncConfig {
+        rulesets: vec![prelisted("c", rules_objs(&[1]), all_eligible(), 50)],
+        ..Default::default()
+    })
+    .await;
+    let handles = cluster.all_validator_handles();
+    let broadcaster = &handles[0];
+    let broadcaster_authority = broadcaster.with(|n| n.state().name);
+    let marker = &handles[1];
+    let marker_authority = marker.with(|n| n.state().name);
+
+    // Live proposal at a manager-allocated (large) generation.
+    let live_gen = broadcast_via_consensus(broadcaster, Some(rules_objs(&[1]))).await;
     wait_for_generation(
         &handles,
         broadcaster_authority,
@@ -349,100 +550,41 @@ async fn test_stale_generation_is_rejected_e2e() {
     )
     .await;
 
-    // Submit a deliberately stale generation (1) from the same broadcaster, with
-    // empty rules. If it were accepted it would clear the deny list.
+    // Deliberately stale generation 1 with empty rules — must be ignored.
     broadcast_via_consensus_with_explicit_generation(
-        &broadcaster,
+        broadcaster,
         1,
         Some(TransactionDenyRules::default()),
     )
     .await;
 
-    // Marker from a different broadcaster (different consensus key): when it
-    // lands at all validators, consensus has progressed past the stale message.
-    let marker_gen =
-        broadcast_via_consensus(&marker_sender, Some(TransactionDenyRules::default())).await;
+    // Marker from a different validator: once it lands everywhere, consensus has
+    // progressed past the stale message.
+    let marker_gen = broadcast_via_consensus(marker, Some(TransactionDenyRules::default())).await;
     wait_for_generation(&handles, marker_authority, marker_gen, PROPAGATION_TIMEOUT).await;
 
-    // The broadcaster's entry on every receiving validator must still be the live
-    // (non-stale) one. The broadcaster itself doesn't carry a self-entry.
-    for h in receivers(&handles, broadcaster_authority) {
+    // Every validator still holds the live (non-stale) proposal.
+    for h in &handles {
         h.with(|node| {
-            let snap = node
+            let snapshot = node
                 .state()
                 .transaction_deny_config_manager()
                 .peer_configs_snapshot();
-            let entry = snap
+            let entry = snapshot
                 .get(&broadcaster_authority)
-                .expect("entry must still exist on receiver");
+                .expect("broadcaster entry must still exist");
             assert_eq!(
                 entry.generation(),
                 live_gen,
-                "stale update appears to have replaced the live entry's generation",
+                "stale update appears to have replaced the live entry",
             );
-            let still_blocking = entry
-                .rules()
-                .map(|r| r.address_deny_list.contains(&sender))
-                .unwrap_or(false);
             assert!(
-                still_blocking,
-                "stale update appears to have replaced the live rules",
+                entry
+                    .rules()
+                    .map(|r| r.object_deny_list.contains(&ObjectID::from_single_byte(1)))
+                    .unwrap_or(false),
+                "stale update appears to have cleared the live rules",
             );
         });
     }
-}
-
-/// Boolean kill switches (e.g. `user_transaction_disabled`) carried in a
-/// recommendation must OR with every validator's local config.
-#[sim_test]
-async fn test_peer_recommendation_or_merges_boolean_kill_switches() {
-    let _guard = enable_protocol_flags();
-    let test_cluster = build_cluster_with_allowlist(trust_all).await;
-    let handles = test_cluster.all_validator_handles();
-
-    let broadcaster = handles[0].clone();
-    let broadcaster_authority = broadcaster.with(|n| n.state().name);
-
-    for h in &handles {
-        assert!(!h.with(|node| {
-            node.state()
-                .transaction_deny_config_manager()
-                .effective_config()
-                .load()
-                .user_transaction_disabled()
-        }));
-    }
-
-    let rules = TransactionDenyRules {
-        user_transaction_disabled: true,
-        ..Default::default()
-    };
-    let generation = broadcast_via_consensus(&broadcaster, Some(rules)).await;
-    wait_for_generation(
-        &handles,
-        broadcaster_authority,
-        generation,
-        PROPAGATION_TIMEOUT,
-    )
-    .await;
-
-    for h in receivers(&handles, broadcaster_authority) {
-        assert!(h.with(|node| {
-            node.state()
-                .transaction_deny_config_manager()
-                .effective_config()
-                .load()
-                .user_transaction_disabled()
-        }));
-    }
-    // The broadcaster's effective config is unchanged: local config is the source
-    // of truth for our own rules; self-broadcasts don't loop back into our own
-    // `peer_configs`.
-    assert!(!broadcaster.with(|node| {
-        node.state()
-            .transaction_deny_config_manager()
-            .effective_config()
-            .load()
-            .user_transaction_disabled()
-    }));
 }
