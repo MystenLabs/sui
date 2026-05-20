@@ -6,11 +6,21 @@ keywords: [ integrate sui, integrate with SUI token, sui tokens, SUI, integrate 
 
 This topic describes how to integrate SUI into a cryptocurrency exchange. Specific requirements and processes vary between exchanges. Before you ship an integration to production, confirm the API and SDK examples you use against the current references linked from each section.
 
-:::info
+## Requirements to configure a SUI integration
 
 Sui's primary data access APIs are [gRPC](/develop/accessing-data/grpc) and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc). JSON-RPC has been deprecated. New integrations should use gRPC or GraphQL.
 
-:::
+The requirements to configure a SUI integration include:
+
+- A Sui full node. You can operate your own Sui full node or use a full node from a node operator.
+
+- Suggested hardware requirements to run a Sui full node:
+
+    - CPU: 8 physical cores / 16 vCPUs
+    - RAM: 128 GB
+    - Storage (SSD): 4 TB NVMe drive
+
+For software prerequisites, snapshots, observability, and the full setup walkthrough, see [Run a Sui Full Node](/operators/full-node/sui-full-node).
 
 ## Infrastructure
 
@@ -91,6 +101,24 @@ Exchange ledgers must account for both coin objects and address-balance accumula
 
 Query balances for an address using the `address(address:).balances(...)` connection in GraphQL. The [GraphQL query guide](/develop/accessing-data/graphql/query-with-graphql) shows the pagination pattern and how to scope queries to a specific checkpoint for consistent reads. For a streaming or fully typed client, use the [gRPC API](/develop/accessing-data/grpc/using-grpc) and select the balance fields through a `FieldMask`.
 
+## Blocks vs Checkpoints {#blocks-vs-checkpoints}
+
+Sui is a DAG-based blockchain and uses checkpoints for node synchronization and global transaction ordering. Checkpoints differ from blocks in the following ways:
+
+- Sui creates checkpoints and adds finalized transactions. Transactions are finalized before they are included in a checkpoint.
+
+- Checkpoints do not fork, roll back, or reorganize.
+
+- Sui creates about 4 checkpoints every second. Find the most current statistic on the [Sui public dashboard](https://metrics.sui.io/public-dashboards/4ceb11cc210d4025b122294586961169).
+
+### Checkpoint API operations {#checkpoint-api-operations}
+
+Read checkpoints through the current gRPC or GraphQL APIs:
+
+- **gRPC:** Use `LedgerService.GetCheckpoint` for point lookups. Subscribe with `SubscriptionService.SubscribeCheckpoints` for an ordered, gapless stream of finalized checkpoints. See [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
+
+- **GraphQL:** Query the `checkpoint(sequenceNumber:)` field for a specific checkpoint, or paginate `checkpoints` for a range. See [Querying Data with GraphQL RPC](/develop/accessing-data/graphql/query-with-graphql).
+
 ## Tracking transactions and events
 
 Use checkpoints as the canonical, ordered stream of finalized activity:
@@ -123,7 +151,52 @@ For the full signature requirements, intent format, and worked examples in Rust,
 
 ## SUI staking
 
-To build staking and unstaking transactions, construct a PTB that calls the relevant entry function in the [`sui_system` Move module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move). Refer to that module for the current entry function signatures, and to the [`staking_pool` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/staking_pool.move) for the `StakedSui` type and reward accounting. These signatures are the source of truth, because they change with system package upgrades. The [TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the helpers you need to assemble the call. Confirm the function signature you target against the linked Move source before you ship.
+The Sui blockchain uses a Delegated Proof-of-Stake (DPoS) mechanism. SUI token holders stake to a validator's staking pool. When a user stakes, the network locks those tokens for the duration of the epoch in which the user adds the stake. New staking requests become active at the start of the next epoch. A user can request a withdrawal at any time, and the principal plus any accrued rewards become available at the start of the next epoch.
+
+SUI holders who stake to validators earn rewards for helping secure the Sui network. Sui determines staking rewards based on stake performance and distributes them at the end of each epoch.
+
+The network fixes the total voting power across all validators at 10,000, similar to basis points (a voting power of 101 = 1.01%). Sui caps the voting power for a single validator at 1,000 (10%) regardless of how much stake the validator has. The quorum threshold for confirming a transaction is 6,667, which is greater than 2/3.
+
+### Staking functions
+
+The current entry functions in the [`sui_system` Move module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move) for staking are listed below. These signatures are the source of truth, because they change with system package upgrades, so verify against the linked Move source before you ship.
+
+- `request_add_stake`: Add stake to a validator's staking pool. The resulting `StakedSui` object is transferred to the sender.
+
+    ```move
+    public entry fun request_add_stake(
+        wrapper: &mut SuiSystemState,
+        stake: Coin<SUI>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    )
+    ```
+
+- `request_add_stake_mul_coin`: Add stake using multiple coins, optionally specifying a stake amount.
+
+    ```move
+    public entry fun request_add_stake_mul_coin(
+        wrapper: &mut SuiSystemState,
+        stakes: vector<Coin<SUI>>,
+        stake_amount: option::Option<u64>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    )
+    ```
+
+- `request_withdraw_stake`: Withdraw stake from a validator's staking pool. The unstaked SUI coin is transferred to the sender.
+
+    ```move
+    public entry fun request_withdraw_stake(
+        wrapper: &mut SuiSystemState,
+        staked_sui: StakedSui,
+        ctx: &mut TxContext,
+    )
+    ```
+
+Non-entry variants `request_add_stake_non_entry` and `request_withdraw_stake_non_entry` return the `StakedSui` object or withdrawn balance directly, so you can compose them with other PTB commands. The `StakedSui` type lives in the [`staking_pool` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/staking_pool.move).
+
+To build staking and unstaking transactions, assemble a PTB that calls one of these functions. The [TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the helpers you need.
 
 To read stake state for an address, such as active stakes, pending stakes, and accrued rewards, query through [GraphQL](/develop/accessing-data/graphql/query-with-graphql) or [gRPC](/develop/accessing-data/grpc/using-grpc) rather than reading the Move module directly.
 
