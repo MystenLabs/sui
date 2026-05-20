@@ -32,7 +32,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use bytes::Bytes;
-use futures::Stream;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use prometheus::HistogramVec;
@@ -64,6 +63,21 @@ pub struct ConcurrencyConfig {
     /// literal can become one bitmap dimension stream; bitmap scans do not
     /// consume downstream request permits.
     pub max_bitmap_filter_literals: usize,
+    /// Per-request evaluated-bucket budget for filtered tx-bitmap scans,
+    /// shared across all DNF dimensions of one query. Caps how many fetched
+    /// buckets the eval evaluates, NOT how many bucket reads BigTable
+    /// receives — at exhaustion each leaf stream may have fetched one
+    /// additional bucket that is discarded rather than evaluated, so
+    /// observed reads can exceed this by up to `max_bitmap_filter_literals`.
+    /// Bounds wall time and resource cost; clients page transparently via
+    /// the returned cursor on SCAN_LIMIT.
+    pub bitmap_bucket_budget_tx: u64,
+    /// Per-request evaluated-bucket budget for filtered event-bitmap scans.
+    /// Event buckets cover far fewer source-domain positions than tx buckets,
+    /// so this is tuned separately even though we currently default both to
+    /// the same number. Same fetched-vs-evaluated semantics as
+    /// `bitmap_bucket_budget_tx`.
+    pub bitmap_bucket_budget_event: u64,
 }
 
 impl Default for ConcurrencyConfig {
@@ -71,6 +85,8 @@ impl Default for ConcurrencyConfig {
         Self {
             request_bigtable_concurrency: 10,
             max_bitmap_filter_literals: 10,
+            bitmap_bucket_budget_tx: 1000,
+            bitmap_bucket_budget_event: 1000,
         }
     }
 }
@@ -85,6 +101,34 @@ impl ConcurrencyConfig {
         anyhow::ensure!(
             self.max_bitmap_filter_literals > 0,
             "max_bitmap_filter_literals must be greater than zero",
+        );
+        anyhow::ensure!(
+            self.bitmap_bucket_budget_tx > 0,
+            "bitmap_bucket_budget_tx must be greater than zero",
+        );
+        anyhow::ensure!(
+            self.bitmap_bucket_budget_event > 0,
+            "bitmap_bucket_budget_event must be greater than zero",
+        );
+        // Each leaf bitmap stream needs at least one bucket fetch to emit its
+        // first watermark; the eval's merged watermark stays `None` until every
+        // child has reported. If the per-request budget is smaller than the
+        // accepted literal count, a SCAN_LIMIT can fire before any merged
+        // watermark reaches the wire, leaving the client with a cursor-less
+        // QueryEnd it cannot resume from.
+        anyhow::ensure!(
+            self.bitmap_bucket_budget_tx >= self.max_bitmap_filter_literals as u64,
+            "bitmap_bucket_budget_tx ({}) must be >= max_bitmap_filter_literals ({}) \
+             so every leaf stream gets at least one bucket before SCAN_LIMIT",
+            self.bitmap_bucket_budget_tx,
+            self.max_bitmap_filter_literals,
+        );
+        anyhow::ensure!(
+            self.bitmap_bucket_budget_event >= self.max_bitmap_filter_literals as u64,
+            "bitmap_bucket_budget_event ({}) must be >= max_bitmap_filter_literals ({}) \
+             so every leaf stream gets at least one bucket before SCAN_LIMIT",
+            self.bitmap_bucket_budget_event,
+            self.max_bitmap_filter_literals,
         );
         Ok(())
     }
@@ -304,15 +348,28 @@ impl BigTableClient {
     /// Eval a `BitmapQuery`. Bitmap scans stay outside the downstream request
     /// semaphore; their concurrency is bounded by `max_bitmap_filter_literals`
     /// during filter validation.
-    pub(crate) fn eval_bitmap_query_stream(
+    pub(crate) fn eval_bitmap_query_stream<F>(
         &self,
         query: BitmapQuery,
         range: Range<u64>,
         spec: BitmapIndexSpec,
         direction: ScanDirection,
-    ) -> impl Stream<Item = Result<u64, anyhow::Error>> + Send + 'static {
+        budget: u64,
+        on_metrics: F,
+    ) -> BoxStream<'static, Result<sui_inverted_index::Watermarked<u64>, anyhow::Error>>
+    where
+        F: FnOnce(sui_inverted_index::BitmapScanMetrics) + Send + 'static,
+    {
         let source = BigTableBitmapSource::new(self.inner.clone(), spec);
-        eval_bitmap_query_stream(source, query, range, spec.bucket_size, direction)
+        eval_bitmap_query_stream(
+            source,
+            query,
+            range,
+            spec.bucket_size,
+            direction,
+            budget,
+            on_metrics,
+        )
     }
 
     async fn acquire(&self, stage: &'static str) -> Result<LimitedPermit, RpcError> {
@@ -320,7 +377,92 @@ impl BigTableClient {
             .await
             .map_err(|_| RpcError::new(tonic::Code::Internal, "request concurrency limiter closed"))
     }
+
+    /// Resolve a bitmap-evaluator watermark to its containing cp via one
+    /// `resolve_tx_checkpoints` row read.
+    ///
+    /// `position` is the watermark in its source domain (tx_seq for the
+    /// tx bitmap, event_seq for the event bitmap). `decode` translates
+    /// the in-domain lookup position into a tx_seq for the BigTable
+    /// lookup — identity for tx-bitmap callers, [`decode_event_seq`] for
+    /// event-bitmap callers.
+    ///
+    /// Asc: lookup the cp containing `position - 1` (the last
+    /// fully-scanned position; the cp it falls in may still produce items
+    /// at positions `≥ position`). Desc: lookup the cp containing
+    /// `position` itself (symmetric).
+    ///
+    /// Returns `Ok(None)` (caller drops the watermark) when the boundary
+    /// tx has no cp: ascending `position == 0` (no preceding tx), or a
+    /// frontier sitting just outside indexed history (e.g. a descending
+    /// scan starting at the ledger tip). A watermark is a best-effort
+    /// progress hint, so an unresolvable one is dropped rather than
+    /// failing the query — divergence that affects returned items still
+    /// surfaces loudly at the item-fetch path.
+    pub(crate) async fn resolve_wm_cp(
+        &self,
+        direction: ScanDirection,
+        position: u64,
+        decode: impl FnOnce(u64) -> u64,
+    ) -> Result<Option<u64>, RpcError> {
+        let lookup_position = if direction.is_ascending() {
+            match position.checked_sub(1) {
+                Some(p) => p,
+                None => return Ok(None),
+            }
+        } else {
+            position
+        };
+        let lookup_tx_seq = decode(lookup_position);
+        let pairs = self.resolve_tx_checkpoints(&[lookup_tx_seq]).await?;
+        Ok(pairs.into_iter().next().map(|(_, cp)| cp))
+    }
+
+    /// Build a resolver closure for tx-bitmap watermarks (identity
+    /// decode). Hand directly to [`crate::pipeline::resolve_watermarks`].
+    pub(crate) fn tx_wm_resolver(
+        &self,
+        direction: ScanDirection,
+    ) -> impl Fn(u64) -> WmResolverFut + Send + 'static {
+        let client = self.clone();
+        move |position| {
+            let client = client.clone();
+            Box::pin(async move {
+                client
+                    .resolve_wm_cp(direction, position, |x| x)
+                    .await
+                    .map_err(anyhow::Error::new)
+            })
+        }
+    }
+
+    /// Build a resolver closure for event-bitmap watermarks. The
+    /// bitmap-domain position is a packed event_seq; decode to its
+    /// tx_seq for the BigTable lookup. Hand directly to
+    /// [`crate::pipeline::resolve_watermarks`].
+    pub(crate) fn event_wm_resolver(
+        &self,
+        direction: ScanDirection,
+    ) -> impl Fn(u64) -> WmResolverFut + Send + 'static {
+        let client = self.clone();
+        move |position| {
+            let client = client.clone();
+            Box::pin(async move {
+                client
+                    .resolve_wm_cp(direction, position, |evt| {
+                        sui_kvstore::tables::event_bitmap_index::decode_event_seq(evt).0
+                    })
+                    .await
+                    .map_err(anyhow::Error::new)
+            })
+        }
+    }
 }
+
+/// Future returned by resolver closures from
+/// [`BigTableClient::tx_wm_resolver`] and [`BigTableClient::event_wm_resolver`].
+pub(crate) type WmResolverFut =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<Option<u64>, anyhow::Error>> + Send>>;
 
 struct LimitedPermit {
     _permit: OwnedSemaphorePermit,
@@ -599,5 +741,33 @@ mod tests {
             .collect();
         assert_eq!(by_stage.get("transactions"), Some(&1));
         assert_eq!(by_stage.get("objects"), Some(&1));
+    }
+
+    #[test]
+    fn validate_rejects_budget_below_literal_cap() {
+        // Per-request budgets must be at least the accepted-literal cap, so
+        // every leaf bitmap stream gets a bucket fetch before SCAN_LIMIT.
+        let mut cfg = ConcurrencyConfig {
+            max_bitmap_filter_literals: 10,
+            bitmap_bucket_budget_tx: 5,
+            ..ConcurrencyConfig::default()
+        };
+        let err = cfg.validate().expect_err("budget < literal cap must fail");
+        assert!(
+            err.to_string().contains("bitmap_bucket_budget_tx"),
+            "error mentions the tx budget: {err}"
+        );
+
+        cfg.bitmap_bucket_budget_tx = 10;
+        cfg.bitmap_bucket_budget_event = 9;
+        let err = cfg.validate().expect_err("budget < literal cap must fail");
+        assert!(
+            err.to_string().contains("bitmap_bucket_budget_event"),
+            "error mentions the event budget: {err}"
+        );
+
+        cfg.bitmap_bucket_budget_event = 10;
+        cfg.validate()
+            .expect("equal budget and literal cap is valid");
     }
 }

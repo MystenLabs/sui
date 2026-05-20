@@ -37,6 +37,7 @@ sui-sdk-types.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 telemetry-subscribers.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tonic.workspace = true
 tonic-prost.workspace = true

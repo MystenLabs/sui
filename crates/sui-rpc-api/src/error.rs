@@ -50,6 +50,17 @@ impl RpcError {
     }
 }
 
+impl std::fmt::Display for RpcError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.message {
+            Some(m) => write!(f, "{}: {}", self.code, m),
+            None => write!(f, "{}", self.code),
+        }
+    }
+}
+
+impl std::error::Error for RpcError {}
+
 impl From<RpcError> for tonic::Status {
     fn from(value: RpcError) -> Self {
         use prost::Message;

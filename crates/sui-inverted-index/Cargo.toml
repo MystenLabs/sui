@@ -21,6 +21,7 @@ itertools.workspace = true
 move-core-types.workspace = true
 roaring.workspace = true
 sui-types.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }

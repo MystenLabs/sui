@@ -54,6 +54,20 @@ struct ConcurrencyArgs {
     /// Bitmap scans do not consume request-bigtable-concurrency permits.
     #[clap(long = "max-bitmap-filter-literals", default_value_t = ConcurrencyConfig::default().max_bitmap_filter_literals)]
     max_bitmap_filter_literals: usize,
+    /// Per-request evaluated-bucket budget for filtered tx-bitmap scans,
+    /// shared across all DNF dimensions. Caps buckets evaluated; observed
+    /// BigTable bucket reads may exceed by up to max-bitmap-filter-literals
+    /// (one fetched-and-discarded bucket per leaf at exhaustion). Filtered
+    /// list_transactions and list_checkpoints requests stop scanning past
+    /// this and return a SCAN_LIMIT cursor.
+    #[clap(long = "bitmap-bucket-budget-tx", default_value_t = ConcurrencyConfig::default().bitmap_bucket_budget_tx)]
+    bitmap_bucket_budget_tx: u64,
+    /// Per-request evaluated-bucket budget for filtered event-bitmap scans.
+    /// Tuned separately from tx because event-bitmap buckets cover far fewer
+    /// source-domain positions. Same fetched-vs-evaluated slop as
+    /// bitmap-bucket-budget-tx.
+    #[clap(long = "bitmap-bucket-budget-event", default_value_t = ConcurrencyConfig::default().bitmap_bucket_budget_event)]
+    bitmap_bucket_budget_event: u64,
 }
 
 impl From<ConcurrencyArgs> for ConcurrencyConfig {
@@ -61,6 +75,8 @@ impl From<ConcurrencyArgs> for ConcurrencyConfig {
         Self {
             request_bigtable_concurrency: args.request_bigtable_concurrency,
             max_bitmap_filter_literals: args.max_bitmap_filter_literals,
+            bitmap_bucket_budget_tx: args.bitmap_bucket_budget_tx,
+            bitmap_bucket_budget_event: args.bitmap_bucket_budget_event,
         }
     }
 }

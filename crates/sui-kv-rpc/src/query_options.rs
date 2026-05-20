@@ -18,7 +18,6 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions as ProtoQueryOptions;
 
 const ORDERING_ASCENDING: i32 = ProtoOrdering::Ascending as i32;
 const ORDERING_DESCENDING: i32 = ProtoOrdering::Descending as i32;
-pub(crate) const MAX_CHECKPOINT_SCAN_WIDTH: u64 = 3_000_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) enum Ordering {
@@ -266,10 +265,6 @@ impl ResolvedRange {
     pub(crate) fn is_empty(&self) -> bool {
         self.range.is_empty()
     }
-
-    pub(crate) fn end_cursor(&self, options: &QueryOptions) -> Bytes {
-        options.cursor_for_boundary(self.end_checkpoint, self.end_position)
-    }
 }
 
 impl CheckpointRange {
@@ -354,31 +349,13 @@ impl CheckpointRange {
             return ResolvedCheckpointRange::empty_at(checkpoint, reason);
         }
 
-        match options.ordering {
-            Ordering::Ascending => {
-                let scan_end = end.min(start.saturating_add(MAX_CHECKPOINT_SCAN_WIDTH));
-                let reason = if scan_end < end {
-                    QueryEndReason::ScanLimit
-                } else {
-                    high_reason
-                };
-                ResolvedCheckpointRange {
-                    range: start..scan_end,
-                    end_reason: reason,
-                }
-            }
-            Ordering::Descending => {
-                let scan_start = start.max(end.saturating_sub(MAX_CHECKPOINT_SCAN_WIDTH));
-                let reason = if scan_start > start {
-                    QueryEndReason::ScanLimit
-                } else {
-                    low_reason
-                };
-                ResolvedCheckpointRange {
-                    range: scan_start..end,
-                    end_reason: reason,
-                }
-            }
+        let end_reason = match options.ordering {
+            Ordering::Ascending => high_reason,
+            Ordering::Descending => low_reason,
+        };
+        ResolvedCheckpointRange {
+            range: start..end,
+            end_reason,
         }
     }
 }
@@ -693,16 +670,6 @@ mod tests {
             QueryEndReason::LedgerTip
         );
         assert!(CheckpointRange::from_request(Some(10), Some(9), 20).is_err());
-        assert!(
-            CheckpointRange::from_request(Some(0), Some(MAX_CHECKPOINT_SCAN_WIDTH + 1), 20).is_ok()
-        );
-
-        let range =
-            CheckpointRange::from_request(Some(10), Some(10 + MAX_CHECKPOINT_SCAN_WIDTH), 20)
-                .unwrap();
-        let resolved = range.resolve(&query_options_from_proto(None).unwrap());
-        assert_eq!(resolved.range, 10..20);
-        assert_eq!(resolved.end_reason, QueryEndReason::LedgerTip);
 
         let range = CheckpointRange::from_request(Some(10), None, 20).unwrap();
         let resolved = range.resolve(&query_options_from_proto(None).unwrap());
@@ -716,25 +683,16 @@ mod tests {
         );
     }
 
+    /// The cp-width clamp was removed when scan limiting moved to the runtime
+    /// bucket-budget path. Whatever range the request asks for is honored at
+    /// resolve time; the bitmap layer terminates scans on budget exhaustion.
     #[test]
-    fn resolves_checkpoint_scan_window() {
+    fn resolves_checkpoint_range_no_longer_clamped_by_width() {
         let options = query_options_from_proto(None).unwrap();
-        let range = CheckpointRange::from_request(
-            Some(10),
-            Some(10 + MAX_CHECKPOINT_SCAN_WIDTH + 5),
-            10 + MAX_CHECKPOINT_SCAN_WIDTH + 5,
-        )
-        .unwrap();
+        let range = CheckpointRange::from_request(Some(10), Some(10_000_000), 10_000_000).unwrap();
         let resolved = range.resolve(&options);
-        assert_eq!(resolved.range, 10..10 + MAX_CHECKPOINT_SCAN_WIDTH);
-        assert_eq!(resolved.end_reason, QueryEndReason::ScanLimit);
-
-        let mut request = ProtoQueryOptions::default();
-        request.ordering = ProtoOrdering::Descending as i32;
-        let options = query_options_from_proto(Some(&request)).unwrap();
-        let resolved = range.resolve(&options);
-        assert_eq!(resolved.range, 15..10 + MAX_CHECKPOINT_SCAN_WIDTH + 5);
-        assert_eq!(resolved.end_reason, QueryEndReason::ScanLimit);
+        assert_eq!(resolved.range, 10..10_000_000);
+        assert_eq!(resolved.end_reason, QueryEndReason::CheckpointBound);
     }
 
     #[test]
