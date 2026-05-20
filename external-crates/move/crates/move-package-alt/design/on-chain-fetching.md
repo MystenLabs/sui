@@ -20,15 +20,6 @@ The package system fetches the bytecode and linkage table from the network (via 
 cache, and loads the package like any other dependency. Stub Move source files are
 generated from the bytecode so the compiler can type-check against the dependency.
 
-### Implementation status
-
-- Schema and validation: **done** (#26552)
-- Fetching and manifest generation: **done** (#26561)
-- Stub source generation: DVX-2119
-- System package deduplication: DVX-2126
-- Support for `sui move test-publish`: DVX-2120
-- Support for `sui move test`: DVX-2060
-
 ## User-facing manifest format
 
 On-chain dependencies use two forms of the `on-chain` key:
@@ -91,7 +82,7 @@ The generated `Move.toml` for an on-chain package looks like:
 
 ```toml
 [package]
-name = "self"
+name = "_onchain_package"
 implicit-dependencies = false
 
 [environments]
@@ -104,7 +95,7 @@ onchain_0x0003 = { on-chain = "0x0033", override = true }
 
 Key design choices:
 
-- **`name = "self"`** — a fixed name for all generated packages. Users never need to know
+- **`name = "_onchain_package"`** — a fixed name for all generated packages. Users never need to know
   this name because the rename-from check is skipped for on-chain dependencies.
 - **`implicit-dependencies = false`** — prevents the generated manifest from pulling in the
   flavor's implicit dependencies (e.g. `sui`, `std`), which would conflict with the system
@@ -141,7 +132,7 @@ calls `get_object` via gRPC, extracts the `MovePackage` from the object, and map
 
 After fetching, `Package::load` reads the generated manifest and proceeds through the
 normal loading pipeline — combining deps, checking environments, loading publications.
-The rename-from check is skipped for on-chain deps (the `"self"` package name won't match
+The rename-from check is skipped for on-chain deps (the `"_onchain_package"` name won't match
 the user's dependency name).
 
 ## Environment handling

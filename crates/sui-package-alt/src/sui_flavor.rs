@@ -8,10 +8,10 @@ use async_trait::async_trait;
 use indexmap::IndexMap;
 use move_compiler::editions::Edition;
 use move_package_alt::{
-    MoveFlavor,
+    MoveFlavor, OnChainPackageData,
     schema::{
         EnvironmentID, EnvironmentName, GitSha, LockfileDependencyInfo, LockfileGitDepInfo,
-        PackageName, ParsedManifest, ReplacementDependency, SystemDepName,
+        OriginalID, PackageName, ParsedManifest, PublishedID, ReplacementDependency, SystemDepName,
     },
 };
 
@@ -231,10 +231,12 @@ impl MoveFlavor for SuiFlavor {
         is_system_package(address.0)
     }
 
+    /// Fetch an on-chain package via gRPC. Returns an error if there is no network connection
+    /// or if the object at `address` is not a package.
     async fn fetch_onchain_package(
         &self,
-        address: &move_package_alt::schema::PublishedID,
-    ) -> anyhow::Result<move_package_alt::OnChainPackageData> {
+        address: &PublishedID,
+    ) -> anyhow::Result<OnChainPackageData> {
         let Some(ref client) = self.client else {
             anyhow::bail!("cannot fetch on-chain package {address}: no network connection")
         };
@@ -244,7 +246,7 @@ impl MoveFlavor for SuiFlavor {
         let package = object
             .data
             .try_as_package()
-            .ok_or_else(|| anyhow::anyhow!("object {address} is not a package"))?;
+            .with_context(|| format!("object {address} is not a package"))?;
 
         let modules = package.serialized_module_map().clone();
         let dependencies = package
@@ -252,16 +254,15 @@ impl MoveFlavor for SuiFlavor {
             .iter()
             .map(|(original_id, upgrade_info)| {
                 (
-                    move_package_alt::schema::OriginalID((*original_id).into()),
-                    move_package_alt::schema::PublishedID(upgrade_info.upgraded_id.into()),
+                    OriginalID((*original_id).into()),
+                    PublishedID(upgrade_info.upgraded_id.into()),
                 )
             })
             .collect();
-        let original_id =
-            move_package_alt::schema::OriginalID(package.original_package_id().into());
+        let original_id = OriginalID(package.original_package_id().into());
         let version: u64 = package.version().into();
 
-        Ok(move_package_alt::OnChainPackageData {
+        Ok(OnChainPackageData {
             modules,
             dependencies,
             original_id,

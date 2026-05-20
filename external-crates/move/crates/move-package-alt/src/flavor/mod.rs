@@ -81,8 +81,8 @@ pub trait MoveFlavor: Debug + Send + Sync {
     /// overridden)
     fn is_system_address(&self, address: &OriginalID) -> bool;
 
-    /// Fetch the on-chain package at `address` from the network. Returns the module bytecode,
-    /// linkage table (as original → linked address), original ID, and version.
+    /// Fetch the on-chain package at `address` from the network, returning an
+    /// [`OnChainPackageData`].
     async fn fetch_onchain_package(
         &self,
         address: &PublishedID,

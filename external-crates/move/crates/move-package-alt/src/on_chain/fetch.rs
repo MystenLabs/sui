@@ -8,7 +8,7 @@
 //! - `bytecode/<module_name>.mv` — serialized `CompiledModule` bytecode (the same format
 //!   the compiler writes to `build/<pkg>/bytecode_modules/`; we use a separate directory
 //!   to avoid clobbering the original bytecode if the package is recompiled)
-//! - `Move.toml` — a generated manifest with `name = "self"` and a single fixed
+//! - `Move.toml` — a generated manifest with `name = "_onchain_package"` and a single fixed
 //!   environment (`_on_chain = "<chain_id>"`)
 //! - `Published.toml` — publication metadata for the `_on_chain` environment
 //!
@@ -24,6 +24,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use anyhow::Context;
 use serde_spanned::Spanned;
 
 use crate::{
@@ -41,7 +42,7 @@ use crate::{
 use super::{OnChainError, OnChainResult};
 
 /// The package name used for all generated on-chain package manifests.
-const ON_CHAIN_PACKAGE_NAME: &str = "self";
+const ON_CHAIN_PACKAGE_NAME: &str = "_onchain_package";
 
 /// The fixed environment name used in generated on-chain package manifests. On-chain
 /// packages are tied to a specific chain, so they use a single environment rather than
@@ -54,7 +55,7 @@ pub(crate) const ON_CHAIN_ENV_NAME: &str = "_on_chain";
 /// The generated `Move.toml` looks like:
 /// ```toml
 /// [package]
-/// name = "self"
+/// name = "_onchain_package"
 /// implicit-dependencies = false
 ///
 /// [environments]
@@ -82,12 +83,12 @@ pub(crate) async fn fetch_onchain<F: MoveFlavor>(
     config: &PackageConfig<F>,
 ) -> OnChainResult<PathBuf> {
     let cache_dir = cache_dir_for(&config.chain_id, address);
-    let manifest_path = cache_dir.join(SourcePackageLayout::Manifest.location_str());
+    let published_path = cache_dir.join("Published.toml");
 
     let _lock = PackageSystemLock::new_for_onchain(&config.chain_id, address)?;
 
-    // Skip if the cache is already populated
-    if manifest_path.exists() {
+    // Published.toml is the last file written, so its existence indicates a complete cache.
+    if published_path.exists() {
         return Ok(cache_dir);
     }
 
@@ -100,10 +101,15 @@ pub(crate) async fn fetch_onchain<F: MoveFlavor>(
             source,
         })?;
 
-    write_bytecode(&cache_dir, &data.modules);
-    write_source(&cache_dir);
-    write_manifest(&cache_dir, &manifest_path, &config.chain_id, &data);
-    write_published::<F>(&cache_dir, address, &config.chain_id, &data);
+    // Write cache files, cleaning up on I/O failure to avoid a partially-populated cache.
+    let result = write_cache::<F>(&cache_dir, &config.chain_id, address, &data);
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&cache_dir);
+    }
+    result.map_err(|source| OnChainError::Fetch {
+        address: address.clone(),
+        source,
+    })?;
 
     Ok(cache_dir)
 }
@@ -117,15 +123,33 @@ fn cache_dir_for(chain_id: &str, address: &PublishedID) -> PathBuf {
         .join(address.to_string())
 }
 
+/// Write all cache files for an on-chain package. Published.toml is written last so that
+/// its presence indicates a complete cache.
+fn write_cache<F: MoveFlavor>(
+    cache_dir: &Path,
+    chain_id: &str,
+    address: &PublishedID,
+    data: &OnChainPackageData,
+) -> anyhow::Result<()> {
+    write_bytecode(cache_dir, &data.modules)?;
+    write_source(cache_dir);
+    write_manifest(cache_dir, chain_id, data)?;
+    write_published::<F>(cache_dir, address, chain_id, data)?;
+    Ok(())
+}
+
 /// Write serialized `CompiledModule` bytecode to `<cache_dir>/bytecode/<name>.mv`.
-fn write_bytecode(cache_dir: &Path, modules: &BTreeMap<String, Vec<u8>>) {
+fn write_bytecode(cache_dir: &Path, modules: &BTreeMap<String, Vec<u8>>) -> anyhow::Result<()> {
     let bytecode_dir = cache_dir.join("bytecode");
-    fs::create_dir_all(&bytecode_dir).expect("can create on-chain package cache directory");
+    fs::create_dir_all(&bytecode_dir)
+        .with_context(|| format!("creating cache directory {}", bytecode_dir.display()))?;
 
     for (name, bytes) in modules {
         let path = bytecode_dir.join(format!("{name}.mv"));
-        fs::write(&path, bytes).expect("can write module bytecode to cache");
+        fs::write(&path, bytes)
+            .with_context(|| format!("writing module bytecode to {}", path.display()))?;
     }
+    Ok(())
 }
 
 /// Generate stub Move source files from bytecode. Currently a no-op; will be implemented
@@ -136,11 +160,13 @@ fn write_source(_cache_dir: &Path) {}
 /// Generate the `Move.toml` for an on-chain package.
 fn write_manifest(
     cache_dir: &Path,
-    manifest_path: &Path,
     chain_id: &str,
     data: &OnChainPackageData,
-) {
-    fs::create_dir_all(cache_dir).expect("can create on-chain package cache directory");
+) -> anyhow::Result<()> {
+    fs::create_dir_all(cache_dir)
+        .with_context(|| format!("creating cache directory {}", cache_dir.display()))?;
+
+    let manifest_path = cache_dir.join(SourcePackageLayout::Manifest.location_str());
 
     let mut manifest = new_manifest();
     manifest.environments.insert(
@@ -176,8 +202,9 @@ fn write_manifest(
             .insert(ON_CHAIN_ENV_NAME.to_string(), env_replacements);
     }
 
-    fs::write(manifest_path, manifest.render_as_toml())
-        .expect("can write generated manifest to cache");
+    fs::write(&manifest_path, manifest.render_as_toml())
+        .with_context(|| format!("writing manifest to {}", manifest_path.display()))?;
+    Ok(())
 }
 
 /// Create a new empty `ParsedManifest` for an on-chain package.
@@ -199,13 +226,14 @@ fn new_manifest() -> ParsedManifest {
     }
 }
 
-/// Generate `Published.toml` for an on-chain package.
+/// Generate `Published.toml` for an on-chain package. This is written last so that its
+/// presence indicates a complete cache.
 fn write_published<F: MoveFlavor>(
     cache_dir: &Path,
     address: &PublishedID,
     chain_id: &str,
     data: &OnChainPackageData,
-) {
+) -> anyhow::Result<()> {
     let pub_path = cache_dir.join("Published.toml");
 
     let mut pubfile = ParsedPublishedFile::<F>::default();
@@ -224,7 +252,9 @@ fn write_published<F: MoveFlavor>(
     );
 
     let rendered = pubfile.render_as_toml();
-    fs::write(&pub_path, rendered).expect("can write Published.toml to cache");
+    fs::write(&pub_path, rendered)
+        .with_context(|| format!("writing Published.toml to {}", pub_path.display()))?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -264,7 +294,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let data = test_data(vec![]);
 
-        write_bytecode(dir.path(), &data.modules);
+        write_bytecode(dir.path(), &data.modules).unwrap();
 
         let my_mod = dir.path().join("bytecode/my_module.mv");
         let other_mod = dir.path().join("bytecode/other_module.mv");
@@ -276,13 +306,13 @@ mod tests {
     #[test]
     fn manifest_no_deps() {
         let dir = tempdir().unwrap();
-        let manifest_path = dir.path().join("Move.toml");
         let data = test_data(vec![]);
 
-        write_manifest(dir.path(), &manifest_path, "test_chain", &data);
+        write_manifest(dir.path(), "test_chain", &data).unwrap();
 
+        let manifest_path = dir.path().join("Move.toml");
         assert_snapshot!(fs::read_to_string(&manifest_path).unwrap(), @r#"
-        package = { name = "self", implicit-dependencies = false }
+        package = { name = "_onchain_package", implicit-dependencies = false }
         environments = { _on_chain = "test_chain" }
         dependencies = {}
         dep-replacements = {}
@@ -293,13 +323,13 @@ mod tests {
     #[test]
     fn manifest_with_deps() {
         let dir = tempdir().unwrap();
-        let manifest_path = dir.path().join("Move.toml");
         let data = test_data(vec![(0x2, 0x2), (0x3, 0x33)]);
 
-        write_manifest(dir.path(), &manifest_path, "test_chain", &data);
+        write_manifest(dir.path(), "test_chain", &data).unwrap();
 
+        let manifest_path = dir.path().join("Move.toml");
         assert_snapshot!(fs::read_to_string(&manifest_path).unwrap(), @r#"
-        package = { name = "self", implicit-dependencies = false }
+        package = { name = "_onchain_package", implicit-dependencies = false }
         environments = { _on_chain = "test_chain" }
         dependencies = {}
 
@@ -315,11 +345,11 @@ mod tests {
     #[test]
     fn manifest_round_trips() {
         let dir = tempdir().unwrap();
-        let manifest_path = dir.path().join("Move.toml");
         let data = test_data(vec![(0x2, 0x2)]);
 
-        write_manifest(dir.path(), &manifest_path, "test_chain", &data);
+        write_manifest(dir.path(), "test_chain", &data).unwrap();
 
+        let manifest_path = dir.path().join("Move.toml");
         let content = fs::read_to_string(&manifest_path).unwrap();
         let parsed: ParsedManifest = toml_edit::de::from_str(&content).unwrap();
 
@@ -340,7 +370,7 @@ mod tests {
         let address = PublishedID::from(0x1234_u16);
         let data = test_data(vec![]);
 
-        write_published::<Vanilla>(dir.path(), &address, "test_chain", &data);
+        write_published::<Vanilla>(dir.path(), &address, "test_chain", &data).unwrap();
 
         assert_snapshot!(fs::read_to_string(dir.path().join("Published.toml")).unwrap(), @r#"
         # Generated by Move

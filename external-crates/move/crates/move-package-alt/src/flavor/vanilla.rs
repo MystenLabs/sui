@@ -7,9 +7,8 @@
 
 use std::collections::BTreeMap;
 
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
-
-use anyhow::anyhow;
 
 use crate::schema::{
     Environment, EnvironmentID, EnvironmentName, LockfileDependencyInfo, OriginalID, PackageName,
@@ -27,7 +26,7 @@ pub const DEFAULT_ENV_ID: &str = "_test_env_id";
 /// The [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports no
 /// flavor-specific resolvers and stores no additional metadata in the lockfile.
 ///
-/// On-chain packages can be pre-populated via [`Vanilla::with_on_chain_package`] for testing.
+/// On-chain packages can be pre-populated via [`Vanilla::with_on_chain_package`].
 #[derive(Clone, Debug, Default)]
 #[non_exhaustive]
 pub struct Vanilla {
@@ -92,17 +91,17 @@ impl MoveFlavor for Vanilla {
         self.on_chain_packages
             .get(address)
             .cloned()
-            .ok_or_else(|| anyhow!("on-chain package not found: {address}"))
+            .with_context(|| format!("on-chain package not found: {address}"))
     }
 }
 
 impl Vanilla {
-    /// Create a new `Vanilla` flavor with no on-chain packages.
+    /// Create a new `Vanilla` flavor.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Add an on-chain package for testing. Returns `self` for chaining.
+    /// Add a pre-populated on-chain package. Returns `self` for chaining.
     pub fn with_on_chain_package(mut self, address: PublishedID, data: OnChainPackageData) -> Self {
         self.on_chain_packages.insert(address, data);
         self
