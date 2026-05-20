@@ -45,7 +45,7 @@ JSON-RPC remains available for legacy clients but is in deprecation. Existing in
 
 ## Sui addresses
 
-Sui addresses do not require onchain initialization. You can spend from an address as soon as it corresponds to a private key you control.
+Sui addresses do not need onchain initialization. You can spend from an address as soon as it corresponds to a private key you control.
 
 For ordinary key-pair schemes, a Sui address is a 32-byte value derived as [BLAKE2b](https://www.blake2.net/)-256 of the 1-byte signature scheme flag concatenated with the public key bytes (`flag || pubkey`). Multisig, zkLogin, and other authentication schemes use scheme-specific derivations. Use the [Sui SDKs](/references/sui-sdks) or the Sui CLI to derive addresses rather than hand-rolling the computation, and see [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview) for the per-scheme details.
 
@@ -122,15 +122,15 @@ For the full signature requirements, intent format, and worked examples in Rust,
 
 Sui uses Delegated Proof-of-Stake (DPoS). SUI holders stake to a validator's staking pool to earn rewards. Key properties:
 
-- Tokens are locked for the duration of the epoch in which the stake is added.
+- The network locks tokens for the duration of the epoch in which you add the stake.
 
 - New stake activates at the start of the next epoch.
 
 - A user can request a withdrawal at any time. The principal and any earned rewards become available at the start of the next epoch.
 
-- The total voting power across all validators is fixed at 10,000, with a per-validator cap of 1,000 (10%). The quorum threshold for confirming a transaction is 6,667 (greater than 2/3).
+- The network fixes the total voting power across all validators at 10,000, with a per-validator cap of 1,000 (10%). The quorum threshold for confirming a transaction is 6,667 (greater than 2/3).
 
-Stakes are represented onchain by `StakedSui` objects owned by the staker.
+`StakedSui` objects owned by the staker represent stakes onchain.
 
 To **build staking and unstaking transactions**, construct a PTB that calls the relevant entry function in the [`sui_system` Move module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move). Refer to that module for the current entry function signatures, and to the [`staking_pool` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/staking_pool.move) for the `StakedSui` type and reward accounting. These signatures are the source of truth, because they change with system package upgrades. The [TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the helpers you need to assemble the call. Confirm the function signature you target against the linked Move source before you ship.
 
@@ -150,7 +150,7 @@ Treat deposit and withdrawal pipelines as event-driven and idempotent. The follo
 
 - **Reconcile against onchain balances.** Periodically read `Balance.totalBalance`, and `Balance.coinBalance` and `Balance.addressBalance` separately, for each tracked address, and compare against your internal ledger. Investigate any drift.
 
-- **Plan for both coin objects and address balances.** Withdrawals can be paid from either, and a user's holdings can sit in either at any time. Build your withdrawal logic to handle both, and use PTBs rather than legacy JSON-RPC transfer methods.
+- **Plan for both coin objects and address balances.** You can pay withdrawals from either, and a user's holdings can sit in either at any time. Build your withdrawal logic to handle both, and use PTBs rather than legacy JSON-RPC transfer methods.
 
 - **Validate addresses on input.** Reject malformed addresses early, and confirm `0x` prefix handling matches your display layer.
 
