@@ -17,9 +17,12 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
     editions::Flavor,
-    hlir::ast::{
-        BaseType_, Command, Command_, LValue, LValue_, Label, ModuleCall, SingleType, SingleType_,
-        Type, Type_, Var,
+    hlir::{
+        ast::{
+            BaseType_, Command, Command_, LValue, LValue_, Label, ModuleCall, SingleType,
+            SingleType_, Type, Type_, Var,
+        },
+        translate::{DisplayVar, display_var},
     },
     linters::StyleCodes,
     parser::ast::Ability_,
@@ -220,9 +223,12 @@ impl SimpleAbsInt for UnusedReturnValueAI {
         let LValue_::Var { var, .. } = l_ else {
             return false;
         };
+        let display_var = display_var(var.0.value);
         let new_value = match value {
-            // Leading-underscore locals are conventionally intentionally/potentially unused
-            Value::Fresh(_) | Value::Bound(_) if var.starts_with_underscore() => Value::Other,
+            // If bound to a user-named local, stop tracking. We only want to track through
+            // compiler generated temporaries.
+            // The compiler already generates warnings for unused locals.
+            _ if matches!(display_var, DisplayVar::Orig(_)) => Value::Other,
             Value::Fresh(call_loc) => {
                 let (block, cmd_idx) = context.location;
                 let id = ValueId {
