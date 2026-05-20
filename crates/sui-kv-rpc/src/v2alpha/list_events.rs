@@ -55,6 +55,7 @@ const DEFAULT_LIMIT_ITEMS: u32 = 50;
 const MAX_LIMIT_ITEMS: u32 = 1000;
 const EVENT_READ_MASK_DEFAULT: &str = "event_type";
 const CHUNK_MAX: usize = 100;
+const EVENT_DISCOVERY_CHUNK_MIN: usize = 16;
 
 pub(crate) type ListEventsStream = BoxStream<'static, Result<ListEventsResponse, RpcError>>;
 
@@ -128,9 +129,9 @@ pub(crate) async fn list_events(
     // Stage A: stream of EventRefs. Filtered requests discover event_seq
     // values through the event bitmap (per-bucket and periodic-frontier
     // watermarks). Unfiltered requests discover eventful transactions through
-    // point-lookups on tx_seq_digest with adaptive in-flight buffering; they
-    // wrap each EventRef as `Watermarked::Item` and rely on item watermarks for
-    // resume.
+    // tx_seq_digest point-lookups with adaptive chunk sizing and bounded
+    // in-flight buffering. They wrap each EventRef as `Watermarked::Item` and
+    // rely on item watermarks for resume.
     let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
     let event_ref_stream: BoxStream<'static, Result<Watermarked<EventRef>, anyhow::Error>> =
         if let Some(filter) = &request.filter {
@@ -626,29 +627,42 @@ fn unfiltered_event_refs(
         .map_ok(Watermarked::Item)
         .map_err(anyhow::Error::new)
         .boxed();
+    let discovery_chunk_size = event_discovery_chunk_size(target);
     let discovery_concurrency_limit =
-        discovery_concurrency_limit(target, request_bigtable_concurrency);
-    let chunked = pipelined_chunks(tx_seq_stream, CHUNK_MAX, discovery_concurrency_limit, {
-        move |seqs| {
-            fetch_event_refs_from_tx_seq_digests(
-                client.clone(),
-                lower_bound,
-                upper_bound,
-                options.clone(),
-                seqs,
-            )
-        }
-    });
+        discovery_concurrency_limit(target, discovery_chunk_size, request_bigtable_concurrency);
+
+    let chunked = pipelined_chunks(
+        tx_seq_stream,
+        discovery_chunk_size,
+        discovery_concurrency_limit,
+        {
+            move |seqs| {
+                fetch_event_refs_from_tx_seq_digests(
+                    client.clone(),
+                    lower_bound,
+                    upper_bound,
+                    options.clone(),
+                    seqs,
+                )
+            }
+        },
+    );
     take_items(chunked, target)
 }
 
-/// Pick a chunk concurrency limit for the unfiltered event-discovery pipeline.
-/// There is an average of ~1.3 events/txn over chain history, so assuming
-/// 1 per txn here is reasonable: roughly one chunk per `CHUNK_MAX` events
-/// requested, capped at the request's downstream BigTable budget.
-fn discovery_concurrency_limit(target: usize, request_bigtable_concurrency: usize) -> usize {
+fn event_discovery_chunk_size(target: usize) -> usize {
+    // Keep tiny pages from issuing single-key BigTable point-lookups, while
+    // still bounding overfetch well below the normal 100-row pipeline chunk.
+    target.clamp(EVENT_DISCOVERY_CHUNK_MIN, CHUNK_MAX)
+}
+
+fn discovery_concurrency_limit(
+    target: usize,
+    chunk_size: usize,
+    request_bigtable_concurrency: usize,
+) -> usize {
     target
-        .div_ceil(CHUNK_MAX)
+        .div_ceil(chunk_size)
         .clamp(1, request_bigtable_concurrency)
 }
 
@@ -914,21 +928,36 @@ mod tests {
     }
 
     #[test]
+    fn event_discovery_chunk_size_scales_with_requested_limit() {
+        assert_eq!(event_discovery_chunk_size(1), EVENT_DISCOVERY_CHUNK_MIN);
+        assert_eq!(
+            event_discovery_chunk_size(EVENT_DISCOVERY_CHUNK_MIN - 1),
+            EVENT_DISCOVERY_CHUNK_MIN
+        );
+        assert_eq!(event_discovery_chunk_size(50), 50);
+        assert_eq!(event_discovery_chunk_size(CHUNK_MAX + 1), CHUNK_MAX);
+    }
+
+    #[test]
     fn discovery_concurrency_limit_scales_with_requested_limit() {
         const REQUEST_CONCURRENCY: usize = 15;
-        assert_eq!(discovery_concurrency_limit(1, REQUEST_CONCURRENCY), 1);
         assert_eq!(
-            discovery_concurrency_limit(CHUNK_MAX, REQUEST_CONCURRENCY),
+            discovery_concurrency_limit(1, EVENT_DISCOVERY_CHUNK_MIN, REQUEST_CONCURRENCY),
             1
         );
         assert_eq!(
-            discovery_concurrency_limit(CHUNK_MAX + 1, REQUEST_CONCURRENCY),
+            discovery_concurrency_limit(CHUNK_MAX, CHUNK_MAX, REQUEST_CONCURRENCY),
+            1
+        );
+        assert_eq!(
+            discovery_concurrency_limit(CHUNK_MAX + 1, CHUNK_MAX, REQUEST_CONCURRENCY),
             2
         );
         assert_eq!(
             discovery_concurrency_limit(
                 CHUNK_MAX * (REQUEST_CONCURRENCY + 10),
-                REQUEST_CONCURRENCY
+                CHUNK_MAX,
+                REQUEST_CONCURRENCY,
             ),
             REQUEST_CONCURRENCY
         );
