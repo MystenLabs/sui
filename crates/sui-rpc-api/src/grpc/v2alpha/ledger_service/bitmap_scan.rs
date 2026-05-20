@@ -375,6 +375,10 @@ struct RpcIndexesBitmapIterator<'a> {
     iter: Option<LedgerBitmapBucketIterator<'a>>,
     finished: bool,
     initial_error: Option<anyhow::Error>,
+    /// This leaf has not yet charged a bucket. Its first bucket is reserved
+    /// (always allowed) so every leaf emits its first watermark; see
+    /// [`BitmapScanBudget::take_first`].
+    first: bool,
 }
 
 impl<'a> RpcIndexesBitmapIterator<'a> {
@@ -395,6 +399,7 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
                 iter: None,
                 finished: true,
                 initial_error: None,
+                first: true,
             };
         }
 
@@ -434,6 +439,7 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
             finished: false,
             iter,
             initial_error,
+            first: true,
         }
     }
 
@@ -449,7 +455,16 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
 
         match iter.next() {
             Some(Ok(bucket)) => {
-                if let Err(e) = self.scan_budget.take_one() {
+                if self.first {
+                    // Reserved: a leaf's first bucket is always allowed so it
+                    // emits its first watermark even if sibling leaves already
+                    // drained the shared budget. Without it a starved leaf
+                    // never reports a watermark, its merge slot stays `None`,
+                    // and the scan ends with a cursorless `ScanLimit` — a
+                    // client livelock. See [`BitmapScanBudget::take_first`].
+                    self.scan_budget.take_first();
+                    self.first = false;
+                } else if let Err(e) = self.scan_budget.take_one() {
                     self.finished = true;
                     return Some(Err(e));
                 }
@@ -502,6 +517,15 @@ impl BitmapScanBudget {
         }
         self.remaining.set(remaining - 1);
         Ok(())
+    }
+
+    /// Charge a leaf's mandatory first bucket: decrements when it can but
+    /// always succeeds, so every leaf is guaranteed to emit its first
+    /// watermark regardless of how sibling leaves drained the shared pool.
+    /// Saturating at 0 only undercounts a first bucket taken after the pool
+    /// was already exhausted; the common `budget >> leaves` case stays exact.
+    fn take_first(&self) {
+        self.remaining.set(self.remaining.get().saturating_sub(1));
     }
 
     fn remaining(&self) -> usize {
@@ -577,6 +601,20 @@ mod tests {
 
         assert_eq!(out, vec![203, 205]);
         assert!(!bucket.has_hits(100, ScanDirection::Ascending));
+    }
+
+    #[test]
+    fn budget_first_bucket_is_always_allowed() {
+        let budget = BitmapScanBudget::new(1);
+        assert!(budget.take_one().is_ok());
+        assert_eq!(budget.remaining(), 0);
+        // The pool is drained, so `take_one` now fails — but a leaf reaching it
+        // still emits its reserved first bucket via `take_first`, which
+        // saturates at 0 instead of erroring. This is what guarantees every
+        // leaf reports a watermark and the scan never ends cursorless.
+        assert!(budget.take_one().is_err());
+        budget.take_first();
+        assert_eq!(budget.remaining(), 0);
     }
 
     #[test]
