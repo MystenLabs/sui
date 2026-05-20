@@ -131,6 +131,16 @@ impl QueryOptions {
         matches!(self.ordering, Ordering::Ascending)
     }
 
+    /// Whether the request explicitly positioned the low end of the scan via an
+    /// `after` cursor. `apply_cursor_bounds` only ever raises `range.start` from
+    /// `after` (in both orderings); `before` bounds the high end. Together with an
+    /// explicit `start_checkpoint`, this lets the pruning-floor check distinguish
+    /// "resume/start from here" (error if below the floor — the data is gone) from
+    /// an open-ended low end (clamp up to the floor).
+    pub fn has_after_cursor(&self) -> bool {
+        self.after.is_some()
+    }
+
     pub fn apply_cursor_bounds(&self, resolved: ResolvedRange) -> ResolvedRange {
         if resolved.is_empty() {
             return resolved;
@@ -528,6 +538,25 @@ mod tests {
             options.apply_cursor_bounds(resolved_range(0..100)).range,
             21..30
         );
+    }
+
+    #[test]
+    fn has_after_cursor_reflects_only_the_after_field() {
+        // No cursors → open-ended low end.
+        let options = query_options_from_proto(Some(&ProtoQueryOptions::default())).unwrap();
+        assert!(!options.has_after_cursor());
+
+        // `before` bounds the high end, so it must not count as an explicit low end.
+        let mut request = ProtoQueryOptions::default();
+        request.before = Some(encode_cursor(item_cursor(3, 30, QueryType::Transactions)));
+        let options = query_options_from_proto(Some(&request)).unwrap();
+        assert!(!options.has_after_cursor());
+
+        // `after` raises the low end → explicit.
+        let mut request = ProtoQueryOptions::default();
+        request.after = Some(encode_cursor(item_cursor(2, 20, QueryType::Transactions)));
+        let options = query_options_from_proto(Some(&request)).unwrap();
+        assert!(options.has_after_cursor());
     }
 
     #[test]

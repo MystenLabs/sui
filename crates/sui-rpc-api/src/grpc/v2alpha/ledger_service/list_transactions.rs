@@ -48,11 +48,13 @@ use super::chunked_scan::ChunkTerminal;
 use super::chunked_scan::ChunkedScan;
 use super::chunked_scan::ScanChunkDone;
 use super::chunked_scan::cancelled;
+use super::ledger_read::apply_tx_seq_floor;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::get_tx_seq_digest_rows;
+use super::ledger_read::ledger_history_tx_seq_floor;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::resolve_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
@@ -236,7 +238,8 @@ fn next_transaction_chunk(
                     end_checkpoint,
                     checkpoint_hi_exclusive(&service)?,
                 )?;
-                let tx_range = resolve_tx_range(&service, checkpoint_range, &options)?;
+                let tx_range =
+                    resolve_tx_range(&service, start_checkpoint, checkpoint_range, &options)?;
                 let terminal = ChunkTerminal {
                     reason: tx_range.end_reason,
                     end_checkpoint: tx_range.end_checkpoint,
@@ -507,6 +510,7 @@ fn should_render_transaction_contents(read_mask: &FieldMaskTree) -> bool {
 
 fn resolve_tx_range(
     service: &RpcService,
+    start_checkpoint: Option<u64>,
     checkpoint_range: CheckpointRange,
     options: &QueryOptions,
 ) -> Result<ResolvedRange, RpcError> {
@@ -518,7 +522,13 @@ fn resolve_tx_range(
     }
 
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    Ok(options.apply_cursor_bounds(cp_range.with_range(tx_range, options.ordering)))
+    let mut resolved = options.apply_cursor_bounds(cp_range.with_range(tx_range, options.ordering));
+    if !resolved.range.is_empty() {
+        let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
+        let floor = ledger_history_tx_seq_floor(service)?;
+        resolved.range.start = apply_tx_seq_floor(resolved.range.start, explicit_lower, floor)?;
+    }
+    Ok(resolved)
 }
 
 fn transaction_item_response(

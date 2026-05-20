@@ -49,11 +49,13 @@ use super::chunked_scan::ChunkTerminal;
 use super::chunked_scan::ChunkedScan;
 use super::chunked_scan::ScanChunkDone;
 use super::chunked_scan::cancelled;
+use super::ledger_read::apply_tx_seq_floor;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::get_tx_seq_digest_rows;
+use super::ledger_read::ledger_history_tx_seq_floor;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::resolve_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
@@ -236,7 +238,8 @@ fn next_event_chunk(
                 end_checkpoint,
                 checkpoint_hi_exclusive(&service)?,
             )?;
-            let event_range = resolve_event_range(&service, checkpoint_range, &options)?;
+            let event_range =
+                resolve_event_range(&service, start_checkpoint, checkpoint_range, &options)?;
             if cancel.is_cancelled() {
                 return Err(cancelled());
             }
@@ -750,6 +753,7 @@ fn validate_event_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTre
 
 fn resolve_event_range(
     service: &RpcService,
+    start_checkpoint: Option<u64>,
     checkpoint_range: CheckpointRange,
     options: &QueryOptions,
 ) -> Result<ResolvedRange, RpcError> {
@@ -764,8 +768,21 @@ fn resolve_event_range(
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
     let start_event_seq = event_seq_lo(tx_range.start);
     let end_event_seq = event_seq_lo(tx_range.end);
-    Ok(options
-        .apply_cursor_bounds(cp_range.with_range(start_event_seq..end_event_seq, options.ordering)))
+    let mut resolved = options
+        .apply_cursor_bounds(cp_range.with_range(start_event_seq..end_event_seq, options.ordering));
+    if !resolved.range.is_empty() {
+        // The floor is tx-seq; the range is packed event-seq. Enforce on the low
+        // end's transaction in tx-seq space. Only re-pack on an actual clamp, so a
+        // cursor resuming mid-transaction keeps its event index when above the floor.
+        let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
+        let floor = ledger_history_tx_seq_floor(service)?;
+        let start_tx = decode_event_seq(resolved.range.start).0;
+        let clamped_tx = apply_tx_seq_floor(start_tx, explicit_lower, floor)?;
+        if clamped_tx != start_tx {
+            resolved.range.start = event_seq_lo(clamped_tx);
+        }
+    }
+    Ok(resolved)
 }
 
 fn tx_range_for_event_range(event_range: Range<u64>) -> Option<Range<u64>> {

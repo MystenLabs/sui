@@ -402,6 +402,17 @@ fn default_table_options() -> typed_store::rocks::DBOptions {
     typed_store::rocks::default_db_options().disable_write_throttling()
 }
 
+/// Like `default_table_options`, but honors range-delete tombstones immediately
+/// instead of ignoring them until compaction (the rocksdb default). `tx_seq_digest`
+/// is pruned with `schedule_delete_range` and `first_tx_seq_digest_key` reads the
+/// resulting pruning floor straight back, so tombstones must be visible to reads at
+/// once or the floor would not advance until a compaction happened to run.
+fn tx_seq_digest_table_options() -> typed_store::rocks::DBOptions {
+    let mut options = default_table_options();
+    options.rw_options = options.rw_options.clone().set_ignore_range_deletions(false);
+    options
+}
+
 fn events_table_options(
     compaction_filter: Option<EventsCompactionFilter>,
 ) -> typed_store::rocks::DBOptions {
@@ -690,7 +701,7 @@ struct IndexStoreTables {
     events_by_stream: DBMap<EventIndexKey, ()>,
 
     /// `tx_sequence_number` → (digest, event_count, checkpoint_number).
-    #[default_options_override_fn = "default_table_options"]
+    #[default_options_override_fn = "tx_seq_digest_table_options"]
     tx_seq_digest: DBMap<u64, TxSeqDigestInfo>,
 
     /// Transaction bitmap index keyed by `(dimension_key, tx_seq bucket)`.
@@ -775,6 +786,8 @@ impl IndexStoreTables {
             table_options.insert(table_name, default_table_options());
         }
         table_options.insert("balance".to_string(), balance_table_options());
+        // Range-delete pruning needs tombstones honored by reads immediately.
+        table_options.insert("tx_seq_digest".to_string(), tx_seq_digest_table_options());
         table_options.insert(
             "events_by_stream".to_string(),
             events_table_options(index_options.events_compaction_filter),
@@ -1037,26 +1050,6 @@ impl IndexStoreTables {
         }
     }
 
-    /// Point-delete `tx_seq_digest` rows in `[lo, hi)` in fixed-size
-    /// chunks. Avoids allocating one giant `Vec<u64>` for prune windows
-    /// that may span millions of tx_seqs.
-    fn delete_tx_seq_digest_range_chunked(&self, lo: u64, hi: u64) -> Result<(), StorageError> {
-        // 100k u64 keys ≈ 800KB worth of u64s; small enough that the batch
-        // overhead is bounded and large enough that the per-batch fixed
-        // overhead amortizes well.
-        const CHUNK: u64 = 100_000;
-        let mut cur = lo;
-        while cur < hi {
-            let chunk_end = std::cmp::min(cur.saturating_add(CHUNK), hi);
-            let keys = cur..chunk_end;
-            let mut batch = self.tx_seq_digest.batch();
-            batch.delete_batch(&self.tx_seq_digest, keys)?;
-            batch.write()?;
-            cur = chunk_end;
-        }
-        Ok(())
-    }
-
     /// Prune data from this Index. `pruned_tx_seq_exclusive` is the
     /// absolute tx-seq floor after this prune — the caller derives it from
     /// the last-pruned checkpoint's `network_total_transactions`. Returns
@@ -1084,15 +1077,19 @@ impl IndexStoreTables {
             // (exclusive). An empty CF means floor 0.
             let prev_exclusive = self.first_tx_seq_digest_key()?.unwrap_or(0);
 
-            // Point-delete tx_seq_digest rows first, `Watermark::Pruned`
-            // second. If we crash mid-delete, the next startup re-derives
-            // `prev_exclusive` from the (partially advanced) first key and
-            // the pruner re-issues the same (idempotent) delete.
-            // `pruned_tx_seq_exclusive == prev_exclusive` when a crashed
-            // prune is replayed — a no-op, not an error.
+            // The range delete and `Watermark::Pruned` ride the same batch, so the
+            // prune commits atomically (all-or-nothing). Recovery self-heals:
+            // the next prune re-derives `prev_exclusive` from the first live key,
+            // whether or not this batch committed. `pruned_tx_seq_exclusive ==
+            // prev_exclusive` when a crashed prune is replayed — a no-op, not an
+            // error. The CF is opened with `ignore_range_deletions = false`, so the
+            // tombstone is visible to `first_tx_seq_digest_key` immediately.
             if pruned_tx_seq_exclusive > prev_exclusive {
-                self.delete_tx_seq_digest_range_chunked(prev_exclusive, pruned_tx_seq_exclusive)
-                    .map_err(|e| TypedStoreError::SerializationError(e.to_string()))?;
+                batch.schedule_delete_range(
+                    &self.tx_seq_digest,
+                    &prev_exclusive,
+                    &pruned_tx_seq_exclusive,
+                )?;
                 batch.write()?;
                 return Ok(Some(pruned_tx_seq_exclusive));
             }
@@ -3447,14 +3444,12 @@ mod tests {
         );
     }
 
-    /// In `prune()`, the tx_seq_digest deletes must happen BEFORE the
-    /// `Watermark::Pruned` batch lands. Otherwise a crash mid-delete would
-    /// leave `Watermark::Pruned` advanced past rows still on disk. Test the
-    /// ordering indirectly: after a successful `prune()`, no tx_seq_digest
-    /// row remains in the deleted range, AND `Watermark::Pruned` is at the
-    /// new value (i.e., neither half is missing).
+    /// `prune()` commits the tx_seq_digest range delete and the
+    /// `Watermark::Pruned` advance in one atomic batch. After a successful
+    /// prune both halves are present: no tx_seq_digest row remains in the
+    /// deleted range, AND `Watermark::Pruned` is at the new value.
     #[tokio::test]
-    async fn prune_deletes_before_watermark_advance() {
+    async fn prune_commits_deletes_and_watermark_atomically() {
         let temp_dir = tempfile::tempdir().unwrap();
         let db_path = temp_dir.path().join("rpc-index");
         let tables =
@@ -3482,12 +3477,8 @@ mod tests {
             .prune(1, 2, /*ledger_history_enabled=*/ true)
             .unwrap();
 
-        // After successful prune, both halves landed: deleted rows AND the
-        // advanced `Watermark::Pruned`. (If the watermark write happened
-        // before the deletes and we somehow crashed in between, `Pruned`
-        // would be at 1 while rows 0/1 were still on disk — but a
-        // successful prune guarantees both, so this assertion is also a
-        // crash-free baseline.)
+        // After the single atomic batch lands, both halves are present: the
+        // deleted rows AND the advanced `Watermark::Pruned`.
         assert_eq!(tables.watermark.get(&Watermark::Pruned).unwrap(), Some(1));
         for tx_seq in 0..2u64 {
             assert!(tables.tx_seq_digest.get(&tx_seq).unwrap().is_none());
@@ -3496,6 +3487,82 @@ mod tests {
             assert!(tables.tx_seq_digest.get(&tx_seq).unwrap().is_some());
         }
         assert_eq!(tables.first_tx_seq_digest_key().unwrap(), Some(2));
+    }
+
+    /// Replaying a prune with an unchanged floor is a no-op: the second call
+    /// returns `None` (floor did not advance) and leaves rows + watermark
+    /// untouched. Covers crash-replay where the pruner re-issues the same prune.
+    #[tokio::test]
+    async fn prune_idempotent_replay() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        let mut batch = tables.tx_seq_digest.batch();
+        for tx_seq in 0..5u64 {
+            batch
+                .insert_batch(
+                    &tables.tx_seq_digest,
+                    [(
+                        tx_seq,
+                        TxSeqDigestInfo {
+                            digest: TransactionDigest::new([0; 32]),
+                            event_count: 0,
+                            checkpoint_number: 0,
+                        },
+                    )],
+                )
+                .unwrap();
+        }
+        batch.write().unwrap();
+
+        assert_eq!(tables.prune(1, 3, true).unwrap(), Some(3));
+        // Same floor again: nothing new to delete, floor already at 3.
+        assert_eq!(tables.prune(1, 3, true).unwrap(), None);
+        assert_eq!(tables.first_tx_seq_digest_key().unwrap(), Some(3));
+        for tx_seq in 3..5u64 {
+            assert!(tables.tx_seq_digest.get(&tx_seq).unwrap().is_some());
+        }
+    }
+
+    /// Consecutive prunes advance the floor across an existing range tombstone:
+    /// the second prune derives `prev_exclusive` from `first_tx_seq_digest_key`,
+    /// which must read *through* the first tombstone (only possible because the
+    /// CF is opened with `ignore_range_deletions = false`).
+    #[tokio::test]
+    async fn prune_consecutive_ranges_advance_floor() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        let mut batch = tables.tx_seq_digest.batch();
+        for tx_seq in 0..6u64 {
+            batch
+                .insert_batch(
+                    &tables.tx_seq_digest,
+                    [(
+                        tx_seq,
+                        TxSeqDigestInfo {
+                            digest: TransactionDigest::new([0; 32]),
+                            event_count: 0,
+                            checkpoint_number: 0,
+                        },
+                    )],
+                )
+                .unwrap();
+        }
+        batch.write().unwrap();
+
+        assert_eq!(tables.prune(1, 3, true).unwrap(), Some(3));
+        assert_eq!(tables.first_tx_seq_digest_key().unwrap(), Some(3));
+        // Second prune must see floor 3 (through the tombstone) and extend it to 5.
+        assert_eq!(tables.prune(2, 5, true).unwrap(), Some(5));
+        for tx_seq in 0..5u64 {
+            assert!(tables.tx_seq_digest.get(&tx_seq).unwrap().is_none());
+        }
+        assert_eq!(tables.first_tx_seq_digest_key().unwrap(), Some(5));
     }
 
     /// `new_without_init` must honor an already-built ledger history DB.
