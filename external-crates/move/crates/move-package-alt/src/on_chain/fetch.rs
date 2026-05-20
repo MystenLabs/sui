@@ -158,7 +158,7 @@ fn write_manifest(
                     PackageName::new(format!("onchain_{original_id}")).expect("valid identifier");
                 let replacement = ReplacementDependency {
                     dependency: Some(DefaultDependency {
-                        dependency_info: ManifestDependencyInfo::OnChainAt(OnChainAddress {
+                        dependency_info: ManifestDependencyInfo::OnChain(OnChainAddress {
                             on_chain: linked_address.clone(),
                         }),
                         is_override: true,
