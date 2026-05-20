@@ -65,6 +65,6 @@ authorities:
     protocol_key: Edh6VmJUkuP4TiU3owC8Qlg13OytuOpAdfHTUyLCGN8=
     network_key: OKXew91B23hZ7ihzvjYptdWUWnQ8qTnvxzWxSIzR84c=
 total_stake: 55
-quorum_threshold: 37
-certification_threshold: 37
-validity_threshold: 19
+quorum_threshold: 43
+certification_threshold: 19
+validity_threshold: 7
