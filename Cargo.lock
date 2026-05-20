@@ -14709,6 +14709,7 @@ dependencies = [
  "move-core-types",
  "mysten-common",
  "mysten-metrics",
+ "mysten-network",
  "p256",
  "passkey-authenticator",
  "passkey-client",
