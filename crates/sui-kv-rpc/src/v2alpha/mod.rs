@@ -17,6 +17,7 @@ use tonic::codegen::BoxStream;
 mod list_checkpoints;
 mod list_events;
 mod list_transactions;
+mod watermark;
 
 // Per-RPC hard request timeout. The outer `operation::with_deadline`
 // wrapper drops the response stream with `DeadlineExceeded` when this

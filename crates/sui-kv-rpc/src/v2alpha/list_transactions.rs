@@ -41,6 +41,12 @@ use crate::v2::get_transaction::needs_object_types;
 use crate::v2::get_transaction::transaction_columns;
 use crate::v2::get_transaction::transaction_to_response;
 use crate::v2::get_transaction::validate_read_mask;
+use crate::v2alpha::watermark::advance_boundary_excluding_cp;
+use crate::v2alpha::watermark::boundary_cursor_cp;
+use crate::v2alpha::watermark::boundary_watermark;
+use crate::v2alpha::watermark::item_watermark;
+use crate::v2alpha::watermark::reached_range_end;
+use crate::v2alpha::watermark::terminal_boundary_watermark;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::error_contains;
 use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
@@ -170,7 +176,7 @@ pub(crate) async fn list_transactions(
             while let Some(item) = digest_stream.next().await {
                 match item {
                     Ok(ResolvedWatermarked::Item(row)) => {
-                        checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, row.checkpoint_number, &options);
+                        checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, row.checkpoint_number, &options);
                         let wm = item_watermark(&options, row.checkpoint_number, row.tx_sequence_number, checkpoint_boundary);
                         emitted += 1;
                         let yield_started = Instant::now();
@@ -178,8 +184,8 @@ pub(crate) async fn list_transactions(
                         ctx.observe_stream_item_yield_wait(yield_started.elapsed());
                     }
                     Ok(ResolvedWatermarked::Watermark { position, cp }) => {
-                        checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp, &options);
-                        let wm = boundary_watermark(&options, cp, position, checkpoint_boundary, direction);
+                        checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
+                        let wm = boundary_watermark(&options, boundary_cursor_cp(cp, direction), position, checkpoint_boundary);
                         yield watermark_response(wm);
                     }
                     Err(e) => {
@@ -278,7 +284,7 @@ pub(crate) async fn list_transactions(
         while let Some(item) = txn_with_objects_stream.next().await {
             match item {
                 Ok(ResolvedWatermarked::Item((tx_seq, tx_data, objects))) => {
-                    checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, tx_data.checkpoint_number, &options);
+                    checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, tx_data.checkpoint_number, &options);
                     let wm = item_watermark(&options, tx_data.checkpoint_number, tx_seq, checkpoint_boundary);
                     let render_started = Instant::now();
                     let executed = transaction_to_response(tx_data, &read_mask, &objects, &resolver).await?;
@@ -289,8 +295,8 @@ pub(crate) async fn list_transactions(
                     ctx.observe_stream_item_yield_wait(yield_started.elapsed());
                 }
                 Ok(ResolvedWatermarked::Watermark { position, cp }) => {
-                    checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp, &options);
-                    let wm = boundary_watermark(&options, cp, position, checkpoint_boundary, direction);
+                    checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
+                    let wm = boundary_watermark(&options, boundary_cursor_cp(cp, direction), position, checkpoint_boundary);
                     yield watermark_response(wm);
                 }
                 Err(e) => {
@@ -328,124 +334,11 @@ pub(crate) async fn list_transactions(
     .boxed())
 }
 
-/// For ListTransactions, the scan-direction completion boundary is
-/// `item_cp ± 1` because the item's own cp may still have unscanned
-/// matching transactions at higher (asc) or lower (desc) tx_seqs.
-/// Monotonic in scan direction: stored as `checkpoint_hi` (ascending) or
-/// `checkpoint_lo` (descending) by the Watermark builders below.
-///
-/// When the direction-adjusted candidate would overflow (`item_cp == 0`
-/// ascending or `u64::MAX` descending), the previously accumulated
-/// boundary is preserved rather than collapsed back to `None`.
-fn advance_checkpoint_boundary(
-    prev: Option<u64>,
-    item_cp: u64,
-    options: &QueryOptions,
-) -> Option<u64> {
-    let candidate = if options.is_ascending() {
-        item_cp.checked_sub(1)
-    } else {
-        item_cp.checked_add(1)
-    };
-    match (prev, candidate) {
-        (p, None) => p,
-        (None, Some(c)) => Some(c),
-        (Some(p), Some(c)) if options.is_ascending() => Some(p.max(c)),
-        (Some(p), Some(c)) => Some(p.min(c)),
-    }
-}
-
-/// Populate the direction-matching field of a `Watermark` from the
-/// per-scan boundary value. Exactly one of `checkpoint_hi` /
-/// `checkpoint_lo` is set, never both.
-fn set_checkpoint_bound(wm: &mut Watermark, options: &QueryOptions, boundary: Option<u64>) {
-    if options.is_ascending() {
-        wm.checkpoint_hi = boundary;
-    } else {
-        wm.checkpoint_lo = boundary;
-    }
-}
-
-/// Build the embedded `Watermark` for an item: cursor encodes this item's
-/// position (so the next request's `after`/`before` resumes past it) plus
-/// the current direction-matching checkpoint boundary.
-fn item_watermark(
-    options: &QueryOptions,
-    cp: u64,
-    position: u64,
-    checkpoint_boundary: Option<u64>,
-) -> Watermark {
-    let mut wm = Watermark::default();
-    wm.cursor = Some(options.cursor_for_item(cp, position));
-    set_checkpoint_bound(&mut wm, options, checkpoint_boundary);
-    wm
-}
-
-/// Build a standalone `Watermark` frame for the scan frontier between
-/// items. The watermark's resolved `cp` is `cp_of(F-1)` ascending or
-/// `cp_of(F)` descending — the last cp the bitmap might still emit
-/// items in. The CURSOR encoding is asymmetric: ascending uses `cp`
-/// directly (Boundary `after` advances the cp range start), but
-/// descending needs `cp + 1` because Boundary `before` treats the cp
-/// coordinate as an EXCLUSIVE upper bound (and we want `cp_of(F)`
-/// included on resume).
-fn boundary_watermark(
-    options: &QueryOptions,
-    cp: u64,
-    position: u64,
-    checkpoint_boundary: Option<u64>,
-    direction: sui_inverted_index::ScanDirection,
-) -> Watermark {
-    let cursor_cp = if direction.is_ascending() {
-        cp
-    } else {
-        cp.saturating_add(1)
-    };
-    let mut wm = Watermark::default();
-    wm.cursor = Some(options.cursor_for_boundary(cursor_cp, position));
-    set_checkpoint_bound(&mut wm, options, checkpoint_boundary);
-    wm
-}
-
 /// Wrap a constructed `Watermark` as a standalone wire frame.
 fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
     let mut response = ListTransactionsResponse::default();
     response.response = Some(list_transactions_response::Response::Watermark(watermark));
     response
-}
-
-/// Whether the scan reached the natural end of the requested range (the ledger
-/// tip or a requested `end_checkpoint`) rather than being truncated by an item
-/// or scan limit, or bounded by a client cursor. Only natural completion proves
-/// the range's final checkpoint complete.
-fn reached_range_end(reason: QueryEndReason) -> bool {
-    matches!(
-        reason,
-        QueryEndReason::LedgerTip | QueryEndReason::CheckpointBound
-    )
-}
-
-/// Boundary watermark emitted once the scan has drained the entire resolved
-/// range under natural completion. Unlike per-item watermarks it can claim the
-/// range's final checkpoint complete — `end_checkpoint - 1` ascending (the
-/// exclusive cp upper) or `end_checkpoint` descending (the inclusive cp lower) —
-/// because no further transactions exist in it within the requested range. The
-/// `(end_checkpoint, end_position)` cursor resumes exactly past the scanned
-/// range.
-fn terminal_boundary_watermark(
-    options: &QueryOptions,
-    end_checkpoint: u64,
-    end_position: u64,
-) -> Watermark {
-    let boundary = if options.is_ascending() {
-        end_checkpoint.checked_sub(1)
-    } else {
-        Some(end_checkpoint)
-    };
-    let mut wm = Watermark::default();
-    wm.cursor = Some(options.cursor_for_boundary(end_checkpoint, end_position));
-    set_checkpoint_bound(&mut wm, options, boundary);
-    wm
 }
 
 async fn fetch_tx_seq_digests(
@@ -666,19 +559,6 @@ mod tests {
         .unwrap()
     }
 
-    fn descending_options() -> QueryOptions {
-        let mut proto = sui_rpc::proto::sui::rpc::v2alpha::QueryOptions::default();
-        proto.ordering = sui_rpc::proto::sui::rpc::v2alpha::Ordering::Descending as i32;
-        QueryOptions::from_proto(
-            Some(&proto),
-            100,
-            1_000,
-            QueryType::Transactions,
-            Option::<&sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter>::None,
-        )
-        .unwrap()
-    }
-
     #[test]
     fn renders_transaction_response_from_tx_seq_digest() {
         let row = TxSeqDigestData {
@@ -733,52 +613,5 @@ mod tests {
         let transaction = both.transaction.expect("executed transaction");
         assert_eq!(transaction.digest, Some(row.digest.to_string()));
         assert_eq!(transaction.checkpoint, Some(9));
-    }
-
-    /// Descending scans set `checkpoint_lo` instead of `checkpoint_hi`,
-    /// so a client can read the direction-correct boundary from the
-    /// wire frame without knowing the request's ordering.
-    #[test]
-    fn descending_item_watermark_sets_checkpoint_lo_not_hi() {
-        let options = descending_options();
-        let wm = item_watermark(&options, 9, 42, Some(10));
-        assert_eq!(
-            wm.checkpoint_hi, None,
-            "descending scan must not set checkpoint_hi"
-        );
-        assert_eq!(
-            wm.checkpoint_lo,
-            Some(10),
-            "descending scan stores the boundary in checkpoint_lo"
-        );
-    }
-
-    /// On natural completion the terminal frame claims the range's final
-    /// checkpoint complete: ascending uses `end_checkpoint - 1` (exclusive cp
-    /// upper) and resumes from `(end_checkpoint, end_position)`.
-    #[test]
-    fn terminal_boundary_watermark_ascending_claims_end_minus_one() {
-        let options = options();
-        let wm = terminal_boundary_watermark(&options, 10, 100);
-        assert_eq!(wm.checkpoint_hi, Some(9));
-        assert_eq!(wm.checkpoint_lo, None);
-        assert_eq!(
-            wm.cursor.as_ref(),
-            Some(&options.cursor_for_boundary(10, 100))
-        );
-    }
-
-    /// Descending stores the range's lowest checkpoint (inclusive) in
-    /// `checkpoint_lo`.
-    #[test]
-    fn terminal_boundary_watermark_descending_claims_end_checkpoint() {
-        let options = descending_options();
-        let wm = terminal_boundary_watermark(&options, 10, 100);
-        assert_eq!(wm.checkpoint_lo, Some(10));
-        assert_eq!(wm.checkpoint_hi, None);
-        assert_eq!(
-            wm.cursor.as_ref(),
-            Some(&options.cursor_for_boundary(10, 100))
-        );
     }
 }

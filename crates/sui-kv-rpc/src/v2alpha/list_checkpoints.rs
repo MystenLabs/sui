@@ -53,6 +53,9 @@ use crate::query_options::ResolvedRange;
 use crate::v2::get_checkpoint::checkpoint_columns;
 use crate::v2::get_transaction::compute_object_keys;
 use crate::v2::get_transaction::transaction_columns;
+use crate::v2alpha::watermark::advance_checkpoint_boundary;
+use crate::v2alpha::watermark::boundary_watermark;
+use crate::v2alpha::watermark::item_watermark;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::error_contains;
@@ -185,7 +188,7 @@ pub(crate) async fn list_checkpoints(
                 match item {
                     Ok(ResolvedWatermarked::Item((cp_seq, cp_data))) => {
                         checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
-                        let wm = item_watermark(&options, cp_seq, checkpoint_boundary);
+                        let wm = item_watermark(&options, cp_seq, cp_seq, checkpoint_boundary);
                         emitted += 1;
                         let message =
                             crate::v2::get_checkpoint::checkpoint_to_response(cp_data, &read_mask, None)
@@ -208,7 +211,7 @@ pub(crate) async fn list_checkpoints(
                         if let Some(c) = frontier_to_boundary_candidate(cp_frontier, &options) {
                             checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, c, &options);
                         }
-                        let wm = boundary_watermark(&options, cp_frontier, checkpoint_boundary);
+                        let wm = boundary_watermark(&options, cp_frontier, cp_frontier, checkpoint_boundary);
                         yield watermark_response(wm);
                     }
                     Err(e) => {
@@ -327,7 +330,7 @@ pub(crate) async fn list_checkpoints(
             match item {
                 Ok(ResolvedWatermarked::Item((cp_seq, cp_data, txs, objects))) => {
                     checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
-                    let wm = item_watermark(&options, cp_seq, checkpoint_boundary);
+                    let wm = item_watermark(&options, cp_seq, cp_seq, checkpoint_boundary);
                     let response = render_full_checkpoint(
                         (cp_seq, cp_data, txs, objects),
                         &read_mask,
@@ -349,7 +352,7 @@ pub(crate) async fn list_checkpoints(
                     if let Some(c) = frontier_to_boundary_candidate(cp_frontier, &options) {
                         checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, c, &options);
                     }
-                    let wm = boundary_watermark(&options, cp_frontier, checkpoint_boundary);
+                    let wm = boundary_watermark(&options, cp_frontier, cp_frontier, checkpoint_boundary);
                     yield watermark_response(wm);
                 }
                 Err(e) => {
@@ -383,32 +386,12 @@ pub(crate) async fn list_checkpoints(
     .boxed())
 }
 
-/// For ListCheckpoints, the scan-direction completion boundary is the
-/// item's cp directly: `filtered_checkpoint_seq_stream` dedupes so a cp
-/// is never re-emitted, meaning "cp X emitted" is equivalent to "cp X
-/// fully processed for the purposes of this scan." (Compare to
-/// list_transactions/list_events, where the boundary is `item_cp ± 1`
-/// because the item's own cp may still have more matches at other
-/// tx_seqs/event_seqs.) Stored as `checkpoint_hi` (ascending) or
-/// `checkpoint_lo` (descending) by the Watermark builders below.
-///
-/// Also called via `frontier_to_boundary_candidate` to fold standalone
-/// `Watermark` frames into the same boundary so sparse filtered scans
-/// surface real cp progress even across long match-less gaps.
-fn advance_checkpoint_boundary(
-    prev: Option<u64>,
-    candidate: u64,
-    options: &QueryOptions,
-) -> Option<u64> {
-    Some(match prev {
-        None => candidate,
-        Some(p) if options.is_ascending() => p.max(candidate),
-        Some(p) => p.min(candidate),
-    })
-}
-
 /// Convert a cp-space scan frontier from `filtered_checkpoint_seq_stream`
 /// into a checkpoint-boundary candidate for `advance_checkpoint_boundary`.
+///
+/// ListCheckpoints dedupes cp_seq, so "cp X emitted" ≡ "cp X complete" and
+/// the item path feeds the item's cp straight into `advance_checkpoint_boundary`.
+/// The frontier path needs this adjustment instead:
 ///
 /// - Ascending: frontier means "all matching cps strictly less than `p`
 ///   have been emitted." The last fully-scanned cp is `p - 1`.
@@ -423,48 +406,6 @@ fn frontier_to_boundary_candidate(frontier: u64, options: &QueryOptions) -> Opti
     } else {
         Some(frontier)
     }
-}
-
-/// Populate the direction-matching field of a `Watermark` from the
-/// per-scan boundary value. Exactly one of `checkpoint_hi` /
-/// `checkpoint_lo` is set, never both.
-fn set_checkpoint_bound(wm: &mut Watermark, options: &QueryOptions, boundary: Option<u64>) {
-    if options.is_ascending() {
-        wm.checkpoint_hi = boundary;
-    } else {
-        wm.checkpoint_lo = boundary;
-    }
-}
-
-/// Build the embedded `Watermark` for a ListCheckpoints item. cp and
-/// position are the same cp_seq (item cursor encoding).
-fn item_watermark(
-    options: &QueryOptions,
-    cp_seq: u64,
-    checkpoint_boundary: Option<u64>,
-) -> Watermark {
-    let mut wm = Watermark::default();
-    wm.cursor = Some(options.cursor_for_item(cp_seq, cp_seq));
-    set_checkpoint_bound(&mut wm, options, checkpoint_boundary);
-    wm
-}
-
-/// Build a standalone scan-frontier `Watermark`. The cursor uses
-/// `Boundary` kind. `filtered_checkpoint_seq_stream` translates tx_seq
-/// watermarks into cp_seq watermarks before they reach the handler, and
-/// clamps them past any cp already delivered as an Item — so the
-/// emitted boundary cursor always resumes past every delivered
-/// checkpoint while still including any cp not yet delivered (its first
-/// matching tx may sit later in the scan).
-fn boundary_watermark(
-    options: &QueryOptions,
-    cp_seq: u64,
-    checkpoint_boundary: Option<u64>,
-) -> Watermark {
-    let mut wm = Watermark::default();
-    wm.cursor = Some(options.cursor_for_boundary(cp_seq, cp_seq));
-    set_checkpoint_bound(&mut wm, options, checkpoint_boundary);
-    wm
 }
 
 fn watermark_response(watermark: Watermark) -> ListCheckpointsResponse {

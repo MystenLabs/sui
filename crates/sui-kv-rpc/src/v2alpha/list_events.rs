@@ -40,6 +40,12 @@ use crate::query_options::QueryOptions;
 use crate::query_options::QueryType;
 use crate::query_options::ResolvedRange;
 use crate::v2::render_json;
+use crate::v2alpha::watermark::advance_boundary_excluding_cp;
+use crate::v2alpha::watermark::boundary_cursor_cp;
+use crate::v2alpha::watermark::boundary_watermark;
+use crate::v2alpha::watermark::item_watermark;
+use crate::v2alpha::watermark::reached_range_end;
+use crate::v2alpha::watermark::terminal_boundary_watermark;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::error_contains;
 
@@ -241,7 +247,7 @@ pub(crate) async fn list_events(
         while let Some(item) = event_stream.next().await {
             match item {
                 Ok(ResolvedWatermarked::Item(rendered)) => {
-                    checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, rendered.checkpoint_number, &options);
+                    checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, rendered.checkpoint_number, &options);
                     let wm = item_watermark(
                         &options,
                         rendered.checkpoint_number,
@@ -252,8 +258,8 @@ pub(crate) async fn list_events(
                     yield event_item_response(rendered.item, wm);
                 }
                 Ok(ResolvedWatermarked::Watermark { position, cp }) => {
-                    checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp, &options);
-                    let wm = boundary_watermark(&options, cp, position, checkpoint_boundary, direction);
+                    checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
+                    let wm = boundary_watermark(&options, boundary_cursor_cp(cp, direction), position, checkpoint_boundary);
                     yield watermark_response(wm);
                 }
                 Err(e) => {
@@ -291,112 +297,10 @@ pub(crate) async fn list_events(
     .boxed())
 }
 
-/// For ListEvents, the scan-direction completion boundary is `item_cp ± 1`
-/// because the item's own cp may still have unscanned matching events at
-/// higher (asc) or lower (desc) event_seqs. Monotonic in scan direction:
-/// stored as `checkpoint_hi` (ascending) or `checkpoint_lo` (descending)
-/// by the Watermark builders below.
-///
-/// When the direction-adjusted candidate would overflow (`item_cp == 0`
-/// ascending or `u64::MAX` descending), the previously accumulated
-/// boundary is preserved rather than collapsed back to `None`.
-fn advance_checkpoint_boundary(
-    prev: Option<u64>,
-    item_cp: u64,
-    options: &QueryOptions,
-) -> Option<u64> {
-    let candidate = if options.is_ascending() {
-        item_cp.checked_sub(1)
-    } else {
-        item_cp.checked_add(1)
-    };
-    match (prev, candidate) {
-        (p, None) => p,
-        (None, Some(c)) => Some(c),
-        (Some(p), Some(c)) if options.is_ascending() => Some(p.max(c)),
-        (Some(p), Some(c)) => Some(p.min(c)),
-    }
-}
-
-/// Populate the direction-matching field of a `Watermark` from the
-/// per-scan boundary value. Exactly one of `checkpoint_hi` /
-/// `checkpoint_lo` is set, never both.
-fn set_checkpoint_bound(wm: &mut Watermark, options: &QueryOptions, boundary: Option<u64>) {
-    if options.is_ascending() {
-        wm.checkpoint_hi = boundary;
-    } else {
-        wm.checkpoint_lo = boundary;
-    }
-}
-
-fn item_watermark(
-    options: &QueryOptions,
-    cp: u64,
-    event_seq: u64,
-    checkpoint_boundary: Option<u64>,
-) -> Watermark {
-    let mut wm = Watermark::default();
-    wm.cursor = Some(options.cursor_for_item(cp, event_seq));
-    set_checkpoint_bound(&mut wm, options, checkpoint_boundary);
-    wm
-}
-
-fn boundary_watermark(
-    options: &QueryOptions,
-    cp: u64,
-    position: u64,
-    checkpoint_boundary: Option<u64>,
-    direction: sui_inverted_index::ScanDirection,
-) -> Watermark {
-    let cursor_cp = if direction.is_ascending() {
-        cp
-    } else {
-        cp.saturating_add(1)
-    };
-    let mut wm = Watermark::default();
-    wm.cursor = Some(options.cursor_for_boundary(cursor_cp, position));
-    set_checkpoint_bound(&mut wm, options, checkpoint_boundary);
-    wm
-}
-
 fn watermark_response(watermark: Watermark) -> ListEventsResponse {
     let mut response = ListEventsResponse::default();
     response.response = Some(list_events_response::Response::Watermark(watermark));
     response
-}
-
-/// Whether the scan reached the natural end of the requested range (the ledger
-/// tip or a requested `end_checkpoint`) rather than being truncated by an item
-/// or scan limit, or bounded by a client cursor. Only natural completion proves
-/// the range's final checkpoint complete.
-fn reached_range_end(reason: QueryEndReason) -> bool {
-    matches!(
-        reason,
-        QueryEndReason::LedgerTip | QueryEndReason::CheckpointBound
-    )
-}
-
-/// Boundary watermark emitted once the scan has drained the entire resolved
-/// range under natural completion. Unlike per-item watermarks it can claim the
-/// range's final checkpoint complete — `end_checkpoint - 1` ascending (the
-/// exclusive cp upper) or `end_checkpoint` descending (the inclusive cp lower) —
-/// because no further events exist in it within the requested range. The
-/// `(end_checkpoint, end_position)` cursor resumes exactly past the scanned
-/// range.
-fn terminal_boundary_watermark(
-    options: &QueryOptions,
-    end_checkpoint: u64,
-    end_position: u64,
-) -> Watermark {
-    let boundary = if options.is_ascending() {
-        end_checkpoint.checked_sub(1)
-    } else {
-        Some(end_checkpoint)
-    };
-    let mut wm = Watermark::default();
-    wm.cursor = Some(options.cursor_for_boundary(end_checkpoint, end_position));
-    set_checkpoint_bound(&mut wm, options, boundary);
-    wm
 }
 
 fn event_item_response(mut item: EventItem, watermark: Watermark) -> ListEventsResponse {
@@ -931,35 +835,6 @@ mod tests {
                 REQUEST_CONCURRENCY
             ),
             REQUEST_CONCURRENCY
-        );
-    }
-
-    /// On natural completion the terminal frame claims the range's final
-    /// checkpoint complete: ascending uses `end_checkpoint - 1` (exclusive cp
-    /// upper) and resumes from `(end_checkpoint, end_position)`.
-    #[test]
-    fn terminal_boundary_watermark_ascending_claims_end_minus_one() {
-        let options = options(Ordering::Ascending);
-        let wm = terminal_boundary_watermark(&options, 10, 100);
-        assert_eq!(wm.checkpoint_hi, Some(9));
-        assert_eq!(wm.checkpoint_lo, None);
-        assert_eq!(
-            wm.cursor.as_ref(),
-            Some(&options.cursor_for_boundary(10, 100))
-        );
-    }
-
-    /// Descending stores the range's lowest checkpoint (inclusive) in
-    /// `checkpoint_lo`.
-    #[test]
-    fn terminal_boundary_watermark_descending_claims_end_checkpoint() {
-        let options = options(Ordering::Descending);
-        let wm = terminal_boundary_watermark(&options, 10, 100);
-        assert_eq!(wm.checkpoint_lo, Some(10));
-        assert_eq!(wm.checkpoint_hi, None);
-        assert_eq!(
-            wm.cursor.as_ref(),
-            Some(&options.cursor_for_boundary(10, 100))
         );
     }
 }
