@@ -156,7 +156,8 @@ impl RocksDBStore {
         Self::open_tables_read_write(
             path.into(),
             MetricConf::new("consensus")
-                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0))
+                .with_th_batch_compression(),
             configs.into_iter().collect(),
         )
     }

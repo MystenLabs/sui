@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{DBMetrics, StorageType, util::ensure_database_type};
+use crate::{DBMetrics, StorageType, rocks::MetricConf, util::ensure_database_type};
 use bincode::Options;
 use mysten_metrics::RegistryID;
 use prometheus::{HistogramTimer, Registry};
@@ -9,6 +9,7 @@ use serde::de::DeserializeOwned;
 use std::env;
 use std::path::Path;
 use std::sync::Arc;
+use tidehunter::compressed_batch::BatchCodec;
 use tidehunter::config::Config;
 use tidehunter::db::Db;
 use tidehunter::iterators::db_iterator::DbIterator;
@@ -30,14 +31,14 @@ pub struct ThConfig {
     pub prefix: Option<Vec<u8>>,
 }
 
-pub fn open(path: &Path, key_shape: KeyShape, db_name: String) -> (Arc<Db>, RegistryID) {
+pub fn open(path: &Path, key_shape: KeyShape, metric_conf: &MetricConf) -> (Arc<Db>, RegistryID) {
     std::fs::create_dir_all(path).expect("failed to open tidehunter db");
     let registry_service = &DBMetrics::get().registry_serivce;
-    let registry = new_db_registry(db_name);
+    let registry = new_db_registry(metric_conf.db_name.clone());
     let registry_id = registry_service.add(registry.clone());
     let metrics = Metrics::new_in(&registry);
     ensure_database_type(path, StorageType::TideHunter).expect("failed to open tidehunter db");
-    let db = Db::open(path, key_shape, Arc::new(thdb_config()), metrics)
+    let db = Db::open(path, key_shape, Arc::new(thdb_config(metric_conf)), metrics)
         .expect("failed to open tidehunter db");
     db.start_periodic_snapshot();
     (db, registry_id)
@@ -83,7 +84,7 @@ pub fn default_max_dirty_keys() -> usize {
     parse_env_usize("TH_DEFAULT_MAX_DIRTY_KEYS", 1).unwrap_or(1024)
 }
 
-fn thdb_config() -> Config {
+fn thdb_config(metric_conf: &MetricConf) -> Config {
     let frag_size = if let Ok(frag_size) = env::var("TH_FRAG_SIZE") {
         let frag_size = frag_size.parse().expect("Failed to parse TH_FRAG_SIZE");
         assert!(frag_size > 0, "TH_FRAG_SIZE must be more then 0");
@@ -117,6 +118,9 @@ fn thdb_config() -> Config {
     let num_flusher_threads = 1;
     #[cfg(not(debug_assertions))]
     let num_flusher_threads = 4;
+    let batch_codec = metric_conf
+        .enable_th_batch_compression
+        .then_some(BatchCodec::Lz4);
     let mut config = Config {
         frag_size,
         // run snapshot every 64 Gb written to wal
@@ -131,6 +135,7 @@ fn thdb_config() -> Config {
         max_index_maps,
         commit_pool_size,
         num_flusher_threads,
+        batch_codec,
         ..Config::default()
     };
 
