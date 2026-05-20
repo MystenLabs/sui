@@ -1,15 +1,14 @@
 ---
-title: Sui Exchange Integration
-sidebar_label: Exchange Integration
-description: Guidance for integrating SUI, the token native to the Sui network, into a cryptocurrency exchange. Covers infrastructure, current APIs (gRPC and GraphQL), balance tracking, transactions, transfers, and staking.
+title: Exchange Integration
+description: Guidance for integrating SUI into a cryptocurrency exchange. Covers infrastructure, current APIs (gRPC and GraphQL), balance tracking, transactions, transfers, and staking.
 keywords: [ integrate sui, integrate with SUI token, sui tokens, SUI, integrate sui into exchange, cryptocurrency exchange, decentralized exchange, dex, integrate with dex, sui balance transfer, staking functions, track balance, checkpoints, grpc, graphql ]
 ---
 
-This topic describes how to integrate SUI, the token native to the Sui network, into a cryptocurrency exchange. The specific requirements and processes vary between exchanges, so this page focuses on the primary tasks and points to the canonical Sui references for the details. Before you ship an integration to production, confirm the API and SDK examples you use against the current references linked from each section, because parts of the Sui stack still evolve quickly.
+This topic describes how to integrate SUI into a cryptocurrency exchange. Specific requirements and processes vary between exchanges. Before you ship an integration to production, confirm the API and SDK examples you use against the current references linked from each section.
 
 :::info
 
-Sui's primary data access APIs are [gRPC](/develop/accessing-data/grpc) and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc). JSON-RPC is in deprecation. New integrations should use gRPC or GraphQL.
+Sui's primary data access APIs are [gRPC](/develop/accessing-data/grpc) and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc). JSON-RPC has been deprecated. New integrations should use gRPC or GraphQL.
 
 :::
 
@@ -37,11 +36,11 @@ For the Rust client, use the [`sui-rust-sdk`](https://github.com/MystenLabs/sui-
 
 ### GraphQL RPC
 
-GraphQL exposes a single endpoint where you select exactly the fields you need across addresses, objects, transactions, checkpoints, events, and balances. It is well suited to monitoring dashboards, custom indexers, and queries that join data across several resources. For practical examples including pagination, checkpoint scoping, and transaction submission, see [Querying Data with GraphQL RPC](/develop/accessing-data/graphql/query-with-graphql).
+GraphQL exposes a single endpoint where you select exactly the fields you need across addresses, objects, transactions, checkpoints, events, and balances. It is well suited for monitoring dashboards, custom indexers, and queries that join data across several resources. For practical examples including pagination, checkpoint scoping, and transaction submission, see [Querying Data with GraphQL RPC](/develop/accessing-data/graphql/query-with-graphql).
 
 ### JSON-RPC (deprecated)
 
-JSON-RPC remains available for legacy clients but is in deprecation. Existing integrations should plan a migration to gRPC or GraphQL. New integrations should not adopt JSON-RPC.
+Existing integrations should plan a migration to gRPC or GraphQL. New integrations should not adopt JSON-RPC.
 
 ## Sui addresses
 
@@ -98,25 +97,21 @@ Use checkpoints as the canonical, ordered stream of finalized activity:
 
 - **Checkpoints do not fork.** Once a checkpoint is final, it does not roll back or reorganize.
 
-- **Sui creates roughly 4 checkpoints per second.** Track the [Sui public dashboard](https://metrics.sui.io/public-dashboards/4ceb11cc210d4025b122294586961169) for current statistics.
-
 - **Transactions are final before they are included in a checkpoint.** Checkpoints group finalized transactions for ordered downstream consumption.
 
 For real-time pipelines, subscribe to the checkpoint stream over [gRPC](/develop/accessing-data/grpc/using-grpc), and read each checkpoint's transaction and event data from the response through a `FieldMask`. For ad hoc queries and replays, paginate over checkpoints, transactions, and events with [GraphQL](/develop/accessing-data/graphql/query-with-graphql), which supports cursor-based pagination and checkpoint-scoped consistency.
 
-For event consumption patterns, including filtering by sender, recipient, package, or event type, see [Using Events](/develop/accessing-data/using-events). That page covers event queries through both gRPC and GraphQL.
+For event consumption patterns, including filtering by sender, recipient, package, or event type, see [Using Events](/develop/accessing-data/using-events).
 
 ## SUI transfers
 
-In Sui, SUI is held as coin objects and (optionally) as an address balance. Build transfers as [programmable transaction blocks (PTBs)](/develop/transactions/ptbs/prog-txn-blocks) using the SDK of your choice. PTBs let you split, merge, and transfer coins in a single atomic transaction without separate JSON-RPC transaction-builder calls.
-
-The [TypeScript SDK](https://sdk.mystenlabs.com/typescript) is the most commonly used path. See [Building Programmable Transaction Blocks](/develop/transactions/ptbs/building-ptb) for the patterns you need, including splitting coins by amount, transferring objects, and signing the resulting transaction.
+Build transfers as [programmable transaction blocks (PTBs)](/develop/transactions/ptbs/prog-txn-blocks) using the SDK of your choice. PTBs let you split, merge, and transfer coins in a single atomic transaction.
 
 A few points that matter for exchange flows:
 
 - **Coin selection.** When you pay from coin objects, the network performs [gas smashing](/develop/transaction-payment/gas-smashing) automatically if you pass multiple gas coins. You do not need to merge coins offline before paying.
 
-- **Address balance gas payments.** When the [address balances](/onchain-finance/asset-custody/address-balances/using-address-balances) feature is enabled on the target network, the gas payment can be drawn directly from the sender or sponsor address balance, removing the need to manage gas coin objects entirely. Transactions that use address-balance gas payments must set a `ValidDuring` expiration with both a minimum and maximum epoch. Before relying on this in production, verify the feature is enabled on each target network using the [protocol-config feature flag check](/onchain-finance/asset-custody/address-balances/using-address-balances#paying-for-gas-from-address-balances).
+- **Address balance gas payments.** The gas payment can be drawn directly from the sender or sponsor address balance, removing the need to manage gas coin objects entirely. Transactions that use address-balance gas payments must set a `ValidDuring` expiration with both a minimum and maximum epoch. 
 
 - **Sponsored transactions.** For user-facing flows, you can sponsor a user's transaction so they pay no gas. See [Sponsored Transactions](/develop/transaction-payment/sponsor-txn).
 
@@ -128,21 +123,9 @@ For the full signature requirements, intent format, and worked examples in Rust,
 
 ## SUI staking
 
-Sui uses Delegated Proof-of-Stake (DPoS). SUI holders stake to a validator's staking pool to earn rewards. Key properties:
+To build staking and unstaking transactions, construct a PTB that calls the relevant entry function in the [`sui_system` Move module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move). Refer to that module for the current entry function signatures, and to the [`staking_pool` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/staking_pool.move) for the `StakedSui` type and reward accounting. These signatures are the source of truth, because they change with system package upgrades. The [TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the helpers you need to assemble the call. Confirm the function signature you target against the linked Move source before you ship.
 
-- The network locks tokens for the duration of the epoch in which you add the stake.
-
-- New stake activates at the start of the next epoch.
-
-- A user can request a withdrawal at any time. The principal and any earned rewards become available at the start of the next epoch.
-
-- The network fixes the total voting power across all validators at 10,000, with a per-validator cap of 1,000 (10%). The quorum threshold for confirming a transaction is 6,667 (greater than 2/3).
-
-`StakedSui` objects owned by the staker represent stakes onchain.
-
-To **build staking and unstaking transactions**, construct a PTB that calls the relevant entry function in the [`sui_system` Move module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move). Refer to that module for the current entry function signatures, and to the [`staking_pool` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/staking_pool.move) for the `StakedSui` type and reward accounting. These signatures are the source of truth, because they change with system package upgrades. The [TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the helpers you need to assemble the call. Confirm the function signature you target against the linked Move source before you ship.
-
-To **read stake state** for an address, such as active stakes, pending stakes, and accrued rewards, query through [GraphQL](/develop/accessing-data/graphql/query-with-graphql) or [gRPC](/develop/accessing-data/grpc/using-grpc) rather than reading the Move module directly.
+To read stake state for an address, such as active stakes, pending stakes, and accrued rewards, query through [GraphQL](/develop/accessing-data/graphql/query-with-graphql) or [gRPC](/develop/accessing-data/grpc/using-grpc) rather than reading the Move module directly.
 
 ## Designing deposits and withdrawals
 
