@@ -151,7 +151,7 @@ For the full signature requirements, intent format, and worked examples in Rust,
 
 ## SUI staking
 
-The Sui blockchain uses a Delegated Proof-of-Stake (DPoS) mechanism. SUI token holders stake to a validator's staking pool. When a user stakes, the network locks those tokens for the duration of the epoch in which the user adds the stake. New staking requests become active at the start of the next epoch. A user can request a withdrawal at any time, and the principal plus any accrued rewards become available at the start of the next epoch.
+The Sui blockchain uses a Delegated Proof-of-Stake (DPoS) mechanism. SUI token holders stake to a validator's staking pool. When a user stakes, the network locks those tokens for the duration of the epoch in which the user adds the stake. New staking requests become active at the start of the next epoch. A user can request a withdrawal at any time. Stake withdrawals process immediately using the previous epoch's exchange rate and include the principal plus rewards accumulated through the previous epoch. The withdrawn stake stops contributing starting the next epoch.
 
 SUI holders who stake to validators earn rewards for helping secure the Sui network. Sui determines staking rewards based on stake performance and distributes them at the end of each epoch.
 
@@ -198,7 +198,7 @@ Non-entry variants `request_add_stake_non_entry` and `request_withdraw_stake_non
 
 To build staking and unstaking transactions, assemble a PTB that calls one of these functions. The [TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the helpers you need.
 
-To read stake state for an address, such as active stakes, pending stakes, and accrued rewards, query through [GraphQL](/develop/accessing-data/graphql/query-with-graphql) or [gRPC](/develop/accessing-data/grpc/using-grpc) rather than reading the Move module directly.
+To read stake state for an address, list owned `StakedSui` objects through `StateService.ListOwnedObjects` filtered by type on [gRPC](/develop/accessing-data/grpc/using-grpc), or through the `address.objects(filter: { type: ... })` connection on [GraphQL](/develop/accessing-data/graphql/query-with-graphql). The current schema exposes balance, transaction, and object access; it does not yet expose a first-class staking-state field that returns active stakes, pending stakes, and accrued rewards together. To compute accrued rewards, read the `StakedSui` object's stake activation epoch and principal, then compute the current value against the validator's exchange rate, or use the [TypeScript SDK](https://sdk.mystenlabs.com/typescript) staking helpers if available for your use case.
 
 ## Designing deposits and withdrawals
 
