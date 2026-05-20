@@ -470,17 +470,6 @@ fn emit_macro_frame_diagnostics(
         }
     }
 
-    fn format_stack(frames: &[MacroFrameInfoEntry], stack: &[u32]) -> String {
-        if stack.is_empty() {
-            return "[]".to_string();
-        }
-        let entries: Vec<String> = stack
-            .iter()
-            .map(|&idx| format_kind_stack(&frames[idx as usize]))
-            .collect();
-        format!("[{}]", entries.join(", "))
-    }
-
     /// Formats a stack with frame indices so same-looking frames remain distinguishable.
     fn format_stack_indexed(frames: &[MacroFrameInfoEntry], stack: &[u32]) -> String {
         if stack.is_empty() {
@@ -598,15 +587,6 @@ fn emit_macro_frame_diagnostics(
                 details.push(format!(
                     "!! frame transition without color change: color/frame stayed {}",
                     format_frame_idx(frame_idx),
-                ));
-            }
-
-            let display_prev_fmt = format_stack(frames, &prev_stack);
-            let display_curr_fmt = format_stack(frames, &stack);
-            if stack_changed && display_prev_fmt == display_curr_fmt {
-                details.push(format!(
-                    "?? ambiguous transition: both stacks display as {}",
-                    display_curr_fmt,
                 ));
             }
 

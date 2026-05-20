@@ -21,7 +21,6 @@ note[I15008]: macro frame info
           [] -> [0:MacroBody(add), 1:Argument]
       8: `add!(x, y)`
           [0:MacroBody(add), 1:Argument] -> [0:MacroBody(add), 2:Argument]
-          ?? ambiguous transition: both stacks display as [MacroBody(add), Argument]
       4: `$a + $b`
           [0:MacroBody(add), 2:Argument] -> [0:MacroBody(add)]
       8: `add!(x, y)`

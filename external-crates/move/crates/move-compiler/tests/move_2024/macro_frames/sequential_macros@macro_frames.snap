@@ -32,7 +32,6 @@ note[I15008]: macro frame info
            [] -> [2:MacroBody(double), 3:Argument]
        12: `add_one!(v) + double!(v)`
            [2:MacroBody(double), 3:Argument] -> [2:MacroBody(double), 4:Argument]
-           ?? ambiguous transition: both stacks display as [MacroBody(double), Argument]
        8: `$x + $x`
            [2:MacroBody(double), 4:Argument] -> [2:MacroBody(double)]
        12: `add_one!(v) + double!(v)`
