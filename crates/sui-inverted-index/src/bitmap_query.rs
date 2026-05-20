@@ -392,7 +392,7 @@ impl BitmapQuery {
     /// must be at least this many — a sanity floor enforced before any
     /// scan. Each leaf's first bucket is then reserved (always allowed) so
     /// every leaf emits its first watermark regardless of how the shared
-    /// budget races; see [`BitmapScanBudget::take_first`].
+    /// budget races; see `BitmapScanBudget::take_first`.
     pub fn leaf_count(&self) -> usize {
         self.terms.iter().map(|t| t.literals.len()).sum()
     }
