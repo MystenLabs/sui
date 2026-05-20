@@ -107,6 +107,11 @@ impl QueryContext {
         self.metrics.observe_response_render(self.method, elapsed);
     }
 
+    pub(crate) fn observe_stage(&self, stage: &'static str, elapsed: std::time::Duration) {
+        self.metrics
+            .observe_stage_latency(self.method, stage, elapsed);
+    }
+
     pub(crate) fn observe_stream_item_yield_wait(&self, elapsed: std::time::Duration) {
         self.metrics
             .observe_stream_item_yield_wait(self.method, elapsed);

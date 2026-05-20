@@ -4,6 +4,8 @@
 use mysten_common::ZipDebugEqIteratorExt;
 use std::collections::{BTreeSet, HashMap};
 use std::str::FromStr;
+use std::time::Duration;
+use std::time::Instant;
 use sui_kvstore::tables::transactions::col;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader, TransactionData};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
@@ -22,7 +24,8 @@ use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use tracing::warn;
 
-use super::render_json;
+use super::render_json_with_layout;
+use super::resolve_json_layout;
 use crate::PackageResolver;
 
 pub const MAX_BATCH_REQUESTS: usize = 200;
@@ -135,6 +138,19 @@ pub(crate) async fn transaction_to_response(
     objects: &HashMap<ObjectKey, Object>,
     resolver: &PackageResolver,
 ) -> Result<ExecutedTransaction, RpcError> {
+    transaction_to_response_observed(source, mask, objects, resolver, |_, _| {}).await
+}
+
+pub(crate) async fn transaction_to_response_observed<F>(
+    source: TransactionData,
+    mask: &FieldMaskTree,
+    objects: &HashMap<ObjectKey, Object>,
+    resolver: &PackageResolver,
+    observe_stage: F,
+) -> Result<ExecutedTransaction, RpcError>
+where
+    F: Fn(&'static str, Duration),
+{
     let mut message = ExecutedTransaction::default();
 
     if mask.contains(ExecutedTransaction::DIGEST_FIELD.name) {
@@ -218,9 +234,21 @@ pub(crate) async fn transaction_to_response(
             for (proto_event, sui_event) in
                 proto_events.events.iter_mut().zip_debug_eq(&events.data)
             {
-                proto_event.json = render_json(resolver, &sui_event.type_, &sui_event.contents)
-                    .await
-                    .map(Box::new);
+                let layout_started = Instant::now();
+                let layout = resolve_json_layout(resolver, &sui_event.type_).await;
+                observe_stage(
+                    "transaction.render.event_json_package_layout",
+                    layout_started.elapsed(),
+                );
+                if let Some(layout) = layout {
+                    let json_started = Instant::now();
+                    proto_event.json =
+                        render_json_with_layout(&sui_event.contents, &layout).map(Box::new);
+                    observe_stage(
+                        "transaction.render.event_json_compute",
+                        json_started.elapsed(),
+                    );
+                }
             }
         }
     }

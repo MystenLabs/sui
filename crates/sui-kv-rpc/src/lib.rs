@@ -66,6 +66,7 @@ pub type PackageResolver = Arc<Resolver<Arc<dyn PackageStore>>>;
 #[derive(Clone)]
 pub(crate) struct KvRpcMetrics {
     bigtable_limiter: Arc<BigTableLimiterMetrics>,
+    stage_latency_ms: HistogramVec,
     response_render_latency_ms: HistogramVec,
     stream_item_yield_wait_ms: HistogramVec,
     bitmap_buckets_evaluated: HistogramVec,
@@ -75,6 +76,14 @@ impl KvRpcMetrics {
     fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
             bigtable_limiter: BigTableLimiterMetrics::new(registry),
+            stage_latency_ms: register_histogram_vec_with_registry!(
+                "kv_rpc_stage_latency_ms",
+                "Wall time spent in named v2alpha list API stages.",
+                &["method", "stage"],
+                prometheus::exponential_buckets(0.01, 2.0, 20).unwrap(),
+                registry,
+            )
+            .unwrap(),
             response_render_latency_ms: register_histogram_vec_with_registry!(
                 "kv_rpc_response_render_latency_ms",
                 "Wall time spent rendering one v2alpha response item.",
@@ -107,6 +116,17 @@ impl KvRpcMetrics {
     fn observe_response_render(&self, method: &'static str, elapsed: std::time::Duration) {
         self.response_render_latency_ms
             .with_label_values(&[method])
+            .observe(elapsed.as_secs_f64() * 1000.0);
+    }
+
+    fn observe_stage_latency(
+        &self,
+        method: &'static str,
+        stage: &'static str,
+        elapsed: std::time::Duration,
+    ) {
+        self.stage_latency_ms
+            .with_label_values(&[method, stage])
             .observe(elapsed.as_secs_f64() * 1000.0);
     }
 

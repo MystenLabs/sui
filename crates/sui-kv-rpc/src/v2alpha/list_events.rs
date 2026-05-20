@@ -40,7 +40,8 @@ use crate::query_options::CheckpointRange;
 use crate::query_options::QueryOptions;
 use crate::query_options::QueryType;
 use crate::query_options::ResolvedRange;
-use crate::v2::render_json;
+use crate::v2::render_json_with_layout;
+use crate::v2::resolve_json_layout;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::error_contains;
 
@@ -87,9 +88,11 @@ pub(crate) async fn list_events(
     let direction = options.scan_direction();
     let wants_json = read_mask.contains(ProtoEvent::JSON_FIELD.name);
 
+    let resolve_started = Instant::now();
     let event_range = resolve_event_range(&client, checkpoint_range, &options)
         .instrument(debug_span!("resolve_event_range"))
         .await?;
+    ctx.observe_stage("event.resolve_range", resolve_started.elapsed());
     let end_reason = event_range.end_reason;
     let end_checkpoint = event_range.end_checkpoint;
     let end_position = event_range.end_position;
@@ -156,7 +159,12 @@ pub(crate) async fn list_events(
                 })
                 .boxed()
         } else {
-            unfiltered_event_refs(client.clone(), event_range.clone(), options.clone())
+            unfiltered_event_refs(
+                ctx.clone(),
+                client.clone(),
+                event_range.clone(),
+                options.clone(),
+            )
         };
     let ref_stream = take_items(event_ref_stream, limit_items);
 
@@ -167,7 +175,8 @@ pub(crate) async fn list_events(
         if filtered {
             pipelined_chunks(ref_stream, CHUNK_MAX, request_bigtable_concurrency, {
                 let client = client.clone();
-                move |refs| attach_tx_seq_digests(client.clone(), refs)
+                let ctx = ctx.clone();
+                move |refs| attach_tx_seq_digests(ctx.clone(), client.clone(), refs)
             })
         } else {
             ref_stream
@@ -183,7 +192,8 @@ pub(crate) async fn list_events(
         {
             let client = client.clone();
             let columns = columns.clone();
-            move |refs| fetch_txs_for_refs(client.clone(), columns.clone(), refs)
+            let ctx = ctx.clone();
+            move |refs| fetch_txs_for_refs(ctx.clone(), client.clone(), columns.clone(), refs)
         },
     );
 
@@ -217,7 +227,13 @@ pub(crate) async fn list_events(
                         let render_task = AbortOnDrop::new(tokio::spawn(async move {
                             let render_started = Instant::now();
                             let rendered = render_event(
-                                event_ref, tx, &read_mask, &resolver, wants_json, &options,
+                                ctx.clone(),
+                                event_ref,
+                                tx,
+                                &read_mask,
+                                &resolver,
+                                wants_json,
+                                &options,
                             )
                             .await?;
                             ctx.observe_response_render(render_started.elapsed());
@@ -415,6 +431,7 @@ fn event_item_response(mut item: EventItem, watermark: Watermark) -> ListEventsR
 /// input ref-index order. A single arriving digest can release multiple
 /// refs (multiple events from one tx).
 async fn attach_tx_seq_digests(
+    ctx: QueryContext,
     client: BigTableClient,
     refs: Vec<EventRef>,
 ) -> Result<BoxStream<'static, Result<EventRef, anyhow::Error>>, anyhow::Error> {
@@ -422,9 +439,12 @@ async fn attach_tx_seq_digests(
         return Ok(futures::stream::empty().boxed());
     }
 
+    let stage_started = Instant::now();
+    let ref_count = refs.len();
     let mut unique_seqs: Vec<u64> = refs.iter().map(|p| p.tx_seq).collect();
     unique_seqs.sort_unstable();
     unique_seqs.dedup();
+    let unique_seq_count = unique_seqs.len();
     // tx_seq -> indices of refs sharing that tx_seq, so a single arriving
     // digest can release all dependent refs at once.
     let mut indices_by_seq: HashMap<u64, Vec<usize>> = HashMap::new();
@@ -432,15 +452,21 @@ async fn attach_tx_seq_digests(
         indices_by_seq.entry(p.tx_seq).or_default().push(i);
     }
 
+    let open_started = Instant::now();
     let digest_stream = client.resolve_tx_digests_stream(unique_seqs).await?;
+    let open_elapsed = open_started.elapsed();
+    ctx.observe_stage("event.attach_tx_seq_digests_open", open_elapsed);
     Ok(async_stream::try_stream! {
         // Keyed by ref index so the emitter releases in input-ref order.
         let input_indices: Vec<usize> = (0..refs.len()).collect();
         let mut emitter: InputOrderEmitter<usize, EventRef> =
             InputOrderEmitter::new(input_indices);
         futures::pin_mut!(digest_stream);
+        let mut row_count = 0usize;
+        let mut emitted = 0usize;
         while let Some(row) = digest_stream.next().await {
             let row = row?;
+            row_count += 1;
             let idxs = indices_by_seq
                 .remove(&row.tx_sequence_number)
                 .ok_or_else(|| {
@@ -457,13 +483,25 @@ async fn attach_tx_seq_digests(
                     p,
                     "list_events: transaction digest lookup for selected event",
                 )? {
+                    emitted += 1;
                     yield v;
                 }
             }
         }
         for v in emitter.finish("list_events: missing selected event transaction digest")? {
+            emitted += 1;
             yield v;
         }
+        ctx.observe_stage("event.attach_tx_seq_digests_drain", stage_started.elapsed());
+        info!(
+            ref_count,
+            unique_seq_count,
+            row_count,
+            emitted,
+            open_ms = open_elapsed.as_millis(),
+            elapsed_ms = stage_started.elapsed().as_millis(),
+            "list_events: attach_tx_seq_digests done"
+        );
     }
     .boxed())
 }
@@ -471,6 +509,7 @@ async fn attach_tx_seq_digests(
 /// Stage C: fetch transactions for a chunk of refs, emitting
 /// `(EventRef, TransactionData)` in input ref-index order.
 async fn fetch_txs_for_refs(
+    ctx: QueryContext,
     client: BigTableClient,
     columns: Arc<[&'static str]>,
     refs: Vec<EventRef>,
@@ -479,6 +518,8 @@ async fn fetch_txs_for_refs(
         return Ok(futures::stream::empty().boxed());
     }
 
+    let stage_started = Instant::now();
+    let ref_count = refs.len();
     let mut unique_digests: Vec<TransactionDigest> = Vec::new();
     let mut seen_digests: std::collections::HashSet<TransactionDigest> =
         std::collections::HashSet::new();
@@ -495,18 +536,25 @@ async fn fetch_txs_for_refs(
         }
         indices_by_digest.entry(row.digest).or_default().push(i);
     }
+    let unique_digest_count = unique_digests.len();
 
     let column_filter = BigTableClient::column_filter(&columns);
+    let open_started = Instant::now();
     let tx_stream = client
         .get_transactions_stream(unique_digests, Some(column_filter))
         .await?;
+    let open_elapsed = open_started.elapsed();
+    ctx.observe_stage("event.fetch_txs_for_refs_open", open_elapsed);
     Ok(async_stream::try_stream! {
         let input_indices: Vec<usize> = (0..refs.len()).collect();
         let mut emitter: InputOrderEmitter<usize, (EventRef, TransactionData)> =
             InputOrderEmitter::new(input_indices);
         futures::pin_mut!(tx_stream);
+        let mut row_count = 0usize;
+        let mut emitted = 0usize;
         while let Some(row) = tx_stream.next().await {
             let (digest, tx) = row?;
+            row_count += 1;
             // All refs sharing this digest become ready at once. We clone
             // `tx` per ref so each event from the same tx has its own
             // `TransactionData`; downstream consumes by-value when reading
@@ -520,13 +568,25 @@ async fn fetch_txs_for_refs(
                     (refs[idx], tx.clone()),
                     "list_events: transaction body lookup for selected event",
                 )? {
+                    emitted += 1;
                     yield v;
                 }
             }
         }
         for v in emitter.finish("list_events: missing selected event transaction body")? {
+            emitted += 1;
             yield v;
         }
+        ctx.observe_stage("event.fetch_txs_for_refs_drain", stage_started.elapsed());
+        info!(
+            ref_count,
+            unique_digest_count,
+            row_count,
+            emitted,
+            open_ms = open_elapsed.as_millis(),
+            elapsed_ms = stage_started.elapsed().as_millis(),
+            "list_events: fetch_txs_for_refs done"
+        );
     }
     .boxed())
 }
@@ -542,6 +602,7 @@ struct RenderedEvent {
 }
 
 async fn render_event(
+    ctx: QueryContext,
     event_ref: EventRef,
     tx: TransactionData,
     read_mask: &FieldMaskTree,
@@ -549,6 +610,7 @@ async fn render_event(
     wants_json: bool,
     _options: &QueryOptions,
 ) -> Result<RenderedEvent, RpcError> {
+    let extract_started = Instant::now();
     let tx_events = tx.events.as_ref().ok_or_else(|| {
         RpcError::new(
             tonic::Code::Internal,
@@ -570,20 +632,30 @@ async fn render_event(
                 ),
             )
         })?;
+    ctx.observe_stage("event.render.extract", extract_started.elapsed());
 
+    let merge_started = Instant::now();
     let mut proto_event = ProtoEvent::merge_from(event, read_mask);
+    ctx.observe_stage("event.render.proto_merge", merge_started.elapsed());
     if wants_json {
-        proto_event.json = render_json(resolver, &event.type_, &event.contents)
-            .await
-            .map(Box::new);
+        let layout_started = Instant::now();
+        let layout = resolve_json_layout(resolver, &event.type_).await;
+        ctx.observe_stage("event.render.package_layout", layout_started.elapsed());
+        if let Some(layout) = layout {
+            let json_started = Instant::now();
+            proto_event.json = render_json_with_layout(&event.contents, &layout).map(Box::new);
+            ctx.observe_stage("event.render.json_compute", json_started.elapsed());
+        }
     }
 
+    let item_started = Instant::now();
     let mut item = EventItem::default();
     item.checkpoint = Some(tx.checkpoint_number);
     item.event_index = Some(event_ref.event_idx);
     item.transaction_digest = Some(tx.digest.to_string());
     item.event = Some(proto_event);
     item.transaction_offset = event_ref.tx_seq_digest.map(|row| row.tx_offset as u64);
+    ctx.observe_stage("event.render.item_build", item_started.elapsed());
 
     Ok(RenderedEvent {
         item,
@@ -617,6 +689,7 @@ struct EventRef {
 /// using each row's `event_count` to enumerate real event_seqs per tx without
 /// touching the tx body.
 fn unfiltered_event_refs(
+    ctx: QueryContext,
     client: BigTableClient,
     event_range: std::ops::Range<u64>,
     options: QueryOptions,
@@ -630,16 +703,33 @@ fn unfiltered_event_refs(
         let source_limit = MAX_LIMIT_ITEMS as usize;
         let (scan_range, scan_limited, frontier_tx) =
             clamp_tx_scan_range(tx_range, source_limit, &options);
+        let stage_started = Instant::now();
+        let open_started = Instant::now();
         let rows = client
             .scan_tx_seq_digests_stream(scan_range, options.scan_direction(), source_limit)
             .await?;
+        let open_elapsed = open_started.elapsed();
+        ctx.observe_stage("event.unfiltered_tx_seq_digest_scan_open", open_elapsed);
 
         futures::pin_mut!(rows);
+        let mut row_count = 0usize;
+        let mut emitted = 0usize;
         while let Some(row) = rows.next().await {
+            row_count += 1;
             for event_ref in expand_event_refs(row?, lower_bound, upper_bound, &options) {
+                emitted += 1;
                 yield Watermarked::Item(event_ref);
             }
         }
+        ctx.observe_stage("event.unfiltered_tx_seq_digest_scan_drain", stage_started.elapsed());
+        info!(
+            row_count,
+            emitted,
+            scan_limited,
+            open_ms = open_elapsed.as_millis(),
+            elapsed_ms = stage_started.elapsed().as_millis(),
+            "list_events: unfiltered_event_refs done"
+        );
 
         if scan_limited {
             yield Watermarked::Watermark(event_bitmap_index::event_seq_lo(frontier_tx));

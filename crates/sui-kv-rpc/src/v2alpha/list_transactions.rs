@@ -40,7 +40,7 @@ use crate::query_options::ResolvedRange;
 use crate::v2::get_transaction::compute_object_keys;
 use crate::v2::get_transaction::needs_object_types;
 use crate::v2::get_transaction::transaction_columns;
-use crate::v2::get_transaction::transaction_to_response;
+use crate::v2::get_transaction::transaction_to_response_observed;
 use crate::v2::get_transaction::validate_read_mask;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::error_contains;
@@ -94,9 +94,11 @@ pub(crate) async fn list_transactions(
     let ordering = options.ordering;
     let direction = options.scan_direction();
 
+    let resolve_started = Instant::now();
     let tx_range = resolve_tx_range(&client, checkpoint_range, &options)
         .instrument(debug_span!("resolve_tx_range"))
         .await?;
+    ctx.observe_stage("transaction.resolve_range", resolve_started.elapsed());
     let end_reason = tx_range.end_reason;
     let end_checkpoint = tx_range.end_checkpoint;
     let end_position = tx_range.end_position;
@@ -150,10 +152,18 @@ pub(crate) async fn list_transactions(
             let seq_stream = take_items(seq_stream, limit_items);
             pipelined_chunks(seq_stream, CHUNK_MAX, request_bigtable_concurrency, {
                 let client = client.clone();
-                move |seqs| fetch_tx_seq_digests(client.clone(), seqs)
+                let ctx = ctx.clone();
+                move |seqs| fetch_tx_seq_digests(ctx.clone(), client.clone(), seqs)
             })
         } else {
-            scan_tx_seq_digests(client.clone(), tx_range.clone(), limit_items, &options).await?
+            scan_tx_seq_digests(
+                ctx.clone(),
+                client.clone(),
+                tx_range.clone(),
+                limit_items,
+                &options,
+            )
+            .await?
         };
 
     let render_transaction_contents = should_render_transaction_contents(&read_mask);
@@ -220,7 +230,8 @@ pub(crate) async fn list_transactions(
     let tx_stream = pipelined_chunks(digest_stream, CHUNK_MAX, request_bigtable_concurrency, {
         let client = client.clone();
         let columns = columns.clone();
-        move |rows| fetch_transactions(client.clone(), columns.clone(), rows)
+        let ctx = ctx.clone();
+        move |rows| fetch_transactions(ctx.clone(), client.clone(), columns.clone(), rows)
     });
 
     // Stage 4: + ObjectMap. Object refs are precomputed per Item; Frontier
@@ -230,6 +241,7 @@ pub(crate) async fn list_transactions(
         Result<Watermarked<TransactionWithObjectsStreamItem>, anyhow::Error>,
     > = if needs_objects {
         let object_cache = ObjectCache::new(Arc::new(BigTableObjectFetcher::new(client.clone())));
+        let object_ctx = ctx.clone();
         let tx_with_keys = tx_stream
             .map_ok(|m| {
                 m.map_item(|(seq, offset, tx)| {
@@ -246,11 +258,22 @@ pub(crate) async fn list_transactions(
             request_bigtable_concurrency,
             move |keys| {
                 let object_cache = object_cache.clone();
+                let ctx = object_ctx.clone();
                 async move {
-                    object_cache
+                    let fetch_started = Instant::now();
+                    let key_count = keys.len();
+                    let objects = object_cache
                         .get_many(keys)
                         .await
-                        .map_err(anyhow::Error::new)
+                        .map_err(anyhow::Error::new)?;
+                    ctx.observe_stage("transaction.fetch_objects", fetch_started.elapsed());
+                    info!(
+                        key_count,
+                        object_count = objects.len(),
+                        elapsed_ms = fetch_started.elapsed().as_millis(),
+                        "list_transactions: fetch_objects done"
+                    );
+                    Ok(objects)
                 }
             },
         )
@@ -280,9 +303,15 @@ pub(crate) async fn list_transactions(
                         let checkpoint_number = tx_data.checkpoint_number;
                         let render_task = AbortOnDrop::new(tokio::spawn(async move {
                             let render_started = Instant::now();
-                            let transaction =
-                                transaction_to_response(tx_data, &read_mask, &objects, &resolver)
-                                    .await?;
+                            let observe_ctx = ctx.clone();
+                            let transaction = transaction_to_response_observed(
+                                tx_data,
+                                &read_mask,
+                                &objects,
+                                &resolver,
+                                move |stage, elapsed| observe_ctx.observe_stage(stage, elapsed),
+                            )
+                            .await?;
                             ctx.observe_response_render(render_started.elapsed());
                             Ok::<_, anyhow::Error>(RenderedTransaction {
                                 tx_sequence_number,
@@ -485,50 +514,77 @@ fn terminal_boundary_watermark(
 }
 
 async fn scan_tx_seq_digests(
+    ctx: QueryContext,
     client: BigTableClient,
     range: std::ops::Range<u64>,
     limit: usize,
     options: &QueryOptions,
 ) -> Result<BoxStream<'static, Result<Watermarked<TxSeqDigestData>, anyhow::Error>>, RpcError> {
+    let open_started = Instant::now();
     let rows = client
         .scan_tx_seq_digests_stream(range, options.scan_direction(), limit)
         .await?;
+    ctx.observe_stage(
+        "transaction.scan_tx_seq_digests_open",
+        open_started.elapsed(),
+    );
     Ok(rows.map_ok(Watermarked::Item).boxed())
 }
 
 async fn fetch_tx_seq_digests(
+    ctx: QueryContext,
     client: BigTableClient,
     seqs: Vec<u64>,
 ) -> Result<BoxStream<'static, Result<TxSeqDigestData, anyhow::Error>>, anyhow::Error> {
     if seqs.is_empty() {
         return Ok(futures::stream::empty().boxed());
     }
+    let stage_started = Instant::now();
+    let open_started = Instant::now();
     // The permit lives inside the stream returned by `BigTableClient::
     // resolve_tx_digests_stream` and drops with that stream — propagated
     // through to the stream we return below.
+    let seq_count = seqs.len();
     let digest_stream = client.resolve_tx_digests_stream(seqs.clone()).await?;
+    let open_elapsed = open_started.elapsed();
+    ctx.observe_stage("transaction.fetch_tx_seq_digests_open", open_elapsed);
     Ok(async_stream::try_stream! {
         let mut emitter: InputOrderEmitter<u64, TxSeqDigestData> =
             InputOrderEmitter::new(seqs);
         futures::pin_mut!(digest_stream);
+        let mut row_count = 0usize;
+        let mut emitted = 0usize;
         while let Some(row) = digest_stream.next().await {
             let row = row?;
+            row_count += 1;
             for v in emitter.push(
                 row.tx_sequence_number,
                 row,
                 "list_transactions: transaction digest lookup",
             )? {
+                emitted += 1;
                 yield v;
             }
         }
         for v in emitter.finish("list_transactions: missing selected transaction digest")? {
+            emitted += 1;
             yield v;
         }
+        ctx.observe_stage("transaction.fetch_tx_seq_digests_drain", stage_started.elapsed());
+        info!(
+            seq_count,
+            row_count,
+            emitted,
+            open_ms = open_elapsed.as_millis(),
+            elapsed_ms = stage_started.elapsed().as_millis(),
+            "list_transactions: fetch_tx_seq_digests done"
+        );
     }
     .boxed())
 }
 
 async fn fetch_transactions(
+    ctx: QueryContext,
     client: BigTableClient,
     columns: Arc<[&'static str]>,
     rows: Vec<TxSeqDigestData>,
@@ -536,23 +592,31 @@ async fn fetch_transactions(
     if rows.is_empty() {
         return Ok(futures::stream::empty().boxed());
     }
+    let stage_started = Instant::now();
     let column_filter = BigTableClient::column_filter(&columns);
     let digests: Vec<TransactionDigest> = rows.iter().map(|row| row.digest).collect();
+    let digest_count = digests.len();
     // Map each digest back to its (tx_sequence_number, within-checkpoint offset)
     // so the output can carry them alongside the tx body as it arrives.
     let meta_by_digest: HashMap<TransactionDigest, (u64, u32)> = rows
         .iter()
         .map(|row| (row.digest, (row.tx_sequence_number, row.tx_offset)))
         .collect();
+    let open_started = Instant::now();
     let tx_stream = client
         .get_transactions_stream(digests.clone(), Some(column_filter))
         .await?;
+    let open_elapsed = open_started.elapsed();
+    ctx.observe_stage("transaction.fetch_transactions_open", open_elapsed);
     Ok(async_stream::try_stream! {
         let mut emitter: InputOrderEmitter<TransactionDigest, (u64, u32, TransactionData)> =
             InputOrderEmitter::new(digests);
         futures::pin_mut!(tx_stream);
+        let mut row_count = 0usize;
+        let mut emitted = 0usize;
         while let Some(row) = tx_stream.next().await {
             let (digest, tx) = row?;
+            row_count += 1;
             let (seq, offset) = meta_by_digest.get(&digest).copied().ok_or_else(|| {
                 anyhow::anyhow!("list_transactions: unexpected transaction body row {digest}")
             })?;
@@ -561,12 +625,23 @@ async fn fetch_transactions(
                 (seq, offset, tx),
                 "list_transactions: transaction body lookup",
             )? {
+                emitted += 1;
                 yield v;
             }
         }
         for v in emitter.finish("list_transactions: missing selected transaction body")? {
+            emitted += 1;
             yield v;
         }
+        ctx.observe_stage("transaction.fetch_transactions_drain", stage_started.elapsed());
+        info!(
+            digest_count,
+            row_count,
+            emitted,
+            open_ms = open_elapsed.as_millis(),
+            elapsed_ms = stage_started.elapsed().as_millis(),
+            "list_transactions: fetch_transactions done"
+        );
     }
     .boxed())
 }
