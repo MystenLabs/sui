@@ -18,6 +18,9 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ inputs.sui_tag }}
 
+permissions:
+  contents: read
+
 jobs:
   bump:
     name: Run brew bump-formula-pr for sui
