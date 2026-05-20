@@ -1,6 +1,6 @@
 # Address Identity in the Dependency Graph
 
-## Problem (TODO)
+## Problem
 
 The dependency system distinguishes between "node" concepts (where a package's source
 lives) and "edge" concepts (how a parent references a dependency). The `Pinned` enum
@@ -67,11 +67,6 @@ identity**. This means:
    seems plausible that we would do so in the future, and such a cache would need to be
    keyed by (source location + addresses).
 
-3. **For on-chain dependencies**, `published_at` is additionally the **source locator** —
-   it determines which bytecode to fetch from the network. So for on-chain deps,
-   `published_at` is unambiguously part of both the source identity and the compiled
-   identity.
-
 ## Implications for `Pinned`
 
 If we treat the same source with different addresses as different nodes in the dependency
@@ -122,8 +117,4 @@ remains important — two edges claiming the *same* `original_id` with *differen
 
 ## Status
 
-- [x] Put `published_at` into `Pinned::OnChain` (immediate, unblocks on-chain deps)
-- [ ] Decide whether addresses belong on all `Pinned` variants or only `OnChain`
-- [ ] Update ephemeral publication keys to account for address overrides
-- [ ] Implement the address consistency check from DESIGN.md
-- [ ] Consider whether `original_id` should also be in `Pinned::OnChain` or remain in context
+Remaining work items are tracked in Linear under DVX-2115.
