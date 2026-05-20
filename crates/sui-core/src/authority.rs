@@ -21,6 +21,7 @@ use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
 use crate::traffic_controller::TrafficController;
 use crate::traffic_controller::metrics::TrafficControllerMetrics;
+use crate::transaction_deny_config_manager::TransactionDenyConfigManager;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::{fix_indexes, verify_indexes};
 use arc_swap::{ArcSwap, ArcSwapOption, Guard};
@@ -966,8 +967,7 @@ pub struct AuthorityState {
 
     /// Created once per process, then re-attached to each new `AuthorityPerEpochStore`
     /// at reconfiguration.
-    transaction_deny_config_manager:
-        Arc<crate::transaction_deny_config_manager::TransactionDenyConfigManager>,
+    transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -3881,16 +3881,15 @@ impl AuthorityState {
         let object_funds_checker_metrics =
             Arc::new(ObjectFundsCheckerMetrics::new(prometheus_registry));
 
-        let transaction_deny_config_manager =
-            crate::transaction_deny_config_manager::TransactionDenyConfigManager::new(
-                name,
-                config.transaction_deny_config.clone(),
-                config.peer_deny_sync_config.clone(),
-                epoch_store.committee().clone(),
-                store.perpetual_tables.clone(),
-                prometheus_registry,
-            )
-            .expect("Failed to initialize TransactionDenyConfigManager");
+        let transaction_deny_config_manager = TransactionDenyConfigManager::new(
+            name,
+            config.transaction_deny_config.clone(),
+            config.peer_deny_sync_config.clone(),
+            epoch_store.committee().clone(),
+            store.perpetual_tables.clone(),
+            prometheus_registry,
+        )
+        .expect("Failed to initialize TransactionDenyConfigManager");
         // Drop any cached entries from peers no longer in the active committee.
         if let Err(e) =
             transaction_deny_config_manager.update_for_committee(epoch_store.committee().clone())
@@ -4694,9 +4693,7 @@ impl AuthorityState {
         self.load_epoch_store_one_call_per_task()
     }
 
-    pub fn transaction_deny_config_manager(
-        &self,
-    ) -> &Arc<crate::transaction_deny_config_manager::TransactionDenyConfigManager> {
+    pub fn transaction_deny_config_manager(&self) -> &Arc<TransactionDenyConfigManager> {
         &self.transaction_deny_config_manager
     }
 
