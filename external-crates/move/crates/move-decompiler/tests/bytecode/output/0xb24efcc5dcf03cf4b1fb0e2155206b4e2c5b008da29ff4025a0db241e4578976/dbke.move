@@ -115,74 +115,74 @@ public fun elf<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut CBM, l2: &mut Balance
             if (l26 < clock::timestamp_ms(l3)) {
                 event::emit(EE { e: ct::e_order_expired(), l: 348u64 });
                 l28 = l28 + 1u64;
-                continue
-            };
-            let l34 = *(&(&l9)[l28]);
-            let l47 = *(&(&l10)[l28]);
-            let l27 = *(&(&l11)[l28]);
-            let l40 = *(&(&l12)[l28]);
-            let l29 = *(&(&l13)[l28]);
-            if (l29) {
-                if (l44 <= l8) {
-                    event::emit(EE { e: ct::e_insufficient_quote_balance(), l: 363u64 });
-                    l28 = l28 + 1u64;
-                    continue
-                }
             } else {
-                if (l21 < u64::max(l32, l7)) {
-                    event::emit(EE { e: ct::e_insufficient_base_balance(), l: 354u64 });
-                    l28 = l28 + 1u64;
-                    continue
-                }
-            };
-            let l30 = dbke::cim(l34);
-            let l37 = l27;
-            if (!(l34 == ct::cpsos())) {
-                let (reg_170, reg_171) = dbke::vbac(freeze(l0), l21, l44, l23, l51, l31, l32, l37, l40, l29, l30, true);
-                let l24 = reg_171;
-                let l53 = reg_170;
-                if (l24 != ct::e_no_error()) {
-                    event::emit(EE { e: l24, l: 404u64 });
-                    l28 = l28 + 1u64;
-                    continue
-                };
-                let l33 = pool::place_limit_order(l0, l2, &l52, l28, l34, l47, l37, l53, l29, true, l26, l3, freeze(l15));
-                let l35 = order_info::original_quantity(&l33);
-                let l25 = order_info::executed_quantity(&l33);
-                let l36 = order_info::paid_fees(&l33);
-                l44 = if (l29) {
-                    let l41 = l35as u128;
-                    let l38 = l37as u128;
-                    let l46 = l41 * l38 / constants::float_scaling_u128() + 1u128;
-                    l21 = l21 + l25;
-                    l44 - l46as u64
+                let l34 = *(&(&l9)[l28]);
+                let l47 = *(&(&l10)[l28]);
+                let l27 = *(&(&l11)[l28]);
+                let l40 = *(&(&l12)[l28]);
+                let l29 = *(&(&l13)[l28]);
+                if (l29) {
+                    if (l44 <= l8) {
+                        event::emit(EE { e: ct::e_insufficient_quote_balance(), l: 363u64 });
+                        l28 = l28 + 1u64;
+                        continue
+                    }
                 } else {
-                    let l42 = l25as u128;
-                    let l39 = l37as u128;
-                    let l45 = l42 * l39 / constants::float_scaling_u128();
-                    l21 = l21 - l35;
-                    l44 + l45as u64
+                    if (l21 < u64::max(l32, l7)) {
+                        event::emit(EE { e: ct::e_insufficient_base_balance(), l: 354u64 });
+                        l28 = l28 + 1u64;
+                        continue
+                    }
                 };
-                l23 = l23 - l36;
-                l28 = l28 + 1u64;
-                continue
-            };
-            if (!(l50)) {
-                let (reg_134, reg_136);
-                (reg_134, reg_135, reg_136, reg_137) = pool::get_level2_ticks_from_mid(freeze(l0), 1u64, l3);
-                let l18 = reg_136;
-                l22 = reg_134;
-                l19 = l18;
-                l50 = true;
-            };
-            let l49 = dbke::sp(&l22, &l19, l51, l27, l29);
-            if (l49 == 0u64) {
-                event::emit(EE { e: ct::e_invalid_price(), l: 379u64 });
-                l28 = l28 + 1u64;
-                continue
-            };
-            l37 = l49;
-            l34 = constants::post_only();
+                let l30 = dbke::cim(l34);
+                let l37 = l27;
+                if (l34 == ct::cpsos()) {
+                    if (!(l50)) {
+                        let (reg_134, reg_136);
+                        (reg_134, reg_135, reg_136, reg_137) = pool::get_level2_ticks_from_mid(freeze(l0), 1u64, l3);
+                        let l18 = reg_136;
+                        l22 = reg_134;
+                        l19 = l18;
+                        l50 = true;
+                    };
+                    let l49 = dbke::sp(&l22, &l19, l51, l27, l29);
+                    if (l49 == 0u64) {
+                        event::emit(EE { e: ct::e_invalid_price(), l: 379u64 });
+                        l28 = l28 + 1u64;
+                    } else {
+                        l37 = l49;
+                        l34 = constants::post_only();
+                    }
+                } else {
+                    let (reg_170, reg_171) = dbke::vbac(freeze(l0), l21, l44, l23, l51, l31, l32, l37, l40, l29, l30, true);
+                    let l24 = reg_171;
+                    let l53 = reg_170;
+                    l28 = if (l24 != ct::e_no_error()) {
+                        event::emit(EE { e: l24, l: 404u64 });
+                        l28 + 1u64
+                    } else {
+                        let l33 = pool::place_limit_order(l0, l2, &l52, l28, l34, l47, l37, l53, l29, true, l26, l3, freeze(l15));
+                        let l35 = order_info::original_quantity(&l33);
+                        let l25 = order_info::executed_quantity(&l33);
+                        let l36 = order_info::paid_fees(&l33);
+                        l44 = if (l29) {
+                            let l41 = l35as u128;
+                            let l38 = l37as u128;
+                            let l46 = l41 * l38 / constants::float_scaling_u128() + 1u128;
+                            l21 = l21 + l25;
+                            l44 - l46as u64
+                        } else {
+                            let l42 = l25as u128;
+                            let l39 = l37as u128;
+                            let l45 = l42 * l39 / constants::float_scaling_u128();
+                            l21 = l21 - l35;
+                            l44 + l45as u64
+                        };
+                        l23 = l23 - l36;
+                        l28 + 1u64
+                    };
+                }
+            }
         }
     }
 }
