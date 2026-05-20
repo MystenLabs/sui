@@ -59,7 +59,6 @@ const DEFAULT_LIMIT_ITEMS: u32 = 50;
 const MAX_LIMIT_ITEMS: u32 = 1000;
 const EVENT_READ_MASK_DEFAULT: &str = "event_type";
 const CHUNK_MAX: usize = 100;
-const LAYOUT_RESOLUTION_CONCURRENCY: usize = 100;
 
 pub(crate) type ListEventsStream = BoxStream<'static, Result<ListEventsResponse, RpcError>>;
 
@@ -206,55 +205,21 @@ pub(crate) async fn list_events(
     // TODO: add global single-flight dedupe around package cache misses so
     // concurrent requests for the same uncached package share one BigTable
     // fetch.
-    let prepared_event_stream = tx_ref_stream
-        .map(move |item| {
-            let resolver = resolver.clone();
-            async move {
-                match item? {
-                    Watermarked::Item((event_ref, tx)) => {
-                        let prepared =
-                            prepare_event_render_input(event_ref, tx, &resolver, wants_json)
-                                .await
-                                .map_err(anyhow::Error::from)?;
-                        Ok::<Watermarked<EventRenderInput>, anyhow::Error>(Watermarked::Item(
-                            prepared,
-                        ))
-                    }
-                    Watermarked::Watermark(p) => Ok(Watermarked::Watermark(p)),
-                }
-            }
-        })
-        .buffered(LAYOUT_RESOLUTION_CONCURRENCY)
-        .boxed();
-
     let render_concurrency = ctx.response_render_concurrency();
+    let prepared_event_stream =
+        pipelined_chunks(tx_ref_stream, CHUNK_MAX, render_concurrency, move |items| {
+            let resolver = resolver.clone();
+            prepare_event_render_inputs(items, resolver, wants_json)
+        });
+
     let render_ctx = ctx.clone();
     let render_read_mask = read_mask.clone();
-    let event_stream = prepared_event_stream
-        .map(move |item| {
+    let event_stream =
+        pipelined_chunks(prepared_event_stream, 1, render_concurrency, move |items| {
             let read_mask = render_read_mask.clone();
             let ctx = render_ctx.clone();
-            async move {
-                match item? {
-                    Watermarked::Item(input) => {
-                        let render_task =
-                            AbortOnDrop::new(tokio::task::spawn_blocking(move || {
-                                let render_started = Instant::now();
-                                let rendered = render_event_sync(input, &read_mask)?;
-                                ctx.observe_response_render(render_started.elapsed());
-                                Ok::<_, anyhow::Error>(rendered)
-                            }));
-                        let rendered = render_task.await.map_err(|e| {
-                            anyhow::anyhow!("list_events: render task failed: {e}")
-                        })??;
-                        Ok::<Watermarked<RenderedEvent>, anyhow::Error>(Watermarked::Item(rendered))
-                    }
-                    Watermarked::Watermark(p) => Ok(Watermarked::Watermark(p)),
-                }
-            }
-        })
-        .buffered(render_concurrency)
-        .boxed();
+            render_event_inputs(items, read_mask, ctx)
+        });
 
     let event_stream = resolve_watermarks(event_stream, client.event_wm_resolver(direction));
 
@@ -571,6 +536,24 @@ struct EventRenderInput {
     json_layout: Option<MoveTypeLayout>,
 }
 
+async fn prepare_event_render_inputs(
+    items: Vec<(EventRef, TransactionData)>,
+    resolver: PackageResolver,
+    wants_json: bool,
+) -> Result<BoxStream<'static, Result<EventRenderInput, anyhow::Error>>, anyhow::Error> {
+    let rows = futures::future::try_join_all(items.into_iter().map(|(event_ref, tx)| {
+        let resolver = resolver.clone();
+        async move {
+            prepare_event_render_input(event_ref, tx, &resolver, wants_json)
+                .await
+                .map_err(anyhow::Error::from)
+        }
+    }))
+    .await?;
+
+    Ok(futures::stream::iter(rows.into_iter().map(Ok)).boxed())
+}
+
 async fn prepare_event_render_input(
     event_ref: EventRef,
     tx: TransactionData,
@@ -613,6 +596,31 @@ async fn prepare_event_render_input(
         event,
         json_layout,
     })
+}
+
+async fn render_event_inputs(
+    items: Vec<EventRenderInput>,
+    read_mask: Arc<FieldMaskTree>,
+    ctx: QueryContext,
+) -> Result<BoxStream<'static, Result<RenderedEvent, anyhow::Error>>, anyhow::Error> {
+    let rows = futures::future::try_join_all(items.into_iter().map(|input| {
+        let read_mask = read_mask.clone();
+        let ctx = ctx.clone();
+        async move {
+            let render_task = AbortOnDrop::new(tokio::task::spawn_blocking(move || {
+                let render_started = Instant::now();
+                let rendered = render_event_sync(input, &read_mask)?;
+                ctx.observe_response_render(render_started.elapsed());
+                Ok::<_, anyhow::Error>(rendered)
+            }));
+            render_task
+                .await
+                .map_err(|e| anyhow::anyhow!("list_events: render task failed: {e}"))?
+        }
+    }))
+    .await?;
+
+    Ok(futures::stream::iter(rows.into_iter().map(Ok)).boxed())
 }
 
 fn render_event_sync(
