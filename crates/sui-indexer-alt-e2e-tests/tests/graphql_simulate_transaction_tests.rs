@@ -241,6 +241,33 @@ impl GraphQlTestCluster {
     }
 }
 
+/// Insta settings that mask non-deterministic values (object IDs, balances,
+/// dynamic package addresses in type `repr`s) and sort object change nodes.
+fn graphql_redactions() -> insta::Settings {
+    let mut settings = insta::Settings::clone_current();
+    settings.add_redaction(".**.json.id", "[id]");
+    settings.add_redaction(".**.json.balance", "[balance]");
+    settings.add_redaction(".**.json.package", "[package]");
+    settings.add_dynamic_redaction(".**.repr", |value, _path| {
+        let s = value.as_str().unwrap();
+        if let Some(idx) = s.find("::") {
+            insta::internals::Content::from(format!("[pkg]{}", &s[idx..]))
+        } else {
+            insta::internals::Content::from(s.to_string())
+        }
+    });
+    settings.add_dynamic_redaction(".**.objectChanges.nodes", |mut value, _path| {
+        if let insta::internals::Content::Seq(ref mut items) = value {
+            items.sort_by_key(|item| {
+                let s = format!("{:?}", item);
+                s.find("::").map(|i| s[i..].to_string()).unwrap_or(s)
+            });
+        }
+        value
+    });
+    settings
+}
+
 #[tokio::test]
 async fn test_simulate_transaction_basic() {
     let validator_cluster = TestClusterBuilder::new().build().await;
@@ -977,6 +1004,82 @@ async fn test_package_resolver_finds_newly_published_package() {
             .unwrap()
             .contains("::resolver_test::NestedObject")
     );
+}
+
+/// Verifies that `outputState.asMoveObject.contents.json` is populated for objects
+/// created by a simulated transaction. Covers both the system-package case (gas coin
+/// of type `0x2::sui::SUI`) and the newly-published-package case (`SimpleObject`
+/// defined in the package this same transaction publishes, which requires the
+/// scope's package resolver to consult execution context).
+#[tokio::test]
+async fn test_simulate_transaction_object_json() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["packages", "package_resolver_test"]);
+    let tx_data = validator_cluster
+        .test_transaction_builder()
+        .await
+        .publish(path)
+        .build();
+    let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
+    let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
+                    effects {
+                        status
+                        objectChanges {
+                            nodes {
+                                inputState {
+                                    asMoveObject {
+                                        contents {
+                                            type { repr }
+                                            json
+                                        }
+                                    }
+                                    asMovePackage {
+                                        modules { nodes { name } }
+                                    }
+                                }
+                                outputState {
+                                    asMoveObject {
+                                        contents {
+                                            type { repr }
+                                            json
+                                        }
+                                    }
+                                    asMovePackage {
+                                        modules { nodes { name } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        "#,
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!(
+            "simulate_transaction_object_json",
+            result.pointer("/data/simulateTransaction"),
+        );
+    });
 }
 
 #[tokio::test]
