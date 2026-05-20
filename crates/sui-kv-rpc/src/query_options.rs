@@ -349,13 +349,6 @@ impl CheckpointRange {
             return ResolvedCheckpointRange::empty_at(checkpoint, reason);
         }
 
-        // Scan limit is now enforced at runtime by `BitmapScanBudget`
-        // metering bucket fetches across all DNF dimensions; the historical
-        // up-front checkpoint-width clamp would produce a misleading scan
-        // frontier under that model. Whatever range the request asks for is
-        // honored here; handlers terminate filtered scans on
-        // `BitmapScanLimitExceeded` and emit a `SCAN_LIMIT` end with the
-        // latest in-stream `Watermark.cursor` as the resume point.
         let end_reason = match options.ordering {
             Ordering::Ascending => high_reason,
             Ordering::Descending => low_reason,

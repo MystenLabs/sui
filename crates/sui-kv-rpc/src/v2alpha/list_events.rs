@@ -215,17 +215,15 @@ pub(crate) async fn list_events(
     // TODO: add global single-flight dedupe around package cache misses so
     // concurrent requests for the same uncached package share one BigTable
     // fetch.
-    let render_options = options.clone();
     let event_stream = tx_ref_stream
         .map(move |item| {
             let resolver = resolver.clone();
             let read_mask = read_mask.clone();
-            let options = render_options.clone();
             async move {
                 match item? {
                     Watermarked::Item((event_ref, tx)) => {
                         let rendered = render_event(
-                            event_ref, tx, &read_mask, &resolver, wants_json, &options,
+                            event_ref, tx, &read_mask, &resolver, wants_json,
                         )
                         .await?;
                         Ok::<Watermarked<RenderedEvent>, anyhow::Error>(Watermarked::Item(rendered))
@@ -447,7 +445,6 @@ async fn render_event(
     read_mask: &FieldMaskTree,
     resolver: &PackageResolver,
     wants_json: bool,
-    _options: &QueryOptions,
 ) -> Result<RenderedEvent, RpcError> {
     let tx_events = tx.events.as_ref().ok_or_else(|| {
         RpcError::new(
