@@ -23,7 +23,4 @@ pub use bitmap_query::error_contains;
 pub use bitmap_query::eval_bitmap_query_bucket_iter;
 pub use bitmap_query::eval_bitmap_query_stream;
 pub use bitmap_query::flatten_watermarked_buckets;
-pub use bitmap_query::intersect_n;
-pub use bitmap_query::subtract_two;
-pub use bitmap_query::union_n;
 pub use dimensions::*;

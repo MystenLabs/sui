@@ -15475,7 +15475,6 @@ dependencies = [
  "async-stream",
  "bcs",
  "futures",
- "itertools 0.13.0",
  "move-core-types",
  "roaring",
  "sui-types",

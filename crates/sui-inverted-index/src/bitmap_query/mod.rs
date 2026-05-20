@@ -42,9 +42,6 @@ pub use stream::BitmapScanMetrics;
 pub use stream::buckets_with_watermarks;
 pub use stream::eval_bitmap_query_stream;
 pub use stream::flatten_watermarked_buckets;
-pub use stream::intersect_n;
-pub use stream::subtract_two;
-pub use stream::union_n;
 
 // Cross-checked against the iterative evaluator in iter.rs tests.
 #[cfg(test)]
@@ -54,19 +51,19 @@ pub(crate) use stream::eval_bitmap_query_bucket_stream;
 
 /// Terminal signal: the per-request bucket-fetch budget is exhausted.
 /// Surfaced as `anyhow::Error` so it short-circuits `try_stream!`
-/// pipelines through the existing error path. A silent EOF would let
-/// `subtract_two` emit unfiltered include rows past the exclude side's
-/// last fetched bucket.
+/// pipelines through the existing error path. A silent EOF would be
+/// indistinguishable from a leaf reaching the range terminus, so the
+/// driver would advance the cursor to the end and claim full coverage
+/// instead of truncating the scan at the current floor.
 #[derive(Debug, thiserror::Error)]
 #[error("bitmap scan budget exhausted")]
 pub struct BitmapScanLimitExceeded;
 
-/// Aggregate of multiple terminal errors raised during the same poll
-/// cycle of a multi-way combinator (e.g. two children of `intersect_n`
-/// both error before the next loop iteration). The single-error
-/// shortcut returns the inner error directly so existing downcasts on
-/// the wire keep working — `MultiError` only appears when 2+ errors
-/// coincide, in which case downstream consumers should use
+/// Aggregate of multiple terminal errors raised in the same driver round
+/// (e.g. two leaves both exhaust the shared budget before the next round).
+/// The single-error shortcut returns the inner error directly so existing
+/// downcasts on the wire keep working — `MultiError` only appears when 2+
+/// errors coincide, in which case downstream consumers should use
 /// [`error_contains`] to interrogate the aggregate.
 #[derive(Debug)]
 pub struct MultiError(Vec<anyhow::Error>);
@@ -103,8 +100,8 @@ impl std::error::Error for MultiError {}
 /// Downcast probe that looks through a `MultiError` aggregate. Returns
 /// the first inner `T` whether the top-level error is `T` directly or a
 /// `MultiError` containing one. Use this instead of `downcast_ref::<T>`
-/// at sites that may receive aggregated errors from the bitmap
-/// combinators.
+/// at sites that may receive aggregated errors from the bitmap eval
+/// driver.
 pub fn error_contains<T: std::error::Error + Send + Sync + 'static>(
     err: &anyhow::Error,
 ) -> Option<&T> {
@@ -143,10 +140,9 @@ impl<T> Watermarked<T> {
 pub type BucketItem = Result<(u64, RoaringBitmap)>;
 pub type BucketStream = BoxStream<'static, BucketItem>;
 
-/// A bucket stream that interleaves data buckets with per-source progress
-/// watermarks. Combinators (`intersect_n`, `union_n`, `subtract_two`)
-/// merge child watermarks structurally so the output always reflects
-/// "every source has scanned past P."
+/// A bucket stream that interleaves data buckets with progress watermarks.
+/// The flat DNF driver derives each watermark from the slowest leaf's
+/// position, so the output always reflects "every source has scanned past P."
 pub(crate) type WatermarkedBucket = Result<Watermarked<(u64, RoaringBitmap)>>;
 pub type WatermarkedBucketStream = BoxStream<'static, WatermarkedBucket>;
 
@@ -311,35 +307,6 @@ fn split_term_literals(term: BitmapTerm) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
     (include, exclude)
 }
 
-fn complete_peeks(peeks: Vec<Option<u64>>) -> Option<(Vec<u64>, u64)> {
-    let mut buckets = Vec::with_capacity(peeks.len());
-    let mut max_bucket = None;
-
-    for peek in peeks {
-        let bucket = peek?;
-        max_bucket = Some(max_bucket.map_or(bucket, |max: u64| max.max(bucket)));
-        buckets.push(bucket);
-    }
-
-    Some((buckets, max_bucket?))
-}
-
-/// Merge per-child watermark slots into the combinator's output.
-/// `None` if any child has yet to emit a first watermark — combinator
-/// must not claim progress past an unknown floor. Ascending min,
-/// descending max (the slowest source is the floor).
-fn merge_watermarks(slots: &[Option<u64>], direction: ScanDirection) -> Option<u64> {
-    // Short-circuits to None if any slot is None.
-    let all: Vec<u64> = slots.iter().copied().collect::<Option<Vec<_>>>()?;
-    if all.is_empty() {
-        return None;
-    }
-    Some(match direction {
-        ScanDirection::Ascending => *all.iter().min().expect("non-empty"),
-        ScanDirection::Descending => *all.iter().max().expect("non-empty"),
-    })
-}
-
 /// The less-advanced of two frontier positions in scan direction: the min
 /// ascending, the max descending. Used to keep a merged frontier bounded by
 /// the slowest contributor.
@@ -347,33 +314,6 @@ fn bound_in_direction(a: u64, b: u64, direction: ScanDirection) -> u64 {
     match direction {
         ScanDirection::Ascending => a.min(b),
         ScanDirection::Descending => a.max(b),
-    }
-}
-
-/// Like [`merge_watermarks`] but also folds in a `ceiling` frozen from
-/// errored (retired) union branches. A retired branch no longer polls, but
-/// the position it reached still bounds how far the union can claim progress,
-/// so it stays in the merge as a fixed floor. Live slots dominate as usual
-/// (any `None` live slot blocks progress); with no live slots left the
-/// ceiling alone is the frontier.
-fn merge_with_ceiling(
-    slots: &[Option<u64>],
-    ceiling: Option<u64>,
-    direction: ScanDirection,
-) -> Option<u64> {
-    // A live branch that has not yet reported blocks progress past its
-    // unknown floor.
-    if slots.iter().any(Option::is_none) {
-        return None;
-    }
-    let live = match direction {
-        ScanDirection::Ascending => slots.iter().flatten().copied().min(),
-        ScanDirection::Descending => slots.iter().flatten().copied().max(),
-    };
-    match (live, ceiling) {
-        (Some(l), Some(c)) => Some(bound_in_direction(l, c, direction)),
-        (Some(l), None) => Some(l),
-        (None, c) => c,
     }
 }
 
@@ -388,6 +328,52 @@ fn frontier_advanced(prev: Option<u64>, next: u64, direction: ScanDirection) -> 
             ScanDirection::Descending => next < prev,
         },
     }
+}
+
+/// Clamped member-id edges of `bucket` in scan direction: `(pre, post)` where
+/// `pre` is the leading edge (everything before it is already covered) and
+/// `post` is the trailing edge (everything up to and including the bucket is
+/// covered). Ascending: `(low, high)`; descending: `(high, low)`. Both clamped
+/// to the request range so cursors stay in-bounds when they round-trip into a
+/// follow-up request with a different range.
+pub(crate) fn bucket_edges(
+    bucket: u64,
+    bucket_size: u64,
+    range: &Range<u64>,
+    direction: ScanDirection,
+) -> (u64, u64) {
+    let start = bucket.saturating_mul(bucket_size);
+    let end = start.saturating_add(bucket_size);
+    match direction {
+        ScanDirection::Ascending => (start.max(range.start), end.min(range.end)),
+        ScanDirection::Descending => (end.min(range.end), start.max(range.start)),
+    }
+}
+
+/// Evaluate one DNF term at a single bucket from the per-leaf bitmaps present
+/// there: intersect the includes (any absent include ⇒ empty term), then
+/// subtract the union of the present excludes (`a AND NOT b`). Returns the
+/// term's matches at the bucket, or `None` if empty. Bitmaps are taken by value
+/// so the caller hands over the consumed leaf rows without cloning.
+pub(crate) fn eval_term_at_bucket(
+    includes: Vec<Option<RoaringBitmap>>,
+    excludes: Vec<Option<RoaringBitmap>>,
+) -> Option<RoaringBitmap> {
+    let mut acc: Option<RoaringBitmap> = None;
+    for include in includes {
+        // A missing include means the intersection is empty at this bucket.
+        let bitmap = include?;
+        acc = Some(match acc {
+            None => bitmap,
+            Some(a) => a & bitmap,
+        });
+    }
+    // Anchored terms always carry at least one include, so `acc` is `Some`.
+    let mut acc = acc?;
+    for exclude in excludes.into_iter().flatten() {
+        acc -= exclude;
+    }
+    (!acc.is_empty()).then_some(acc)
 }
 
 #[cfg(test)]
