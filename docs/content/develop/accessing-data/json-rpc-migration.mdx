@@ -43,14 +43,17 @@ If you only need to read live state from a single full node, gRPC is usually eno
 
 ## Method mapping
 
-The following table maps common JSON-RPC method families to their gRPC service and GraphQL equivalents. Method names on the gRPC side use the protobuf service in the [Sui Full Node gRPC reference](/references/fullnode-protocol). GraphQL equivalents reference the root field on the schema. Use this table to plan the migration, then consult the linked references for the exact request and response shapes.
+The following table maps common JSON-RPC method families to their gRPC service and GraphQL equivalents. Method names on the gRPC side use the protobuf service in the [Sui Full Node gRPC reference](/references/fullnode-protocol). GraphQL equivalents reference the GraphQL field or field path on the schema. Use this table to plan the migration, then consult the linked references for the exact request and response shapes.
 
 | JSON-RPC method | gRPC service and operation | GraphQL field |
 | --- | --- | --- |
-| `sui_getCheckpoint`, `sui_getCheckpoints`, `sui_getLatestCheckpointSequenceNumber` | `LedgerService.GetCheckpoint` | `checkpoint`, `checkpoints` |
-| `sui_getTransactionBlock`, `sui_multiGetTransactionBlocks` | `LedgerService.GetTransaction` | `transaction`, `transactions` |
-| `sui_getTotalTransactionBlocks` | `LedgerService.GetCheckpoint` (read `networkTotalTransactions`) | `checkpoint.networkTotalTransactions` |
-| `sui_getObject`, `sui_multiGetObjects`, `sui_tryGetPastObject` | `LedgerService.GetObject` (current state and recent history) | `object`, `objects` |
+| `sui_getCheckpoint`, `sui_getLatestCheckpointSequenceNumber` | `LedgerService.GetCheckpoint` | `checkpoint` |
+| `sui_getCheckpoints` | No paginated gRPC list. Use `LedgerService.GetCheckpoint` for point lookups, or `SubscriptionService.SubscribeCheckpoints` for an ordered stream, depending on your use case. | `checkpoints` |
+| `sui_getTransactionBlock` | `LedgerService.GetTransaction` | `transaction` |
+| `sui_multiGetTransactionBlocks` | `LedgerService.BatchGetTransactions` | `multiGetTransactions` |
+| `sui_getTotalTransactionBlocks` | `LedgerService.GetCheckpoint` on the latest or target checkpoint, then read `summary.total_network_transactions` | `checkpoint.networkTotalTransactions` |
+| `sui_getObject`, `sui_tryGetPastObject` | `LedgerService.GetObject` (current state and recent history) | `object` |
+| `sui_multiGetObjects` | `LedgerService.BatchGetObjects` | `multiGetObjects` |
 | `suix_getBalance`, `suix_getAllBalances` | `StateService.GetBalance`, `StateService.ListBalances` | `address.balance`, `address.balances` |
 | `suix_getCoins`, `suix_getAllCoins` | `StateService.ListOwnedObjects` filtered by `Coin<T>` type | `address.objects(filter: { type: "0x2::coin::Coin<...>" })` |
 | `suix_getCoinMetadata` | `StateService.GetCoinInfo` | `coinMetadata` |
