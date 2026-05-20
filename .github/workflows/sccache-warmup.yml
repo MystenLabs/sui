@@ -92,13 +92,7 @@ jobs:
         shell: bash
         run: |
           [ -f ~/.cargo/env ] && source ~/.cargo/env
-          # Exclude `sui` from the bulk build and build it once with tracing.
-          # A plain `cargo build --release` compiles `sui` without tracing and the
-          # next step rebuilds it with tracing, so the non-tracing `sui` binary was
-          # wasted work — and release.yml only ever builds `sui` with tracing, so
-          # the non-tracing-release `sui` object warms a cache nothing consumes.
-          # The bulk build still warms the rest of the workspace in release mode.
-          cargo build --release --workspace --exclude sui
+          cargo build --release
           cargo build --release --features tracing --bin sui
           cargo build --profile=dev --bin sui --features tracing
 
