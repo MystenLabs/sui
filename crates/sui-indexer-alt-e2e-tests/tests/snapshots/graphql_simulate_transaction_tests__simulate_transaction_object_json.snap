@@ -1,0 +1,96 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_simulate_transaction_tests.rs
+expression: "result.pointer(\"/data/simulateTransaction\")"
+---
+{
+  "effects": {
+    "status": "SUCCESS",
+    "objectChanges": {
+      "nodes": [
+        {
+          "inputState": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                },
+                "json": {
+                  "id": "[id]",
+                  "balance": "[balance]"
+                }
+              }
+            },
+            "asMovePackage": null
+          },
+          "outputState": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                },
+                "json": {
+                  "id": "[id]",
+                  "balance": "[balance]"
+                }
+              }
+            },
+            "asMovePackage": null
+          }
+        },
+        {
+          "inputState": null,
+          "outputState": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "[pkg]::package::UpgradeCap"
+                },
+                "json": {
+                  "id": "[id]",
+                  "package": "[package]",
+                  "version": "1",
+                  "policy": 0
+                }
+              }
+            },
+            "asMovePackage": null
+          }
+        },
+        {
+          "inputState": null,
+          "outputState": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "[pkg]::resolver_test::SimpleObject"
+                },
+                "json": {
+                  "id": "[id]",
+                  "value": {
+                    "dummy_field": false
+                  }
+                }
+              }
+            },
+            "asMovePackage": null
+          }
+        },
+        {
+          "inputState": null,
+          "outputState": {
+            "asMoveObject": null,
+            "asMovePackage": {
+              "modules": {
+                "nodes": [
+                  {
+                    "name": "resolver_test"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
