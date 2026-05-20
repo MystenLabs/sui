@@ -53,7 +53,7 @@ use super::ledger_read::apply_tx_seq_floor;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::get_tx_seq_digest_multi;
-use super::ledger_read::ledger_history_tx_seq_floor;
+use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::resolve_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
@@ -252,7 +252,7 @@ fn next_checkpoint_chunk(
                 let mut tx_range = checkpoint_to_tx_range(&service, range)?;
                 if !tx_range.is_empty() {
                     let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
-                    let floor = ledger_history_tx_seq_floor(&service)?;
+                    let floor = lowest_available_tx_seq(&service)?;
                     tx_range.start = apply_tx_seq_floor(tx_range.start, explicit_lower, floor)?;
                 }
                 if tx_range.is_empty() {

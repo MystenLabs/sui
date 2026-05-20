@@ -55,7 +55,7 @@ use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::get_tx_seq_digest_rows;
-use super::ledger_read::ledger_history_tx_seq_floor;
+use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::resolve_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
@@ -775,7 +775,7 @@ fn resolve_event_range(
         // end's transaction in tx-seq space. Only re-pack on an actual clamp, so a
         // cursor resuming mid-transaction keeps its event index when above the floor.
         let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
-        let floor = ledger_history_tx_seq_floor(service)?;
+        let floor = lowest_available_tx_seq(service)?;
         let start_tx = decode_event_seq(resolved.range.start).0;
         let clamped_tx = apply_tx_seq_floor(start_tx, explicit_lower, floor)?;
         if clamped_tx != start_tx {

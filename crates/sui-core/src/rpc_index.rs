@@ -2272,11 +2272,6 @@ impl RpcIndexStore {
         }
     }
 
-    pub fn ledger_history_tx_seq_floor(&self) -> Result<Option<u64>, TypedStoreError> {
-        self.ensure_ledger_history_enabled()?;
-        self.tables.first_tx_seq_digest_key()
-    }
-
     pub fn ledger_tx_seq_digest(
         &self,
         tx_seq: u64,

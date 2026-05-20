@@ -802,12 +802,6 @@ impl RpcIndexes for RestReadStore {
             .map_err(Into::into)
     }
 
-    fn ledger_history_tx_seq_floor(&self) -> Result<Option<u64>> {
-        self.index()?
-            .ledger_history_tx_seq_floor()
-            .map_err(Into::into)
-    }
-
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>> {
         self.index()?
             .ledger_tx_seq_digest(tx_seq)

@@ -1363,12 +1363,6 @@ impl RpcIndexes for DataStore {
         Ok(self.get_highest_checkpoint().ok())
     }
 
-    fn ledger_history_tx_seq_floor(&self) -> StorageResult<Option<u64>> {
-        Err(StorageError::custom(
-            "ledger history indexes are not supported by fork store",
-        ))
-    }
-
     fn ledger_tx_seq_digest(&self, _tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
         Err(StorageError::custom(
             "ledger history indexes are not supported by fork store",
