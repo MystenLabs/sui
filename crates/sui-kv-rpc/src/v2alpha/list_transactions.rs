@@ -90,6 +90,8 @@ pub(crate) async fn list_transactions(
         .instrument(debug_span!("resolve_tx_range"))
         .await?;
     let end_reason = tx_range.end_reason;
+    let end_checkpoint = tx_range.end_checkpoint;
+    let end_position = tx_range.end_position;
     let tx_range = tx_range.range;
 
     if tx_range.is_empty() {
@@ -100,7 +102,23 @@ pub(crate) async fn list_transactions(
             elapsed_ms = started.elapsed().as_millis(),
             "list_transactions: empty range"
         );
-        return Ok(futures::stream::once(async move { Ok(end_response(end_reason)) }).boxed());
+        // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
+        // range; still surface the terminal boundary so the client learns the
+        // final checkpoint is complete without waiting for the next item.
+        let terminal = reached_range_end(end_reason).then(|| {
+            watermark_response(terminal_boundary_watermark(
+                &options,
+                end_checkpoint,
+                end_position,
+            ))
+        });
+        return Ok(futures::stream::iter(
+            terminal
+                .into_iter()
+                .chain([end_response(end_reason)])
+                .map(Ok),
+        )
+        .boxed());
     }
 
     let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
@@ -181,6 +199,9 @@ pub(crate) async fn list_transactions(
             } else {
                 end_reason
             };
+            if reached_range_end(reason) {
+                yield watermark_response(terminal_boundary_watermark(&options, end_checkpoint, end_position));
+            }
             yield end_response(reason);
             info!(
                 filtered,
@@ -289,6 +310,9 @@ pub(crate) async fn list_transactions(
         } else {
             end_reason
         };
+        if reached_range_end(reason) {
+            yield watermark_response(terminal_boundary_watermark(&options, end_checkpoint, end_position));
+        }
         yield end_response(reason);
 
         info!(
@@ -388,6 +412,40 @@ fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
     let mut response = ListTransactionsResponse::default();
     response.response = Some(list_transactions_response::Response::Watermark(watermark));
     response
+}
+
+/// Whether the scan reached the natural end of the requested range (the ledger
+/// tip or a requested `end_checkpoint`) rather than being truncated by an item
+/// or scan limit, or bounded by a client cursor. Only natural completion proves
+/// the range's final checkpoint complete.
+fn reached_range_end(reason: QueryEndReason) -> bool {
+    matches!(
+        reason,
+        QueryEndReason::LedgerTip | QueryEndReason::CheckpointBound
+    )
+}
+
+/// Boundary watermark emitted once the scan has drained the entire resolved
+/// range under natural completion. Unlike per-item watermarks it can claim the
+/// range's final checkpoint complete — `end_checkpoint - 1` ascending (the
+/// exclusive cp upper) or `end_checkpoint` descending (the inclusive cp lower) —
+/// because no further transactions exist in it within the requested range. The
+/// `(end_checkpoint, end_position)` cursor resumes exactly past the scanned
+/// range.
+fn terminal_boundary_watermark(
+    options: &QueryOptions,
+    end_checkpoint: u64,
+    end_position: u64,
+) -> Watermark {
+    let boundary = if options.is_ascending() {
+        end_checkpoint.checked_sub(1)
+    } else {
+        Some(end_checkpoint)
+    };
+    let mut wm = Watermark::default();
+    wm.cursor = Some(options.cursor_for_boundary(end_checkpoint, end_position));
+    set_checkpoint_bound(&mut wm, options, boundary);
+    wm
 }
 
 async fn fetch_tx_seq_digests(
@@ -692,6 +750,35 @@ mod tests {
             wm.checkpoint_lo,
             Some(10),
             "descending scan stores the boundary in checkpoint_lo"
+        );
+    }
+
+    /// On natural completion the terminal frame claims the range's final
+    /// checkpoint complete: ascending uses `end_checkpoint - 1` (exclusive cp
+    /// upper) and resumes from `(end_checkpoint, end_position)`.
+    #[test]
+    fn terminal_boundary_watermark_ascending_claims_end_minus_one() {
+        let options = options();
+        let wm = terminal_boundary_watermark(&options, 10, 100);
+        assert_eq!(wm.checkpoint_hi, Some(9));
+        assert_eq!(wm.checkpoint_lo, None);
+        assert_eq!(
+            wm.cursor.as_ref(),
+            Some(&options.cursor_for_boundary(10, 100))
+        );
+    }
+
+    /// Descending stores the range's lowest checkpoint (inclusive) in
+    /// `checkpoint_lo`.
+    #[test]
+    fn terminal_boundary_watermark_descending_claims_end_checkpoint() {
+        let options = descending_options();
+        let wm = terminal_boundary_watermark(&options, 10, 100);
+        assert_eq!(wm.checkpoint_lo, Some(10));
+        assert_eq!(wm.checkpoint_hi, None);
+        assert_eq!(
+            wm.cursor.as_ref(),
+            Some(&options.cursor_for_boundary(10, 100))
         );
     }
 }
