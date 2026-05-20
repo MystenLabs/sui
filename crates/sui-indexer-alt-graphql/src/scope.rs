@@ -69,15 +69,6 @@ struct ActiveTransaction {
     contents: Option<Arc<NativeTransactionContents>>,
 }
 
-impl Debug for ActiveTransaction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ActiveTransaction")
-            .field("digest", &self.digest)
-            .field("contents_loaded", &self.contents.is_some())
-            .finish()
-    }
-}
-
 /// Root object bound for consistent dynamic field reads.
 ///
 /// This enables consistent dynamic field reads in the case of chained dynamic object fields,
@@ -458,6 +449,15 @@ fn extract_objects_from_executed_transaction(
     }
 
     Ok(Arc::new(map))
+}
+
+impl Debug for ActiveTransaction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ActiveTransaction")
+            .field("digest", &self.digest)
+            .field("contents_loaded", &self.contents.is_some())
+            .finish()
+    }
 }
 
 impl Debug for Scope {

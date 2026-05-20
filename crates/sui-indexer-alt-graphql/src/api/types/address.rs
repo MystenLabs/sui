@@ -224,9 +224,9 @@ impl Address {
     ///
     /// Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
     ///
-    /// In an `events` subscription, the `transactionDigest` argument may be omitted; the field then resolves against the transaction that emitted the parent event.
+    /// The `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.
     ///
-    /// Passing an explicit `transactionDigest` other than the parent event's transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.
+    /// Passing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.
     pub(crate) async fn as_transaction_object(
         &self,
         ctx: &Context<'_>,
