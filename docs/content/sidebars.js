@@ -161,6 +161,7 @@ export default {
       link: { type: 'doc', id: 'develop/accessing-data/index' },
       items: [
         'develop/accessing-data/data-serving',
+        'develop/accessing-data/json-rpc-migration',
         {
           type: 'category',
           label: 'gRPC',

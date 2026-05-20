@@ -1,0 +1,154 @@
+---
+title: JSON-RPC Migration Guide
+sidebar_label: JSON-RPC Migration
+description: Choose between gRPC and GraphQL RPC when migrating from the deprecated JSON-RPC API. Includes a method mapping, decision criteria, and common migration gotchas.
+keywords: [ json-rpc, migration, grpc, graphql, deprecation, sui rpc, json-rpc migration, sui rpc migration, replace json-rpc ]
+---
+
+<ImportContent source="json-rpc-deprecation" mode="snippet" />
+
+This guide tells you how to move an existing JSON-RPC integration to the current Sui data access APIs. JSON-RPC is deprecated and is planned for deactivation in July 2026. The two replacements are [gRPC](/develop/accessing-data/grpc) for full node access and transaction execution, and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) for indexed, filterable reads.
+
+If you already know which API you want, jump to the [method mapping](#method-mapping) and the [examples](#examples-for-high-traffic-paths). If you are deciding, start with the next section.
+
+## Choose your replacement
+
+You can use one API or both. Most exchanges and indexers end up using both: gRPC for the live data path and transaction submission, GraphQL for ad hoc queries, support tools, and joined reads.
+
+Use **gRPC** for:
+
+- Backend services, indexers, and exchange pipelines.
+
+- Transaction execution and signed transaction submission, through `TransactionExecutionService`.
+
+- Streaming finalized checkpoints with `SubscriptionService.SubscribeCheckpoint`, which replaces JSON-RPC WebSocket subscriptions.
+
+- Low-latency point lookups against the current state and recent history of a full node, through `LedgerService` and `StateService`.
+
+- Generated, typed clients in TypeScript, Go, Rust, Python, and other languages.
+
+- Workloads where protocol overhead, message size, and tail latency matter.
+
+Use **GraphQL RPC** for:
+
+- Frontends, developer tools, scripts, and dynamic-language clients.
+
+- Indexed, filterable queries over historical transactions, events, objects, and balances.
+
+- Queries that join multiple resources in a single request, such as an address with its owned objects, balances, and recent transactions.
+
+- Checkpoint-scoped reads where you want consistent results across a paginated query.
+
+If you only need to read live state from a single full node, gRPC is usually enough. If you need cross-resource filtering, deep pagination, or want one request to return data assembled from several sources, GraphQL is usually a better fit. For deeper detail on when each API applies, see [What is gRPC](/develop/accessing-data/grpc/what-is-grpc) and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc).
+
+## Method mapping
+
+The following table maps common JSON-RPC method families to their gRPC service and GraphQL equivalents. Method names on the gRPC side use the protobuf service in the [Sui Full Node gRPC reference](/references/fullnode-protocol). GraphQL equivalents reference the root field on the schema. Use this table to plan the migration, then consult the linked references for the exact request and response shapes.
+
+| JSON-RPC method | gRPC service and operation | GraphQL field |
+| --- | --- | --- |
+| `sui_getCheckpoint`, `sui_getCheckpoints`, `sui_getLatestCheckpointSequenceNumber` | `LedgerService.GetCheckpoint` | `checkpoint`, `checkpoints` |
+| `sui_getTransactionBlock`, `sui_multiGetTransactionBlocks` | `LedgerService.GetTransaction` | `transaction`, `transactions` |
+| `sui_getTotalTransactionBlocks` | `LedgerService.GetCheckpoint` (read `networkTotalTransactions`) | `checkpoint.networkTotalTransactions` |
+| `sui_getObject`, `sui_multiGetObjects`, `sui_tryGetPastObject` | `LedgerService.GetObject` (current state and recent history) | `object`, `objects` |
+| `suix_getBalance`, `suix_getAllBalances` | `StateService.GetBalance`, `StateService.ListBalances` | `address.balance`, `address.balances` |
+| `suix_getCoins`, `suix_getAllCoins`, `suix_getCoinMetadata` | `StateService` coin operations | `address.objects(filter: { type: ... })`, `coinMetadata` |
+| `suix_getOwnedObjects` | `StateService` owned objects operation | `address.objects` |
+| `suix_getDynamicFields`, `suix_getDynamicFieldObject` | `StateService` dynamic fields operation | `owner.dynamicFields`, `owner.dynamicObjectField` |
+| `suix_queryTransactionBlocks` | `LedgerService.GetTransaction` plus client-side filtering, or GraphQL | `transactions(filter: ...)` |
+| `suix_queryEvents` | Read events from transaction data returned by `LedgerService` or `SubscriptionService` | `events(filter: ...)` |
+| `sui_subscribeEvent`, `sui_subscribeTransaction` (WebSocket) | `SubscriptionService.SubscribeCheckpoint`, then read events and transactions from each checkpoint | Not applicable (use gRPC streaming) |
+| `suix_getReferenceGasPrice` | `LedgerService` reference gas price | `epoch.referenceGasPrice` |
+| `suix_getStakes`, `suix_getStakesByIds`, `suix_getValidatorsApy` | `StateService` staking operations | `address.stakes`, `epoch.validatorSet` |
+| `sui_executeTransactionBlock` | `TransactionExecutionService.ExecuteTransaction` | `executeTransaction` mutation |
+| `sui_dryRunTransactionBlock`, `sui_devInspectTransactionBlock` | `TransactionExecutionService.SimulateTransaction` | `simulateTransaction` |
+| `unsafe_paySui`, `unsafe_pay`, `unsafe_payAllSui`, `unsafe_transferSui`, `unsafe_transferObject`, `unsafe_moveCall`, `unsafe_splitCoin`, `unsafe_mergeCoins`, `unsafe_batchTransaction` | Build a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) with the SDK, then execute it through `TransactionExecutionService.ExecuteTransaction` | Build a PTB with the SDK, then submit through `executeTransaction` |
+| `sui_getNormalizedMoveModule`, `sui_getNormalizedMoveFunction`, `sui_getNormalizedMoveStruct` | `MovePackageService` | `package`, `module`, `function`, `struct` |
+
+The JSON-RPC `unsafe_*` builder methods do not have a one-to-one replacement on either side. Build transactions with [PTBs](/develop/transactions/ptbs/prog-txn-blocks) using the [TypeScript SDK](https://sdk.mystenlabs.com/typescript) or the [Rust SDK](https://github.com/MystenLabs/sui-rust-sdk), then submit the resulting bytes through `TransactionExecutionService.ExecuteTransaction`.
+
+## Migration gotchas
+
+### No implicit archival fallback in gRPC
+
+JSON-RPC sometimes resolved requests for older data through fallback paths that were transparent to the caller. The gRPC API does not do this. A full node only returns data within its retention window. If `LedgerService` returns "not found" for an older transaction, checkpoint, or object, query the [Archival Store](/develop/accessing-data/archival-store) endpoint directly instead. You can reuse the same `LedgerService` methods, but you must point the client at an Archival Service endpoint such as `archive.mainnet.sui.io:443` or your provider's archival URL.
+
+### Typed requests replace positional JSON-RPC params
+
+JSON-RPC accepts a positional array of arguments. gRPC uses typed protobuf messages, and GraphQL uses named, typed arguments and selection sets. When you port a call, do not translate positional indices directly. Read the schema and pass each value by name, including the response shape selector. For gRPC, use a `FieldMask` to fetch only the fields you need rather than the entire response. See [field masks](/develop/accessing-data/grpc/using-grpc#field-masks) for the rules.
+
+### WebSocket subscriptions are replaced by gRPC streaming
+
+JSON-RPC offered WebSocket subscriptions for events and transactions. Sui does not carry those forward. Use `SubscriptionService.SubscribeCheckpoint` over gRPC server streaming to receive finalized checkpoints in order, and read each checkpoint's transactions, effects, and events from the streamed payload. If your stream disconnects, resume from the last processed checkpoint sequence number. Backfill any missed range using `LedgerService` before you resubscribe. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
+
+### Public load balancer URLs are not production endpoints
+
+The public URLs at `https://fullnode.<network>.sui.io` and `https://graphql.<network>.sui.io/graphql` are rate-limited and intended for development and public-good access. Do not point a production exchange, indexer, or wallet backend at them. Run your own [Sui full node](/operators/full-node/sui-full-node) or contract with a provider for a dedicated gRPC or GraphQL endpoint.
+
+### Object and coin queries behave differently
+
+GraphQL and gRPC expose richer typing for objects and coins than JSON-RPC. A few practical points:
+
+- **Coin selection.** Replace `suix_getCoins` patterns with the GraphQL `address.objects(filter: { type: "0x2::coin::Coin<...>" })` connection, or use the gRPC owned-objects operation on `StateService`. For transaction building, prefer [gas smashing](/develop/transaction-payment/gas-smashing) or [address-balance gas payments](/onchain-finance/asset-custody/address-balances/using-address-balances) rather than constructing coin lists by hand.
+
+- **Balances cover both representations.** Read `Balance.totalBalance` to get the sum across coin objects and the address-balance accumulator. Read `Balance.coinBalance` and `Balance.addressBalance` separately to reconcile against your own ledger.
+
+- **Object versions.** GraphQL supports time-travel queries through `checkpoint { query { ... } }`, which has no JSON-RPC analog. Use it when you need a consistent snapshot across a multi-step read.
+
+### Pagination uses typed cursors
+
+JSON-RPC cursors are opaque strings. GraphQL passes cursors through the `after` (or `before`) field on a connection, with the page size in `first` (or `last`). gRPC paging uses fields on the typed request and response messages. Do not try to reuse a JSON-RPC `nextCursor` value in a GraphQL or gRPC request. Fetch a fresh cursor from the new API and persist it as the resume point.
+
+### Retention windows
+
+A full node retains a configurable window of recent data and prunes older history. Your application sees this as "not found" responses. For long-running queries, replays, or audits, plan to fall back to the [Archival Service](/develop/accessing-data/archival-store) for data outside the full node's retention.
+
+## Examples for high-traffic paths
+
+These point you at the canonical worked examples for each pattern. The examples have been reviewed by the API owners and are the source of truth for request and response shapes.
+
+### Transaction lookup
+
+- **GraphQL:** [Example 2 in Migrating to GraphQL from JSON-RPC](/develop/accessing-data/graphql/query-with-graphql#migrating-to-graphql-from-json-rpc) shows the JSON-RPC `sui_getTransactionBlock` call and the GraphQL `transaction(digest:)` equivalent side by side.
+
+- **gRPC:** Use `LedgerService.GetTransaction` with a `FieldMask` that selects the response fields you need (effects, events, object changes). See [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
+
+### Balances
+
+- **GraphQL:** Query `address(address:).balance(coinType:)` for a single coin type or `address(address:).balances` for all balances. Read `totalBalance`, `coinBalance`, and `addressBalance` together to reconcile. See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances) for a verified example.
+
+- **gRPC:** Use `StateService.GetBalance` or `StateService.ListBalances`. See the [`GetBalance` request reference](/references/fullnode-protocol#sui-rpc-v2-GetBalanceRequest) and the worked example in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances).
+
+### Coins
+
+- **GraphQL:** [Example 3 in Migrating to GraphQL from JSON-RPC](/develop/accessing-data/graphql/query-with-graphql#migrating-to-graphql-from-json-rpc) maps `suix_getCoins` to `address.objects(filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" })`, including how cursor pagination changes.
+
+- **gRPC:** Read coin objects through the owned-objects operation on `StateService`.
+
+### Events
+
+- **GraphQL:** See [Querying events with GraphQL](/develop/accessing-data/using-events#querying-events-with-graphql) for the `events(filter:)` field and the filtering reference.
+
+- **gRPC:** Events arrive as part of transaction data in `LedgerService.GetTransaction` responses, and live updates arrive in each checkpoint streamed by `SubscriptionService.SubscribeCheckpoint`. See [Querying events with RPC](/develop/accessing-data/using-events#querying-events-with-rpc).
+
+### Checkpoints
+
+- **gRPC:** Subscribe with `SubscriptionService.SubscribeCheckpoint` for an ordered, gapless stream of finalized checkpoints. Use `LedgerService.GetCheckpoint` for point lookups. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
+
+- **GraphQL:** Query the `checkpoint(sequenceNumber:)` field for a specific checkpoint, or paginate `checkpoints` for a range. Use `checkpoint { query { ... } }` to scope a multi-resource read to a specific checkpoint.
+
+### Submit a transaction
+
+Build the transaction with a PTB through the SDK, sign it, and execute it through `TransactionExecutionService.ExecuteTransaction` (gRPC) or the `executeTransaction` mutation (GraphQL). See [Building Programmable Transaction Blocks](/develop/transactions/ptbs/building-ptb) for the construction steps and [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview) for the signature requirements.
+
+## Where to go next
+
+- [What is gRPC](/develop/accessing-data/grpc/what-is-grpc) for the gRPC overview, service map, and timeline.
+
+- [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc) for worked examples in TypeScript, Go, Python, and `grpcurl`.
+
+- [Querying Data with GraphQL RPC](/develop/accessing-data/graphql/query-with-graphql) for query patterns, pagination, and the side-by-side JSON-RPC migration examples.
+
+- [Sui SDKs](/references/sui-sdks) for the current SDK options. The [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) is the gRPC Rust client. The [Legacy Rust SDK](/references/rust-sdk) supports JSON-RPC for migration purposes only.
+
+- [Sui Full Node gRPC reference](/references/fullnode-protocol) for the protobuf service definitions and message shapes.
