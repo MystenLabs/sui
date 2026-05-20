@@ -19,7 +19,7 @@ use super::DependencyContext;
 
 /// The dep_info type for the combined stage. This is `ManifestDependencyInfo`, but with the
 /// additional invariant that all on-chain dependencies have addresses (i.e. they use the
-/// `OnChainAt` variant, not `OnChain`). This is enforced during combining: `on-chain = true`
+/// `OnChain` variant, not `OnChainPlaceholder`). This is enforced during combining: `on-chain = true`
 /// without a dep-replacement is rejected.
 pub(super) type Combined = ManifestDependencyInfo;
 
@@ -96,14 +96,14 @@ impl CombinedDependency {
         default: DefaultDependency,
     ) -> ManifestResult<Self> {
         // on-chain = "0x..." belongs in [dep-replacements], not [dependencies]
-        if let ManifestDependencyInfo::OnChainAt(_) = &default.dependency_info {
+        if let ManifestDependencyInfo::OnChain(_) = &default.dependency_info {
             return Err(ManifestError::with_file(file)(
                 ManifestErrorKind::OnChainDepWithAddress { name },
             ));
         }
 
         // on-chain = true with no dep-replacement means no address — error
-        if let ManifestDependencyInfo::OnChain(_) = &default.dependency_info {
+        if let ManifestDependencyInfo::OnChainPlaceholder(_) = &default.dependency_info {
             return Err(ManifestError::with_file(file)(
                 ManifestErrorKind::OnChainDepMissingReplacement { name },
             ));
@@ -141,7 +141,7 @@ impl CombinedDependency {
         };
 
         // On-chain deps in [dep-replacements] must use `on-chain = "0x..."`, not `true`
-        if let ManifestDependencyInfo::OnChain(_) = &dep.dependency_info {
+        if let ManifestDependencyInfo::OnChainPlaceholder(_) = &dep.dependency_info {
             return Err(ManifestError::with_file(file)(
                 ManifestErrorKind::OnChainReplacementWithoutAddress { name },
             ));
@@ -169,7 +169,7 @@ impl CombinedDependency {
         replacement: ReplacementDependency,
     ) -> ManifestResult<Self> {
         // on-chain = "0x..." belongs in [dep-replacements], not [dependencies]
-        if let ManifestDependencyInfo::OnChainAt(_) = &default.dependency_info {
+        if let ManifestDependencyInfo::OnChain(_) = &default.dependency_info {
             return Err(ManifestError::with_file(file)(
                 ManifestErrorKind::OnChainDepWithAddress { name },
             ));
@@ -178,7 +178,7 @@ impl CombinedDependency {
         let dep = replacement.dependency.unwrap_or(default);
 
         // Enforce invariant: after combining, all on-chain deps must have addresses
-        if let ManifestDependencyInfo::OnChain(_) = &dep.dependency_info {
+        if let ManifestDependencyInfo::OnChainPlaceholder(_) = &dep.dependency_info {
             return Err(ManifestError::with_file(file)(
                 ManifestErrorKind::OnChainReplacementWithoutAddress { name },
             ));

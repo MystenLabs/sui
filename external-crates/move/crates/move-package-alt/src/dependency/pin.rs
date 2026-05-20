@@ -342,8 +342,12 @@ impl LocalDepInfo {
                 absolute_path_to_package: root.path().join(&self.local).clean(),
                 relative_path_from_root_package: self.local.clean(),
             }),
-            Pinned::OnChain { .. } => {
-                unreachable!("on-chain packages have system-generated manifests with no local deps")
+            Pinned::OnChain { address } => {
+                unreachable!(
+                    "on-chain package {address} has a local dependency `{}`, but on-chain \
+                     packages have system-generated manifests that should never contain local deps",
+                    self.local.display()
+                )
             }
         };
 

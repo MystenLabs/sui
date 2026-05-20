@@ -9,8 +9,8 @@ use move_compiler::editions::Edition;
 use crate::compatibility::legacy::LegacyData;
 
 use super::{
-    EnvironmentName, LocalDepInfo, OnChainAddress, OnChainFlag, PackageName, PublishAddresses,
-    ResolverName,
+    EnvironmentName, LocalDepInfo, OnChainAddress, OnChainPlaceholder, PackageName,
+    PublishAddresses, ResolverName,
 };
 
 /// The on-chain identifier for an environment (such as a chain ID); these are bound to environment
@@ -110,8 +110,8 @@ pub enum ManifestDependencyInfo {
     Git(ManifestGitDependency),
     External(ExternalDependency),
     Local(LocalDepInfo),
-    OnChain(OnChainFlag),
-    OnChainAt(OnChainAddress),
+    OnChainPlaceholder(OnChainPlaceholder),
+    OnChain(OnChainAddress),
     System(SystemDependency),
 }
 
@@ -195,18 +195,17 @@ impl<'de> Deserialize<'de> for ManifestDependencyInfo {
                 let dep = LocalDepInfo::deserialize(data).map_err(de::Error::custom)?;
                 Ok(ManifestDependencyInfo::Local(dep))
             } else if tbl.contains_key("on-chain") {
-                let val = &tbl["on-chain"];
-                if val.is_bool() {
-                    let dep = OnChainFlag::deserialize(data).map_err(de::Error::custom)?;
-                    Ok(ManifestDependencyInfo::OnChain(dep))
-                } else if val.is_str() {
-                    let dep = OnChainAddress::deserialize(data).map_err(de::Error::custom)?;
-                    Ok(ManifestDependencyInfo::OnChainAt(dep))
-                } else {
-                    Err(de::Error::custom(
+                match &tbl["on-chain"] {
+                    toml::Value::Boolean(_) => OnChainPlaceholder::deserialize(data)
+                        .map(ManifestDependencyInfo::OnChainPlaceholder)
+                        .map_err(de::Error::custom),
+                    toml::Value::String(_) => OnChainAddress::deserialize(data)
+                        .map(ManifestDependencyInfo::OnChain)
+                        .map_err(de::Error::custom),
+                    _ => Err(de::Error::custom(
                         "on-chain must be `true` (in [dependencies]) or a hex address string \
                          like \"0x...\" (in [dep-replacements])",
-                    ))
+                    )),
                 }
             } else {
                 Err(de::Error::custom(
@@ -1017,7 +1016,7 @@ mod tests {
 
         assert!(matches!(
             manifest.get_dep("foo").dependency_info,
-            ManifestDependencyInfo::OnChain(_)
+            ManifestDependencyInfo::OnChainPlaceholder(_)
         ));
     }
 
@@ -1088,6 +1087,25 @@ mod tests {
           |                   ^^^^^^^^^^^^^^^^^
         on-chain must be `true` (in [dependencies]) or a hex address string like "0x..." (in [dep-replacements])
         "###);
+    }
+
+    /// Parsing a short hex address like `on-chain = "0x1"` succeeds (addresses are zero-padded)
+    #[test]
+    fn parse_on_chain_short_address() {
+        let _: ParsedManifest = toml_edit::de::from_str(
+            r#"
+            [package]
+            name = "test"
+            edition = "2024"
+
+            [dependencies]
+            foo = { on-chain = true }
+
+            [dep-replacements]
+            mainnet.foo = { on-chain = "0x1" }
+            "#,
+        )
+        .unwrap();
     }
 
     /// [addresses] is dead ♥

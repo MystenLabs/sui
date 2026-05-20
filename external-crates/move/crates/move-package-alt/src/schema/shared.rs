@@ -58,12 +58,12 @@ pub struct LocalDepInfo {
     pub local: PathBuf,
 }
 
-/// An on-chain dependency marker: `{on-chain = true}`.
+/// An on-chain dependency placeholder: `{on-chain = true}`.
 ///
 /// Used in the `[dependencies]` section of a manifest to declare that a dependency should be
 /// fetched from the chain rather than from source.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-pub struct OnChainFlag {
+pub struct OnChainPlaceholder {
     #[serde(rename = "on-chain")]
     pub on_chain: ConstTrue,
 }
