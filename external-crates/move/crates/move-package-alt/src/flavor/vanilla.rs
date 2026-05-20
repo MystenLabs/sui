@@ -25,10 +25,8 @@ pub const DEFAULT_ENV_ID: &str = "_test_env_id";
 /// The [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports no
 /// flavor-specific resolvers and stores no additional metadata in the lockfile.
 #[derive(Debug, Default)]
-pub struct Vanilla {
-    /// Private field to prevent unit-struct construction; use [`Vanilla::new`] instead.
-    _private: (),
-}
+#[non_exhaustive]
+pub struct Vanilla;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "kebab-case")]

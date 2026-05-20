@@ -41,9 +41,8 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
     };
 
     let mut writer = Vec::new();
-    let env = Vanilla::default_environment();
     let root_pkg: RootPackage<Vanilla> = config
-        .package_loader(pkg_dir, &env, Vanilla::new())
+        .package_loader(pkg_dir, &Vanilla::default_environment(), Vanilla::new())
         .load_sync()?;
 
     let model = model_builder::build(&mut writer, &root_pkg, &config)?;
