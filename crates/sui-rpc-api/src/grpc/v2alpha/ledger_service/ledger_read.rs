@@ -79,19 +79,19 @@ pub(super) fn checkpoint_to_tx_range(
     Ok(start..end)
 }
 
-/// The ledger-history pruning floor in tx-seq space: the lowest tx_sequence_number
-/// still served by the index (`first_tx_seq_digest_key`). An empty/None index is
-/// floor 0. Reads below this floor would hit pruned `tx_seq_digest` rows.
-pub(super) fn ledger_history_tx_seq_floor(service: &RpcService) -> Result<u64, RpcError> {
-    let indexes = service
-        .reader
-        .inner()
-        .indexes()
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
-    Ok(indexes
-        .ledger_history_tx_seq_floor()
-        .map_err(storage_error)?
-        .unwrap_or(0))
+/// The serving floor in tx-seq space: the first tx_sequence_number whose
+/// checkpoint contents are still retained (the first tx of the lowest available
+/// checkpoint). This is the perpetual-store pruning floor, NOT the index's own
+/// floor — the index prunes *after* the perpetual store, so it can still hold
+/// `tx_seq_digest` rows for transactions whose contents are already gone. Serving
+/// must be bounded by content availability, matching `get_transaction`.
+///
+/// `checkpoint_to_tx_boundary` reads the lowest available checkpoint's predecessor
+/// from `certified_checkpoints`, which is retained across pruning, so this resolves
+/// even at the floor.
+pub(super) fn lowest_available_tx_seq(service: &RpcService) -> Result<u64, RpcError> {
+    let lowest_checkpoint = service.reader.get_lowest_available_checkpoint()?;
+    checkpoint_to_tx_boundary(service, lowest_checkpoint)
 }
 
 /// Enforce the pruning `floor` on a resolved scan's low end (`start`, tx-seq space).
@@ -227,13 +227,14 @@ pub(super) fn resolve_frontier_checkpoint(
     Ok(Some(checkpoint))
 }
 
-/// Classify a missing `tx_seq_digest` row encountered during a scan. The floor
-/// can advance after a range is resolved (a concurrent prune), so a row missing
-/// below the *current* floor was pruned mid-scan — permanently gone, surfaced as
-/// `OutOfRange`. A row missing at/above the floor is a genuine inconsistency
-/// (`Internal`). A failed floor lookup conservatively reports the latter.
+/// Classify a missing `tx_seq_digest` row encountered during a scan. The serving
+/// floor can advance after a range is resolved (a concurrent prune), so a row
+/// missing below the *current* floor was pruned mid-scan — permanently gone,
+/// surfaced as `OutOfRange`. A row missing at/above the floor is a genuine
+/// inconsistency (`Internal`). A failed floor lookup conservatively reports the
+/// latter.
 fn missing_row_error(service: &RpcService, tx_seq: u64) -> RpcError {
-    match ledger_history_tx_seq_floor(service) {
+    match lowest_available_tx_seq(service) {
         Ok(floor) if tx_seq < floor => out_of_range(floor),
         _ => missing_tx_seq_digest(tx_seq),
     }
