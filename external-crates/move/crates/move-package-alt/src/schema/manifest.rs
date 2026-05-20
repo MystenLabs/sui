@@ -1108,6 +1108,48 @@ mod tests {
         .unwrap();
     }
 
+    /// Parsing an address longer than 32 bytes should be a parse error.
+    // TODO(DVX-2143): currently silently drops the invalid address due to serde flatten+default
+    #[test]
+    #[ignore]
+    fn parse_on_chain_too_long_address() {
+        toml_edit::de::from_str::<ParsedManifest>(
+            r#"
+            [package]
+            name = "test"
+            edition = "2024"
+
+            [dependencies]
+            foo = { on-chain = true }
+
+            [dep-replacements]
+            mainnet.foo = { on-chain = "0x00000000000000000000000000000000000000000000000000000000000000000001" }
+            "#,
+        )
+        .unwrap_err();
+    }
+
+    /// Parsing an invalid hex string should be a parse error.
+    // TODO(DVX-2143): currently silently drops the invalid address due to serde flatten+default
+    #[test]
+    #[ignore]
+    fn parse_on_chain_invalid_hex() {
+        toml_edit::de::from_str::<ParsedManifest>(
+            r#"
+            [package]
+            name = "test"
+            edition = "2024"
+
+            [dependencies]
+            foo = { on-chain = true }
+
+            [dep-replacements]
+            mainnet.foo = { on-chain = "0x0000q" }
+            "#,
+        )
+        .unwrap_err();
+    }
+
     /// [addresses] is dead ♥
     #[test]
     fn parse_addresses_section() {
