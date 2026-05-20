@@ -77,33 +77,10 @@ pub(crate) async fn checkpoint_to_response(
     read_mask: &FieldMaskTree,
     checkpoint_bucket: Option<&str>,
 ) -> Result<Checkpoint, RpcError> {
-    let sequence_number = checkpoint
-        .summary
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("checkpoint summary missing"))?
-        .sequence_number;
-    let mut message = checkpoint_to_response_from_data(checkpoint, read_mask)?;
-
-    if (read_mask.contains(Checkpoint::TRANSACTIONS_FIELD)
-        || read_mask.contains(Checkpoint::OBJECTS_FIELD))
-        && let Some(url) = checkpoint_bucket
-    {
-        let store = build_object_store(url, vec![]);
-        let checkpoint = fetch_checkpoint(&store, sequence_number).await?;
-
-        message.merge(&checkpoint, read_mask);
-    }
-
-    Ok(message)
-}
-
-pub(crate) fn checkpoint_to_response_from_data(
-    checkpoint: CheckpointData,
-    read_mask: &FieldMaskTree,
-) -> Result<Checkpoint, RpcError> {
     let summary = checkpoint
         .summary
         .ok_or_else(|| anyhow::anyhow!("checkpoint summary missing"))?;
+    let sequence_number = summary.sequence_number;
     let mut message = Checkpoint::default();
     let summary: sui_sdk_types::CheckpointSummary = summary.try_into()?;
     message.merge(&summary, read_mask);
@@ -124,6 +101,16 @@ pub(crate) fn checkpoint_to_response_from_data(
             sui_sdk_types::CheckpointContents::try_from(contents)?,
             read_mask,
         );
+    }
+
+    if (read_mask.contains(Checkpoint::TRANSACTIONS_FIELD)
+        || read_mask.contains(Checkpoint::OBJECTS_FIELD))
+        && let Some(url) = checkpoint_bucket
+    {
+        let store = build_object_store(url, vec![]);
+        let checkpoint = fetch_checkpoint(&store, sequence_number).await?;
+
+        message.merge(&checkpoint, read_mask);
     }
 
     Ok(message)

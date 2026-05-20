@@ -8,7 +8,6 @@ use std::time::Instant;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
-use move_core_types::annotated_value::MoveTypeLayout;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
@@ -40,9 +39,8 @@ use crate::query_options::QueryType;
 use crate::query_options::ResolvedRange;
 use crate::v2::get_transaction::compute_object_keys;
 use crate::v2::get_transaction::needs_object_types;
-use crate::v2::get_transaction::resolve_transaction_event_json_layouts;
 use crate::v2::get_transaction::transaction_columns;
-use crate::v2::get_transaction::transaction_to_response_with_event_layouts;
+use crate::v2::get_transaction::transaction_to_response;
 use crate::v2::get_transaction::validate_read_mask;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::error_contains;
@@ -67,15 +65,6 @@ struct RenderedTransaction {
     tx_offset: u32,
     checkpoint_number: u64,
     transaction: ExecutedTransaction,
-}
-
-struct TransactionRenderInput {
-    tx_sequence_number: u64,
-    tx_offset: u32,
-    checkpoint_number: u64,
-    tx_data: TransactionData,
-    objects: ObjectMap,
-    event_json_layouts: Option<Vec<Option<MoveTypeLayout>>>,
 }
 
 pub(crate) async fn list_transactions(
@@ -280,25 +269,41 @@ pub(crate) async fn list_transactions(
 
     let render_ctx = ctx.clone();
     let render_concurrency = ctx.response_render_concurrency();
-    let layout_read_mask = read_mask.clone();
-    let prepared_txn_stream = pipelined_chunks(
-        txn_with_objects_stream,
-        CHUNK_MAX,
-        render_concurrency,
-        move |items| {
-            let read_mask = layout_read_mask.clone();
+    let rendered_txn_stream = txn_with_objects_stream
+        .map(move |item| {
+            let read_mask = read_mask.clone();
             let resolver = resolver.clone();
-            prepare_transaction_render_inputs(items, read_mask, resolver)
-        },
-    );
-
-    let render_read_mask = read_mask.clone();
-    let rendered_txn_stream =
-        pipelined_chunks(prepared_txn_stream, 1, render_concurrency, move |items| {
-            let read_mask = render_read_mask.clone();
             let ctx = render_ctx.clone();
-            render_transaction_inputs(items, read_mask, ctx)
-        });
+            async move {
+                match item? {
+                    Watermarked::Item((tx_sequence_number, tx_offset, tx_data, objects)) => {
+                        let checkpoint_number = tx_data.checkpoint_number;
+                        let render_task = AbortOnDrop::new(tokio::spawn(async move {
+                            let render_started = Instant::now();
+                            let transaction =
+                                transaction_to_response(tx_data, &read_mask, &objects, &resolver)
+                                    .await?;
+                            ctx.observe_response_render(render_started.elapsed());
+                            Ok::<_, anyhow::Error>(RenderedTransaction {
+                                tx_sequence_number,
+                                tx_offset,
+                                checkpoint_number,
+                                transaction,
+                            })
+                        }));
+                        let rendered = render_task.await.map_err(|e| {
+                            anyhow::anyhow!("list_transactions: render task failed: {e}")
+                        })??;
+                        Ok::<Watermarked<RenderedTransaction>, anyhow::Error>(Watermarked::Item(
+                            rendered,
+                        ))
+                    }
+                    Watermarked::Watermark(position) => Ok(Watermarked::Watermark(position)),
+                }
+            }
+        })
+        .buffered(render_concurrency)
+        .boxed();
 
     let rendered_txn_stream =
         resolve_watermarks(rendered_txn_stream, client.tx_wm_resolver(direction));
@@ -357,70 +362,6 @@ pub(crate) async fn list_transactions(
         );
     }
     .boxed())
-}
-
-async fn prepare_transaction_render_inputs(
-    items: Vec<TransactionWithObjectsStreamItem>,
-    read_mask: Arc<FieldMaskTree>,
-    resolver: crate::PackageResolver,
-) -> Result<BoxStream<'static, Result<TransactionRenderInput, anyhow::Error>>, anyhow::Error> {
-    let rows = futures::future::try_join_all(items.into_iter().map(
-        |(tx_sequence_number, tx_offset, tx_data, objects)| {
-            let read_mask = read_mask.clone();
-            let resolver = resolver.clone();
-            async move {
-                let checkpoint_number = tx_data.checkpoint_number;
-                let event_json_layouts =
-                    resolve_transaction_event_json_layouts(&tx_data, &read_mask, &resolver).await;
-                Ok::<_, anyhow::Error>(TransactionRenderInput {
-                    tx_sequence_number,
-                    tx_offset,
-                    checkpoint_number,
-                    tx_data,
-                    objects,
-                    event_json_layouts,
-                })
-            }
-        },
-    ))
-    .await?;
-
-    Ok(futures::stream::iter(rows.into_iter().map(Ok)).boxed())
-}
-
-async fn render_transaction_inputs(
-    items: Vec<TransactionRenderInput>,
-    read_mask: Arc<FieldMaskTree>,
-    ctx: QueryContext,
-) -> Result<BoxStream<'static, Result<RenderedTransaction, anyhow::Error>>, anyhow::Error> {
-    let rows = futures::future::try_join_all(items.into_iter().map(|input| {
-        let read_mask = read_mask.clone();
-        let ctx = ctx.clone();
-        async move {
-            let render_task = AbortOnDrop::new(tokio::task::spawn_blocking(move || {
-                let render_started = Instant::now();
-                let transaction = transaction_to_response_with_event_layouts(
-                    input.tx_data,
-                    &read_mask,
-                    &input.objects,
-                    input.event_json_layouts.as_deref(),
-                )?;
-                ctx.observe_response_render(render_started.elapsed());
-                Ok::<_, anyhow::Error>(RenderedTransaction {
-                    tx_sequence_number: input.tx_sequence_number,
-                    tx_offset: input.tx_offset,
-                    checkpoint_number: input.checkpoint_number,
-                    transaction,
-                })
-            }));
-            render_task
-                .await
-                .map_err(|e| anyhow::anyhow!("list_transactions: render task failed: {e}"))?
-        }
-    }))
-    .await?;
-
-    Ok(futures::stream::iter(rows.into_iter().map(Ok)).boxed())
 }
 
 /// For ListTransactions, the scan-direction completion boundary is

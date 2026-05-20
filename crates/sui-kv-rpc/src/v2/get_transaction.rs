@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::annotated_value::MoveTypeLayout;
 use mysten_common::ZipDebugEqIteratorExt;
 use std::collections::{BTreeSet, HashMap};
 use std::str::FromStr;
@@ -23,8 +22,7 @@ use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use tracing::warn;
 
-use super::render_json_with_layout;
-use super::resolve_json_layout;
+use super::render_json;
 use crate::PackageResolver;
 
 pub const MAX_BATCH_REQUESTS: usize = 200;
@@ -137,37 +135,6 @@ pub(crate) async fn transaction_to_response(
     objects: &HashMap<ObjectKey, Object>,
     resolver: &PackageResolver,
 ) -> Result<ExecutedTransaction, RpcError> {
-    let event_json_layouts = resolve_transaction_event_json_layouts(&source, mask, resolver).await;
-    transaction_to_response_with_event_layouts(source, mask, objects, event_json_layouts.as_deref())
-}
-
-pub(crate) async fn resolve_transaction_event_json_layouts(
-    source: &TransactionData,
-    mask: &FieldMaskTree,
-    resolver: &PackageResolver,
-) -> Option<Vec<Option<MoveTypeLayout>>> {
-    if !transaction_event_json_requested(mask) {
-        return None;
-    }
-
-    let events = source.events.as_ref()?;
-    Some(
-        futures::future::join_all(
-            events
-                .data
-                .iter()
-                .map(|event| resolve_json_layout(resolver, &event.type_)),
-        )
-        .await,
-    )
-}
-
-pub(crate) fn transaction_to_response_with_event_layouts(
-    source: TransactionData,
-    mask: &FieldMaskTree,
-    objects: &HashMap<ObjectKey, Object>,
-    event_json_layouts: Option<&[Option<MoveTypeLayout>]>,
-) -> Result<ExecutedTransaction, RpcError> {
     let mut message = ExecutedTransaction::default();
 
     if mask.contains(ExecutedTransaction::DIGEST_FIELD.name) {
@@ -247,17 +214,12 @@ pub(crate) fn transaction_to_response_with_event_layouts(
         if let Some(event_mask) = submask.subtree(TransactionEvents::EVENTS_FIELD.name)
             && event_mask.contains(Event::JSON_FIELD.name)
             && let Some(proto_events) = message.events.as_mut()
-            && let Some(event_json_layouts) = event_json_layouts
         {
-            for ((proto_event, sui_event), layout) in proto_events
-                .events
-                .iter_mut()
-                .zip_debug_eq(&events.data)
-                .zip_debug_eq(event_json_layouts)
+            for (proto_event, sui_event) in
+                proto_events.events.iter_mut().zip_debug_eq(&events.data)
             {
-                proto_event.json = layout
-                    .as_ref()
-                    .and_then(|layout| render_json_with_layout(&sui_event.contents, layout))
+                proto_event.json = render_json(resolver, &sui_event.type_, &sui_event.contents)
+                    .await
                     .map(Box::new);
             }
         }
@@ -274,16 +236,6 @@ pub(crate) fn transaction_to_response_with_event_layouts(
     }
 
     Ok(message)
-}
-
-pub(crate) fn transaction_event_json_requested(mask: &FieldMaskTree) -> bool {
-    let Some(events_mask) = mask.subtree(ExecutedTransaction::EVENTS_FIELD.name) else {
-        return false;
-    };
-    let Some(event_mask) = events_mask.subtree(TransactionEvents::EVENTS_FIELD.name) else {
-        return false;
-    };
-    event_mask.contains(Event::JSON_FIELD.name)
 }
 
 /// Compute the set of BigTable columns needed for the given read mask.

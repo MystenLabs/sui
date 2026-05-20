@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2::{
@@ -34,24 +33,10 @@ pub(crate) async fn render_json(
     struct_tag: &StructTag,
     contents: &[u8],
 ) -> Option<prost_types::Value> {
-    let layout = resolve_json_layout(resolver, struct_tag).await?;
-    render_json_with_layout(contents, &layout)
-}
-
-pub(crate) async fn resolve_json_layout(
-    resolver: &PackageResolver,
-    struct_tag: &StructTag,
-) -> Option<MoveTypeLayout> {
     let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
-    resolver.type_layout(type_tag).await.ok()
-}
-
-pub(crate) fn render_json_with_layout(
-    contents: &[u8],
-    layout: &MoveTypeLayout,
-) -> Option<prost_types::Value> {
+    let layout = resolver.type_layout(type_tag).await.ok()?;
     ProtoVisitor::new(MAX_JSON_MOVE_VALUE_SIZE)
-        .deserialize_value(contents, layout)
+        .deserialize_value(contents, &layout)
         .ok()
 }
 

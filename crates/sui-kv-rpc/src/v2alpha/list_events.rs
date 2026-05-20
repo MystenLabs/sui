@@ -8,7 +8,6 @@ use std::time::Instant;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
-use move_core_types::annotated_value::MoveTypeLayout;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
@@ -23,7 +22,6 @@ use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_types::digests::TransactionDigest;
-use sui_types::event::Event as SuiEvent;
 use tracing::Instrument;
 use tracing::debug_span;
 use tracing::info;
@@ -42,8 +40,7 @@ use crate::query_options::CheckpointRange;
 use crate::query_options::QueryOptions;
 use crate::query_options::QueryType;
 use crate::query_options::ResolvedRange;
-use crate::v2::render_json_with_layout;
-use crate::v2::resolve_json_layout;
+use crate::v2::render_json;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::error_contains;
 
@@ -205,21 +202,38 @@ pub(crate) async fn list_events(
     // TODO: add global single-flight dedupe around package cache misses so
     // concurrent requests for the same uncached package share one BigTable
     // fetch.
-    let render_concurrency = ctx.response_render_concurrency();
-    let prepared_event_stream =
-        pipelined_chunks(tx_ref_stream, CHUNK_MAX, render_concurrency, move |items| {
-            let resolver = resolver.clone();
-            prepare_event_render_inputs(items, resolver, wants_json)
-        });
-
+    let render_options = options.clone();
     let render_ctx = ctx.clone();
-    let render_read_mask = read_mask.clone();
-    let event_stream =
-        pipelined_chunks(prepared_event_stream, 1, render_concurrency, move |items| {
-            let read_mask = render_read_mask.clone();
+    let render_concurrency = ctx.response_render_concurrency();
+    let event_stream = tx_ref_stream
+        .map(move |item| {
+            let resolver = resolver.clone();
+            let read_mask = read_mask.clone();
+            let options = render_options.clone();
             let ctx = render_ctx.clone();
-            render_event_inputs(items, read_mask, ctx)
-        });
+            async move {
+                match item? {
+                    Watermarked::Item((event_ref, tx)) => {
+                        let render_task = AbortOnDrop::new(tokio::spawn(async move {
+                            let render_started = Instant::now();
+                            let rendered = render_event(
+                                event_ref, tx, &read_mask, &resolver, wants_json, &options,
+                            )
+                            .await?;
+                            ctx.observe_response_render(render_started.elapsed());
+                            Ok::<_, anyhow::Error>(rendered)
+                        }));
+                        let rendered = render_task.await.map_err(|e| {
+                            anyhow::anyhow!("list_events: render task failed: {e}")
+                        })??;
+                        Ok::<Watermarked<RenderedEvent>, anyhow::Error>(Watermarked::Item(rendered))
+                    }
+                    Watermarked::Watermark(p) => Ok(Watermarked::Watermark(p)),
+                }
+            }
+        })
+        .buffered(render_concurrency)
+        .boxed();
 
     let event_stream = resolve_watermarks(event_stream, client.event_wm_resolver(direction));
 
@@ -527,39 +541,14 @@ struct RenderedEvent {
     event_seq: u64,
 }
 
-struct EventRenderInput {
-    event_ref: EventRef,
-    checkpoint_number: u64,
-    tx_digest: TransactionDigest,
-    tx_offset: Option<u64>,
-    event: SuiEvent,
-    json_layout: Option<MoveTypeLayout>,
-}
-
-async fn prepare_event_render_inputs(
-    items: Vec<(EventRef, TransactionData)>,
-    resolver: PackageResolver,
-    wants_json: bool,
-) -> Result<BoxStream<'static, Result<EventRenderInput, anyhow::Error>>, anyhow::Error> {
-    let rows = futures::future::try_join_all(items.into_iter().map(|(event_ref, tx)| {
-        let resolver = resolver.clone();
-        async move {
-            prepare_event_render_input(event_ref, tx, &resolver, wants_json)
-                .await
-                .map_err(anyhow::Error::from)
-        }
-    }))
-    .await?;
-
-    Ok(futures::stream::iter(rows.into_iter().map(Ok)).boxed())
-}
-
-async fn prepare_event_render_input(
+async fn render_event(
     event_ref: EventRef,
     tx: TransactionData,
+    read_mask: &FieldMaskTree,
     resolver: &PackageResolver,
     wants_json: bool,
-) -> Result<EventRenderInput, RpcError> {
+    _options: &QueryOptions,
+) -> Result<RenderedEvent, RpcError> {
     let tx_events = tx.events.as_ref().ok_or_else(|| {
         RpcError::new(
             tonic::Code::Internal,
@@ -580,69 +569,26 @@ async fn prepare_event_render_input(
                     event_ref.event_seq, event_ref.event_idx, tx.digest
                 ),
             )
-        })?
-        .clone();
-    let json_layout = if wants_json {
-        resolve_json_layout(resolver, &event.type_).await
-    } else {
-        None
-    };
+        })?;
 
-    Ok(EventRenderInput {
-        event_ref,
-        checkpoint_number: tx.checkpoint_number,
-        tx_digest: tx.digest,
-        tx_offset: event_ref.tx_seq_digest.map(|row| row.tx_offset as u64),
-        event,
-        json_layout,
-    })
-}
-
-async fn render_event_inputs(
-    items: Vec<EventRenderInput>,
-    read_mask: Arc<FieldMaskTree>,
-    ctx: QueryContext,
-) -> Result<BoxStream<'static, Result<RenderedEvent, anyhow::Error>>, anyhow::Error> {
-    let rows = futures::future::try_join_all(items.into_iter().map(|input| {
-        let read_mask = read_mask.clone();
-        let ctx = ctx.clone();
-        async move {
-            let render_task = AbortOnDrop::new(tokio::task::spawn_blocking(move || {
-                let render_started = Instant::now();
-                let rendered = render_event_sync(input, &read_mask)?;
-                ctx.observe_response_render(render_started.elapsed());
-                Ok::<_, anyhow::Error>(rendered)
-            }));
-            render_task
-                .await
-                .map_err(|e| anyhow::anyhow!("list_events: render task failed: {e}"))?
-        }
-    }))
-    .await?;
-
-    Ok(futures::stream::iter(rows.into_iter().map(Ok)).boxed())
-}
-
-fn render_event_sync(
-    input: EventRenderInput,
-    read_mask: &FieldMaskTree,
-) -> Result<RenderedEvent, RpcError> {
-    let mut proto_event = ProtoEvent::merge_from(&input.event, read_mask);
-    if let Some(layout) = input.json_layout.as_ref() {
-        proto_event.json = render_json_with_layout(&input.event.contents, layout).map(Box::new);
+    let mut proto_event = ProtoEvent::merge_from(event, read_mask);
+    if wants_json {
+        proto_event.json = render_json(resolver, &event.type_, &event.contents)
+            .await
+            .map(Box::new);
     }
 
     let mut item = EventItem::default();
-    item.checkpoint = Some(input.checkpoint_number);
-    item.event_index = Some(input.event_ref.event_idx);
-    item.transaction_digest = Some(input.tx_digest.to_string());
+    item.checkpoint = Some(tx.checkpoint_number);
+    item.event_index = Some(event_ref.event_idx);
+    item.transaction_digest = Some(tx.digest.to_string());
     item.event = Some(proto_event);
-    item.transaction_offset = input.tx_offset;
+    item.transaction_offset = event_ref.tx_seq_digest.map(|row| row.tx_offset as u64);
 
     Ok(RenderedEvent {
         item,
-        checkpoint_number: input.checkpoint_number,
-        event_seq: input.event_ref.event_seq,
+        checkpoint_number: tx.checkpoint_number,
+        event_seq: event_ref.event_seq,
     })
 }
 
@@ -827,13 +773,6 @@ async fn checkpoint_to_tx_boundary(
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
-    use move_core_types::annotated_value::MoveTypeLayout;
-    use move_core_types::language_storage::StructTag;
-    use sui_types::Identifier;
-    use sui_types::base_types::ObjectID;
-    use sui_types::base_types::SuiAddress;
     use sui_types::digests::TransactionDigest;
 
     use super::*;
@@ -875,60 +814,6 @@ mod tests {
                 (r.tx_seq, r.event_idx)
             })
             .collect()
-    }
-
-    fn test_event(contents: Vec<u8>) -> SuiEvent {
-        SuiEvent {
-            package_id: ObjectID::ZERO,
-            transaction_module: Identifier::new("m").unwrap(),
-            sender: SuiAddress::ZERO,
-            type_: StructTag::from_str("0x2::m::T").unwrap(),
-            contents,
-        }
-    }
-
-    #[test]
-    fn render_event_sync_without_json_does_not_need_layout() {
-        let input = EventRenderInput {
-            event_ref: EventRef {
-                event_seq: 1,
-                tx_seq: 1,
-                event_idx: 0,
-                tx_seq_digest: None,
-            },
-            checkpoint_number: 7,
-            tx_digest: TransactionDigest::new([1; 32]),
-            tx_offset: None,
-            event: test_event(vec![]),
-            json_layout: None,
-        };
-        let read_mask = FieldMaskTree::from(FieldMask::from_str("event_type"));
-
-        let rendered = render_event_sync(input, &read_mask).expect("render succeeds");
-
-        assert!(rendered.item.event.unwrap().json.is_none());
-    }
-
-    #[test]
-    fn render_event_sync_uses_resolved_json_layout() {
-        let input = EventRenderInput {
-            event_ref: EventRef {
-                event_seq: 1,
-                tx_seq: 1,
-                event_idx: 0,
-                tx_seq_digest: None,
-            },
-            checkpoint_number: 7,
-            tx_digest: TransactionDigest::new([1; 32]),
-            tx_offset: None,
-            event: test_event(bcs::to_bytes(&42u64).unwrap()),
-            json_layout: Some(MoveTypeLayout::U64),
-        };
-        let read_mask = FieldMaskTree::from(FieldMask::from_str("json"));
-
-        let rendered = render_event_sync(input, &read_mask).expect("render succeeds");
-
-        assert!(rendered.item.event.unwrap().json.is_some());
     }
 
     #[test]
