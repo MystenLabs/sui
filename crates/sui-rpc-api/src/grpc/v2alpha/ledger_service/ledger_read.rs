@@ -79,6 +79,47 @@ pub(super) fn checkpoint_to_tx_range(
     Ok(start..end)
 }
 
+/// The ledger-history pruning floor in tx-seq space: the lowest tx_sequence_number
+/// still served by the index (`first_tx_seq_digest_key`). An empty/None index is
+/// floor 0. Reads below this floor would hit pruned `tx_seq_digest` rows.
+pub(super) fn ledger_history_tx_seq_floor(service: &RpcService) -> Result<u64, RpcError> {
+    let indexes = service
+        .reader
+        .inner()
+        .indexes()
+        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
+    Ok(indexes
+        .ledger_history_tx_seq_floor()
+        .map_err(storage_error)?
+        .unwrap_or(0))
+}
+
+/// Enforce the pruning `floor` on a resolved scan's low end (`start`, tx-seq space).
+/// Returns the effective start: unchanged when at/above the floor; clamped up to
+/// the floor when the low end was open-ended; or `OutOfRange` when an explicitly
+/// requested low end (a `start_checkpoint` or `after` cursor) is below the floor —
+/// that data was pruned and is permanently gone.
+pub(super) fn apply_tx_seq_floor(
+    start: u64,
+    explicit_lower: bool,
+    floor: u64,
+) -> Result<u64, RpcError> {
+    if start >= floor {
+        Ok(start)
+    } else if explicit_lower {
+        Err(out_of_range(floor))
+    } else {
+        Ok(floor)
+    }
+}
+
+fn out_of_range(floor: u64) -> RpcError {
+    RpcError::new(
+        tonic::Code::OutOfRange,
+        format!("requested data below earliest available; lowest available tx_seq is {floor}"),
+    )
+}
+
 pub(super) fn get_tx_seq_digest_multi(
     service: &RpcService,
     tx_seqs: &[u64],
@@ -97,7 +138,7 @@ pub(super) fn get_tx_seq_digest_multi(
         .map_err(storage_error)?
         .into_iter()
         .zip_debug_eq(tx_seqs.iter().copied())
-        .map(|(row, tx_seq)| row.ok_or_else(|| missing_tx_seq_digest(tx_seq)))
+        .map(|(row, tx_seq)| row.ok_or_else(|| missing_row_error(service, tx_seq)))
         .collect()
 }
 
@@ -131,7 +172,7 @@ pub(super) fn get_tx_seq_digest_rows(
             Some(result) => {
                 let row = result.map_err(storage_error)?;
                 if row.tx_sequence_number != expected {
-                    return Err(missing_tx_seq_digest(expected));
+                    return Err(missing_row_error(service, expected));
                 }
                 rows.push(row);
 
@@ -148,7 +189,7 @@ pub(super) fn get_tx_seq_digest_rows(
                 }
             }
             None => {
-                return Err(missing_tx_seq_digest(expected));
+                return Err(missing_row_error(service, expected));
             }
         }
     }
@@ -186,6 +227,18 @@ pub(super) fn resolve_frontier_checkpoint(
     Ok(Some(checkpoint))
 }
 
+/// Classify a missing `tx_seq_digest` row encountered during a scan. The floor
+/// can advance after a range is resolved (a concurrent prune), so a row missing
+/// below the *current* floor was pruned mid-scan — permanently gone, surfaced as
+/// `OutOfRange`. A row missing at/above the floor is a genuine inconsistency
+/// (`Internal`). A failed floor lookup conservatively reports the latter.
+fn missing_row_error(service: &RpcService, tx_seq: u64) -> RpcError {
+    match ledger_history_tx_seq_floor(service) {
+        Ok(floor) if tx_seq < floor => out_of_range(floor),
+        _ => missing_tx_seq_digest(tx_seq),
+    }
+}
+
 fn missing_tx_seq_digest(tx_seq: u64) -> RpcError {
     RpcError::new(
         tonic::Code::Internal,
@@ -204,4 +257,38 @@ pub(super) fn remaining_range_after(
         range.start..position
     };
     (!remaining.is_empty()).then_some(remaining)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn apply_tx_seq_floor_passes_through_at_or_above_floor() {
+        assert_eq!(apply_tx_seq_floor(10, false, 10).unwrap(), 10);
+        assert_eq!(apply_tx_seq_floor(15, true, 10).unwrap(), 15);
+    }
+
+    #[test]
+    fn apply_tx_seq_floor_clamps_open_ended_low_end() {
+        // No explicit low bound below the floor → clamp up to the floor.
+        assert_eq!(apply_tx_seq_floor(0, false, 10).unwrap(), 10);
+        assert_eq!(apply_tx_seq_floor(7, false, 10).unwrap(), 10);
+    }
+
+    #[test]
+    fn apply_tx_seq_floor_errors_on_explicit_below_floor() {
+        for start in [0u64, 9] {
+            let status = tonic::Status::from(apply_tx_seq_floor(start, true, 10).unwrap_err());
+            assert_eq!(status.code(), tonic::Code::OutOfRange);
+        }
+    }
+
+    #[test]
+    fn apply_tx_seq_floor_zero_floor_never_clamps_or_errors() {
+        // Empty/unpruned index (floor 0): every start is at/above the floor.
+        assert_eq!(apply_tx_seq_floor(0, true, 0).unwrap(), 0);
+        assert_eq!(apply_tx_seq_floor(0, false, 0).unwrap(), 0);
+        assert_eq!(apply_tx_seq_floor(123, true, 0).unwrap(), 123);
+    }
 }
