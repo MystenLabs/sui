@@ -15,6 +15,7 @@ anyhow.workspace = true
 
 move-core-types.workspace = true
 move-compiler.workspace = true
+move-vm-config.workspace = true
 move-vm-runtime.workspace = true
 move-binary-format.workspace = true
 move-stdlib.workspace = true
