@@ -179,9 +179,11 @@ impl BitmapScanBudget {
     /// common `budget >> leaves` case; it only undercounts a first bucket
     /// taken after the pool was already exhausted by other leaves.
     fn take_first(&self) {
-        let _ = self.remaining.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |b| {
-            Some(b.saturating_sub(1))
-        });
+        let _ = self
+            .remaining
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |b| {
+                Some(b.saturating_sub(1))
+            });
     }
 
     fn buckets_evaluated(&self) -> u64 {
@@ -204,6 +206,43 @@ fn merge_watermarks(slots: &[Option<u64>], direction: ScanDirection) -> Option<u
         ScanDirection::Ascending => *all.iter().min().expect("non-empty"),
         ScanDirection::Descending => *all.iter().max().expect("non-empty"),
     })
+}
+
+/// The less-advanced of two frontier positions in scan direction: the min
+/// ascending, the max descending. Used to keep a merged frontier bounded by
+/// the slowest contributor.
+fn bound_in_direction(a: u64, b: u64, direction: ScanDirection) -> u64 {
+    match direction {
+        ScanDirection::Ascending => a.min(b),
+        ScanDirection::Descending => a.max(b),
+    }
+}
+
+/// Like [`merge_watermarks`] but also folds in a `ceiling` frozen from
+/// errored (retired) union branches. A retired branch no longer polls, but
+/// the position it reached still bounds how far the union can claim progress,
+/// so it stays in the merge as a fixed floor. Live slots dominate as usual
+/// (any `None` live slot blocks progress); with no live slots left the
+/// ceiling alone is the frontier.
+fn merge_with_ceiling(
+    slots: &[Option<u64>],
+    ceiling: Option<u64>,
+    direction: ScanDirection,
+) -> Option<u64> {
+    // A live branch that has not yet reported blocks progress past its
+    // unknown floor.
+    if slots.iter().any(Option::is_none) {
+        return None;
+    }
+    let live = match direction {
+        ScanDirection::Ascending => slots.iter().flatten().copied().min(),
+        ScanDirection::Descending => slots.iter().flatten().copied().max(),
+    };
+    match (live, ceiling) {
+        (Some(l), Some(c)) => Some(bound_in_direction(l, c, direction)),
+        (Some(l), None) => Some(l),
+        (None, c) => c,
+    }
 }
 
 /// RAII guard: fires `on_metrics` exactly once on drop with the final
@@ -716,8 +755,21 @@ where
 
 /// Multi-way merge union. Emits every bucket_id produced by any child,
 /// with the bitwise OR of bitmaps at that bucket. Per-child watermarks
-/// drain eagerly; min/max merged across surviving children emits when
-/// it advances.
+/// drain eagerly; min/max merged across live children emits when it
+/// advances.
+///
+/// Flush-on-error: a budget-exhausted child is an `OR` branch that died,
+/// not a reason to discard its siblings. Such a child is *retired* —
+/// removed from the live set, its final position frozen as a
+/// `resume_ceiling`, its error stashed. The union keeps emitting the
+/// surviving branches' already-fetched buckets UP TO that ceiling, then
+/// propagates the error. Buckets at or below the ceiling are inside the
+/// region every branch jointly scanned, so they resume cleanly; buckets
+/// PAST it are withheld — they sit ahead of the resumable frontier (pinned
+/// at the dead branch's floor) and would be re-scanned, hence
+/// double-delivered, on resume. Without this, a dead branch would discard a
+/// live sibling's first-bucket result and pin the cursor at the request
+/// floor (a livelock).
 pub fn union_n<S>(
     streams: Vec<S>,
     direction: ScanDirection,
@@ -733,34 +785,62 @@ where
             streams.into_iter().map(|s| s.peekable()).collect();
         let mut child_watermarks: Vec<Option<u64>> = vec![None; children.len()];
         let mut last_emitted: Option<u64> = None;
+        // Frozen floor + stashed errors from retired (errored) branches.
+        // `resume_ceiling` caps how far the surviving branches may be
+        // emitted; `pending_errors` propagate once the flush completes.
+        let mut resume_ceiling: Option<u64> = None;
+        let mut pending_errors: Vec<anyhow::Error> = Vec::new();
 
         loop {
             // Drain pending watermarks concurrently to avoid serializing
-            // on the slowest child. Defer errors until AFTER emitting the
-            // merged watermark.
+            // on the slowest child.
             let outcomes = futures::future::join_all(
                 children
                     .iter_mut()
                     .map(|child| drain_pending_watermarks(Pin::new(child))),
             )
             .await;
-            let mut deferred_errors: Vec<anyhow::Error> = Vec::new();
-            for (i, outcome) in outcomes.into_iter().enumerate() {
-                if let Some(p) = outcome.last_watermark {
-                    child_watermarks[i] = Some(p);
-                }
-                if let Some(e) = outcome.error {
-                    deferred_errors.push(e);
+
+            // Apply watermarks; retire any child that errored — freeze its
+            // final position into the resume ceiling and stash its error to
+            // propagate once the survivors have been flushed.
+            let mut live_children = Vec::with_capacity(children.len());
+            let mut live_watermarks = Vec::with_capacity(children.len());
+            for ((child, outcome), prev) in children
+                .into_iter()
+                .zip_eq(outcomes)
+                .zip_eq(child_watermarks)
+            {
+                let wm = outcome.last_watermark.or(prev);
+                match outcome.error {
+                    Some(e) => {
+                        pending_errors.push(e);
+                        if let Some(f) = wm {
+                            resume_ceiling = Some(match resume_ceiling {
+                                None => f,
+                                Some(c) => bound_in_direction(c, f, direction),
+                            });
+                        }
+                    }
+                    None => {
+                        live_children.push(child);
+                        live_watermarks.push(wm);
+                    }
                 }
             }
-            if let Some(merged) = merge_watermarks(&child_watermarks, direction)
+            children = live_children;
+            child_watermarks = live_watermarks;
+
+            if let Some(merged) = merge_with_ceiling(&child_watermarks, resume_ceiling, direction)
                 && frontier_advanced(last_emitted, merged, direction)
             {
                 yield Watermarked::Watermark(merged);
                 last_emitted = Some(merged);
             }
-            if !deferred_errors.is_empty() {
-                Err(MultiError::collapse(deferred_errors))?;
+
+            // No live branch left to emit from.
+            if children.is_empty() {
+                break;
             }
 
             let peeks = peek_buckets(&mut children).await?;
@@ -787,7 +867,7 @@ where
             child_watermarks = surviving_watermarks;
 
             if surviving_peeks.is_empty() {
-                return;
+                break;
             }
             let next_bucket = match direction {
                 ScanDirection::Ascending => *surviving_peeks
@@ -799,6 +879,27 @@ where
                     .max()
                     .expect("non-empty after evicting None peeks"),
             };
+
+            // Resume-ceiling gate: once a branch has died, withhold any
+            // bucket sitting past its frozen floor — on resume from the
+            // ceiling it would be re-scanned and so re-emitted. A bucket's
+            // leading `pre` watermark (recorded per child during the drain)
+            // is its position; the child at `next_bucket` carries the
+            // direction-min/max one.
+            if let Some(ceil) = resume_ceiling {
+                let next_pre = surviving_peeks
+                    .iter()
+                    .position(|&b| b == next_bucket)
+                    .and_then(|i| child_watermarks[i]);
+                let past_ceiling = match (next_pre, direction) {
+                    (Some(p), ScanDirection::Ascending) => p >= ceil,
+                    (Some(p), ScanDirection::Descending) => p <= ceil,
+                    (None, _) => false,
+                };
+                if past_ceiling {
+                    break;
+                }
+            }
 
             let mut acc: Option<RoaringBitmap> = None;
             for (i, child) in children.iter_mut().enumerate() {
@@ -815,6 +916,9 @@ where
             {
                 yield Watermarked::Item((next_bucket, bitmap));
             }
+        }
+        if !pending_errors.is_empty() {
+            Err(MultiError::collapse(pending_errors))?;
         }
     }
 }
@@ -1362,11 +1466,10 @@ mod tests {
         // drop the pre-error watermark under test.
         let all: Vec<Result<Watermarked<u64>>> = stream.collect().await;
 
-        let last_ok = all
-            .iter()
-            .rev()
-            .find_map(|r| r.as_ref().ok())
-            .expect("a frontier watermark must surface before the (otherwise cursorless) error");
+        let last_ok =
+            all.iter().rev().find_map(|r| r.as_ref().ok()).expect(
+                "a frontier watermark must surface before the (otherwise cursorless) error",
+            );
         match last_ok {
             Watermarked::Watermark(p) => assert!(
                 *p > 0,
@@ -1374,6 +1477,89 @@ mod tests {
             ),
             Watermarked::Item(_) => panic!("disjoint intersect must not emit items here"),
         }
+        let err = all
+            .last()
+            .expect("non-empty")
+            .as_ref()
+            .expect_err("scan must terminate with an error");
+        assert!(
+            error_contains::<BitmapScanLimitExceeded>(err).is_some(),
+            "expected BitmapScanLimitExceeded, got {err:?}"
+        );
+    }
+
+    /// Flush-on-error: when a sibling `OR` branch dies, the union flushes a
+    /// surviving branch's already-fetched buckets that lie *below* the dead
+    /// branch's frozen floor before propagating the error. Same shape as
+    /// above, but `c`'s match sits in the FIRST bucket (below `(a AND b)`'s
+    /// death floor), so it is within the jointly-scanned region: its item
+    /// must be DELIVERED and the resume frontier must advance to the dead
+    /// branch's floor — not be pinned at the request floor (the livelock the
+    /// flush exists to prevent). The delivered item stays below the final
+    /// watermark, so resuming from that cursor will not re-emit it.
+    #[tokio::test]
+    async fn flush_on_error_delivers_below_ceiling_sibling_result() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([
+                (
+                    test_key(b"a"),
+                    vec![
+                        (0, vec![1]),
+                        (1, vec![1]),
+                        (2, vec![1]),
+                        (3, vec![1]),
+                        (4, vec![1]),
+                    ],
+                ),
+                (test_key(b"b"), vec![(50, vec![1])]),
+                (test_key(b"c"), vec![(0, vec![7])]),
+            ])),
+        };
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), include(b"b")]).unwrap(),
+            BitmapTerm::new(vec![include(b"c")]).unwrap(),
+        ])
+        .unwrap();
+
+        let stream = eval_bitmap_query_stream(
+            source,
+            query,
+            0..(60 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            3,
+            |_| {},
+        );
+        let all: Vec<Result<Watermarked<u64>>> = stream.collect().await;
+
+        // c's bucket-0 match (member id 7) is delivered despite term1 dying.
+        let items: Vec<u64> = all
+            .iter()
+            .filter_map(|r| match r {
+                Ok(Watermarked::Item(v)) => Some(*v),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(items, vec![7], "c's below-floor match must be delivered");
+
+        // Resume frontier advances to term1's death floor (post of bucket 1),
+        // not stuck at the request floor 0.
+        let last_wm = all
+            .iter()
+            .rev()
+            .find_map(|r| match r {
+                Ok(Watermarked::Watermark(p)) => Some(*p),
+                _ => None,
+            })
+            .expect("a frontier watermark must surface");
+        assert_eq!(last_wm, 2 * BUCKET_SIZE, "frontier must advance past floor");
+        // The delivered item is below the resume cursor, so a resume won't
+        // re-emit it.
+        assert!(
+            items.iter().all(|&i| i < last_wm),
+            "items must be below the resume cursor"
+        );
+
         let err = all
             .last()
             .expect("non-empty")
