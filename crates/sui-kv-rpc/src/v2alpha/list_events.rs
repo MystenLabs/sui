@@ -29,6 +29,7 @@ use tracing::info;
 use crate::PackageResolver;
 use crate::bigtable_client::BigTableClient;
 use crate::operation::QueryContext;
+use crate::pipeline::AbortOnDrop;
 use crate::pipeline::InputOrderEmitter;
 use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
@@ -202,25 +203,36 @@ pub(crate) async fn list_events(
     // concurrent requests for the same uncached package share one BigTable
     // fetch.
     let render_options = options.clone();
+    let render_ctx = ctx.clone();
+    let render_concurrency = ctx.response_render_concurrency();
     let event_stream = tx_ref_stream
         .map(move |item| {
             let resolver = resolver.clone();
             let read_mask = read_mask.clone();
             let options = render_options.clone();
+            let ctx = render_ctx.clone();
             async move {
                 match item? {
                     Watermarked::Item((event_ref, tx)) => {
-                        let rendered = render_event(
-                            event_ref, tx, &read_mask, &resolver, wants_json, &options,
-                        )
-                        .await?;
+                        let render_task = AbortOnDrop::new(tokio::spawn(async move {
+                            let render_started = Instant::now();
+                            let rendered = render_event(
+                                event_ref, tx, &read_mask, &resolver, wants_json, &options,
+                            )
+                            .await?;
+                            ctx.observe_response_render(render_started.elapsed());
+                            Ok::<_, anyhow::Error>(rendered)
+                        }));
+                        let rendered = render_task.await.map_err(|e| {
+                            anyhow::anyhow!("list_events: render task failed: {e}")
+                        })??;
                         Ok::<Watermarked<RenderedEvent>, anyhow::Error>(Watermarked::Item(rendered))
                     }
                     Watermarked::Watermark(p) => Ok(Watermarked::Watermark(p)),
                 }
             }
         })
-        .buffered(request_bigtable_concurrency)
+        .buffered(render_concurrency)
         .boxed();
 
     let event_stream = resolve_watermarks(event_stream, client.event_wm_resolver(direction));

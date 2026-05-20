@@ -5,7 +5,9 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Context;
 use std::task::Poll;
 
 use futures::StreamExt;
@@ -19,6 +21,36 @@ use sui_rpc_api::RpcError;
 // in this module; sui-inverted-index just happens to define the carrier
 // type the bitmap eval already produces.
 pub(crate) use sui_inverted_index::Watermarked;
+
+/// Tokio detaches a `JoinHandle` when dropped. Response streams can be
+/// dropped by client disconnects or request deadlines, so spawned per-item
+/// work should abort with the stream instead of running to completion in the
+/// background.
+pub(crate) struct AbortOnDrop<T> {
+    handle: tokio::task::JoinHandle<T>,
+}
+
+impl<T> AbortOnDrop<T> {
+    pub(crate) fn new(handle: tokio::task::JoinHandle<T>) -> Self {
+        Self { handle }
+    }
+}
+
+impl<T> Future for AbortOnDrop<T> {
+    type Output = Result<T, tokio::task::JoinError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        Pin::new(&mut self.get_mut().handle).poll(cx)
+    }
+}
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
+}
+
+impl<T> Unpin for AbortOnDrop<T> {}
 
 /// Chunk an upstream stream of `Watermarked<I>` and run an async fn over each
 /// chunk of Items, preserving upstream order in the output. Up to

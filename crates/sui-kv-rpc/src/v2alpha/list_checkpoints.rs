@@ -39,6 +39,7 @@ use crate::object_cache::BigTableObjectFetcher;
 use crate::object_cache::ObjectCache;
 use crate::object_cache::ObjectMap;
 use crate::operation::QueryContext;
+use crate::pipeline::AbortOnDrop;
 use crate::pipeline::InputOrderEmitter;
 use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
@@ -76,6 +77,11 @@ type ResolvedCp = (u64, CheckpointData, Vec<TransactionData>, ObjectMap);
 pub(crate) type ListCheckpointsStream =
     BoxStream<'static, Result<ListCheckpointsResponse, RpcError>>;
 
+struct RenderedCheckpoint {
+    cp_sequence_number: u64,
+    checkpoint: Checkpoint,
+}
+
 pub(crate) async fn list_checkpoints(
     ctx: QueryContext,
     request: ListCheckpointsRequest,
@@ -90,7 +96,7 @@ pub(crate) async fn list_checkpoints(
         request.end_checkpoint,
         checkpoint_hi_exclusive,
     )?;
-    let read_mask = {
+    let read_mask = Arc::new({
         let read_mask = request
             .read_mask
             .unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
@@ -100,7 +106,7 @@ pub(crate) async fn list_checkpoints(
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
         FieldMaskTree::from(read_mask)
-    };
+    });
     let options = QueryOptions::from_proto(
         request.options.as_ref(),
         DEFAULT_LIMIT_ITEMS,
@@ -175,22 +181,55 @@ pub(crate) async fn list_checkpoints(
     // directly from CheckpointData via the existing `checkpoint_to_response`
     // (with `checkpoint_bucket = None`, the GCS branch is a no-op).
     if !needs_full {
-        let cp_data_stream = resolve_watermarks(cp_data_stream, client.tx_wm_resolver(direction));
+        let render_ctx = ctx.clone();
+        let render_concurrency = ctx.response_render_concurrency();
+        let rendered_cp_stream = cp_data_stream
+            .map(move |item| {
+                let read_mask = read_mask.clone();
+                let ctx = render_ctx.clone();
+                async move {
+                    match item? {
+                        Watermarked::Item((cp_sequence_number, cp_data)) => {
+                            let render_task = AbortOnDrop::new(tokio::spawn(async move {
+                                let render_started = Instant::now();
+                                let checkpoint = crate::v2::get_checkpoint::checkpoint_to_response(
+                                    cp_data, &read_mask, None,
+                                )
+                                .await?;
+                                ctx.observe_response_render(render_started.elapsed());
+                                Ok::<_, anyhow::Error>(RenderedCheckpoint {
+                                    cp_sequence_number,
+                                    checkpoint,
+                                })
+                            }));
+                            let rendered = render_task.await.map_err(|e| {
+                                anyhow::anyhow!("list_checkpoints: render task failed: {e}")
+                            })??;
+                            Ok::<Watermarked<RenderedCheckpoint>, anyhow::Error>(Watermarked::Item(
+                                rendered,
+                            ))
+                        }
+                        Watermarked::Watermark(position) => Ok(Watermarked::Watermark(position)),
+                    }
+                }
+            })
+            .buffered(render_concurrency)
+            .boxed();
+
+        let rendered_cp_stream =
+            resolve_watermarks(rendered_cp_stream, client.tx_wm_resolver(direction));
         return Ok(async_stream::try_stream! {
-            futures::pin_mut!(cp_data_stream);
+            futures::pin_mut!(rendered_cp_stream);
             let mut emitted = 0usize;
             let mut checkpoint_boundary: Option<u64> = None;
             let mut scan_limit_hit = false;
-            while let Some(item) = cp_data_stream.next().await {
+            while let Some(item) = rendered_cp_stream.next().await {
                 match item {
-                    Ok(ResolvedWatermarked::Item((cp_seq, cp_data))) => {
-                        checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
-                        let wm = item_watermark(&options, cp_seq, checkpoint_boundary);
+                    Ok(ResolvedWatermarked::Item(rendered)) => {
+                        checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, rendered.cp_sequence_number, &options);
+                        let wm = item_watermark(&options, rendered.cp_sequence_number, checkpoint_boundary);
                         emitted += 1;
-                        let message =
-                            crate::v2::get_checkpoint::checkpoint_to_response(cp_data, &read_mask, None)
-                                .await?;
-                        yield response_for(wm, message);
+                        yield response_for(wm, rendered.checkpoint);
                     }
                     Ok(ResolvedWatermarked::Watermark { position: _, cp: raw_cp }) => {
                         // Tx-space → cp-space translation done in the
@@ -311,7 +350,43 @@ pub(crate) async fn list_checkpoints(
                 .boxed()
         };
 
-    let cp_full_stream = resolve_watermarks(cp_full_stream, client.tx_wm_resolver(direction));
+    let render_ctx = ctx.clone();
+    let render_concurrency = ctx.response_render_concurrency();
+    let rendered_cp_stream = cp_full_stream
+        .map(move |item| {
+            let read_mask = read_mask.clone();
+            let ctx = render_ctx.clone();
+            async move {
+                match item? {
+                    Watermarked::Item((cp_sequence_number, cp_data, txs, objects)) => {
+                        let render_task = AbortOnDrop::new(tokio::spawn(async move {
+                            let render_started = Instant::now();
+                            let checkpoint = render_full_checkpoint(
+                                (cp_sequence_number, cp_data, txs, objects),
+                                &read_mask,
+                            )?;
+                            ctx.observe_response_render(render_started.elapsed());
+                            Ok::<_, anyhow::Error>(RenderedCheckpoint {
+                                cp_sequence_number,
+                                checkpoint,
+                            })
+                        }));
+                        let rendered = render_task.await.map_err(|e| {
+                            anyhow::anyhow!("list_checkpoints: render task failed: {e}")
+                        })??;
+                        Ok::<Watermarked<RenderedCheckpoint>, anyhow::Error>(Watermarked::Item(
+                            rendered,
+                        ))
+                    }
+                    Watermarked::Watermark(position) => Ok(Watermarked::Watermark(position)),
+                }
+            }
+        })
+        .buffered(render_concurrency)
+        .boxed();
+
+    let rendered_cp_stream =
+        resolve_watermarks(rendered_cp_stream, client.tx_wm_resolver(direction));
 
     // Stage E: sync render — build full_checkpoint_content::Checkpoint and
     // merge into the proto Checkpoint (CPU-only, no further IO).
@@ -319,22 +394,17 @@ pub(crate) async fn list_checkpoints(
         // Hold the cache for the lifetime of the response stream so in-flight
         // object dispatches are aborted if the consumer drops the stream.
         let _object_cache = object_cache;
-        futures::pin_mut!(cp_full_stream);
+        futures::pin_mut!(rendered_cp_stream);
         let mut emitted = 0usize;
         let mut checkpoint_boundary: Option<u64> = None;
         let mut scan_limit_hit = false;
-        while let Some(item) = cp_full_stream.next().await {
+        while let Some(item) = rendered_cp_stream.next().await {
             match item {
-                Ok(ResolvedWatermarked::Item((cp_seq, cp_data, txs, objects))) => {
-                    checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
-                    let wm = item_watermark(&options, cp_seq, checkpoint_boundary);
-                    let response = render_full_checkpoint(
-                        (cp_seq, cp_data, txs, objects),
-                        &read_mask,
-                        wm,
-                    )?;
+                Ok(ResolvedWatermarked::Item(rendered)) => {
+                    checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, rendered.cp_sequence_number, &options);
+                    let wm = item_watermark(&options, rendered.cp_sequence_number, checkpoint_boundary);
                     emitted += 1;
-                    yield response;
+                    yield response_for(wm, rendered.checkpoint);
                 }
                 Ok(ResolvedWatermarked::Watermark { position: _, cp: raw_cp }) => {
                     // See light-path arm — same clamp + boundary logic.
@@ -668,8 +738,7 @@ async fn fetch_transactions_for_cps(
 fn render_full_checkpoint(
     item: ResolvedCp,
     read_mask: &FieldMaskTree,
-    watermark: Watermark,
-) -> Result<ListCheckpointsResponse, RpcError> {
+) -> Result<Checkpoint, RpcError> {
     let (cp_seq, cp_data, txs, objects) = item;
 
     let summary = cp_data.summary.ok_or_else(|| {
@@ -731,7 +800,7 @@ fn render_full_checkpoint(
     let mut message = Checkpoint::default();
     message.merge(&full_checkpoint, read_mask);
 
-    Ok(response_for(watermark, message))
+    Ok(message)
 }
 
 fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {

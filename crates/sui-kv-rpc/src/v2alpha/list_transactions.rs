@@ -25,6 +25,7 @@ use crate::object_cache::BigTableObjectFetcher;
 use crate::object_cache::ObjectCache;
 use crate::object_cache::ObjectMap;
 use crate::operation::QueryContext;
+use crate::pipeline::AbortOnDrop;
 use crate::pipeline::InputOrderEmitter;
 use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
@@ -59,6 +60,13 @@ pub(crate) type ListTransactionsStream =
     BoxStream<'static, Result<ListTransactionsResponse, RpcError>>;
 type TransactionWithObjectsStreamItem = (u64, u32, TransactionData, ObjectMap);
 
+struct RenderedTransaction {
+    tx_sequence_number: u64,
+    tx_offset: u32,
+    checkpoint_number: u64,
+    transaction: ExecutedTransaction,
+}
+
 pub(crate) async fn list_transactions(
     ctx: QueryContext,
     request: ListTransactionsRequest,
@@ -74,7 +82,7 @@ pub(crate) async fn list_transactions(
         request.end_checkpoint,
         checkpoint_hi_exclusive,
     )?;
-    let read_mask = validate_read_mask(request.read_mask)?;
+    let read_mask = Arc::new(validate_read_mask(request.read_mask)?);
     let options = QueryOptions::from_proto(
         request.options.as_ref(),
         DEFAULT_LIMIT_ITEMS,
@@ -259,26 +267,61 @@ pub(crate) async fn list_transactions(
             .boxed()
     };
 
-    let txn_with_objects_stream =
-        resolve_watermarks(txn_with_objects_stream, client.tx_wm_resolver(direction));
+    let render_ctx = ctx.clone();
+    let render_concurrency = ctx.response_render_concurrency();
+    let rendered_txn_stream = txn_with_objects_stream
+        .map(move |item| {
+            let read_mask = read_mask.clone();
+            let resolver = resolver.clone();
+            let ctx = render_ctx.clone();
+            async move {
+                match item? {
+                    Watermarked::Item((tx_sequence_number, tx_offset, tx_data, objects)) => {
+                        let checkpoint_number = tx_data.checkpoint_number;
+                        let render_task = AbortOnDrop::new(tokio::spawn(async move {
+                            let render_started = Instant::now();
+                            let transaction =
+                                transaction_to_response(tx_data, &read_mask, &objects, &resolver)
+                                    .await?;
+                            ctx.observe_response_render(render_started.elapsed());
+                            Ok::<_, anyhow::Error>(RenderedTransaction {
+                                tx_sequence_number,
+                                tx_offset,
+                                checkpoint_number,
+                                transaction,
+                            })
+                        }));
+                        let rendered = render_task.await.map_err(|e| {
+                            anyhow::anyhow!("list_transactions: render task failed: {e}")
+                        })??;
+                        Ok::<Watermarked<RenderedTransaction>, anyhow::Error>(Watermarked::Item(
+                            rendered,
+                        ))
+                    }
+                    Watermarked::Watermark(position) => Ok(Watermarked::Watermark(position)),
+                }
+            }
+        })
+        .buffered(render_concurrency)
+        .boxed();
+
+    let rendered_txn_stream =
+        resolve_watermarks(rendered_txn_stream, client.tx_wm_resolver(direction));
 
     Ok(async_stream::try_stream! {
-        futures::pin_mut!(txn_with_objects_stream);
+        futures::pin_mut!(rendered_txn_stream);
 
         let mut emitted = 0usize;
         let mut checkpoint_boundary: Option<u64> = None;
         let mut scan_limit_hit = false;
-        while let Some(item) = txn_with_objects_stream.next().await {
+        while let Some(item) = rendered_txn_stream.next().await {
             match item {
-                Ok(ResolvedWatermarked::Item((tx_seq, tx_offset, tx_data, objects))) => {
-                    checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, tx_data.checkpoint_number, &options);
-                    let wm = item_watermark(&options, tx_data.checkpoint_number, tx_seq, checkpoint_boundary);
-                    let render_started = Instant::now();
-                    let executed = transaction_to_response(tx_data, &read_mask, &objects, &resolver).await?;
-                    ctx.observe_response_render(render_started.elapsed());
+                Ok(ResolvedWatermarked::Item(rendered)) => {
+                    checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, rendered.checkpoint_number, &options);
+                    let wm = item_watermark(&options, rendered.checkpoint_number, rendered.tx_sequence_number, checkpoint_boundary);
                     emitted += 1;
                     let yield_started = Instant::now();
-                    yield transaction_item_response(wm, executed, tx_offset);
+                    yield transaction_item_response(wm, rendered.transaction, rendered.tx_offset);
                     ctx.observe_stream_item_yield_wait(yield_started.elapsed());
                 }
                 Ok(ResolvedWatermarked::Watermark { position, cp }) => {

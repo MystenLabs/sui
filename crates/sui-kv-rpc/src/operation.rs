@@ -82,6 +82,12 @@ impl QueryContext {
         self.limits.request_bigtable_concurrency
     }
 
+    pub(crate) fn response_render_concurrency(&self) -> usize {
+        std::thread::available_parallelism()
+            .map(usize::from)
+            .unwrap_or(4)
+    }
+
     /// Per-request evaluated-bucket budget for `spec`. Handlers pass this
     /// into `eval_bitmap_query_stream`, which constructs a
     /// `BitmapScanBudget` internally and reports the resulting
