@@ -52,6 +52,7 @@ use crate::query_options::QueryOptions;
 use crate::query_options::QueryType;
 use crate::query_options::ResolvedRange;
 use crate::v2::get_checkpoint::checkpoint_columns;
+use crate::v2::get_checkpoint::checkpoint_to_response_from_data;
 use crate::v2::get_transaction::compute_object_keys;
 use crate::v2::get_transaction::transaction_columns;
 use sui_inverted_index::BitmapScanLimitExceeded;
@@ -183,38 +184,12 @@ pub(crate) async fn list_checkpoints(
     if !needs_full {
         let render_ctx = ctx.clone();
         let render_concurrency = ctx.response_render_concurrency();
-        let rendered_cp_stream = cp_data_stream
-            .map(move |item| {
+        let rendered_cp_stream =
+            pipelined_chunks(cp_data_stream, 1, render_concurrency, move |items| {
                 let read_mask = read_mask.clone();
                 let ctx = render_ctx.clone();
-                async move {
-                    match item? {
-                        Watermarked::Item((cp_sequence_number, cp_data)) => {
-                            let render_task = AbortOnDrop::new(tokio::spawn(async move {
-                                let render_started = Instant::now();
-                                let checkpoint = crate::v2::get_checkpoint::checkpoint_to_response(
-                                    cp_data, &read_mask, None,
-                                )
-                                .await?;
-                                ctx.observe_response_render(render_started.elapsed());
-                                Ok::<_, anyhow::Error>(RenderedCheckpoint {
-                                    cp_sequence_number,
-                                    checkpoint,
-                                })
-                            }));
-                            let rendered = render_task.await.map_err(|e| {
-                                anyhow::anyhow!("list_checkpoints: render task failed: {e}")
-                            })??;
-                            Ok::<Watermarked<RenderedCheckpoint>, anyhow::Error>(Watermarked::Item(
-                                rendered,
-                            ))
-                        }
-                        Watermarked::Watermark(position) => Ok(Watermarked::Watermark(position)),
-                    }
-                }
-            })
-            .buffered(render_concurrency)
-            .boxed();
+                render_checkpoint_data(items, read_mask, ctx)
+            });
 
         let rendered_cp_stream =
             resolve_watermarks(rendered_cp_stream, client.tx_wm_resolver(direction));
@@ -352,38 +327,12 @@ pub(crate) async fn list_checkpoints(
 
     let render_ctx = ctx.clone();
     let render_concurrency = ctx.response_render_concurrency();
-    let rendered_cp_stream = cp_full_stream
-        .map(move |item| {
+    let rendered_cp_stream =
+        pipelined_chunks(cp_full_stream, 1, render_concurrency, move |items| {
             let read_mask = read_mask.clone();
             let ctx = render_ctx.clone();
-            async move {
-                match item? {
-                    Watermarked::Item((cp_sequence_number, cp_data, txs, objects)) => {
-                        let render_task = AbortOnDrop::new(tokio::spawn(async move {
-                            let render_started = Instant::now();
-                            let checkpoint = render_full_checkpoint(
-                                (cp_sequence_number, cp_data, txs, objects),
-                                &read_mask,
-                            )?;
-                            ctx.observe_response_render(render_started.elapsed());
-                            Ok::<_, anyhow::Error>(RenderedCheckpoint {
-                                cp_sequence_number,
-                                checkpoint,
-                            })
-                        }));
-                        let rendered = render_task.await.map_err(|e| {
-                            anyhow::anyhow!("list_checkpoints: render task failed: {e}")
-                        })??;
-                        Ok::<Watermarked<RenderedCheckpoint>, anyhow::Error>(Watermarked::Item(
-                            rendered,
-                        ))
-                    }
-                    Watermarked::Watermark(position) => Ok(Watermarked::Watermark(position)),
-                }
-            }
-        })
-        .buffered(render_concurrency)
-        .boxed();
+            render_full_checkpoints(items, read_mask, ctx)
+        });
 
     let rendered_cp_stream =
         resolve_watermarks(rendered_cp_stream, client.tx_wm_resolver(direction));
@@ -733,6 +682,68 @@ async fn fetch_transactions_for_cps(
         }
     }
     .boxed())
+}
+
+async fn render_checkpoint_data(
+    items: Vec<(u64, CheckpointData)>,
+    read_mask: Arc<FieldMaskTree>,
+    ctx: QueryContext,
+) -> Result<BoxStream<'static, Result<RenderedCheckpoint, anyhow::Error>>, anyhow::Error> {
+    let rows =
+        futures::future::try_join_all(items.into_iter().map(|(cp_sequence_number, cp_data)| {
+            let read_mask = read_mask.clone();
+            let ctx = ctx.clone();
+            async move {
+                let render_task = AbortOnDrop::new(tokio::task::spawn_blocking(move || {
+                    let render_started = Instant::now();
+                    let checkpoint = checkpoint_to_response_from_data(cp_data, &read_mask)?;
+                    ctx.observe_response_render(render_started.elapsed());
+                    Ok::<_, anyhow::Error>(RenderedCheckpoint {
+                        cp_sequence_number,
+                        checkpoint,
+                    })
+                }));
+                render_task
+                    .await
+                    .map_err(|e| anyhow::anyhow!("list_checkpoints: render task failed: {e}"))?
+            }
+        }))
+        .await?;
+
+    Ok(futures::stream::iter(rows.into_iter().map(Ok)).boxed())
+}
+
+async fn render_full_checkpoints(
+    items: Vec<ResolvedCp>,
+    read_mask: Arc<FieldMaskTree>,
+    ctx: QueryContext,
+) -> Result<BoxStream<'static, Result<RenderedCheckpoint, anyhow::Error>>, anyhow::Error> {
+    let rows = futures::future::try_join_all(items.into_iter().map(
+        |(cp_sequence_number, cp_data, txs, objects)| {
+            let read_mask = read_mask.clone();
+            let ctx = ctx.clone();
+            async move {
+                let render_task = AbortOnDrop::new(tokio::task::spawn_blocking(move || {
+                    let render_started = Instant::now();
+                    let checkpoint = render_full_checkpoint(
+                        (cp_sequence_number, cp_data, txs, objects),
+                        &read_mask,
+                    )?;
+                    ctx.observe_response_render(render_started.elapsed());
+                    Ok::<_, anyhow::Error>(RenderedCheckpoint {
+                        cp_sequence_number,
+                        checkpoint,
+                    })
+                }));
+                render_task
+                    .await
+                    .map_err(|e| anyhow::anyhow!("list_checkpoints: render task failed: {e}"))?
+            }
+        },
+    ))
+    .await?;
+
+    Ok(futures::stream::iter(rows.into_iter().map(Ok)).boxed())
 }
 
 fn render_full_checkpoint(
