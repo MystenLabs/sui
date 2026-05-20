@@ -147,6 +147,66 @@ The Sui repository includes a guide on running a full node through [Docker Compo
 This alone is not suitable for a production environment, but you can use it to get a full node up and running quickly on a virtual machine or local machine for development purposes.
 See [Running a full node](#running-a-full-node) for instructions relevant to production use cases.
 
+Run the commands in this section from the same folder. Replace `branch-name` in URLs with the branch that matches your target network, such as `mainnet`, `testnet`, or `devnet`.
+
+1. Install [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/). Docker Desktop includes Docker Compose.
+
+1. On Linux, install the build prerequisites:
+
+    ```sh
+    $ apt update \
+    && apt install -y --no-install-recommends \
+    tzdata \
+    ca-certificates \
+    build-essential \
+    pkg-config \
+    cmake
+    ```
+
+1. Download the `docker-compose.yaml` file:
+
+    ```sh
+    $ curl -fLO https://raw.githubusercontent.com/MystenLabs/sui/branch-name/docker/fullnode/docker-compose.yaml
+    ```
+
+1. Download the `fullnode-template.yaml` file:
+
+    ```sh
+    $ curl -fLO https://github.com/MystenLabs/sui/raw/branch-name/crates/sui-config/data/fullnode-template.yaml
+    ```
+
+1. Download the `genesis.blob` file for your target network. Replace `<network>` with `mainnet`, `testnet`, or `devnet`:
+
+    ```sh
+    $ curl -fLO https://github.com/MystenLabs/sui-genesis/raw/main/<network>/genesis.blob
+    ```
+
+1. Start the full node in detached mode:
+
+    ```sh
+    $ docker-compose up -d
+    ```
+
+### Building from source
+
+You can also build `sui-node` directly from the Sui repository using [Cargo](https://doc.rust-lang.org/cargo/), the Rust package manager.
+
+1. Install the prerequisites listed in [Software requirements](#software-requirements).
+
+1. Clone the Sui repository, replacing `branch-name` with the branch for your target network:
+
+    ```sh
+    $ git clone https://github.com/MystenLabs/sui.git -b branch-name
+    $ cd sui
+    ```
+
+1. Follow [Setting up a full node](#setting-up-a-full-node) to prepare `fullnode.yaml` and download the genesis blob.
+
+1. Build and run `sui-node` from source:
+
+    ```sh
+    $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
+    ```
 
 ### Setting up a full node
 
