@@ -6,19 +6,19 @@ info:
   lint: false
 ---
 note[I15008]: macro frame info
-   ┌─ tests/move_2024/macro_frames/eliminate_local_nested_color.move:19:9
+   ┌─ tests/move_2024/macro_frames/eliminate_local_nested_color.move:16:9
    │
-10 │         let v = $v;
+ 7 │         let v = $v;
    │                 -- [2] Argument
    ·
-15 │         m!(1, $g)
+12 │         m!(1, $g)
    │         --------- [1] MacroBody(0x41::m::m)
    ·
-19 │         outer!(|x| x)
+16 │         outer!(|x| x)
    │         ^^^^^^^^^^^^^ [0] MacroBody(0x41::m::outer)
    │
    = Frame transitions (test):
-       15: `m!(1, $g)`
+       12: `m!(1, $g)`
            [] -> [0:MacroBody(outer), 1:MacroBody(m), 2:Argument]
-       19: `outer!(|x| x)`
+       16: `outer!(|x| x)`
            [0:MacroBody(outer), 1:MacroBody(m), 2:Argument] -> []

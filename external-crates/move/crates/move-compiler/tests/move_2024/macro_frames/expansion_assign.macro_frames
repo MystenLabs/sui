@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests that bind_value_in_block uses the value expression's
 // color for the Assign statement. When a macro is called
 // inside a lambda's if-branch, tail() stamps MacroBody color

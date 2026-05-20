@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests three-level argument forwarding — deeper parent chains.
 module A::m {
     macro fun a($x: u64): u64 {

@@ -6,20 +6,20 @@ info:
   lint: false
 ---
 note[I15008]: macro frame info
-   ┌─ tests/move_2024/macro_frames/argument_frame_transition.move:16:9
+   ┌─ tests/move_2024/macro_frames/argument_frame_transition.move:13:9
    │
-12 │         base + $x
+ 9 │         base + $x
    │                -- [1] Argument
    ·
-16 │         process!(p + 1)
+13 │         process!(p + 1)
    │         ^^^^^^^^^^^^^^^ [0] MacroBody(0x41::m::process)
    │
    = Frame transitions (test):
-       11: `let base = identity(1);`
+       8: `let base = identity(1);`
            [] -> [0:MacroBody(process)]
-       16: `process!(p + 1)`
+       13: `process!(p + 1)`
            [0:MacroBody(process)] -> [0:MacroBody(process), 1:Argument]
-       12: `base + $x`
+       9: `base + $x`
            [0:MacroBody(process), 1:Argument] -> [0:MacroBody(process)]
-       16: `process!(p + 1)`
+       13: `process!(p + 1)`
            [0:MacroBody(process)] -> []

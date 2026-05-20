@@ -6,24 +6,24 @@ info:
   lint: false
 ---
 note[I15008]: macro frame info
-   ┌─ tests/move_2024/macro_frames/deep_forwarding.move:19:9
+   ┌─ tests/move_2024/macro_frames/deep_forwarding.move:16:9
    │
-11 │         a!($x)
+ 8 │         a!($x)
    │         ------ [3] MacroBody(0x41::m::a)
    ·
-15 │         b!($x)
+12 │         b!($x)
    │         ------
    │         │  │
    │         │  [1] Argument
    │         [2] MacroBody(0x41::m::b)
    ·
-19 │         c!(v)
+16 │         c!(v)
    │         ^^^^^ [0] MacroBody(0x41::m::c)
    │
    = Frame transitions (test):
-       19: `c!(v)`
+       16: `c!(v)`
            [] -> [0:MacroBody(c), 1:Argument]
-       7: `$x + 1`
+       4: `$x + 1`
            [0:MacroBody(c), 1:Argument] -> [0:MacroBody(c), 2:MacroBody(b), 3:MacroBody(a)]
-       19: `c!(v)`
+       16: `c!(v)`
            [0:MacroBody(c), 2:MacroBody(b), 3:MacroBody(a)] -> []

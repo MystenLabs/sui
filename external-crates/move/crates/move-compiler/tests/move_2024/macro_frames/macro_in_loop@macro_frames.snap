@@ -6,18 +6,18 @@ info:
   lint: false
 ---
 note[I15008]: macro frame info
-   ┌─ tests/move_2024/macro_frames/macro_in_loop.move:13:17
+   ┌─ tests/move_2024/macro_frames/macro_in_loop.move:10:17
    │
- 7 │         $x + 1
+ 4 │         $x + 1
    │         -- [1] Argument
    ·
-13 │             i = inc!(i);
+10 │             i = inc!(i);
    │                 ^^^^^^^ [0] MacroBody(0x41::m::inc)
    │
    = Frame transitions (test):
-       13: `i = inc!(i);`
+       10: `i = inc!(i);`
            [] -> [0:MacroBody(inc), 1:Argument]
-       7: `$x + 1`
+       4: `$x + 1`
            [0:MacroBody(inc), 1:Argument] -> [0:MacroBody(inc)]
-       13: `i = inc!(i);`
+       10: `i = inc!(i);`
            [0:MacroBody(inc)] -> []

@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests a branch where only one arm enters a macro expansion. This keeps the
 // control-flow shape small while exercising transitions between macro-colored
 // bytecode and user bytecode in the same expression.

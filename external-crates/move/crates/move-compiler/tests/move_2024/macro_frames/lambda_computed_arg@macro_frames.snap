@@ -6,29 +6,29 @@ info:
   lint: false
 ---
 note[I15008]: macro frame info
-   ┌─ tests/move_2024/macro_frames/lambda_computed_arg.move:20:17
+   ┌─ tests/move_2024/macro_frames/lambda_computed_arg.move:17:17
    │
-10 │         $f(ret)
+ 7 │         $f(ret)
    │         ------- [1] Lambda
    ·
-16 │         $f(ret + ret)
+13 │         $f(ret + ret)
    │         ------------- [3] Lambda
    ·
-20 │         let a = apply_simple!(|x| x + p);
+17 │         let a = apply_simple!(|x| x + p);
    │                 ^^^^^^^^^^^^^^^^^^^^^^^^ [0] MacroBody(0x41::m::apply_simple)
-21 │         a + apply_computed!(|x| x + p)
+18 │         a + apply_computed!(|x| x + p)
    │             -------------------------- [2] MacroBody(0x41::m::apply_computed)
    │
    = Frame transitions (test):
-       9: `let ret = 42;`
+       6: `let ret = 42;`
            [] -> [0:MacroBody(apply_simple)]
-       20: `let a = apply_simple!(|x| x + p);`
+       17: `let a = apply_simple!(|x| x + p);`
            [0:MacroBody(apply_simple)] -> [0:MacroBody(apply_simple), 1:Lambda]
-       21: `a + apply_computed!(|x| x + p)`
+       18: `a + apply_computed!(|x| x + p)`
            [0:MacroBody(apply_simple), 1:Lambda] -> []
-       15: `let ret = 42;`
+       12: `let ret = 42;`
            [] -> [2:MacroBody(apply_computed)]
-       21: `a + apply_computed!(|x| x + p)`
+       18: `a + apply_computed!(|x| x + p)`
            [2:MacroBody(apply_computed)] -> [2:MacroBody(apply_computed), 3:Lambda]
-       21: `a + apply_computed!(|x| x + p)`
+       18: `a + apply_computed!(|x| x + p)`
            [2:MacroBody(apply_computed), 3:Lambda] -> []

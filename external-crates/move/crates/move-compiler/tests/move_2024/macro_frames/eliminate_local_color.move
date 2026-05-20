@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Minimal test for the color guard in eliminate_locals (cfgir/optimize).
 //
 // `let v = 1` lives in MacroBody(m). The lambda invocation `$f(v)` passes

@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests that instructions inside a user-written named block ('a) that
 // appears inside a macro body are correctly attributed to the macro's
 // expansion frame (MacroBody), and that the binder StLoc generated to

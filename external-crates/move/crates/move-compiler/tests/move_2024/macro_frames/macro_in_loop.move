@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests macro call inside a while-loop body.
 module A::m {
     macro fun inc($x: u64): u64 {

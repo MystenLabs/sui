@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests that id!(x) on line 22, called inside a lambda's if-branch,
 // appears as MacroBody(id) in frame transitions. The if/else on line 21
 // produces a compiler-generated assignment to bind the result. That

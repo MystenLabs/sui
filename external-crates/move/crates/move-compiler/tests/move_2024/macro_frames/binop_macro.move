@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests two things about macro frame transitions for `add1!(x) + p`
 // called inside a lambda:
 // 1. Parent chain: MacroBody(add1) should be nested under

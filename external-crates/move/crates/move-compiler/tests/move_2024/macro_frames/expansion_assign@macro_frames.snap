@@ -6,36 +6,36 @@ info:
   lint: false
 ---
 note[I15008]: macro frame info
-   ┌─ tests/move_2024/macro_frames/expansion_assign.move:20:9
+   ┌─ tests/move_2024/macro_frames/expansion_assign.move:17:9
    │  
-11 │           $x
+ 8 │           $x
    │           -- [3] Argument
    ·  
-16 │           $f(arg)
+13 │           $f(arg)
    │           ------- [1] Lambda
    ·  
-20 │ ╭         apply!(|x|
-21 │ │             if (x > p) {
-22 │ │                 id!(x)
+17 │ ╭         apply!(|x|
+18 │ │             if (x > p) {
+19 │ │                 id!(x)
    │ │                 ------ [2] MacroBody(0x41::m::id)
-23 │ │             } else {
-24 │ │                 0
-25 │ │             }
-26 │ │         )
+20 │ │             } else {
+21 │ │                 0
+22 │ │             }
+23 │ │         )
    │ ╰─────────^ [0] MacroBody(0x41::m::apply)
    │  
    = Frame transitions (test):
-       15: `let arg = 1;`
+       12: `let arg = 1;`
            [] -> [0:MacroBody(apply)]
-       20: `apply!(|x|`
+       17: `apply!(|x|`
            [0:MacroBody(apply)] -> [0:MacroBody(apply), 1:Lambda]
-       22: `id!(x)`
+       19: `id!(x)`
            [0:MacroBody(apply), 1:Lambda] -> [0:MacroBody(apply), 1:Lambda, 2:MacroBody(id), 3:Argument]
-       21: `if (x > p) {`
+       18: `if (x > p) {`
            [0:MacroBody(apply), 1:Lambda, 2:MacroBody(id), 3:Argument] -> [0:MacroBody(apply), 1:Lambda]
-       24: `0`
+       21: `0`
            [0:MacroBody(apply), 1:Lambda] -> []
-       21: `if (x > p) {`
+       18: `if (x > p) {`
            [] -> [0:MacroBody(apply), 1:Lambda]
-       20: `apply!(|x|`
+       17: `apply!(|x|`
            [0:MacroBody(apply), 1:Lambda] -> []

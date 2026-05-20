@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests lambda frame transitions when the lambda receives a computed expression
 module A::m {
 

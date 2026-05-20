@@ -6,21 +6,21 @@ info:
   lint: false
 ---
 note[I15008]: macro frame info
-   ┌─ tests/move_2024/macro_frames/binop_macro.move:21:9
+   ┌─ tests/move_2024/macro_frames/binop_macro.move:18:9
    │  
-17 │           $f(arg)
+14 │           $f(arg)
    │           ------- [1] Lambda
    ·  
-21 │ ╭         apply!(|x|
-22 │ │             add1!(x) + p
+18 │ ╭         apply!(|x|
+19 │ │             add1!(x) + p
    │ │             -------- [2] MacroBody(0x41::m::add1)
-23 │ │         )
+20 │ │         )
    │ ╰─────────^ [0] MacroBody(0x41::m::apply)
    │  
    = Frame transitions (test):
-       12: `$x + 1`
+       9: `$x + 1`
            [] -> [0:MacroBody(apply), 1:Lambda, 2:MacroBody(add1)]
-       22: `add1!(x) + p`
+       19: `add1!(x) + p`
            [0:MacroBody(apply), 1:Lambda, 2:MacroBody(add1)] -> [0:MacroBody(apply), 1:Lambda]
-       21: `apply!(|x|`
+       18: `apply!(|x|`
            [0:MacroBody(apply), 1:Lambda] -> []

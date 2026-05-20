@@ -5,57 +5,54 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-source 0x..aefdd:
-   1 | // Copyright (c) Mysten Labs, Inc.
-   2 | // SPDX-License-Identifier: Apache-2.0
-   3 | 
-   4 | // Tests a branch where only one arm enters a macro expansion. This keeps the
-   5 | // control-flow shape small while exercising transitions between macro-colored
-   6 | // bytecode and user bytecode in the same expression.
-   7 | module A::m {
-   8 |     macro fun id($x: u64): u64 {
-   9 |         $x
-  10 |     }
-  11 | 
-  12 |     public fun test(b: bool, v: u64): u64 {
-  13 |         if (b) {
-  14 |             id!(v)
-  15 |         } else {
-  16 |             v + 1
-  17 |         }
-  18 |     }
-  19 | }
+source 0x..af36c:
+   1 | // Tests a branch where only one arm enters a macro expansion. This keeps the
+   2 | // control-flow shape small while exercising transitions between macro-colored
+   3 | // bytecode and user bytecode in the same expression.
+   4 | module A::m {
+   5 |     macro fun id($x: u64): u64 {
+   6 |         $x
+   7 |     }
+   8 | 
+   9 |     public fun test(b: bool, v: u64): u64 {
+  10 |         if (b) {
+  11 |             id!(v)
+  12 |         } else {
+  13 |             v + 1
+  14 |         }
+  15 |     }
+  16 | }
 
 module 41::m
 
 function test:
-  location: 12:5-18:6 `public fun test(b: bool, v: u64): u64 { ...`
-  definition: 12:16-12:20 `test`
+  location: 9:5-15:6 `public fun test(b: bool, v: u64): u64 { ...`
+  definition: 9:16-9:20 `test`
   parameters:
-    0 b#0#0: 12:21-12:22 `b`
-    1 v#0#0: 12:30-12:31 `v`
+    0 b#0#0: 9:21-9:22 `b`
+    1 v#0#0: 9:30-9:31 `v`
   returns:
-    0: 12:39-12:42 `u64`
+    0: 9:39-9:42 `u64`
   locals:
-    0 %#2: 13:9-17:10 `if (b) { ...`
+    0 %#2: 10:9-14:10 `if (b) { ...`
   code_map:
-    0: 13:13-13:14 `b`
-    1: 13:9-17:10 `if (b) { ...`
-    2: 14:17-14:18 `v`
-    3: 13:9-17:10 `if (b) { ...`
-    5: 16:13-16:14 `v`
-    6: 16:17-16:18 `1`
-    7: 16:15-16:16 `+`
-    8: 13:9-17:10 `if (b) { ...`
+    0: 10:13-10:14 `b`
+    1: 10:9-14:10 `if (b) { ...`
+    2: 11:17-11:18 `v`
+    3: 10:9-14:10 `if (b) { ...`
+    5: 13:13-13:14 `v`
+    6: 13:17-13:18 `1`
+    7: 13:15-13:16 `+`
+    8: 10:9-14:10 `if (b) { ...`
   macro_frame_info:
     [0] MacroBody(41::m::id)
         parent: -
-        source: 8:5-10:6 `macro fun id($x: u64): u64 { ...`
-        call: 14:13-14:19 `id!(v)`
+        source: 5:5-7:6 `macro fun id($x: u64): u64 { ...`
+        call: 11:13-11:19 `id!(v)`
     [1] Argument
         parent: 0
-        source: 14:17-14:18 `v`
-        call: 9:9-9:11 `$x`
+        source: 11:17-11:18 `v`
+        call: 6:9-6:11 `$x`
   macro_color_map:
     0 -> -
     2 -> 1

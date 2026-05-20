@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 // Tests that argument evaluation frames appear in frame transitions.
 // The argument `p + 1` is a multi-bytecode expression that should be
 // colored with the Argument expansion color.

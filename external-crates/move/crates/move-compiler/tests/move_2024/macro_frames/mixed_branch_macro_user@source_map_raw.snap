@@ -7,27 +7,27 @@ info:
 ---
 {
   "constant_map": {},
-  "definition_location": {"file_hash": "0x..aefdd", "start": 293, "end": 297},
+  "definition_location": {"file_hash": "0x..af36c", "start": 218, "end": 222},
   "enum_map": {},
   "from_file_path": null,
   "function_map": {
     "0": {
       "code_map": {
-        "0": {"file_hash": "0x..aefdd", "start": 407, "end": 408},
-        "1": {"file_hash": "0x..aefdd", "start": 403, "end": 475},
-        "2": {"file_hash": "0x..aefdd", "start": 428, "end": 429},
-        "3": {"file_hash": "0x..aefdd", "start": 403, "end": 475},
-        "5": {"file_hash": "0x..aefdd", "start": 460, "end": 461},
-        "6": {"file_hash": "0x..aefdd", "start": 464, "end": 465},
-        "7": {"file_hash": "0x..aefdd", "start": 462, "end": 463},
-        "8": {"file_hash": "0x..aefdd", "start": 403, "end": 475}
+        "0": {"file_hash": "0x..af36c", "start": 332, "end": 333},
+        "1": {"file_hash": "0x..af36c", "start": 328, "end": 400},
+        "2": {"file_hash": "0x..af36c", "start": 353, "end": 354},
+        "3": {"file_hash": "0x..af36c", "start": 328, "end": 400},
+        "5": {"file_hash": "0x..af36c", "start": 385, "end": 386},
+        "6": {"file_hash": "0x..af36c", "start": 389, "end": 390},
+        "7": {"file_hash": "0x..af36c", "start": 387, "end": 388},
+        "8": {"file_hash": "0x..af36c", "start": 328, "end": 400}
       },
-      "definition_location": {"file_hash": "0x..aefdd", "start": 366, "end": 370},
+      "definition_location": {"file_hash": "0x..af36c", "start": 291, "end": 295},
       "is_native": false,
       "locals": [
-        ["%#2", {"file_hash": "0x..aefdd", "start": 403, "end": 475}]
+        ["%#2", {"file_hash": "0x..af36c", "start": 328, "end": 400}]
       ],
-      "location": {"file_hash": "0x..aefdd", "start": 355, "end": 481},
+      "location": {"file_hash": "0x..af36c", "start": 280, "end": 406},
       "macro_color_map": [
         [0, null],
         [2, 1],
@@ -35,7 +35,7 @@ info:
       ],
       "macro_frame_info": [
         {
-          "call_loc": {"file_hash": "0x..aefdd", "start": 424, "end": 430},
+          "call_loc": {"file_hash": "0x..af36c", "start": 349, "end": 355},
           "kind": {
             "MacroBody": {
               "function_name": "id",
@@ -44,22 +44,22 @@ info:
             }
           },
           "parent_index": null,
-          "source_loc": {"file_hash": "0x..aefdd", "start": 304, "end": 349}
+          "source_loc": {"file_hash": "0x..af36c", "start": 229, "end": 274}
         },
         {
-          "call_loc": {"file_hash": "0x..aefdd", "start": 341, "end": 343},
+          "call_loc": {"file_hash": "0x..af36c", "start": 266, "end": 268},
           "kind": "Argument",
           "parent_index": 0,
-          "source_loc": {"file_hash": "0x..aefdd", "start": 428, "end": 429}
+          "source_loc": {"file_hash": "0x..af36c", "start": 353, "end": 354}
         }
       ],
       "nops": {},
       "parameters": [
-        ["b#0#0", {"file_hash": "0x..aefdd", "start": 371, "end": 372}],
-        ["v#0#0", {"file_hash": "0x..aefdd", "start": 380, "end": 381}]
+        ["b#0#0", {"file_hash": "0x..af36c", "start": 296, "end": 297}],
+        ["v#0#0", {"file_hash": "0x..af36c", "start": 305, "end": 306}]
       ],
       "returns": [
-        {"file_hash": "0x..aefdd", "start": 389, "end": 392}
+        {"file_hash": "0x..af36c", "start": 314, "end": 317}
       ],
       "type_parameters": []
     }

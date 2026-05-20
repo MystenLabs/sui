@@ -6,13 +6,13 @@ info:
   lint: false
 ---
 note[I15008]: macro frame info
-   ┌─ tests/move_2024/macro_frames/eliminate_local_color.move:19:9
+   ┌─ tests/move_2024/macro_frames/eliminate_local_color.move:16:9
    │
-19 │         m!(|x| x)
+16 │         m!(|x| x)
    │         ^^^^^^^^^ [0] MacroBody(0x41::m::m)
    │
    = Frame transitions (test):
-       14: `let v = 1;`
+       11: `let v = 1;`
            [] -> [0:MacroBody(m)]
-       19: `m!(|x| x)`
+       16: `m!(|x| x)`
            [0:MacroBody(m)] -> []

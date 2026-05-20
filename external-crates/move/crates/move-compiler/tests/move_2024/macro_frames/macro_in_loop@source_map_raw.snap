@@ -7,31 +7,31 @@ info:
 ---
 {
   "constant_map": {},
-  "definition_location": {"file_hash": "0x..680da", "start": 128, "end": 132},
+  "definition_location": {"file_hash": "0x..42f51", "start": 53, "end": 57},
   "enum_map": {},
   "from_file_path": null,
   "function_map": {
     "0": {
       "code_map": {
-        "0": {"file_hash": "0x..680da", "start": 240, "end": 241},
-        "1": {"file_hash": "0x..680da", "start": 232, "end": 237},
-        "2": {"file_hash": "0x..680da", "start": 258, "end": 259},
-        "3": {"file_hash": "0x..680da", "start": 262, "end": 264},
-        "4": {"file_hash": "0x..680da", "start": 260, "end": 261},
-        "5": {"file_hash": "0x..680da", "start": 251, "end": 302},
-        "7": {"file_hash": "0x..680da", "start": 289, "end": 290},
-        "8": {"file_hash": "0x..680da", "start": 182, "end": 183},
-        "9": {"file_hash": "0x..680da", "start": 180, "end": 181},
-        "10": {"file_hash": "0x..680da", "start": 280, "end": 281},
-        "11": {"file_hash": "0x..680da", "start": 251, "end": 302},
-        "12": {"file_hash": "0x..680da", "start": 312, "end": 313}
+        "0": {"file_hash": "0x..42f51", "start": 165, "end": 166},
+        "1": {"file_hash": "0x..42f51", "start": 157, "end": 162},
+        "2": {"file_hash": "0x..42f51", "start": 183, "end": 184},
+        "3": {"file_hash": "0x..42f51", "start": 187, "end": 189},
+        "4": {"file_hash": "0x..42f51", "start": 185, "end": 186},
+        "5": {"file_hash": "0x..42f51", "start": 176, "end": 227},
+        "7": {"file_hash": "0x..42f51", "start": 214, "end": 215},
+        "8": {"file_hash": "0x..42f51", "start": 107, "end": 108},
+        "9": {"file_hash": "0x..42f51", "start": 105, "end": 106},
+        "10": {"file_hash": "0x..42f51", "start": 205, "end": 206},
+        "11": {"file_hash": "0x..42f51", "start": 176, "end": 227},
+        "12": {"file_hash": "0x..42f51", "start": 237, "end": 238}
       },
-      "definition_location": {"file_hash": "0x..680da", "start": 206, "end": 210},
+      "definition_location": {"file_hash": "0x..42f51", "start": 131, "end": 135},
       "is_native": false,
       "locals": [
-        ["i#1#0", {"file_hash": "0x..680da", "start": 236, "end": 237}]
+        ["i#1#0", {"file_hash": "0x..42f51", "start": 161, "end": 162}]
       ],
-      "location": {"file_hash": "0x..680da", "start": 195, "end": 319},
+      "location": {"file_hash": "0x..42f51", "start": 120, "end": 244},
       "macro_color_map": [
         [0, null],
         [7, 1],
@@ -40,7 +40,7 @@ info:
       ],
       "macro_frame_info": [
         {
-          "call_loc": {"file_hash": "0x..680da", "start": 284, "end": 291},
+          "call_loc": {"file_hash": "0x..42f51", "start": 209, "end": 216},
           "kind": {
             "MacroBody": {
               "function_name": "inc",
@@ -49,19 +49,19 @@ info:
             }
           },
           "parent_index": null,
-          "source_loc": {"file_hash": "0x..680da", "start": 139, "end": 189}
+          "source_loc": {"file_hash": "0x..42f51", "start": 64, "end": 114}
         },
         {
-          "call_loc": {"file_hash": "0x..680da", "start": 177, "end": 179},
+          "call_loc": {"file_hash": "0x..42f51", "start": 102, "end": 104},
           "kind": "Argument",
           "parent_index": 0,
-          "source_loc": {"file_hash": "0x..680da", "start": 289, "end": 290}
+          "source_loc": {"file_hash": "0x..42f51", "start": 214, "end": 215}
         }
       ],
       "nops": {},
       "parameters": [],
       "returns": [
-        {"file_hash": "0x..680da", "start": 214, "end": 217}
+        {"file_hash": "0x..42f51", "start": 139, "end": 142}
       ],
       "type_parameters": []
     }
