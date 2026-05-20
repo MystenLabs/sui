@@ -74,6 +74,8 @@ struct EventsResult {
 
 struct CheckpointsResult {
     checkpoints: Vec<CheckpointItem>,
+    // Standalone `Response::Watermark` frames (scan/terminal), in stream order.
+    watermarks: Vec<Watermark>,
     end: bool,
     end_cursor: Option<Bytes>,
     end_reason: Option<QueryEndReason>,
@@ -348,6 +350,7 @@ async fn list_checkpoints_result(
 ) -> CheckpointsResult {
     let mut stream = client.list_checkpoints(request).await.unwrap().into_inner();
     let mut checkpoints = Vec::new();
+    let mut watermarks = Vec::new();
     let mut end = false;
     // Resume cursor is the latest watermark cursor seen, on an item or a
     // scan watermark frame — QueryEnd no longer carries one.
@@ -364,9 +367,10 @@ async fn list_checkpoints_result(
             }
             list_checkpoints_response::Response::Watermark(watermark) => {
                 assert!(!end, "watermark frame after end");
-                if let Some(cursor) = watermark.cursor {
+                if let Some(cursor) = watermark.cursor.clone() {
                     end_cursor = Some(cursor);
                 }
+                watermarks.push(watermark);
             }
             list_checkpoints_response::Response::End(end_frame) => {
                 assert!(!end, "duplicate end frame");
@@ -381,6 +385,7 @@ async fn list_checkpoints_result(
     }
     CheckpointsResult {
         checkpoints,
+        watermarks,
         end,
         end_cursor,
         end_reason,
@@ -2098,5 +2103,243 @@ async fn test_list_checkpoints_read_masks_and_empty_range() {
     assert!(
         any_transactions,
         "expected transactions[].digest populated with objects read mask"
+    );
+}
+
+// list_checkpoints dedupes cp_seq, so an emitted checkpoint is proven complete:
+// its item watermark must claim its OWN sequence number as the covered boundary
+// (checkpoint_hi == sequence_number ascending, checkpoint_lo == sequence_number
+// descending), not sequence_number ∓ 1. This pins the item path onto
+// `advance_checkpoint_boundary`; the previous (buggy) `advance_boundary_excluding_cp`
+// path under-claimed by one. Also asserts the wire-documented monotonicity.
+#[sim_test]
+async fn test_list_checkpoints_item_watermark_boundary() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    let tx1 = transfer_self(&cluster, sender).await;
+    let tx2 = transfer_self(&cluster, sender).await;
+    let tx3 = transfer_self(&cluster, sender).await;
+    let (start, end) = checkpoint_range(&[&tx1, &tx2, &tx3]);
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(tx_sender(sender));
+    req.options = Some(query_options(100));
+    let resp = list_checkpoints_result(&mut client, req).await;
+    assert!(
+        !resp.checkpoints.is_empty(),
+        "expected matching checkpoints"
+    );
+    let mut prev_hi: Option<u64> = None;
+    for item in &resp.checkpoints {
+        let seq = checkpoint_sequence(item);
+        let wm = item.watermark.as_ref().expect("checkpoint item watermark");
+        assert_eq!(
+            wm.checkpoint_hi,
+            Some(seq),
+            "ascending checkpoint item should claim its own sequence number complete"
+        );
+        assert_eq!(
+            wm.checkpoint_lo, None,
+            "ascending item must set only checkpoint_hi"
+        );
+        if let Some(prev) = prev_hi {
+            assert!(
+                seq >= prev,
+                "checkpoint_hi must be non-decreasing ascending"
+            );
+        }
+        prev_hi = Some(seq);
+    }
+
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(tx_sender(sender));
+    req.options = Some(query_options_descending(100));
+    let resp = list_checkpoints_result(&mut client, req).await;
+    assert!(
+        !resp.checkpoints.is_empty(),
+        "expected matching checkpoints"
+    );
+    let mut prev_lo: Option<u64> = None;
+    for item in &resp.checkpoints {
+        let seq = checkpoint_sequence(item);
+        let wm = item.watermark.as_ref().expect("checkpoint item watermark");
+        assert_eq!(
+            wm.checkpoint_lo,
+            Some(seq),
+            "descending checkpoint item should claim its own sequence number complete"
+        );
+        assert_eq!(
+            wm.checkpoint_hi, None,
+            "descending item must set only checkpoint_lo"
+        );
+        if let Some(prev) = prev_lo {
+            assert!(
+                seq <= prev,
+                "checkpoint_lo must be non-increasing descending"
+            );
+        }
+        prev_lo = Some(seq);
+    }
+}
+
+// The contrast that makes the checkpoint assertion above meaningful: list_events
+// scans WITHIN a checkpoint, so an event at checkpoint C does not prove C
+// complete (more matches may sit at higher event_seqs). The covered boundary
+// must therefore EXCLUDE C itself — checkpoint_hi == C - 1 ascending,
+// checkpoint_lo == C + 1 descending — i.e. the under-claim is correct here and a
+// bug for checkpoints.
+#[sim_test]
+async fn test_list_events_item_watermark_boundary() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    let (pkg, _) = publish_package(&cluster, sender, emit_test_event_pkg_path()).await;
+    let tx1 = call_emit_many(&cluster, sender, pkg, 3).await;
+    let tx2 = call_emit_many(&cluster, sender, pkg, 2).await;
+    let (start, end) = checkpoint_range(&[&tx1, &tx2]);
+    let module = format!("{}::emit_test_event", pkg.to_canonical_string(true));
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    let mut req = ListEventsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(ev_emit_module(&module));
+    req.options = Some(query_options(100));
+    let resp = list_events_result(&mut client, req).await;
+    assert!(!resp.events.is_empty(), "expected matching events");
+    let mut prev_hi: Option<u64> = None;
+    for item in &resp.events {
+        let cp = item.checkpoint.expect("event item checkpoint");
+        assert!(cp >= 1, "user events are never in the genesis checkpoint");
+        let expected_hi = cp - 1;
+        let wm = item.watermark.as_ref().expect("event item watermark");
+        assert_eq!(
+            wm.checkpoint_hi,
+            Some(expected_hi),
+            "ascending event item must under-claim its own checkpoint (C - 1)"
+        );
+        assert_eq!(
+            wm.checkpoint_lo, None,
+            "ascending item sets only checkpoint_hi"
+        );
+        if let Some(prev) = prev_hi {
+            assert!(
+                expected_hi >= prev,
+                "event checkpoint_hi must be non-decreasing ascending"
+            );
+        }
+        prev_hi = Some(expected_hi);
+    }
+
+    let mut req = ListEventsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(ev_emit_module(&module));
+    req.options = Some(query_options_descending(100));
+    let resp = list_events_result(&mut client, req).await;
+    assert!(!resp.events.is_empty(), "expected matching events");
+    let mut prev_lo: Option<u64> = None;
+    for item in &resp.events {
+        let cp = item.checkpoint.expect("event item checkpoint");
+        let expected_lo = cp + 1;
+        let wm = item.watermark.as_ref().expect("event item watermark");
+        assert_eq!(
+            wm.checkpoint_lo,
+            Some(expected_lo),
+            "descending event item must under-claim its own checkpoint (C + 1)"
+        );
+        assert_eq!(
+            wm.checkpoint_hi, None,
+            "descending item sets only checkpoint_lo"
+        );
+        if let Some(prev) = prev_lo {
+            assert!(
+                expected_lo <= prev,
+                "event checkpoint_lo must be non-increasing descending"
+            );
+        }
+        prev_lo = Some(expected_lo);
+    }
+}
+
+// Natural completion (the scan drains the whole range without hitting the item
+// limit) emits a single standalone terminal `Watermark` frame before `QueryEnd`,
+// claiming the range's final checkpoint complete. An item-limited query stops
+// early with `ItemLimit` and emits NO standalone frame — the last item's
+// embedded watermark already carries the resume cursor. (The mid-stream
+// sparse-gap scan watermark is not reachable in e2e: it needs the scan to cross
+// ~16M empty tx_seqs to exhaust the per-chunk bucket budget.)
+#[sim_test]
+async fn test_list_checkpoints_terminal_watermark() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    let tx1 = transfer_self(&cluster, sender).await;
+    let tx2 = transfer_self(&cluster, sender).await;
+    let tx3 = transfer_self(&cluster, sender).await;
+    let (start, end) = checkpoint_range(&[&tx1, &tx2, &tx3]);
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(tx_sender(sender));
+    req.options = Some(query_options(100));
+    let resp = list_checkpoints_result(&mut client, req).await;
+    assert_eq!(resp.end_reason, Some(QueryEndReason::CheckpointBound));
+    assert_eq!(
+        resp.watermarks.len(),
+        1,
+        "natural completion emits exactly one standalone terminal watermark"
+    );
+    let terminal = &resp.watermarks[0];
+    let last_item_hi = resp
+        .checkpoints
+        .last()
+        .and_then(|item| item.watermark.as_ref())
+        .and_then(|wm| wm.checkpoint_hi)
+        .expect("last item checkpoint_hi");
+    assert!(
+        terminal.checkpoint_hi.is_some_and(|hi| hi >= last_item_hi),
+        "terminal watermark must not regress the covered boundary"
+    );
+
+    // The terminal cursor is a safe resume point: resuming past it returns nothing.
+    let cursor = terminal.cursor.clone().expect("terminal watermark cursor");
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(tx_sender(sender));
+    req.options = Some(query_options_after(100, cursor));
+    let resumed = list_checkpoints_result(&mut client, req).await;
+    assert!(
+        resumed.checkpoints.is_empty(),
+        "resuming past the terminal watermark should yield no more items"
+    );
+
+    // Item-limited query: stops early, no standalone watermark frame.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(tx_sender(sender));
+    req.options = Some(query_options(2));
+    let limited = list_checkpoints_result(&mut client, req).await;
+    assert_item_limit_end(limited.end, limited.end_reason);
+    assert!(
+        limited.watermarks.is_empty(),
+        "item-limited query must not emit a standalone terminal watermark"
     );
 }
