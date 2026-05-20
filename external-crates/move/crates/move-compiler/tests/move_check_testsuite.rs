@@ -593,9 +593,7 @@ fn write_json_object(out: &mut String, map: &serde_json::Map<String, Value>, ind
     out.push('}');
 }
 
-fn sorted_json_object_entries<'a>(
-    map: &'a serde_json::Map<String, Value>,
-) -> Vec<(&'a String, &'a Value)> {
+fn sorted_json_object_entries(map: &serde_json::Map<String, Value>) -> Vec<(&String, &Value)> {
     let mut entries = map.iter().collect::<Vec<_>>();
     if entries.iter().all(|(key, _)| key.parse::<u64>().is_ok()) {
         entries.sort_by_key(|(key, _)| key.parse::<u64>().unwrap());

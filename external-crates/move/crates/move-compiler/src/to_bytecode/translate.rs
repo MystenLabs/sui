@@ -396,7 +396,7 @@ fn module(
         .contains(&Symbol::from("macro-frames"))
     {
         emit_macro_frame_diagnostics(
-            &reporter,
+            reporter,
             &source_map,
             &module,
             compilation_env.mapped_files(),
@@ -563,15 +563,15 @@ fn emit_macro_frame_diagnostics(
             // source location must fall within that entry's source range.
             if let Some(idx) = frame_idx {
                 let frame = &frames[idx as usize];
-                if let Some((_, instr_loc)) = code_map.range(..=pc).next_back() {
-                    if !frame.source_loc.contains(instr_loc) {
-                        let frame_ref = format_frame_idx_kind(frames, idx);
-                        details.push(format!(
-                            "!! color/location mismatch: instruction has {} color, \
+                if let Some((_, instr_loc)) = code_map.range(..=pc).next_back()
+                    && !frame.source_loc.contains(instr_loc)
+                {
+                    let frame_ref = format_frame_idx_kind(frames, idx);
+                    details.push(format!(
+                        "!! color/location mismatch: instruction has {} color, \
                              but location is outside {} source range",
-                            frame_ref, frame_ref,
-                        ));
-                    }
+                        frame_ref, frame_ref,
+                    ));
                 }
             }
 
@@ -750,10 +750,8 @@ fn populate_macro_frame_info(
         }
 
         // Register nodes from post-optimization instruction colors.
-        for color in color_data {
-            if let Some(node) = color {
-                register_node(node, &mut ptr_to_index, &mut ordered_nodes);
-            }
+        for node in color_data.iter().flatten() {
+            register_node(node, &mut ptr_to_index, &mut ordered_nodes);
         }
 
         if ordered_nodes.is_empty() {
