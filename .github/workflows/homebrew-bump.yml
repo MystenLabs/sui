@@ -2,11 +2,15 @@ name: Bump Homebrew sui formula
 
 run-name: Bump Homebrew sui formula → ${{ inputs.sui_tag }}
 
-# Standalone, workflow_dispatch-only counterpart to the `update-homebrew-formula`
-# job inside release.yml. Use this to manually bump the homebrew-core sui
-# formula for any release tag — useful when the in-release job failed (e.g. a
-# transient homebrew error) or for tags that the in-release job skips
-# (release.yml's job is gated to `contains(..., 'testnet')`).
+# Bumps the sui formula in Homebrew/homebrew-core. Two ways to invoke:
+#
+#   1. workflow_call: release.yml's `update-homebrew-formula` job calls this
+#      after the release-build matrix finishes, so the standard release path
+#      stays single-button.
+#   2. workflow_dispatch: a release captain can also fire this manually for
+#      any release tag — useful when the in-release call failed (e.g. a
+#      transient homebrew error) or for tags release.yml skips (its job is
+#      gated to `contains(..., 'testnet')`, so mainnet bumps need this).
 
 on:
   workflow_dispatch:
@@ -14,6 +18,16 @@ on:
       sui_tag:
         description: "Sui release tag (e.g. testnet-v1.72.2 or mainnet-v1.72.2)"
         type: string
+        required: true
+  workflow_call:
+    inputs:
+      sui_tag:
+        description: "Sui release tag (e.g. testnet-v1.72.2 or mainnet-v1.72.2)"
+        type: string
+        required: true
+    secrets:
+      HOMEBREW_GH_FORMULA_BUMP:
+        description: "PAT with public_repo,workflow scopes — opens the homebrew-core PR"
         required: true
 
 concurrency: ${{ github.workflow }}-${{ inputs.sui_tag }}
@@ -85,5 +99,5 @@ jobs:
             --no-browse \
             --url="${url}" \
             --version="${{ steps.tag.outputs.versionless_tag }}" \
-            --message="Manually triggered: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --message="Triggered from: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             sui
