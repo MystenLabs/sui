@@ -28,6 +28,12 @@ info:
       },
       "definition_location": {"file_hash": "0x..42f51", "start": 131, "end": 135},
       "is_native": false,
+      "labels": {
+        "0": 0,
+        "1": 2,
+        "3": 7,
+        "4": 12
+      },
       "locals": [
         ["i#1#0", {"file_hash": "0x..42f51", "start": 161, "end": 162}]
       ],

@@ -24,6 +24,12 @@ info:
       },
       "definition_location": {"file_hash": "0x..af36c", "start": 291, "end": 295},
       "is_native": false,
+      "labels": {
+        "0": 0,
+        "2": 2,
+        "3": 5,
+        "4": 9
+      },
       "locals": [
         ["%#2", {"file_hash": "0x..af36c", "start": 328, "end": 400}]
       ],
