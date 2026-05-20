@@ -187,18 +187,19 @@ mod checked {
         // Gas budget for this gas status instance.
         // Typically the gas budget as defined in the `TransactionData::GasData`
         gas_budget: u64,
-        // Computation cost after execution. This is the result of the gas used by the `GasStatus`
-        // properly bucketized.
-        // Starts at 0 and it is assigned in `bucketize_computation`.
-        computation_cost: u64,
         // Whether to charge or go unmetered
         charge: bool,
-        // Gas price for computation.
-        // This is a multiplier on the final charge as related to the RGP (reference gas price).
-        // Checked at signing: `gas_price >= reference_gas_price`
-        // and then conceptually
-        // `final_computation_cost = total_computation_cost * gas_price / reference_gas_price`
-        gas_price: u64,
+        // The price `summary()` uses to convert raw gas units into MIST. Starts
+        // equal to `user_gas_price`; lowered to the abort-tx cap by
+        // `bucketize_computation` when the result is a Move abort and the
+        // protocol config sets `max_gas_price_rgp_factor_for_aborted_transactions`.
+        effective_gas_price: u64,
+        // The gas price the user signed for. Checked at signing
+        // (`user_gas_price >= reference_gas_price`). Used as the upper bound
+        // for the abort cap, as the initial value of `effective_gas_price`,
+        // and exposed via the `gas_price()` accessor for TxContext / RPC /
+        // telemetry.
+        user_gas_price: u64,
         // RGP as defined in the protocol config.
         reference_gas_price: u64,
         // Gas price for storage. This is a multiplier on the final charge
@@ -219,6 +220,15 @@ mod checked {
         unmetered_storage_rebate: u64,
         /// Rounding mode for gas charges.
         gas_rounding_mode: GasRoundingMode,
+        /// When true, `uncapped_computation_cost` and `derived_computation_cost`
+        /// short-circuit to `gas_budget` instead of deriving from the Move VM
+        /// meter. Set by `adjust_computation_on_out_of_gas` on the err-path
+        /// fallback (legacy storage-OOG handler, step-pipeline
+        /// `set_computation_to_budget`) so the gas summary reports the budget
+        /// exactly — meter-derived math is `(budget / user_gas_price) ×
+        /// effective_gas_price` and loses up to `budget % user_gas_price`
+        /// MIST to integer-division floor.
+        force_computation_cost_to_budget: bool,
     }
 
     impl SuiGasStatus {
@@ -226,7 +236,7 @@ mod checked {
             move_gas_status: GasStatus,
             gas_budget: u64,
             charge: bool,
-            gas_price: u64,
+            user_gas_price: u64,
             reference_gas_price: u64,
             storage_gas_price: u64,
             rebate_rate: u64,
@@ -242,8 +252,8 @@ mod checked {
                 gas_status: move_gas_status,
                 gas_budget,
                 charge,
-                computation_cost: 0,
-                gas_price,
+                effective_gas_price: user_gas_price,
+                user_gas_price,
                 reference_gas_price,
                 storage_gas_price,
                 per_object_storage: Vec::new(),
@@ -251,6 +261,7 @@ mod checked {
                 unmetered_storage_rebate: 0,
                 gas_rounding_mode,
                 cost_table,
+                force_computation_cost_to_budget: false,
             }
         }
 
@@ -309,6 +320,64 @@ mod checked {
 
         pub fn reference_gas_price(&self) -> u64 {
             self.reference_gas_price
+        }
+
+        /// Current computation cost in MIST derived from the Move VM meter:
+        ///   `gas_used_pre_gas_price() × effective_gas_price`,
+        /// capped so that `computation_cost + storage_cost - sender_rebate ≤ gas_budget`.
+        ///
+        /// `effective_gas_price` starts equal to the user's `user_gas_price`
+        /// and is lowered to the abort-tx cap by `bucketize_computation` when a
+        /// Move abort is detected and the protocol config defines such a cap.
+        ///
+        /// The budget cap accounts for storage so the gas coin can always pay
+        /// `net_gas_usage()` — if both computation and storage are attempted (e.g.
+        /// storage OOG'd after a Move abort), the meter-derived computation is
+        /// reduced to leave room for the accumulated net storage cost. Storage
+        /// charges stick, computation absorbs whatever the budget can still afford.
+        /// The bucketed, abort-discounted MIST cost of the computation accumulated
+        /// in the Move VM meter so far. NO budget cap applied — callers that need
+        /// the cap (`summary()`) should use `derived_computation_cost`; callers
+        /// that need the "true" value to gate further charging (`bucketize_computation`,
+        /// `charge_storage_and_rebate`) should use this one.
+        ///
+        /// The abort discount, if applicable, is folded in via
+        /// `effective_gas_price` — `bucketize_computation` lowers that field when
+        /// the result is a Move abort and the protocol config defines an abort cap.
+        fn uncapped_computation_cost(&self) -> u64 {
+            if self.force_computation_cost_to_budget {
+                return self.gas_budget;
+            }
+            let raw_units = self.gas_status.gas_used_pre_gas_price();
+            let bucketed_units = match self.gas_rounding_mode {
+                GasRoundingMode::KeepHalfDigits => half_digits_rounding(raw_units),
+                GasRoundingMode::Stepped(gas_rounding) => {
+                    if raw_units > 0 && raw_units % gas_rounding == 0 {
+                        raw_units
+                    } else {
+                        ((raw_units / gas_rounding) + 1) * gas_rounding
+                    }
+                }
+                GasRoundingMode::Bucketize => {
+                    get_bucket_cost(&self.cost_table.computation_bucket, raw_units)
+                }
+            };
+            bucketed_units.saturating_mul(self.effective_gas_price)
+        }
+
+        /// Computation cost reported to the user via `summary()`. Caps so that
+        /// `computation_cost + storage_cost - sender_rebate ≤ gas_budget` — when
+        /// both computation and storage are attempted (e.g. storage OOG'd after
+        /// computation succeeded), the meter-derived computation is reduced to
+        /// leave room for the accumulated net storage cost. Storage charges
+        /// stick, computation absorbs whatever the budget can still afford.
+        fn derived_computation_cost(&self) -> u64 {
+            let uncapped = self.uncapped_computation_cost();
+            let storage_rebate = self.storage_rebate();
+            let sender_rebate = sender_rebate(storage_rebate, self.rebate_rate);
+            let net_storage = self.storage_cost().saturating_sub(sender_rebate);
+            let max_computation = self.gas_budget.saturating_sub(net_storage);
+            uncapped.min(max_computation)
         }
 
         // Check whether gas arguments are legit:
@@ -410,64 +479,41 @@ mod checked {
         }
 
         fn bucketize_computation(&mut self, aborted: Option<bool>) -> Result<(), ExecutionError> {
-            let gas_used = self.gas_status.gas_used_pre_gas_price();
-            let effective_gas_price = if self
-                .cost_table
-                .max_gas_price_rgp_factor_for_aborted_transactions
-                .is_some()
-                && aborted.unwrap_or(false)
-            {
-                // For aborts, cap at max but don't exceed user's price
-                // This minimizes the risk of competing for priority execution in the case that the txn may be aborted.
-                let max_gas_price_for_aborted_txns = self
+            // Bucketize fixes the price `summary()` will use for the rest of the
+            // pipeline — normally the user's `gas_price`, but lowered to the
+            // abort-tx cap if this call reports a Move abort and the protocol
+            // config defines such a cap. After that, it signals OOG if the
+            // bucketed-and-priced computation alone exceeds the budget. The
+            // bucketing math itself lives in `uncapped_computation_cost`, which
+            // `summary()` calls on demand through `derived_computation_cost`.
+            self.effective_gas_price = if aborted.unwrap_or(false) {
+                match self
                     .cost_table
                     .max_gas_price_rgp_factor_for_aborted_transactions
-                    .unwrap()
-                    * self.reference_gas_price;
-                self.gas_price.min(max_gas_price_for_aborted_txns)
+                {
+                    Some(factor) => self.user_gas_price.min(factor * self.reference_gas_price),
+                    None => self.user_gas_price,
+                }
             } else {
-                // For all other cases, use the user's gas price
-                self.gas_price
+                self.user_gas_price
             };
-            let gas_used = match self.gas_rounding_mode {
-                GasRoundingMode::KeepHalfDigits => {
-                    half_digits_rounding(gas_used) * effective_gas_price
-                }
-                GasRoundingMode::Stepped(gas_rounding) => {
-                    if gas_used > 0 && gas_used % gas_rounding == 0 {
-                        gas_used * effective_gas_price
-                    } else {
-                        ((gas_used / gas_rounding) + 1) * gas_rounding * effective_gas_price
-                    }
-                }
-                GasRoundingMode::Bucketize => {
-                    let bucket_cost =
-                        get_bucket_cost(&self.cost_table.computation_bucket, gas_used);
-                    // charge extra on top of `computation_cost` to make the total computation
-                    // cost a bucket value
-                    bucket_cost * effective_gas_price
-                }
-            };
-            if self.gas_budget <= gas_used {
-                self.computation_cost = self.gas_budget;
-                Err(ExecutionErrorKind::InsufficientGas.into())
-            } else {
-                self.computation_cost = gas_used;
-                Ok(())
+            if self.uncapped_computation_cost() >= self.gas_budget {
+                return Err(ExecutionErrorKind::InsufficientGas.into());
             }
+            Ok(())
         }
 
-        /// Returns the final (computation cost, storage cost, storage rebate) of the gas meter.
-        /// We use initial budget, combined with remaining gas and storage cost to derive
-        /// computation cost.
+        /// Returns the gas cost summary derived directly from the Move VM meter state.
+        /// `computation_cost = gas_used × effective_gas_price` (capped at
+        /// `gas_budget − net_storage`). The effective price equals
+        /// `user_gas_price` until `bucketize_computation` lowers it for a Move abort.
         fn summary(&self) -> GasCostSummary {
-            // compute storage rebate, both rebate and non refundable fee
             let storage_rebate = self.storage_rebate();
             let sender_rebate = sender_rebate(storage_rebate, self.rebate_rate);
             assert!(sender_rebate <= storage_rebate);
             let non_refundable_storage_fee = storage_rebate - sender_rebate;
             GasCostSummary {
-                computation_cost: self.computation_cost,
+                computation_cost: self.derived_computation_cost(),
                 storage_cost: self.storage_cost(),
                 storage_rebate: sender_rebate,
                 non_refundable_storage_fee,
@@ -479,7 +525,7 @@ mod checked {
         }
 
         fn gas_price(&self) -> u64 {
-            self.gas_price
+            self.user_gas_price
         }
 
         fn reference_gas_price(&self) -> u64 {
@@ -564,22 +610,25 @@ mod checked {
             storage_cost
         }
 
+        /// Verify the accumulated `per_object_storage` fits in the remaining
+        /// budget (`gas_budget − net_computation`). If the rebates already
+        /// cover the cost, succeed unconditionally; otherwise compare net
+        /// storage against the *uncapped* computation cost so the check
+        /// reflects what the meter actually accumulated rather than the
+        /// summary's capped report (the cap would otherwise always make
+        /// storage appear to fit).
         fn charge_storage_and_rebate(&mut self) -> Result<(), ExecutionError> {
             let storage_rebate = self.storage_rebate();
             let storage_cost = self.storage_cost();
             let sender_rebate = sender_rebate(storage_rebate, self.rebate_rate);
             assert!(sender_rebate <= storage_rebate);
             if sender_rebate >= storage_cost {
-                // there is more rebate than cost, when deducting gas we are adding
-                // to whatever is the current amount charged so we are `Ok`
                 Ok(())
             } else {
-                let gas_left = self.gas_budget - self.computation_cost;
-                // we have to charge for storage and may go out of gas, check
+                let gas_left = self
+                    .gas_budget
+                    .saturating_sub(self.uncapped_computation_cost());
                 if gas_left < storage_cost - sender_rebate {
-                    // Running out of gas would cause the temporary store to reset
-                    // and zero storage and rebate.
-                    // The remaining_gas will be 0 and we will charge all in computation
                     Err(ExecutionErrorKind::InsufficientGas.into())
                 } else {
                     Ok(())
@@ -587,9 +636,17 @@ mod checked {
             }
         }
 
+        /// Force `summary()` to report `computation_cost == gas_budget` by
+        /// dropping the accumulated `per_object_storage` and flipping
+        /// `force_computation_cost_to_budget`. Setting the flag bypasses the
+        /// meter math entirely; deriving from `gas_used_pre_gas_price() ×
+        /// effective_gas_price` would otherwise lose up to `budget %
+        /// user_gas_price` MIST. Callers: `set_computation_to_budget` on the
+        /// err-path fallback when even input-only storage doesn't fit the
+        /// budget, and the legacy storage-OOG handler.
         fn adjust_computation_on_out_of_gas(&mut self) {
             self.per_object_storage = Vec::new();
-            self.computation_cost = self.gas_budget;
+            self.force_computation_cost_to_budget = true;
         }
 
         fn gas_usage_report(&self) -> GasUsageReport {

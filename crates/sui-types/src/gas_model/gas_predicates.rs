@@ -85,3 +85,12 @@ pub fn native_function_threshold_exceeded(gas_model_version: u64, num_native_cal
 pub fn refresh_gas_payment_location(gas_model_version: u64) -> bool {
     gas_model_version >= 13
 }
+
+/// Use the step-by-step gas-charging pipeline that replaces the monolithic
+/// `charge_gas` with explicit `charge_input_objects` / `execute_ptb` /
+/// `charge_storage` / `charge` steps, with err-path recovery moved out into
+/// `reset_writes`. Subsumes `refresh_gas_payment_location` structurally and
+/// changes five additional effects-visible behaviors documented in the PR.
+pub fn use_step_gas_charging(gas_model_version: u64) -> bool {
+    gas_model_version >= 15
+}
