@@ -21,7 +21,7 @@
 //!
 //! The packed namespace is sparse: most transactions use only a tiny prefix of
 //! their reserved event slots. Each row spans 33,554,432 packed event positions
-//! (`BUCKET_SIZE = 2^23`), which is exactly 128 transactions worth of event
+//! (`BUCKET_SIZE = 2^25`), which is exactly 512 transactions worth of event
 //! namespace at `EVENT_BITS = 16`, while leaving bucket-relative bit positions
 //! well within RoaringBitmap's `u32` limit.
 
@@ -30,7 +30,7 @@ pub const NAME: &str = "event_bitmap_index";
 pub const SCHEMA_VERSION: u32 = 1;
 pub const BUCKET_ID_WIDTH: usize = 12;
 /// Number of packed `event_seq`s per bitmap bucket.
-pub const BUCKET_SIZE: u64 = 8_388_608;
+pub const BUCKET_SIZE: u64 = 33_554_432;
 
 /// Number of low bits of `event_seq` reserved for the per-tx event index.
 pub const EVENT_BITS: u32 = 16;
