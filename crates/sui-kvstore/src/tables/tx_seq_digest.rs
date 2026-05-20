@@ -31,7 +31,7 @@ pub mod col {
     pub const DIGEST: &str = "d";
     /// Big-endian u32 count of events emitted by this transaction.
     pub const EVENT_COUNT: &str = "e";
-    /// Big-endian u32 zero-based position of this transaction within its checkpoint.
+    /// Varint-encoded zero-based position of this transaction within its checkpoint.
     pub const TX_OFFSET: &str = "o";
     /// Varint-encoded checkpoint sequence number containing this transaction.
     pub const CHECKPOINT_NUMBER: &str = "c";
@@ -62,10 +62,7 @@ pub fn encode(
             col::EVENT_COUNT,
             Bytes::copy_from_slice(&event_count.to_be_bytes()),
         ),
-        (
-            col::TX_OFFSET,
-            Bytes::copy_from_slice(&tx_offset.to_be_bytes()),
-        ),
+        (col::TX_OFFSET, Bytes::from(tx_offset.encode_var_vec())),
         (
             col::CHECKPOINT_NUMBER,
             Bytes::from(checkpoint_number.encode_var_vec()),
@@ -94,11 +91,7 @@ pub fn decode(
                 .context("tx_seq_digest event_count not 4 bytes")?;
             event_count = u32::from_be_bytes(bytes);
         } else if column.as_ref() == col::TX_OFFSET.as_bytes() {
-            let bytes: [u8; 4] = value
-                .as_ref()
-                .try_into()
-                .context("tx_seq_digest tx_offset not 4 bytes")?;
-            tx_offset = Some(u32::from_be_bytes(bytes));
+            tx_offset = Some(decode_canonical_varint::<u32>(value, "tx_offset")?);
         } else if column.as_ref() == col::CHECKPOINT_NUMBER.as_bytes() {
             checkpoint_number = Some(decode_checkpoint_number_value(value)?);
         }
@@ -122,15 +115,21 @@ pub fn decode_checkpoint_number(cells: &[(Bytes, Bytes)]) -> Result<CheckpointSe
 }
 
 fn decode_checkpoint_number_value(value: &Bytes) -> Result<CheckpointSequenceNumber> {
-    let (checkpoint_number, bytes_read) = u64::decode_var(value.as_ref())
-        .context("tx_seq_digest checkpoint_number is not a valid u64 varint")?;
+    decode_canonical_varint::<u64>(value, "checkpoint_number")
+}
+
+/// Decode a canonical varint cell value, rejecting trailing or non-minimal
+/// bytes so each value has exactly one valid encoding.
+fn decode_canonical_varint<T: VarInt>(value: &Bytes, field: &str) -> Result<T> {
+    let (decoded, bytes_read) = T::decode_var(value.as_ref())
+        .with_context(|| format!("tx_seq_digest {field} is not a valid varint"))?;
     if bytes_read != value.len() {
-        bail!("tx_seq_digest checkpoint_number has trailing bytes");
+        bail!("tx_seq_digest {field} has trailing bytes");
     }
-    if checkpoint_number.required_space() != bytes_read {
-        bail!("tx_seq_digest checkpoint_number is not canonical");
+    if decoded.required_space() != bytes_read {
+        bail!("tx_seq_digest {field} is not canonical");
     }
-    Ok(checkpoint_number)
+    Ok(decoded)
 }
 
 #[cfg(test)]
@@ -164,7 +163,7 @@ mod tests {
         let cells = encode(&digest, event_count, tx_offset, checkpoint_number);
 
         assert_eq!(cells[1].1.as_ref(), &event_count.to_be_bytes());
-        assert_eq!(cells[2].1.as_ref(), &tx_offset.to_be_bytes());
+        assert_eq!(cells[2].1.as_ref(), tx_offset.encode_var_vec().as_slice());
         assert_eq!(cells[3].1.len(), 5);
 
         let cells = cells
