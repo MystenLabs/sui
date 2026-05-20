@@ -548,6 +548,9 @@ pub struct MetricConf {
     pub read_sample_interval: SamplingInterval,
     pub write_sample_interval: SamplingInterval,
     pub iter_sample_interval: SamplingInterval,
+    /// When true and the database is opened with the tidehunter backend, each
+    /// committed `WriteBatch` is written as a single lz4-compressed WAL entry.
+    pub enable_th_batch_compression: bool,
 }
 
 impl MetricConf {
@@ -560,16 +563,18 @@ impl MetricConf {
             read_sample_interval: SamplingInterval::default(),
             write_sample_interval: SamplingInterval::default(),
             iter_sample_interval: SamplingInterval::default(),
+            enable_th_batch_compression: false,
         }
     }
 
-    pub fn with_sampling(self, read_interval: SamplingInterval) -> Self {
-        Self {
-            db_name: self.db_name,
-            read_sample_interval: read_interval,
-            write_sample_interval: SamplingInterval::default(),
-            iter_sample_interval: SamplingInterval::default(),
-        }
+    pub fn with_sampling(mut self, read_interval: SamplingInterval) -> Self {
+        self.read_sample_interval = read_interval;
+        self
+    }
+
+    pub fn with_th_batch_compression(mut self) -> Self {
+        self.enable_th_batch_compression = true;
+        self
     }
 }
 const CF_METRICS_REPORT_PERIOD_SECS: u64 = 30;
