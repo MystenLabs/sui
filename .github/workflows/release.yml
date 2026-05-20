@@ -167,11 +167,20 @@ jobs:
         if: ${{ env.s3_existing_archive == '' }}
         shell: bash
         run: |
-          # Build everything except `sui` first, then build `sui` once with the
-          # tracing feature. Previously the bulk `cargo build --release` compiled
-          # `sui` without tracing and the next step immediately recompiled+overwrote
-          # it with tracing — a wasted compile+link of `sui` on every platform.
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release --workspace --exclude sui && cargo build --release --features tracing --bin sui && cargo build --profile=dev --bin sui --features tracing
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          # Build only the binaries we actually package (the release_binaries in
+          # binary-build-list.json — the same list the rename step below moves),
+          # not the whole workspace. `sui` is built separately, once, with the
+          # tracing feature: a plain `cargo build --release` compiled `sui` without
+          # tracing and the next step overwrote it, wasting a compile+link of `sui`
+          # on every platform.
+          sui_bins=""
+          for b in $(jq -r '.release_binaries[] | select(. != "sui")' "${{ env.BINARY_LIST_FILE }}"); do
+            sui_bins="$sui_bins --bin $(echo "$b" | tr -d $'\r')"
+          done
+          cargo build --release $sui_bins
+          cargo build --release --features tracing --bin sui
+          cargo build --profile=dev --bin sui --features tracing
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.s3_existing_archive == '' }}
