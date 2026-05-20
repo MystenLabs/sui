@@ -567,15 +567,27 @@ impl CheckpointExecutor {
 
         pipeline_handle.skip_to(PipelineStage::BuildDbBatch).await;
 
-        CheckpointExecutionState::new_with_global_state_hasher(
-            CheckpointExecutionData {
-                checkpoint,
-                checkpoint_contents,
-                tx_digests,
-                fx_digests,
-            },
-            state_hasher,
-        )
+        let ckpt_data = CheckpointExecutionData {
+            checkpoint,
+            checkpoint_contents,
+            tx_digests,
+            fx_digests,
+        };
+
+        // Observer full nodes (run consensus but are not validators) take this fast path
+        // but still need checkpoint data for the subscription service and RPC indexing.
+        let full_data =
+            if self.checkpoint_data_enabled() && self.state.is_fullnode(&self.epoch_store) {
+                let tx_data = self.load_transaction_data(&ckpt_data);
+                self.process_checkpoint_data(&ckpt_data, &tx_data)
+            } else {
+                None
+            };
+
+        let mut state =
+            CheckpointExecutionState::new_with_global_state_hasher(ckpt_data, state_hasher);
+        state.full_data = full_data;
+        state
     }
 
     #[instrument(level = "info", skip_all)]
@@ -850,6 +862,52 @@ impl CheckpointExecutor {
                 CheckpointTransactionData::new(transactions, effects, executed_fx_digests),
             )
         }
+    }
+
+    // Load transaction data from the cache for an already-executed checkpoint.
+    // Used by observer full nodes taking the fast path to populate checkpoint data
+    // for the subscription service and RPC indexing.
+    fn load_transaction_data(
+        &self,
+        ckpt_data: &CheckpointExecutionData,
+    ) -> CheckpointTransactionData {
+        let epoch = ckpt_data.checkpoint.epoch;
+        let seq = ckpt_data.checkpoint.sequence_number;
+
+        let transactions = self
+            .transaction_cache_reader
+            .multi_get_transaction_blocks(&ckpt_data.tx_digests)
+            .into_iter()
+            .enumerate()
+            .map(|(i, tx)| {
+                let tx = tx.unwrap_or_else(|| {
+                    fatal!("transaction not found for {:?}", ckpt_data.tx_digests[i])
+                });
+                let tx = Arc::try_unwrap(tx).unwrap_or_else(|tx| (*tx).clone());
+                VerifiedExecutableTransaction::new_from_checkpoint(tx, epoch, seq)
+            })
+            .collect();
+
+        let effects = self
+            .transaction_cache_reader
+            .multi_get_effects(&ckpt_data.fx_digests)
+            .into_iter()
+            .enumerate()
+            .map(|(i, effect)| {
+                effect.unwrap_or_else(|| {
+                    fatal!(
+                        "checkpoint effect not found for {:?}",
+                        ckpt_data.fx_digests[i]
+                    )
+                })
+            })
+            .collect();
+
+        let executed_fx_digests = self
+            .transaction_cache_reader
+            .multi_get_executed_effects_digests(&ckpt_data.tx_digests);
+
+        CheckpointTransactionData::new(transactions, effects, executed_fx_digests)
     }
 
     // Schedule all unexecuted transactions in the checkpoint for execution
