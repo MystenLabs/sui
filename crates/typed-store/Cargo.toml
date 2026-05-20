@@ -34,7 +34,7 @@ sui-macros.workspace = true
 mysten-common.workspace = true
 mysten-metrics.workspace = true
 [target.'cfg(not(windows))'.dependencies]
-tidehunter = {git = "https://github.com/mystenlabs/tidehunter.git", rev = "3cbbae1b3e7a8df18e46ce0cc5e7c7033424063d", version = "0.1.0", optional = true}
+tidehunter = {git = "https://github.com/mystenlabs/tidehunter.git", rev = "c17cbc45e75bde6714a021fcc3f309c1572e1e61", version = "0.1.0", optional = true}
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 rocksdb = { version = "0.22.0", default-features = false, features = ["jemalloc"] }

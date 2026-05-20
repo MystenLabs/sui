@@ -52,7 +52,7 @@ sui-tls.workspace = true
 bin-version.workspace = true
 
 [target.'cfg(not(windows))'.dependencies]
-tideconsole = {git = "https://github.com/mystenlabs/tidehunter.git", rev = "3cbbae1b3e7a8df18e46ce0cc5e7c7033424063d", package = "tideconsole", optional = true}
+tideconsole = {git = "https://github.com/mystenlabs/tidehunter.git", rev = "c17cbc45e75bde6714a021fcc3f309c1572e1e61", package = "tideconsole", optional = true}
 rhai = { version = "1", optional = true }
 rustyline = { version = "14", optional = true }
 parking_lot = { workspace = true, optional = true }
