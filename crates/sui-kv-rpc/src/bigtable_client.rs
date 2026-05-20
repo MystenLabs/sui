@@ -42,6 +42,7 @@ use sui_inverted_index::ScanDirection;
 use sui_inverted_index::eval_bitmap_query_stream;
 use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BitmapIndexSpec;
+use sui_kvstore::CheckpointData;
 use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
@@ -319,6 +320,35 @@ impl BigTableClient {
             .await
             .map_err(RpcError::from)?;
         Ok(gate_stream(permit, inner.boxed()))
+    }
+
+    pub(crate) async fn scan_tx_seq_digests_stream(
+        &self,
+        range: Range<u64>,
+        direction: ScanDirection,
+        rows_limit: usize,
+    ) -> Result<BoxStream<'static, Result<TxSeqDigestData, anyhow::Error>>, RpcError> {
+        self.inner
+            .clone()
+            .scan_tx_seq_digests_stream(range, direction, rows_limit)
+            .await
+            .map(|stream| stream.boxed())
+            .map_err(RpcError::from)
+    }
+
+    pub(crate) async fn scan_checkpoints_stream(
+        &self,
+        range: Range<u64>,
+        direction: ScanDirection,
+        rows_limit: usize,
+        filter: Option<RowFilter>,
+    ) -> Result<BoxStream<'static, Result<(u64, CheckpointData), anyhow::Error>>, RpcError> {
+        self.inner
+            .clone()
+            .scan_checkpoints_stream(range, direction, rows_limit, filter)
+            .await
+            .map(|stream| stream.boxed())
+            .map_err(RpcError::from)
     }
 
     pub(crate) async fn checkpoint_to_tx_range(

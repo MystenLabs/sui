@@ -11,8 +11,7 @@ use crate::tables;
 
 use super::handler::BigTableProcessor;
 
-/// Pipeline that writes one row per transaction keyed by bit-reversed
-/// tx_sequence_number.
+/// Pipeline that writes tx_sequence_number lookup rows.
 pub struct TxSeqDigestPipeline;
 
 #[async_trait::async_trait]
