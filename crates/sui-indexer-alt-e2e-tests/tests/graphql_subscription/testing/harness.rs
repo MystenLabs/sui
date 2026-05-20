@@ -383,6 +383,7 @@ pub fn graphql_redactions() -> insta::Settings {
     settings.add_redaction(".**.networkTotalTransactions", "[networkTotalTransactions]");
     settings.add_redaction(".**.cursor", "[cursor]");
     settings.add_redaction(".**.signature", "[signature]");
+    settings.add_redaction(".**.json.id", "[json_id]");
     settings.add_dynamic_redaction(".**.repr", |value, _path| {
         let s = value.as_str().unwrap();
         if let Some(idx) = s.find("::") {

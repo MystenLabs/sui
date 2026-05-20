@@ -421,14 +421,14 @@ pub(super) fn process_checkpoint(
         )?);
     }
 
-    Ok(ProcessedCheckpoint::new(
+    Ok(ProcessedCheckpoint {
         sequence_number,
         summary,
         contents,
         signature,
         transactions,
-        Arc::new(execution_objects),
-    ))
+        execution_objects: Arc::new(execution_objects),
+    })
 }
 
 fn process_transaction(
@@ -500,7 +500,7 @@ fn process_transaction(
     Ok(ProcessedTransaction {
         tx_sequence_number,
         digest,
-        contents,
+        contents: Arc::new(contents),
     })
 }
 

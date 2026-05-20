@@ -11,7 +11,6 @@ use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::event::Event;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::transaction::Transaction;
-use crate::api::types::transaction::TransactionContents;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::config::Limits;
 use crate::error::RpcError;
@@ -94,13 +93,7 @@ impl Subscription {
                             if !filter.matches(&tx.contents) {
                                 continue;
                             }
-                            yield Ok(Transaction {
-                                digest: tx.digest,
-                                contents: TransactionContents {
-                                    scope: scope.with_active_transaction_digest(tx.digest),
-                                    contents: Some(Arc::new(tx.contents.clone())),
-                                },
-                            });
+                            yield Transaction::with_contents(scope.clone(), tx.contents.clone());
                         }
                     }
                     Err(e) => {
@@ -147,7 +140,10 @@ impl Subscription {
                                     continue;
                                 }
                                 yield Ok(Event {
-                                    scope: scope.with_active_transaction_digest(tx.digest),
+                                    scope: scope.with_active_transaction_contents(
+                                        tx.digest,
+                                        tx.contents.clone(),
+                                    ),
                                     native,
                                     transaction_digest: tx.digest,
                                     sequence_number: idx as u64,

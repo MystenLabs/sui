@@ -115,6 +115,103 @@ async fn test_event_subscription_transaction_fields() {
     });
 }
 
+/// Verifies the `Address.asTransactionObject` resolver in streaming mode for the
+/// `ObjectChange` variant.
+#[tokio::test]
+async fn test_event_subscription_as_transaction_object_change() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let package_id = emit_event_harness::publish(&mut cluster.validator).await;
+
+    // Pre-create the object in a separate tx, before subscribing, so the subscription
+    // only sees the mutation tx's event.
+    let (_, object_ref) =
+        emit_event_harness::create_object(&mut cluster.validator, package_id, /* value = */ 7)
+            .await;
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($pkg: SuiAddress!) {
+                events(filter: { type: $pkg }) {
+                    contents {
+                        extract(path: "address_event_id") {
+                            asAddress {
+                                asTransactionObject {
+                                    __typename
+                                    ... on ObjectChange {
+                                        inputState {
+                                            asMoveObject { contents { json } }
+                                        }
+                                        outputState {
+                                            asMoveObject { contents { json } }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+            Some(json!({ "pkg": package_id.to_string() })),
+        )
+        .await;
+
+    let _digest = emit_event_harness::mutate_and_emit(
+        &mut cluster.validator,
+        package_id,
+        object_ref,
+        /* new_value = */ 99,
+    )
+    .await;
+    let item = stream.next().await.expect("Stream ended");
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("event_subscription_as_transaction_object_change", item);
+    });
+}
+
+/// Verifies the `Address.asTransactionObject` resolver in streaming mode for the
+/// `ConsensusObjectRead` variant. The test tx takes the (read-only) shared clock as a
+/// consensus input and emits a `TestAddressEvent` whose payload is the clock's address.
+#[tokio::test]
+async fn test_event_subscription_as_transaction_object_consensus_read() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let package_id = emit_event_harness::publish(&mut cluster.validator).await;
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($pkg: SuiAddress!) {
+                events(filter: { type: $pkg }) {
+                    contents {
+                        extract(path: "address_event_id") {
+                            asAddress {
+                                asTransactionObject {
+                                    __typename
+                                    ... on ConsensusObjectRead {
+                                        object {
+                                            asMoveObject { contents { type { repr } } }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+            Some(json!({ "pkg": package_id.to_string() })),
+        )
+        .await;
+
+    let _digest = emit_event_harness::emit_with_clock(&mut cluster.validator, package_id).await;
+    let item = stream.next().await.expect("Stream ended");
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!(
+            "event_subscription_as_transaction_object_consensus_read",
+            item
+        );
+    });
+}
+
 /// Verifies that `event.transaction.effects.objectChanges` resolves with non-empty
 /// object data in streaming mode. Exercises `EffectsContents::fetch`'s streaming fast
 /// path plus the per-tx execution-objects anchor that `Scope::with_tx_sequence_number_viewed_at`
