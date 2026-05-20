@@ -47,7 +47,9 @@ JSON-RPC remains available for legacy clients but is in deprecation. Existing in
 
 Sui addresses do not require onchain initialization. You can spend from an address as soon as it corresponds to a private key you control.
 
-A Sui address is a 32-byte value derived by hashing the 1-byte signature scheme flag concatenated with the public key bytes (`flag || pubkey`) using [BLAKE2b](https://www.blake2.net/) (256-bit output). Sui currently supports the following schemes and flag bytes:
+For ordinary key-pair schemes, a Sui address is a 32-byte value derived as [BLAKE2b](https://www.blake2.net/)-256 of the 1-byte signature scheme flag concatenated with the public key bytes (`flag || pubkey`). Multisig, zkLogin, and other authentication schemes use scheme-specific derivations. Use the [Sui SDKs](/references/sui-sdks) or the Sui CLI to derive addresses rather than hand-rolling the computation, and see [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview) for the per-scheme details.
+
+Sui currently supports the following schemes and flag bytes:
 
 | Scheme          | Flag |
 | --------------- | ---- |
@@ -156,7 +158,7 @@ Treat deposit and withdrawal pipelines as event-driven and idempotent. The follo
 
 - **Endpoints.** Use your own full node or a contracted provider endpoint. Do not rely on the public `fullnode.<network>.sui.io` or `graphql.<network>.sui.io` URLs for production traffic.
 
-- **Observability.** Configure [full node logging](/operators/full-node/sui-full-node#full-node-logging) and metrics so you can detect lag or failures quickly. The full node exposes Prometheus metrics by default.
+- **Observability.** Configure full node [logging](/operators/observability#logging-levels) and [metrics monitoring](/operators/full-node/monitoring) so you can detect lag or failures quickly.
 
 - **Snapshots.** Start a new full node from a recent snapshot rather than syncing from genesis. See [Sui Snapshots](/operators/snapshots).
 
