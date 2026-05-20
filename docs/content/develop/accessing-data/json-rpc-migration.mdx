@@ -1,15 +1,12 @@
 ---
 title: JSON-RPC Migration Guide
-sidebar_label: JSON-RPC Migration
 description: Choose between gRPC and GraphQL RPC when migrating from the deprecated JSON-RPC API. Includes a method mapping, decision criteria, and common migration gotchas.
 keywords: [ json-rpc, migration, grpc, graphql, deprecation, sui rpc, json-rpc migration, sui rpc migration, replace json-rpc ]
 ---
 
 <ImportContent source="json-rpc-deprecation" mode="snippet" />
 
-This guide tells you how to move an existing JSON-RPC integration to the current Sui data access APIs. JSON-RPC is deprecated and is planned for deactivation in July 2026. The two replacements are [gRPC](/develop/accessing-data/grpc) for full node access and transaction execution, and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) for indexed, filterable reads.
-
-If you already know which API you want, jump to the [method mapping](#method-mapping) and the [examples](#examples-for-high-traffic-paths). If you are deciding, start with the next section.
+JSON-RPC is deprecated and is planned for deactivation in July 2026. The two replacements are [gRPC](/develop/accessing-data/grpc) for full node access and transaction execution, and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) for indexed, filterable reads.
 
 ## Choose your replacement
 
