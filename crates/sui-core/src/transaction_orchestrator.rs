@@ -275,7 +275,7 @@ where
         };
 
         let inner = self.inner.clone();
-        let (response, _) = spawn_monitored_task!(Inner::<A>::execute_transaction_with_retry(
+        let (response, local) = spawn_monitored_task!(Inner::<A>::execute_transaction_with_retry(
             inner,
             request,
             client_addr
@@ -286,10 +286,12 @@ where
             details: e.to_string(),
         })??;
 
+        let local_fetch = if local { "true" } else { "false" };
+
         self.inner
             .metrics
             .request_latency
-            .with_label_values(&[tx_type.as_str(), "execute_transaction_v3", "false"])
+            .with_label_values(&[tx_type.as_str(), "execute_transaction_v3", local_fetch])
             .observe(timer.elapsed().as_secs_f64());
 
         let QuorumTransactionResponse {
