@@ -28,6 +28,7 @@ use tracing::info;
 
 use crate::PackageResolver;
 use crate::bigtable_client::BigTableClient;
+use crate::config::PipelineStage;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
 use crate::pipeline::ResolvedWatermarked;
@@ -70,8 +71,10 @@ pub(crate) async fn list_events(
     let client: BigTableClient = ctx.client().clone();
     let resolver: crate::PackageResolver = ctx.package_resolver().clone();
     let checkpoint_hi_exclusive = ctx.checkpoint_hi_exclusive();
-    let endpoint = ctx.ledger_history().list_events();
-    let chunk_max = endpoint.chunk_max;
+    let lh = ctx.ledger_history();
+    let endpoint = lh.list_events();
+    let tx_seq_digest_stage = lh.stage(PipelineStage::TxSeqDigest);
+    let transactions_stage = lh.stage(PipelineStage::Transactions);
 
     let checkpoint_range = CheckpointRange::from_request(
         request.start_checkpoint,
@@ -174,10 +177,15 @@ pub(crate) async fn list_events(
     // so we skip this stage there.
     let ref_with_digest_stream: BoxStream<'static, Result<Watermarked<EventRef>, anyhow::Error>> =
         if filtered {
-            pipelined_chunks(ref_stream, chunk_max, request_bigtable_concurrency, {
-                let client = client.clone();
-                move |refs| attach_tx_seq_digests(client.clone(), refs)
-            })
+            pipelined_chunks(
+                ref_stream,
+                tx_seq_digest_stage.chunk_size,
+                tx_seq_digest_stage.concurrency,
+                {
+                    let client = client.clone();
+                    move |refs| attach_tx_seq_digests(client.clone(), refs)
+                },
+            )
         } else {
             ref_stream
         };
@@ -187,8 +195,8 @@ pub(crate) async fn list_events(
     // Stage C: Watermarked<EventRef> -> Watermarked<(EventRef, TransactionData)>.
     let tx_ref_stream = pipelined_chunks(
         ref_with_digest_stream,
-        chunk_max,
-        request_bigtable_concurrency,
+        transactions_stage.chunk_size,
+        transactions_stage.concurrency,
         {
             let client = client.clone();
             let columns = columns.clone();

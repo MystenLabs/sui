@@ -35,6 +35,7 @@ use tracing::info;
 
 use crate::bigtable_client::BigTableClient;
 use crate::bigtable_client::stage;
+use crate::config::PipelineStage;
 use crate::object_cache::BigTableObjectFetcher;
 use crate::object_cache::ObjectCache;
 use crate::object_cache::ObjectMap;
@@ -86,8 +87,11 @@ pub(crate) async fn list_checkpoints(
     let filtered = request.filter.is_some();
     let client: BigTableClient = ctx.client().clone();
     let checkpoint_hi_exclusive = ctx.checkpoint_hi_exclusive();
-    let endpoint = ctx.ledger_history().list_checkpoints();
-    let chunk_max = endpoint.chunk_max;
+    let lh = ctx.ledger_history();
+    let endpoint = lh.list_checkpoints();
+    let checkpoints_stage = lh.stage(PipelineStage::Checkpoints);
+    let transactions_stage = lh.stage(PipelineStage::Transactions);
+    let objects_stage = lh.stage(PipelineStage::Objects);
 
     let checkpoint_range = CheckpointRange::from_request(
         request.start_checkpoint,
@@ -155,8 +159,6 @@ pub(crate) async fn list_checkpoints(
     let needs_full = needs_transactions_or_objects(&read_mask);
     let cp_columns: Arc<[&'static str]> = list_checkpoint_columns(&read_mask, needs_full).into();
 
-    let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
-
     // Stage A: discover checkpoint rows for the requested response. Filtered
     // requests use sparse bitmap-eval over transactions and then fetch the
     // deduped checkpoint rows. Unfiltered requests scan the dense checkpoint
@@ -177,11 +179,16 @@ pub(crate) async fn list_checkpoints(
         )
         .await?;
         let seq_stream = take_items(seq_stream, limit_items);
-        pipelined_chunks(seq_stream, chunk_max, request_bigtable_concurrency, {
-            let client = client.clone();
-            let columns = cp_columns.clone();
-            move |seqs| fetch_checkpoint_data(client.clone(), columns.clone(), seqs)
-        })
+        pipelined_chunks(
+            seq_stream,
+            checkpoints_stage.chunk_size,
+            checkpoints_stage.concurrency,
+            {
+                let client = client.clone();
+                let columns = cp_columns.clone();
+                move |seqs| fetch_checkpoint_data(client.clone(), columns.clone(), seqs)
+            },
+        )
     } else {
         scan_checkpoint_data(
             client.clone(),
@@ -275,12 +282,16 @@ pub(crate) async fn list_checkpoints(
     // across the chunk: gather ALL tx_digests across all cps in the chunk
     // into one multi_get, route results back per-cp, then emit in input
     // cp_seq order after the chunk drains.
-    let cp_with_txs_stream =
-        pipelined_chunks(cp_data_stream, chunk_max, request_bigtable_concurrency, {
+    let cp_with_txs_stream = pipelined_chunks(
+        cp_data_stream,
+        transactions_stage.chunk_size,
+        transactions_stage.concurrency,
+        {
             let client = client.clone();
             let columns = tx_columns.clone();
             move |items| fetch_transactions_for_cps(client.clone(), columns.clone(), items)
-        });
+        },
+    );
 
     // Stage D: + ObjectMap. Per-cp object refs are precomputed, then
     // `pipelined_keyed_batches` packs consecutive cps into batches whose
@@ -305,9 +316,9 @@ pub(crate) async fn list_checkpoints(
                 .boxed();
             pipelined_keyed_batches(
                 cp_with_keys,
-                chunk_max,
-                chunk_max,
-                request_bigtable_concurrency,
+                objects_stage.chunk_size,
+                objects_stage.chunk_size,
+                objects_stage.concurrency,
                 {
                     let object_cache = object_cache.clone();
                     move |keys| {
@@ -799,7 +810,10 @@ async fn filtered_checkpoint_seq_stream(
 
     let client = ctx.client();
     let query = ctx.transaction_filter_query(filter)?;
-    let chunk_max = ctx.ledger_history().list_checkpoints().chunk_max;
+    let chunk_max = ctx
+        .ledger_history()
+        .stage(PipelineStage::TxSeqDigest)
+        .chunk_size;
 
     let tx_seq_stream = client.eval_bitmap_query_stream(
         query,

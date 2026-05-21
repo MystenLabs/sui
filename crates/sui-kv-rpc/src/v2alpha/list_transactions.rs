@@ -21,6 +21,7 @@ use tracing::debug_span;
 use tracing::info;
 
 use crate::bigtable_client::BigTableClient;
+use crate::config::PipelineStage;
 use crate::object_cache::BigTableObjectFetcher;
 use crate::object_cache::ObjectCache;
 use crate::object_cache::ObjectMap;
@@ -70,8 +71,11 @@ pub(crate) async fn list_transactions(
     let client: BigTableClient = ctx.client().clone();
     let resolver: crate::PackageResolver = ctx.package_resolver().clone();
     let checkpoint_hi_exclusive = ctx.checkpoint_hi_exclusive();
-    let endpoint = ctx.ledger_history().list_transactions();
-    let chunk_max = endpoint.chunk_max;
+    let lh = ctx.ledger_history();
+    let endpoint = lh.list_transactions();
+    let tx_seq_digest_stage = lh.stage(PipelineStage::TxSeqDigest);
+    let transactions_stage = lh.stage(PipelineStage::Transactions);
+    let objects_stage = lh.stage(PipelineStage::Objects);
 
     let checkpoint_range = CheckpointRange::from_request(
         request.start_checkpoint,
@@ -125,8 +129,6 @@ pub(crate) async fn list_transactions(
         .boxed());
     }
 
-    let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
-
     // Stage 1: discover tx_seq_digest rows for the requested response.
     // Filtered requests are sparse bitmap hits and still use chunked
     // multi_get lookups. Unfiltered requests scan the dense tx_seq_digest
@@ -144,10 +146,15 @@ pub(crate) async fn list_transactions(
                 ctx.bitmap_scan_observer(),
             );
             let seq_stream = take_items(seq_stream, limit_items);
-            pipelined_chunks(seq_stream, chunk_max, request_bigtable_concurrency, {
-                let client = client.clone();
-                move |seqs| fetch_tx_seq_digests(client.clone(), seqs)
-            })
+            pipelined_chunks(
+                seq_stream,
+                tx_seq_digest_stage.chunk_size,
+                tx_seq_digest_stage.concurrency,
+                {
+                    let client = client.clone();
+                    move |seqs| fetch_tx_seq_digests(client.clone(), seqs)
+                },
+            )
         } else {
             scan_tx_seq_digests(client.clone(), tx_range.clone(), limit_items, &options).await?
         };
@@ -213,11 +220,16 @@ pub(crate) async fn list_transactions(
     let needs_objects = needs_object_types(&read_mask);
 
     // Stage 3: Watermarked<TxSeqDigestData> -> Watermarked<(tx_seq, TransactionData)>.
-    let tx_stream = pipelined_chunks(digest_stream, chunk_max, request_bigtable_concurrency, {
-        let client = client.clone();
-        let columns = columns.clone();
-        move |rows| fetch_transactions(client.clone(), columns.clone(), rows)
-    });
+    let tx_stream = pipelined_chunks(
+        digest_stream,
+        transactions_stage.chunk_size,
+        transactions_stage.concurrency,
+        {
+            let client = client.clone();
+            let columns = columns.clone();
+            move |rows| fetch_transactions(client.clone(), columns.clone(), rows)
+        },
+    );
 
     // Stage 4: + ObjectMap. Object refs are precomputed per Item; Frontier
     // watermarks pass through pipelined_keyed_batches unchanged.
@@ -237,9 +249,9 @@ pub(crate) async fn list_transactions(
 
         pipelined_keyed_batches(
             tx_with_keys,
-            chunk_max,
-            chunk_max,
-            request_bigtable_concurrency,
+            objects_stage.chunk_size,
+            objects_stage.chunk_size,
+            objects_stage.concurrency,
             move |keys| {
                 let object_cache = object_cache.clone();
                 async move {

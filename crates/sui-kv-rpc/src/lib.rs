@@ -49,7 +49,11 @@ use bigtable_client::Metrics as BigTableLimiterMetrics;
 pub use config::KvRpcConfig;
 pub use config::LedgerHistoryConfig;
 pub use config::LedgerHistoryMethodConfig;
+pub use config::PipelineStage;
 pub use config::ResolvedLedgerHistoryMethodConfig;
+pub use config::ResolvedStageConfig;
+pub use config::StageConfig;
+pub use config::StagesConfig;
 use package_store::BigTablePackageStore;
 
 pub const DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 6] = [

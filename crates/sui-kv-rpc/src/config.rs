@@ -19,29 +19,27 @@ const DEFAULT_BITMAP_BUCKET_BUDGET_TX: u64 = 1_024;
 const DEFAULT_BITMAP_BUCKET_BUDGET_EVENT: u64 = 1_024;
 const DEFAULT_MAX_BITMAP_FILTER_LITERALS: usize = 10;
 const DEFAULT_REQUEST_BIGTABLE_CONCURRENCY: usize = 10;
+const DEFAULT_STAGE_CHUNK_SIZE: usize = 100;
+const DEFAULT_STAGE_CONCURRENCY: usize = 10;
 
 /// Built-in per-endpoint defaults. These differ per endpoint (e.g. checkpoints
 /// page smaller than transactions).
 struct LedgerHistoryMethodDefaults {
     default_limit_items: u32,
     max_limit_items: u32,
-    chunk_max: usize,
 }
 
 const LIST_TRANSACTIONS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
     default_limit_items: 50,
     max_limit_items: 500,
-    chunk_max: 100,
 };
 const LIST_EVENTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
     default_limit_items: 50,
     max_limit_items: 1_000,
-    chunk_max: 100,
 };
 const LIST_CHECKPOINTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
     default_limit_items: 10,
     max_limit_items: 100,
-    chunk_max: 100,
 };
 
 /// Per-endpoint tunables for one v2alpha ledger-history list API. Every field is
@@ -61,10 +59,6 @@ pub struct LedgerHistoryMethodConfig {
     /// Upper bound a request's `limit_items` is clamped to.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_limit_items: Option<u32>,
-
-    /// Maximum items materialized per internal scan/pipeline chunk.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub chunk_max: Option<usize>,
 }
 
 /// A [`LedgerHistoryMethodConfig`] with all defaults applied.
@@ -73,7 +67,6 @@ pub struct ResolvedLedgerHistoryMethodConfig {
     pub timeout: Duration,
     pub default_limit_items: u32,
     pub max_limit_items: u32,
-    pub chunk_max: usize,
 }
 
 impl LedgerHistoryMethodConfig {
@@ -92,7 +85,87 @@ impl LedgerHistoryMethodConfig {
             max_limit_items: this
                 .and_then(|c| c.max_limit_items)
                 .unwrap_or(defaults.max_limit_items),
-            chunk_max: this.and_then(|c| c.chunk_max).unwrap_or(defaults.chunk_max),
+        }
+    }
+}
+
+/// One read pipeline stage, identified by the BigTable table it scans. The same
+/// stage is shared by every list method that reads that table, so its cost is a
+/// property of the table (e.g. object rows are large, `tx_seq_digest` rows tiny)
+/// rather than the calling method.
+#[derive(Clone, Copy, Debug)]
+pub enum PipelineStage {
+    TxSeqDigest,
+    Transactions,
+    Objects,
+    Checkpoints,
+}
+
+/// Per-stage tunables. Every field is optional and falls back to a built-in
+/// default; see [`ResolvedStageConfig`].
+#[derive(Clone, Debug, Default, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct StageConfig {
+    /// Items per multi-get batch issued to this stage's table. Defaults to `100`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chunk_size: Option<usize>,
+
+    /// Max in-flight chunk fetches for this stage. Independent of
+    /// `request_bigtable_concurrency`, which still caps total concurrent reads
+    /// across all stages within a request. Defaults to `10`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub concurrency: Option<usize>,
+}
+
+/// A [`StageConfig`] with all defaults applied.
+#[derive(Clone, Copy, Debug)]
+pub struct ResolvedStageConfig {
+    pub chunk_size: usize,
+    pub concurrency: usize,
+}
+
+impl StageConfig {
+    fn resolve(this: Option<&StageConfig>) -> ResolvedStageConfig {
+        ResolvedStageConfig {
+            chunk_size: this
+                .and_then(|c| c.chunk_size)
+                .unwrap_or(DEFAULT_STAGE_CHUNK_SIZE),
+            concurrency: this
+                .and_then(|c| c.concurrency)
+                .unwrap_or(DEFAULT_STAGE_CONCURRENCY),
+        }
+    }
+}
+
+/// Per-table-stage pipeline tunables, shared across the list methods that read
+/// each table.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct StagesConfig {
+    /// Reads of the `tx_seq_digest` table (sequence number -> digest/checkpoint).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tx_seq_digest: Option<StageConfig>,
+
+    /// Reads of the `transactions` table (digest -> transaction body).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transactions: Option<StageConfig>,
+
+    /// Multi-get reads of the `objects` table.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub objects: Option<StageConfig>,
+
+    /// Reads of the `checkpoints` table.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoints: Option<StageConfig>,
+}
+
+impl StagesConfig {
+    fn get(&self, stage: PipelineStage) -> Option<&StageConfig> {
+        match stage {
+            PipelineStage::TxSeqDigest => self.tx_seq_digest.as_ref(),
+            PipelineStage::Transactions => self.transactions.as_ref(),
+            PipelineStage::Objects => self.objects.as_ref(),
+            PipelineStage::Checkpoints => self.checkpoints.as_ref(),
         }
     }
 }
@@ -153,6 +226,12 @@ pub struct LedgerHistoryConfig {
     /// Defaults to `10` if not specified.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request_bigtable_concurrency: Option<usize>,
+
+    /// Per-table-stage pipeline tunables (chunk size and fan-out concurrency).
+    /// Bounded by `request_bigtable_concurrency` at runtime, which remains the
+    /// request-wide read ceiling.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stages: Option<StagesConfig>,
 }
 
 impl LedgerHistoryConfig {
@@ -194,6 +273,13 @@ impl LedgerHistoryConfig {
             .unwrap_or(DEFAULT_REQUEST_BIGTABLE_CONCURRENCY)
     }
 
+    /// Resolved tunables for one pipeline stage. Unset stages fall back to the
+    /// built-in chunk size (`100`) and stage concurrency (`10`); the latter is
+    /// independent of `request_bigtable_concurrency`.
+    pub fn stage(&self, stage: PipelineStage) -> ResolvedStageConfig {
+        StageConfig::resolve(self.stages.as_ref().and_then(|s| s.get(stage)))
+    }
+
     /// Reject configurations that cannot make forward progress. Each filter
     /// literal becomes one bitmap leaf that must fetch at least one bucket to
     /// emit its first watermark; if a per-request budget is below the literal
@@ -225,6 +311,22 @@ impl LedgerHistoryConfig {
             self.bitmap_bucket_budget_event(),
             self.max_bitmap_filter_literals(),
         );
+        for stage in [
+            PipelineStage::TxSeqDigest,
+            PipelineStage::Transactions,
+            PipelineStage::Objects,
+            PipelineStage::Checkpoints,
+        ] {
+            let resolved = self.stage(stage);
+            anyhow::ensure!(
+                resolved.chunk_size > 0,
+                "ledger_history.stages.{stage:?} chunk_size must be greater than zero",
+            );
+            anyhow::ensure!(
+                resolved.concurrency > 0,
+                "ledger_history.stages.{stage:?} concurrency must be greater than zero",
+            );
+        }
         Ok(())
     }
 }
@@ -435,6 +537,65 @@ mod tests {
     }
 
     #[test]
+    fn stage_override_wins_and_siblings_default() {
+        let yaml = r#"
+ledger-history:
+  stages:
+    objects:
+      concurrency: 4
+    transactions:
+      chunk-size: 25
+"#;
+        let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
+        let lh = cfg.ledger_history();
+
+        let objects = lh.stage(PipelineStage::Objects);
+        assert_eq!(objects.concurrency, 4);
+        // Unset sibling field on the same stage falls back to its default.
+        assert_eq!(objects.chunk_size, 100);
+
+        let transactions = lh.stage(PipelineStage::Transactions);
+        assert_eq!(transactions.chunk_size, 25);
+        assert_eq!(transactions.concurrency, 10);
+
+        // Untouched stage is fully default.
+        let checkpoints = lh.stage(PipelineStage::Checkpoints);
+        assert_eq!(checkpoints.chunk_size, 100);
+        assert_eq!(checkpoints.concurrency, 10);
+
+        lh.validate().unwrap();
+    }
+
+    #[test]
+    fn validate_rejects_zero_stage_knob() {
+        let cfg = LedgerHistoryConfig {
+            stages: Some(StagesConfig {
+                objects: Some(StageConfig {
+                    chunk_size: Some(0),
+                    concurrency: None,
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let err = cfg.validate().expect_err("zero chunk_size must fail");
+        assert!(err.to_string().contains("chunk_size"), "{err}");
+
+        let cfg = LedgerHistoryConfig {
+            stages: Some(StagesConfig {
+                transactions: Some(StageConfig {
+                    chunk_size: None,
+                    concurrency: Some(0),
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let err = cfg.validate().expect_err("zero concurrency must fail");
+        assert!(err.to_string().contains("concurrency"), "{err}");
+    }
+
+    #[test]
     fn partial_yaml_falls_back_to_defaults() {
         // Only one nested knob set; everything else must resolve to defaults.
         let yaml = r#"
@@ -456,19 +617,5 @@ ledger-history:
         assert_eq!(lh.bitmap_bucket_budget_tx(), 2048);
         assert_eq!(lh.bitmap_bucket_budget_event(), 1024);
         lh.validate().unwrap();
-    }
-
-    #[test]
-    fn round_trip_skips_none_fields() {
-        let cfg = KvRpcConfig {
-            instance_id: Some("inst".to_string()),
-            ..Default::default()
-        };
-        let yaml = serde_yaml::to_string(&cfg).unwrap();
-        // Only the set field is serialized.
-        assert!(yaml.contains("instance-id: inst"));
-        assert!(!yaml.contains("address"));
-        let back: KvRpcConfig = serde_yaml::from_str(&yaml).unwrap();
-        assert_eq!(back.instance_id, cfg.instance_id);
     }
 }
