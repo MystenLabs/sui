@@ -2261,6 +2261,7 @@
                 "gasless_transaction_drop_safety": false,
                 "gasless_verify_remaining_balance": false,
                 "generate_df_type_layouts": false,
+                "granular_post_execution_checks": false,
                 "groth16_prepare_verifying_key_bls12381_cost_base": "52",
                 "groth16_prepare_verifying_key_bn254_cost_base": "52",
                 "groth16_verify_groth16_proof_internal_bls12381_cost_base": "52",
