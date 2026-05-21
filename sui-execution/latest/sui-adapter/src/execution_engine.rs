@@ -448,7 +448,12 @@ mod checked {
         Result<Mode::ExecutionResults, Mode::Error>,
         Vec<ExecutionTiming>,
     ) {
-        if use_step_gas_charging(gas_charger.gas_model_version()) {
+        let gas_model_version = gas_charger.gas_model_version();
+        if use_step_gas_charging(gas_model_version) {
+            tracing::info!(
+                gas_model_version,
+                "tx-backtest dual-replay: latest dispatch selecting new execute_transaction"
+            );
             execute_transaction::<Mode>(
                 store,
                 temporary_store,
@@ -466,6 +471,10 @@ mod checked {
                 input_reservations,
             )
         } else {
+            tracing::info!(
+                gas_model_version,
+                "tx-backtest dual-replay: latest dispatch selecting legacy execute_transaction"
+            );
             // TODO: remove all `legacy` code on the next execution version cut
             legacy::execute_transaction::<Mode>(
                 store,

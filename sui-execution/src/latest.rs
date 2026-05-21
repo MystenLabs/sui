@@ -5,7 +5,7 @@ use move_binary_format::CompiledModule;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
@@ -50,11 +50,29 @@ pub(crate) struct Verifier<'m> {
     metrics: &'m Arc<BytecodeVerifierMetrics>,
 }
 
+const TX_BACKTEST_TIP_PROTOCOL_VERSION: u64 = 125;
+
+fn tx_backtest_tip_protocol_config(protocol_config: &ProtocolConfig) -> ProtocolConfig {
+    let tip_protocol_config = ProtocolConfig::get_for_version(
+        ProtocolVersion::new(TX_BACKTEST_TIP_PROTOCOL_VERSION),
+        Chain::Mainnet,
+    );
+    tracing::info!(
+        base_protocol_version = protocol_config.version.as_u64(),
+        base_gas_model_version = protocol_config.gas_model_version(),
+        tip_protocol_version = tip_protocol_config.version.as_u64(),
+        tip_gas_model_version = tip_protocol_config.gas_model_version(),
+        "tx-backtest dual-replay: overriding tip protocol config"
+    );
+    tip_protocol_config
+}
+
 impl Executor {
     pub(crate) fn new(protocol_config: &ProtocolConfig, silent: bool) -> Result<Self, SuiError> {
+        let tip_protocol_config = tx_backtest_tip_protocol_config(protocol_config);
         let tip_runtime = Arc::new(new_move_runtime(
-            all_natives(silent, protocol_config),
-            protocol_config,
+            all_natives(silent, &tip_protocol_config),
+            &tip_protocol_config,
         )?);
         let base_runtime = Arc::new(sui_adapter_replay_cut::adapter::new_move_runtime(
             sui_move_natives_replay_cut::all_natives(silent, protocol_config),
@@ -96,6 +114,7 @@ impl executor::Executor for Executor {
         Result<(), ExecutionFailure>,
     ) {
         // DUAL_REPLAY_INJECTED
+        let tip_protocol_config = tx_backtest_tip_protocol_config(protocol_config);
         tracing::info!(%transaction_digest, "tx-backtest dual-replay: running tip execute_transaction");
         let tip_start = std::time::Instant::now();
         let (tip_store, tip_gas_status, tip_effects, _tip_timings, _tip_result) =
@@ -111,7 +130,7 @@ impl executor::Executor for Executor {
                 &self.0,
                 epoch_id,
                 epoch_timestamp_ms,
-                protocol_config,
+                &tip_protocol_config,
                 metrics.clone(),
                 enable_expensive_checks,
                 execution_params.clone(),
@@ -182,6 +201,7 @@ impl executor::Executor for Executor {
         Result<(), ExecutionError>,
     ) {
         // DUAL_REPLAY_INJECTED
+        let tip_protocol_config = tx_backtest_tip_protocol_config(protocol_config);
         tracing::info!(%transaction_digest, "tx-backtest dual-replay: running tip execute_transaction_with_error");
         let tip_start = std::time::Instant::now();
         let (tip_store, tip_gas_status, tip_effects, _tip_timings, _tip_result) =
@@ -197,7 +217,7 @@ impl executor::Executor for Executor {
                 &self.0,
                 epoch_id,
                 epoch_timestamp_ms,
-                protocol_config,
+                &tip_protocol_config,
                 metrics.clone(),
                 enable_expensive_checks,
                 execution_params.clone(),

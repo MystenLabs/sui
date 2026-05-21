@@ -440,6 +440,10 @@ mod checked {
         Result<Mode::ExecutionResults, Mode::Error>,
         Vec<ExecutionTiming>,
     ) {
+        tracing::info!(
+            gas_model_version = protocol_config.gas_model_version(),
+            "tx-backtest dual-replay: replay_cut/base executing regular execute_transaction"
+        );
         // At this point no charges have been applied yet
         debug_assert!(
             gas_charger.no_charges(),
