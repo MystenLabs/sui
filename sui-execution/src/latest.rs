@@ -61,8 +61,8 @@ impl Executor {
             protocol_config,
         )?);
         tracing::warn!(
-            order = "base_then_tip",
-            timings = "outer_and_execution_loop",
+            order = "base_tip_tip_base",
+            timings = "abba_outer_and_execution_loop",
             "dual-replay: tx-backtest executor enabled"
         );
         Ok(Executor(tip_runtime, base_runtime))
@@ -101,17 +101,32 @@ impl executor::Executor for Executor {
         Result<(), ExecutionFailure>,
     ) {
         // DUAL_REPLAY_INJECTED
-        // Run base first so the replay-cut side pays any first-run cache warmup cost.
-        let tip_input_objects = input_objects.clone();
-        let tip_gas = gas.clone();
-        let tip_gas_status = gas_status.clone();
-        let tip_transaction_kind = transaction_kind.clone();
-        let tip_rewritten_inputs = rewritten_inputs.clone();
-        let tip_metrics = metrics.clone();
-        let tip_execution_params = execution_params.clone();
+        // Run A/B/B/A so first-run and second-run order effects can be separated from the
+        // base-vs-tip comparison. A=base/replay_cut, B=tip/latest.
+        let tip1_input_objects = input_objects.clone();
+        let tip2_input_objects = input_objects.clone();
+        let base2_input_objects = input_objects.clone();
+        let tip1_gas = gas.clone();
+        let tip2_gas = gas.clone();
+        let base2_gas = gas.clone();
+        let tip1_gas_status = gas_status.clone();
+        let tip2_gas_status = gas_status.clone();
+        let base2_gas_status = gas_status.clone();
+        let tip1_transaction_kind = transaction_kind.clone();
+        let tip2_transaction_kind = transaction_kind.clone();
+        let base2_transaction_kind = transaction_kind.clone();
+        let tip1_rewritten_inputs = rewritten_inputs.clone();
+        let tip2_rewritten_inputs = rewritten_inputs.clone();
+        let base2_rewritten_inputs = rewritten_inputs.clone();
+        let tip1_metrics = metrics.clone();
+        let tip2_metrics = metrics.clone();
+        let base2_metrics = metrics.clone();
+        let tip1_execution_params = execution_params.clone();
+        let tip2_execution_params = execution_params.clone();
+        let base2_execution_params = execution_params.clone();
 
-        let base_start = std::time::Instant::now();
-        let base = {
+        let base1_start = std::time::Instant::now();
+        let base1 = {
             use sui_adapter_replay_cut as base_adapter;
             base_adapter::execution_engine::execute_transaction_to_effects::<
                 base_adapter::execution_mode::Normal,
@@ -134,46 +149,105 @@ impl executor::Executor for Executor {
                 trace_builder_opt,
             )
         };
-        let base_ns = base_start.elapsed().as_nanos() as u64;
-        let base_loop_ns =
+        let base1_ns = base1_start.elapsed().as_nanos() as u64;
+        let base1_loop_ns =
             sui_adapter_replay_cut::execution_engine::dual_replay_take_last_execution_loop_ns();
 
-        let tip_start = std::time::Instant::now();
-        let (tip_store, tip_gas_status, tip_effects, _tip_timings, _tip_result) =
+        let tip1_start = std::time::Instant::now();
+        let (tip1_store, tip1_gas_status, tip1_effects, _tip1_timings, _tip1_result) =
             execute_transaction_to_effects::<execution_mode::Normal>(
                 store,
-                tip_input_objects,
-                tip_gas,
-                tip_gas_status,
-                tip_transaction_kind,
-                tip_rewritten_inputs,
+                tip1_input_objects,
+                tip1_gas,
+                tip1_gas_status,
+                tip1_transaction_kind,
+                tip1_rewritten_inputs,
                 transaction_signer,
                 transaction_digest,
                 &self.0,
                 epoch_id,
                 epoch_timestamp_ms,
                 protocol_config,
-                tip_metrics,
+                tip1_metrics,
                 enable_expensive_checks,
-                tip_execution_params,
+                tip1_execution_params,
                 &mut None,
             );
-        let tip_ns = tip_start.elapsed().as_nanos() as u64;
-        let tip_loop_ns =
+        let tip1_ns = tip1_start.elapsed().as_nanos() as u64;
+        let tip1_loop_ns =
             sui_adapter_latest::execution_engine::dual_replay_take_last_execution_loop_ns();
-        self::latest_dual_replay::compare_dual_replay(
-            (&base.0, &base.1, &base.2),
-            (&tip_store, &tip_gas_status, &tip_effects),
+
+        let tip2_start = std::time::Instant::now();
+        let (tip2_store, tip2_gas_status, tip2_effects, _tip2_timings, _tip2_result) =
+            execute_transaction_to_effects::<execution_mode::Normal>(
+                store,
+                tip2_input_objects,
+                tip2_gas,
+                tip2_gas_status,
+                tip2_transaction_kind,
+                tip2_rewritten_inputs,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                tip2_metrics,
+                enable_expensive_checks,
+                tip2_execution_params,
+                &mut None,
+            );
+        let tip2_ns = tip2_start.elapsed().as_nanos() as u64;
+        let tip2_loop_ns =
+            sui_adapter_latest::execution_engine::dual_replay_take_last_execution_loop_ns();
+
+        let base2_start = std::time::Instant::now();
+        let base2 = {
+            use sui_adapter_replay_cut as base_adapter;
+            base_adapter::execution_engine::execute_transaction_to_effects::<
+                base_adapter::execution_mode::Normal,
+            >(
+                store,
+                base2_input_objects,
+                base2_gas,
+                base2_gas_status,
+                base2_transaction_kind,
+                base2_rewritten_inputs,
+                transaction_signer,
+                transaction_digest,
+                &self.1,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                base2_metrics,
+                enable_expensive_checks,
+                base2_execution_params,
+                &mut None,
+            )
+        };
+        let base2_ns = base2_start.elapsed().as_nanos() as u64;
+        let base2_loop_ns =
+            sui_adapter_replay_cut::execution_engine::dual_replay_take_last_execution_loop_ns();
+
+        self::latest_dual_replay::compare_dual_replay_abba(
+            (&base1.0, &base1.1, &base1.2),
+            (&tip1_store, &tip1_gas_status, &tip1_effects),
+            (&tip2_store, &tip2_gas_status, &tip2_effects),
+            (&base2.0, &base2.1, &base2.2),
             transaction_digest,
-            base_ns,
-            tip_ns,
-            base_loop_ns,
-            tip_loop_ns,
+            base1_ns,
+            tip1_ns,
+            tip2_ns,
+            base2_ns,
+            base1_loop_ns,
+            tip1_loop_ns,
+            tip2_loop_ns,
+            base2_loop_ns,
         );
-        if let Err(error) = &base.4 {
+        if let Err(error) = &base1.4 {
             log_execution_error(transaction_digest, error);
         }
-        base
+        base1
     }
 
     fn execute_transaction_to_effects_and_execution_error(
@@ -201,17 +275,32 @@ impl executor::Executor for Executor {
         Result<(), ExecutionError>,
     ) {
         // DUAL_REPLAY_INJECTED
-        // Run base first so the replay-cut side pays any first-run cache warmup cost.
-        let tip_input_objects = input_objects.clone();
-        let tip_gas = gas.clone();
-        let tip_gas_status = gas_status.clone();
-        let tip_transaction_kind = transaction_kind.clone();
-        let tip_rewritten_inputs = rewritten_inputs.clone();
-        let tip_metrics = metrics.clone();
-        let tip_execution_params = execution_params.clone();
+        // Run A/B/B/A so first-run and second-run order effects can be separated from the
+        // base-vs-tip comparison. A=base/replay_cut, B=tip/latest.
+        let tip1_input_objects = input_objects.clone();
+        let tip2_input_objects = input_objects.clone();
+        let base2_input_objects = input_objects.clone();
+        let tip1_gas = gas.clone();
+        let tip2_gas = gas.clone();
+        let base2_gas = gas.clone();
+        let tip1_gas_status = gas_status.clone();
+        let tip2_gas_status = gas_status.clone();
+        let base2_gas_status = gas_status.clone();
+        let tip1_transaction_kind = transaction_kind.clone();
+        let tip2_transaction_kind = transaction_kind.clone();
+        let base2_transaction_kind = transaction_kind.clone();
+        let tip1_rewritten_inputs = rewritten_inputs.clone();
+        let tip2_rewritten_inputs = rewritten_inputs.clone();
+        let base2_rewritten_inputs = rewritten_inputs.clone();
+        let tip1_metrics = metrics.clone();
+        let tip2_metrics = metrics.clone();
+        let base2_metrics = metrics.clone();
+        let tip1_execution_params = execution_params.clone();
+        let tip2_execution_params = execution_params.clone();
+        let base2_execution_params = execution_params.clone();
 
-        let base_start = std::time::Instant::now();
-        let base = {
+        let base1_start = std::time::Instant::now();
+        let base1 = {
             use sui_adapter_replay_cut as base_adapter;
             base_adapter::execution_engine::execute_transaction_to_effects::<
                 base_adapter::execution_mode::Normal<ExecutionError>,
@@ -234,46 +323,105 @@ impl executor::Executor for Executor {
                 trace_builder_opt,
             )
         };
-        let base_ns = base_start.elapsed().as_nanos() as u64;
-        let base_loop_ns =
+        let base1_ns = base1_start.elapsed().as_nanos() as u64;
+        let base1_loop_ns =
             sui_adapter_replay_cut::execution_engine::dual_replay_take_last_execution_loop_ns();
 
-        let tip_start = std::time::Instant::now();
-        let (tip_store, tip_gas_status, tip_effects, _tip_timings, _tip_result) =
+        let tip1_start = std::time::Instant::now();
+        let (tip1_store, tip1_gas_status, tip1_effects, _tip1_timings, _tip1_result) =
             execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
                 store,
-                tip_input_objects,
-                tip_gas,
-                tip_gas_status,
-                tip_transaction_kind,
-                tip_rewritten_inputs,
+                tip1_input_objects,
+                tip1_gas,
+                tip1_gas_status,
+                tip1_transaction_kind,
+                tip1_rewritten_inputs,
                 transaction_signer,
                 transaction_digest,
                 &self.0,
                 epoch_id,
                 epoch_timestamp_ms,
                 protocol_config,
-                tip_metrics,
+                tip1_metrics,
                 enable_expensive_checks,
-                tip_execution_params,
+                tip1_execution_params,
                 &mut None,
             );
-        let tip_ns = tip_start.elapsed().as_nanos() as u64;
-        let tip_loop_ns =
+        let tip1_ns = tip1_start.elapsed().as_nanos() as u64;
+        let tip1_loop_ns =
             sui_adapter_latest::execution_engine::dual_replay_take_last_execution_loop_ns();
-        self::latest_dual_replay::compare_dual_replay(
-            (&base.0, &base.1, &base.2),
-            (&tip_store, &tip_gas_status, &tip_effects),
+
+        let tip2_start = std::time::Instant::now();
+        let (tip2_store, tip2_gas_status, tip2_effects, _tip2_timings, _tip2_result) =
+            execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
+                store,
+                tip2_input_objects,
+                tip2_gas,
+                tip2_gas_status,
+                tip2_transaction_kind,
+                tip2_rewritten_inputs,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                tip2_metrics,
+                enable_expensive_checks,
+                tip2_execution_params,
+                &mut None,
+            );
+        let tip2_ns = tip2_start.elapsed().as_nanos() as u64;
+        let tip2_loop_ns =
+            sui_adapter_latest::execution_engine::dual_replay_take_last_execution_loop_ns();
+
+        let base2_start = std::time::Instant::now();
+        let base2 = {
+            use sui_adapter_replay_cut as base_adapter;
+            base_adapter::execution_engine::execute_transaction_to_effects::<
+                base_adapter::execution_mode::Normal<ExecutionError>,
+            >(
+                store,
+                base2_input_objects,
+                base2_gas,
+                base2_gas_status,
+                base2_transaction_kind,
+                base2_rewritten_inputs,
+                transaction_signer,
+                transaction_digest,
+                &self.1,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                base2_metrics,
+                enable_expensive_checks,
+                base2_execution_params,
+                &mut None,
+            )
+        };
+        let base2_ns = base2_start.elapsed().as_nanos() as u64;
+        let base2_loop_ns =
+            sui_adapter_replay_cut::execution_engine::dual_replay_take_last_execution_loop_ns();
+
+        self::latest_dual_replay::compare_dual_replay_abba(
+            (&base1.0, &base1.1, &base1.2),
+            (&tip1_store, &tip1_gas_status, &tip1_effects),
+            (&tip2_store, &tip2_gas_status, &tip2_effects),
+            (&base2.0, &base2.1, &base2.2),
             transaction_digest,
-            base_ns,
-            tip_ns,
-            base_loop_ns,
-            tip_loop_ns,
+            base1_ns,
+            tip1_ns,
+            tip2_ns,
+            base2_ns,
+            base1_loop_ns,
+            tip1_loop_ns,
+            tip2_loop_ns,
+            base2_loop_ns,
         );
-        if let Err(error) = &base.4 {
+        if let Err(error) = &base1.4 {
             log_execution_error(transaction_digest, error);
         }
-        base
+        base1
     }
 
     fn dev_inspect_transaction(
@@ -466,59 +614,108 @@ mod latest_dual_replay {
         &'a TransactionEffects,
     );
 
-    pub(super) fn compare_dual_replay(
-        base: View<'_>,
-        tip: View<'_>,
+    pub(super) fn compare_dual_replay_abba(
+        base1: View<'_>,
+        tip1: View<'_>,
+        tip2: View<'_>,
+        base2: View<'_>,
         digest: TransactionDigest,
-        base_ns: u64,
-        tip_ns: u64,
-        base_loop_ns: u64,
-        tip_loop_ns: u64,
+        base1_ns: u64,
+        tip1_ns: u64,
+        tip2_ns: u64,
+        base2_ns: u64,
+        base1_loop_ns: u64,
+        tip1_loop_ns: u64,
+        tip2_loop_ns: u64,
+        base2_loop_ns: u64,
     ) {
-        let (_, base_gas, base_effects) = base;
-        let (_, tip_gas, tip_effects) = tip;
-        let base_gas_used = base_gas.gas_used();
-        let tip_gas_used = tip_gas.gas_used();
-        let status_match = matches!(
-            (base_effects.status(), tip_effects.status()),
+        let (_, base1_gas, base1_effects) = base1;
+        let (_, tip1_gas, tip1_effects) = tip1;
+        let (_, tip2_gas, tip2_effects) = tip2;
+        let (_, base2_gas, base2_effects) = base2;
+        let base1_gas_used = base1_gas.gas_used();
+        let tip1_gas_used = tip1_gas.gas_used();
+        let tip2_gas_used = tip2_gas.gas_used();
+        let base2_gas_used = base2_gas.gas_used();
+        let status_match_1 = same_status_shape(base1_effects.status(), tip1_effects.status());
+        let status_match_2 = same_status_shape(base2_effects.status(), tip2_effects.status());
+        record_timing_abba(
+            digest,
+            base1_ns,
+            tip1_ns,
+            tip2_ns,
+            base2_ns,
+            base1_loop_ns,
+            tip1_loop_ns,
+            tip2_loop_ns,
+            base2_loop_ns,
+            base1_gas_used,
+            tip1_gas_used,
+            tip2_gas_used,
+            base2_gas_used,
+            status_match_1,
+            status_match_2,
+        );
+        if should_log_completed_paths() {
+            let outer_tip_avg_ns = average_ns(tip1_ns, tip2_ns);
+            let outer_base_avg_ns = average_ns(base1_ns, base2_ns);
+            let loop_tip_avg_ns = average_ns(tip1_loop_ns, tip2_loop_ns);
+            let loop_base_avg_ns = average_ns(base1_loop_ns, base2_loop_ns);
+            tracing::info!(
+                %digest,
+                base1_ns,
+                tip1_ns,
+                tip2_ns,
+                base2_ns,
+                base1_loop_ns,
+                tip1_loop_ns,
+                tip2_loop_ns,
+                base2_loop_ns,
+                outer_tip_avg_ns,
+                outer_base_avg_ns,
+                loop_tip_avg_ns,
+                loop_base_avg_ns,
+                base1_gas_used,
+                tip1_gas_used,
+                tip2_gas_used,
+                base2_gas_used,
+                status_match_1,
+                status_match_2,
+                "dual-replay: A/B/B/A execution paths completed"
+            );
+        }
+        let first_differs = effects_differ(base1_effects, tip1_effects, base1_gas, tip1_gas);
+        let second_differs = effects_differ(base2_effects, tip2_effects, base2_gas, tip2_gas);
+        if first_differs || second_differs {
+            report_diff(base1_effects, tip1_effects, digest);
+        }
+    }
+
+    fn average_ns(left: u64, right: u64) -> u64 {
+        ((left as u128 + right as u128) / 2) as u64
+    }
+
+    fn same_status_shape(base: &ExecutionStatus, tip: &ExecutionStatus) -> bool {
+        matches!(
+            (base, tip),
             (ExecutionStatus::Success, ExecutionStatus::Success)
                 | (
                     ExecutionStatus::Failure { .. },
                     ExecutionStatus::Failure { .. }
                 )
-        );
-        record_timing(
-            digest,
-            base_ns,
-            tip_ns,
-            base_loop_ns,
-            tip_loop_ns,
-            base_gas_used,
-            tip_gas_used,
-            status_match,
-        );
-        if should_log_completed_paths() {
-            tracing::info!(
-                %digest,
-                base_ns,
-                tip_ns,
-                base_loop_ns,
-                tip_loop_ns,
-                base_gas_used,
-                tip_gas_used,
-                status_match,
-                "dual-replay: both execution paths completed"
-            );
-        }
-        let differs = {
-            let status_differs = base_effects.status() != tip_effects.status();
-            let gas_differs = !gas_within_tolerance(base_gas.gas_used(), tip_gas.gas_used());
-            let shape_differs = base_effects != tip_effects;
-            status_differs || gas_differs || shape_differs
-        };
-        if differs {
-            report_diff(base_effects, tip_effects, digest);
-        }
+        )
+    }
+
+    fn effects_differ(
+        base_effects: &TransactionEffects,
+        tip_effects: &TransactionEffects,
+        base_gas: &SuiGasStatus,
+        tip_gas: &SuiGasStatus,
+    ) -> bool {
+        let status_differs = base_effects.status() != tip_effects.status();
+        let gas_differs = !gas_within_tolerance(base_gas.gas_used(), tip_gas.gas_used());
+        let shape_differs = base_effects != tip_effects;
+        status_differs || gas_differs || shape_differs
     }
 
     struct TimingsSink {
@@ -551,7 +748,7 @@ mod latest_dual_replay {
                     Ok(mut f) => {
                         if is_new {
                             let _ = f.write_all(
-                                b"digest,base_ns,tip_ns,base_loop_ns,tip_loop_ns,base_gas,tip_gas,status_match
+                                b"digest,base1_ns,tip1_ns,tip2_ns,base2_ns,base1_loop_ns,tip1_loop_ns,tip2_loop_ns,base2_loop_ns,base1_gas,tip1_gas,tip2_gas,base2_gas,status_match_1,status_match_2
 ",
                             );
                         }
@@ -569,29 +766,43 @@ mod latest_dual_replay {
             .as_ref()
     }
 
-    fn record_timing(
+    fn record_timing_abba(
         digest: TransactionDigest,
-        base_ns: u64,
-        tip_ns: u64,
-        base_loop_ns: u64,
-        tip_loop_ns: u64,
-        base_gas: u64,
-        tip_gas: u64,
-        status_match: bool,
+        base1_ns: u64,
+        tip1_ns: u64,
+        tip2_ns: u64,
+        base2_ns: u64,
+        base1_loop_ns: u64,
+        tip1_loop_ns: u64,
+        tip2_loop_ns: u64,
+        base2_loop_ns: u64,
+        base1_gas: u64,
+        tip1_gas: u64,
+        tip2_gas: u64,
+        base2_gas: u64,
+        status_match_1: bool,
+        status_match_2: bool,
     ) {
         let Some(sink) = timings() else { return };
         let Ok(mut guard) = sink.lock() else { return };
         if writeln!(
             guard.writer,
-            "{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             digest,
-            base_ns,
-            tip_ns,
-            base_loop_ns,
-            tip_loop_ns,
-            base_gas,
-            tip_gas,
-            status_match as u8,
+            base1_ns,
+            tip1_ns,
+            tip2_ns,
+            base2_ns,
+            base1_loop_ns,
+            tip1_loop_ns,
+            tip2_loop_ns,
+            base2_loop_ns,
+            base1_gas,
+            tip1_gas,
+            tip2_gas,
+            base2_gas,
+            status_match_1 as u8,
+            status_match_2 as u8,
         )
         .is_ok()
         {
