@@ -96,6 +96,7 @@ impl executor::Executor for Executor {
         Result<(), ExecutionFailure>,
     ) {
         // DUAL_REPLAY_INJECTED
+        tracing::info!(%transaction_digest, "tx-backtest dual-replay: running tip execute_transaction");
         let tip_start = std::time::Instant::now();
         let (tip_store, tip_gas_status, tip_effects, _tip_timings, _tip_result) =
             execute_transaction_to_effects::<execution_mode::Normal>(
@@ -117,6 +118,7 @@ impl executor::Executor for Executor {
                 &mut None,
             );
         let tip_ns = tip_start.elapsed().as_nanos() as u64;
+        tracing::info!(%transaction_digest, "tx-backtest dual-replay: running base/regular execute_transaction");
         let base_start = std::time::Instant::now();
         let base = {
             use sui_adapter_replay_cut as base_adapter;
@@ -180,6 +182,7 @@ impl executor::Executor for Executor {
         Result<(), ExecutionError>,
     ) {
         // DUAL_REPLAY_INJECTED
+        tracing::info!(%transaction_digest, "tx-backtest dual-replay: running tip execute_transaction_with_error");
         let tip_start = std::time::Instant::now();
         let (tip_store, tip_gas_status, tip_effects, _tip_timings, _tip_result) =
             execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
@@ -201,6 +204,7 @@ impl executor::Executor for Executor {
                 &mut None,
             );
         let tip_ns = tip_start.elapsed().as_nanos() as u64;
+        tracing::info!(%transaction_digest, "tx-backtest dual-replay: running base/regular execute_transaction_with_error");
         let base_start = std::time::Instant::now();
         let base = {
             use sui_adapter_replay_cut as base_adapter;
@@ -418,10 +422,15 @@ mod latest_dual_replay {
 
     const OUTPUT_DIR: &str = "/opt/sui/replay-output/93a2eec772f3659092ea65ca313bf0d1c4b0e832";
     const GAS_TOLERANCE_PCT: f64 = 0.0_f64;
-    const TIMINGS_FILE: &str = "/opt/sui/replay-output/93a2eec772f3659092ea65ca313bf0d1c4b0e832/timings.csv";
+    const TIMINGS_FILE: &str =
+        "/opt/sui/replay-output/93a2eec772f3659092ea65ca313bf0d1c4b0e832/timings.csv";
     const TIMINGS_FLUSH_EVERY: usize = 500;
 
-    type View<'a> = (&'a InnerTemporaryStore, &'a SuiGasStatus, &'a TransactionEffects);
+    type View<'a> = (
+        &'a InnerTemporaryStore,
+        &'a SuiGasStatus,
+        &'a TransactionEffects,
+    );
 
     pub(super) fn compare_dual_replay(
         base: View<'_>,
@@ -437,9 +446,19 @@ mod latest_dual_replay {
         let status_match = matches!(
             (base_effects.status(), tip_effects.status()),
             (ExecutionStatus::Success, ExecutionStatus::Success)
-                | (ExecutionStatus::Failure { .. }, ExecutionStatus::Failure { .. })
+                | (
+                    ExecutionStatus::Failure { .. },
+                    ExecutionStatus::Failure { .. }
+                )
         );
-        record_timing(digest, base_ns, tip_ns, base_gas_used, tip_gas_used, status_match);
+        record_timing(
+            digest,
+            base_ns,
+            tip_ns,
+            base_gas_used,
+            tip_gas_used,
+            status_match,
+        );
         let differs = {
             let status_differs = base_effects.status() != tip_effects.status();
             let gas_differs = !gas_within_tolerance(base_gas.gas_used(), tip_gas.gas_used());
@@ -474,9 +493,11 @@ mod latest_dual_replay {
                 .open(path)
                 .expect("dual-replay: failed to open timings file");
             if is_new {
-                f.write_all(b"digest,base_ns,tip_ns,base_gas,tip_gas,status_match
-")
-                    .expect("dual-replay: failed to write timings header");
+                f.write_all(
+                    b"digest,base_ns,tip_ns,base_gas,tip_gas,status_match
+",
+                )
+                .expect("dual-replay: failed to write timings header");
             }
             Mutex::new(TimingsSink {
                 writer: BufWriter::new(f),
@@ -537,9 +558,7 @@ mod latest_dual_replay {
             .expect("dual-replay: failed to serialize base effects");
         let tip_json = serde_json::to_string_pretty(tip_effects)
             .expect("dual-replay: failed to serialize tip effects");
-        std::fs::write(&base_path, base_json)
-            .expect("dual-replay: failed to write base effects");
-        std::fs::write(&tip_path, tip_json)
-            .expect("dual-replay: failed to write tip effects");
+        std::fs::write(&base_path, base_json).expect("dual-replay: failed to write base effects");
+        std::fs::write(&tip_path, tip_json).expect("dual-replay: failed to write tip effects");
     }
 }
