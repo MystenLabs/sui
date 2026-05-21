@@ -76,7 +76,7 @@ pub fn execute<Mode: ExecutionMode>(
     let mut translation_meter =
         translation_meter::TranslationMeter::new(protocol_config, gas_charger);
 
-    let txn = {
+    let mut txn = {
         let tx_context_ref = tx_context.borrow();
         loading::translate::transaction::<Mode>(
             &mut translation_meter,
@@ -88,6 +88,13 @@ pub fn execute<Mode: ExecutionMode>(
         )
         .map_err(|e| (e, vec![]))?
     };
+    linkage::component_based_linkage::refine_per_component_linkage::<Mode::Error>(
+        &mut txn,
+        linkage::component_based_linkage::SourceCriterion::MutRef,
+        &linkage_analysis,
+        &package_store,
+    )
+    .map_err(|e| (e, vec![]))?;
     let txn = typing::translate_and_verify::<Mode>(&mut translation_meter, &env, txn)
         .map_err(|e| (e, vec![]))?;
     execution::interpreter::execute::<Mode>(

@@ -166,6 +166,31 @@ pub(crate) fn get_package<E: ExecutionErrorTrait>(
         .ok_or_else(|| E::from_kind(ExecutionErrorKind::InvalidLinkage))
 }
 
+/// Add a package and its transitive dependencies to the resolution table. The package itself
+/// gets `self_resolution_fn`'s constraint; every transitive dep (per the package's linkage
+/// table) gets `dep_resolution_fn`'s constraint. Used by both the PTB-wide pre-loading analysis
+/// (`LinkageAnalyzer::compute_call_linkage_`) and the per-component refinement
+/// (`linkage::component_based_linkage::refine_per_component_linkage`).
+pub(crate) fn add_package<E: ExecutionErrorTrait>(
+    object_id: &ObjectID,
+    store: &dyn PackageStore,
+    resolution_table: &mut ResolutionTable,
+    self_resolution_fn: fn(&VerifiedPackage) -> Option<VersionConstraint>,
+    dep_resolution_fn: fn(&VerifiedPackage) -> Option<VersionConstraint>,
+) -> Result<(), E> {
+    let pkg = get_package(object_id, store)?;
+    let transitive_deps = resolution_table
+        .config
+        .linkage_table(&pkg)
+        .into_values()
+        .map(ObjectID::from);
+    for dep_id in transitive_deps {
+        add_and_unify(&dep_id, store, resolution_table, dep_resolution_fn)?;
+    }
+    add_and_unify(object_id, store, resolution_table, self_resolution_fn)?;
+    Ok(())
+}
+
 // Add a package to the unification table, unifying it with any existing package in the table.
 // Errors if the packages cannot be unified (e.g., if one is exact and the other is not).
 pub(crate) fn add_and_unify<E: ExecutionErrorTrait>(
