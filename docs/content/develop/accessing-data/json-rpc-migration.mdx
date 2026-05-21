@@ -108,6 +108,8 @@ GraphQL and gRPC expose richer typing for objects and coins than JSON-RPC. A few
 
 - **Object and package versions.** GraphQL can scrub through the version history of an object or package, which has no JSON-RPC analog. Use `Query.objectVersions`, or `IObject.objectVersionsAfter` and `IObject.objectVersionsBefore` from an object, to page through an object's versions. Use `Query.packageVersions` for the published versions of a package.
 
+- **Checkpoint-scoped consistency.** GraphQL can pin a query to the chain state at a specific checkpoint through `Checkpoint.query`, so a read that spans multiple types or multiple pages sees one consistent snapshot. JSON-RPC has no equivalent.
+
 ### Pagination uses typed cursors
 
 JSON-RPC cursors are opaque strings. GraphQL passes cursors through the `after` (or `before`) field on a connection, with the page size in `first` (or `last`). gRPC paging uses fields on the typed request and response messages. Do not try to reuse a JSON-RPC `nextCursor` value in a GraphQL or gRPC request. Fetch a fresh cursor from the new API and persist it as the resume point.
