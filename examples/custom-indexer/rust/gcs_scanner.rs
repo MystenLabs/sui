@@ -4,19 +4,21 @@
 //! Scans a range of mainnet checkpoints from GCS, reporting every transaction
 //! where the signature order does not match [sender, gas_owner].
 //!
-//! Output is JSONL: mismatch records followed by a final summary record.
-//! When OUTPUT_GCS_BUCKET is set the file is uploaded to GCS at the end.
+//! Output is JSONL: per-transaction `mismatch` and `possible_alias` records
+//! followed by a final `summary` record. When OUTPUT_GCS_BUCKET is set, the
+//! file is uploaded to GCS at the end.
 //!
 //! Auth: workload identity on GKE, or ADC locally
 //!       (gcloud auth application-default login).
 //!
 //! Env vars:
-//!   GCS_BUCKET           source bucket (default: mysten-mainnet-checkpoints)
-//!   LATEST_CHECKPOINT    tip sequence number (default: 276_015_239)
-//!   START_CHECKPOINT     first checkpoint inclusive (default: LATEST - 100_000_000)
-//!   END_CHECKPOINT       last checkpoint inclusive  (default: LATEST_CHECKPOINT)
-//!   TEST                 set to "1" to scan only START..START+10_000
-//!   CONCURRENCY          parallel fetch concurrency (default: 300)
+//!   GCS_BUCKET           source bucket (default: mysten-mainnet-checkpoints-use4)
+//!   GCS_USER_PROJECT     `x-goog-user-project` header value for requester-pays
+//!                        buckets. Default: fullnode-snapshot-gcs.
+//!   START_CHECKPOINT     first checkpoint inclusive (required)
+//!   END_CHECKPOINT       last checkpoint inclusive  (required)
+//!   CONCURRENCY          deprecated — adaptive concurrency is used now,
+//!                        kept for compatibility with the existing job spec.
 //!   OUTPUT_FILE          local output path (default: /data/mismatches.jsonl)
 //!   OUTPUT_GCS_BUCKET    if set, upload output here when done
 //!   OUTPUT_GCS_KEY       object key inside OUTPUT_GCS_BUCKET
@@ -32,21 +34,22 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use anyhow::Result;
-use async_trait::async_trait;
+use anyhow::anyhow;
 use bytes::Bytes;
 use object_store::ObjectStoreExt;
 use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::path::Path as ObjPath;
+use prometheus::Registry;
 use serde::Serialize;
-use sui_data_ingestion_core::ReaderOptions;
-use sui_data_ingestion_core::Worker;
-use sui_data_ingestion_core::setup_single_workflow_with_options;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::IngestionConfig;
+use sui_indexer_alt_framework::ingestion::IngestionService;
+use sui_indexer_alt_framework::ingestion::ingestion_client::CheckpointEnvelope;
+use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_types::base_types::SuiAddress;
-use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionDataAPI;
-
-// ── output record types ────────────────────────────────────────────────────
 
 #[derive(Serialize)]
 struct MismatchRecord<'a> {
@@ -87,20 +90,17 @@ struct SummaryRecord<'a> {
     end_checkpoint: u64,
 }
 
-// ── worker ─────────────────────────────────────────────────────────────────
-
-struct GcsScanWorker {
-    output: Arc<Mutex<BufWriter<File>>>,
-    checkpoints_processed: Arc<AtomicU64>,
-    mismatches_found: Arc<AtomicU64>,
-    possible_aliases_found: Arc<AtomicU64>,
+struct Counters {
+    checkpoints_processed: AtomicU64,
+    mismatches_found: AtomicU64,
+    possible_aliases_found: AtomicU64,
 }
 
-/// Addresses a signature could authenticate. For zkLogin, both the modern
+/// Addresses a signature could authenticate. For zkLogin both the modern
 /// unpadded derivation and the legacy padded derivation are accepted by the
-/// verifier (controlled by `verify_legacy_zklogin_address`), so we include
-/// both. For every other authenticator the canonical address is the only
-/// option.
+/// protocol verifier (controlled by `verify_legacy_zklogin_address`), so we
+/// include both. For every other authenticator the canonical address is the
+/// only option.
 fn acceptable_addresses(sig: &GenericSignature) -> Result<Vec<SuiAddress>> {
     let mut addrs = vec![SuiAddress::try_from(sig)?];
     if let GenericSignature::ZkLoginAuthenticator(z) = sig {
@@ -113,135 +113,117 @@ fn acceptable_addresses(sig: &GenericSignature) -> Result<Vec<SuiAddress>> {
     Ok(addrs)
 }
 
-#[async_trait]
-impl Worker for GcsScanWorker {
-    type Result = ();
+fn process_checkpoint(
+    checkpoint: &Checkpoint,
+    counters: &Counters,
+    output: &Mutex<BufWriter<File>>,
+) -> Result<()> {
+    let seq = checkpoint.summary.sequence_number;
+    let processed = counters
+        .checkpoints_processed
+        .fetch_add(1, Ordering::Relaxed)
+        + 1;
 
-    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<()> {
-        let seq = checkpoint.checkpoint_summary.sequence_number;
-        let processed = self.checkpoints_processed.fetch_add(1, Ordering::Relaxed) + 1;
-
-        if processed % 10_000 == 0 {
-            eprintln!(
-                "progress checkpoint={seq} scanned={processed} mismatches={} possible_aliases={}",
-                self.mismatches_found.load(Ordering::Relaxed),
-                self.possible_aliases_found.load(Ordering::Relaxed),
-            );
-        }
-
-        for ctx in &checkpoint.transactions {
-            let data = ctx.transaction.data();
-            let tx_data = data.transaction_data();
-
-            if tx_data.is_system_tx() {
-                continue;
-            }
-            let sender = tx_data.sender();
-            let gas_owner = tx_data.gas_owner();
-            if sender == gas_owner {
-                continue;
-            }
-
-            let sigs = data.tx_signatures();
-            if sigs.len() < 2 {
-                continue;
-            }
-
-            // A sig parsing failure shouldn't kill the whole checkpoint —
-            // treat it as "no acceptable addresses" so it falls through to the
-            // possible-alias branch and gets surfaced for audit.
-            let sig0_addrs = acceptable_addresses(&sigs[0]).unwrap_or_default();
-            let sig1_addrs = acceptable_addresses(&sigs[1]).unwrap_or_default();
-
-            let sig0_matches_sender = sig0_addrs.contains(&sender);
-            let sig0_matches_gas = sig0_addrs.contains(&gas_owner);
-            let sig1_matches_sender = sig1_addrs.contains(&sender);
-            let sig1_matches_gas = sig1_addrs.contains(&gas_owner);
-
-            // Convention is [sender, gas_owner]; in-order is the happy path.
-            if sig0_matches_sender && sig1_matches_gas {
-                continue;
-            }
-
-            let digest = ctx.transaction.digest().to_string();
-            let line = if sig0_matches_gas && sig1_matches_sender {
-                // Both sigs definitively match the required signer set, just
-                // swapped — the case the scan is hunting.
-                self.mismatches_found.fetch_add(1, Ordering::Relaxed);
-                let record = MismatchRecord {
-                    record_type: "mismatch",
-                    checkpoint: seq,
-                    tx_digest: digest,
-                    sender: sender.to_string(),
-                    gas_owner: gas_owner.to_string(),
-                    sig0_address: sig0_addrs
-                        .first()
-                        .map(|a| a.to_string())
-                        .unwrap_or_default(),
-                    sig1_address: sig1_addrs
-                        .first()
-                        .map(|a| a.to_string())
-                        .unwrap_or_default(),
-                };
-                serde_json::to_string(&record)?
-            } else {
-                // At least one sig doesn't match either required signer —
-                // could be an aliased address, an exotic authenticator, or a
-                // sig we couldn't decode.
-                self.possible_aliases_found
-                    .fetch_add(1, Ordering::Relaxed);
-                let record = PossibleAliasRecord {
-                    record_type: "possible_alias",
-                    checkpoint: seq,
-                    tx_digest: digest,
-                    sender: sender.to_string(),
-                    gas_owner: gas_owner.to_string(),
-                    sig0_addresses: sig0_addrs.iter().map(SuiAddress::to_string).collect(),
-                    sig1_addresses: sig1_addrs.iter().map(SuiAddress::to_string).collect(),
-                };
-                serde_json::to_string(&record)?
-            };
-
-            let mut out = self.output.lock().unwrap();
-            writeln!(out, "{line}")?;
-        }
-        Ok(())
+    if processed % 10_000 == 0 {
+        eprintln!(
+            "progress checkpoint={seq} scanned={processed} mismatches={} possible_aliases={}",
+            counters.mismatches_found.load(Ordering::Relaxed),
+            counters.possible_aliases_found.load(Ordering::Relaxed),
+        );
     }
-}
 
-// ── main ───────────────────────────────────────────────────────────────────
+    for tx in &checkpoint.transactions {
+        let tx_data = &tx.transaction;
+
+        if tx_data.is_system_tx() {
+            continue;
+        }
+        let sender = tx_data.sender();
+        let gas_owner = tx_data.gas_owner();
+
+        // Single required signer ⇒ no ordering to check.
+        if sender == gas_owner {
+            continue;
+        }
+
+        if tx.signatures.len() < 2 {
+            continue;
+        }
+
+        // A parse failure shouldn't kill the whole checkpoint — treat it as
+        // an empty acceptable set so the tx falls into the possible-alias
+        // bucket and surfaces for audit.
+        let sig0_addrs = acceptable_addresses(&tx.signatures[0]).unwrap_or_default();
+        let sig1_addrs = acceptable_addresses(&tx.signatures[1]).unwrap_or_default();
+
+        let sig0_matches_sender = sig0_addrs.contains(&sender);
+        let sig0_matches_gas = sig0_addrs.contains(&gas_owner);
+        let sig1_matches_sender = sig1_addrs.contains(&sender);
+        let sig1_matches_gas = sig1_addrs.contains(&gas_owner);
+
+        // Convention is [sender, gas_owner]; in-order is the happy path.
+        if sig0_matches_sender && sig1_matches_gas {
+            continue;
+        }
+
+        let digest = tx_data.digest().to_string();
+        let line = if sig0_matches_gas && sig1_matches_sender {
+            // Both sigs definitively match the required signer set, just
+            // swapped — the case the scan is hunting.
+            counters.mismatches_found.fetch_add(1, Ordering::Relaxed);
+            let record = MismatchRecord {
+                record_type: "mismatch",
+                checkpoint: seq,
+                tx_digest: digest,
+                sender: sender.to_string(),
+                gas_owner: gas_owner.to_string(),
+                sig0_address: sig0_addrs
+                    .first()
+                    .map(|a| a.to_string())
+                    .unwrap_or_default(),
+                sig1_address: sig1_addrs
+                    .first()
+                    .map(|a| a.to_string())
+                    .unwrap_or_default(),
+            };
+            serde_json::to_string(&record)?
+        } else {
+            counters
+                .possible_aliases_found
+                .fetch_add(1, Ordering::Relaxed);
+            let record = PossibleAliasRecord {
+                record_type: "possible_alias",
+                checkpoint: seq,
+                tx_digest: digest,
+                sender: sender.to_string(),
+                gas_owner: gas_owner.to_string(),
+                sig0_addresses: sig0_addrs.iter().map(SuiAddress::to_string).collect(),
+                sig1_addresses: sig1_addrs.iter().map(SuiAddress::to_string).collect(),
+            };
+            serde_json::to_string(&record)?
+        };
+
+        let mut out = output.lock().unwrap();
+        writeln!(out, "{line}")?;
+    }
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let src_bucket =
-        env::var("GCS_BUCKET").unwrap_or_else(|_| "mysten-mainnet-checkpoints".to_string());
-    let remote_store_url = format!("gs://{src_bucket}");
-
-    let latest: u64 = env::var("LATEST_CHECKPOINT")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(276_015_239);
+        env::var("GCS_BUCKET").unwrap_or_else(|_| "mysten-mainnet-checkpoints-use4".to_string());
+    let user_project =
+        env::var("GCS_USER_PROJECT").unwrap_or_else(|_| "fullnode-snapshot-gcs".to_string());
 
     let start: u64 = env::var("START_CHECKPOINT")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or_else(|| latest.saturating_sub(100_000_000));
-
-    let test_mode = env::var("TEST").map(|v| v == "1").unwrap_or(false);
-
-    let end: u64 = if test_mode {
-        start + 10_000
-    } else {
-        env::var("END_CHECKPOINT")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(latest)
-    };
-
-    let concurrency: usize = env::var("CONCURRENCY")
+        .ok_or_else(|| anyhow!("START_CHECKPOINT must be set to a u64"))?;
+    let end: u64 = env::var("END_CHECKPOINT")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(300);
+        .ok_or_else(|| anyhow!("END_CHECKPOINT must be set to a u64"))?;
 
     let local_output =
         env::var("OUTPUT_FILE").unwrap_or_else(|_| "/data/mismatches.jsonl".to_string());
@@ -250,13 +232,8 @@ async fn main() -> Result<()> {
         env::var("OUTPUT_GCS_KEY").unwrap_or_else(|_| "sig-order-scan/results.jsonl".to_string());
 
     eprintln!(
-        "scanning gs://{src_bucket} checkpoints {start}..{end} ({} total) concurrency={concurrency}{}",
-        end.saturating_sub(start),
-        if test_mode {
-            " [TEST MODE — 10k]"
-        } else {
-            ""
-        },
+        "scanning gs://{src_bucket} checkpoints {start}..={end} ({} total) user_project={user_project}",
+        (end - start) + 1,
     );
     eprintln!("local output: {local_output}");
     if let Some(ref b) = output_gcs_bucket {
@@ -265,41 +242,60 @@ async fn main() -> Result<()> {
 
     let file = File::create(&local_output)?;
     let output = Arc::new(Mutex::new(BufWriter::new(file)));
-    let checkpoints_processed = Arc::new(AtomicU64::new(0));
-    let mismatches_found = Arc::new(AtomicU64::new(0));
-    let possible_aliases_found = Arc::new(AtomicU64::new(0));
+    let counters = Arc::new(Counters {
+        checkpoints_processed: AtomicU64::new(0),
+        mismatches_found: AtomicU64::new(0),
+        possible_aliases_found: AtomicU64::new(0),
+    });
 
-    let worker = GcsScanWorker {
-        output: output.clone(),
-        checkpoints_processed: checkpoints_processed.clone(),
-        mismatches_found: mismatches_found.clone(),
-        possible_aliases_found: possible_aliases_found.clone(),
+    let client_args = IngestionClientArgs {
+        remote_store_gcs: Some(src_bucket.clone()),
+        remote_store_headers: vec![(
+            "x-goog-user-project"
+                .parse()
+                .map_err(|e| anyhow!("invalid header name: {e}"))?,
+            user_project
+                .parse()
+                .map_err(|e| anyhow!("invalid header value: {e}"))?,
+        )],
+        ..Default::default()
+    };
+    let args = ClientArgs {
+        ingestion: client_args,
+        ..Default::default()
     };
 
-    let reader_options = ReaderOptions {
-        batch_size: 500,
-        timeout_secs: 30,
-        upper_limit: Some(end),
-        ..ReaderOptions::default()
+    let registry = Registry::new();
+    let mut service = IngestionService::new(args, IngestionConfig::default(), None, &registry)
+        .map_err(|e| anyhow!("ingestion service init: {e}"))?;
+    let mut rx = service.subscribe_bounded(256);
+    let mut svc = service
+        .run(start..=end)
+        .await
+        .map_err(|e| anyhow!("ingestion service run: {e}"))?;
+
+    let consumer = {
+        let counters = counters.clone();
+        let output = output.clone();
+        tokio::spawn(async move {
+            while let Some(envelope) = rx.recv().await {
+                let env: Arc<CheckpointEnvelope> = envelope;
+                if let Err(e) = process_checkpoint(env.checkpoint.as_ref(), &counters, &output) {
+                    eprintln!("error processing checkpoint: {e:?}");
+                }
+            }
+            Ok::<(), anyhow::Error>(())
+        })
     };
 
-    let (executor, _term_sender) = setup_single_workflow_with_options(
-        worker,
-        remote_store_url,
-        vec![],
-        start,
-        concurrency,
-        Some(reader_options),
-    )
-    .await?;
+    svc.join().await.map_err(|e| anyhow!("svc join: {e}"))?;
+    // Subscriber loop exits once the channel closes after the service shuts down.
+    consumer.await??;
 
-    executor.await?;
+    let total_checkpoints = counters.checkpoints_processed.load(Ordering::Relaxed);
+    let total_mismatches = counters.mismatches_found.load(Ordering::Relaxed);
+    let total_possible_aliases = counters.possible_aliases_found.load(Ordering::Relaxed);
 
-    let total_checkpoints = checkpoints_processed.load(Ordering::Relaxed);
-    let total_mismatches = mismatches_found.load(Ordering::Relaxed);
-    let total_possible_aliases = possible_aliases_found.load(Ordering::Relaxed);
-
-    // Write summary as the final JSONL line so the file is never empty.
     {
         let summary = SummaryRecord {
             record_type: "summary",
