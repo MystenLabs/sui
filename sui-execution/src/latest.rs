@@ -40,7 +40,10 @@ use crate::executor;
 use crate::verifier;
 use sui_adapter_latest::execution_mode;
 
-pub(crate) struct Executor(Arc<MoveRuntime>);
+pub(crate) struct Executor(
+    Arc<MoveRuntime>,
+    Arc<move_vm_runtime_replay_cut::runtime::MoveRuntime>,
+);
 
 pub(crate) struct Verifier<'m> {
     config: VerifierConfig,
@@ -49,10 +52,15 @@ pub(crate) struct Verifier<'m> {
 
 impl Executor {
     pub(crate) fn new(protocol_config: &ProtocolConfig, silent: bool) -> Result<Self, SuiError> {
-        Ok(Executor(Arc::new(new_move_runtime(
+        let tip_runtime = Arc::new(new_move_runtime(
             all_natives(silent, protocol_config),
             protocol_config,
-        )?)))
+        )?);
+        let base_runtime = Arc::new(sui_adapter_replay_cut::adapter::new_move_runtime(
+            sui_move_natives_replay_cut::all_natives(silent, protocol_config),
+            protocol_config,
+        )?);
+        Ok(Executor(tip_runtime, base_runtime))
     }
 }
 
@@ -87,8 +95,34 @@ impl executor::Executor for Executor {
         Vec<ExecutionTiming>,
         Result<(), ExecutionFailure>,
     ) {
-        let (store_out, gas_status_out, effects, timings, result) =
+        // DUAL_REPLAY_INJECTED
+        let tip_start = std::time::Instant::now();
+        let (tip_store, tip_gas_status, tip_effects, _tip_timings, _tip_result) =
             execute_transaction_to_effects::<execution_mode::Normal>(
+                store,
+                input_objects.clone(),
+                gas.clone(),
+                gas_status.clone(),
+                transaction_kind.clone(),
+                rewritten_inputs.clone(),
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics.clone(),
+                enable_expensive_checks,
+                execution_params.clone(),
+                &mut None,
+            );
+        let tip_ns = tip_start.elapsed().as_nanos() as u64;
+        let base_start = std::time::Instant::now();
+        let base = {
+            use sui_adapter_replay_cut as base_adapter;
+            base_adapter::execution_engine::execute_transaction_to_effects::<
+                base_adapter::execution_mode::Normal,
+            >(
                 store,
                 input_objects,
                 gas,
@@ -97,7 +131,7 @@ impl executor::Executor for Executor {
                 rewritten_inputs,
                 transaction_signer,
                 transaction_digest,
-                &self.0,
+                &self.1,
                 epoch_id,
                 epoch_timestamp_ms,
                 protocol_config,
@@ -105,11 +139,20 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
                 trace_builder_opt,
-            );
-        if let Err(error) = &result {
+            )
+        };
+        let base_ns = base_start.elapsed().as_nanos() as u64;
+        self::latest_dual_replay::compare_dual_replay(
+            (&base.0, &base.1, &base.2),
+            (&tip_store, &tip_gas_status, &tip_effects),
+            transaction_digest,
+            base_ns,
+            tip_ns,
+        );
+        if let Err(error) = &base.4 {
             log_execution_error(transaction_digest, error);
         }
-        (store_out, gas_status_out, effects, timings, result)
+        base
     }
 
     fn execute_transaction_to_effects_and_execution_error(
@@ -136,8 +179,34 @@ impl executor::Executor for Executor {
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
-        let (store_out, gas_status_out, effects, timings, result) =
+        // DUAL_REPLAY_INJECTED
+        let tip_start = std::time::Instant::now();
+        let (tip_store, tip_gas_status, tip_effects, _tip_timings, _tip_result) =
             execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
+                store,
+                input_objects.clone(),
+                gas.clone(),
+                gas_status.clone(),
+                transaction_kind.clone(),
+                rewritten_inputs.clone(),
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics.clone(),
+                enable_expensive_checks,
+                execution_params.clone(),
+                &mut None,
+            );
+        let tip_ns = tip_start.elapsed().as_nanos() as u64;
+        let base_start = std::time::Instant::now();
+        let base = {
+            use sui_adapter_replay_cut as base_adapter;
+            base_adapter::execution_engine::execute_transaction_to_effects::<
+                base_adapter::execution_mode::Normal<ExecutionError>,
+            >(
                 store,
                 input_objects,
                 gas,
@@ -146,7 +215,7 @@ impl executor::Executor for Executor {
                 rewritten_inputs,
                 transaction_signer,
                 transaction_digest,
-                &self.0,
+                &self.1,
                 epoch_id,
                 epoch_timestamp_ms,
                 protocol_config,
@@ -154,11 +223,20 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
                 trace_builder_opt,
-            );
-        if let Err(error) = &result {
+            )
+        };
+        let base_ns = base_start.elapsed().as_nanos() as u64;
+        self::latest_dual_replay::compare_dual_replay(
+            (&base.0, &base.1, &base.2),
+            (&tip_store, &tip_gas_status, &tip_effects),
+            transaction_digest,
+            base_ns,
+            tip_ns,
+        );
+        if let Err(error) = &base.4 {
             log_execution_error(transaction_digest, error);
         }
-        (store_out, gas_status_out, effects, timings, result)
+        base
     }
 
     fn dev_inspect_transaction(
@@ -323,5 +401,145 @@ where
             );
         }
         _ => (),
+    }
+}
+
+// // DUAL_REPLAY_INJECTED
+mod latest_dual_replay {
+    use std::fs::{File, OpenOptions};
+    use std::io::{BufWriter, Write};
+    use std::path::Path;
+    use std::sync::{Mutex, OnceLock};
+    use sui_types::digests::TransactionDigest;
+    use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
+    use sui_types::execution_status::ExecutionStatus;
+    use sui_types::gas::{SuiGasStatus, SuiGasStatusAPI};
+    use sui_types::inner_temporary_store::InnerTemporaryStore;
+
+    const OUTPUT_DIR: &str = "/opt/sui/replay-output/93a2eec772f3659092ea65ca313bf0d1c4b0e832";
+    const GAS_TOLERANCE_PCT: f64 = 0.0_f64;
+    const TIMINGS_FILE: &str = "/opt/sui/replay-output/93a2eec772f3659092ea65ca313bf0d1c4b0e832/timings.csv";
+    const TIMINGS_FLUSH_EVERY: usize = 500;
+
+    type View<'a> = (&'a InnerTemporaryStore, &'a SuiGasStatus, &'a TransactionEffects);
+
+    pub(super) fn compare_dual_replay(
+        base: View<'_>,
+        tip: View<'_>,
+        digest: TransactionDigest,
+        base_ns: u64,
+        tip_ns: u64,
+    ) {
+        let (_, base_gas, base_effects) = base;
+        let (_, tip_gas, tip_effects) = tip;
+        let base_gas_used = base_gas.gas_used();
+        let tip_gas_used = tip_gas.gas_used();
+        let status_match = matches!(
+            (base_effects.status(), tip_effects.status()),
+            (ExecutionStatus::Success, ExecutionStatus::Success)
+                | (ExecutionStatus::Failure { .. }, ExecutionStatus::Failure { .. })
+        );
+        record_timing(digest, base_ns, tip_ns, base_gas_used, tip_gas_used, status_match);
+        let differs = {
+            let status_differs = base_effects.status() != tip_effects.status();
+            let gas_differs = !gas_within_tolerance(base_gas.gas_used(), tip_gas.gas_used());
+            let shape_differs = base_effects != tip_effects;
+            status_differs || gas_differs || shape_differs
+        };
+        if differs {
+            report_diff(base_effects, tip_effects, digest);
+        }
+    }
+
+    struct TimingsSink {
+        writer: BufWriter<File>,
+        pending: usize,
+    }
+
+    static TIMINGS: OnceLock<Mutex<TimingsSink>> = OnceLock::new();
+
+    fn timings() -> &'static Mutex<TimingsSink> {
+        TIMINGS.get_or_init(|| {
+            let path = Path::new(TIMINGS_FILE);
+            if let Some(parent) = path.parent() {
+                if !parent.as_os_str().is_empty() {
+                    std::fs::create_dir_all(parent)
+                        .expect("dual-replay: failed to create timings dir");
+                }
+            }
+            let is_new = !path.exists();
+            let mut f = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .expect("dual-replay: failed to open timings file");
+            if is_new {
+                f.write_all(b"digest,base_ns,tip_ns,base_gas,tip_gas,status_match
+")
+                    .expect("dual-replay: failed to write timings header");
+            }
+            Mutex::new(TimingsSink {
+                writer: BufWriter::new(f),
+                pending: 0,
+            })
+        })
+    }
+
+    fn record_timing(
+        digest: TransactionDigest,
+        base_ns: u64,
+        tip_ns: u64,
+        base_gas: u64,
+        tip_gas: u64,
+        status_match: bool,
+    ) {
+        let mut guard = timings()
+            .lock()
+            .expect("dual-replay: timings mutex poisoned");
+        writeln!(
+            guard.writer,
+            "{},{},{},{},{},{}",
+            digest, base_ns, tip_ns, base_gas, tip_gas, status_match as u8,
+        )
+        .expect("dual-replay: failed to write timings row");
+        guard.pending += 1;
+        if guard.pending >= TIMINGS_FLUSH_EVERY {
+            guard
+                .writer
+                .flush()
+                .expect("dual-replay: failed to flush timings");
+            guard.pending = 0;
+        }
+    }
+
+    fn gas_within_tolerance(base_gas: u64, tip_gas: u64) -> bool {
+        if GAS_TOLERANCE_PCT <= 0.0 {
+            return base_gas == tip_gas;
+        }
+        let base = base_gas as f64;
+        let tip = tip_gas as f64;
+        let delta = (base - tip).abs();
+        let denom = base.max(1.0);
+        (delta / denom) * 100.0 <= GAS_TOLERANCE_PCT
+    }
+
+    fn report_diff(
+        base_effects: &TransactionEffects,
+        tip_effects: &TransactionEffects,
+        digest: TransactionDigest,
+    ) {
+        tracing::warn!(%digest, "dual-replay: effects differ");
+        std::fs::create_dir_all(Path::new(OUTPUT_DIR))
+            .expect("dual-replay: failed to create output dir");
+        let base_path = format!("{}/{}.base.json", OUTPUT_DIR, digest);
+        let tip_path = format!("{}/{}.tip.json", OUTPUT_DIR, digest);
+        let base_json = serde_json::to_string_pretty(base_effects)
+            .expect("dual-replay: failed to serialize base effects");
+        let tip_json = serde_json::to_string_pretty(tip_effects)
+            .expect("dual-replay: failed to serialize tip effects");
+        std::fs::write(&base_path, base_json)
+            .expect("dual-replay: failed to write base effects");
+        std::fs::write(&tip_path, tip_json)
+            .expect("dual-replay: failed to write tip effects");
     }
 }

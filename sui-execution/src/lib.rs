@@ -15,6 +15,7 @@ pub mod executor;
 pub mod verifier;
 
 mod latest;
+mod replay_cut;
 mod v0;
 mod v1;
 mod v2;
@@ -23,6 +24,7 @@ mod v3;
 #[cfg(test)]
 mod tests;
 
+pub const REPLAY_CUT: u64 = u64::MAX;
 pub fn executor(
     protocol_config: &ProtocolConfig,
     silent: bool,
@@ -38,6 +40,8 @@ pub fn executor(
         3 => Arc::new(v3::Executor::new(protocol_config, silent)?),
 
         4 => Arc::new(latest::Executor::new(protocol_config, silent)?),
+
+        REPLAY_CUT => Arc::new(replay_cut::Executor::new(protocol_config, silent)?),
 
         v => panic!("Unsupported execution version {v}"),
     })
@@ -56,6 +60,7 @@ pub fn verifier<'m>(
         2 => Box::new(v2::Verifier::new(config, metrics)),
         3 => Box::new(v3::Verifier::new(config, metrics)),
         4 => Box::new(latest::Verifier::new(config, metrics)),
+        REPLAY_CUT => Box::new(replay_cut::Verifier::new(config, metrics)),
         v => panic!("Unsupported execution version {v}"),
     }
 }
