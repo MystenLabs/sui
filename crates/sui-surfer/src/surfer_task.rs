@@ -14,7 +14,9 @@ use tokio::sync::{RwLock, watch};
 
 use crate::{
     surf_strategy::SurfStrategy,
-    surfer_state::{ImmObjects, OwnedObjects, SharedObjects, SurfStatistics, SurferState},
+    surfer_state::{
+        ImmObjects, OwnedObjects, ReceivableObjects, SharedObjects, SurfStatistics, SurferState,
+    },
 };
 
 pub struct SurferTask {
@@ -34,6 +36,7 @@ impl SurferTask {
         let mut rng = StdRng::seed_from_u64(seed);
         let immutable_objects: ImmObjects = Arc::new(RwLock::new(HashMap::new()));
         let shared_objects: SharedObjects = Arc::new(RwLock::new(HashMap::new()));
+        let receivable_objects: ReceivableObjects = Arc::new(RwLock::new(HashMap::new()));
 
         let mut accounts: HashMap<SuiAddress, (Option<ObjectRef>, OwnedObjects)> = cluster
             .get_addresses()
@@ -94,6 +97,17 @@ impl SurferTask {
                                             .or_default()
                                             .insert(obj_ref);
                                     }
+                                } else {
+                                    // Owned by a non-account address (e.g. an object's
+                                    // address): potentially receivable via Receiving.
+                                    receivable_objects
+                                        .write()
+                                        .await
+                                        .entry(address)
+                                        .or_default()
+                                        .entry(struct_tag)
+                                        .or_default()
+                                        .insert(obj_ref);
                                 }
                             }
                             Owner::ObjectOwner(_) => (),
@@ -119,6 +133,7 @@ impl SurferTask {
                     owned_objects,
                     immutable_objects.clone(),
                     shared_objects.clone(),
+                    receivable_objects.clone(),
                     entry_functions.clone(),
                 );
                 SurferTask {
@@ -133,6 +148,17 @@ impl SurferTask {
     pub async fn surf(mut self) -> SurfStatistics {
         loop {
             let entry_functions = self.state.entry_functions.read().await.clone();
+
+            // No callable functions discovered yet (e.g. packages still being
+            // published). Yield instead of spinning in a tight loop, which would
+            // otherwise starve the runtime (and trip the simulator's deadlock
+            // detector).
+            if entry_functions.is_empty() {
+                tokio::select! {
+                    _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => continue,
+                    _ = self.exit_rcv.changed() => return self.state.stats,
+                }
+            }
 
             tokio::select! {
                 _ = self.surf_strategy
