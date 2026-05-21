@@ -350,7 +350,8 @@ const MAINNET_USDB: &str =
 //              and enable_gasless on mainnet to bring it in line with testnet.
 //              Configure mainnet gasless allowlist with stablecoin types and $0.01 minimum
 //              transfer per stable.
-// Version 125: Enable timestamp_based_epoch_close on testnet.
+// Version 125: Enable granular_post_execution_checks.
+//              Enable timestamp_based_epoch_close on testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1114,6 +1115,10 @@ struct FeatureFlags {
     // runs but a violation panics so unexpected violations surface during rollout.
     #[serde(skip_serializing_if = "is_false")]
     enforce_address_balance_change_invariant: bool,
+
+    // Enables more granular post-execution checks.
+    #[serde(skip_serializing_if = "is_false")]
+    granular_post_execution_checks: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2847,6 +2852,10 @@ impl ProtocolConfig {
 
     pub fn enforce_address_balance_change_invariant(&self) -> bool {
         self.feature_flags.enforce_address_balance_change_invariant
+    }
+
+    pub fn granular_post_execution_checks(&self) -> bool {
+        self.feature_flags.granular_post_execution_checks
     }
 }
 
@@ -4966,6 +4975,7 @@ impl ProtocolConfig {
                     }
                 }
                 125 => {
+                    cfg.feature_flags.granular_post_execution_checks = true;
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.timestamp_based_epoch_close = true;
                     }

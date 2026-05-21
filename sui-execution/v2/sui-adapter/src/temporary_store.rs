@@ -711,6 +711,9 @@ impl TemporaryStore<'_> {
                             "ConsensusAddressOwner does not exist for this execution version"
                         )
                     }
+                    Owner::Party { .. } => {
+                        unimplemented!("Party does not exist for this execution version")
+                    }
                 }
             })
             .filter(|id| {
@@ -781,6 +784,9 @@ impl TemporaryStore<'_> {
                         unimplemented!(
                             "ConsensusAddressOwner does not exist for this execution version"
                         )
+                    }
+                    Owner::Party { .. } => {
+                        unimplemented!("Party does not exist for this execution version")
                     }
                 }
             };

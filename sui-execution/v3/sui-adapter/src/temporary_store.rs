@@ -677,6 +677,9 @@ impl TemporaryStore<'_> {
                             "Input objects must be address owned, shared, consensus, or immutable"
                         )
                     }
+                    Owner::Party { .. } => {
+                        unimplemented!("Party does not exist for this execution version")
+                    }
                 }
             })
             .filter(|id| {
@@ -763,6 +766,9 @@ impl TemporaryStore<'_> {
                             "Only system packages can be upgraded"
                         );
                         continue;
+                    }
+                    Owner::Party { .. } => {
+                        unimplemented!("Party does not exist for this execution version")
                     }
                 }
             };
@@ -1179,6 +1185,9 @@ fn was_object_mutated(object: &Object, original: &Object) -> bool {
         | (Owner::ObjectOwner(_), _)
         | (Owner::Shared { .. }, _)
         | (Owner::ConsensusAddressOwner { .. }, _) => false,
+        (Owner::Party { .. }, _) => {
+            unimplemented!("Party does not exist for this execution version")
+        }
     };
 
     !data_equal || !owner_equal

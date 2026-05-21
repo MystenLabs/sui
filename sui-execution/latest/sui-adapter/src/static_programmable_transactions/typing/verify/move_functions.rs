@@ -36,7 +36,7 @@ fn command<Mode: ExecutionMode>(
         command,
         result_type: _,
         drop_values: _,
-        consumed_shared_objects: _,
+        incurs_post_execution_checks: _,
     } = c;
     match command {
         T::Command__::MoveCall(call) => move_call::<Mode>(env, call)?,

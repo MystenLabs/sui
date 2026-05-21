@@ -248,6 +248,10 @@ pub fn end_transaction(
                     .or_default()
                     .insert(id);
             }
+            Owner::Party { .. } => {
+                // TODO(Party WIP)
+                todo!("Party WIP")
+            }
         }
     }
 
@@ -873,6 +877,10 @@ fn transaction_effects(
             Owner::Immutable => frozen.push(id),
             Owner::ConsensusAddressOwner { owner, .. } => {
                 transferred_to_account.push((pack_id(id), Value::address(owner.into())))
+            }
+            Owner::Party { .. } => {
+                // TODO(Party WIP)
+                todo!("Party WIP")
             }
         }
     }
