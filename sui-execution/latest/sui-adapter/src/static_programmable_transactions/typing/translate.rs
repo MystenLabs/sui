@@ -1288,7 +1288,7 @@ mod post_execution_checks {
     struct Context {
         // Does the input object require a post-execution check?
         inputs: Vec<bool>,
-        // True if
+        // True if the command incurs post-execution checks
         results: Vec<bool>,
         propagate_through_mut_borrow: bool,
     }
@@ -1306,6 +1306,7 @@ mod post_execution_checks {
                 original_command_len: _,
                 commands: _,
             } = ast;
+            // Find inputs with post execution checks
             let inputs = objects
                 .iter()
                 .map(|o| {
@@ -1360,7 +1361,7 @@ mod post_execution_checks {
             | T::Command__::Publish(_, _, _)
             | T::Command__::Upgrade(_, _, _, _, _) => (arg_requires_post_execution_checks, false),
         };
-        c.incurs_post_execution_checks = incurs_checks;
+        c.incurs_post_execution_checks |= incurs_checks;
         context.results.push(tainted_result);
         Ok(())
     }

@@ -556,6 +556,7 @@ impl Display for ObjectPermission {
 #[derive(
     Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
 )]
+#[serde(try_from = "u64", into = "u64")]
 #[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub struct ObjectPermissions(u64);
 
@@ -686,6 +687,19 @@ impl std::ops::BitOr<ObjectPermissions> for ObjectPermissions {
     }
 }
 
+impl TryFrom<u64> for ObjectPermissions {
+    type Error = &'static str;
+    fn try_from(bits: u64) -> Result<Self, Self::Error> {
+        Self::new(bits).ok_or("invalid ObjectPermissions bits")
+    }
+}
+
+impl From<ObjectPermissions> for u64 {
+    fn from(p: ObjectPermissions) -> u64 {
+        p.0
+    }
+}
+
 pub struct ObjectPermissionsIterator {
     set: ObjectPermissions,
     idx: usize,
@@ -743,6 +757,7 @@ impl Display for ObjectPermissions {
 #[derive(
     Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
 )]
+#[serde(try_from = "RawPartySerde", into = "RawPartySerde")]
 #[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub struct Party {
     /// The default permissions, used for any party member not explicitly listed in `members`.
@@ -799,6 +814,40 @@ impl Display for Party {
             first = false;
         }
         write!(f, "}} }}")
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+struct RawPartySerde {
+    default_permissions: ObjectPermissions,
+    members: Vec<(SuiAddress, ObjectPermissions)>,
+}
+
+impl TryFrom<RawPartySerde> for Party {
+    type Error = &'static str;
+    fn try_from(raw: RawPartySerde) -> Result<Self, Self::Error> {
+        for window in raw.members.windows(2) {
+            match window[0].0.cmp(&window[1].0) {
+                std::cmp::Ordering::Less => continue,
+                std::cmp::Ordering::Equal => return Err("duplicate Party member address"),
+                std::cmp::Ordering::Greater => return Err("Party members must be sorted"),
+            }
+        }
+        let members: BTreeMap<SuiAddress, ObjectPermissions> = raw.members.into_iter().collect();
+        // Party's cannot be equivalent to ConsensusAddressOwner
+        // The error message here is left generic for any additional restrictions that may be added
+        // in the future
+        Self::new(raw.default_permissions, members)
+            .ok_or("invalid Party: violates canonical representation")
+    }
+}
+
+impl From<Party> for RawPartySerde {
+    fn from(p: Party) -> Self {
+        Self {
+            default_permissions: p.default_permissions,
+            members: p.members.into_iter().collect(),
+        }
     }
 }
 
