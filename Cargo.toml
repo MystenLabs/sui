@@ -529,17 +529,17 @@ tokio-tungstenite = { version = "0.26.2", features = ["connect"] }
 tokio-util = "0.7.18"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.14.3", features = [
+tonic = { version = "0.14.6", features = [
   "zstd",
   "transport",
   "tls-webpki-roots",
 ] }
-tonic-build = "0.14.2"
-tonic-prost = "0.14.2"
-tonic-prost-build = "0.14.2"
-tonic-health = "0.14.2"
-tonic-reflection = "0.14.2"
-tonic-web = "0.14.2"
+tonic-build = "0.14.6"
+tonic-prost = "0.14.6"
+tonic-prost-build = "0.14.6"
+tonic-health = "0.14.6"
+tonic-reflection = "0.14.6"
+tonic-web = "0.14.6"
 tonic-rustls = "0.3.0"
 tower = { version = "0.5", features = [
   "full",
@@ -772,11 +772,6 @@ sui-execution = { path = "sui-execution" }
 # move-bytecode-verifier = { path = "external-crates/move/move-bytecode-verifier" }
 
 [patch.crates-io]
-# Go back to using a crates.io release once a release is made that includes
-# this fix: https://github.com/grpc/grpc-rust/pull/2596
-tonic = { git = "https://github.com/grpc/grpc-rust.git", rev = "d6ce69b0d93e1de21b0769e942ace00b48f52e17" }
-tonic-prost = { git = "https://github.com/grpc/grpc-rust.git", rev = "d6ce69b0d93e1de21b0769e942ace00b48f52e17" }
-tonic-reflection = { git = "https://github.com/grpc/grpc-rust.git", rev = "d6ce69b0d93e1de21b0769e942ace00b48f52e17" }
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
