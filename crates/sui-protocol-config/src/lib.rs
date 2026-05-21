@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 124;
+const MAX_PROTOCOL_VERSION: u64 = 125;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -350,6 +350,8 @@ const MAINNET_USDB: &str =
 //              and enable_gasless on mainnet to bring it in line with testnet.
 //              Configure mainnet gasless allowlist with stablecoin types and $0.01 minimum
 //              transfer per stable.
+// Version 125: Require a one-to-one matching between required signers and provided
+//              signatures during signature verification.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1016,6 +1018,13 @@ struct FeatureFlags {
     // Enables address aliases.
     #[serde(skip_serializing_if = "is_false")]
     address_aliases: bool,
+
+    // Requires a one-to-one matching between required signers and provided signatures
+    // during signature verification, so a signature that is not bound to a unique
+    // required signer is rejected.
+    // See `verify_sender_signed_data_message_signatures` for details.
+    #[serde(skip_serializing_if = "is_false")]
+    fix_aliased_signer_signatures: bool,
 
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // TODO: remove old code and deprecate once in mainnet.
@@ -2733,6 +2742,10 @@ impl ProtocolConfig {
 
     pub fn fix_checkpoint_signature_mapping(&self) -> bool {
         self.feature_flags.fix_checkpoint_signature_mapping
+    }
+
+    pub fn fix_aliased_signer_signatures(&self) -> bool {
+        self.feature_flags.fix_aliased_signer_signatures
     }
 
     pub fn enable_object_funds_withdraw(&self) -> bool {
@@ -4964,6 +4977,9 @@ impl ProtocolConfig {
                         ]);
                     }
                 }
+                125 => {
+                    cfg.feature_flags.fix_aliased_signer_signatures = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -5279,6 +5295,10 @@ impl ProtocolConfig {
 
     pub fn set_address_aliases_for_testing(&mut self, val: bool) {
         self.feature_flags.address_aliases = val;
+    }
+
+    pub fn set_fix_aliased_signer_signatures_for_testing(&mut self, val: bool) {
+        self.feature_flags.fix_aliased_signer_signatures = val;
     }
 
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {

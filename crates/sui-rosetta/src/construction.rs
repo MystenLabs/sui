@@ -130,6 +130,7 @@ pub async fn combine(
         Arc::new(VerifiedDigestCache::new_empty()), // no need to use cache in rosetta
         // TODO: This will fail for tx sent from aliased addresses.
         vec![],
+        true,
     )?;
     let signed_tx_bytes = bcs::to_bytes(&signed_tx)?;
 

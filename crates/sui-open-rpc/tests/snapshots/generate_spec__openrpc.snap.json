@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "124",
+              "maxSupportedProtocolVersion": "125",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1380,6 +1380,7 @@
                 "end_of_epoch_transaction_supported": false,
                 "enforce_address_balance_change_invariant": false,
                 "enforce_checkpoint_timestamp_monotonicity": false,
+                "fix_aliased_signer_signatures": false,
                 "fix_checkpoint_signature_mapping": false,
                 "flexible_tx_context_positions": false,
                 "fresh_vm_on_framework_upgrade": false,
