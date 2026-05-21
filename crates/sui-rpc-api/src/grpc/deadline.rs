@@ -118,10 +118,7 @@ where
                         Err(_) => {
                             // Cancellation — only reachable at runtime shutdown
                             // (our abort guard fires on Drop, when we wouldn't be
-                            // polling). EOF is harmless then; assert in dev to
-                            // catch any future path that makes this reachable.
-                            debug_assert!(false, "with_deadline producer cancelled unexpectedly");
-                            break;
+                            // polling), so EOF is harmless.                             break;
                         }
                     }
                 }

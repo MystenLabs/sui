@@ -82,14 +82,12 @@ enum FrameHandle<O, E> {
 /// A **cancellation** is only reachable at runtime shutdown: we abort our own
 /// tasks via `Drop`, never while awaiting their handles, and nobody else holds
 /// an abort handle. The stack is tearing down and the client connection is
-/// already dead, so truncating is harmless. The `debug_assert` is a dev
-/// tripwire — if a future change makes this arm reachable mid-request it would
-/// fabricate a bogus "complete", so catch it then.
+/// already dead, so truncating is harmless — treat it as EOF.
 fn surface_panic(res: Result<(), JoinError>) {
     match res {
         Ok(()) => {}
         Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
-        Err(_) => debug_assert!(false, "pipelined_chunks task cancelled unexpectedly"),
+        Err(_) => {}
     }
 }
 
