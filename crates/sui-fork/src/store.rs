@@ -9,8 +9,6 @@ use std::sync::RwLockWriteGuard;
 
 use anyhow::Context as _;
 use anyhow::anyhow;
-use anyhow::bail;
-use itertools::Itertools as _;
 use tracing::info;
 
 use move_core_types::annotated_value::MoveTypeLayout;
@@ -76,7 +74,7 @@ use crate::TransactionRead;
 use crate::VersionQuery;
 use crate::filesystem::FilesystemStore;
 use crate::filesystem::ObjectLatestState;
-use crate::filesystem::OwnedObjectEntry;
+use crate::owned_object_index::OwnedObjectIndexStore;
 
 /// A data store for Sui data, combining a shared local filesystem cache with a remote GraphQL
 /// endpoint for historical reads. Pre-fork data is fetched on demand and cached locally; post-fork
@@ -96,6 +94,9 @@ struct DataStoreInner {
     forked_at_checkpoint: CheckpointSequenceNumber,
     gql: GraphQLClient,
     local: FilesystemStore,
+    /// DBMap-backed address-owned object index, kept as a sibling of `local` so it can evolve
+    /// independently of the filesystem object cache.
+    owned_index: OwnedObjectIndexStore,
     /// Protects multi-file filesystem snapshots between executor writes and cloned RPC readers.
     local_snapshot_lock: RwLock<()>,
 }
@@ -141,11 +142,13 @@ impl DataStore {
         gql: GraphQLClient,
         local: FilesystemStore,
     ) -> Self {
+        let owned_index = OwnedObjectIndexStore::open(local.root());
         Self {
             inner: Arc::new(DataStoreInner {
                 forked_at_checkpoint,
                 gql,
                 local,
+                owned_index,
                 local_snapshot_lock: RwLock::new(()),
             }),
         }
@@ -167,7 +170,7 @@ impl DataStore {
             .map_err(|_| StorageError::custom("local snapshot lock poisoned"))
     }
 
-    fn write_local_snapshot(&self) -> anyhow::Result<RwLockWriteGuard<'_, ()>> {
+    pub(crate) fn write_local_snapshot(&self) -> anyhow::Result<RwLockWriteGuard<'_, ()>> {
         self.inner
             .local_snapshot_lock
             .write()
@@ -180,6 +183,10 @@ impl DataStore {
 
     pub(crate) fn local(&self) -> &FilesystemStore {
         &self.inner.local
+    }
+
+    pub(crate) fn owned_index(&self) -> &OwnedObjectIndexStore {
+        &self.inner.owned_index
     }
 
     /// Get a checkpoint summary by sequence number. Tries the local filesystem first. If it's a
@@ -524,86 +531,6 @@ impl DataStore {
         None
     }
 
-    fn ensure_owned_object_index_initialized(&self) -> anyhow::Result<()> {
-        if self.inner.local.owned_object_index_exists()? {
-            return Ok(());
-        }
-
-        let _local_snapshot_guard = self.write_local_snapshot()?;
-        if self.inner.local.owned_object_index_exists()? {
-            return Ok(());
-        }
-
-        if let Some(checkpoint) = self.inner.local.get_highest_verified_checkpoint()?
-            && checkpoint.data().sequence_number > self.forked_at_checkpoint()
-        {
-            bail!(
-                "owned-object index is missing while local checkpoints have advanced past the fork checkpoint; refusing to rebuild stale seed state",
-            );
-        }
-
-        let mut entries = BTreeMap::new();
-        if self.inner.local.seed_manifest_exists() {
-            let manifest = self.inner.local.read_seed_manifest()?;
-            if manifest.checkpoint != self.forked_at_checkpoint() {
-                bail!(
-                    "Seed manifest checkpoint {} does not match requested checkpoint {}. Use a different --data-dir.",
-                    manifest.checkpoint,
-                    self.forked_at_checkpoint(),
-                );
-            }
-
-            let keys: Vec<_> = manifest
-                .entries
-                .iter()
-                .map(|entry| ObjectKey {
-                    object_id: entry.object_ref.0,
-                    version_query: VersionQuery::VersionAtCheckpoint {
-                        version: entry.object_ref.1.value(),
-                        checkpoint: self.forked_at_checkpoint(),
-                    },
-                })
-                .collect();
-            let objects = self
-                .inner
-                .gql
-                .get_objects(&keys)
-                .context("failed to fetch seeded objects for owned-object index")?;
-
-            for (seed_entry, object) in manifest.entries.iter().zip_eq(objects) {
-                let Some((object, _)) = object else {
-                    bail!(
-                        "seeded object {} version {} was not found at fork checkpoint {}",
-                        seed_entry.object_ref.0,
-                        seed_entry.object_ref.1.value(),
-                        self.forked_at_checkpoint(),
-                    );
-                };
-                let entry = OwnedObjectEntry::from_object(&object).with_context(|| {
-                    format!(
-                        "seeded object {} is not an address-owned Move object",
-                        seed_entry.object_ref.0,
-                    )
-                })?;
-                if entry.object_ref != seed_entry.object_ref {
-                    bail!(
-                        "seeded object {} metadata does not match fetched object at fork checkpoint {}",
-                        seed_entry.object_ref.0,
-                        self.forked_at_checkpoint(),
-                    );
-                }
-
-                self.inner.local.write_object(&object)?;
-                entries.insert(entry.object_ref.0, entry);
-            }
-        }
-
-        let entries: Vec<_> = entries.into_values().collect();
-        self.inner
-            .local
-            .write_owned_object_entries_for_initialization(&entries)
-    }
-
     /// Persist local object writes and current-state removals, then update the address-owned
     /// index from the same diff.
     fn apply_object_updates(
@@ -677,7 +604,7 @@ impl DataStore {
         }
 
         self.inner
-            .local
+            .owned_index
             .apply_owned_object_index_updates(&removed_object_ids, indexable_written_objects)
             .context("failed to update owned-object index")
     }
@@ -707,63 +634,6 @@ impl DataStore {
         Self::from_parts(forked_at_checkpoint, gql, local)
     }
 
-    /// Get owned objects for an address, optionally filtered by object type and paginated with a
-    /// cursor.
-    fn get_owned_objects(
-        &self,
-        owner: SuiAddress,
-        object_type: Option<StructTag>,
-        cursor: Option<OwnedObjectInfo>,
-    ) -> StorageResult<Vec<OwnedObjectInfo>> {
-        self.get_owned_object_infos(owner, object_type, cursor)
-    }
-
-    /// Initialize the owned-object index when needed, then read complete indexed RPC metadata.
-    fn get_owned_object_infos(
-        &self,
-        owner: SuiAddress,
-        object_type: Option<StructTag>,
-        cursor: Option<OwnedObjectInfo>,
-    ) -> StorageResult<Vec<OwnedObjectInfo>> {
-        self.ensure_owned_object_index_initialized()
-            .map_err(|e| StorageError::custom(e.to_string()))?;
-        let cursor_object_id = cursor.map(|cursor| cursor.object_id);
-        let entries = self
-            .inner
-            .local
-            .get_owned_object_entries_for_owner(owner, cursor_object_id)
-            .map_err(|e| StorageError::custom(e.to_string()))?;
-
-        Ok(entries
-            .into_iter()
-            .filter(|entry| {
-                object_type
-                    .as_ref()
-                    .is_none_or(|filter| struct_tag_filter_matches(filter, &entry.object_type))
-            })
-            .map(|entry| OwnedObjectInfo {
-                owner: entry.owner,
-                object_type: entry.object_type,
-                balance: entry.balance,
-                object_id: entry.object_ref.0,
-                version: entry.object_ref.1,
-            })
-            .collect())
-    }
-}
-
-/// Check if the these two `StructTag`s match for the purposes of owned-object filtering. The filter
-/// may have empty type parameters, in which case they are ignored and only the address, module, and
-/// name are compared.
-///
-/// This allows a wildcard filter like `0x2::coin::Coin` to match all versions of the `Coin` struct,
-/// regardless of the type parameter (e.g., `0x2::coin::Coin<0x1::sui::SUI>`).
-fn struct_tag_filter_matches(filter: &StructTag, candidate: &StructTag) -> bool {
-    filter.address == candidate.address
-        && filter.module.as_ident_str() == candidate.module.as_ident_str()
-        && filter.name.as_ident_str() == candidate.name.as_ident_str()
-        && (filter.type_params.is_empty()
-            || filter.type_params.as_slice() == candidate.type_params.as_slice())
 }
 
 /// Preserve effect removal categories before passing removals through `update_objects`, whose trait

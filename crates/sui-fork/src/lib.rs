@@ -10,6 +10,7 @@ pub(crate) mod context;
 pub(crate) mod filesystem;
 mod gql;
 mod node;
+pub(crate) mod owned_object_index;
 mod proto;
 mod rpc;
 pub(crate) mod seed;
