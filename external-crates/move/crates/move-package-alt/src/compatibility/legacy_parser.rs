@@ -13,8 +13,8 @@ use crate::{
     package::paths::PackagePath,
     schema::{
         DefaultDependency, Environment, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
-        ManifestGitDependency, ModeName, OnChainDepInfo, PackageMetadata, PackageName,
-        ParsedManifest, PublishAddresses, SystemDepName,
+        ManifestGitDependency, ModeName, PackageMetadata, PackageName, ParsedManifest,
+        PublishAddresses, SystemDepName,
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
@@ -596,17 +596,6 @@ fn parse_dependency(mut tval: TV, mode: Option<&str>) -> Result<DefaultDependenc
                 repo: git_url.to_string(),
                 subdir,
                 rev: Some(git_rev.to_string()),
-            })
-        }
-
-        (None, None, None, Some(id)) => {
-            let Some(_id) = id.as_str() else {
-                bail!("ID not a string")
-            };
-
-            // TODO: Implement once we have the on-chain deps design.
-            ManifestDependencyInfo::OnChain(OnChainDepInfo {
-                on_chain: true.try_into().unwrap(),
             })
         }
 

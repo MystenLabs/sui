@@ -140,10 +140,7 @@ impl<F: MoveFlavor> Package<F> {
             dummy_addr,
         };
 
-        debug!(
-            "successfully loaded {:?}",
-            result.dep_for_self.unfetched_path(&config.chain_id)
-        );
+        debug!("successfully loaded {}", result.dep_for_self);
         Ok(result)
     }
 
@@ -332,7 +329,7 @@ pub async fn cache_package<F: MoveFlavor>(
 
     // convert to a combined dependency
     let combined =
-        CombinedDependency::from_default(toml_handle, package, env.name().clone(), default_dep);
+        CombinedDependency::from_default(toml_handle, package, env.name().clone(), default_dep)?;
 
     // pin
     let root = Pinned::Root(dummy_path.clone());
