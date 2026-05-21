@@ -141,7 +141,7 @@ impl DkgRole {
             ) {
                 Ok(party) => party,
                 Err(err) => {
-                    error!("random beacon: error while initializing Party: {err:?}");
+                    debug_fatal!("random beacon: error while initializing Party: {err:?}");
                     return None;
                 }
             };
@@ -154,7 +154,7 @@ impl DkgRole {
             let observer = match dkg_v1::Observer::<PkG, EncG>::new(nodes, t, random_oracle) {
                 Ok(observer) => observer,
                 Err(err) => {
-                    error!("random beacon: error while initializing Observer: {err:?}");
+                    debug_fatal!("random beacon: error while initializing Observer: {err:?}");
                     return None;
                 }
             };
