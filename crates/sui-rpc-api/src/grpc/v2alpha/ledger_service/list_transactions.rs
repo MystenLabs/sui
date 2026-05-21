@@ -72,7 +72,7 @@ const DEFAULT_LIMIT_ITEMS: u32 = 50;
 const MAX_LIMIT_ITEMS: u32 = 500;
 const CHUNK_MAX: usize = 32;
 const MAX_BITMAP_FILTER_LITERALS: usize = 10;
-const READ_MASK_DEFAULT: &str = "digest";
+const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::TRANSACTION;
 
 pub(crate) type ListTransactionsStream =
     BoxStream<'static, Result<ListTransactionsResponse, RpcError>>;

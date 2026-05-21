@@ -21,7 +21,7 @@ use sui_types::storage::OwnedObjectInfo;
 const MAX_PAGE_SIZE: usize = 1000;
 const DEFAULT_PAGE_SIZE: usize = 50;
 const MAX_PAGE_SIZE_BYTES: usize = 512 * 1024; // 512KiB
-const READ_MASK_DEFAULT: &str = "object_id,version,object_type";
+const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::OWNED_OBJECT;
 
 #[tracing::instrument(skip(service))]
 pub fn list_owned_objects(

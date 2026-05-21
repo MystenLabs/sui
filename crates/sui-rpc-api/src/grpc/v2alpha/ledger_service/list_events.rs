@@ -74,7 +74,7 @@ pub(super) const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5
 
 const DEFAULT_LIMIT_ITEMS: u32 = 50;
 const MAX_LIMIT_ITEMS: u32 = 1000;
-const EVENT_READ_MASK_DEFAULT: &str = "event_type";
+const EVENT_READ_MASK_DEFAULT: &str = crate::read_mask_defaults::EVENT;
 const CHUNK_MAX: usize = 32;
 const MAX_BITMAP_FILTER_LITERALS: usize = 10;
 

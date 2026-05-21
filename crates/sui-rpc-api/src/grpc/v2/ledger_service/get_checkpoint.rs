@@ -23,7 +23,7 @@ use sui_sdk_types::Digest;
 use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::full_checkpoint_content::ObjectSet as TypesObjectSet;
 
-pub const READ_MASK_DEFAULT: &str = "sequence_number,digest";
+pub const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::CHECKPOINT;
 
 #[tracing::instrument(skip(service))]
 pub fn get_checkpoint(

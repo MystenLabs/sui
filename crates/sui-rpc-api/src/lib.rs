@@ -19,6 +19,7 @@ mod error;
 pub mod grpc;
 pub mod ledger_history;
 mod metrics;
+pub mod read_mask_defaults;
 mod reader;
 mod response;
 mod service;

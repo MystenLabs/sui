@@ -71,7 +71,7 @@ pub(super) const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5
 const DEFAULT_LIMIT_ITEMS: u32 = 10;
 const MAX_LIMIT_ITEMS: u32 = 100;
 const CHUNK_MAX: usize = 16;
-const READ_MASK_DEFAULT: &str = "sequence_number,digest";
+const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::CHECKPOINT;
 const MAX_BITMAP_FILTER_LITERALS: usize = 10;
 
 pub(crate) type ListCheckpointsStream =
