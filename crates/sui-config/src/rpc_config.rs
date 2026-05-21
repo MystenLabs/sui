@@ -408,7 +408,10 @@ pub struct LedgerHistoryConfig {
 
 impl LedgerHistoryConfig {
     pub fn list_transactions(&self) -> ResolvedLedgerHistoryMethodConfig {
-        LedgerHistoryMethodConfig::resolve(self.list_transactions.as_ref(), LIST_TRANSACTIONS_DEFAULTS)
+        LedgerHistoryMethodConfig::resolve(
+            self.list_transactions.as_ref(),
+            LIST_TRANSACTIONS_DEFAULTS,
+        )
     }
 
     pub fn list_events(&self) -> ResolvedLedgerHistoryMethodConfig {
@@ -416,7 +419,10 @@ impl LedgerHistoryConfig {
     }
 
     pub fn list_checkpoints(&self) -> ResolvedLedgerHistoryMethodConfig {
-        LedgerHistoryMethodConfig::resolve(self.list_checkpoints.as_ref(), LIST_CHECKPOINTS_DEFAULTS)
+        LedgerHistoryMethodConfig::resolve(
+            self.list_checkpoints.as_ref(),
+            LIST_CHECKPOINTS_DEFAULTS,
+        )
     }
 
     pub fn bitmap_bucket_scan_budget(&self) -> usize {
@@ -440,7 +446,7 @@ impl LedgerHistoryConfig {
     /// emit its first watermark; if the per-request budget is below the literal
     /// cap a `SCAN_LIMIT` can fire before any merged watermark reaches the wire,
     /// leaving the client a cursorless `QueryEnd` it cannot resume from. Mirrors
-    /// the BigTable side's `ConcurrencyConfig::validate`.
+    /// the archival/BigTable side's `LedgerHistoryConfig::validate`.
     pub fn validate(&self) -> anyhow::Result<()> {
         anyhow::ensure!(
             self.bitmap_bucket_scan_budget() >= self.max_bitmap_filter_literals(),

@@ -86,7 +86,7 @@ pub(crate) async fn list_checkpoints(
     let filtered = request.filter.is_some();
     let client: BigTableClient = ctx.client().clone();
     let checkpoint_hi_exclusive = ctx.checkpoint_hi_exclusive();
-    let endpoint = ctx.list_api().list_checkpoints;
+    let endpoint = ctx.ledger_history().list_checkpoints();
     let chunk_max = endpoint.chunk_max;
 
     let checkpoint_range = CheckpointRange::from_request(
@@ -799,7 +799,7 @@ async fn filtered_checkpoint_seq_stream(
 
     let client = ctx.client();
     let query = ctx.transaction_filter_query(filter)?;
-    let chunk_max = ctx.list_api().list_checkpoints.chunk_max;
+    let chunk_max = ctx.ledger_history().list_checkpoints().chunk_max;
 
     let tx_seq_stream = client.eval_bitmap_query_stream(
         query,

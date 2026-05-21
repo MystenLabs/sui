@@ -70,7 +70,7 @@ pub(crate) async fn list_transactions(
     let client: BigTableClient = ctx.client().clone();
     let resolver: crate::PackageResolver = ctx.package_resolver().clone();
     let checkpoint_hi_exclusive = ctx.checkpoint_hi_exclusive();
-    let endpoint = ctx.list_api().list_transactions;
+    let endpoint = ctx.ledger_history().list_transactions();
     let chunk_max = endpoint.chunk_max;
 
     let checkpoint_range = CheckpointRange::from_request(
