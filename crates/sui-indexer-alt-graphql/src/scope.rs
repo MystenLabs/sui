@@ -25,9 +25,16 @@ use sui_types::object::Object as NativeObject;
 
 use crate::config::Limits;
 use crate::error::RpcError;
-use crate::task::streaming::ProcessedCheckpoint;
-use crate::task::streaming::StreamingPackageStore;
 use crate::task::watermark::Watermarks;
+
+#[cfg(feature = "staging")]
+mod staging {
+    pub(super) use crate::task::streaming::ProcessedCheckpoint;
+    pub(super) use crate::task::streaming::StreamingPackageStore;
+}
+
+#[cfg(feature = "staging")]
+use staging::*;
 
 /// A map of objects from an executed transaction, keyed by (ObjectID, SequenceNumber).
 /// None values indicate tombstones for deleted/wrapped objects.
@@ -50,6 +57,7 @@ pub(crate) enum DataSource {
     /// A streamed checkpoint with all per-tx contents and a checkpoint-wide execution-objects
     /// map. If the scope is anchored to a particular transaction in the checkpoint, its digest
     /// is in [`Scope::effects_viewed_at_digest`].
+    #[cfg(feature = "staging")]
     Streamed {
         checkpoint: Arc<ProcessedCheckpoint>,
     },
@@ -147,6 +155,7 @@ impl Scope {
 
     /// Create a scope for streamed checkpoint data. Sets `checkpoint_viewed_at` to `None`
     /// because streamed data is resolved from memory, not bounded by an indexed checkpoint.
+    #[cfg(feature = "staging")]
     pub(crate) fn for_streamed_checkpoint(
         package_store: Arc<StreamingPackageStore>,
         resolver_limits: sui_package_resolver::Limits,
@@ -348,6 +357,7 @@ impl Scope {
         match &self.data_source {
             DataSource::Indexed => None,
             DataSource::Executed { execution_objects } => Some(execution_objects),
+            #[cfg(feature = "staging")]
             DataSource::Streamed { checkpoint } => Some(&checkpoint.execution_objects),
         }
     }
