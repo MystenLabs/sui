@@ -8124,7 +8124,7 @@
             "additionalProperties": false
           },
           {
-            "description": "Object is sequenced via consensus with per-address permissions. Each address can be granted a subset of {Read, Write, Delete, Transfer}. Addresses not explicitly listed fall back to the default permissions.",
+            "description": "Object is sequenced via consensus with per-address permissions. Each address can be granted a subset of [`ObjectPermission`] flags. Addresses not explicitly listed fall back to the default permissions.",
             "type": "object",
             "required": [
               "Party"
