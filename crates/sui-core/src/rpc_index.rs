@@ -278,12 +278,16 @@ pub struct PackageVersionInfo {
 }
 
 /// Row of the `tx_seq_digest` table — direct mapping from `tx_sequence_number`
-/// to `(digest, event_count, checkpoint_number)`. `event_count` lets event
-/// listings enumerate a transaction's event_seqs without rereading the tx row.
+/// to `(digest, event_count, tx_offset, checkpoint_number)`. `event_count` lets
+/// event listings enumerate a transaction's event_seqs without rereading the tx
+/// row. `tx_offset` is the transaction's zero-based position within its
+/// checkpoint, letting readers report a `(checkpoint, tx_offset)` coordinate
+/// without recomputing it from the checkpoint's base sequence number.
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct TxSeqDigestInfo {
     pub digest: TransactionDigest,
     pub event_count: u32,
+    pub tx_offset: u32,
     pub checkpoint_number: CheckpointSequenceNumber,
 }
 
@@ -328,6 +332,7 @@ fn ledger_tx_seq_digest(tx_sequence_number: u64, info: TxSeqDigestInfo) -> Ledge
         tx_sequence_number,
         digest: info.digest,
         event_count: info.event_count,
+        tx_offset: info.tx_offset,
         checkpoint_number: info.checkpoint_number,
     }
 }
@@ -1463,6 +1468,8 @@ impl IndexStoreTables {
                     TxSeqDigestInfo {
                         digest,
                         event_count,
+                        // `i` is the transaction's zero-based position within this checkpoint.
+                        tx_offset: i as u32,
                         checkpoint_number: cp_seq,
                     },
                 )],
@@ -3449,6 +3456,7 @@ mod tests {
                     &TxSeqDigestInfo {
                         digest: TransactionDigest::new([0; 32]),
                         event_count: 0,
+                        tx_offset: 0,
                         checkpoint_number: 0,
                     },
                 )
@@ -3504,6 +3512,7 @@ mod tests {
                         TxSeqDigestInfo {
                             digest: TransactionDigest::new([0; 32]),
                             event_count: 0,
+                            tx_offset: 0,
                             checkpoint_number: 0,
                         },
                     )],
@@ -3545,6 +3554,7 @@ mod tests {
                 &TxSeqDigestInfo {
                     digest: TransactionDigest::new([0; 32]),
                     event_count: 0,
+                    tx_offset: 0,
                     checkpoint_number: 0,
                 },
             )
@@ -3634,6 +3644,81 @@ mod tests {
         );
     }
 
+    /// `tx_offset` records each transaction's zero-based position *within its
+    /// checkpoint*, not its global `tx_sequence_number`, and restarts at 0 on
+    /// every checkpoint boundary.
+    #[tokio::test]
+    async fn index_checkpoint_records_within_checkpoint_tx_offset() {
+        use sui_types::layout_resolver::LayoutResolver;
+        use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+        let rpc_config = sui_config::RpcConfig::default();
+
+        struct PanicResolver;
+        impl LayoutResolver for PanicResolver {
+            fn get_annotated_layout(
+                &mut self,
+                _struct_tag: &move_core_types::language_storage::StructTag,
+            ) -> Result<
+                move_core_types::annotated_value::MoveDatatypeLayout,
+                sui_types::error::SuiError,
+            > {
+                panic!("layout resolver should not be invoked by ledger history indexing");
+            }
+        }
+
+        // Checkpoint 1: three txs over a non-zero tx-seq base (100), so the
+        // global tx_seqs are 100,101,102 — distinct from the offsets 0,1,2.
+        let checkpoint1: CheckpointData = TestCheckpointBuilder::new(1)
+            .with_network_total_transactions(100)
+            .start_transaction(0)
+            .finish_transaction()
+            .start_transaction(1)
+            .finish_transaction()
+            .start_transaction(2)
+            .finish_transaction()
+            .build_checkpoint()
+            .into();
+        tables
+            .index_checkpoint(&checkpoint1, &mut PanicResolver, &rpc_config, true)
+            .expect("index_checkpoint failed")
+            .write()
+            .expect("batch write failed");
+
+        // Checkpoint 2: two more txs; global tx_seqs continue at 103,104 but the
+        // offsets restart at 0.
+        let checkpoint2: CheckpointData = TestCheckpointBuilder::new(2)
+            .with_network_total_transactions(103)
+            .start_transaction(0)
+            .finish_transaction()
+            .start_transaction(1)
+            .finish_transaction()
+            .build_checkpoint()
+            .into();
+        tables
+            .index_checkpoint(&checkpoint2, &mut PanicResolver, &rpc_config, true)
+            .expect("index_checkpoint failed")
+            .write()
+            .expect("batch write failed");
+
+        let offset_by_tx_seq: std::collections::BTreeMap<u64, u32> = tables
+            .tx_seq_digest
+            .safe_iter()
+            .map(|row| row.map(|(tx_seq, info)| (tx_seq, info.tx_offset)))
+            .collect::<Result<_, _>>()
+            .unwrap();
+
+        assert_eq!(
+            offset_by_tx_seq,
+            std::collections::BTreeMap::from([(100, 0), (101, 1), (102, 2), (103, 0), (104, 1),]),
+            "tx_offset must be the within-checkpoint position, not the global tx_seq"
+        );
+    }
+
     /// `prune()` commits the tx_seq_digest range delete and the
     /// `Watermark::Pruned` advance in one atomic batch. After a successful
     /// prune both halves are present: no tx_seq_digest row remains in the
@@ -3655,6 +3740,7 @@ mod tests {
                         TxSeqDigestInfo {
                             digest: TransactionDigest::new([0; 32]),
                             event_count: 0,
+                            tx_offset: 0,
                             checkpoint_number: 0,
                         },
                     )],
@@ -3699,6 +3785,7 @@ mod tests {
                         TxSeqDigestInfo {
                             digest: TransactionDigest::new([0; 32]),
                             event_count: 0,
+                            tx_offset: 0,
                             checkpoint_number: 0,
                         },
                     )],
@@ -3737,6 +3824,7 @@ mod tests {
                         TxSeqDigestInfo {
                             digest: TransactionDigest::new([0; 32]),
                             event_count: 0,
+                            tx_offset: 0,
                             checkpoint_number: 0,
                         },
                     )],
@@ -3793,6 +3881,7 @@ mod tests {
                             TxSeqDigestInfo {
                                 digest: TransactionDigest::new([0; 32]),
                                 event_count: 0,
+                                tx_offset: 0,
                                 checkpoint_number: 0,
                             },
                         )],

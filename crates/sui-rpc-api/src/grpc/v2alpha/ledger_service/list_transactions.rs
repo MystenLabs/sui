@@ -470,7 +470,7 @@ fn render_transaction_rows(
                 row.checkpoint_number,
                 read_mask,
             )?;
-            transaction_item_response(watermark, transaction)
+            transaction_item_response(watermark, transaction, row.tx_offset)
         } else {
             let mut transaction = ExecutedTransaction::default();
             if read_mask.contains(ExecutedTransaction::DIGEST_FIELD.name) {
@@ -479,7 +479,7 @@ fn render_transaction_rows(
             if read_mask.contains(ExecutedTransaction::CHECKPOINT_FIELD.name) {
                 transaction.checkpoint = Some(row.checkpoint_number);
             }
-            transaction_item_response(watermark, transaction)
+            transaction_item_response(watermark, transaction, row.tx_offset)
         };
         items.push(response);
     }
@@ -534,10 +534,12 @@ fn resolve_tx_range(
 fn transaction_item_response(
     watermark: Watermark,
     transaction: ExecutedTransaction,
+    tx_offset: u32,
 ) -> ListTransactionsResponse {
     let mut item = TransactionItem::default();
     item.watermark = Some(watermark);
     item.transaction = Some(transaction);
+    item.transaction_offset = Some(tx_offset as u64);
 
     let mut response = ListTransactionsResponse::default();
     response.response = Some(list_transactions_response::Response::Item(item));
