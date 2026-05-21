@@ -192,10 +192,13 @@ decide it.
 The key observation is that the scheduler itself sees every withdrawal reservation in the order
 consensus assigned them. By the time a new request arrives, the scheduler already knows what
 every prior reservation against that account declared as its maximum withdrawal — that is enough
-to compute the post-reservation balance without waiting for any of those earlier transactions to
-finish executing. Settlement adjusts the in-memory state to match on-chain reality, but it is
-not required to make a sound sufficient/insufficient decision for the next request. The naive
-scheduler ignores this and blocks anyway.
+to establish a lower bound on the balance still available to the new request (the worst case where
+every prior reservation withdraws its full declared maximum), without waiting for any of those
+earlier transactions to finish executing. That lower bound is all the scheduler needs: if it still
+covers the new request's declared maximum, the request is guaranteed to be satisfiable. Settlement
+adjusts the in-memory state to match on-chain reality, but it is not required to make a sound
+sufficient/insufficient decision for the next request. The naive scheduler ignores this and
+blocks anyway.
 
 The eager scheduler exploits this directly.
 
