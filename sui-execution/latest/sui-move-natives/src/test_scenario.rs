@@ -249,6 +249,7 @@ pub fn end_transaction(
                     .insert(id);
             }
             Owner::Party { .. } => {
+                // TODO(Party WIP)
                 todo!("Party WIP")
             }
         }
@@ -878,6 +879,7 @@ fn transaction_effects(
                 transferred_to_account.push((pack_id(id), Value::address(owner.into())))
             }
             Owner::Party { .. } => {
+                // TODO(Party WIP)
                 todo!("Party WIP")
             }
         }

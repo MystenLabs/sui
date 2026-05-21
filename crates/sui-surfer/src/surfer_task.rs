@@ -67,7 +67,7 @@ impl SurferTask {
                                     .or_default()
                                     .push(obj_ref);
                             }
-                            // TODO: Implement full support for Party objects in sui-surfer.
+                            // TODO(Party WIP) Implement full support for Party objects in sui-surfer.
                             Owner::Shared {
                                 initial_shared_version,
                             }

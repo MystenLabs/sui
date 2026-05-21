@@ -72,6 +72,7 @@ impl BalanceChange {
                     Owner::AddressOwner(addr)
                     | Owner::ObjectOwner(addr)
                     | Owner::ConsensusAddressOwner { owner: addr, .. } => *addr,
+                    // TODO(Party WIP)
                     Owner::Party { .. } => todo!("Party WIP"),
                     Owner::Shared { .. } | Owner::Immutable => return Ok(None),
                 }
@@ -139,6 +140,7 @@ impl From<BalanceChangeContents> for GrpcBalanceChange {
                     Owner::AddressOwner(addr)
                     | Owner::ObjectOwner(addr)
                     | Owner::ConsensusAddressOwner { owner: addr, .. } => Some(addr),
+                    // TODO(Party WIP)
                     Owner::Party { .. } => todo!("Party WIP"),
                     Owner::Shared { .. } | Owner::Immutable => None,
                 };

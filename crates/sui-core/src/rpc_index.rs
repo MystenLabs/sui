@@ -890,6 +890,7 @@ impl IndexStoreTables {
                     }
                     Owner::Shared { .. } | Owner::Immutable => {}
                     Owner::Party { .. } => {
+                        // TODO(Party WIP)
                         todo!("Party WIP");
                         // We could maybe look at non-default permissions for the owner. But
                         // I'm not sure what this is really used for
@@ -918,6 +919,7 @@ impl IndexStoreTables {
                         Owner::Shared { .. } | Owner::Immutable => {}
 
                         Owner::Party { .. } => {
+                            // TODO(Party WIP)
                             todo!("Party WIP");
                             // We could maybe look at non-default permissions for the owner. But
                             // I'm not sure what this is really used for
@@ -938,6 +940,7 @@ impl IndexStoreTables {
                         }
                     }
                     Owner::Shared { .. } | Owner::Immutable => {}
+                    // TODO(Party WIP)
                     Owner::Party { .. } => todo!("Party WIP"),
                 }
                 if let Some((key, info)) = Self::extract_version_if_package(object) {
@@ -1724,6 +1727,7 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
             Owner::Shared { .. } | Owner::Immutable => {}
 
             Owner::Party { .. } => {
+                // TODO(Party WIP)
                 todo!("Party WIP");
                 // We could maybe look at non-default permissions for "owners"?
             }

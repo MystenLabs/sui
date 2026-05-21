@@ -154,8 +154,8 @@ impl TestCallArg {
                 initial_shared_version: *initial_shared_version,
                 mutability: SharedObjectMutability::Mutable,
             },
-            // TODO Party Objects: This would benefit from either having the `mutability`
-            // passed in, or the sender so the mutability could be computed from the party's
+            // TODO(Party WIP) This would benefit from either having the `mutability` passed
+            // in, or the sender so the mutability could be computed from the party's
             // permissions.
             Owner::Party {
                 start_version: initial_shared_version,

@@ -168,7 +168,7 @@ pub fn get_owner_type(object: &Object) -> OwnerType {
         Owner::Shared { .. } => OwnerType::Shared,
         Owner::Immutable => OwnerType::Immutable,
         Owner::ConsensusAddressOwner { .. } => OwnerType::AddressOwner,
-        // TODO Party Objects -- we might want a more granular OwnerType here
+        // TODO(Party WIP) we might want a more granular OwnerType here
         Owner::Party { .. } => OwnerType::Shared,
     }
 }

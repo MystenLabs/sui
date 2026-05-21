@@ -2182,6 +2182,7 @@ impl From<crate::object::Owner> for Owner {
                 message.address = Some(owner.to_string());
                 OwnerKind::ConsensusAddress
             }
+            // TODO(Party WIP)
             O::Party { .. } => todo!("Party WIP"),
         };
 

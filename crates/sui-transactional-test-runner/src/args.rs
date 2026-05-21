@@ -773,6 +773,7 @@ impl SuiValue {
                 mutability: SharedObjectMutability::Mutable,
             }),
             Owner::Party { .. } => {
+                // TODO(Party WIP)
                 // We need to know the sender for mutability flag
                 todo!("Party WIP")
             }
