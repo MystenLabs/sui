@@ -4295,22 +4295,23 @@ async fn test_tree_shaking_package_with_duplicate_dependency_names() -> Result<(
     let (package_a_id, _) = test.test_publish_package("A", false).await?;
     let (package_a_alt_id, _) = test.test_publish_package("A_ALT", false).await?;
 
-    // `DuplicateDirect` declares both packages but only references `A_ALT`.
+    // `DuplicateDirect` declares both packages and references both. Tree shaking needs to keep
+    // both package graph IDs, even though both packages have the same declared package name.
     let (package_duplicate_id, _) = test.test_publish_package("DuplicateDirect", false).await?;
     let linkage_table = test.fetch_linkage_table(package_duplicate_id).await;
 
     assert!(
+        linkage_table.contains_key(&package_a_id),
+        "Package DuplicateDirect should depend on A"
+    );
+    assert!(
         linkage_table.contains_key(&package_a_alt_id),
         "Package DuplicateDirect should depend on A_ALT"
     );
-    assert!(
-        !linkage_table.contains_key(&package_a_id),
-        "Package DuplicateDirect should tree shake the unused A dependency"
-    );
     assert_eq!(
         linkage_table.len(),
-        1,
-        "Package DuplicateDirect should have exactly one dependency"
+        2,
+        "Package DuplicateDirect should have exactly two dependencies"
     );
 
     Ok(())
