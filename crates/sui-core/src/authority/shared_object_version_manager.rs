@@ -39,8 +39,11 @@ pub struct AssignedVersions {
     /// Accumulator version number at the beginning of the consensus commit
     /// that this transaction belongs to. It is used to determine the deterministic
     /// balance state of the accounts involved in funds withdrawals.
-    /// None only if accumulator is not enabled at protocol level.
-    /// TODO: Make it required once accumulator is enabled.
+    ///
+    /// `None` when no accumulator version applies to this transaction:
+    /// - accumulators are not enabled at the protocol level for this epoch, or
+    /// - the transaction is an end-of-epoch / change-epoch tx, which does not
+    ///   read or write the accumulator root.
     pub accumulator_version: Option<SequenceNumber>,
 }
 

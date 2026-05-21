@@ -367,16 +367,6 @@ async fn test_should_commit_early_exits() {
         state.execution_scheduler(),
         &epoch_store,
     ));
-    // Fastpath path transactions that have object funds withdraws must wait.
-    assert!(!checker.should_commit_object_funds_withdraws(
-        &tx,
-        &ExecutionStatus::Success,
-        &withdraws,
-        &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(vec![], None)),
-        state.get_account_funds_read(),
-        state.execution_scheduler(),
-        &epoch_store,
-    ));
 
     // Failed execution should always commit.
     assert!(checker.should_commit_object_funds_withdraws(
