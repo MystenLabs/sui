@@ -99,7 +99,7 @@ Exchange ledgers must account for both coin objects and address-balance accumula
 
 :::
 
-Query balances for an address using the `address(address:).balances(...)` connection in GraphQL. The [GraphQL query guide](/develop/accessing-data/graphql/query-with-graphql) shows the pagination pattern and how to scope queries to a specific checkpoint for consistent reads. For a streaming or fully typed client, use the [gRPC API](/develop/accessing-data/grpc/using-grpc) and select the balance fields through a `FieldMask`.
+Query balances for an address using the `address(address:).balances(...)` connection in GraphQL. The [GraphQL query guide](/develop/accessing-data/graphql/query-with-graphql) shows the pagination pattern and how to scope queries to a specific checkpoint for consistent reads. For a typed client, use `StateService.GetBalance` for a single coin type or `StateService.ListBalances` for all balances over [gRPC](/develop/accessing-data/grpc/using-grpc). Both return the `balance`, `coinBalance`, and `addressBalance` fields.
 
 ## Blocks vs Checkpoints {#blocks-vs-checkpoints}
 
@@ -139,7 +139,7 @@ A few points that matter for exchange flows:
 
 - **Coin selection.** When you pay from coin objects, the network performs [gas smashing](/develop/transaction-payment/gas-smashing) automatically if you pass multiple gas coins. You do not need to merge coins offline before paying.
 
-- **Address balance gas payments.** The gas payment can be drawn directly from the sender or sponsor address balance, removing the need to manage gas coin objects entirely. Transactions that use address-balance gas payments must set a `ValidDuring` expiration with both a minimum and maximum epoch. 
+- **Address balance gas payments.** When the [address balances](/onchain-finance/asset-custody/address-balances/using-address-balances) feature is enabled on the target network, the gas payment can be drawn directly from the sender or sponsor address balance, removing the need to manage gas coin objects entirely. Transactions that use address-balance gas payments must set a `ValidDuring` expiration with both a minimum and maximum epoch. Confirm the feature is enabled and review the expiration requirement in [Paying for gas from address balances](/onchain-finance/asset-custody/address-balances/using-address-balances#paying-for-gas-from-address-balances).
 
 - **Sponsored transactions.** For user-facing flows, you can sponsor a user's transaction so they pay no gas. See [Sponsored Transactions](/develop/transaction-payment/sponsor-txn).
 
