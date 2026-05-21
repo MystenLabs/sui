@@ -601,7 +601,9 @@ mod tests {
             local: pkg_path.clone(),
         });
 
-        let info = cache_package::<Vanilla>(&env, dep, Vanilla).await.unwrap();
+        let info = cache_package::<Vanilla>(&env, dep, Vanilla::new())
+            .await
+            .unwrap();
 
         let CachedPackageInfo {
             name,

@@ -834,7 +834,7 @@ impl Scenario {
         let config = PackageLoader::new(
             self.path_for(&package),
             Vanilla::default_environment(),
-            Vanilla,
+            Vanilla::new(),
         )
         .config()
         .clone();
@@ -885,7 +885,7 @@ impl Scenario {
         config(PackageLoader::new(
             self.path_for(package),
             Vanilla::default_environment(),
-            Vanilla,
+            Vanilla::new(),
         ))
         .load()
         .await
