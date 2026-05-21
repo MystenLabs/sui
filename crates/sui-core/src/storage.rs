@@ -35,6 +35,9 @@ use sui_types::storage::BalanceIterator;
 use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldKey;
+use sui_types::storage::LedgerBitmapBucketIterator;
+use sui_types::storage::LedgerTxSeqDigest;
+use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::RpcIndexes;
@@ -224,16 +227,40 @@ impl ReadStore for RocksDbStore {
             .get_transaction_block(digest)
     }
 
+    fn multi_get_transactions(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Arc<VerifiedTransaction>>> {
+        self.cache_traits
+            .transaction_cache_reader
+            .multi_get_transaction_blocks(digests)
+    }
+
     fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
         self.cache_traits
             .transaction_cache_reader
             .get_executed_effects(digest)
     }
 
+    fn multi_get_transaction_effects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<TransactionEffects>> {
+        self.cache_traits
+            .transaction_cache_reader
+            .multi_get_executed_effects(digests)
+    }
+
     fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.cache_traits
             .transaction_cache_reader
             .get_events(digest)
+    }
+
+    fn multi_get_events(&self, digests: &[TransactionDigest]) -> Vec<Option<TransactionEvents>> {
+        self.cache_traits
+            .transaction_cache_reader
+            .multi_get_events(digests)
     }
 
     fn get_unchanged_loaded_runtime_objects(
@@ -465,12 +492,30 @@ impl ReadStore for RestReadStore {
         self.rocks.get_transaction(digest)
     }
 
+    fn multi_get_transactions(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Arc<VerifiedTransaction>>> {
+        self.rocks.multi_get_transactions(digests)
+    }
+
     fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
         self.rocks.get_transaction_effects(digest)
     }
 
+    fn multi_get_transaction_effects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<TransactionEffects>> {
+        self.rocks.multi_get_transaction_effects(digests)
+    }
+
     fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.rocks.get_events(digest)
+    }
+
+    fn multi_get_events(&self, digests: &[TransactionDigest]) -> Vec<Option<TransactionEvents>> {
+        self.rocks.multi_get_events(digests)
     }
 
     fn get_full_checkpoint_contents(
@@ -754,6 +799,66 @@ impl RpcIndexes for RestReadStore {
     ) -> sui_types::storage::error::Result<Option<CheckpointSequenceNumber>> {
         self.index()?
             .get_highest_indexed_checkpoint_seq_number()
+            .map_err(Into::into)
+    }
+
+    fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>> {
+        self.index()?
+            .ledger_tx_seq_digest(tx_seq)
+            .map_err(Into::into)
+    }
+
+    fn ledger_tx_seq_digest_multi_get(
+        &self,
+        tx_seqs: &[u64],
+    ) -> Result<Vec<Option<LedgerTxSeqDigest>>> {
+        self.index()?
+            .ledger_tx_seq_digest_multi_get(tx_seqs)
+            .map_err(Into::into)
+    }
+
+    fn ledger_tx_seq_digest_iter(
+        &self,
+        start: u64,
+        end_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerTxSeqDigestIterator<'_>> {
+        self.index()?
+            .ledger_tx_seq_digest_iter(start, end_exclusive, descending)
+            .map_err(Into::into)
+    }
+
+    fn transaction_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>> {
+        self.index()?
+            .transaction_bitmap_bucket_iter(
+                dimension_key,
+                start_bucket,
+                end_bucket_exclusive,
+                descending,
+            )
+            .map_err(Into::into)
+    }
+
+    fn event_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>> {
+        self.index()?
+            .event_bitmap_bucket_iter(
+                dimension_key,
+                start_bucket,
+                end_bucket_exclusive,
+                descending,
+            )
             .map_err(Into::into)
     }
 

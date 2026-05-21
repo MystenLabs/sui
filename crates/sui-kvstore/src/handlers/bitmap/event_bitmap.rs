@@ -12,6 +12,7 @@ use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_inverted_index::IndexDimension;
 use sui_inverted_index::for_each_event_dimension;
 use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::transaction::TransactionDataAPI;
 
 use crate::tables::event_bitmap_index;
 
@@ -41,12 +42,17 @@ impl BitmapIndexProcessor for EventBitmapProcessor {
 
         for (i, tx) in checkpoint.transactions.iter().enumerate() {
             let tx_seq = tx_lo + i as u64;
-            for_each_event_dimension(tx, |event_idx, dim, value| {
-                let event_seq = event_bitmap_index::encode_event_seq(tx_seq, event_idx);
-                let bucket_id = event_seq / event_bitmap_index::BUCKET_SIZE;
-                let bit_position = (event_seq % event_bitmap_index::BUCKET_SIZE) as u32;
-                emit(bucket_id, bit_position, dim, value);
-            });
+            for_each_event_dimension(
+                tx.transaction.sender(),
+                &tx.effects,
+                tx.events.as_ref(),
+                |event_idx, dim, value| {
+                    let event_seq = event_bitmap_index::encode_event_seq(tx_seq, event_idx);
+                    let bucket_id = event_seq / event_bitmap_index::BUCKET_SIZE;
+                    let bit_position = (event_seq % event_bitmap_index::BUCKET_SIZE) as u32;
+                    emit(bucket_id, bit_position, dim, value);
+                },
+            );
         }
     }
 

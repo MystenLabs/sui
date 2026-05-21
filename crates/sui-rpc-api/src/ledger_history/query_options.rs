@@ -7,26 +7,27 @@ use bytes::Bytes;
 use fastcrypto::hash::HashFunction;
 use prost::Message;
 use sui_inverted_index::ScanDirection;
-use sui_rpc_api::ErrorReason;
-use sui_rpc_api::RpcError;
-use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
-use sui_types::crypto::DefaultHash;
-
 use sui_rpc::proto::sui::rpc::v2alpha::Ordering as ProtoOrdering;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions as ProtoQueryOptions;
+use sui_types::crypto::DefaultHash;
+
+use crate::ErrorReason;
+use crate::RpcError;
+use crate::proto::google::rpc::bad_request::FieldViolation;
 
 const ORDERING_ASCENDING: i32 = ProtoOrdering::Ascending as i32;
 const ORDERING_DESCENDING: i32 = ProtoOrdering::Descending as i32;
+pub const MAX_CHECKPOINT_SCAN_WIDTH: u64 = 3_000_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub(crate) enum Ordering {
+pub enum Ordering {
     Ascending,
     Descending,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub(crate) enum QueryType {
+pub enum QueryType {
     Checkpoints,
     Transactions,
     Events,
@@ -40,31 +41,31 @@ enum CursorKind {
 
 /// Validated, normalized form of `QueryOptions` (the proto wire type).
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct QueryOptions {
+pub struct QueryOptions {
     query_type: QueryType,
-    pub(crate) limit_items: usize,
-    pub(crate) ordering: Ordering,
+    pub limit_items: usize,
+    pub ordering: Ordering,
     after: Option<CursorToken>,
     before: Option<CursorToken>,
     scope_digest: [u8; 32],
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ResolvedCheckpointRange {
-    pub(crate) range: Range<u64>,
-    pub(crate) end_reason: QueryEndReason,
+pub struct ResolvedCheckpointRange {
+    pub range: Range<u64>,
+    pub end_reason: QueryEndReason,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ResolvedRange {
-    pub(crate) range: Range<u64>,
-    pub(crate) end_checkpoint: u64,
-    pub(crate) end_position: u64,
-    pub(crate) end_reason: QueryEndReason,
+pub struct ResolvedRange {
+    pub range: Range<u64>,
+    pub end_checkpoint: u64,
+    pub end_position: u64,
+    pub end_reason: QueryEndReason,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct CheckpointRange {
+pub struct CheckpointRange {
     start: u64,
     end: u64,
     high_reason: QueryEndReason,
@@ -72,7 +73,7 @@ pub(crate) struct CheckpointRange {
 }
 
 impl QueryOptions {
-    pub(crate) fn from_proto(
+    pub fn from_proto(
         request: Option<&ProtoQueryOptions>,
         default_limit_items: u32,
         max_limit_items: u32,
@@ -119,18 +120,28 @@ impl QueryOptions {
         })
     }
 
-    pub(crate) fn scan_direction(&self) -> ScanDirection {
+    pub fn scan_direction(&self) -> ScanDirection {
         match self.ordering {
             Ordering::Ascending => ScanDirection::Ascending,
             Ordering::Descending => ScanDirection::Descending,
         }
     }
 
-    pub(crate) fn is_ascending(&self) -> bool {
+    pub fn is_ascending(&self) -> bool {
         matches!(self.ordering, Ordering::Ascending)
     }
 
-    pub(crate) fn apply_cursor_bounds(&self, resolved: ResolvedRange) -> ResolvedRange {
+    /// Whether the request explicitly positioned the low end of the scan via an
+    /// `after` cursor. `apply_cursor_bounds` only ever raises `range.start` from
+    /// `after` (in both orderings); `before` bounds the high end. Together with an
+    /// explicit `start_checkpoint`, this lets the pruning-floor check distinguish
+    /// "resume/start from here" (error if below the floor — the data is gone) from
+    /// an open-ended low end (clamp up to the floor).
+    pub fn has_after_cursor(&self) -> bool {
+        self.after.is_some()
+    }
+
+    pub fn apply_cursor_bounds(&self, resolved: ResolvedRange) -> ResolvedRange {
         if resolved.is_empty() {
             return resolved;
         }
@@ -196,11 +207,11 @@ impl QueryOptions {
         }
     }
 
-    pub(crate) fn cursor_for_item(&self, checkpoint: u64, position: u64) -> Bytes {
+    pub fn cursor_for_item(&self, checkpoint: u64, position: u64) -> Bytes {
         self.encode_cursor(CursorKind::Item, checkpoint, position)
     }
 
-    pub(crate) fn cursor_for_boundary(&self, checkpoint: u64, position: u64) -> Bytes {
+    pub fn cursor_for_boundary(&self, checkpoint: u64, position: u64) -> Bytes {
         self.encode_cursor(CursorKind::Boundary, checkpoint, position)
     }
 
@@ -216,25 +227,25 @@ impl QueryOptions {
 }
 
 impl ResolvedCheckpointRange {
-    pub(crate) fn empty_at(checkpoint: u64, reason: QueryEndReason) -> Self {
+    pub fn empty_at(checkpoint: u64, reason: QueryEndReason) -> Self {
         Self {
             range: checkpoint..checkpoint,
             end_reason: reason,
         }
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.range.is_empty()
     }
 
-    pub(crate) fn terminal_checkpoint(&self, ordering: Ordering) -> u64 {
+    pub fn terminal_checkpoint(&self, ordering: Ordering) -> u64 {
         match ordering {
             Ordering::Ascending => self.range.end,
             Ordering::Descending => self.range.start,
         }
     }
 
-    pub(crate) fn with_range(self, range: Range<u64>, ordering: Ordering) -> ResolvedRange {
+    pub fn with_range(self, range: Range<u64>, ordering: Ordering) -> ResolvedRange {
         let end_position = match ordering {
             Ordering::Ascending => range.end,
             Ordering::Descending => range.start,
@@ -249,11 +260,7 @@ impl ResolvedCheckpointRange {
 }
 
 impl ResolvedRange {
-    pub(crate) fn empty_at(
-        end_checkpoint: u64,
-        end_position: u64,
-        end_reason: QueryEndReason,
-    ) -> Self {
+    pub fn empty_at(end_checkpoint: u64, end_position: u64, end_reason: QueryEndReason) -> Self {
         Self {
             range: end_position..end_position,
             end_checkpoint,
@@ -262,13 +269,17 @@ impl ResolvedRange {
         }
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.range.is_empty()
+    }
+
+    pub fn end_cursor(&self, options: &QueryOptions) -> Bytes {
+        options.cursor_for_boundary(self.end_checkpoint, self.end_position)
     }
 }
 
 impl CheckpointRange {
-    pub(crate) fn from_request(
+    pub fn from_request(
         start_checkpoint: Option<u64>,
         end_checkpoint: Option<u64>,
         checkpoint_hi_exclusive: u64,
@@ -301,7 +312,7 @@ impl CheckpointRange {
         })
     }
 
-    pub(crate) fn resolve(self, options: &QueryOptions) -> ResolvedCheckpointRange {
+    pub fn resolve(self, options: &QueryOptions) -> ResolvedCheckpointRange {
         let mut start = self.start;
         let mut end = self.end;
         let mut low_reason = QueryEndReason::CheckpointBound;
@@ -527,6 +538,25 @@ mod tests {
             options.apply_cursor_bounds(resolved_range(0..100)).range,
             21..30
         );
+    }
+
+    #[test]
+    fn has_after_cursor_reflects_only_the_after_field() {
+        // No cursors → open-ended low end.
+        let options = query_options_from_proto(Some(&ProtoQueryOptions::default())).unwrap();
+        assert!(!options.has_after_cursor());
+
+        // `before` bounds the high end, so it must not count as an explicit low end.
+        let mut request = ProtoQueryOptions::default();
+        request.before = Some(encode_cursor(item_cursor(3, 30, QueryType::Transactions)));
+        let options = query_options_from_proto(Some(&request)).unwrap();
+        assert!(!options.has_after_cursor());
+
+        // `after` raises the low end → explicit.
+        let mut request = ProtoQueryOptions::default();
+        request.after = Some(encode_cursor(item_cursor(2, 20, QueryType::Transactions)));
+        let options = query_options_from_proto(Some(&request)).unwrap();
+        assert!(options.has_after_cursor());
     }
 
     #[test]

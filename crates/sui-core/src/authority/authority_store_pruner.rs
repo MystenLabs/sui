@@ -142,7 +142,7 @@ impl AuthorityStorePruner {
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_number: CheckpointSequenceNumber,
         metrics: Arc<AuthorityStorePruningMetrics>,
-        checkpoint_content_to_prune: Vec<CheckpointContents>,
+        pruned_tx_seq_exclusive: u64,
         rpc_index: Option<&RpcIndexStore>,
         enable_pruning_tombstones: bool,
     ) -> anyhow::Result<()> {
@@ -211,14 +211,15 @@ impl AuthorityStorePruner {
             wb.delete_batch(&perpetual_db.objects, object_keys_to_delete)?;
         }
 
-        if let Some(rpc_index) = rpc_index {
-            rpc_index.prune(checkpoint_number, &checkpoint_content_to_prune)?;
-        }
-
         perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
         metrics.last_pruned_checkpoint.set(checkpoint_number as i64);
 
         wb.write()?;
+
+        if let Some(rpc_index) = rpc_index {
+            rpc_index.prune(checkpoint_number, pruned_tx_seq_exclusive)?;
+        }
+
         Ok(())
     }
 
@@ -228,7 +229,7 @@ impl AuthorityStorePruner {
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_number: CheckpointSequenceNumber,
         metrics: Arc<AuthorityStorePruningMetrics>,
-        checkpoint_content_to_prune: Vec<CheckpointContents>,
+        pruned_tx_seq_exclusive: u64,
         rpc_index: Option<&RpcIndexStore>,
         _: bool,
     ) -> anyhow::Result<()> {
@@ -251,13 +252,14 @@ impl AuthorityStorePruner {
             .inc_by(objects_to_prune.len() as u64);
         wb.delete_batch(&perpetual_db.objects, &objects_to_prune)?;
 
-        if let Some(rpc_index) = rpc_index {
-            rpc_index.prune(checkpoint_number, &checkpoint_content_to_prune)?;
-        }
-
         perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
         metrics.last_pruned_checkpoint.set(checkpoint_number as i64);
         wb.write()?;
+
+        if let Some(rpc_index) = rpc_index {
+            rpc_index.prune(checkpoint_number, pruned_tx_seq_exclusive)?;
+        }
+
         Ok(())
     }
 
@@ -465,6 +467,11 @@ impl AuthorityStorePruner {
         let mut checkpoints_to_prune = vec![];
         let mut checkpoint_content_to_prune = vec![];
         let mut effects_to_prune = vec![];
+        // Absolute tx-seq floor (exclusive) after pruning the current
+        // batch — the last-pruned checkpoint's `network_total_transactions`.
+        // `RpcIndexStore::prune` consumes this directly instead of summing
+        // checkpoint content sizes.
+        let mut pruned_tx_seq_exclusive = 0u64;
 
         loop {
             let Some(ckpt) = checkpoint_store
@@ -485,6 +492,7 @@ impl AuthorityStorePruner {
                 break;
             }
             checkpoint_number = *checkpoint.sequence_number();
+            pruned_tx_seq_exclusive = checkpoint.network_total_transactions;
 
             let content = checkpoint_store
                 .get_checkpoint_contents(&checkpoint.content_digest)?
@@ -513,7 +521,7 @@ impl AuthorityStorePruner {
                             perpetual_db,
                             checkpoint_number,
                             metrics.clone(),
-                            checkpoint_content_to_prune,
+                            pruned_tx_seq_exclusive,
                             rpc_index,
                             !config.killswitch_tombstone_pruning,
                         )
@@ -545,7 +553,7 @@ impl AuthorityStorePruner {
                         perpetual_db,
                         checkpoint_number,
                         metrics.clone(),
-                        checkpoint_content_to_prune,
+                        pruned_tx_seq_exclusive,
                         rpc_index,
                         !config.killswitch_tombstone_pruning,
                     )
@@ -1159,7 +1167,7 @@ mod tests {
                 &db,
                 0,
                 metrics,
-                vec![],
+                0,
                 None,
                 true,
             )
@@ -1257,7 +1265,7 @@ mod tests {
             &perpetual_db,
             0,
             metrics,
-            vec![],
+            0,
             None,
             true,
         )
