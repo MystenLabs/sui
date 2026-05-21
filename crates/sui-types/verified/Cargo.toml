@@ -12,15 +12,5 @@ workspace = true
 verify = true
 
 [dependencies]
-anyhow.workspace = true
-bcs.workspace = true
-derive_more = { workspace = true, features = ["as_ref"] }
-fastcrypto.workspace = true
 nonempty.workspace = true
-schemars.workspace = true
-serde.workspace = true
-serde-name.workspace = true
-serde_with.workspace = true
-shared-crypto.workspace = true
-sui-sdk-types.workspace = true
 vstd.workspace = true
