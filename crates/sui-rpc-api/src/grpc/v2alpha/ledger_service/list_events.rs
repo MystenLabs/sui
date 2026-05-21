@@ -53,6 +53,7 @@ use super::ledger_read::apply_tx_seq_floor;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::checkpoint_to_tx_range;
+use super::ledger_read::ensure_ledger_history_enabled;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::get_tx_seq_digest_rows;
 use super::ledger_read::lowest_available_tx_seq;
@@ -73,7 +74,7 @@ pub(super) const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5
 
 const DEFAULT_LIMIT_ITEMS: u32 = 50;
 const MAX_LIMIT_ITEMS: u32 = 1000;
-const EVENT_READ_MASK_DEFAULT: &str = "event_type";
+const EVENT_READ_MASK_DEFAULT: &str = crate::read_mask_defaults::EVENT;
 const CHUNK_MAX: usize = 32;
 const MAX_BITMAP_FILTER_LITERALS: usize = 10;
 
@@ -83,6 +84,7 @@ pub(crate) async fn list_events(
     service: RpcService,
     request: ListEventsRequest,
 ) -> Result<ListEventsStream, RpcError> {
+    ensure_ledger_history_enabled(&service)?;
     let started = Instant::now();
     let start_checkpoint = request.start_checkpoint;
     let end_checkpoint = request.end_checkpoint;

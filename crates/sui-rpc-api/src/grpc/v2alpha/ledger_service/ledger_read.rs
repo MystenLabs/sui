@@ -16,6 +16,22 @@ pub(super) fn storage_error(e: impl std::fmt::Display) -> RpcError {
     RpcError::new(tonic::Code::Internal, e.to_string())
 }
 
+/// Reject list queries when ledger-history indexing is disabled. The v2alpha
+/// list APIs read the history indexes (`tx_seq_digest`, transaction/event
+/// bitmaps); when an operator has not enabled `ledger_history_indexing` those
+/// column families are absent, so the API is unsupported rather than merely
+/// empty. Gates both indexing and serving the same way `authenticated_events`
+/// does.
+pub(super) fn ensure_ledger_history_enabled(service: &RpcService) -> Result<(), RpcError> {
+    if !service.config.ledger_history_indexing() {
+        return Err(RpcError::new(
+            tonic::Code::Unimplemented,
+            "ledger history indexing is disabled",
+        ));
+    }
+    Ok(())
+}
+
 pub(super) fn validate_checkpoint_bounds(
     start_checkpoint: Option<u64>,
     end_checkpoint: Option<u64>,

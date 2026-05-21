@@ -17,7 +17,7 @@ use sui_rpc::proto::timestamp_ms_to_proto;
 use sui_sdk_types::EpochId;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
-pub const READ_MASK_DEFAULT: &str = "epoch,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
+pub const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::EPOCH;
 
 #[tracing::instrument(skip(service))]
 pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEpochResponse> {

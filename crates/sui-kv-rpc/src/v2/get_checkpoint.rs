@@ -14,7 +14,7 @@ use sui_rpc_api::{
 use sui_storage::object_store::util::{build_object_store, fetch_checkpoint};
 use sui_types::digests::CheckpointDigest;
 
-pub const READ_MASK_DEFAULT: &str = "sequence_number,digest";
+pub const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::CHECKPOINT;
 
 pub async fn get_checkpoint(
     mut client: BigTableClient,

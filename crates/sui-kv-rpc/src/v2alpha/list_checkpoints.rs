@@ -73,7 +73,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
 const DEFAULT_LIMIT_ITEMS: u32 = 10;
 const MAX_LIMIT_ITEMS: u32 = 100;
 const CHUNK_MAX: usize = 100;
-const READ_MASK_DEFAULT: &str = "sequence_number,digest";
+const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::CHECKPOINT;
 
 type CpWithTxs = (u64, CheckpointData, Vec<TransactionData>);
 type ResolvedCp = (u64, CheckpointData, Vec<TransactionData>, ObjectMap);
