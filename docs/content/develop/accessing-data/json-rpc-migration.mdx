@@ -118,7 +118,7 @@ A full node retains a configurable window of recent data and prunes older histor
 
 ## Examples for high-traffic paths
 
-These point you at the canonical worked examples for each pattern. The examples have been reviewed by the API owners and are the source of truth for request and response shapes.
+Each pattern below links to the canonical worked example and includes an inline snippet you can expand. The canonical docs remain the source of truth for the full request and response shapes.
 
 ### Transaction lookup
 
@@ -126,11 +126,75 @@ These point you at the canonical worked examples for each pattern. The examples 
 
 - **gRPC:** Use `LedgerService.GetTransaction` with a `FieldMask` that selects the response fields you need (effects, events, object changes). See [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
 
+<details>
+
+<summary>gRPC and GraphQL examples</summary>
+
+Look up a transaction over gRPC with `grpcurl`:
+
+```sh
+$ grpcurl -d '{ "digest": "J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4" }' <full node URL:port> sui.rpc.v2.LedgerService/GetTransaction
+```
+
+The equivalent GraphQL query:
+
+```graphql
+query {
+  transaction(digest: "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF") {
+    gasInput {
+      gasSponsor {
+        address
+      }
+      gasPrice
+      gasBudget
+    }
+    effects {
+      status
+      timestamp
+      checkpoint {
+        sequenceNumber
+      }
+    }
+  }
+}
+```
+
+</details>
+
 ### Balances
 
 - **GraphQL:** Query `Address.balance` for a single coin type or `Address.balances` for all balances, both reached from `Query.address`. Read `Balance.totalBalance`, `Balance.coinBalance`, and `Balance.addressBalance` together to reconcile. See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances) for a verified example.
 
 - **gRPC:** Use `StateService.GetBalance` or `StateService.ListBalances`. See the [`GetBalance` request reference](/references/fullnode-protocol-messages#sui-rpc-v2-GetBalanceRequest) and the worked example in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances).
+
+<details>
+
+<summary>gRPC and GraphQL examples</summary>
+
+Read a balance over gRPC with the Buf CLI:
+
+```sh
+$ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.StateService/GetBalance -d '{ "owner": "<ADDRESS>", "coin_type": "0x2::sui::SUI" }'
+```
+
+The equivalent GraphQL query:
+
+```graphql
+query {
+  address(address: "0xe4ee9c157b5eb185c2df885bd7dcb4be493630a913f4b0e0c7e8ecf77930a878") {
+    balance(coinType: "0x2::sui::SUI") {
+      coinType {
+        repr
+      }
+      addressBalance
+      coinBalance
+      totalBalance
+    }
+  }
+}
+```
+
+</details>
 
 ### Coins
 
@@ -138,11 +202,66 @@ These point you at the canonical worked examples for each pattern. The examples 
 
 - **gRPC:** Read coin objects through `StateService.ListOwnedObjects` with a `Coin<T>` type filter.
 
+<details>
+
+<summary>gRPC and GraphQL examples</summary>
+
+List owned objects over gRPC with `grpcurl`:
+
+```sh
+$ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5" }' <full node URL:port> sui.rpc.v2.StateService/ListOwnedObjects
+```
+
+Filter for a coin type in GraphQL:
+
+```graphql
+query {
+  address(address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9") {
+    objects(first: 3, filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" }) {
+      nodes {
+        address
+      }
+    }
+  }
+}
+```
+
+</details>
+
 ### Events
 
 - **GraphQL:** See [Querying events with GraphQL](/develop/accessing-data/using-events#querying-events-with-graphql) for the `events(filter:)` field and the filtering reference.
 
 - **gRPC:** Events arrive as part of transaction data in `LedgerService.GetTransaction` responses, and live updates arrive in each checkpoint streamed by `SubscriptionService.SubscribeCheckpoints`. See [Querying events with RPC](/develop/accessing-data/using-events#querying-events-with-rpc).
+
+<details>
+
+<summary>GraphQL example</summary>
+
+Query events with a type filter:
+
+```graphql
+query {
+  events(
+    filter: { type: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>" }
+  ) {
+    nodes {
+      sender {
+        address
+      }
+      timestamp
+      contents {
+        type {
+          repr
+        }
+        json
+      }
+    }
+  }
+}
+```
+
+</details>
 
 ### Checkpoints
 
@@ -150,6 +269,36 @@ These point you at the canonical worked examples for each pattern. The examples 
 
 - **GraphQL:** Query `Query.checkpoint` for a specific checkpoint, or paginate `Query.checkpoints` for a range. Use `Checkpoint.query` to scope a multi-resource read to a specific checkpoint.
 
+<details>
+
+<summary>gRPC and GraphQL examples</summary>
+
+Look up a checkpoint over gRPC with `grpcurl`:
+
+```sh
+$ grpcurl -d '{ "sequence_number": "164329987", "read_mask": { "paths": ["transactions"]} }' <full node URL:port> sui.rpc.v2.LedgerService/GetCheckpoint
+```
+
+Subscribe to the checkpoint stream over gRPC with the Buf CLI:
+
+```sh
+$ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }' --timeout 1m
+```
+
+Look up a checkpoint in GraphQL:
+
+```graphql
+query {
+  checkpoint(sequenceNumber: 164329987) {
+    digest
+    networkTotalTransactions
+    timestamp
+  }
+}
+```
+
+</details>
+
 ### Submit a transaction
 
-Build the transaction with a PTB through the SDK, sign it, and execute it through `TransactionExecutionService.ExecuteTransaction` (gRPC) or the `executeTransaction` mutation (GraphQL). See [Building Programmable Transaction Blocks](/develop/transactions/ptbs/building-ptb) for the construction steps and [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview) for the signature requirements.
+Build the transaction with a PTB through the SDK, sign it, and execute it through `TransactionExecutionService.ExecuteTransaction` (gRPC) or the `Mutation.executeTransaction` mutation (GraphQL). See [Building Programmable Transaction Blocks](/develop/transactions/ptbs/building-ptb) for the construction steps and [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview) for the signature requirements.
