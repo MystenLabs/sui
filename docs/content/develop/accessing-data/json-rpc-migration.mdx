@@ -46,37 +46,45 @@ The following table maps common JSON-RPC method families to their gRPC service a
 
 | JSON-RPC method | gRPC service and operation | GraphQL field |
 | --- | --- | --- |
-| `sui_getCheckpoint`, `sui_getLatestCheckpointSequenceNumber` | `LedgerService.GetCheckpoint` | `checkpoint` |
-| `sui_getCheckpoints` | No paginated gRPC list. Use `LedgerService.GetCheckpoint` for point lookups, or `SubscriptionService.SubscribeCheckpoints` for an ordered stream, depending on your use case. | `checkpoints` |
-| `sui_getTransactionBlock` | `LedgerService.GetTransaction` | `transaction` |
-| `sui_multiGetTransactionBlocks` | `LedgerService.BatchGetTransactions` | `multiGetTransactions` |
-| `sui_getTotalTransactionBlocks` | `LedgerService.GetCheckpoint` on the latest or target checkpoint, then read `summary.total_network_transactions` | `checkpoint.networkTotalTransactions` |
-| `sui_getObject`, `sui_tryGetPastObject` | `LedgerService.GetObject` (current state and recent history) | `object` |
-| `sui_multiGetObjects` | `LedgerService.BatchGetObjects` | `multiGetObjects` |
-| `suix_getBalance`, `suix_getAllBalances` | `StateService.GetBalance`, `StateService.ListBalances` | `address.balance`, `address.balances` |
-| `suix_getCoins`, `suix_getAllCoins` | `StateService.ListOwnedObjects` filtered by `Coin<T>` type | `address.objects(filter: { type: "0x2::coin::Coin<...>" })` |
-| `suix_getCoinMetadata` | `StateService.GetCoinInfo` | `coinMetadata` |
-| `suix_getOwnedObjects` | `StateService.ListOwnedObjects` | `address.objects` |
-| `suix_getDynamicFields` | `StateService.ListDynamicFields` | `owner.dynamicFields` |
-| `suix_getDynamicFieldObject` | `StateService.ListDynamicFields` to find the field, then `LedgerService.GetObject` for the value | `owner.dynamicObjectField` |
-| `suix_queryTransactionBlocks` | No direct filtered query. Enumerate finalized transactions through `SubscriptionService.SubscribeCheckpoints`, or fetch known transactions through `LedgerService.GetTransaction`. | `transactions(filter: ...)` |
-| `suix_queryEvents` | Read events from transaction data returned by `LedgerService.GetTransaction` or streamed by `SubscriptionService.SubscribeCheckpoints` | `events(filter: ...)` |
+| `sui_getCheckpoint`, `sui_getLatestCheckpointSequenceNumber` | `LedgerService.GetCheckpoint` | `Query.checkpoint` |
+| `sui_getCheckpoints` | No paginated gRPC list. Use `LedgerService.GetCheckpoint` for point lookups, or `SubscriptionService.SubscribeCheckpoints` for an ordered stream, depending on your use case. | `Query.checkpoints` |
+| `sui_getTransactionBlock` | `LedgerService.GetTransaction` | `Query.transaction` |
+| `sui_multiGetTransactionBlocks` | `LedgerService.BatchGetTransactions` | `Query.multiGetTransactions` |
+| `sui_getTotalTransactionBlocks` | `LedgerService.GetCheckpoint` on the latest or target checkpoint, then read `summary.total_network_transactions` | `Checkpoint.networkTotalTransactions` |
+| `sui_getObject`, `sui_tryGetPastObject` | `LedgerService.GetObject` (current state and recent history) | `Query.object` |
+| `sui_multiGetObjects` | `LedgerService.BatchGetObjects` | `Query.multiGetObjects` |
+| `suix_getBalance`, `suix_getAllBalances` | `StateService.GetBalance`, `StateService.ListBalances` | `Address.balance`, `Address.balances` |
+| `suix_getCoins`, `suix_getAllCoins` | `StateService.ListOwnedObjects` with a type filter: `0x2::coin::Coin<T>` for one coin type, or the bare `0x2::coin::Coin` for all coin types | `Address.objects` with `filter: { type: "0x2::coin::Coin<T>" }` for one coin type, or `filter: { type: "0x2::coin::Coin" }` for all coin types |
+| `suix_getCoinMetadata` | `StateService.GetCoinInfo` | `Query.coinMetadata` |
+| `suix_getOwnedObjects` | `StateService.ListOwnedObjects` | `Address.objects` |
+| `suix_getDynamicFields` | `StateService.ListDynamicFields` | `Object.dynamicFields` |
+| `suix_getDynamicFieldObject` | Derive the dynamic field's object ID locally from the parent object ID and the field name, then call `LedgerService.GetObject`. `ListDynamicFields` is not needed when you already know the field name. | `Object.dynamicObjectField` |
+| `suix_queryTransactionBlocks` | No direct filtered query. Enumerate finalized transactions through `SubscriptionService.SubscribeCheckpoints`, or fetch known transactions through `LedgerService.GetTransaction`. | `Query.transactions` with a `TransactionFilter` |
+| `suix_queryEvents` | Read events from transaction data returned by `LedgerService.GetTransaction` or streamed by `SubscriptionService.SubscribeCheckpoints` | `Query.events` with an `EventFilter` |
 | `sui_subscribeEvent`, `sui_subscribeTransaction` (WebSocket) | `SubscriptionService.SubscribeCheckpoints`, then read events and transactions from each checkpoint | Not applicable (use gRPC streaming) |
-| `suix_getReferenceGasPrice` | `LedgerService.GetEpoch` (read `reference_gas_price` from the response) | `epoch.referenceGasPrice` |
-| `suix_getStakes`, `suix_getStakesByIds` | No direct gRPC method. Read owned `StakedSui` objects through `StateService.ListOwnedObjects` filtered by type, then fetch full contents through `LedgerService.GetObject`. | Query owned objects of type `StakedSui` through `address.objects(filter: { type: ... })` |
-| `suix_getValidatorsApy` | No direct gRPC method. Read validator-set state through the [TypeScript SDK](https://sdk.mystenlabs.com/typescript) or compute APY client-side from validator-set data. | `epoch.validatorSet` |
-| `sui_executeTransactionBlock` | `TransactionExecutionService.ExecuteTransaction` | `executeTransaction` mutation |
-| `sui_dryRunTransactionBlock`, `sui_devInspectTransactionBlock` | `TransactionExecutionService.SimulateTransaction` | `simulateTransaction` |
-| `unsafe_paySui`, `unsafe_pay`, `unsafe_payAllSui`, `unsafe_transferSui`, `unsafe_transferObject`, `unsafe_moveCall`, `unsafe_splitCoin`, `unsafe_mergeCoins`, `unsafe_batchTransaction` | Build a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) with the SDK, then execute it through `TransactionExecutionService.ExecuteTransaction` | Build a PTB with the SDK, then submit through `executeTransaction` |
-| `sui_getNormalizedMoveModule`, `sui_getNormalizedMoveFunction`, `sui_getNormalizedMoveStruct` | `MovePackageService` | `package`, `module`, `function`, `struct` |
+| `suix_getReferenceGasPrice` | `LedgerService.GetEpoch` (read `reference_gas_price` from the response) | `Epoch.referenceGasPrice` |
+| `suix_getStakes`, `suix_getStakesByIds` | No direct gRPC method. Read owned `StakedSui` objects through `StateService.ListOwnedObjects` filtered by type, then fetch full contents through `LedgerService.GetObject`. | `Address.objects` with `filter: { type: "0x3::staking_pool::StakedSui" }` |
+| `suix_getValidatorsApy` | No direct gRPC method and no APY field. Read validator-set data and compute APY client-side. | No direct APY field. Read validator-set data through `Epoch.validatorSet` and compute APY client-side. |
+| `sui_executeTransactionBlock` | `TransactionExecutionService.ExecuteTransaction` | `Mutation.executeTransaction` |
+| `sui_dryRunTransactionBlock`, `sui_devInspectTransactionBlock` | `TransactionExecutionService.SimulateTransaction` | `Query.simulateTransaction` |
+| `unsafe_paySui`, `unsafe_pay`, `unsafe_payAllSui`, `unsafe_transferSui`, `unsafe_transferObject`, `unsafe_moveCall`, `unsafe_splitCoin`, `unsafe_mergeCoins`, `unsafe_batchTransaction` | Build a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) with the SDK, then execute it through `TransactionExecutionService.ExecuteTransaction` | Build a PTB with the SDK, then submit through `Mutation.executeTransaction` |
+| `sui_getNormalizedMoveModule`, `sui_getNormalizedMoveFunction`, `sui_getNormalizedMoveStruct` | `MovePackageService` | `Query.package`, then `MovePackage.module`, `MoveModule.function`, and `MoveModule.struct` |
 
 The JSON-RPC `unsafe_*` builder methods do not have a one-to-one replacement on either side. Build transactions with [PTBs](/develop/transactions/ptbs/prog-txn-blocks) using the [TypeScript SDK](https://sdk.mystenlabs.com/typescript) or the [Rust SDK](https://github.com/MystenLabs/sui-rust-sdk), then submit the resulting bytes through `TransactionExecutionService.ExecuteTransaction`.
 
 ## Migration gotchas
 
-### No implicit archival fallback in gRPC
+### No implicit archival fallback in full node gRPC
 
-JSON-RPC sometimes resolved requests for older data through fallback paths that were transparent to the caller. The gRPC API does not do this. A full node only returns data within its retention window. If `LedgerService` returns "not found" for an older transaction, checkpoint, or object, query the [Archival Store](/develop/accessing-data/archival-store) endpoint directly instead. You can reuse the same `LedgerService` methods, but you must point the client at an Archival Service endpoint such as `archive.mainnet.sui.io:443` or your provider's archival URL.
+JSON-RPC sometimes resolved requests for older data through fallback paths that were transparent to the caller. Full node gRPC does not do this. A full node serves only the data within its retention window, and `LedgerService` returns "not found" for anything older.
+
+The three interfaces differ in how they reach pruned history:
+
+- **Full node gRPC** serves the complete RPC surface (transaction execution, point lookups, checkpoint subscriptions), but only within the full node's retention window.
+
+- **The Archival Service** is a separate gRPC service that serves unpruned point lookups for checkpoints, transactions, and objects. It is scoped to those point lookups, so it does not serve the rest of the full node RPC surface, such as transaction execution or live state queries. Reuse the same `LedgerService` methods, but point the client at an Archival Service endpoint such as `archive.mainnet.sui.io:443` or your provider's archival URL. See [Archival Store](/develop/accessing-data/archival-store).
+
+- **GraphQL** is a unified interface that serves both recent data and, when the operator configures archival access, unpruned point lookups, with no client-side fallback.
 
 ### Typed requests replace positional JSON-RPC params
 
@@ -94,11 +102,11 @@ The public URLs at `https://fullnode.<network>.sui.io` and `https://graphql.<net
 
 GraphQL and gRPC expose richer typing for objects and coins than JSON-RPC. A few practical points:
 
-- **Coin selection.** Replace `suix_getCoins` patterns with the GraphQL `address.objects(filter: { type: "0x2::coin::Coin<...>" })` connection, or use `StateService.ListOwnedObjects` on the gRPC side with a `Coin<T>` type filter. For transaction building, prefer [gas smashing](/develop/transaction-payment/gas-smashing) or [address-balance gas payments](/onchain-finance/asset-custody/address-balances/using-address-balances) rather than constructing coin lists by hand.
+- **Coin selection.** Replace `suix_getCoins` with an owned-objects query filtered by coin type: `Address.objects` with `filter: { type: "0x2::coin::Coin<...>" }` in GraphQL, or `StateService.ListOwnedObjects` with the same type filter on gRPC. To list coins of every type (the `suix_getAllCoins` case), filter by the bare `0x2::coin::Coin` type without a type parameter. For transaction building, prefer [gas smashing](/develop/transaction-payment/gas-smashing) or [address-balance gas payments](/onchain-finance/asset-custody/address-balances/using-address-balances) rather than constructing coin lists by hand.
 
 - **Balances cover both representations.** Read `Balance.totalBalance` to get the sum across coin objects and the address-balance accumulator. Read `Balance.coinBalance` and `Balance.addressBalance` separately to reconcile against your own ledger.
 
-- **Object versions.** GraphQL supports time-travel queries through `checkpoint { query { ... } }`, which has no JSON-RPC analog. Use it when you need a consistent snapshot across a multi-step read.
+- **Object and package versions.** GraphQL can scrub through the version history of an object or package, which has no JSON-RPC analog. Use `Query.objectVersions`, or `IObject.objectVersionsAfter` and `IObject.objectVersionsBefore` from an object, to page through an object's versions. Use `Query.packageVersions` for the published versions of a package.
 
 ### Pagination uses typed cursors
 
@@ -114,19 +122,19 @@ These point you at the canonical worked examples for each pattern. The examples 
 
 ### Transaction lookup
 
-- **GraphQL:** [Example 2 in Migrating to GraphQL from JSON-RPC](/develop/accessing-data/graphql/query-with-graphql#migrating-to-graphql-from-json-rpc) shows the JSON-RPC `sui_getTransactionBlock` call and the GraphQL `transaction(digest:)` equivalent side by side.
+- **GraphQL:** [Example 2 in Migrating to GraphQL from JSON-RPC](/develop/accessing-data/graphql/query-with-graphql#migrating-to-graphql-from-json-rpc) shows the JSON-RPC `sui_getTransactionBlock` call and the GraphQL `Query.transaction` equivalent side by side.
 
 - **gRPC:** Use `LedgerService.GetTransaction` with a `FieldMask` that selects the response fields you need (effects, events, object changes). See [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
 
 ### Balances
 
-- **GraphQL:** Query `address(address:).balance(coinType:)` for a single coin type or `address(address:).balances` for all balances. Read `totalBalance`, `coinBalance`, and `addressBalance` together to reconcile. See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances) for a verified example.
+- **GraphQL:** Query `Address.balance` for a single coin type or `Address.balances` for all balances, both reached from `Query.address`. Read `Balance.totalBalance`, `Balance.coinBalance`, and `Balance.addressBalance` together to reconcile. See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances) for a verified example.
 
 - **gRPC:** Use `StateService.GetBalance` or `StateService.ListBalances`. See the [`GetBalance` request reference](/references/fullnode-protocol-messages#sui-rpc-v2-GetBalanceRequest) and the worked example in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances).
 
 ### Coins
 
-- **GraphQL:** [Example 3 in Migrating to GraphQL from JSON-RPC](/develop/accessing-data/graphql/query-with-graphql#migrating-to-graphql-from-json-rpc) maps `suix_getCoins` to `address.objects(filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" })`, including how cursor pagination changes.
+- **GraphQL:** [Example 3 in Migrating to GraphQL from JSON-RPC](/develop/accessing-data/graphql/query-with-graphql#migrating-to-graphql-from-json-rpc) maps `suix_getCoins` to `Address.objects` with `filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" }`, including how cursor pagination changes.
 
 - **gRPC:** Read coin objects through `StateService.ListOwnedObjects` with a `Coin<T>` type filter.
 
@@ -140,7 +148,7 @@ These point you at the canonical worked examples for each pattern. The examples 
 
 - **gRPC:** Subscribe with `SubscriptionService.SubscribeCheckpoints` for an ordered, gapless stream of finalized checkpoints. Use `LedgerService.GetCheckpoint` for point lookups. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
 
-- **GraphQL:** Query the `checkpoint(sequenceNumber:)` field for a specific checkpoint, or paginate `checkpoints` for a range. Use `checkpoint { query { ... } }` to scope a multi-resource read to a specific checkpoint.
+- **GraphQL:** Query `Query.checkpoint` for a specific checkpoint, or paginate `Query.checkpoints` for a range. Use `Checkpoint.query` to scope a multi-resource read to a specific checkpoint.
 
 ### Submit a transaction
 
