@@ -20,6 +20,7 @@ use move_binary_format::{
 use move_core_types::account_address::AccountAddress;
 use move_vm_config::verifier::VerifierConfig;
 use mysten_common::in_integration_test;
+use mysten_common::rpc_format::{Format, Meter, MeterError, ToFormat};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use sui_protocol_config_macros::{
@@ -458,8 +459,10 @@ impl Chain {
 
 pub struct Error(pub String);
 
-// TODO: There are quite a few non boolean values in the feature flags. We should move them out.
 /// Records on/off feature flags that may vary at each protocol version.
+///
+/// Every field must be `bool` (enforced at compile time by `ProtocolConfigFeatureFlagsGetters`);
+/// typed config belongs on `ProtocolConfig`.
 #[derive(Default, Clone, Serialize, Deserialize, Debug, ProtocolConfigFeatureFlagsGetters)]
 struct FeatureFlags {
     // Add feature flags here, e.g.:
@@ -520,13 +523,6 @@ struct FeatureFlags {
     // Enable zklogin auth
     #[serde(skip_serializing_if = "is_false")]
     zklogin_auth: bool,
-    // zkLogin circuit verify mode: 0 = accept v1 circuit proofs only, 1 = try the v2
-    // circuit first and fall back to v1 (migration phase), 2 = accept v2 circuit proofs only.
-    #[serde(skip_serializing_if = "is_zero")]
-    zklogin_circuit_mode: u64,
-    // How we order transactions coming out of consensus before sending to execution.
-    #[serde(skip_serializing_if = "ConsensusTransactionOrdering::is_none")]
-    consensus_transaction_ordering: ConsensusTransactionOrdering,
 
     // Previously, the unwrapped_then_deleted field in TransactionEffects makes a distinction between
     // whether an object has existed in the store previously (i.e. whether there is a tombstone).
@@ -551,10 +547,6 @@ struct FeatureFlags {
     // If true, then the new algorithm for the leader election schedule will be used
     #[serde(skip_serializing_if = "is_false")]
     narwhal_new_leader_election_schedule: bool,
-
-    // A list of supported OIDC providers that can be used for zklogin.
-    #[serde(skip_serializing_if = "is_empty")]
-    zklogin_supported_providers: BTreeSet<String>,
 
     // If true, use the new child object format
     #[serde(skip_serializing_if = "is_false")]
@@ -682,25 +674,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     reject_mutable_random_on_entry_functions: bool,
 
-    // Controls the behavior of per object congestion control in consensus handler.
-    #[serde(skip_serializing_if = "PerObjectCongestionControlMode::is_none")]
-    per_object_congestion_control_mode: PerObjectCongestionControlMode,
-
-    // The consensus protocol to be used for the epoch.
-    #[serde(skip_serializing_if = "ConsensusChoice::is_narwhal")]
-    consensus_choice: ConsensusChoice,
-
-    // Consensus network to use.
-    #[serde(skip_serializing_if = "ConsensusNetwork::is_anemo")]
-    consensus_network: ConsensusNetwork,
-
     // If true, use the correct (<=) comparison for max_gas_payment_objects instead of (<)
     #[serde(skip_serializing_if = "is_false")]
     correct_gas_payment_limit_check: bool,
-
-    // Set the upper bound allowed for max_epoch in zklogin signature.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    zklogin_max_epoch_upper_bound_delta: Option<u64>,
 
     // Controls leader scoring & schedule change in Mysticeti consensus.
     #[serde(skip_serializing_if = "is_false")]
@@ -747,10 +723,6 @@ struct FeatureFlags {
     // cancellation.
     #[serde(skip_serializing_if = "is_false")]
     prepend_prologue_tx_in_consensus_commit_in_checkpoints: bool,
-
-    // Set number of leaders per round for Mysticeti commits.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    mysticeti_num_leaders_per_round: Option<usize>,
 
     // Enable Soft Bundle (SIP-19).
     #[serde(skip_serializing_if = "is_false")]
@@ -1218,10 +1190,6 @@ fn is_false(b: &bool) -> bool {
     !b
 }
 
-fn is_empty(b: &BTreeSet<String>) -> bool {
-    b.is_empty()
-}
-
 fn is_zero(val: &u64) -> bool {
     *val == 0
 }
@@ -1239,6 +1207,16 @@ pub enum ConsensusTransactionOrdering {
 impl ConsensusTransactionOrdering {
     pub fn is_none(&self) -> bool {
         matches!(self, ConsensusTransactionOrdering::None)
+    }
+}
+
+impl ToFormat for ConsensusTransactionOrdering {
+    fn to_format<F: Format, M: Meter>(&self, meter: &mut M) -> Result<F, MeterError> {
+        let name = match self {
+            Self::None => "None",
+            Self::ByGasPrice => "ByGasPrice",
+        };
+        F::string(meter, name.to_owned())
     }
 }
 
@@ -1281,6 +1259,54 @@ pub struct ExecutionTimeEstimateParams {
     pub observations_chunk_size: Option<u64>,
 }
 
+impl ToFormat for ExecutionTimeEstimateParams {
+    fn to_format<F: Format, M: Meter>(&self, meter: &mut M) -> Result<F, MeterError> {
+        let Self {
+            target_utilization,
+            allowed_txn_cost_overage_burst_limit_us,
+            randomness_scalar,
+            max_estimate_us,
+            stored_observations_num_included_checkpoints,
+            stored_observations_limit,
+            stake_weighted_median_threshold,
+            default_none_duration_for_new_keys,
+            observations_chunk_size,
+        } = self;
+        let mut out = F::Map::default();
+        {
+            let mut nested = meter.nest()?;
+            macro_rules! field {
+                ($key:literal, $val:expr) => {{
+                    let value = $val.to_format::<F, _>(&mut nested)?;
+                    F::map_push_field(&mut nested, &mut out, $key.to_owned(), value)?;
+                }};
+            }
+            field!("target_utilization", target_utilization);
+            field!(
+                "allowed_txn_cost_overage_burst_limit_us",
+                allowed_txn_cost_overage_burst_limit_us
+            );
+            field!("randomness_scalar", randomness_scalar);
+            field!("max_estimate_us", max_estimate_us);
+            field!(
+                "stored_observations_num_included_checkpoints",
+                stored_observations_num_included_checkpoints
+            );
+            field!("stored_observations_limit", stored_observations_limit);
+            field!(
+                "stake_weighted_median_threshold",
+                stake_weighted_median_threshold
+            );
+            field!(
+                "default_none_duration_for_new_keys",
+                default_none_duration_for_new_keys
+            );
+            field!("observations_chunk_size", observations_chunk_size);
+        }
+        F::map(meter, out)
+    }
+}
+
 // The config for per object congestion control in consensus handler.
 #[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum PerObjectCongestionControlMode {
@@ -1295,6 +1321,32 @@ pub enum PerObjectCongestionControlMode {
 impl PerObjectCongestionControlMode {
     pub fn is_none(&self) -> bool {
         matches!(self, PerObjectCongestionControlMode::None)
+    }
+}
+
+impl ToFormat for PerObjectCongestionControlMode {
+    fn to_format<F: Format, M: Meter>(&self, meter: &mut M) -> Result<F, MeterError> {
+        match self {
+            Self::None => F::string(meter, "None".to_owned()),
+            Self::TotalGasBudget => F::string(meter, "TotalGasBudget".to_owned()),
+            Self::TotalTxCount => F::string(meter, "TotalTxCount".to_owned()),
+            Self::TotalGasBudgetWithCap => F::string(meter, "TotalGasBudgetWithCap".to_owned()),
+            // Externally tagged to mirror the enum's serde representation.
+            Self::ExecutionTimeEstimate(params) => {
+                let mut out = F::Map::default();
+                {
+                    let mut nested = meter.nest()?;
+                    let value = params.to_format::<F, _>(&mut nested)?;
+                    F::map_push_field(
+                        &mut nested,
+                        &mut out,
+                        "ExecutionTimeEstimate".to_owned(),
+                        value,
+                    )?;
+                }
+                F::map(meter, out)
+            }
+        }
     }
 }
 
@@ -1313,6 +1365,17 @@ impl ConsensusChoice {
     }
 }
 
+impl ToFormat for ConsensusChoice {
+    fn to_format<F: Format, M: Meter>(&self, meter: &mut M) -> Result<F, MeterError> {
+        let name = match self {
+            Self::Narwhal => "Narwhal",
+            Self::SwapEachEpoch => "SwapEachEpoch",
+            Self::Mysticeti => "Mysticeti",
+        };
+        F::string(meter, name.to_owned())
+    }
+}
+
 // Configuration options for consensus network.
 #[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum ConsensusNetwork {
@@ -1324,6 +1387,16 @@ pub enum ConsensusNetwork {
 impl ConsensusNetwork {
     pub fn is_anemo(&self) -> bool {
         matches!(self, ConsensusNetwork::Anemo)
+    }
+}
+
+impl ToFormat for ConsensusNetwork {
+    fn to_format<F: Format, M: Meter>(&self, meter: &mut M) -> Result<F, MeterError> {
+        let name = match self {
+            Self::Anemo => "Anemo",
+            Self::Tonic => "Tonic",
+        };
+        F::string(meter, name.to_owned())
     }
 }
 
@@ -2156,6 +2229,33 @@ pub struct ProtocolConfig {
     /// Maximum serialized size in bytes of a gasless transaction (SenderSignedData).
     /// Bounds the persistent storage impact of each admitted gasless transaction.
     gasless_max_tx_size_bytes: Option<u64>,
+
+    /// How we order transactions coming out of consensus before sending to execution.
+    consensus_transaction_ordering: Option<ConsensusTransactionOrdering>,
+
+    /// A list of supported OIDC providers that can be used for zklogin.
+    zklogin_supported_providers: Option<BTreeSet<String>>,
+
+    /// Controls the behavior of per object congestion control in consensus handler.
+    per_object_congestion_control_mode: Option<PerObjectCongestionControlMode>,
+
+    /// The consensus protocol to be used for the epoch.
+    consensus_choice: Option<ConsensusChoice>,
+
+    /// Consensus network to use.
+    consensus_network: Option<ConsensusNetwork>,
+
+    /// Set the upper bound allowed for max_epoch in zklogin signature. `None` means the upper
+    /// bound is not enforced at this protocol version.
+    zklogin_max_epoch_upper_bound_delta: Option<u64>,
+
+    /// Set number of leaders per round for Mysticeti commits. `None` means the default leader
+    /// count is used at this protocol version.
+    mysticeti_num_leaders_per_round: Option<usize>,
+
+    /// zkLogin circuit verify mode: 0 = accept v1 circuit proofs only, 1 = try the v2 circuit
+    /// first and fall back to v1 (migration phase), 2 = accept v2 circuit proofs only.
+    zklogin_circuit_mode: Option<u64>,
 }
 
 /// An aliased address.
@@ -2200,17 +2300,14 @@ impl ProtocolConfig {
     }
 
     pub fn zklogin_supported_providers(&self) -> &BTreeSet<String> {
-        &self.feature_flags.zklogin_supported_providers
-    }
-
-    /// zkLogin circuit verify mode: 0 = v1 circuit only, 1 = v2 circuit with
-    /// fallback to v1, 2 = v2 circuit only.
-    pub fn zklogin_circuit_mode(&self) -> u64 {
-        self.feature_flags.zklogin_circuit_mode
+        self.zklogin_supported_providers
+            .as_ref()
+            .expect(Self::CONSTANT_ERR_MSG)
     }
 
     pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
-        self.feature_flags.consensus_transaction_ordering
+        self.consensus_transaction_ordering
+            .expect(Self::CONSTANT_ERR_MSG)
     }
 
     pub fn enable_jwk_consensus_updates(&self) -> bool {
@@ -2253,10 +2350,6 @@ impl ProtocolConfig {
         self.bridge_should_try_to_finalize_committee.unwrap_or(true)
     }
 
-    pub fn zklogin_max_epoch_upper_bound_delta(&self) -> Option<u64> {
-        self.feature_flags.zklogin_max_epoch_upper_bound_delta
-    }
-
     pub fn enable_coin_reservation_obj_refs(&self) -> bool {
         self.new_vm_enabled() && self.feature_flags.enable_coin_reservation_obj_refs
     }
@@ -2266,19 +2359,16 @@ impl ProtocolConfig {
     }
 
     pub fn per_object_congestion_control_mode(&self) -> PerObjectCongestionControlMode {
-        self.feature_flags.per_object_congestion_control_mode
+        self.per_object_congestion_control_mode
+            .expect(Self::CONSTANT_ERR_MSG)
     }
 
     pub fn consensus_choice(&self) -> ConsensusChoice {
-        self.feature_flags.consensus_choice
+        self.consensus_choice.expect(Self::CONSTANT_ERR_MSG)
     }
 
     pub fn consensus_network(&self) -> ConsensusNetwork {
-        self.feature_flags.consensus_network
-    }
-
-    pub fn mysticeti_num_leaders_per_round(&self) -> Option<usize> {
-        self.feature_flags.mysticeti_num_leaders_per_round
+        self.consensus_network.expect(Self::CONSTANT_ERR_MSG)
     }
 
     pub fn max_transaction_size_bytes(&self) -> u64 {
@@ -2976,6 +3066,15 @@ impl ProtocolConfig {
             gasless_max_tps: None,
             include_special_package_amendments: None,
             gasless_max_tx_size_bytes: None,
+
+            consensus_transaction_ordering: Some(ConsensusTransactionOrdering::None),
+            zklogin_supported_providers: Some(BTreeSet::new()),
+            per_object_congestion_control_mode: Some(PerObjectCongestionControlMode::None),
+            consensus_choice: Some(ConsensusChoice::Narwhal),
+            consensus_network: Some(ConsensusNetwork::Anemo),
+            zklogin_max_epoch_upper_bound_delta: None,
+            mysticeti_num_leaders_per_round: None,
+            zklogin_circuit_mode: Some(0),
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -3067,8 +3166,8 @@ impl ProtocolConfig {
                     cfg.gas_model_version = Some(6);
                 }
                 15 => {
-                    cfg.feature_flags.consensus_transaction_ordering =
-                        ConsensusTransactionOrdering::ByGasPrice;
+                    cfg.consensus_transaction_ordering =
+                        Some(ConsensusTransactionOrdering::ByGasPrice);
                 }
                 16 => {
                     cfg.feature_flags.simplified_unwrap_then_delete = true;
@@ -3109,11 +3208,11 @@ impl ProtocolConfig {
 
                 21 => {
                     if chain != Chain::Mainnet {
-                        cfg.feature_flags.zklogin_supported_providers = BTreeSet::from([
+                        cfg.zklogin_supported_providers = Some(BTreeSet::from([
                             "Google".to_string(),
                             "Facebook".to_string(),
                             "Twitch".to_string(),
-                        ]);
+                        ]));
                     }
                 }
                 22 => {
@@ -3144,11 +3243,11 @@ impl ProtocolConfig {
                 }
                 25 => {
                     // Enable zkLogin for all providers in all networks.
-                    cfg.feature_flags.zklogin_supported_providers = BTreeSet::from([
+                    cfg.zklogin_supported_providers = Some(BTreeSet::from([
                         "Google".to_string(),
                         "Facebook".to_string(),
                         "Twitch".to_string(),
-                    ]);
+                    ]));
                     cfg.feature_flags.zklogin_auth = true;
 
                     // Enable jwk consensus updates
@@ -3196,7 +3295,7 @@ impl ProtocolConfig {
                     // zklogin_supported_providers config is deprecated, zklogin
                     // signature verifier will use the fetched jwk map to determine
                     // whether the provider is supported based on node config.
-                    cfg.feature_flags.zklogin_supported_providers = BTreeSet::default();
+                    cfg.zklogin_supported_providers = Some(BTreeSet::default());
 
                     cfg.feature_flags.recompute_has_public_transfer_in_execution = true;
                 }
@@ -3375,7 +3474,7 @@ impl ProtocolConfig {
                 }
                 42 => {}
                 43 => {
-                    cfg.feature_flags.zklogin_max_epoch_upper_bound_delta = Some(30);
+                    cfg.zklogin_max_epoch_upper_bound_delta = Some(30);
                     cfg.max_meter_ticks_per_package = Some(16_000_000);
                 }
                 44 => {
@@ -3383,13 +3482,13 @@ impl ProtocolConfig {
                     cfg.feature_flags.include_consensus_digest_in_prologue = true;
                     // Switch between Narwhal and Mysticeti per epoch in tests, devnet and testnet.
                     if chain != Chain::Mainnet {
-                        cfg.feature_flags.consensus_choice = ConsensusChoice::SwapEachEpoch;
+                        cfg.consensus_choice = Some(ConsensusChoice::SwapEachEpoch);
                     }
                 }
                 45 => {
                     // Use tonic networking for consensus, in tests and devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
-                        cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
+                        cfg.consensus_network = Some(ConsensusNetwork::Tonic);
                     }
 
                     if chain != Chain::Mainnet {
@@ -3418,7 +3517,7 @@ impl ProtocolConfig {
                 47 => {}
                 48 => {
                     // Use tonic networking for Mysticeti.
-                    cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
+                    cfg.consensus_network = Some(ConsensusNetwork::Tonic);
 
                     // Enable resolving abort code IDs to package ID instead of runtime module ID
                     cfg.feature_flags.resolve_abort_locations_to_package_id = true;
@@ -3456,7 +3555,7 @@ impl ProtocolConfig {
 
                     // Run Mysticeti consensus in testnet.
                     if chain != Chain::Mainnet {
-                        cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
+                        cfg.consensus_choice = Some(ConsensusChoice::Mysticeti);
                     }
 
                     // Run Move verification on framework upgrades in its own VM
@@ -3475,7 +3574,7 @@ impl ProtocolConfig {
                             .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
                     }
 
-                    cfg.feature_flags.mysticeti_num_leaders_per_round = Some(1);
+                    cfg.mysticeti_num_leaders_per_round = Some(1);
 
                     // Set max transaction deferral to 10 consensus rounds.
                     cfg.max_deferral_rounds_for_congestion_control = Some(10);
@@ -3499,12 +3598,12 @@ impl ProtocolConfig {
                     // Turn on shared object congestion control in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(100);
-                        cfg.feature_flags.per_object_congestion_control_mode =
-                            PerObjectCongestionControlMode::TotalTxCount;
+                        cfg.per_object_congestion_control_mode =
+                            Some(PerObjectCongestionControlMode::TotalTxCount);
                     }
 
                     // Enable Mysticeti on mainnet.
-                    cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
+                    cfg.consensus_choice = Some(ConsensusChoice::Mysticeti);
 
                     // Enable leader scoring & schedule change on mainnet for mysticeti.
                     cfg.feature_flags.mysticeti_leader_scoring_and_schedule = true;
@@ -3548,8 +3647,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(100);
                         cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(10);
-                        cfg.feature_flags.per_object_congestion_control_mode =
-                            PerObjectCongestionControlMode::TotalTxCount;
+                        cfg.per_object_congestion_control_mode =
+                            Some(PerObjectCongestionControlMode::TotalTxCount);
                     }
 
                     // Adjust stdlib gas costs
@@ -3593,8 +3692,8 @@ impl ProtocolConfig {
                     // Turns on shared object congestion control on mainnet.
                     cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(100);
                     cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(10);
-                    cfg.feature_flags.per_object_congestion_control_mode =
-                        PerObjectCongestionControlMode::TotalTxCount;
+                    cfg.per_object_congestion_control_mode =
+                        Some(PerObjectCongestionControlMode::TotalTxCount);
 
                     // Enable soft bundle on mainnet.
                     cfg.feature_flags.soft_bundle = true;
@@ -3658,15 +3757,15 @@ impl ProtocolConfig {
                     cfg.feature_flags.relocate_event_module = true;
                 }
                 63 => {
-                    cfg.feature_flags.per_object_congestion_control_mode =
-                        PerObjectCongestionControlMode::TotalGasBudgetWithCap;
+                    cfg.per_object_congestion_control_mode =
+                        Some(PerObjectCongestionControlMode::TotalGasBudgetWithCap);
                     cfg.gas_budget_based_txn_cost_cap_factor = Some(400_000);
                     cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(18_500_000);
                     cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(240_000_000);
                 }
                 64 => {
-                    cfg.feature_flags.per_object_congestion_control_mode =
-                        PerObjectCongestionControlMode::TotalTxCount;
+                    cfg.per_object_congestion_control_mode =
+                        Some(PerObjectCongestionControlMode::TotalTxCount);
                     cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(40);
                     cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(3);
                 }
@@ -3698,8 +3797,8 @@ impl ProtocolConfig {
                         cfg.feature_flags.uncompressed_g1_group_elements = true;
                     }
 
-                    cfg.feature_flags.per_object_congestion_control_mode =
-                        PerObjectCongestionControlMode::TotalGasBudgetWithCap;
+                    cfg.per_object_congestion_control_mode =
+                        Some(PerObjectCongestionControlMode::TotalGasBudgetWithCap);
                     cfg.gas_budget_based_txn_cost_cap_factor = Some(400_000);
                     cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(18_500_000);
                     cfg.max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit =
@@ -3848,8 +3947,8 @@ impl ProtocolConfig {
                         .consensus_round_prober_probe_accepted_rounds = true;
 
                     // Increase congestion control budget.
-                    cfg.feature_flags.per_object_congestion_control_mode =
-                        PerObjectCongestionControlMode::TotalGasBudgetWithCap;
+                    cfg.per_object_congestion_control_mode =
+                        Some(PerObjectCongestionControlMode::TotalGasBudgetWithCap);
                     cfg.gas_budget_based_txn_cost_cap_factor = Some(400_000);
                     cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(37_000_000);
                     cfg.max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit =
@@ -3917,8 +4016,8 @@ impl ProtocolConfig {
                         cfg.consensus_commit_rate_estimation_window_size = Some(10);
 
                         // Enable execution time estimate mode for congestion control on testnet.
-                        cfg.feature_flags.per_object_congestion_control_mode =
-                            PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                        cfg.per_object_congestion_control_mode =
+                            Some(PerObjectCongestionControlMode::ExecutionTimeEstimate(
                                 ExecutionTimeEstimateParams {
                                     target_utilization: 30,
                                     allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
@@ -3930,7 +4029,7 @@ impl ProtocolConfig {
                                     default_none_duration_for_new_keys: false,
                                     observations_chunk_size: None,
                                 },
-                            );
+                            ));
                     }
                 }
                 79 => {
@@ -3999,8 +4098,8 @@ impl ProtocolConfig {
                         // Enable execution time estimate mode for congestion control on mainnet.
                         cfg.feature_flags.record_additional_state_digest_in_prologue = true;
                         cfg.consensus_commit_rate_estimation_window_size = Some(10);
-                        cfg.feature_flags.per_object_congestion_control_mode =
-                            PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                        cfg.per_object_congestion_control_mode =
+                            Some(PerObjectCongestionControlMode::ExecutionTimeEstimate(
                                 ExecutionTimeEstimateParams {
                                     target_utilization: 30,
                                     allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
@@ -4012,7 +4111,7 @@ impl ProtocolConfig {
                                     default_none_duration_for_new_keys: false,
                                     observations_chunk_size: None,
                                 },
-                            );
+                            ));
 
                         // Enable the new depth-first block sync logic.
                         cfg.feature_flags.consensus_batched_block_sync = true;
@@ -4031,8 +4130,8 @@ impl ProtocolConfig {
                         // Enable execution time estimate mode for congestion control on mainnet.
                         cfg.feature_flags.record_additional_state_digest_in_prologue = true;
                         cfg.consensus_commit_rate_estimation_window_size = Some(10);
-                        cfg.feature_flags.per_object_congestion_control_mode =
-                            PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                        cfg.per_object_congestion_control_mode =
+                            Some(PerObjectCongestionControlMode::ExecutionTimeEstimate(
                                 ExecutionTimeEstimateParams {
                                     target_utilization: 30,
                                     allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
@@ -4044,7 +4143,7 @@ impl ProtocolConfig {
                                     default_none_duration_for_new_keys: false,
                                     observations_chunk_size: None,
                                 },
-                            );
+                            ));
 
                         // Enable the new depth-first block sync logic.
                         cfg.feature_flags.consensus_batched_block_sync = true;
@@ -4056,8 +4155,8 @@ impl ProtocolConfig {
                     }
 
                     // Limit the number of stored execution time observations at end of epoch.
-                    cfg.feature_flags.per_object_congestion_control_mode =
-                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    cfg.per_object_congestion_control_mode =
+                        Some(PerObjectCongestionControlMode::ExecutionTimeEstimate(
                             ExecutionTimeEstimateParams {
                                 target_utilization: 30,
                                 allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
@@ -4069,7 +4168,7 @@ impl ProtocolConfig {
                                 default_none_duration_for_new_keys: false,
                                 observations_chunk_size: None,
                             },
-                        );
+                        ));
                     cfg.feature_flags.allow_unbounded_system_objects = true;
                 }
                 85 => {
@@ -4080,8 +4179,8 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .record_consensus_determined_version_assignments_in_prologue_v2 = true;
                     cfg.feature_flags.disallow_self_identifier = true;
-                    cfg.feature_flags.per_object_congestion_control_mode =
-                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    cfg.per_object_congestion_control_mode =
+                        Some(PerObjectCongestionControlMode::ExecutionTimeEstimate(
                             ExecutionTimeEstimateParams {
                                 target_utilization: 50,
                                 allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
@@ -4093,15 +4192,15 @@ impl ProtocolConfig {
                                 default_none_duration_for_new_keys: false,
                                 observations_chunk_size: None,
                             },
-                        );
+                        ));
                 }
                 86 => {
                     cfg.feature_flags.type_tags_in_object_runtime = true;
                     cfg.max_move_enum_variants = Some(move_core_types::VARIANT_COUNT_MAX);
 
                     // Set a stake_weighted_median_threshold for congestion control.
-                    cfg.feature_flags.per_object_congestion_control_mode =
-                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    cfg.per_object_congestion_control_mode =
+                        Some(PerObjectCongestionControlMode::ExecutionTimeEstimate(
                             ExecutionTimeEstimateParams {
                                 target_utilization: 50,
                                 allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
@@ -4113,7 +4212,7 @@ impl ProtocolConfig {
                                 default_none_duration_for_new_keys: false,
                                 observations_chunk_size: None,
                             },
-                        );
+                        ));
                     // Enable party transfer for testnet.
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_party_transfer = true;
@@ -4133,8 +4232,8 @@ impl ProtocolConfig {
 
                     // Disable backwards compatible behavior in execution time estimator for
                     // new protocol version.
-                    cfg.feature_flags.per_object_congestion_control_mode =
-                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    cfg.per_object_congestion_control_mode =
+                        Some(PerObjectCongestionControlMode::ExecutionTimeEstimate(
                             ExecutionTimeEstimateParams {
                                 target_utilization: 50,
                                 allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
@@ -4146,7 +4245,7 @@ impl ProtocolConfig {
                                 default_none_duration_for_new_keys: true,
                                 observations_chunk_size: None,
                             },
-                        );
+                        ));
                 }
                 89 => {
                     cfg.feature_flags.dependency_linkage_error = true;
@@ -4178,8 +4277,8 @@ impl ProtocolConfig {
                 }
                 94 => {
                     // Decrease stored observations limit 20->18 to stay within system object size limit.
-                    cfg.feature_flags.per_object_congestion_control_mode =
-                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    cfg.per_object_congestion_control_mode =
+                        Some(PerObjectCongestionControlMode::ExecutionTimeEstimate(
                             ExecutionTimeEstimateParams {
                                 target_utilization: 50,
                                 allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
@@ -4191,7 +4290,7 @@ impl ProtocolConfig {
                                 default_none_duration_for_new_keys: true,
                                 observations_chunk_size: None,
                             },
-                        );
+                        ));
 
                     // Enable party transfer on mainnet.
                     cfg.feature_flags.enable_party_transfer = true;
@@ -4242,8 +4341,8 @@ impl ProtocolConfig {
                     // Enable execution time observation chunking and increase limit to 180.
                     // max_move_object_size is 250 KB, we've experientially determined that fits ~ 18 estimates
                     // so if we have 10 chunks, that's 2.5MB, < 8MB max_serialized_tx_effects_size_bytes_system_tx
-                    cfg.feature_flags.per_object_congestion_control_mode =
-                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    cfg.per_object_congestion_control_mode =
+                        Some(PerObjectCongestionControlMode::ExecutionTimeEstimate(
                             ExecutionTimeEstimateParams {
                                 target_utilization: 50,
                                 allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
@@ -4255,7 +4354,7 @@ impl ProtocolConfig {
                                 default_none_duration_for_new_keys: true,
                                 observations_chunk_size: Some(18),
                             },
-                        );
+                        ));
                     cfg.feature_flags.deprecate_global_storage_ops = true;
                 }
                 103 => {}
@@ -4558,7 +4657,7 @@ impl ProtocolConfig {
                     cfg.max_scratch_pad_size = Some(16 * max_commands);
                     // Verify with the v2 then v1 for devnet.
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.zklogin_circuit_mode = 1;
+                        cfg.zklogin_circuit_mode = Some(1);
                     }
                 }
                 131 => {
@@ -4794,35 +4893,6 @@ impl ProtocolConfig {
              test_address_balance_gas_v3_accumulator_sign)."
         );
         self.execution_version = Some(val);
-    }
-
-    // Not generated by the feature-flags derive because zklogin_circuit_mode is a u64
-    // flag (the macro only generates setters for bool flags).
-    pub fn set_zklogin_circuit_mode_for_testing(&mut self, val: u64) {
-        self.feature_flags.zklogin_circuit_mode = val
-    }
-
-    pub fn set_per_object_congestion_control_mode_for_testing(
-        &mut self,
-        val: PerObjectCongestionControlMode,
-    ) {
-        self.feature_flags.per_object_congestion_control_mode = val;
-    }
-
-    pub fn set_consensus_choice_for_testing(&mut self, val: ConsensusChoice) {
-        self.feature_flags.consensus_choice = val;
-    }
-
-    pub fn set_consensus_network_for_testing(&mut self, val: ConsensusNetwork) {
-        self.feature_flags.consensus_network = val;
-    }
-
-    pub fn set_zklogin_max_epoch_upper_bound_delta_for_testing(&mut self, val: Option<u64>) {
-        self.feature_flags.zklogin_max_epoch_upper_bound_delta = val
-    }
-
-    pub fn set_mysticeti_num_leaders_per_round_for_testing(&mut self, val: Option<usize>) {
-        self.feature_flags.mysticeti_num_leaders_per_round = val;
     }
 
     pub fn disable_accumulators_for_testing(&mut self) {
@@ -5381,6 +5451,81 @@ mod test {
         assert!(
             entry.is_null(),
             "value should be null for pre-feature protocol version, got {entry:?}",
+        );
+    }
+
+    #[test]
+    fn render_reclassified_fields_use_typed_shapes() {
+        use mysten_common::rpc_format::Unmetered;
+        use serde_json::json;
+
+        // Set known values so the assertions don't depend on per-version defaults.
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.set_consensus_transaction_ordering_for_testing(
+            ConsensusTransactionOrdering::ByGasPrice,
+        );
+        config.set_consensus_choice_for_testing(ConsensusChoice::Mysticeti);
+        config.set_consensus_network_for_testing(ConsensusNetwork::Tonic);
+        config.set_zklogin_supported_providers_for_testing(BTreeSet::from([
+            "Google".to_string(),
+            "Facebook".to_string(),
+        ]));
+        config.set_zklogin_max_epoch_upper_bound_delta_for_testing(30);
+        config.set_mysticeti_num_leaders_per_round_for_testing(1);
+        config.set_per_object_congestion_control_mode_for_testing(
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(ExecutionTimeEstimateParams {
+                target_utilization: 50,
+                allowed_txn_cost_overage_burst_limit_us: 100,
+                randomness_scalar: 20,
+                max_estimate_us: 1_500_000,
+                stored_observations_num_included_checkpoints: 10,
+                stored_observations_limit: 180,
+                stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: true,
+                observations_chunk_size: Some(18),
+            }),
+        );
+
+        let rendered = config
+            .render::<serde_json::Value>(&mut Unmetered)
+            .expect("render should succeed");
+        let get = |k: &str| {
+            rendered
+                .get(k)
+                .unwrap_or_else(|| panic!("`{k}` should be present"))
+        };
+
+        // Unit enums render as their variant name.
+        assert_eq!(get("consensus_transaction_ordering"), &json!("ByGasPrice"));
+        assert_eq!(get("consensus_choice"), &json!("Mysticeti"));
+        assert_eq!(get("consensus_network"), &json!("Tonic"));
+
+        // BTreeSet<String> renders as a (sorted) JSON array.
+        assert_eq!(
+            get("zklogin_supported_providers"),
+            &json!(["Facebook", "Google"]),
+        );
+
+        // Option<u64> / Option<usize> render as precision-safe strings when set.
+        assert_eq!(get("zklogin_max_epoch_upper_bound_delta"), &json!("30"));
+        assert_eq!(get("mysticeti_num_leaders_per_round"), &json!("1"));
+
+        // Externally-tagged struct variant: u64 params as strings, bool as bool, Option inline.
+        assert_eq!(
+            get("per_object_congestion_control_mode"),
+            &json!({
+                "ExecutionTimeEstimate": {
+                    "target_utilization": "50",
+                    "allowed_txn_cost_overage_burst_limit_us": "100",
+                    "randomness_scalar": "20",
+                    "max_estimate_us": "1500000",
+                    "stored_observations_num_included_checkpoints": "10",
+                    "stored_observations_limit": "180",
+                    "stake_weighted_median_threshold": "0",
+                    "default_none_duration_for_new_keys": true,
+                    "observations_chunk_size": "18",
+                }
+            }),
         );
     }
 }
