@@ -33,8 +33,8 @@ fn generate_system_packages_version_table() -> anyhow::Result<()> {
         for package in entry.packages.iter() {
             writeln!(
                 &mut file,
-                "          SystemPackage {{ package_name: \"{}\".into(), repo_path: \"{}\".into() }},",
-                package.name, package.path,
+                "          SystemPackage {{ package_name: \"{}\".into(), repo_path: \"{}\".into(), id: ObjectID::from_hex_literal(\"{}\").unwrap() }},",
+                package.name, package.path, package.id,
             )?;
         }
         writeln!(&mut file, "        ].into(),")?;
