@@ -48,3 +48,5 @@ Tests projects are established as following
     - linkage table should contain package K's ID and L's ID
 - DuplicateDirect depends on A and A_ALT, and references both packages.
     - linkage table should contain both A's ID and A_ALT's ID
+- DuplicateSingle depends on A and A_ALT, but only references A.
+    - linkage table should contain A's ID and not A_ALT's ID

@@ -4318,6 +4318,36 @@ async fn test_tree_shaking_package_with_duplicate_dependency_names() -> Result<(
 }
 
 #[sim_test]
+async fn test_tree_shaking_package_with_duplicate_dependency_names_drops_unused()
+-> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
+
+    // Publish two packages with the same declared package name. `DuplicateSingle` declares both
+    // dependencies but references only A, so A_ALT must be dropped after tree shaking.
+    let (package_a_id, _) = test.test_publish_package("A", false).await?;
+    let (package_a_alt_id, _) = test.test_publish_package("A_ALT", false).await?;
+
+    let (package_duplicate_id, _) = test.test_publish_package("DuplicateSingle", false).await?;
+    let linkage_table = test.fetch_linkage_table(package_duplicate_id).await;
+
+    assert!(
+        linkage_table.contains_key(&package_a_id),
+        "Package DuplicateSingle should depend on A"
+    );
+    assert!(
+        !linkage_table.contains_key(&package_a_alt_id),
+        "Package DuplicateSingle should tree shake the unused A_ALT dependency"
+    );
+    assert_eq!(
+        linkage_table.len(),
+        1,
+        "Package DuplicateSingle should have exactly one dependency"
+    );
+
+    Ok(())
+}
+
+#[sim_test]
 async fn test_tree_shaking_package_with_unused_dependency() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await?;
 
