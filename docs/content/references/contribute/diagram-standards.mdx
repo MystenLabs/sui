@@ -74,14 +74,22 @@ If a diagram must temporarily override a brand color (rare, and only with docume
 
 ### Claude Design
 
-Claude Design ([claude.ai/design](https://claude.ai/design)) is the recommended tool for diagrams that exceed Mermaid's practical limits. It produces SVG output that conforms to the Sui brand palette, the C4 model, and the layout rules in this document when configured with the Sui Diagram Design System package.
+:::info
+
+Visit the [Sui Docs Diagrams repo](https://github.com/jon-mysten/sui-docs-diagrams) on GitHub for the source files of this package. The latest release includes the design system content and the brand fonts bundle as separate downloads.
+
+:::
+
+Claude Design ([claude.ai/design](https://claude.ai/design)) is the recommended tool for diagrams that exceed Mermaid's practical limits. It produces SVG output that conforms to the Sui brand palette, the C4 model, and the layout rules in this document when configured with the Sui Docs Diagrams package.
 
 #### Setup, one time
 
-1. Download the Sui Diagram Design System package.
+1. Download the latest release from the [Sui Docs Diagrams releases page](https://github.com/jon-mysten/sui-docs-diagrams/releases/latest). Two files are needed:
+   - `sui-docs-claude-design.zip`, the design system content
+   - `sui-docs-fonts.zip`, the brand fonts bundle (uploaded through a separate path)
 2. Open [claude.ai/design](https://claude.ai/design) and create a new design system.
-3. Drag the files from each subdirectory into the matching Claude Design upload slot. The package's `UPLOAD-GUIDE.md` documents the slot-by-slot mapping.
-4. When Claude Design displays the Missing brand fonts banner after onboarding, click the **Upload fonts** button and drop in the flat `sui-fonts.zip` bundle from the package. Claude Design's font analyzer is a separate ingestion path from the design system upload.
+3. Drag the files from each subdirectory of `sui-docs-claude-design.zip` into the matching Claude Design upload slot. The package's `UPLOAD-GUIDE.md` documents the slot-by-slot mapping.
+4. When Claude Design displays the Missing brand fonts banner after onboarding, click the **Upload fonts** button and drop in `sui-docs-fonts.zip`. Claude Design's font analyzer is a separate ingestion path from the design system upload.
 5. Attach the package's top-level `DESIGN.md` file to the first chat project you create. This file codifies the C4 rules, casing, shapes, colors, and arrow taxonomy. Claude Design references it as the source of truth for compliance.
 
 #### Creating a diagram
@@ -92,9 +100,9 @@ Claude Design ([claude.ai/design](https://claude.ai/design)) is the recommended 
 4. Export the SVG and a PNG.
 5. Commit the SVG and PNG to the same directory as the docs page that references them. Follow the file-naming convention in [Files and exporting](#files-and-exporting).
 
-#### What the design system enforces
+#### What the package enforces
 
-The Sui Diagram Design System ships with four static audits the package author runs before any diagram ships:
+The Sui Docs Diagrams package ships with four static audits the package author runs before any diagram ships:
 
 - `audit-contrast.py`: every text-on-fill pairing meets its WCAG 2.1 threshold.
 - `audit-node-sizing.py`: every node-internal text element fits with at least 16px of horizontal padding per side.
