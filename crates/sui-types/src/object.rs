@@ -560,8 +560,25 @@ impl Display for ObjectPermission {
     Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
 )]
 #[serde(try_from = "u64", into = "u64")]
-#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub struct ObjectPermissions(u64);
+
+#[cfg(feature = "fuzzing")]
+impl proptest::arbitrary::Arbitrary for ObjectPermissions {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+    fn arbitrary_with(_: ()) -> Self::Strategy {
+        use proptest::prelude::*;
+        any::<u8>()
+            .prop_map(|bits| {
+                let mut bits = bits as u64 & Self::ALL_BITS;
+                if bits & Self::MUTABLE_PERMISSION_BITS != 0 {
+                    bits |= ObjectPermission::MutableUsage as u64;
+                }
+                Self(bits)
+            })
+            .boxed()
+    }
+}
 
 impl ObjectPermissions {
     /// Bitmask of the individual mutable permissions.
@@ -798,7 +815,6 @@ impl Display for ObjectPermissions {
     Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
 )]
 #[serde(try_from = "RawPartySerde", into = "RawPartySerde")]
-#[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
 pub struct Party {
     /// The default permissions, used for any party member not explicitly listed in `members`.
     default_permissions: ObjectPermissions,
@@ -888,6 +904,24 @@ impl From<Party> for RawPartySerde {
             default_permissions: p.default_permissions,
             members: p.members.into_iter().collect(),
         }
+    }
+}
+
+#[cfg(feature = "fuzzing")]
+impl proptest::arbitrary::Arbitrary for Party {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+    fn arbitrary_with(_: ()) -> Self::Strategy {
+        use proptest::prelude::*;
+        (
+            any::<ObjectPermissions>(),
+            any::<BTreeMap<SuiAddress, ObjectPermissions>>(),
+        )
+            .prop_filter_map(
+                "Party representable as ConsensusAddressOwner",
+                |(default_permissions, members)| Self::new(default_permissions, members),
+            )
+            .boxed()
     }
 }
 
