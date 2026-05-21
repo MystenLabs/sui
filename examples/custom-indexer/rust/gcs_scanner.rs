@@ -56,6 +56,7 @@ struct MismatchRecord<'a> {
     #[serde(rename = "type")]
     record_type: &'a str,
     checkpoint: u64,
+    timestamp_ms: u64,
     tx_digest: String,
     sender: String,
     gas_owner: String,
@@ -72,6 +73,7 @@ struct PossibleAliasRecord<'a> {
     #[serde(rename = "type")]
     record_type: &'a str,
     checkpoint: u64,
+    timestamp_ms: u64,
     tx_digest: String,
     sender: String,
     gas_owner: String,
@@ -119,6 +121,7 @@ fn process_checkpoint(
     output: &Mutex<BufWriter<File>>,
 ) -> Result<()> {
     let seq = checkpoint.summary.sequence_number;
+    let timestamp_ms = checkpoint.summary.timestamp_ms;
     let processed = counters
         .checkpoints_processed
         .fetch_add(1, Ordering::Relaxed)
@@ -174,6 +177,7 @@ fn process_checkpoint(
             let record = MismatchRecord {
                 record_type: "mismatch",
                 checkpoint: seq,
+                timestamp_ms,
                 tx_digest: digest,
                 sender: sender.to_string(),
                 gas_owner: gas_owner.to_string(),
@@ -194,6 +198,7 @@ fn process_checkpoint(
             let record = PossibleAliasRecord {
                 record_type: "possible_alias",
                 checkpoint: seq,
+                timestamp_ms,
                 tx_digest: digest,
                 sender: sender.to_string(),
                 gas_owner: gas_owner.to_string(),
