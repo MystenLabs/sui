@@ -74,14 +74,22 @@ pub trait BlockAPI {
     fn slot(&self) -> Slot;
     fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
+
+    /// Transactions included in this block.
     fn transactions(&self) -> &[Transaction];
     fn transactions_data(&self) -> Vec<&[u8]>;
-    fn commit_votes(&self) -> &[CommitVote];
+
+    /// Votes on if a transaction should be accepted or rejected.
     fn transaction_votes(&self) -> &[BlockTransactionVotes];
-    fn misbehavior_reports(&self) -> &[MisbehaviorReport];
+
     /// The author's local GC round at the time the block was proposed.
     /// Only `BlockV3` carries this — earlier variants panic.
     fn transaction_votes_cutoff_round(&self) -> Round;
+
+    /// Votes on commits observed by this authority.
+    fn commit_votes(&self) -> &[CommitVote];
+
+    fn misbehavior_reports(&self) -> &[MisbehaviorReport];
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -166,20 +174,20 @@ impl BlockAPI for BlockV1 {
         self.transactions.iter().map(|t| t.data()).collect()
     }
 
-    fn commit_votes(&self) -> &[CommitVote] {
-        &self.commit_votes
-    }
-
     fn transaction_votes(&self) -> &[BlockTransactionVotes] {
         &[]
     }
 
-    fn misbehavior_reports(&self) -> &[MisbehaviorReport] {
-        &self.misbehavior_reports
-    }
-
     fn transaction_votes_cutoff_round(&self) -> Round {
         panic!("transaction_votes_cutoff_round() is not supported on BlockV1");
+    }
+
+    fn commit_votes(&self) -> &[CommitVote] {
+        &self.commit_votes
+    }
+
+    fn misbehavior_reports(&self) -> &[MisbehaviorReport] {
+        &self.misbehavior_reports
     }
 }
 
@@ -205,8 +213,8 @@ impl BlockV2 {
         timestamp_ms: BlockTimestampMs,
         ancestors: Vec<BlockRef>,
         transactions: Vec<Transaction>,
-        commit_votes: Vec<CommitVote>,
         transaction_votes: Vec<BlockTransactionVotes>,
+        commit_votes: Vec<CommitVote>,
         misbehavior_reports: Vec<MisbehaviorReport>,
     ) -> BlockV2 {
         Self {
@@ -216,8 +224,8 @@ impl BlockV2 {
             timestamp_ms,
             ancestors,
             transactions,
-            commit_votes,
             transaction_votes,
+            commit_votes,
             misbehavior_reports,
         }
     }
@@ -230,8 +238,8 @@ impl BlockV2 {
             timestamp_ms: context.epoch_start_timestamp_ms,
             ancestors: vec![],
             transactions: vec![],
-            commit_votes: vec![],
             transaction_votes: vec![],
+            commit_votes: vec![],
             misbehavior_reports: vec![],
         }
     }
@@ -274,16 +282,16 @@ impl BlockAPI for BlockV2 {
         &self.transaction_votes
     }
 
+    fn transaction_votes_cutoff_round(&self) -> Round {
+        panic!("transaction_votes_cutoff_round() is not supported on BlockV2");
+    }
+
     fn commit_votes(&self) -> &[CommitVote] {
         &self.commit_votes
     }
 
     fn misbehavior_reports(&self) -> &[MisbehaviorReport] {
         &self.misbehavior_reports
-    }
-
-    fn transaction_votes_cutoff_round(&self) -> Round {
-        panic!("transaction_votes_cutoff_round() is not supported on BlockV2");
     }
 }
 
@@ -296,10 +304,9 @@ pub(crate) struct BlockV3 {
     ancestors: Vec<BlockRef>,
     transactions: Vec<Transaction>,
     transaction_votes: Vec<BlockTransactionVotes>,
+    transaction_votes_cutoff_round: Round,
     commit_votes: Vec<CommitVote>,
     misbehavior_reports: Vec<MisbehaviorReport>,
-    /// The author's local GC round at the time the block was proposed.
-    transaction_votes_cutoff_round: Round,
 }
 
 #[allow(unused)]
@@ -311,10 +318,10 @@ impl BlockV3 {
         timestamp_ms: BlockTimestampMs,
         ancestors: Vec<BlockRef>,
         transactions: Vec<Transaction>,
-        commit_votes: Vec<CommitVote>,
         transaction_votes: Vec<BlockTransactionVotes>,
-        misbehavior_reports: Vec<MisbehaviorReport>,
         transaction_votes_cutoff_round: Round,
+        commit_votes: Vec<CommitVote>,
+        misbehavior_reports: Vec<MisbehaviorReport>,
     ) -> BlockV3 {
         Self {
             epoch,
@@ -323,10 +330,10 @@ impl BlockV3 {
             timestamp_ms,
             ancestors,
             transactions,
-            commit_votes,
             transaction_votes,
-            misbehavior_reports,
             transaction_votes_cutoff_round,
+            commit_votes,
+            misbehavior_reports,
         }
     }
 
@@ -338,10 +345,10 @@ impl BlockV3 {
             timestamp_ms: context.epoch_start_timestamp_ms,
             ancestors: vec![],
             transactions: vec![],
-            commit_votes: vec![],
             transaction_votes: vec![],
-            misbehavior_reports: vec![],
             transaction_votes_cutoff_round: GENESIS_ROUND,
+            commit_votes: vec![],
+            misbehavior_reports: vec![],
         }
     }
 }
@@ -383,16 +390,16 @@ impl BlockAPI for BlockV3 {
         &self.transaction_votes
     }
 
+    fn transaction_votes_cutoff_round(&self) -> Round {
+        self.transaction_votes_cutoff_round
+    }
+
     fn commit_votes(&self) -> &[CommitVote] {
         &self.commit_votes
     }
 
     fn misbehavior_reports(&self) -> &[MisbehaviorReport] {
         &self.misbehavior_reports
-    }
-
-    fn transaction_votes_cutoff_round(&self) -> Round {
-        self.transaction_votes_cutoff_round
     }
 }
 
