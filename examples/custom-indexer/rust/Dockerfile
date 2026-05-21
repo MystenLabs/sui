@@ -2,7 +2,7 @@ FROM rust:1.92-bookworm AS builder
 
 WORKDIR /build
 COPY . .
-RUN cargo build --release --bin gcs_scanner
+RUN cargo build --release --locked --bin gcs_scanner
 
 FROM debian:bookworm-slim
 
