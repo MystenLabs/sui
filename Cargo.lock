@@ -18463,7 +18463,7 @@ dependencies = [
 [[package]]
 name = "tonic"
 version = "0.14.5"
-source = "git+https://github.com/hyperium/tonic.git?rev=d6ce69b0d93e1de21b0769e942ace00b48f52e17#d6ce69b0d93e1de21b0769e942ace00b48f52e17"
+source = "git+https://github.com/grpc/grpc-rust.git?rev=d6ce69b0d93e1de21b0769e942ace00b48f52e17#d6ce69b0d93e1de21b0769e942ace00b48f52e17"
 dependencies = [
  "async-trait",
  "axum 0.8.3",
@@ -18521,7 +18521,7 @@ dependencies = [
 [[package]]
 name = "tonic-prost"
 version = "0.14.5"
-source = "git+https://github.com/hyperium/tonic.git?rev=d6ce69b0d93e1de21b0769e942ace00b48f52e17#d6ce69b0d93e1de21b0769e942ace00b48f52e17"
+source = "git+https://github.com/grpc/grpc-rust.git?rev=d6ce69b0d93e1de21b0769e942ace00b48f52e17#d6ce69b0d93e1de21b0769e942ace00b48f52e17"
 dependencies = [
  "bytes",
  "prost 0.14.1",
@@ -18547,7 +18547,7 @@ dependencies = [
 [[package]]
 name = "tonic-reflection"
 version = "0.14.5"
-source = "git+https://github.com/hyperium/tonic.git?rev=d6ce69b0d93e1de21b0769e942ace00b48f52e17#d6ce69b0d93e1de21b0769e942ace00b48f52e17"
+source = "git+https://github.com/grpc/grpc-rust.git?rev=d6ce69b0d93e1de21b0769e942ace00b48f52e17#d6ce69b0d93e1de21b0769e942ace00b48f52e17"
 dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",
