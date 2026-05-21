@@ -96,13 +96,30 @@ jobs:
             rm -f ~/simtest_active_run; \
             sudo rm -rf /tmp/* 2>/dev/null || true; \
             rm -rf ~/sui; \
-            cd ~/ && git clone git@github.com:MystenLabs/sui.git; \
             (cd ~/simtest_logs && ls -dt */ 2>/dev/null | tail -n +11 | xargs -r rm -rf) || true"
+
+      # Guard free space at the point of maximum free space — right after
+      # cleanup and before the clone/install/build that actually consume it.
+      # Checking here (rather than just before the run) means an already-full
+      # host fails with df/du diagnostics instead of a raw `git clone` or
+      # install.sh error that buries the real cause.
+      - name: Check simtest host disk space after cleanup
+        run: |
+          min_free_gb=${{ env.SIMTEST_MIN_FREE_GB }}
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "set -e; \
+            free_gb=\$(df -BG / | awk 'NR == 2 { gsub(/G/, \"\", \$4); print \$4 }'); \
+            echo \"simtest-01 root filesystem has \${free_gb}G free; required floor is ${min_free_gb}G\"; \
+            if [ \"\${free_gb}\" -lt \"${min_free_gb}\" ]; then \
+              echo '::error::simtest-01 does not have enough free disk space to start simulator tests'; \
+              df -h / /home /tmp; \
+              du -xh -d1 /home/ubuntu 2>/dev/null | sort -h | tail -20 || true; \
+              exit 1; \
+            fi"
 
       # Checkout out the latest sui repo
       - name: Checkout sui repo
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin && git checkout ${{ env.SUI_REF }}"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/ && git clone git@github.com:MystenLabs/sui.git && cd ~/sui && git fetch origin && git checkout ${{ env.SUI_REF }}"
 
       # Setting up cargo and simtest
       - name: Install simtest
@@ -135,19 +152,6 @@ jobs:
       # Run simulator tests via detached execution to survive SSH session drops.
       # The test script runs independently on the remote machine; we poll for completion
       # with short-lived SSH calls instead of holding a single long-lived session.
-      - name: Check simtest host disk space before run
-        run: |
-          min_free_gb=${{ env.SIMTEST_MIN_FREE_GB }}
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "set -e; \
-            free_gb=\$(df -BG / | awk 'NR == 2 { gsub(/G/, \"\", \$4); print \$4 }'); \
-            echo \"simtest-01 root filesystem has \${free_gb}G free; required floor is ${min_free_gb}G\"; \
-            if [ \"\${free_gb}\" -lt \"${min_free_gb}\" ]; then \
-              echo '::error::simtest-01 does not have enough free disk space to start simulator tests'; \
-              df -h / /home /tmp; \
-              du -xh -d1 /home/ubuntu 2>/dev/null | sort -h | tail -20 || true; \
-              exit 1; \
-            fi"
-
       - name: Start simtest (detached)
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_exit_code; printf 'workflow=%s\nrun_id=%s\nrun_url=%s\nstarted_at=%s\nmin_free_gb=%s\n' '${{ github.workflow }}' '${{ github.run_id }}' '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '${{ env.SIMTEST_MIN_FREE_GB }}' > ~/simtest_active_run"
@@ -211,8 +215,13 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
           echo "log_dir=$LOG_DIR" >> $GITHUB_OUTPUT
 
+      # Skip on cancellation: the simtest was launched with `nohup ... &`, so a
+      # cancelled Actions run leaves the remote process alive. Clearing the
+      # marker here would falsely advertise the host as idle while a run is
+      # still in flight. The next nightly's "Environment clean" step pkills the
+      # survivor and removes the marker together, so leaving it on cancel is safe.
       - name: Clear simtest active marker
-        if: always()
+        if: always() && !cancelled()
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_active_run" || true
 
