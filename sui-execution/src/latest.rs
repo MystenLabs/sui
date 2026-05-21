@@ -5,7 +5,7 @@ use move_binary_format::CompiledModule;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
-use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
@@ -50,19 +50,17 @@ pub(crate) struct Verifier<'m> {
     metrics: &'m Arc<BytecodeVerifierMetrics>,
 }
 
-const TX_BACKTEST_TIP_PROTOCOL_VERSION: u64 = 125;
+const TX_BACKTEST_TIP_GAS_MODEL_VERSION: u64 = 15;
 
 fn tx_backtest_tip_protocol_config(protocol_config: &ProtocolConfig) -> ProtocolConfig {
-    let tip_protocol_config = ProtocolConfig::get_for_version(
-        ProtocolVersion::new(TX_BACKTEST_TIP_PROTOCOL_VERSION),
-        Chain::Mainnet,
-    );
+    let mut tip_protocol_config = protocol_config.clone();
+    tip_protocol_config.set_gas_model_version_for_tx_backtest(TX_BACKTEST_TIP_GAS_MODEL_VERSION);
     tracing::info!(
         base_protocol_version = protocol_config.version.as_u64(),
         base_gas_model_version = protocol_config.gas_model_version(),
         tip_protocol_version = tip_protocol_config.version.as_u64(),
         tip_gas_model_version = tip_protocol_config.gas_model_version(),
-        "tx-backtest dual-replay: overriding tip protocol config"
+        "tx-backtest dual-replay: overriding only tip gas_model_version"
     );
     tip_protocol_config
 }
@@ -440,10 +438,10 @@ mod latest_dual_replay {
     use sui_types::gas::{SuiGasStatus, SuiGasStatusAPI};
     use sui_types::inner_temporary_store::InnerTemporaryStore;
 
-    const OUTPUT_DIR: &str = "/opt/sui/replay-output/93a2eec772f3659092ea65ca313bf0d1c4b0e832";
+    const OUTPUT_DIR: &str =
+        "/opt/sui/replay-output/93a2eec772f3659092ea65ca313bf0d1c4b0e832-gas-model-15-only";
     const GAS_TOLERANCE_PCT: f64 = 0.0_f64;
-    const TIMINGS_FILE: &str =
-        "/opt/sui/replay-output/93a2eec772f3659092ea65ca313bf0d1c4b0e832/timings.csv";
+    const TIMINGS_FILE: &str = "/opt/sui/replay-output/93a2eec772f3659092ea65ca313bf0d1c4b0e832-gas-model-15-only/timings.csv";
     const TIMINGS_FLUSH_EVERY: usize = 500;
 
     type View<'a> = (
