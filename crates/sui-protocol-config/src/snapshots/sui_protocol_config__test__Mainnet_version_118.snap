@@ -20,7 +20,6 @@ feature_flags:
   no_extraneous_module_bytes: true
   narwhal_versioned_metadata: true
   zklogin_auth: true
-  consensus_transaction_ordering: ByGasPrice
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
   txn_base_cost_as_multiplier: true
@@ -53,21 +52,7 @@ feature_flags:
   enable_nitro_attestation_all_nonzero_pcrs_parsing: true
   enable_nitro_attestation_always_include_required_pcrs_parsing: true
   reject_mutable_random_on_entry_functions: true
-  per_object_congestion_control_mode:
-    ExecutionTimeEstimate:
-      target_utilization: 50
-      allowed_txn_cost_overage_burst_limit_us: 500000
-      randomness_scalar: 20
-      max_estimate_us: 1500000
-      stored_observations_num_included_checkpoints: 10
-      stored_observations_limit: 180
-      stake_weighted_median_threshold: 3334
-      default_none_duration_for_new_keys: true
-      observations_chunk_size: 18
-  consensus_choice: Mysticeti
-  consensus_network: Tonic
   correct_gas_payment_limit_check: true
-  zklogin_max_epoch_upper_bound_delta: 30
   mysticeti_leader_scoring_and_schedule: true
   reshare_at_same_initial_version: true
   resolve_abort_locations_to_package_id: true
@@ -76,7 +61,6 @@ feature_flags:
   record_consensus_determined_version_assignments_in_prologue_v2: true
   fresh_vm_on_framework_upgrade: true
   prepend_prologue_tx_in_consensus_commit_in_checkpoints: true
-  mysticeti_num_leaders_per_round: 1
   soft_bundle: true
   enable_coin_deny_list_v2: true
   passkey_auth: true
@@ -669,3 +653,20 @@ translation_per_type_node_charge: 1
 translation_per_reference_node_charge: 1
 translation_per_linkage_entry_charge: 10
 max_updates_per_settlement_txn: 100
+consensus_transaction_ordering: ByGasPrice
+zklogin_supported_providers: []
+per_object_congestion_control_mode:
+  ExecutionTimeEstimate:
+    target_utilization: 50
+    allowed_txn_cost_overage_burst_limit_us: 500000
+    randomness_scalar: 20
+    max_estimate_us: 1500000
+    stored_observations_num_included_checkpoints: 10
+    stored_observations_limit: 180
+    stake_weighted_median_threshold: 3334
+    default_none_duration_for_new_keys: true
+    observations_chunk_size: 18
+consensus_choice: Mysticeti
+consensus_network: Tonic
+zklogin_max_epoch_upper_bound_delta: 30
+mysticeti_num_leaders_per_round: 1

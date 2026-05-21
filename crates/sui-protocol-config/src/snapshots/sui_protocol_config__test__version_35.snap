@@ -20,7 +20,6 @@ feature_flags:
   no_extraneous_module_bytes: true
   narwhal_versioned_metadata: true
   zklogin_auth: true
-  consensus_transaction_ordering: ByGasPrice
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
   txn_base_cost_as_multiplier: true
@@ -217,4 +216,8 @@ random_beacon_reduction_allowed_delta: 800
 random_beacon_reduction_lower_bound: 1600
 random_beacon_dkg_timeout_round: 3000
 random_beacon_min_round_interval_ms: 150
-
+consensus_transaction_ordering: ByGasPrice
+zklogin_supported_providers: []
+per_object_congestion_control_mode: None
+consensus_choice: Narwhal
+consensus_network: Anemo

@@ -20,7 +20,6 @@ feature_flags:
   no_extraneous_module_bytes: true
   narwhal_versioned_metadata: true
   zklogin_auth: true
-  consensus_transaction_ordering: ByGasPrice
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
   txn_base_cost_as_multiplier: true
@@ -45,10 +44,6 @@ feature_flags:
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
   reject_mutable_random_on_entry_functions: true
-  per_object_congestion_control_mode: TotalTxCount
-  consensus_choice: Mysticeti
-  consensus_network: Tonic
-  zklogin_max_epoch_upper_bound_delta: 30
   mysticeti_leader_scoring_and_schedule: true
   reshare_at_same_initial_version: true
   resolve_abort_locations_to_package_id: true
@@ -56,7 +51,6 @@ feature_flags:
   record_consensus_determined_version_assignments_in_prologue: true
   fresh_vm_on_framework_upgrade: true
   prepend_prologue_tx_in_consensus_commit_in_checkpoints: true
-  mysticeti_num_leaders_per_round: 1
   soft_bundle: true
   enable_coin_deny_list_v2: true
   rethrow_serialization_type_layout_errors: true
@@ -324,4 +318,10 @@ checkpoint_summary_version_specific_data: 1
 max_soft_bundle_size: 5
 bridge_should_try_to_finalize_committee: true
 max_accumulated_txn_cost_per_object_in_mysticeti_commit: 10
-
+consensus_transaction_ordering: ByGasPrice
+zklogin_supported_providers: []
+per_object_congestion_control_mode: TotalTxCount
+consensus_choice: Mysticeti
+consensus_network: Tonic
+zklogin_max_epoch_upper_bound_delta: 30
+mysticeti_num_leaders_per_round: 1

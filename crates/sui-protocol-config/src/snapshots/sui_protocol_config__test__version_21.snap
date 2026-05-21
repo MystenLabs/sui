@@ -20,15 +20,10 @@ feature_flags:
   no_extraneous_module_bytes: true
   narwhal_versioned_metadata: true
   zklogin_auth: true
-  consensus_transaction_ordering: ByGasPrice
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
   txn_base_cost_as_multiplier: true
   narwhal_new_leader_election_schedule: true
-  zklogin_supported_providers:
-    - Facebook
-    - Google
-    - Twitch
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -191,4 +186,11 @@ hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
 execution_version: 1
 consensus_bad_nodes_stake_threshold: 20
-
+consensus_transaction_ordering: ByGasPrice
+zklogin_supported_providers:
+  - Facebook
+  - Google
+  - Twitch
+per_object_congestion_control_mode: None
+consensus_choice: Narwhal
+consensus_network: Anemo

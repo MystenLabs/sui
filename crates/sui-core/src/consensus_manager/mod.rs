@@ -159,7 +159,7 @@ fn to_consensus_protocol_config(config: &ProtocolConfig) -> ConsensusProtocolCon
         config.max_num_transactions_in_block(),
         config.gc_depth(),
         /* transaction_voting_enabled */ true,
-        config.mysticeti_num_leaders_per_round(),
+        config.mysticeti_num_leaders_per_round_as_option(),
         config.consensus_bad_nodes_stake_threshold(),
         /* enable_v3 */ false,
         /* leader_schedule_window_size */ 300,

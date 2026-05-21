@@ -20,7 +20,6 @@ feature_flags:
   no_extraneous_module_bytes: true
   narwhal_versioned_metadata: true
   zklogin_auth: true
-  consensus_transaction_ordering: ByGasPrice
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
   txn_base_cost_as_multiplier: true
@@ -43,13 +42,10 @@ feature_flags:
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
   reject_mutable_random_on_entry_functions: true
-  consensus_network: Tonic
-  zklogin_max_epoch_upper_bound_delta: 30
   reshare_at_same_initial_version: true
   resolve_abort_locations_to_package_id: true
   mysticeti_use_committed_subdag_digest: true
   fresh_vm_on_framework_upgrade: true
-  mysticeti_num_leaders_per_round: 1
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -270,4 +266,10 @@ random_beacon_dkg_version: 1
 consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 6291456
 max_deferral_rounds_for_congestion_control: 10
-
+consensus_transaction_ordering: ByGasPrice
+zklogin_supported_providers: []
+per_object_congestion_control_mode: None
+consensus_choice: Narwhal
+consensus_network: Tonic
+zklogin_max_epoch_upper_bound_delta: 30
+mysticeti_num_leaders_per_round: 1

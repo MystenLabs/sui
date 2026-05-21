@@ -1966,6 +1966,7 @@
                 "move_binary_format_version": {
                   "u32": "6"
                 },
+                "mysticeti_num_leaders_per_round": null,
                 "nitro_attestation_parse_base_cost": null,
                 "nitro_attestation_parse_cost_per_byte": null,
                 "nitro_attestation_verify_base_cost": null,
@@ -2105,7 +2106,8 @@
                 "vector_push_back_legacy_per_abstract_memory_unit_cost": null,
                 "vector_swap_base_cost": null,
                 "verify_bulletproofs_ristretto255_base_cost": null,
-                "verify_bulletproofs_ristretto255_cost_per_bit_and_commitment": null
+                "verify_bulletproofs_ristretto255_cost_per_bit_and_commitment": null,
+                "zklogin_max_epoch_upper_bound_delta": null
               },
               "configs": {
                 "abstract_size_in_object_runtime": false,
@@ -2147,15 +2149,18 @@
                 "consensus_always_accept_system_transactions": false,
                 "consensus_batched_block_sync": false,
                 "consensus_checkpoint_signature_key_includes_digest": false,
+                "consensus_choice": "Narwhal",
                 "consensus_distributed_vote_scoring_strategy": false,
                 "consensus_linearize_subdag_v2": false,
                 "consensus_median_based_commit_timestamp": false,
+                "consensus_network": "Anemo",
                 "consensus_order_end_of_epoch_last": true,
                 "consensus_round_prober": false,
                 "consensus_round_prober_probe_accepted_rounds": false,
                 "consensus_skip_gced_accept_votes": false,
                 "consensus_skip_gced_blocks_in_direct_finalization": false,
                 "consensus_smart_ancestor_selection": false,
+                "consensus_transaction_ordering": "None",
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
                 "convert_withdrawal_compatibility_ptb_arguments": false,
@@ -2373,6 +2378,7 @@
                 "package_upgrades": true,
                 "passkey_auth": false,
                 "per_command_shared_object_transfer_rules": false,
+                "per_object_congestion_control_mode": "None",
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
                 "private_generics_verifier_v2": false,
                 "random_beacon": false,
@@ -2424,7 +2430,8 @@
                 "validator_validate_metadata_data_cost_per_byte": "2",
                 "variant_nodes": false,
                 "verify_legacy_zklogin_address": false,
-                "zklogin_auth": false
+                "zklogin_auth": false,
+                "zklogin_supported_providers": []
               }
             }
           }
