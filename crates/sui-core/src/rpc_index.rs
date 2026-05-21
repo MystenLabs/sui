@@ -15,6 +15,7 @@ use roaring::RoaringBitmap;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::Deserialize;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::path::PathBuf;
@@ -64,19 +65,6 @@ use typed_store::rocksdb::{MergeOperands, WriteOptions, compaction_filter::Decis
 use typed_store::traits::Map;
 
 const CURRENT_DB_VERSION: u64 = 4;
-
-/// Feature bit OR-ed into `meta.version` when ledger history indexing is enabled.
-const LEDGER_HISTORY_DB_VERSION_FLAG: u64 = 1 << 32;
-
-/// The `meta.version` this binary expects on disk. A mismatch triggers a full
-/// rpc-index rebuild.
-fn expected_db_version(ledger_history_indexing: bool) -> u64 {
-    if ledger_history_indexing {
-        CURRENT_DB_VERSION | LEDGER_HISTORY_DB_VERSION_FLAG
-    } else {
-        CURRENT_DB_VERSION
-    }
-}
 
 // I tried increasing this to 100k and 1M and it didn't speed up indexing at all.
 const BALANCE_FLUSH_THRESHOLD: usize = 10_000;
@@ -159,6 +147,15 @@ fn get_available_memory() -> u64 {
 struct MetadataInfo {
     /// Version of the Database
     version: u64,
+}
+
+/// Per-DB rpc-index settings, persisted in their own column family so the
+/// schema `version` stays a clean monotonic number rather than carrying packed
+/// feature bits.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+struct IndexSettings {
+    /// Whether this DB was built with ledger-history indexing enabled.
+    ledger_history_indexing: bool,
 }
 
 /// Checkpoint watermark type
@@ -641,6 +638,13 @@ struct IndexStoreTables {
     ///   be incremented.
     meta: DBMap<(), MetadataInfo>,
 
+    /// A singleton recording which optional features this DB was built with
+    /// (currently just ledger-history indexing). Kept separate from `meta` so
+    /// the schema `version` need not encode feature flags. Auto-created on
+    /// older DBs; a missing entry reads as `IndexSettings::default()` (all
+    /// features off).
+    settings: DBMap<(), IndexSettings>,
+
     /// Table used to track watermark for the highest indexed checkpoint
     ///
     /// This is useful to help know the highest checkpoint that was indexed in the event that the
@@ -751,6 +755,33 @@ impl EventsCompactionFilter {
     }
 }
 
+/// Completely empty a column family and physically reclaim its disk. A single
+/// range tombstone over `[first, last)` (end-exclusive, so paired with a point
+/// delete of `last`) drops every row in O(1). The range is then compacted so
+/// the data is physically removed: this reclaims the space immediately rather
+/// than waiting for a background compaction, and makes the rows invisible to
+/// reads regardless of the CF's `ignore_range_deletions` setting.
+fn clear_table<K, V>(map: &DBMap<K, V>) -> Result<(), TypedStoreError>
+where
+    K: Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
+{
+    let first = map.safe_iter().next().transpose()?.map(|(k, _)| k);
+    let last = map
+        .reversed_safe_iter_with_bounds(None, None)?
+        .next()
+        .transpose()?
+        .map(|(k, _)| k);
+    let (Some(first), Some(last)) = (first, last) else {
+        return Ok(());
+    };
+    let mut batch = map.batch();
+    batch.schedule_delete_range(map, &first, &last)?;
+    batch.delete_batch(map, std::iter::once(&last))?;
+    batch.write()?;
+    map.compact_range(&first, &last)
+}
+
 impl IndexStoreTables {
     fn extract_version_if_package(
         object: &Object,
@@ -833,17 +864,52 @@ impl IndexStoreTables {
         )
     }
 
+    /// Whether the ledger-history feature was enabled when this DB was built,
+    /// as persisted in the `settings` CF. A missing entry (fresh or pre-feature
+    /// DB) reads as `false`.
+    fn persisted_ledger_history_indexing(&self) -> bool {
+        self.settings
+            .get(&())
+            .ok()
+            .flatten()
+            .map(|s| s.ledger_history_indexing)
+            .unwrap_or(false)
+    }
+
     fn needs_to_do_initialization(
         &self,
         checkpoint_store: &CheckpointStore,
         ledger_history_indexing: bool,
     ) -> bool {
-        // Covers schema-version changes and the ledger-history feature bit.
-        (match self.meta.get(&()) {
-            Ok(Some(metadata)) => metadata.version != expected_db_version(ledger_history_indexing),
-            Ok(None) => true,
-            Err(_) => true,
-        }) || self.is_indexed_watermark_out_of_date(checkpoint_store)
+        let schema_stale = match self.meta.get(&()) {
+            Ok(Some(metadata)) => metadata.version != CURRENT_DB_VERSION,
+            Ok(None) | Err(_) => true,
+        };
+        // *Enabling* ledger history requires a full rebuild to backfill the
+        // historical rows. *Disabling* it does not — the base indexes stay
+        // valid, so the now-unused history CFs are dropped in place by
+        // `disable_ledger_history_indexing` instead.
+        let enabling = ledger_history_indexing && !self.persisted_ledger_history_indexing();
+        schema_stale || enabling || self.is_indexed_watermark_out_of_date(checkpoint_store)
+    }
+
+    /// Drop the ledger-history column families and clear the persisted feature
+    /// flag without rebuilding the rest of the index. Used when a node that had
+    /// ledger history enabled restarts with it disabled: the base indexes are
+    /// untouched, so only the now-unused history rows need to go. Idempotent —
+    /// it runs at open before the store goes live, so a crash mid-way just
+    /// re-runs it on the next start.
+    fn disable_ledger_history_indexing(&self) -> Result<(), TypedStoreError> {
+        clear_table(&self.tx_seq_digest)?;
+        clear_table(&self.transaction_bitmap)?;
+        clear_table(&self.event_bitmap)?;
+        self.settings.insert(
+            &(),
+            &IndexSettings {
+                ledger_history_indexing: false,
+            },
+        )?;
+        Ok(())
     }
 
     // Check if the index watermark is behind the highets_executed watermark.
@@ -934,12 +1000,28 @@ impl IndexStoreTables {
             &highest_executed_checkpint.unwrap_or(0),
         )?;
 
-        self.meta.insert(
-            &(),
-            &MetadataInfo {
-                version: expected_db_version(rpc_config.ledger_history_indexing()),
-            },
+        // Write the schema version and the feature settings in one batch so the
+        // two can never be persisted independently.
+        let mut batch = self.meta.batch();
+        batch.insert_batch(
+            &self.meta,
+            [(
+                (),
+                MetadataInfo {
+                    version: CURRENT_DB_VERSION,
+                },
+            )],
         )?;
+        batch.insert_batch(
+            &self.settings,
+            [(
+                (),
+                IndexSettings {
+                    ledger_history_indexing: rpc_config.ledger_history_indexing(),
+                },
+            )],
+        )?;
+        batch.write()?;
 
         info!("Finished initializing RPC indexes");
 
@@ -990,9 +1072,9 @@ impl IndexStoreTables {
 
     /// Backfill ledger history rows over a freshly recreated rpc-index DB.
     ///
-    /// Bulk writes disable WAL, so this flushes before `init()`
-    /// writes `meta.version`; otherwise a crash could persist the version
-    /// without the rows it claims to cover.
+    /// Bulk writes disable WAL, so this flushes before `init()` writes the
+    /// `meta.version` / `settings` markers; otherwise a crash could persist
+    /// those markers without the rows they claim to cover.
     fn backfill_ledger_history_indexes(
         &self,
         authority_store: &AuthorityStore,
@@ -1729,8 +1811,8 @@ pub struct RpcIndexStore {
     /// value that hasn't been persisted.
     ledger_history_pruning_watermark: Arc<AtomicU64>,
     /// True iff this rpc-index DB was built with ledger history indexing
-    /// enabled. Derived once at open from `meta.version & LEDGER_HISTORY_DB_VERSION_FLAG`
-    /// and used as the gate for forward indexing and pruning.
+    /// enabled. Derived once at open from the persisted `settings` CF and used
+    /// as the gate for forward indexing and pruning.
     ledger_history_enabled: bool,
 }
 
@@ -1786,7 +1868,8 @@ impl RpcIndexStore {
         let tables = {
             let tables = IndexStoreTables::open_with_index_options(&path, index_options.clone());
 
-            // Rebuild if the schema, watermarks, or ledger-history flag are stale.
+            // Rebuild if the schema or watermarks are stale, or ledger history
+            // is being enabled (which needs a backfill).
             if tables
                 .needs_to_do_initialization(checkpoint_store, rpc_config.ledger_history_indexing())
             {
@@ -2025,21 +2108,35 @@ impl RpcIndexStore {
                 let reopened_tables =
                     IndexStoreTables::open_with_index_options(&path, index_options);
 
-                // Sanity check: verify the database version was persisted correctly
+                // Sanity check: verify the schema version and feature settings
+                // were persisted correctly.
                 let stored_version = reopened_tables
                     .meta
                     .get(&())
                     .expect("Failed to read metadata from reopened database")
                     .expect("Metadata not found in reopened database");
-                let expected_version = expected_db_version(rpc_config.ledger_history_indexing());
                 assert_eq!(
-                    stored_version.version, expected_version,
+                    stored_version.version, CURRENT_DB_VERSION,
                     "Database version mismatch after flush and reopen: expected {:#x}, found {:#x}",
-                    expected_version, stored_version.version
+                    CURRENT_DB_VERSION, stored_version.version
+                );
+                assert_eq!(
+                    reopened_tables.persisted_ledger_history_indexing(),
+                    rpc_config.ledger_history_indexing(),
+                    "ledger-history setting mismatch after flush and reopen"
                 );
 
                 reopened_tables
             } else {
+                // No rebuild needed. If ledger history was on and is now off,
+                // drop just those CFs rather than reindexing everything.
+                if tables.persisted_ledger_history_indexing()
+                    && !rpc_config.ledger_history_indexing()
+                {
+                    tables
+                        .disable_ledger_history_indexing()
+                        .expect("unable to disable ledger history indexing");
+                }
                 tables
             }
         };
@@ -2047,18 +2144,13 @@ impl RpcIndexStore {
         // Hydrate before compaction filters can observe the default 0 floor.
         Self::hydrate_ledger_history_pruning_atomic(&tables, &ledger_history_atomic);
 
-        // `ledger_history_enabled` is derived from the persisted `meta.version`
-        // feature bit, not directly from config.
-        let ledger_history_enabled = tables
-            .meta
-            .get(&())
-            .ok()
-            .flatten()
-            .is_some_and(|m| m.version & LEDGER_HISTORY_DB_VERSION_FLAG != 0);
+        // `ledger_history_enabled` is derived from the persisted `settings` CF,
+        // not directly from config.
+        let ledger_history_enabled = tables.persisted_ledger_history_indexing();
         debug_assert_eq!(
             ledger_history_enabled,
             rpc_config.ledger_history_indexing(),
-            "ledger_history_enabled (from meta.version) must match the configured ledger_history_indexing flag"
+            "ledger_history_enabled (from settings CF) must match the configured ledger_history_indexing flag"
         );
 
         Self {
@@ -2087,12 +2179,7 @@ impl RpcIndexStore {
         };
         let tables = IndexStoreTables::open_with_index_options(path, index_options);
 
-        let ledger_history_enabled = tables
-            .meta
-            .get(&())
-            .ok()
-            .flatten()
-            .is_some_and(|m| m.version & LEDGER_HISTORY_DB_VERSION_FLAG != 0);
+        let ledger_history_enabled = tables.persisted_ledger_history_indexing();
         Self::hydrate_ledger_history_pruning_atomic(&tables, &ledger_history_atomic);
 
         Self {
@@ -3275,18 +3362,126 @@ mod tests {
         assert!(matches!(decoded_pruned, Watermark::Pruned));
     }
 
-    /// `expected_db_version` folds the ledger-history bit into the schema
-    /// version without colliding with `CURRENT_DB_VERSION` itself.
-    #[test]
-    fn expected_db_version_folds_in_ledger_history_flag() {
-        assert_eq!(expected_db_version(false), CURRENT_DB_VERSION);
-        assert_eq!(
-            expected_db_version(true),
-            CURRENT_DB_VERSION | LEDGER_HISTORY_DB_VERSION_FLAG
-        );
-        // The schema version lives in the low bits; the feature flag does not.
-        assert_eq!(CURRENT_DB_VERSION & LEDGER_HISTORY_DB_VERSION_FLAG, 0);
-        assert_ne!(expected_db_version(true), expected_db_version(false));
+    /// The schema version and the ledger-history feature flag are tracked
+    /// independently: the flag round-trips through the `settings` CF, and
+    /// *enabling* the feature forces a reinit while the schema version is
+    /// unchanged. *Disabling* it does not (that is handled in place).
+    #[tokio::test]
+    async fn settings_cf_round_trips_and_drives_reinit() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        // Stamp a current-schema DB built with ledger history disabled.
+        tables
+            .meta
+            .insert(
+                &(),
+                &MetadataInfo {
+                    version: CURRENT_DB_VERSION,
+                },
+            )
+            .unwrap();
+        tables
+            .settings
+            .insert(
+                &(),
+                &IndexSettings {
+                    ledger_history_indexing: false,
+                },
+            )
+            .unwrap();
+        assert!(!tables.persisted_ledger_history_indexing());
+
+        // An empty checkpoint store keeps the watermark check out of the way so
+        // we isolate the schema-version / feature-toggle logic.
+        let checkpoint_store = CheckpointStore::new_for_tests();
+
+        // Same schema, same feature setting => no reinit.
+        assert!(!tables.needs_to_do_initialization(&checkpoint_store, false));
+        // Same schema, but the feature was toggled on => reinit.
+        assert!(tables.needs_to_do_initialization(&checkpoint_store, true));
+
+        // Flip the persisted flag; it round-trips.
+        tables
+            .settings
+            .insert(
+                &(),
+                &IndexSettings {
+                    ledger_history_indexing: true,
+                },
+            )
+            .unwrap();
+        assert!(tables.persisted_ledger_history_indexing());
+        // Already enabled => no reinit.
+        assert!(!tables.needs_to_do_initialization(&checkpoint_store, true));
+        // Disabling does NOT force a rebuild — the history CFs are dropped in
+        // place instead.
+        assert!(!tables.needs_to_do_initialization(&checkpoint_store, false));
+    }
+
+    /// `disable_ledger_history_indexing` empties every ledger-history CF (not
+    /// all-but-the-last, the trap with end-exclusive range deletes) and clears
+    /// the persisted flag, while leaving the base indexes untouched.
+    #[tokio::test]
+    async fn disable_ledger_history_indexing_drops_history_cfs_in_place() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        // Seed a ledger-history DB with several rows in each history CF.
+        tables
+            .settings
+            .insert(
+                &(),
+                &IndexSettings {
+                    ledger_history_indexing: true,
+                },
+            )
+            .unwrap();
+        for tx_seq in 0..5u64 {
+            tables
+                .tx_seq_digest
+                .insert(
+                    &tx_seq,
+                    &TxSeqDigestInfo {
+                        digest: TransactionDigest::new([0; 32]),
+                        event_count: 0,
+                        checkpoint_number: 0,
+                    },
+                )
+                .unwrap();
+        }
+        for bucket_id in 0..5u64 {
+            let key = BitmapIndexKey {
+                dimension_key: vec![1, 2, 3],
+                bucket_id,
+            };
+            tables
+                .transaction_bitmap
+                .insert(&key, &BitmapBlob(vec![0xab]))
+                .unwrap();
+            tables
+                .event_bitmap
+                .insert(&key, &BitmapBlob(vec![0xcd]))
+                .unwrap();
+        }
+        // A non-history CF that must survive the drop.
+        tables.watermark.insert(&Watermark::Indexed, &42).unwrap();
+
+        tables.disable_ledger_history_indexing().unwrap();
+
+        // Every history row is gone — including the last key in each CF.
+        assert!(tables.tx_seq_digest.is_empty());
+        assert!(tables.transaction_bitmap.is_empty());
+        assert!(tables.event_bitmap.is_empty());
+        assert_eq!(tables.first_tx_seq_digest_key().unwrap(), None);
+
+        // The flag is cleared and the base index is untouched.
+        assert!(!tables.persisted_ledger_history_indexing());
+        assert_eq!(tables.watermark.get(&Watermark::Indexed).unwrap(), Some(42));
     }
 
     /// `prune()` advances `Watermark::Pruned` and deletes the exact
@@ -3562,7 +3757,7 @@ mod tests {
 
     /// `new_without_init` must honor an already-built ledger history DB.
     #[tokio::test]
-    async fn new_without_init_enables_ledger_history_for_db_with_ledger_history_version() {
+    async fn new_without_init_enables_ledger_history_for_db_with_ledger_history_setting() {
         let temp_dir = tempfile::tempdir().unwrap();
         let db_path = temp_dir.path().join("rpc-index");
 
@@ -3575,7 +3770,16 @@ mod tests {
                 .insert(
                     &(),
                     &MetadataInfo {
-                        version: CURRENT_DB_VERSION | LEDGER_HISTORY_DB_VERSION_FLAG,
+                        version: CURRENT_DB_VERSION,
+                    },
+                )
+                .unwrap();
+            tables
+                .settings
+                .insert(
+                    &(),
+                    &IndexSettings {
+                        ledger_history_indexing: true,
                     },
                 )
                 .unwrap();
@@ -3631,9 +3835,9 @@ mod tests {
         );
     }
 
-    /// A DB without the ledger-history bit stays disabled in `new_without_init`.
+    /// A DB without the ledger-history setting stays disabled in `new_without_init`.
     #[tokio::test]
-    async fn new_without_init_disables_ledger_history_for_db_without_ledger_history_version() {
+    async fn new_without_init_disables_ledger_history_for_db_without_ledger_history_setting() {
         // Case 1: fresh/empty DB.
         let temp_dir = tempfile::tempdir().unwrap();
         let store = RpcIndexStore::new_without_init(temp_dir.path());
@@ -3653,7 +3857,8 @@ mod tests {
             "disabled ledger history indexing must leave tx_seq_digest untouched"
         );
 
-        // Case 2: a DB explicitly stamped at the plain `CURRENT_DB_VERSION`.
+        // Case 2: a current-schema DB with no `settings` row (e.g. a pre-feature
+        // DB). The missing row must read as ledger history disabled.
         let temp_dir = tempfile::tempdir().unwrap();
         let db_path = temp_dir.path().join("rpc-index");
         {
@@ -3672,7 +3877,7 @@ mod tests {
         let store = RpcIndexStore::new_without_init(temp_dir.path());
         assert!(
             !store.ledger_history_enabled,
-            "new_without_init on a version-{CURRENT_DB_VERSION} DB must leave ledger history indexing disabled"
+            "new_without_init on a DB with no settings row must leave ledger history indexing disabled"
         );
     }
 
