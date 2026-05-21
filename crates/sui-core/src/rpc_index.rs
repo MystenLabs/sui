@@ -1137,18 +1137,19 @@ impl IndexStoreTables {
         }
     }
 
-    /// Prune data from this Index. `pruned_tx_seq_exclusive` is the
-    /// absolute tx-seq floor after this prune — the caller derives it from
-    /// the last-pruned checkpoint's `network_total_transactions`. Returns
-    /// that floor iff ledger history maintenance ran and advanced it, so the caller
-    /// can update the compaction-filter atomic after the batch commits and
-    /// the atomic never leads disk.
+    /// Prune data from this Index. `pruned_tx_seq_exclusive` is the absolute
+    /// tx-seq floor after this prune — the caller derives it from the
+    /// last-pruned checkpoint's `network_total_transactions`.
+    ///
+    /// When ledger history is enabled, the compaction-filter atomic is moved to
+    /// the new floor *after* the batch commits, so the atomic never leads disk.
     fn prune(
         &self,
         pruned_checkpoint_watermark: u64,
         pruned_tx_seq_exclusive: u64,
         ledger_history_enabled: bool,
-    ) -> Result<Option<u64>, TypedStoreError> {
+        pruning_atomic: &AtomicU64,
+    ) -> Result<(), TypedStoreError> {
         let mut batch = self.watermark.batch();
 
         batch.insert_batch(
@@ -1156,36 +1157,25 @@ impl IndexStoreTables {
             [(Watermark::Pruned, pruned_checkpoint_watermark)],
         )?;
 
-        // When enabled, `tx_seq_digest` and bitmap CFs share this tx-seq floor.
         if ledger_history_enabled {
-            // The previous floor is the first live `tx_seq_digest` key,
-            // not a stored watermark: pruning and forward indexing keep
-            // the first key equal to the highest fully-pruned tx_seq
-            // (exclusive). An empty CF means floor 0.
+            // First live `tx_seq_digest` key = current floor, read from disk so a
+            // prune skipped by a crash self-heals on the next call. The range
+            // delete shares the batch with the `Watermark::Pruned` insert above.
             let prev_exclusive = self.first_tx_seq_digest_key()?.unwrap_or(0);
-
-            // The range delete and `Watermark::Pruned` ride the same batch, so the
-            // prune commits atomically (all-or-nothing). Recovery self-heals:
-            // the next prune re-derives `prev_exclusive` from the first live key,
-            // whether or not this batch committed. `pruned_tx_seq_exclusive ==
-            // prev_exclusive` when a crashed prune is replayed — a no-op, not an
-            // error. The CF is opened with `ignore_range_deletions = false`, so the
-            // tombstone is visible to `first_tx_seq_digest_key` immediately.
-            if pruned_tx_seq_exclusive > prev_exclusive {
-                batch.schedule_delete_range(
-                    &self.tx_seq_digest,
-                    &prev_exclusive,
-                    &pruned_tx_seq_exclusive,
-                )?;
-                batch.write()?;
-                return Ok(Some(pruned_tx_seq_exclusive));
-            }
-            batch.write()?;
-            return Ok(None);
+            batch.schedule_delete_range(
+                &self.tx_seq_digest,
+                &prev_exclusive,
+                &pruned_tx_seq_exclusive,
+            )?;
         }
 
         batch.write()?;
-        Ok(None)
+
+        if ledger_history_enabled {
+            // After the commit so the atomic never leads disk.
+            pruning_atomic.store(pruned_tx_seq_exclusive, Ordering::Relaxed);
+        }
+        Ok(())
     }
 
     /// Index a Checkpoint
@@ -2203,20 +2193,12 @@ impl RpcIndexStore {
         pruned_checkpoint_watermark: u64,
         pruned_tx_seq_exclusive: u64,
     ) -> Result<(), TypedStoreError> {
-        let new_exclusive = self.tables.prune(
+        self.tables.prune(
             pruned_checkpoint_watermark,
             pruned_tx_seq_exclusive,
             self.ledger_history_enabled,
-        )?;
-
-        // Advance the compaction-filter atomic ONLY after the batch
-        // commits, so a compaction can never observe a watermark that
-        // hasn't been persisted.
-        if let Some(new_exclusive) = new_exclusive {
-            self.ledger_history_pruning_watermark
-                .store(new_exclusive, Ordering::Relaxed);
-        }
-        Ok(())
+            &self.ledger_history_pruning_watermark,
+        )
     }
 
     /// Index a checkpoint and stage the index updated in `pending_updates`.
@@ -3523,10 +3505,11 @@ mod tests {
 
         // Prune cp 1 with an absolute tx-seq floor of 3 → rows 0..3 should
         // be deleted, the derived floor advances from 0 to 3.
-        let new_exclusive = tables
-            .prune(1, 3, /*ledger_history_enabled=*/ true)
+        let pruning_atomic = AtomicU64::new(0);
+        tables
+            .prune(1, 3, /*ledger_history_enabled=*/ true, &pruning_atomic)
             .unwrap();
-        assert_eq!(new_exclusive, Some(3));
+        assert_eq!(pruning_atomic.load(Ordering::Relaxed), 3);
 
         assert_eq!(tables.watermark.get(&Watermark::Pruned).unwrap(), Some(1));
         for tx_seq in 0..3u64 {
@@ -3560,10 +3543,20 @@ mod tests {
             )
             .unwrap();
 
-        let new_exclusive = tables
-            .prune(5, 3, /*ledger_history_enabled=*/ false)
+        let pruning_atomic = AtomicU64::new(0);
+        tables
+            .prune(
+                5,
+                3,
+                /*ledger_history_enabled=*/ false,
+                &pruning_atomic,
+            )
             .unwrap();
-        assert_eq!(new_exclusive, None);
+        assert_eq!(
+            pruning_atomic.load(Ordering::Relaxed),
+            0,
+            "disabled prune must not advance the compaction-filter atomic"
+        );
         assert_eq!(
             tables.watermark.get(&Watermark::Pruned).unwrap(),
             Some(5),
@@ -3749,8 +3742,9 @@ mod tests {
         }
         batch.write().unwrap();
 
+        let pruning_atomic = AtomicU64::new(0);
         tables
-            .prune(1, 2, /*ledger_history_enabled=*/ true)
+            .prune(1, 2, /*ledger_history_enabled=*/ true, &pruning_atomic)
             .unwrap();
 
         // After the single atomic batch lands, both halves are present: the
@@ -3763,11 +3757,13 @@ mod tests {
             assert!(tables.tx_seq_digest.get(&tx_seq).unwrap().is_some());
         }
         assert_eq!(tables.first_tx_seq_digest_key().unwrap(), Some(2));
+        assert_eq!(pruning_atomic.load(Ordering::Relaxed), 2);
     }
 
     /// Replaying a prune with an unchanged floor is a no-op: the second call
-    /// returns `None` (floor did not advance) and leaves rows + watermark
-    /// untouched. Covers crash-replay where the pruner re-issues the same prune.
+    /// does not advance the compaction-filter atomic and leaves rows +
+    /// watermark untouched. Covers crash-replay where the pruner re-issues the
+    /// same prune.
     #[tokio::test]
     async fn prune_idempotent_replay() {
         let temp_dir = tempfile::tempdir().unwrap();
@@ -3794,9 +3790,16 @@ mod tests {
         }
         batch.write().unwrap();
 
-        assert_eq!(tables.prune(1, 3, true).unwrap(), Some(3));
+        let pruning_atomic = AtomicU64::new(0);
+        tables.prune(1, 3, true, &pruning_atomic).unwrap();
+        assert_eq!(pruning_atomic.load(Ordering::Relaxed), 3);
         // Same floor again: nothing new to delete, floor already at 3.
-        assert_eq!(tables.prune(1, 3, true).unwrap(), None);
+        tables.prune(1, 3, true, &pruning_atomic).unwrap();
+        assert_eq!(
+            pruning_atomic.load(Ordering::Relaxed),
+            3,
+            "replay must not move the atomic"
+        );
         assert_eq!(tables.first_tx_seq_digest_key().unwrap(), Some(3));
         for tx_seq in 3..5u64 {
             assert!(tables.tx_seq_digest.get(&tx_seq).unwrap().is_some());
@@ -3833,10 +3836,13 @@ mod tests {
         }
         batch.write().unwrap();
 
-        assert_eq!(tables.prune(1, 3, true).unwrap(), Some(3));
+        let pruning_atomic = AtomicU64::new(0);
+        tables.prune(1, 3, true, &pruning_atomic).unwrap();
+        assert_eq!(pruning_atomic.load(Ordering::Relaxed), 3);
         assert_eq!(tables.first_tx_seq_digest_key().unwrap(), Some(3));
         // Second prune must see floor 3 (through the tombstone) and extend it to 5.
-        assert_eq!(tables.prune(2, 5, true).unwrap(), Some(5));
+        tables.prune(2, 5, true, &pruning_atomic).unwrap();
+        assert_eq!(pruning_atomic.load(Ordering::Relaxed), 5);
         for tx_seq in 0..5u64 {
             assert!(tables.tx_seq_digest.get(&tx_seq).unwrap().is_none());
         }
