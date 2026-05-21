@@ -38,7 +38,7 @@ Use **GraphQL RPC** for:
 
 - Queries that join multiple resources in a single request, such as an address with its owned objects, balances, and recent transactions.
 
-- Checkpoint-scoped reads where you want consistent results across a paginated query.
+- Consistent results pinned to the chain state at a specific checkpoint for queries that span multiple different types, or multiple pages.
 
 If you only need to read live state from a single full node, gRPC is usually enough. If you need cross-resource filtering, deep pagination, or want one request to return data assembled from several sources, GraphQL is usually a better fit. For deeper detail on when each API applies, see [What is gRPC](/develop/accessing-data/grpc/what-is-grpc) and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc).
 
