@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 124;
+const MAX_PROTOCOL_VERSION: u64 = 125;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -350,6 +350,7 @@ const MAINNET_USDB: &str =
 //              and enable_gasless on mainnet to bring it in line with testnet.
 //              Configure mainnet gasless allowlist with stablecoin types and $0.01 minimum
 //              transfer per stable.
+// Version 125: Enable timestamp_based_epoch_close on testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4962,6 +4963,11 @@ impl ProtocolConfig {
                             (MAINNET_AUSD.to_string(), 10_000),
                             (MAINNET_USDB.to_string(), 10_000),
                         ]);
+                    }
+                }
+                125 => {
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.timestamp_based_epoch_close = true;
                     }
                 }
                 // Use this template when making changes:
