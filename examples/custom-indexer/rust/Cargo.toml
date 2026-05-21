@@ -11,8 +11,8 @@ object_store = { version = "0.13", features = ["gcp"] }
 prometheus = "0.13.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sui_data_ingestion_core = { git = "https://github.com/mystenlabs/sui", package = "sui-data-ingestion-core"}
-sui_types = { git = "https://github.com/mystenlabs/sui", package = "sui-types"}
+sui_data_ingestion_core = { git = "https://github.com/mystenlabs/sui", package = "sui-data-ingestion-core", rev = "d10a16f29e90596186b523414b96a79a7d611fae" }
+sui_types = { git = "https://github.com/mystenlabs/sui", package = "sui-types", rev = "d10a16f29e90596186b523414b96a79a7d611fae" }
 tokio = { version = "1.38.0", features = ["full"]}
 
 [[bin]]
