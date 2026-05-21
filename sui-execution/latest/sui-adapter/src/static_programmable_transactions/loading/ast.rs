@@ -67,7 +67,7 @@ pub enum ObjectArgKind {
 pub struct ObjectArg {
     pub kind: ObjectArgKind,
     /// Permissions, potentially refined/limited based on the input argument. For example if a
-    /// shared object is used but marked as read-only, the permissiones would be refined to being
+    /// shared object is used but marked as read-only, the permissions would be refined to being
     /// _only_ immutable usage.
     pub refined_permissions: ObjectPermissions,
 }

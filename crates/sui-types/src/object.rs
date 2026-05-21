@@ -524,7 +524,7 @@ pub enum ObjectPermission {
 }
 
 impl ObjectPermission {
-    pub const fn from_u64(bits: u64) -> Option<Self> {
+    pub fn from_u64(bits: u64) -> Option<Self> {
         match bits {
             b if b == Self::Write as u64 => Some(Self::Write),
             b if b == Self::Delete as u64 => Some(Self::Delete),
@@ -533,7 +533,10 @@ impl ObjectPermission {
             b if b == Self::Wrap as u64 => Some(Self::Wrap),
             b if b == Self::MutableUsage as u64 => Some(Self::MutableUsage),
             b if b == Self::ImmutableUsage as u64 => Some(Self::ImmutableUsage),
-            _ => None,
+            _ => {
+                debug_assert!(false, "Invalid ObjectPermission bit pattern: {bits}.");
+                None
+            }
         }
     }
 }
@@ -637,7 +640,7 @@ impl ObjectPermissions {
     }
 
     /// Can the object's UID be deleted?
-    // TODO this might also gate derived object restoration
+    // TODO(Party WIP) this might also gate derived object UID release
     pub fn can_delete(&self) -> bool {
         self.can(ObjectPermission::Delete)
     }
@@ -653,6 +656,8 @@ impl ObjectPermissions {
     }
 
     /// Can the object be wrapped?
+    // TODO(Party WIP) this might _not_ gate derived object UID release even though it will be a
+    // wrap
     pub fn can_wrap(&self) -> bool {
         self.can(ObjectPermission::Wrap)
     }
@@ -703,28 +708,42 @@ impl From<ObjectPermissions> for u64 {
 pub struct ObjectPermissionsIterator {
     set: ObjectPermissions,
     idx: usize,
+    #[cfg(debug_assertions)]
+    emitted: u64,
+}
+
+impl ObjectPermissionsIterator {
+    const ORDER: &'static [ObjectPermission] = &[
+        ObjectPermission::ImmutableUsage,
+        ObjectPermission::MutableUsage,
+        ObjectPermission::Write,
+        ObjectPermission::Delete,
+        ObjectPermission::InternalTransfer,
+        ObjectPermission::PublicTransfer,
+        ObjectPermission::Wrap,
+    ];
 }
 
 impl Iterator for ObjectPermissionsIterator {
     type Item = ObjectPermission;
 
     fn next(&mut self) -> Option<Self::Item> {
-        const ORDER: &[ObjectPermission] = &[
-            ObjectPermission::Write,
-            ObjectPermission::Delete,
-            ObjectPermission::InternalTransfer,
-            ObjectPermission::PublicTransfer,
-            ObjectPermission::Wrap,
-            ObjectPermission::MutableUsage,
-            ObjectPermission::ImmutableUsage,
-        ];
-        while self.idx < ORDER.len() {
-            let p = ORDER[self.idx];
+        while self.idx < Self::ORDER.len() {
+            let p = Self::ORDER[self.idx];
             self.idx += 1;
             if self.set.can(p) {
+                #[cfg(debug_assertions)]
+                {
+                    self.emitted |= p as u64;
+                }
                 return Some(p);
             }
         }
+        #[cfg(debug_assertions)]
+        debug_assert_eq!(
+            self.emitted, self.set.0,
+            "ObjectPermissionsIterator did not iterate over every permission in the set",
+        );
         None
     }
 }
@@ -733,7 +752,28 @@ impl IntoIterator for ObjectPermissions {
     type Item = ObjectPermission;
     type IntoIter = ObjectPermissionsIterator;
     fn into_iter(self) -> Self::IntoIter {
-        ObjectPermissionsIterator { idx: 0, set: self }
+        debug_assert_eq!(
+            ObjectPermissionsIterator::ORDER
+                .iter()
+                .copied()
+                .fold(0u64, |a, p| {
+                    let bit = p as u64;
+                    debug_assert_eq!(
+                        a & bit,
+                        0,
+                        "duplicate ObjectPermission in ObjectPermissionsIterator::ORDER: {p:?}",
+                    );
+                    a | bit
+                }),
+            ObjectPermissions::ALL.0,
+            "ObjectPermissionsIterator::ORDER must contain every ObjectPermission",
+        );
+        ObjectPermissionsIterator {
+            idx: 0,
+            set: self,
+            #[cfg(debug_assertions)]
+            emitted: 0,
+        }
     }
 }
 
@@ -834,9 +874,9 @@ impl TryFrom<RawPartySerde> for Party {
             }
         }
         let members: BTreeMap<SuiAddress, ObjectPermissions> = raw.members.into_iter().collect();
-        // Party's cannot be equivalent to ConsensusAddressOwner
-        // The error message here is left generic for any additional restrictions that may be added
-        // in the future
+        // A Party cannot be equivalent to a ConsensusAddressOwner.
+        // The error message here is left generic for any additional restrictions that may be
+        // added in the future.
         Self::new(raw.default_permissions, members)
             .ok_or("invalid Party: violates canonical representation")
     }
@@ -878,7 +918,7 @@ pub enum Owner {
         owner: SuiAddress,
     },
     /// Object is sequenced via consensus with per-address permissions.
-    /// Each address can be granted a subset of {Read, Write, Delete, Transfer}.
+    /// Each address can be granted a subset of [`ObjectPermission`] flags.
     /// Addresses not explicitly listed fall back to the default permissions.
     Party {
         /// The version at which the object most recently became a party object.

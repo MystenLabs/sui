@@ -1818,8 +1818,9 @@ mod checked {
                 // protected by transaction input checker
                 invariant_violation!("ObjectOwner objects cannot be input")
             }
-            // TODO(Party WIP)
-            Owner::Party { .. } => todo!("Party WIP"),
+            Owner::Party { .. } => {
+                unimplemented!("Party does not exist for this execution version")
+            }
         };
         let owner = obj.owner.clone();
         let version = obj.version();

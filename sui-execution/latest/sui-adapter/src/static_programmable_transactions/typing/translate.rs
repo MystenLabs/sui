@@ -1284,7 +1284,7 @@ mod post_execution_checks {
         object::ObjectPermissions,
     };
 
-    // Shared object (non-party) IDs contained in each location
+    // Taint context for inputs and results that require/incur post-execution checks
     struct Context {
         // Does the input object require a post-execution check?
         inputs: Vec<bool>,
@@ -1322,18 +1322,18 @@ mod post_execution_checks {
         }
     }
 
-    /// Finds what shared objects are taken by-value by each command and must be either
-    /// deleted or re-shared.
-    /// MakeMoveVec is the only command that can take shared objects by-value and propagate them
-    /// for another command.
+    /// Find what commands will consume an object and incur a post execution check
+    /// MakeMoveVec is the only command that can take objects by-value and propagate them
+    /// for another command without directly incurring a check, as such we taint track for
+    /// MakeMoveVec
     pub fn transaction(
         protocol_config: &ProtocolConfig,
         ast: &mut T::Transaction,
     ) -> Result<(), ExecutionError> {
         let mut context = Context::new(protocol_config, ast);
 
-        // For each command, find what shared objects are taken by-value and mark them as being
-        // consumed
+        // For each command, find what objects are taken by-value and will incur a post-execution
+        // check
         for c in &mut ast.commands {
             debug_assert!(!c.value.incurs_post_execution_checks);
             command(&mut context, c)?;
@@ -1344,7 +1344,7 @@ mod post_execution_checks {
     fn command(context: &mut Context, sp!(_, c): &mut T::Command) -> Result<(), ExecutionError> {
         let arg_requires_post_execution_checks = arguments(context, c.command.arguments())?;
         let (incurs_checks, tainted_result) = match &c.command {
-            // make move vec does not "consume" any by-value shared objects, and can propagate
+            // make move vec does not directly "consume" any objects, and can propagate
             // them to a later command
             T::Command__::MakeMoveVec(_, _) => {
                 assert_invariant!(
@@ -1353,7 +1353,7 @@ mod post_execution_checks {
                 );
                 (false, arg_requires_post_execution_checks)
             }
-            // these commands do not propagate shared objects, and consume any in the acc
+            // these commands do not propagate objects, and directly incur checks
             T::Command__::MoveCall(_)
             | T::Command__::TransferObjects(_, _)
             | T::Command__::SplitCoins(_, _, _)
