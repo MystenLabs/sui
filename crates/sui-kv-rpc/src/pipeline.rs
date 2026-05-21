@@ -72,19 +72,24 @@ enum FrameHandle<O, E> {
     Err(E),
 }
 
-/// Resolve a drainer/dispatcher `JoinHandle` awaited at an EOF boundary. A
-/// panic is re-raised — the `with_deadline` wrapper above these handlers
-/// turns it into an `Internal` status. A cancellation here is anomalous: on
-/// these paths we hold the task's handle and never abort it ourselves, so a
-/// cancel (e.g. runtime shutdown) would otherwise silently truncate the
-/// stream — surface it loudly rather than treating it as clean EOF.
+/// Resolve a drainer/dispatcher `JoinHandle` awaited at an EOF boundary.
+///
+/// A **panic** is re-raised: it fires during a live request (a bug in the work
+/// the drainer runs), and swallowing it would let the handler above emit its
+/// terminal `QueryEnd` — a clean "complete" over truncated data. The
+/// `with_deadline` wrapper turns the re-raised panic into an `Internal` status.
+///
+/// A **cancellation** is only reachable at runtime shutdown: we abort our own
+/// tasks via `Drop`, never while awaiting their handles, and nobody else holds
+/// an abort handle. The stack is tearing down and the client connection is
+/// already dead, so truncating is harmless. The `debug_assert` is a dev
+/// tripwire — if a future change makes this arm reachable mid-request it would
+/// fabricate a bogus "complete", so catch it then.
 fn surface_panic(res: Result<(), JoinError>) {
     match res {
         Ok(()) => {}
         Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
-        Err(_) => {
-            panic!("pipelined_chunks task cancelled unexpectedly");
-        }
+        Err(_) => debug_assert!(false, "pipelined_chunks task cancelled unexpectedly"),
     }
 }
 
