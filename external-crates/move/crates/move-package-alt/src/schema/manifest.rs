@@ -10,7 +10,7 @@ use crate::compatibility::legacy::LegacyData;
 
 use super::{
     EnvironmentName, LocalDepInfo, OnChainAddress, OnChainPlaceholder, PackageName,
-    PublishAddresses, RenderToml, ResolverName,
+    PublishAddresses, PublishedID, RenderToml, ResolverName,
 };
 
 /// The on-chain identifier for an environment (such as a chain ID); these are bound to environment
@@ -165,6 +165,22 @@ impl ReplacementDependency {
             dependency: Some(DefaultDependency {
                 dependency_info: ManifestDependencyInfo::System(SystemDependency {
                     system: name.into(),
+                }),
+                is_override: true,
+                rename_from: None,
+                modes: None,
+            }),
+            addresses: None,
+            use_environment: None,
+        }
+    }
+
+    /// Convenience method for creating a `{ on-chain = "0x...", override = true }` dep
+    pub fn override_on_chain(address: PublishedID) -> ReplacementDependency {
+        ReplacementDependency {
+            dependency: Some(DefaultDependency {
+                dependency_info: ManifestDependencyInfo::OnChain(OnChainAddress {
+                    on_chain: address,
                 }),
                 is_override: true,
                 rename_from: None,

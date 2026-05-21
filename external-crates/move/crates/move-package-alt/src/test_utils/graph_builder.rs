@@ -53,6 +53,7 @@ use tracing::debug;
 
 use crate::{
     errors::PackageResult,
+    flavor::OnChainPackageData,
     flavor::{
         Vanilla,
         vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME},
@@ -64,8 +65,8 @@ use crate::{
         paths::PackagePath,
     },
     schema::{
-        Environment, EphemeralDependencyInfo, LocalPub, ModeName, OriginalID, Publication,
-        PublishAddresses, PublishedID,
+        Environment, EphemeralDependencyInfo, LocalPub, ModeName, OriginalID, PackageName,
+        Publication, PublishAddresses, PublishedID, ReplacementDependency,
     },
     test_utils::{Project, project},
 };
@@ -171,7 +172,7 @@ pub struct DepSpec {
 pub struct OnChainPkgSpec {
     address: PublishedID,
     modules: BTreeMap<String, Vec<u8>>,
-    dependencies: BTreeMap<OriginalID, PublishedID>,
+    dependencies: Vec<(PackageName, ReplacementDependency)>,
     original_id: OriginalID,
     version: u64,
 }
@@ -182,7 +183,7 @@ impl OnChainPkgSpec {
             original_id: OriginalID(address.0),
             address,
             modules: BTreeMap::new(),
-            dependencies: BTreeMap::new(),
+            dependencies: Vec::new(),
             version: 1,
         }
     }
@@ -192,9 +193,12 @@ impl OnChainPkgSpec {
         todo!("load .mv bytecode from tests/data/")
     }
 
-    /// Add a linkage table entry: this on-chain package depends on `linked` at `original`.
-    pub fn dep(mut self, original: OriginalID, linked: PublishedID) -> Self {
-        self.dependencies.insert(original, linked);
+    /// Add a dependency as a TOML string, e.g. `dep("my_dep", "{ on-chain = \"0x2\" }")`.
+    pub fn dep(mut self, name: &str, toml_str: &str) -> Self {
+        let name = PackageName::new(name).expect("valid identifier");
+        let dep: ReplacementDependency =
+            toml::from_str(toml_str).expect("valid TOML for ReplacementDependency");
+        self.dependencies.push((name, dep));
         self
     }
 
@@ -361,7 +365,7 @@ impl TestPackageGraph {
         let spec = build(OnChainPkgSpec::new(address.clone()));
         self.on_chain_pkgs.push((
             address,
-            crate::flavor::OnChainPackageData {
+            OnChainPackageData {
                 modules: spec.modules,
                 dependencies: spec.dependencies,
                 original_id: spec.original_id,

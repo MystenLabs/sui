@@ -18,13 +18,17 @@ use crate::schema::{
 use indexmap::IndexMap;
 
 /// Data returned by [`MoveFlavor::fetch_onchain_package`] representing a package fetched from the
-/// network.
+/// network. The `dependencies` are manifest-level dep-replacements that the flavor constructs
+/// from the on-chain linkage table — the flavor decides how each dependency should be resolved
+/// (e.g. as an on-chain dep or a system dep).
 #[derive(Clone, Debug)]
 pub struct OnChainPackageData {
     /// Module name → serialized `CompiledModule` bytecode (the `.mv` format)
     pub modules: BTreeMap<String, Vec<u8>>,
-    /// Original dependency ID → current linked address
-    pub dependencies: BTreeMap<OriginalID, PublishedID>,
+    /// Dependencies as manifest dep-replacement entries, ready to write into the generated
+    /// `Move.toml`. The flavor is responsible for classifying linkage table entries (e.g.
+    /// system packages become `{ system = "..." }` rather than `{ on-chain = "0x..." }`).
+    pub dependencies: Vec<(PackageName, ReplacementDependency)>,
     /// The original (runtime) ID of this package
     pub original_id: OriginalID,
     /// The on-chain version of this package

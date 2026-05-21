@@ -17,7 +17,7 @@ use move_package_alt::{
 
 use serde::{Deserialize, Serialize};
 use sui_package_management::system_package_versions::{
-    SYSTEM_GIT_REPO, latest_system_packages, system_packages_for_protocol,
+    SYSTEM_GIT_REPO, SystemPackagesVersion, latest_system_packages, system_packages_for_protocol,
 };
 use sui_protocol_config::ProtocolVersion;
 use sui_rpc_api::Client as RpcClient;
@@ -117,6 +117,20 @@ impl SuiFlavor {
             ("Bridge".into(), "bridge".into()),
             ("DeepBook".into(), "deepbook".into()),
         ])
+    }
+
+    /// Look up the system dep name for a system package address. Returns `None` for
+    /// non-system packages.
+    fn system_dep_name_for_address(
+        addr: ObjectID,
+        packages: &SystemPackagesVersion,
+    ) -> Option<SystemDepName> {
+        let names = Self::system_deps_by_name();
+        packages
+            .packages
+            .iter()
+            .find(|p| p.id == addr)
+            .and_then(|p| names.get(&p.package_name).cloned())
     }
 }
 
@@ -249,14 +263,30 @@ impl MoveFlavor for SuiFlavor {
             .with_context(|| format!("object {address} is not a package"))?;
 
         let modules = package.serialized_module_map().clone();
+
+        let version = self.protocol_version().await;
+        let system_packages = match system_packages_for_protocol(version) {
+            Ok((pkgs, _)) => pkgs,
+            Err(_) => latest_system_packages(),
+        };
+
         let dependencies = package
             .linkage_table()
             .iter()
             .map(|(original_id, upgrade_info)| {
-                (
-                    OriginalID((*original_id).into()),
-                    PublishedID(upgrade_info.upgraded_id.into()),
-                )
+                let linked = PublishedID(upgrade_info.upgraded_id.into());
+                if let Some(sys_name) =
+                    Self::system_dep_name_for_address(*original_id, system_packages)
+                {
+                    let name = PackageName::new(sys_name.clone())
+                        .expect("system dep name is a valid identifier");
+                    (name, ReplacementDependency::override_system_dep(&sys_name))
+                } else {
+                    let name =
+                        PackageName::new(format!("onchain_{}", OriginalID((*original_id).into())))
+                            .expect("valid identifier");
+                    (name, ReplacementDependency::override_on_chain(linked))
+                }
             })
             .collect();
         let original_id = OriginalID(package.original_package_id().into());

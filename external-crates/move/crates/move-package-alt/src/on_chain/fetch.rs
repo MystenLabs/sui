@@ -33,9 +33,8 @@ use crate::{
         layout::SourcePackageLayout, package_loader::PackageConfig, package_lock::PackageSystemLock,
     },
     schema::{
-        DefaultDependency, ManifestDependencyInfo, OnChainAddress, PackageName, ParsedManifest,
-        ParsedPublishedFile, Publication, PublishAddresses, PublishedID, RenderToml,
-        ReplacementDependency,
+        PackageName, ParsedManifest, ParsedPublishedFile, Publication, PublishAddresses,
+        PublishedID, RenderToml,
     },
 };
 
@@ -66,18 +65,8 @@ pub(crate) const ON_CHAIN_ENV_NAME: &str = "_on_chain";
 /// override = true
 /// ```
 ///
-/// # Known limitation: system packages
-///
-/// The linkage table entries are currently all turned into on-chain dep-replacements. This
-/// includes entries for system packages (e.g. `0x1`, `0x2` on Sui), which are mutable and
-/// should instead be resolved as system deps. Since almost all on-chain packages depend on
-/// system packages, this means the generated manifest will redundantly fetch system packages
-/// on-chain rather than using the source versions already in the graph.
-///
-/// The general problem is that a package may be reachable both as an on-chain dep (from the
-/// linkage table) and as a source dep (from system deps or the user's manifest). These need
-/// to be deduplicated, likely in a post-processing step after the full graph is built.
-// TODO(DVX-2126): filter system packages from the linkage table or deduplicate in the graph builder.
+/// The flavor is responsible for classifying each linkage table entry — for example,
+/// `SuiFlavor` returns system deps for known system packages and on-chain deps for the rest.
 pub(crate) async fn fetch_onchain<F: MoveFlavor>(
     address: &PublishedID,
     config: &PackageConfig<F>,
@@ -157,7 +146,8 @@ fn write_bytecode(cache_dir: &Path, modules: &BTreeMap<String, Vec<u8>>) -> anyh
 // TODO: implement stub source generation from bytecode
 fn write_source(_cache_dir: &Path) {}
 
-/// Generate the `Move.toml` for an on-chain package.
+/// Generate the `Move.toml` for an on-chain package. The dependencies are written as
+/// dep-replacements exactly as the flavor provided them.
 fn write_manifest(
     cache_dir: &Path,
     chain_id: &str,
@@ -174,28 +164,11 @@ fn write_manifest(
         Spanned::new(0..1, chain_id.to_string()),
     );
 
-    // Add dep-replacements from linkage table
     if !data.dependencies.is_empty() {
         let env_replacements = data
             .dependencies
             .iter()
-            .map(|(original_id, linked_address)| {
-                let dep_name =
-                    PackageName::new(format!("onchain_{original_id}")).expect("valid identifier");
-                let replacement = ReplacementDependency {
-                    dependency: Some(DefaultDependency {
-                        dependency_info: ManifestDependencyInfo::OnChain(OnChainAddress {
-                            on_chain: linked_address.clone(),
-                        }),
-                        is_override: true,
-                        rename_from: None,
-                        modes: None,
-                    }),
-                    addresses: None,
-                    use_environment: None,
-                };
-                (dep_name, Spanned::new(0..1, replacement))
-            })
+            .map(|(name, replacement)| (name.clone(), Spanned::new(0..1, replacement.clone())))
             .collect();
         manifest
             .dep_replacements
@@ -268,20 +241,24 @@ mod tests {
     use super::*;
     use crate::{
         flavor::{Vanilla, vanilla::DEFAULT_ENV_NAME},
-        schema::{OriginalID, PublishedID},
+        schema::{OriginalID, PublishedID, ReplacementDependency},
         test_utils::graph_builder::TestPackageGraph,
     };
 
-    /// Helper to create test on-chain package data.
-    fn test_data(deps: Vec<(u16, u16)>) -> OnChainPackageData {
+    /// Helper to create test on-chain package data with on-chain dep-replacements.
+    fn test_data(deps: &[(&str, &str)]) -> OnChainPackageData {
         OnChainPackageData {
             modules: BTreeMap::from([
                 ("my_module".to_string(), vec![0xDE, 0xAD]),
                 ("other_module".to_string(), vec![0xBE, 0xEF]),
             ]),
             dependencies: deps
-                .into_iter()
-                .map(|(orig, linked)| (OriginalID::from(orig), PublishedID::from(linked)))
+                .iter()
+                .map(|(name, toml_str)| {
+                    let name = PackageName::new(*name).expect("valid identifier");
+                    let dep: ReplacementDependency = toml::from_str(toml_str).expect("valid TOML");
+                    (name, dep)
+                })
                 .collect(),
             original_id: OriginalID::from(0xABCD_u16),
             version: 3,
@@ -292,7 +269,7 @@ mod tests {
     #[test]
     fn bytecode_files() {
         let dir = tempdir().unwrap();
-        let data = test_data(vec![]);
+        let data = test_data(&[]);
 
         write_bytecode(dir.path(), &data.modules).unwrap();
 
@@ -306,7 +283,7 @@ mod tests {
     #[test]
     fn manifest_no_deps() {
         let dir = tempdir().unwrap();
-        let data = test_data(vec![]);
+        let data = test_data(&[]);
 
         write_manifest(dir.path(), "test_chain", &data).unwrap();
 
@@ -323,7 +300,10 @@ mod tests {
     #[test]
     fn manifest_with_deps() {
         let dir = tempdir().unwrap();
-        let data = test_data(vec![(0x2, 0x2), (0x3, 0x33)]);
+        let data = test_data(&[
+            ("dep_a", "on-chain = \"0x2\""),
+            ("dep_b", "on-chain = \"0x33\""),
+        ]);
 
         write_manifest(dir.path(), "test_chain", &data).unwrap();
 
@@ -345,7 +325,7 @@ mod tests {
     #[test]
     fn manifest_round_trips() {
         let dir = tempdir().unwrap();
-        let data = test_data(vec![(0x2, 0x2)]);
+        let data = test_data(&[("dep_a", "on-chain = \"0x2\"")]);
 
         write_manifest(dir.path(), "test_chain", &data).unwrap();
 
@@ -368,7 +348,7 @@ mod tests {
     fn published_toml() {
         let dir = tempdir().unwrap();
         let address = PublishedID::from(0x1234_u16);
-        let data = test_data(vec![]);
+        let data = test_data(&[]);
 
         write_published::<Vanilla>(dir.path(), &address, "test_chain", &data).unwrap();
 
@@ -424,7 +404,7 @@ mod tests {
                 |d| d.in_env(DEFAULT_ENV_NAME),
             )
             .add_on_chain_pkg(PublishedID::from(0x2001_u16), |pkg| {
-                pkg.dep(OriginalID::from(0x2002_u16), PublishedID::from(0x2002_u16))
+                pkg.dep("dep_b", "on-chain = \"0x2002\"")
             })
             .add_on_chain_pkg(PublishedID::from(0x2002_u16), |pkg| pkg)
             .build();
@@ -453,7 +433,7 @@ mod tests {
                 |d| d.in_env(DEFAULT_ENV_NAME),
             )
             .add_on_chain_pkg(PublishedID::from(0x3001_u16), |pkg| {
-                pkg.dep(OriginalID::from(0x3002_u16), PublishedID::from(0x3002_u16))
+                pkg.dep("local_dep", "on-chain = \"0x3002\"")
             })
             .add_on_chain_pkg(PublishedID::from(0x3002_u16), |pkg| pkg)
             .build();
