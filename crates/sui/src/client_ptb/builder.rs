@@ -1026,7 +1026,7 @@ impl<'a> PTBBuilder<'a> {
                         .dependency_ids
                         .published
                         .values()
-                        .cloned()
+                        .map(|dep| dep.published_at)
                         .collect::<Vec<_>>(),
                     compiled_modules,
                 );

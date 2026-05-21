@@ -4287,6 +4287,36 @@ async fn test_tree_shaking_package_with_direct_dependency() -> Result<(), anyhow
 }
 
 #[sim_test]
+async fn test_tree_shaking_package_with_duplicate_dependency_names() -> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
+
+    // Publish two packages with the same declared package name. The package system disambiguates
+    // them with package graph IDs like `a` and `a_1`; tree shaking needs to use that same key space.
+    let (package_a_id, _) = test.test_publish_package("A", false).await?;
+    let (package_a_alt_id, _) = test.test_publish_package("A_ALT", false).await?;
+
+    // `DuplicateDirect` declares both packages but only references `A_ALT`.
+    let (package_duplicate_id, _) = test.test_publish_package("DuplicateDirect", false).await?;
+    let linkage_table = test.fetch_linkage_table(package_duplicate_id).await;
+
+    assert!(
+        linkage_table.contains_key(&package_a_alt_id),
+        "Package DuplicateDirect should depend on A_ALT"
+    );
+    assert!(
+        !linkage_table.contains_key(&package_a_id),
+        "Package DuplicateDirect should tree shake the unused A dependency"
+    );
+    assert_eq!(
+        linkage_table.len(),
+        1,
+        "Package DuplicateDirect should have exactly one dependency"
+    );
+
+    Ok(())
+}
+
+#[sim_test]
 async fn test_tree_shaking_package_with_unused_dependency() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await?;
 
