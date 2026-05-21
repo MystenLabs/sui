@@ -43,6 +43,7 @@ use sui_data_ingestion_core::Worker;
 use sui_data_ingestion_core::setup_single_workflow_with_options;
 use sui_types::base_types::SuiAddress;
 use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionDataAPI;
 
 // ── output record types ────────────────────────────────────────────────────
@@ -59,12 +60,29 @@ struct MismatchRecord<'a> {
     sig1_address: String,
 }
 
+/// Either sig fails to match either required signer (sender / gas_owner). The
+/// signer may have on-chain address aliases (post-protocol-v116) that we can't
+/// resolve without object-store access — or the tx may be using an
+/// authenticator we don't fully understand. Logged so we can audit separately.
+#[derive(Serialize)]
+struct PossibleAliasRecord<'a> {
+    #[serde(rename = "type")]
+    record_type: &'a str,
+    checkpoint: u64,
+    tx_digest: String,
+    sender: String,
+    gas_owner: String,
+    sig0_addresses: Vec<String>,
+    sig1_addresses: Vec<String>,
+}
+
 #[derive(Serialize)]
 struct SummaryRecord<'a> {
     #[serde(rename = "type")]
     record_type: &'a str,
     total_checkpoints_processed: u64,
     total_mismatches: u64,
+    total_possible_aliases: u64,
     start_checkpoint: u64,
     end_checkpoint: u64,
 }
@@ -75,6 +93,24 @@ struct GcsScanWorker {
     output: Arc<Mutex<BufWriter<File>>>,
     checkpoints_processed: Arc<AtomicU64>,
     mismatches_found: Arc<AtomicU64>,
+    possible_aliases_found: Arc<AtomicU64>,
+}
+
+/// Addresses a signature could authenticate. For zkLogin, both the modern
+/// unpadded derivation and the legacy padded derivation are accepted by the
+/// verifier (controlled by `verify_legacy_zklogin_address`), so we include
+/// both. For every other authenticator the canonical address is the only
+/// option.
+fn acceptable_addresses(sig: &GenericSignature) -> Result<Vec<SuiAddress>> {
+    let mut addrs = vec![SuiAddress::try_from(sig)?];
+    if let GenericSignature::ZkLoginAuthenticator(z) = sig {
+        if let Ok(padded) = SuiAddress::try_from_padded(&z.inputs) {
+            if !addrs.contains(&padded) {
+                addrs.push(padded);
+            }
+        }
+    }
+    Ok(addrs)
 }
 
 #[async_trait]
@@ -87,8 +123,9 @@ impl Worker for GcsScanWorker {
 
         if processed % 10_000 == 0 {
             eprintln!(
-                "progress checkpoint={seq} scanned={processed} mismatches={}",
+                "progress checkpoint={seq} scanned={processed} mismatches={} possible_aliases={}",
                 self.mismatches_found.load(Ordering::Relaxed),
+                self.possible_aliases_found.load(Ordering::Relaxed),
             );
         }
 
@@ -110,28 +147,63 @@ impl Worker for GcsScanWorker {
                 continue;
             }
 
-            let required = [sender, gas_owner];
-            let actual: Vec<SuiAddress> = sigs
-                .iter()
-                .take(2)
-                .map(SuiAddress::try_from)
-                .collect::<Result<_, _>>()?;
+            // A sig parsing failure shouldn't kill the whole checkpoint —
+            // treat it as "no acceptable addresses" so it falls through to the
+            // possible-alias branch and gets surfaced for audit.
+            let sig0_addrs = acceptable_addresses(&sigs[0]).unwrap_or_default();
+            let sig1_addrs = acceptable_addresses(&sigs[1]).unwrap_or_default();
 
-            if actual[0] != required[0] || actual[1] != required[1] {
+            let sig0_matches_sender = sig0_addrs.contains(&sender);
+            let sig0_matches_gas = sig0_addrs.contains(&gas_owner);
+            let sig1_matches_sender = sig1_addrs.contains(&sender);
+            let sig1_matches_gas = sig1_addrs.contains(&gas_owner);
+
+            // Convention is [sender, gas_owner]; in-order is the happy path.
+            if sig0_matches_sender && sig1_matches_gas {
+                continue;
+            }
+
+            let digest = ctx.transaction.digest().to_string();
+            let line = if sig0_matches_gas && sig1_matches_sender {
+                // Both sigs definitively match the required signer set, just
+                // swapped — the case the scan is hunting.
+                self.mismatches_found.fetch_add(1, Ordering::Relaxed);
                 let record = MismatchRecord {
                     record_type: "mismatch",
                     checkpoint: seq,
-                    tx_digest: ctx.transaction.digest().to_string(),
-                    sender: required[0].to_string(),
-                    gas_owner: required[1].to_string(),
-                    sig0_address: actual[0].to_string(),
-                    sig1_address: actual[1].to_string(),
+                    tx_digest: digest,
+                    sender: sender.to_string(),
+                    gas_owner: gas_owner.to_string(),
+                    sig0_address: sig0_addrs
+                        .first()
+                        .map(|a| a.to_string())
+                        .unwrap_or_default(),
+                    sig1_address: sig1_addrs
+                        .first()
+                        .map(|a| a.to_string())
+                        .unwrap_or_default(),
                 };
-                self.mismatches_found.fetch_add(1, Ordering::Relaxed);
-                let line = serde_json::to_string(&record)?;
-                let mut out = self.output.lock().unwrap();
-                writeln!(out, "{line}")?;
-            }
+                serde_json::to_string(&record)?
+            } else {
+                // At least one sig doesn't match either required signer —
+                // could be an aliased address, an exotic authenticator, or a
+                // sig we couldn't decode.
+                self.possible_aliases_found
+                    .fetch_add(1, Ordering::Relaxed);
+                let record = PossibleAliasRecord {
+                    record_type: "possible_alias",
+                    checkpoint: seq,
+                    tx_digest: digest,
+                    sender: sender.to_string(),
+                    gas_owner: gas_owner.to_string(),
+                    sig0_addresses: sig0_addrs.iter().map(SuiAddress::to_string).collect(),
+                    sig1_addresses: sig1_addrs.iter().map(SuiAddress::to_string).collect(),
+                };
+                serde_json::to_string(&record)?
+            };
+
+            let mut out = self.output.lock().unwrap();
+            writeln!(out, "{line}")?;
         }
         Ok(())
     }
@@ -195,11 +267,13 @@ async fn main() -> Result<()> {
     let output = Arc::new(Mutex::new(BufWriter::new(file)));
     let checkpoints_processed = Arc::new(AtomicU64::new(0));
     let mismatches_found = Arc::new(AtomicU64::new(0));
+    let possible_aliases_found = Arc::new(AtomicU64::new(0));
 
     let worker = GcsScanWorker {
         output: output.clone(),
         checkpoints_processed: checkpoints_processed.clone(),
         mismatches_found: mismatches_found.clone(),
+        possible_aliases_found: possible_aliases_found.clone(),
     };
 
     let reader_options = ReaderOptions {
@@ -223,6 +297,7 @@ async fn main() -> Result<()> {
 
     let total_checkpoints = checkpoints_processed.load(Ordering::Relaxed);
     let total_mismatches = mismatches_found.load(Ordering::Relaxed);
+    let total_possible_aliases = possible_aliases_found.load(Ordering::Relaxed);
 
     // Write summary as the final JSONL line so the file is never empty.
     {
@@ -230,6 +305,7 @@ async fn main() -> Result<()> {
             record_type: "summary",
             total_checkpoints_processed: total_checkpoints,
             total_mismatches,
+            total_possible_aliases,
             start_checkpoint: start,
             end_checkpoint: end,
         };
@@ -239,7 +315,7 @@ async fn main() -> Result<()> {
     }
 
     eprintln!(
-        "done: processed={total_checkpoints} mismatches={total_mismatches} output={local_output}",
+        "done: processed={total_checkpoints} mismatches={total_mismatches} possible_aliases={total_possible_aliases} output={local_output}",
     );
 
     if let Some(bucket) = output_gcs_bucket {
