@@ -515,9 +515,17 @@ impl SuiNode {
         let enable_write_stall = config
             .enable_db_write_stall
             .unwrap_or(node_role.runs_consensus());
+        // The tidehunter objects compactor retains only the latest version per
+        // ObjectID and is mutually exclusive with the object pruner. Enable it
+        // for validators (which always disable the pruner), and also for any
+        // node configured with `num_epochs_to_retain = 0` — that aggressive
+        // setting is what the compactor replaces. The pruner is force-disabled
+        // in `AuthorityStorePruner::new` whenever this is true.
+        let enable_objects_compactor = node_role.is_validator()
+            || config.authority_store_pruning_config.num_epochs_to_retain == 0;
         let perpetual_tables_options = AuthorityPerpetualTablesOptions {
             enable_write_stall,
-            is_validator: node_role.is_validator(),
+            enable_objects_compactor,
         };
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_store_path(),
