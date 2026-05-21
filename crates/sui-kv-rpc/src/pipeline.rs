@@ -83,8 +83,6 @@ fn surface_panic(res: Result<(), JoinError>) {
         Ok(()) => {}
         Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
         Err(_) => {
-            tracing::error!("pipelined_chunks task cancelled unexpectedly");
-            debug_assert!(false, "pipelined_chunks task cancelled unexpectedly");
             panic!("pipelined_chunks task cancelled unexpectedly");
         }
     }
