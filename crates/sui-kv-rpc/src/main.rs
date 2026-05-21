@@ -10,6 +10,8 @@ use clap::Parser;
 use prometheus::Registry;
 use sui_kv_rpc::ConcurrencyConfig;
 use sui_kv_rpc::KvRpcServer;
+use sui_kv_rpc::LedgerHistoryMethodConfig;
+use sui_kv_rpc::ListApiConfig;
 use sui_kv_rpc::PoolConfig;
 use sui_kv_rpc::ServerConfig;
 use sui_kv_rpc::default_service_info_watermark_pipelines;
@@ -81,6 +83,63 @@ impl From<ConcurrencyArgs> for ConcurrencyConfig {
     }
 }
 
+/// Per-endpoint tunables for the v2alpha list APIs. CLI-driven for now; a config
+/// file may back these later.
+#[derive(Parser)]
+struct ListApiArgs {
+    #[clap(long = "list-transactions-timeout-ms", default_value_t = ListApiConfig::default().list_transactions.timeout.as_millis() as u64)]
+    list_transactions_timeout_ms: u64,
+    #[clap(long = "list-transactions-default-limit", default_value_t = ListApiConfig::default().list_transactions.default_limit_items)]
+    list_transactions_default_limit: u32,
+    #[clap(long = "list-transactions-max-limit", default_value_t = ListApiConfig::default().list_transactions.max_limit_items)]
+    list_transactions_max_limit: u32,
+    #[clap(long = "list-transactions-chunk-max", default_value_t = ListApiConfig::default().list_transactions.chunk_max)]
+    list_transactions_chunk_max: usize,
+
+    #[clap(long = "list-events-timeout-ms", default_value_t = ListApiConfig::default().list_events.timeout.as_millis() as u64)]
+    list_events_timeout_ms: u64,
+    #[clap(long = "list-events-default-limit", default_value_t = ListApiConfig::default().list_events.default_limit_items)]
+    list_events_default_limit: u32,
+    #[clap(long = "list-events-max-limit", default_value_t = ListApiConfig::default().list_events.max_limit_items)]
+    list_events_max_limit: u32,
+    #[clap(long = "list-events-chunk-max", default_value_t = ListApiConfig::default().list_events.chunk_max)]
+    list_events_chunk_max: usize,
+
+    #[clap(long = "list-checkpoints-timeout-ms", default_value_t = ListApiConfig::default().list_checkpoints.timeout.as_millis() as u64)]
+    list_checkpoints_timeout_ms: u64,
+    #[clap(long = "list-checkpoints-default-limit", default_value_t = ListApiConfig::default().list_checkpoints.default_limit_items)]
+    list_checkpoints_default_limit: u32,
+    #[clap(long = "list-checkpoints-max-limit", default_value_t = ListApiConfig::default().list_checkpoints.max_limit_items)]
+    list_checkpoints_max_limit: u32,
+    #[clap(long = "list-checkpoints-chunk-max", default_value_t = ListApiConfig::default().list_checkpoints.chunk_max)]
+    list_checkpoints_chunk_max: usize,
+}
+
+impl From<ListApiArgs> for ListApiConfig {
+    fn from(args: ListApiArgs) -> Self {
+        Self {
+            list_transactions: LedgerHistoryMethodConfig {
+                timeout: Duration::from_millis(args.list_transactions_timeout_ms),
+                default_limit_items: args.list_transactions_default_limit,
+                max_limit_items: args.list_transactions_max_limit,
+                chunk_max: args.list_transactions_chunk_max,
+            },
+            list_events: LedgerHistoryMethodConfig {
+                timeout: Duration::from_millis(args.list_events_timeout_ms),
+                default_limit_items: args.list_events_default_limit,
+                max_limit_items: args.list_events_max_limit,
+                chunk_max: args.list_events_chunk_max,
+            },
+            list_checkpoints: LedgerHistoryMethodConfig {
+                timeout: Duration::from_millis(args.list_checkpoints_timeout_ms),
+                default_limit_items: args.list_checkpoints_default_limit,
+                max_limit_items: args.list_checkpoints_max_limit,
+                chunk_max: args.list_checkpoints_chunk_max,
+            },
+        }
+    }
+}
+
 bin_version::bin_version!();
 
 #[derive(Parser)]
@@ -126,6 +185,8 @@ struct App {
     pool: PoolArgs,
     #[clap(flatten)]
     concurrency: ConcurrencyArgs,
+    #[clap(flatten)]
+    list_api: ListApiArgs,
 }
 
 async fn health_check() -> &'static str {
@@ -148,6 +209,7 @@ async fn main() -> Result<()> {
     let channel_timeout = app.bigtable_channel_timeout_ms.map(Duration::from_millis);
     let pool_config: PoolConfig = app.pool.into();
     let concurrency_config: ConcurrencyConfig = app.concurrency.into();
+    let list_api_config: ListApiConfig = app.list_api.into();
     let service_info_watermark_pipelines = if app.watermark_pipeline.is_empty() {
         default_service_info_watermark_pipelines(app.enable_experimental_query_apis)
     } else {
@@ -166,6 +228,7 @@ async fn main() -> Result<()> {
         pool_config,
         service_info_watermark_pipelines,
         concurrency_config,
+        list_api_config,
     )
     .await?;
 

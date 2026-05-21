@@ -64,9 +64,6 @@ use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::reached_range_end;
 use crate::ledger_history::watermark::terminal_boundary_watermark;
 
-const DEFAULT_LIMIT_ITEMS: u32 = 10;
-const MAX_LIMIT_ITEMS: u32 = 100;
-const CHUNK_MAX: usize = 16;
 const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::CHECKPOINT;
 
 pub(crate) type ListCheckpointsStream =
@@ -85,19 +82,20 @@ pub(crate) async fn list_checkpoints(
     let filtered = filter.is_some();
     validate_checkpoint_bounds(start_checkpoint, end_checkpoint)?;
     let read_mask = validate_read_mask(request.read_mask)?;
+    let ledger_history = service.config.ledger_history();
+    let endpoint = ledger_history.list_checkpoints();
+    let bitmap_bucket_scan_budget = ledger_history.bitmap_bucket_scan_budget();
+    let chunk_bucket_scan_budget = ledger_history.chunk_bucket_scan_budget();
+    let max_bitmap_filter_literals = ledger_history.max_bitmap_filter_literals();
     let options = QueryOptions::from_proto(
         request_options.as_ref(),
-        DEFAULT_LIMIT_ITEMS,
-        MAX_LIMIT_ITEMS,
+        endpoint.default_limit_items,
+        endpoint.max_limit_items,
         QueryType::Checkpoints,
         filter.as_ref(),
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
-    let ledger_history_api = service.config.ledger_history_api();
-    let bitmap_bucket_scan_budget = ledger_history_api.bitmap_bucket_scan_budget();
-    let chunk_bucket_scan_budget = ledger_history_api.chunk_bucket_scan_budget();
-    let max_bitmap_filter_literals = ledger_history_api.max_bitmap_filter_literals();
     let filter_query = filter
         .as_ref()
         .map(|filter| transaction_filter_to_query(filter, max_bitmap_filter_literals))
@@ -114,7 +112,7 @@ pub(crate) async fn list_checkpoints(
         let mut scan = ChunkedScan::new(
             initial_state,
             limit_items,
-            CHUNK_MAX,
+            endpoint.chunk_max,
             bitmap_bucket_scan_budget,
             move |state, args: ChunkArgs| {
                 spawn_checkpoint_chunk(

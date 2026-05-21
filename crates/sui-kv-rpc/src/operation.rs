@@ -20,6 +20,7 @@ use crate::KvRpcServer;
 use crate::PackageResolver;
 use crate::bigtable_client::BigTableClient;
 use crate::bigtable_client::ConcurrencyConfig;
+use crate::bigtable_client::ListApiConfig;
 use sui_rpc_api::ledger_history::filter::event_filter_to_query;
 use sui_rpc_api::ledger_history::filter::transaction_filter_to_query;
 
@@ -43,6 +44,7 @@ pub(crate) struct QueryContext {
     method: &'static str,
     checkpoint_hi_exclusive: u64,
     limits: ConcurrencyConfig,
+    list_api: ListApiConfig,
 }
 
 impl QueryContext {
@@ -53,6 +55,7 @@ impl QueryContext {
         method: &'static str,
         checkpoint_hi_exclusive: u64,
         limits: ConcurrencyConfig,
+        list_api: ListApiConfig,
     ) -> Self {
         Self {
             client,
@@ -61,7 +64,12 @@ impl QueryContext {
             method,
             checkpoint_hi_exclusive,
             limits,
+            list_api,
         }
+    }
+
+    pub(crate) fn list_api(&self) -> &ListApiConfig {
+        &self.list_api
     }
 
     pub(crate) fn client(&self) -> &BigTableClient {
@@ -174,6 +182,7 @@ impl KvRpcServer {
             operation,
             self.cached_checkpoint_hi_exclusive().await?,
             self.concurrency,
+            self.list_api,
         ))
     }
 

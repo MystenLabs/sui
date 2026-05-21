@@ -57,10 +57,6 @@ use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::ledger_history::watermark::reached_range_end;
 use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
 
-const DEFAULT_LIMIT_ITEMS: u32 = 50;
-const MAX_LIMIT_ITEMS: u32 = 500;
-const CHUNK_MAX: usize = 100;
-
 pub(crate) type ListTransactionsStream =
     BoxStream<'static, Result<ListTransactionsResponse, RpcError>>;
 type TransactionWithObjectsStreamItem = (u64, u32, TransactionData, ObjectMap);
@@ -74,6 +70,8 @@ pub(crate) async fn list_transactions(
     let client: BigTableClient = ctx.client().clone();
     let resolver: crate::PackageResolver = ctx.package_resolver().clone();
     let checkpoint_hi_exclusive = ctx.checkpoint_hi_exclusive();
+    let endpoint = ctx.list_api().list_transactions;
+    let chunk_max = endpoint.chunk_max;
 
     let checkpoint_range = CheckpointRange::from_request(
         request.start_checkpoint,
@@ -83,8 +81,8 @@ pub(crate) async fn list_transactions(
     let read_mask = validate_read_mask(request.read_mask)?;
     let options = QueryOptions::from_proto(
         request.options.as_ref(),
-        DEFAULT_LIMIT_ITEMS,
-        MAX_LIMIT_ITEMS,
+        endpoint.default_limit_items,
+        endpoint.max_limit_items,
         QueryType::Transactions,
         request.filter.as_ref(),
     )?;
@@ -146,7 +144,7 @@ pub(crate) async fn list_transactions(
                 ctx.bitmap_scan_observer(),
             );
             let seq_stream = take_items(seq_stream, limit_items);
-            pipelined_chunks(seq_stream, CHUNK_MAX, request_bigtable_concurrency, {
+            pipelined_chunks(seq_stream, chunk_max, request_bigtable_concurrency, {
                 let client = client.clone();
                 move |seqs| fetch_tx_seq_digests(client.clone(), seqs)
             })
@@ -215,7 +213,7 @@ pub(crate) async fn list_transactions(
     let needs_objects = needs_object_types(&read_mask);
 
     // Stage 3: Watermarked<TxSeqDigestData> -> Watermarked<(tx_seq, TransactionData)>.
-    let tx_stream = pipelined_chunks(digest_stream, CHUNK_MAX, request_bigtable_concurrency, {
+    let tx_stream = pipelined_chunks(digest_stream, chunk_max, request_bigtable_concurrency, {
         let client = client.clone();
         let columns = columns.clone();
         move |rows| fetch_transactions(client.clone(), columns.clone(), rows)
@@ -239,8 +237,8 @@ pub(crate) async fn list_transactions(
 
         pipelined_keyed_batches(
             tx_with_keys,
-            CHUNK_MAX,
-            CHUNK_MAX,
+            chunk_max,
+            chunk_max,
             request_bigtable_concurrency,
             move |keys| {
                 let object_cache = object_cache.clone();

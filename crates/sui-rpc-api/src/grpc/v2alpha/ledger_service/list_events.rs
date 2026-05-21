@@ -68,10 +68,7 @@ use event_seq::decode_event_seq;
 use event_seq::encode_event_seq;
 use event_seq::event_seq_lo;
 
-const DEFAULT_LIMIT_ITEMS: u32 = 50;
-const MAX_LIMIT_ITEMS: u32 = 1000;
 const EVENT_READ_MASK_DEFAULT: &str = crate::read_mask_defaults::EVENT;
-const CHUNK_MAX: usize = 32;
 
 pub(crate) type ListEventsStream = BoxStream<'static, Result<ListEventsResponse, RpcError>>;
 
@@ -88,19 +85,20 @@ pub(crate) async fn list_events(
     let filtered = filter.is_some();
     validate_checkpoint_bounds(start_checkpoint, end_checkpoint)?;
     let read_mask = validate_event_read_mask(request.read_mask)?;
+    let ledger_history = service.config.ledger_history();
+    let endpoint = ledger_history.list_events();
+    let bitmap_bucket_scan_budget = ledger_history.bitmap_bucket_scan_budget();
+    let chunk_bucket_scan_budget = ledger_history.chunk_bucket_scan_budget();
+    let max_bitmap_filter_literals = ledger_history.max_bitmap_filter_literals();
     let options = QueryOptions::from_proto(
         request_options.as_ref(),
-        DEFAULT_LIMIT_ITEMS,
-        MAX_LIMIT_ITEMS,
+        endpoint.default_limit_items,
+        endpoint.max_limit_items,
         QueryType::Events,
         filter.as_ref(),
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
-    let ledger_history_api = service.config.ledger_history_api();
-    let bitmap_bucket_scan_budget = ledger_history_api.bitmap_bucket_scan_budget();
-    let chunk_bucket_scan_budget = ledger_history_api.chunk_bucket_scan_budget();
-    let max_bitmap_filter_literals = ledger_history_api.max_bitmap_filter_literals();
     let filter_query = filter
         .as_ref()
         .map(|filter| event_filter_to_query(filter, max_bitmap_filter_literals))
@@ -114,10 +112,11 @@ pub(crate) async fn list_events(
 
     let terminal_options = options.clone();
     Ok(async_stream::try_stream! {
+        let unfiltered_row_scan_budget = endpoint.max_limit_items as usize;
         let mut scan = ChunkedScan::new(
             initial_state,
             limit_items,
-            CHUNK_MAX,
+            endpoint.chunk_max,
             bitmap_bucket_scan_budget,
             move |state, args: ChunkArgs| {
                 spawn_event_chunk(
@@ -127,6 +126,7 @@ pub(crate) async fn list_events(
                     options.clone(),
                     args.scan_budget,
                     chunk_bucket_scan_budget,
+                    unfiltered_row_scan_budget,
                     args.chunk_item_limit,
                     args.remaining_request_item_limit,
                     args.cancel,
@@ -171,6 +171,7 @@ fn spawn_event_chunk(
     options: QueryOptions,
     scan_budget: usize,
     chunk_scan_budget: usize,
+    unfiltered_row_scan_budget: usize,
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: CancellationToken,
@@ -183,6 +184,7 @@ fn spawn_event_chunk(
             options,
             scan_budget,
             chunk_scan_budget,
+            unfiltered_row_scan_budget,
             chunk_item_limit,
             remaining_request_item_limit,
             &cancel,
@@ -201,7 +203,8 @@ enum EventScanState {
         range: Range<u64>,
         // Remaining tx rows this scan may read before stopping with `ScanLimit`.
         // Bounds an unfiltered scan that walks event-less history (each scanned
-        // tx may carry zero events) to `MAX_LIMIT_ITEMS` rows per request.
+        // tx may carry zero events) to the endpoint's configured `max_limit_items`
+        // rows per request.
         row_scan_budget: usize,
         end_reason: QueryEndReason,
         end_checkpoint: u64,
@@ -226,6 +229,7 @@ fn next_event_chunk(
     options: QueryOptions,
     scan_budget: usize,
     chunk_scan_budget: usize,
+    unfiltered_row_scan_budget: usize,
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
@@ -274,7 +278,7 @@ fn next_event_chunk(
                 },
                 None => EventScanState::Unfiltered {
                     range,
-                    row_scan_budget: MAX_LIMIT_ITEMS as usize,
+                    row_scan_budget: unfiltered_row_scan_budget,
                     end_reason: terminal.reason,
                     end_checkpoint: terminal.end_checkpoint,
                     end_position: terminal.end_position,
@@ -287,6 +291,7 @@ fn next_event_chunk(
                 options,
                 remaining_scan_budget,
                 chunk_scan_budget,
+                unfiltered_row_scan_budget,
                 chunk_item_limit,
                 remaining_request_item_limit,
                 cancel,

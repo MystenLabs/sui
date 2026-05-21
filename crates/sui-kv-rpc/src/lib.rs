@@ -45,6 +45,8 @@ mod v2alpha;
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_server::LedgerServiceServer as KvLedgerServiceServer;
 
 pub use bigtable_client::ConcurrencyConfig;
+pub use bigtable_client::LedgerHistoryMethodConfig;
+pub use bigtable_client::ListApiConfig;
 use bigtable_client::Metrics as BigTableLimiterMetrics;
 use package_store::BigTablePackageStore;
 
@@ -132,6 +134,7 @@ pub struct KvRpcServer {
     package_resolver: PackageResolver,
     metrics: Arc<KvRpcMetrics>,
     pub(crate) concurrency: ConcurrencyConfig,
+    pub(crate) list_api: ListApiConfig,
 }
 
 /// Optional configuration for the gRPC server (TLS, metrics, reflection).
@@ -156,6 +159,7 @@ impl KvRpcServer {
         pool_config: PoolConfig,
         service_info_watermark_pipelines: Vec<&'static str>,
         concurrency: ConcurrencyConfig,
+        list_api: ListApiConfig,
     ) -> anyhow::Result<Self> {
         concurrency.validate()?;
         let mut client = BigTableClient::new_remote_with_credentials(
@@ -187,6 +191,7 @@ impl KvRpcServer {
             service_info_watermark_pipelines,
             metrics,
             concurrency,
+            list_api,
         )
     }
 
@@ -209,6 +214,7 @@ impl KvRpcServer {
             default_service_info_watermark_pipelines(false),
             metrics,
             ConcurrencyConfig::default(),
+            ListApiConfig::default(),
         )
     }
 
@@ -220,6 +226,7 @@ impl KvRpcServer {
         service_info_watermark_pipelines: Vec<&'static str>,
         metrics: Arc<KvRpcMetrics>,
         concurrency: ConcurrencyConfig,
+        list_api: ListApiConfig,
     ) -> anyhow::Result<Self> {
         ensure!(
             !service_info_watermark_pipelines.is_empty(),
@@ -244,6 +251,7 @@ impl KvRpcServer {
             package_resolver,
             metrics,
             concurrency,
+            list_api,
         };
 
         let server_clone = server.clone();

@@ -86,7 +86,7 @@ impl Default for ConcurrencyConfig {
         Self {
             request_bigtable_concurrency: 10,
             max_bitmap_filter_literals: 10,
-            // Matches the fullnode's `ledger_history_api` default bitmap budget.
+            // Matches the fullnode's `ledger_history` default bitmap budget.
             bitmap_bucket_budget_tx: 1024,
             bitmap_bucket_budget_event: 1024,
         }
@@ -133,6 +133,54 @@ impl ConcurrencyConfig {
             self.max_bitmap_filter_literals,
         );
         Ok(())
+    }
+}
+
+/// Per-endpoint tunables for one v2alpha ledger-history list API.
+#[derive(Clone, Copy, Debug)]
+pub struct LedgerHistoryMethodConfig {
+    /// Per-request wall-clock timeout.
+    pub timeout: Duration,
+    /// Page size used when a request omits `limit_items`.
+    pub default_limit_items: u32,
+    /// Upper bound a request's `limit_items` is clamped to.
+    pub max_limit_items: u32,
+    /// Maximum items materialized per internal scan/pipeline chunk.
+    pub chunk_max: usize,
+}
+
+/// Read-side tunables for the v2alpha list APIs. CLI-driven for now; a config
+/// file may back this later (mirrors the fullnode's `LedgerHistoryConfig`).
+#[derive(Clone, Copy, Debug)]
+pub struct ListApiConfig {
+    pub list_transactions: LedgerHistoryMethodConfig,
+    pub list_events: LedgerHistoryMethodConfig,
+    pub list_checkpoints: LedgerHistoryMethodConfig,
+}
+
+impl Default for ListApiConfig {
+    fn default() -> Self {
+        let timeout = Duration::from_secs(5);
+        Self {
+            list_transactions: LedgerHistoryMethodConfig {
+                timeout,
+                default_limit_items: 50,
+                max_limit_items: 500,
+                chunk_max: 100,
+            },
+            list_events: LedgerHistoryMethodConfig {
+                timeout,
+                default_limit_items: 50,
+                max_limit_items: 1000,
+                chunk_max: 100,
+            },
+            list_checkpoints: LedgerHistoryMethodConfig {
+                timeout,
+                default_limit_items: 10,
+                max_limit_items: 100,
+                chunk_max: 100,
+            },
+        }
     }
 }
 
