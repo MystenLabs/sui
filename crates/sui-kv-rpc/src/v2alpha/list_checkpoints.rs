@@ -35,6 +35,7 @@ use tracing::info;
 
 use crate::bigtable_client::BigTableClient;
 use crate::bigtable_client::stage;
+use crate::config::PipelineStage;
 use crate::object_cache::BigTableObjectFetcher;
 use crate::object_cache::ObjectCache;
 use crate::object_cache::ObjectMap;
@@ -70,9 +71,6 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
 
-const DEFAULT_LIMIT_ITEMS: u32 = 10;
-const MAX_LIMIT_ITEMS: u32 = 100;
-const CHUNK_MAX: usize = 100;
 const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::CHECKPOINT;
 
 type CpWithTxs = (u64, CheckpointData, Vec<TransactionData>);
@@ -89,6 +87,11 @@ pub(crate) async fn list_checkpoints(
     let filtered = request.filter.is_some();
     let client: BigTableClient = ctx.client().clone();
     let checkpoint_hi_exclusive = ctx.checkpoint_hi_exclusive();
+    let lh = ctx.ledger_history();
+    let endpoint = lh.list_checkpoints();
+    let checkpoints_stage = lh.stage(PipelineStage::Checkpoints);
+    let transactions_stage = lh.stage(PipelineStage::Transactions);
+    let objects_stage = lh.stage(PipelineStage::Objects);
 
     let checkpoint_range = CheckpointRange::from_request(
         request.start_checkpoint,
@@ -108,8 +111,8 @@ pub(crate) async fn list_checkpoints(
     };
     let options = QueryOptions::from_proto(
         request.options.as_ref(),
-        DEFAULT_LIMIT_ITEMS,
-        MAX_LIMIT_ITEMS,
+        endpoint.default_limit_items,
+        endpoint.max_limit_items,
         QueryType::Checkpoints,
         request.filter.as_ref(),
     )?;
@@ -156,8 +159,6 @@ pub(crate) async fn list_checkpoints(
     let needs_full = needs_transactions_or_objects(&read_mask);
     let cp_columns: Arc<[&'static str]> = list_checkpoint_columns(&read_mask, needs_full).into();
 
-    let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
-
     // Stage A: discover checkpoint rows for the requested response. Filtered
     // requests use sparse bitmap-eval over transactions and then fetch the
     // deduped checkpoint rows. Unfiltered requests scan the dense checkpoint
@@ -178,11 +179,16 @@ pub(crate) async fn list_checkpoints(
         )
         .await?;
         let seq_stream = take_items(seq_stream, limit_items);
-        pipelined_chunks(seq_stream, CHUNK_MAX, request_bigtable_concurrency, {
-            let client = client.clone();
-            let columns = cp_columns.clone();
-            move |seqs| fetch_checkpoint_data(client.clone(), columns.clone(), seqs)
-        })
+        pipelined_chunks(
+            seq_stream,
+            checkpoints_stage.chunk_size,
+            checkpoints_stage.concurrency,
+            {
+                let client = client.clone();
+                let columns = cp_columns.clone();
+                move |seqs| fetch_checkpoint_data(client.clone(), columns.clone(), seqs)
+            },
+        )
     } else {
         scan_checkpoint_data(
             client.clone(),
@@ -276,17 +282,20 @@ pub(crate) async fn list_checkpoints(
     // across the chunk: gather ALL tx_digests across all cps in the chunk
     // into one multi_get, route results back per-cp, then emit in input
     // cp_seq order after the chunk drains.
-    let cp_with_txs_stream =
-        pipelined_chunks(cp_data_stream, CHUNK_MAX, request_bigtable_concurrency, {
+    let cp_with_txs_stream = pipelined_chunks(
+        cp_data_stream,
+        transactions_stage.chunk_size,
+        transactions_stage.concurrency,
+        {
             let client = client.clone();
             let columns = tx_columns.clone();
             move |items| fetch_transactions_for_cps(client.clone(), columns.clone(), items)
-        });
+        },
+    );
 
     // Stage D: + ObjectMap. Per-cp object refs are precomputed, then
     // `pipelined_keyed_batches` packs consecutive cps into batches whose
-    // deduped key union fits within CHUNK_MAX (see comment on the
-    // constant). The helper splits the per-batch fetch result back out
+    // deduped key union fits within `chunk_max`. The helper splits the per-batch fetch result back out
     // per cp — `render_full_checkpoint` builds an `ObjectSet` by
     // iterating the whole map, so each cp must see only its own keys.
     let object_cache = ObjectCache::new(Arc::new(BigTableObjectFetcher::new(client.clone())));
@@ -307,9 +316,9 @@ pub(crate) async fn list_checkpoints(
                 .boxed();
             pipelined_keyed_batches(
                 cp_with_keys,
-                CHUNK_MAX,
-                CHUNK_MAX,
-                request_bigtable_concurrency,
+                objects_stage.chunk_size,
+                objects_stage.chunk_size,
+                objects_stage.concurrency,
                 {
                     let object_cache = object_cache.clone();
                     move |keys| {
@@ -801,6 +810,10 @@ async fn filtered_checkpoint_seq_stream(
 
     let client = ctx.client();
     let query = ctx.transaction_filter_query(filter)?;
+    let chunk_max = ctx
+        .ledger_history()
+        .stage(PipelineStage::TxSeqDigest)
+        .chunk_size;
 
     let tx_seq_stream = client.eval_bitmap_query_stream(
         query,
@@ -815,7 +828,7 @@ async fn filtered_checkpoint_seq_stream(
 
     let stream = async_stream::try_stream! {
         futures::pin_mut!(tx_seq_stream);
-        let mut tx_seq_chunk: Vec<u64> = Vec::with_capacity(CHUNK_MAX);
+        let mut tx_seq_chunk: Vec<u64> = Vec::with_capacity(chunk_max);
         let mut last_cp_seq: Option<u64> = None;
         let mut emitted = 0usize;
 
@@ -823,7 +836,7 @@ async fn filtered_checkpoint_seq_stream(
             // Read until we have a full chunk of tx_seq Items, OR a Frontier
             // marker arrives (forcing flush), OR the upstream ends.
             let mut pending_watermark: Option<u64> = None;
-            while tx_seq_chunk.len() < CHUNK_MAX && pending_watermark.is_none() {
+            while tx_seq_chunk.len() < chunk_max && pending_watermark.is_none() {
                 match tx_seq_stream.try_next().await? {
                     Some(Watermarked::Item(tx_seq)) => tx_seq_chunk.push(tx_seq),
                     Some(Watermarked::Watermark(p)) => pending_watermark = Some(p),

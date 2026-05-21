@@ -19,7 +19,7 @@ use crate::KvRpcMetrics;
 use crate::KvRpcServer;
 use crate::PackageResolver;
 use crate::bigtable_client::BigTableClient;
-use crate::bigtable_client::ConcurrencyConfig;
+use crate::config::LedgerHistoryConfig;
 use sui_rpc_api::ledger_history::filter::event_filter_to_query;
 use sui_rpc_api::ledger_history::filter::transaction_filter_to_query;
 
@@ -42,7 +42,7 @@ pub(crate) struct QueryContext {
     metrics: std::sync::Arc<KvRpcMetrics>,
     method: &'static str,
     checkpoint_hi_exclusive: u64,
-    limits: ConcurrencyConfig,
+    ledger_history: LedgerHistoryConfig,
 }
 
 impl QueryContext {
@@ -52,7 +52,7 @@ impl QueryContext {
         metrics: std::sync::Arc<KvRpcMetrics>,
         method: &'static str,
         checkpoint_hi_exclusive: u64,
-        limits: ConcurrencyConfig,
+        ledger_history: LedgerHistoryConfig,
     ) -> Self {
         Self {
             client,
@@ -60,8 +60,12 @@ impl QueryContext {
             metrics,
             method,
             checkpoint_hi_exclusive,
-            limits,
+            ledger_history,
         }
+    }
+
+    pub(crate) fn ledger_history(&self) -> &LedgerHistoryConfig {
+        &self.ledger_history
     }
 
     pub(crate) fn client(&self) -> &BigTableClient {
@@ -77,7 +81,7 @@ impl QueryContext {
     }
 
     pub(crate) fn request_bigtable_concurrency(&self) -> usize {
-        self.limits.request_bigtable_concurrency
+        self.ledger_history.request_bigtable_concurrency()
     }
 
     /// Per-request evaluated-bucket budget for `spec`. Handlers pass this
@@ -89,8 +93,8 @@ impl QueryContext {
     /// exhaustion.
     pub(crate) fn scan_budget(&self, spec: BitmapIndexSpec) -> u64 {
         match spec.table_name {
-            transaction_bitmap_index::NAME => self.limits.bitmap_bucket_budget_tx,
-            event_bitmap_index::NAME => self.limits.bitmap_bucket_budget_event,
+            transaction_bitmap_index::NAME => self.ledger_history.bitmap_bucket_budget_tx(),
+            event_bitmap_index::NAME => self.ledger_history.bitmap_bucket_budget_event(),
             other => panic!("unknown bitmap index table {other}; add a budget for it"),
         }
     }
@@ -108,11 +112,11 @@ impl QueryContext {
         &self,
         filter: &TransactionFilter,
     ) -> Result<BitmapQuery, RpcError> {
-        transaction_filter_to_query(filter, self.limits.max_bitmap_filter_literals)
+        transaction_filter_to_query(filter, self.ledger_history.max_bitmap_filter_literals())
     }
 
     pub(crate) fn event_filter_query(&self, filter: &EventFilter) -> Result<BitmapQuery, RpcError> {
-        event_filter_to_query(filter, self.limits.max_bitmap_filter_literals)
+        event_filter_to_query(filter, self.ledger_history.max_bitmap_filter_literals())
     }
 
     /// Callback for `eval_bitmap_query_stream`'s `on_metrics`. Fires exactly
@@ -140,7 +144,7 @@ impl KvRpcServer {
     fn limited_client(&self, operation: &'static str) -> BigTableClient {
         BigTableClient::new(
             self.client.clone(),
-            self.concurrency.request_bigtable_concurrency,
+            self.ledger_history.request_bigtable_concurrency(),
             self.metrics.bigtable_limiter.clone(),
             operation,
         )
@@ -173,7 +177,7 @@ impl KvRpcServer {
             self.metrics.clone(),
             operation,
             self.cached_checkpoint_hi_exclusive().await?,
-            self.concurrency,
+            self.ledger_history.clone(),
         ))
     }
 

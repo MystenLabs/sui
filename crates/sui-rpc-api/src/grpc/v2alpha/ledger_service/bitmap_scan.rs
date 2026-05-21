@@ -20,15 +20,6 @@ use crate::RpcService;
 use super::chunked_scan::cancelled;
 use super::ledger_read::remaining_range_after;
 
-/// Total evaluated-bucket budget for one request. Exhausting it ends the query
-/// with `ScanLimit`.
-pub(super) const BITMAP_BUCKET_SCAN_BUDGET: usize = 1_024;
-/// Per-chunk evaluated-bucket cap. A chunk that hits this (while the request
-/// budget remains) emits a scan watermark and resumes in the next chunk, so a
-/// long sparse scan reports incremental progress instead of one watermark at the
-/// end.
-pub(super) const CHUNK_BUCKET_SCAN_BUDGET: usize = 256;
-const _: () = assert!(CHUNK_BUCKET_SCAN_BUDGET <= BITMAP_BUCKET_SCAN_BUDGET);
 pub(super) const TX_BITMAP_BUCKET_SIZE: u64 = 65_536;
 // Must match the writer's `EVENT_BUCKET_SIZE` in sui-core's rpc_index and
 // sui-kvstore's `event_bitmap_index::BUCKET_SIZE` (2^28).

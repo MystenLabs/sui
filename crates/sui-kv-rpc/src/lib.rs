@@ -35,6 +35,7 @@ use tonic::transport::ServerTlsConfig;
 use tracing::error;
 
 mod bigtable_client;
+mod config;
 mod object_cache;
 mod operation;
 mod package_store;
@@ -44,8 +45,15 @@ mod v2alpha;
 
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_server::LedgerServiceServer as KvLedgerServiceServer;
 
-pub use bigtable_client::ConcurrencyConfig;
 use bigtable_client::Metrics as BigTableLimiterMetrics;
+pub use config::KvRpcConfig;
+pub use config::LedgerHistoryConfig;
+pub use config::LedgerHistoryMethodConfig;
+pub use config::PipelineStage;
+pub use config::ResolvedLedgerHistoryMethodConfig;
+pub use config::ResolvedStageConfig;
+pub use config::StageConfig;
+pub use config::StagesConfig;
 use package_store::BigTablePackageStore;
 
 pub const DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 6] = [
@@ -131,7 +139,7 @@ pub struct KvRpcServer {
     cache: Arc<RwLock<Option<GetServiceInfoResponse>>>,
     package_resolver: PackageResolver,
     metrics: Arc<KvRpcMetrics>,
-    pub(crate) concurrency: ConcurrencyConfig,
+    pub(crate) ledger_history: LedgerHistoryConfig,
 }
 
 /// Optional configuration for the gRPC server (TLS, metrics, reflection).
@@ -155,9 +163,9 @@ impl KvRpcServer {
         credentials_path: Option<String>,
         pool_config: PoolConfig,
         service_info_watermark_pipelines: Vec<&'static str>,
-        concurrency: ConcurrencyConfig,
+        ledger_history: LedgerHistoryConfig,
     ) -> anyhow::Result<Self> {
-        concurrency.validate()?;
+        ledger_history.validate()?;
         let mut client = BigTableClient::new_remote_with_credentials(
             instance_id,
             project_id,
@@ -186,7 +194,7 @@ impl KvRpcServer {
             checkpoint_bucket,
             service_info_watermark_pipelines,
             metrics,
-            concurrency,
+            ledger_history,
         )
     }
 
@@ -208,7 +216,7 @@ impl KvRpcServer {
             checkpoint_bucket,
             default_service_info_watermark_pipelines(false),
             metrics,
-            ConcurrencyConfig::default(),
+            LedgerHistoryConfig::default(),
         )
     }
 
@@ -219,13 +227,13 @@ impl KvRpcServer {
         checkpoint_bucket: Option<String>,
         service_info_watermark_pipelines: Vec<&'static str>,
         metrics: Arc<KvRpcMetrics>,
-        concurrency: ConcurrencyConfig,
+        ledger_history: LedgerHistoryConfig,
     ) -> anyhow::Result<Self> {
         ensure!(
             !service_info_watermark_pipelines.is_empty(),
             "at least one service info watermark pipeline must be configured"
         );
-        concurrency.validate()?;
+        ledger_history.validate()?;
 
         let cache = Arc::new(RwLock::new(None));
 
@@ -243,7 +251,7 @@ impl KvRpcServer {
             cache,
             package_resolver,
             metrics,
-            concurrency,
+            ledger_history,
         };
 
         let server_clone = server.clone();
