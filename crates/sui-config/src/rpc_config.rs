@@ -66,9 +66,11 @@ pub struct RpcConfig {
 
     /// Enable historical checkpoint/transaction indexes for RPC queries.
     ///
-    /// This flag is folded into the `rpc-index` DB version, so flipping it in
-    /// either direction triggers a full rebuild. While it stays put, forward
-    /// indexing and pruning maintain these indexes normally.
+    /// This flag is persisted in the `rpc-index` DB's own `settings` column
+    /// family. Enabling it triggers a full rebuild to backfill the historical
+    /// rows; disabling it drops the now-unused history column families in place
+    /// (no rebuild). While it stays put, forward indexing and pruning maintain
+    /// these indexes normally.
     ///
     /// Defaults to `false`.
     #[serde(skip_serializing_if = "Option::is_none")]
