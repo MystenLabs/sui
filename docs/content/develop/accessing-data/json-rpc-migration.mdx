@@ -16,9 +16,7 @@ Use **gRPC** for:
 
 - Backend services, indexers, and exchange pipelines.
 
-- Transaction execution and signed transaction submission, through `TransactionExecutionService`.
-
-- Streaming finalized checkpoints with `SubscriptionService.SubscribeCheckpoints`, which replaces JSON-RPC WebSocket subscriptions.
+- Streaming finalized checkpoints with `SubscriptionService.SubscribeCheckpoints`. Combined with client-side event filtering, this can serve as a replacement for JSON-RPC WebSocket subscriptions.
 
 - Low-latency point lookups against the current state and recent history of a full node, through `LedgerService` and `StateService`.
 
