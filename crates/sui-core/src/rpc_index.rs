@@ -152,10 +152,32 @@ struct MetadataInfo {
 /// Per-DB rpc-index settings, persisted in their own column family so the
 /// schema `version` stays a clean monotonic number rather than carrying packed
 /// feature bits.
+///
+/// Stored as JSON inside an opaque `Vec<u8>` value (see [`encode_settings`])
+/// rather than as a bcs-encoded struct, so the settings can evolve without a
+/// schema break: every field carries `#[serde(default)]`, so a newer binary
+/// reading an older DB fills missing fields with defaults, and an older binary
+/// reading a newer DB ignores fields it doesn't know — safe in both upgrade
+/// directions. Add new flags here with `#[serde(default)]` and that property
+/// holds.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
 struct IndexSettings {
     /// Whether this DB was built with ledger-history indexing enabled.
+    #[serde(default)]
     ledger_history_indexing: bool,
+}
+
+/// Serialize settings to the JSON bytes stored in the `settings` CF. JSON of a
+/// plain flag struct cannot fail, so this does not return a `Result`.
+fn encode_settings(settings: &IndexSettings) -> Vec<u8> {
+    serde_json::to_vec(settings).expect("IndexSettings is always JSON-serializable")
+}
+
+/// Decode `settings`-CF JSON bytes, defaulting on absent/corrupt data. With
+/// `#[serde(default)]` on every field, schema evolution never reaches the
+/// default-on-error path; only genuine corruption does.
+fn decode_settings(bytes: &[u8]) -> IndexSettings {
+    serde_json::from_slice(bytes).unwrap_or_default()
 }
 
 /// Checkpoint watermark type
@@ -645,10 +667,11 @@ struct IndexStoreTables {
 
     /// A singleton recording which optional features this DB was built with
     /// (currently just ledger-history indexing). Kept separate from `meta` so
-    /// the schema `version` need not encode feature flags. Auto-created on
-    /// older DBs; a missing entry reads as `IndexSettings::default()` (all
-    /// features off).
-    settings: DBMap<(), IndexSettings>,
+    /// the schema `version` need not encode feature flags. The value is
+    /// `IndexSettings` as JSON bytes (see `IndexSettings`); auto-created on older
+    /// DBs, and a missing entry reads as `IndexSettings::default()` (all features
+    /// off).
+    settings: DBMap<(), Vec<u8>>,
 
     /// Table used to track watermark for the highest indexed checkpoint
     ///
@@ -873,12 +896,18 @@ impl IndexStoreTables {
     /// as persisted in the `settings` CF. A missing entry (fresh or pre-feature
     /// DB) reads as `false`.
     fn persisted_ledger_history_indexing(&self) -> bool {
+        self.read_settings().ledger_history_indexing
+    }
+
+    /// Read the persisted settings, defaulting when the row is absent or
+    /// unreadable.
+    fn read_settings(&self) -> IndexSettings {
         self.settings
             .get(&())
             .ok()
             .flatten()
-            .map(|s| s.ledger_history_indexing)
-            .unwrap_or(false)
+            .map(|bytes| decode_settings(&bytes))
+            .unwrap_or_default()
     }
 
     fn needs_to_do_initialization(
@@ -910,9 +939,9 @@ impl IndexStoreTables {
         clear_table(&self.event_bitmap)?;
         self.settings.insert(
             &(),
-            &IndexSettings {
+            &encode_settings(&IndexSettings {
                 ledger_history_indexing: false,
-            },
+            }),
         )?;
         Ok(())
     }
@@ -1021,9 +1050,9 @@ impl IndexStoreTables {
             &self.settings,
             [(
                 (),
-                IndexSettings {
+                encode_settings(&IndexSettings {
                     ledger_history_indexing: rpc_config.ledger_history_indexing(),
-                },
+                }),
             )],
         )?;
         batch.write()?;
@@ -3376,9 +3405,9 @@ mod tests {
             .settings
             .insert(
                 &(),
-                &IndexSettings {
+                &encode_settings(&IndexSettings {
                     ledger_history_indexing: false,
-                },
+                }),
             )
             .unwrap();
         assert!(!tables.persisted_ledger_history_indexing());
@@ -3397,9 +3426,9 @@ mod tests {
             .settings
             .insert(
                 &(),
-                &IndexSettings {
+                &encode_settings(&IndexSettings {
                     ledger_history_indexing: true,
-                },
+                }),
             )
             .unwrap();
         assert!(tables.persisted_ledger_history_indexing());
@@ -3425,9 +3454,9 @@ mod tests {
             .settings
             .insert(
                 &(),
-                &IndexSettings {
+                &encode_settings(&IndexSettings {
                     ledger_history_indexing: true,
-                },
+                }),
             )
             .unwrap();
         for tx_seq in 0..5u64 {
@@ -3872,9 +3901,9 @@ mod tests {
                 .settings
                 .insert(
                     &(),
-                    &IndexSettings {
+                    &encode_settings(&IndexSettings {
                         ledger_history_indexing: true,
-                    },
+                    }),
                 )
                 .unwrap();
             let mut batch = tables.tx_seq_digest.batch();
