@@ -678,6 +678,8 @@ pub struct LedgerTxSeqDigest {
     pub tx_sequence_number: u64,
     pub digest: TransactionDigest,
     pub event_count: u32,
+    /// Zero-based position of this transaction within its checkpoint.
+    pub tx_offset: u32,
     pub checkpoint_number: CheckpointSequenceNumber,
 }
 

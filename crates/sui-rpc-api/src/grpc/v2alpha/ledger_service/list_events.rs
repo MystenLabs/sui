@@ -629,6 +629,7 @@ fn render_event_chunk(
         item.checkpoint = Some(row.checkpoint_number);
         item.event_index = Some(event_ref.event_idx);
         item.transaction_digest = Some(row.digest.to_string());
+        item.transaction_offset = Some(row.tx_offset as u64);
         item.event = Some(proto_event);
 
         let mut response = ListEventsResponse::default();
