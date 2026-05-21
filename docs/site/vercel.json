@@ -16,6 +16,11 @@
       "permanent": true
     },
     {
+      "source": "/standards/deepbookv3",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
       "source": "/standards/deepbookv3/:path*",
       "destination": "/onchain-finance/deepbookv3/:path*",
       "permanent": true
