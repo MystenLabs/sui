@@ -35,6 +35,10 @@ Gasless stablecoin transfers are narrow by design. A transaction qualifies only 
 
 If the user is sending SUI, sending a non-allowlisted token, or executing any other Move call (NFT mint, swap, app interaction), the gasless stablecoin transfer does not apply and the transaction requires a normal gas payment.
 
+## Monitoring gasless stablecoin transfers
+
+Transactions for gasless stablecoin transfers can be monitored through SuiVision, [such as this example transaction](https://testnet.suivision.xyz/txblock/BptFuauZXfwQZAGX1wbQ6iz4sDnv5kJBBeVEn1ZzewPy). 
+
 ## Supporting gasless stablecoin transfers 
 
 Sui gasless stablecoin transfers are an extension of the [Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances) feature, enabled by calling the Address Balances Move API `send_funds()` with `gas=0` and `gas_budget=0`.
