@@ -5,7 +5,9 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Context;
 use std::task::Poll;
 
 use futures::StreamExt;
@@ -13,6 +15,11 @@ use futures::TryStreamExt;
 use futures::stream;
 use futures::stream::BoxStream;
 use sui_rpc_api::RpcError;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
+use tokio::sync::mpsc;
+use tokio::task::JoinError;
+use tokio::task::JoinHandle;
 
 // Re-export so handler-layer code can spell the marker type without
 // directly importing from sui-inverted-index. The pipeline shape lives
@@ -20,23 +27,92 @@ use sui_rpc_api::RpcError;
 // type the bitmap eval already produces.
 pub(crate) use sui_inverted_index::Watermarked;
 
+/// Wraps a spawned task's `JoinHandle` so dropping the wrapper aborts the
+/// task — releasing any BigTable permit or drainer slot the task holds —
+/// while still allowing the handle to be awaited to surface a panic. Mirrors
+/// the pattern in `sui-kvstore`'s bigtable client (`AbortOnDrop`).
+struct AbortOnDrop<T> {
+    handle: JoinHandle<T>,
+}
+
+impl<T> AbortOnDrop<T> {
+    fn new(handle: JoinHandle<T>) -> Self {
+        Self { handle }
+    }
+}
+
+impl<T> Future for AbortOnDrop<T> {
+    type Output = Result<T, JoinError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        Pin::new(&mut self.get_mut().handle).poll(cx)
+    }
+}
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
+}
+
+impl<T> Unpin for AbortOnDrop<T> {}
+
+/// One ordered frame handed from the [`pipelined_chunks`] dispatcher task to
+/// its consumer. `Items` carries a live row receiver (filled by a spawned
+/// drainer that owns the permit-holding BigTable stream), the drainer's
+/// abort/join handle, and the drainer slot held until the frame is fully
+/// consumed. Watermarks and terminal errors are zero-cost passthroughs.
+enum FrameHandle<O, E> {
+    Items {
+        rx: mpsc::UnboundedReceiver<Result<O, E>>,
+        drain: AbortOnDrop<()>,
+        _slot: OwnedSemaphorePermit,
+    },
+    Watermark(u64),
+    Err(E),
+}
+
+/// Resolve a drainer/dispatcher `JoinHandle` awaited at an EOF boundary. A
+/// panic is re-raised — the `with_deadline` wrapper above these handlers
+/// turns it into an `Internal` status. A cancellation here is anomalous: on
+/// these paths we hold the task's handle and never abort it ourselves, so a
+/// cancel (e.g. runtime shutdown) would otherwise silently truncate the
+/// stream — surface it loudly rather than treating it as clean EOF.
+fn surface_panic(res: Result<(), JoinError>) {
+    match res {
+        Ok(()) => {}
+        Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+        Err(_) => {
+            tracing::error!("pipelined_chunks task cancelled unexpectedly");
+            debug_assert!(false, "pipelined_chunks task cancelled unexpectedly");
+            panic!("pipelined_chunks task cancelled unexpectedly");
+        }
+    }
+}
+
 /// Chunk an upstream stream of `Watermarked<I>` and run an async fn over each
-/// chunk of Items, preserving upstream order in the output. Up to
-/// `max_concurrent_chunks` chunk futures run at a time.
+/// chunk of Items, preserving upstream order. Watermarks keep their position
+/// relative to Items: frames are consumed strictly in input order and a
+/// watermark frame is yielded only after the preceding chunk's rows have all
+/// been drained, so "every Item before me has been emitted" holds.
 ///
-/// `Watermarked::Watermark`s travel through with their original ordering
-/// relative to Items: a marker that arrived between Items A and B in the
-/// upstream will arrive between A's transformed output and B's transformed
-/// output downstream. The watermark's invariant — "every Item before me has
-/// been emitted" — is preserved across the chunk boundary because chunks
-/// complete in input order and watermarks are queued behind their preceding
-/// chunk.
+/// Each chunk is drained in a **spawned task** that owns the stream returned by
+/// the closure and pushes rows to the next stage via a non-blocking send. This
+/// lets rows flow as they are drained while ensuring the drainer never blocks on
+/// the consumer. If the returned stream holds a scarce resource (for example, a
+/// request-scoped BigTable permit), that resource is held only while the stream
+/// itself is being drained, never across downstream backpressure. The dispatcher
+/// is spawned eagerly (work may start before the first poll); dropping the
+/// returned stream aborts it and all live drainers, releasing their
+/// permits/slots.
 ///
-/// The closure returns a permit-holding BigTable stream. This helper drains
-/// it to a local `Vec` inside the chunk future, so the permit is released
-/// before any rows are emitted to the next stage. That avoids stacked
-/// `.buffered()` deadlocks where downstream futures are waiting on the same
-/// semaphore needed to drain upstream streams.
+/// The per-frame **row** channel is unbounded so those sends never block; it is
+/// unbounded in type only — the drainer sends one message per row in its chunk
+/// (≤ chunk_size under the ~1:1 call-site contract) plus an optional terminal
+/// error, so memory is O(chunk_size) per in-flight frame. The **handle** channel
+/// is bounded by `max_concurrent_chunks`, and a per-stage drainer slot caps
+/// in-flight *item* frames at `max_concurrent_chunks` (held until each frame is
+/// consumed).
 pub(crate) fn pipelined_chunks<I, O, E, F, Fut>(
     upstream: BoxStream<'static, Result<Watermarked<I>, E>>,
     chunk_size: usize,
@@ -50,47 +126,141 @@ where
     O: Send + 'static,
     E: Send + 'static,
 {
-    // Local-scope output enum — the `Items(rows)` carrier between the
-    // `.buffered()` boundary and the downstream `.flat_map` is private
-    // to this function; ChunkInput is shared with pipelined_keyed_batches,
-    // hence module-level.
-    enum ChunkOutput<O> {
-        Items(Vec<O>),
-        Watermark(u64),
-    }
+    assert!(
+        max_concurrent_chunks > 0,
+        "pipelined_chunks: max_concurrent_chunks must be > 0"
+    );
+    assert!(chunk_size > 0, "pipelined_chunks: chunk_size must be > 0");
 
     let f = Arc::new(f);
-    let inputs = chunks_with_watermarks(upstream, chunk_size);
-    inputs
-        .map(move |input| {
-            let f = f.clone();
-            async move {
-                match input? {
-                    ChunkInput::Items(items) => {
-                        let rows = f(items).await?.try_collect::<Vec<_>>().await?;
-                        Ok::<ChunkOutput<O>, E>(ChunkOutput::Items(rows))
+    // Per-stage cap on in-flight *item* frames (queued + being consumed),
+    // distinct from the shared BigTable request semaphore: it only bounds how
+    // far the dispatcher runs ahead, so a slow consumer can't pile up
+    // unbounded drained-but-unconsumed chunks. Held in each item frame until
+    // the consumer finishes it.
+    let drainer_slots = Arc::new(Semaphore::new(max_concurrent_chunks));
+    // Bounded so a sparse stream of watermark/error frames (which take no
+    // drainer slot) can't enqueue unboundedly at a stalled consumer.
+    let (frame_tx, frame_rx) = mpsc::channel::<FrameHandle<O, E>>(max_concurrent_chunks);
+
+    // Dispatcher: pull ordered frames, spawn a permit-owning drainer per item
+    // frame, hand ordered frame handles to the consumer. Spawned (not lazy) so
+    // drainers make progress — and release their BigTable permits at RPC
+    // completion — independently of whether the consumer is currently polling.
+    let dispatcher = tokio::spawn({
+        let f = f.clone();
+        let drainer_slots = drainer_slots.clone();
+        async move {
+            let mut chunker = chunks_with_watermarks(upstream, chunk_size);
+            while let Some(input) = chunker.next().await {
+                let frame = match input {
+                    Ok(ChunkInput::Items(items)) => {
+                        // Acquire a slot before opening so the dispatcher never
+                        // holds a BigTable permit while waiting on the
+                        // in-flight bound.
+                        let Ok(slot) = drainer_slots.clone().acquire_owned().await else {
+                            return;
+                        };
+                        // Invoke `f` synchronously in chunker order so the
+                        // closure's synchronous side effects stay ordered; only
+                        // the returned future's `.await` + drain run in the
+                        // spawned task.
+                        let fut = f(items);
+                        // Unbounded so the drainer's sends are non-blocking: the
+                        // drainer holds the BigTable permit while draining and
+                        // must NEVER block on the consumer — a bounded channel
+                        // would let a stalled consumer wedge the drainer and hold
+                        // the permit across downstream backpressure, the exact
+                        // deadlock class this design removes. Unbounded in type
+                        // only: the drainer sends one message per row in its
+                        // chunk (≤ chunk_size under the ~1:1 call-site contract)
+                        // plus an optional terminal error, so memory is
+                        // O(chunk_size) per in-flight frame.
+                        #[allow(clippy::disallowed_methods)]
+                        // non-blocking; bounded in practice by chunk_size
+                        let (row_tx, row_rx) = mpsc::unbounded_channel();
+                        let drain = tokio::spawn(async move {
+                            match fut.await {
+                                Ok(stream) => {
+                                    let mut stream = stream;
+                                    while let Some(row) = stream.next().await {
+                                        // The inner stream's item is exactly the
+                                        // channel's item (`Result<O, E>`), so
+                                        // forward it directly. An Err is terminal
+                                        // (prefix-then-error): send it, then stop.
+                                        let terminal = row.is_err();
+                                        if row_tx.send(row).is_err() {
+                                            // Consumer gone.
+                                            return;
+                                        }
+                                        if terminal {
+                                            return;
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    // Open failed: forward the single error.
+                                    let _ = row_tx.send(Err(e));
+                                }
+                            }
+                        });
+                        FrameHandle::Items {
+                            rx: row_rx,
+                            drain: AbortOnDrop::new(drain),
+                            _slot: slot,
+                        }
                     }
-                    ChunkInput::Watermark(pos) => Ok(ChunkOutput::Watermark(pos)),
+                    Ok(ChunkInput::Watermark(pos)) => FrameHandle::Watermark(pos),
+                    Err(e) => {
+                        // Terminal error: send in order, then stop.
+                        let _ = frame_tx.send(FrameHandle::Err(e)).await;
+                        return;
+                    }
+                };
+                // On send failure the consumer is gone: returning drops `frame`
+                // (and any item frame's drainer handle + slot inside it),
+                // aborting the drainer and releasing the slot.
+                if frame_tx.send(frame).await.is_err() {
+                    return;
                 }
             }
-        })
-        .buffered(max_concurrent_chunks)
-        .flat_map(|result| match result {
-            Ok(ChunkOutput::Items(rows)) => {
-                stream::iter(rows.into_iter().map(|r| Ok(Watermarked::Item(r)))).boxed()
+        }
+    });
+
+    // Built BEFORE the generator and moved in, so dropping the returned stream
+    // (even unpolled) drops the guard and tears the dispatcher down.
+    let dispatcher_guard = AbortOnDrop::new(dispatcher);
+
+    async_stream::try_stream! {
+        let dispatcher_guard = dispatcher_guard;
+        let mut frame_rx = frame_rx;
+        while let Some(frame) = frame_rx.recv().await {
+            match frame {
+                FrameHandle::Items { mut rx, drain, _slot } => {
+                    while let Some(row) = rx.recv().await {
+                        yield Watermarked::Item(row?);
+                    }
+                    // Row channel closed: the drainer finished (or panicked).
+                    // Await it so a hidden panic surfaces instead of a silently
+                    // truncated chunk. `_slot` releases when this arm's
+                    // bindings drop.
+                    surface_panic(drain.await);
+                }
+                FrameHandle::Watermark(pos) => yield Watermarked::Watermark(pos),
+                FrameHandle::Err(e) => Err(e)?,
             }
-            Ok(ChunkOutput::Watermark(pos)) => {
-                stream::once(async move { Ok(Watermarked::Watermark(pos)) }).boxed()
-            }
-            Err(err) => stream::once(async { Err(err) }).boxed(),
-        })
-        .boxed()
+        }
+        // Frame channel closed: the dispatcher finished. Surface a dispatcher
+        // panic the same way.
+        surface_panic(dispatcher_guard.await);
+    }
+    .boxed()
 }
 
 /// One unit of work for `pipelined_chunks`. Items are batched up to the
 /// caller-specified chunk size; watermarks are zero-cost passthroughs that
-/// occupy a slot in the input-order sequence so `buffered()` re-emits them
-/// in place.
+/// occupy a slot in the input-order sequence so the dispatcher forwards them
+/// in place between item frames.
 enum ChunkInput<I> {
     Items(Vec<I>),
     Watermark(u64),
@@ -118,9 +288,10 @@ enum ChunkInput<I> {
 /// dominates have already been emitted to the chunker's output. Items
 /// dominated by held_wm are either in earlier emitted chunks (already
 /// downstream) or in the current `sub` (flushed as a chunk just before the
-/// WM in the same Pending-path or next-Item-path). Downstream
-/// `.buffered(...)` preserves input order, so those chunks' multigets
-/// complete and their items reach the wire before the WM resolves.
+/// WM in the same Pending-path or next-Item-path). The dispatcher forwards
+/// frames in input order over a FIFO handle channel and the consumer drains
+/// each item frame's rows before the next frame, so those chunks' rows reach
+/// the wire before the WM resolves.
 ///
 /// Waker plumbing: the inner ready-drain loop uses `futures::poll!`,
 /// which does not install a waker on `Pending`. We rely on the outer
@@ -205,9 +376,9 @@ where
             // scans (long gaps between items) still surface fresh
             // progress to the wire before the request deadline. The
             // ordering invariant survives because the sub chunk is
-            // queued through `.buffered(...)` strictly before the WM
-            // future: any items the WM dominates are either already on
-            // the wire (earlier chunks) or in this just-flushed sub.
+            // forwarded as a frame strictly before the WM frame: any items
+            // the WM dominates are either already on the wire (earlier
+            // chunks) or in this just-flushed sub.
             if !sub.is_empty() {
                 yield ChunkInput::Items(std::mem::replace(&mut sub, Vec::with_capacity(chunk_size)));
             }
@@ -908,6 +1079,7 @@ where
 mod tests {
     use std::sync::Arc;
     use std::sync::Mutex;
+    use std::sync::atomic::AtomicBool;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
     use std::time::Duration;
@@ -1001,9 +1173,11 @@ mod tests {
         let seen_for_closure = seen.clone();
 
         let stream = pipelined_chunks(upstream, 4, 2, move |chunk: Vec<u64>| {
-            let seen = seen_for_closure.clone();
+            // Record in the SYNCHRONOUS part of the closure: the dispatcher
+            // invokes `f(chunk)` in chunker order, so this captures invocation
+            // order even though the per-chunk drains run concurrently after.
+            seen_for_closure.lock().unwrap().push(chunk.clone());
             async move {
-                seen.lock().unwrap().push(chunk.clone());
                 Ok::<_, RpcError>(stream::iter(chunk.into_iter().map(Ok::<_, RpcError>)).boxed())
             }
         });
@@ -1077,22 +1251,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn does_not_emit_rows_until_chunk_stream_drains() {
+    async fn emits_rows_as_chunk_stream_drains() {
+        // The drainer streams rows to the consumer as they arrive: row 0 must
+        // be observable while the closure's inner stream is still blocked
+        // before row 1 — i.e. WITHOUT the chunk being fully drained first. This
+        // is the whole point of the streaming-drainer design (no per-chunk
+        // drain barrier).
         let upstream = ok_items(0..2u64);
-        let (first_drained_tx, first_drained_rx) = oneshot::channel();
         let (release_second_tx, release_second_rx) = oneshot::channel();
-        let first_drained_tx = Arc::new(Mutex::new(Some(first_drained_tx)));
         let release_second_rx = Arc::new(Mutex::new(Some(release_second_rx)));
 
+        // chunk_size=2 groups [0, 1] into one chunk; the inner stream yields
+        // row 0, then blocks before row 1.
         let stream = pipelined_chunks(upstream, 2, 1, move |chunk: Vec<u64>| {
-            let first_drained_tx = first_drained_tx.clone();
             let release_second_rx = release_second_rx.clone();
             async move {
                 let inner = async_stream::try_stream! {
                     yield chunk[0];
-                    if let Some(tx) = first_drained_tx.lock().unwrap().take() {
-                        let _ = tx.send(());
-                    }
                     let release_second_rx = release_second_rx
                         .lock()
                         .unwrap()
@@ -1107,16 +1282,17 @@ mod tests {
 
         let stream = items_only(stream);
         futures::pin_mut!(stream);
-        let next = stream.try_next();
-        tokio::pin!(next);
-        tokio::select! {
-            item = &mut next => panic!("row emitted before chunk drained: {item:?}"),
-            res = first_drained_rx => res.expect("first row drained inside helper"),
-        }
 
-        release_second_tx.send(()).expect("release receiver alive");
-        let first = next.await.expect("ok").expect("some");
+        // Row 0 reaches the consumer before we release row 1.
+        let first = timeout(Duration::from_secs(1), stream.try_next())
+            .await
+            .expect("row 0 should be emitted before the chunk fully drains")
+            .expect("ok")
+            .expect("some");
         assert_eq!(first, 0);
+
+        // Release row 1; the rest streams through in order.
+        release_second_tx.send(()).expect("release receiver alive");
         let second = stream.try_next().await.expect("ok").expect("some");
         assert_eq!(second, 1);
         assert!(stream.try_next().await.expect("ok").is_none());
@@ -1124,6 +1300,8 @@ mod tests {
 
     #[tokio::test]
     async fn propagates_inner_stream_error() {
+        // Prefix-then-error: the row drained before the inner error must reach
+        // the consumer, followed by the error (not all-or-nothing).
         let upstream = ok_items(0..3u64);
         let stream = pipelined_chunks(upstream, 3, 1, |chunk: Vec<u64>| async move {
             let inner = async_stream::try_stream! {
@@ -1133,8 +1311,19 @@ mod tests {
             };
             Ok::<_, RpcError>(inner.boxed())
         });
-        let result: Result<Vec<u64>, RpcError> = items_only(stream).try_collect().await;
-        assert!(result.is_err());
+        let stream = items_only(stream);
+        futures::pin_mut!(stream);
+        assert_eq!(
+            stream.try_next().await.expect("prefix row emitted"),
+            Some(0),
+            "the prefix row before the inner error must reach the consumer"
+        );
+        let err = stream
+            .try_next()
+            .await
+            .expect_err("inner error after prefix");
+        let status: tonic::Status = err.into();
+        assert_eq!(status.message(), "inner stream boom");
     }
 
     #[tokio::test]
@@ -1195,6 +1384,203 @@ mod tests {
         handle.abort();
         let _ = handle.await;
         wait_for_available_permits(&limiter, 1).await;
+    }
+
+    #[tokio::test]
+    async fn drainer_does_not_block_on_stalled_consumer() {
+        // The drainer holds the BigTable permit while draining and MUST NOT
+        // block on the consumer: a bounded row channel would let a stalled
+        // consumer wedge the drainer and hold the permit across downstream
+        // backpressure (the deadlock class this design removes). With the
+        // consumer fully stalled, a chunk of several rows must still drain to
+        // completion. Guards the unbounded/non-blocking row channel choice — a
+        // bounded blocking channel would leave `drained` false.
+        struct SetOnDrop(Arc<AtomicBool>);
+        impl Drop for SetOnDrop {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+
+        let drained = Arc::new(AtomicBool::new(false));
+        let upstream = ok_items(0..5u64); // chunk_size = 5 → one chunk of 5 rows
+        let stream = pipelined_chunks(upstream, 5, 1, {
+            let drained = drained.clone();
+            move |chunk: Vec<u64>| {
+                let drained = drained.clone();
+                async move {
+                    let inner = async_stream::try_stream! {
+                        // Dropped only once the drainer finishes draining every
+                        // row — which can't happen if a send blocked.
+                        let _done = SetOnDrop(drained.clone());
+                        for x in chunk {
+                            yield x;
+                        }
+                    };
+                    Ok::<_, RpcError>(inner.boxed())
+                }
+            }
+        });
+
+        // Hold the stream WITHOUT consuming; eager dispatch runs the drainer.
+        let _stream = stream;
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(
+            drained.load(Ordering::SeqCst),
+            "drainer failed to complete with a stalled consumer (blocked on send?)"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancellation_releases_permit_of_queued_frame() {
+        // With N>1 and a consumer that never pulls, the eager dispatcher spawns
+        // drainers for queued frames ahead of consumption — each acquires a
+        // BigTable permit. Dropping the output must abort those queued drainers
+        // (via their FrameHandle's AbortOnDrop) and release their permits.
+        let upstream = ok_items(0..4u64);
+        let limiter = Arc::new(Semaphore::new(4));
+
+        let stream = pipelined_chunks(upstream, 1, 4, {
+            let limiter = limiter.clone();
+            move |chunk: Vec<u64>| {
+                let limiter = limiter.clone();
+                async move {
+                    let inner = async_stream::try_stream! {
+                        let permit = limiter.clone().acquire_owned().await.map_err(|_| {
+                            RpcError::new(tonic::Code::Internal, "test limiter closed")
+                        })?;
+                        let _permit = permit;
+                        yield chunk[0];
+                        // Hold the permit open after emitting so the frame stays
+                        // queued (unconsumed) with a live permit.
+                        std::future::pending::<()>().await;
+                    };
+                    Ok::<_, RpcError>(inner.boxed())
+                }
+            }
+        });
+
+        // Eager dispatch: drainers run and acquire all 4 permits without the
+        // consumer polling.
+        wait_for_available_permits(&limiter, 0).await;
+        drop(stream);
+        wait_for_available_permits(&limiter, 4).await;
+    }
+
+    #[tokio::test]
+    async fn bounded_in_flight_with_stalled_consumer() {
+        // Eager dispatch must not run unboundedly ahead of a stalled consumer:
+        // at most max_concurrent_chunks item-frame drainers active at once
+        // (the drainer-slot semaphore, held until each frame is consumed).
+        let upstream = ok_items(0..50u64);
+        let active = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+
+        let stream = pipelined_chunks(upstream, 1, 3, {
+            let active = active.clone();
+            let peak = peak.clone();
+            move |chunk: Vec<u64>| {
+                let guard = ActiveGuard::new(active.clone(), peak.clone());
+                async move {
+                    let inner = async_stream::try_stream! {
+                        let _guard = guard;
+                        yield chunk[0];
+                        // Stay alive (slot held) so the consumer stall is what
+                        // bounds concurrency.
+                        std::future::pending::<()>().await;
+                    };
+                    Ok::<_, RpcError>(inner.boxed())
+                }
+            }
+        });
+
+        // Hold the stream (dispatcher eager) WITHOUT consuming.
+        let _stream = stream;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            peak.load(Ordering::SeqCst) <= 3,
+            "ran unboundedly ahead of a stalled consumer: peak {}",
+            peak.load(Ordering::SeqCst)
+        );
+        assert!(
+            peak.load(Ordering::SeqCst) >= 1,
+            "dispatcher should have started at least one drainer"
+        );
+    }
+
+    #[tokio::test]
+    async fn drainer_panic_surfaces_rather_than_truncating() {
+        use futures::FutureExt;
+        // A drainer task that panics mid-stream must surface to the consumer
+        // (via the joined handle), not silently truncate the chunk. The
+        // `black_box` keeps the panic out of the compiler's reachability
+        // analysis so the trailing `yield` stays statically reachable.
+        let upstream = ok_items(0..1u64);
+        let stream = pipelined_chunks(upstream, 1, 1, |_chunk: Vec<u64>| async move {
+            let inner = async_stream::try_stream! {
+                yield 0u64;
+                if std::hint::black_box(true) {
+                    panic!("drainer boom");
+                }
+                yield 1u64;
+            };
+            Ok::<_, RpcError>(inner.boxed())
+        });
+
+        let outcome = std::panic::AssertUnwindSafe(items_only(stream).try_collect::<Vec<u64>>())
+            .catch_unwind()
+            .await;
+        assert!(
+            outcome.is_err(),
+            "drainer panic must surface, not silently truncate the stream"
+        );
+    }
+
+    #[tokio::test]
+    async fn sparse_watermarks_apply_backpressure() {
+        // A sparse stream of watermarks (no items, so no drainer slots) must
+        // still be bounded by the handle channel: with a stalled consumer the
+        // dispatcher pulls at most ~max_concurrent_chunks watermarks ahead, not
+        // the whole stream. Each watermark is separated by a real Pending (the
+        // sleep) so the chunker flushes them as individual frames rather than
+        // debouncing them all into one.
+        let pulled = Arc::new(AtomicUsize::new(0));
+        let total = 50u64;
+        let n = 3usize;
+        let upstream = {
+            let pulled = pulled.clone();
+            stream::unfold(0u64, move |i| {
+                let pulled = pulled.clone();
+                async move {
+                    if i >= total {
+                        return None;
+                    }
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                    pulled.fetch_add(1, Ordering::SeqCst);
+                    Some((Ok::<_, RpcError>(Watermarked::Watermark(i)), i + 1))
+                }
+            })
+            .boxed()
+        };
+
+        // Closure never runs (no item frames); identity passthrough.
+        let stream = pipelined_chunks(upstream, 10, n, |chunk: Vec<u64>| async move {
+            Ok::<_, RpcError>(stream::iter(chunk.into_iter().map(Ok::<_, RpcError>)).boxed())
+        });
+
+        // Hold the stream without consuming; the dispatcher must stall on the
+        // bounded handle channel instead of draining all 50 watermarks.
+        let _stream = stream;
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let pulled_now = pulled.load(Ordering::SeqCst);
+        assert!(
+            pulled_now <= n + 3,
+            "dispatcher ran unboundedly ahead of a stalled consumer: pulled {pulled_now} (bound ~{n})"
+        );
+        assert!(
+            pulled_now >= 1,
+            "dispatcher should have pulled at least one watermark"
+        );
     }
 
     #[tokio::test]
