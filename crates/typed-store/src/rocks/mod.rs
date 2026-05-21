@@ -259,15 +259,14 @@ impl Database {
                 .map(|r| Ok(r.map(GetResult::InMemory)))
                 .collect(),
             #[cfg(tidehunter)]
-            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => {
-                let res = keys.into_iter().map(|k| {
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => keys
+                .into_iter()
+                .map(|k| {
                     db.get(*ks, &transform_th_key(k.as_ref(), prefix))
                         .map_err(typed_store_error_from_th_error)
-                });
-                res.into_iter()
-                    .map(|r| r.map(|item| item.map(GetResult::TideHunter)))
-                    .collect()
-            }
+                        .map(|item| item.map(|bytes| GetResult::TideHunter(bytes.into_owned())))
+                })
+                .collect(),
             _ => unreachable!("typed store invariant violation"),
         }
     }
