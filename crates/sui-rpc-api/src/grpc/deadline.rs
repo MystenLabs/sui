@@ -116,10 +116,9 @@ where
                             )))?;
                         }
                         Err(_) => {
-                            // Cancellation — only possible if the abort
-                            // guard fired (which only happens on Drop), so
-                            // we shouldn't be polling. Treat as EOF.
-                            break;
+                            // Cancellation — only reachable at runtime shutdown
+                            // (our abort guard fires on Drop, when we wouldn't be
+                            // polling), so EOF is harmless.                             break;
                         }
                     }
                 }
