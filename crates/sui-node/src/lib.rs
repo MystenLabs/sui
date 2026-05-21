@@ -2568,6 +2568,7 @@ async fn build_http_servers(
         rpc_service.with_server_version(server_version);
 
         if let Some(config) = config.rpc.clone() {
+            config.validate()?;
             rpc_service.with_config(config);
         }
 

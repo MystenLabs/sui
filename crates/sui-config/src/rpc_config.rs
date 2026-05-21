@@ -131,11 +131,18 @@ impl RpcConfig {
             list_checkpoints_timeout_ms: None,
             bitmap_bucket_scan_budget: None,
             chunk_bucket_scan_budget: None,
+            max_bitmap_filter_literals: None,
         };
 
         self.ledger_history_api
             .as_ref()
             .unwrap_or(&DEFAULT_LEDGER_HISTORY_API_CONFIG)
+    }
+
+    /// Validate cross-field invariants. Call once at startup to fail fast on a
+    /// misconfiguration rather than surfacing it per-request.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        self.ledger_history_api().validate()
     }
 
     pub fn display(&self) -> &DisplayConfig {
@@ -272,6 +279,7 @@ impl DisplayConfig {
 const DEFAULT_LEDGER_HISTORY_API_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_BITMAP_BUCKET_SCAN_BUDGET: usize = 1_024;
 const DEFAULT_CHUNK_BUCKET_SCAN_BUDGET: usize = 256;
+const DEFAULT_MAX_BITMAP_FILTER_LITERALS: usize = 10;
 // A chunk never evaluates more buckets than the whole request is allowed, so the
 // per-chunk cap must not exceed the per-request budget. Enforced for the
 // defaults here; the accessors clamp configured values the same way.
@@ -316,6 +324,15 @@ pub struct LedgerHistoryApiConfig {
     /// Defaults to `256` if not specified.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chunk_bucket_scan_budget: Option<usize>,
+
+    /// Maximum total filter literals (bitmap dimensions) accepted in one filtered
+    /// request, across all DNF terms. Each literal becomes one bitmap leaf, so
+    /// this bounds a single filter's scan fanout. Must not exceed
+    /// `bitmap_bucket_scan_budget` (see [`LedgerHistoryApiConfig::validate`]).
+    ///
+    /// Defaults to `10` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_bitmap_filter_literals: Option<usize>,
 }
 
 impl LedgerHistoryApiConfig {
@@ -349,5 +366,28 @@ impl LedgerHistoryApiConfig {
         self.chunk_bucket_scan_budget
             .unwrap_or(DEFAULT_CHUNK_BUCKET_SCAN_BUDGET)
             .min(self.bitmap_bucket_scan_budget())
+    }
+
+    pub fn max_bitmap_filter_literals(&self) -> usize {
+        self.max_bitmap_filter_literals
+            .unwrap_or(DEFAULT_MAX_BITMAP_FILTER_LITERALS)
+    }
+
+    /// Reject configurations that cannot make forward progress. Each filter
+    /// literal becomes one bitmap leaf that must fetch at least one bucket to
+    /// emit its first watermark; if the per-request budget is below the literal
+    /// cap a `SCAN_LIMIT` can fire before any merged watermark reaches the wire,
+    /// leaving the client a cursorless `QueryEnd` it cannot resume from. Mirrors
+    /// the BigTable side's `ConcurrencyConfig::validate`.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.bitmap_bucket_scan_budget() >= self.max_bitmap_filter_literals(),
+            "ledger_history_api.bitmap_bucket_scan_budget ({}) must be >= \
+             max_bitmap_filter_literals ({}) so every filter leaf gets at least one \
+             bucket before SCAN_LIMIT",
+            self.bitmap_bucket_scan_budget(),
+            self.max_bitmap_filter_literals(),
+        );
+        Ok(())
     }
 }

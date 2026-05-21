@@ -68,7 +68,6 @@ const DEFAULT_LIMIT_ITEMS: u32 = 10;
 const MAX_LIMIT_ITEMS: u32 = 100;
 const CHUNK_MAX: usize = 16;
 const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::CHECKPOINT;
-const MAX_BITMAP_FILTER_LITERALS: usize = 10;
 
 pub(crate) type ListCheckpointsStream =
     BoxStream<'static, Result<ListCheckpointsResponse, RpcError>>;
@@ -95,14 +94,14 @@ pub(crate) async fn list_checkpoints(
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
-    let filter_query = filter
-        .as_ref()
-        .map(|filter| transaction_filter_to_query(filter, MAX_BITMAP_FILTER_LITERALS))
-        .transpose()?;
-
     let ledger_history_api = service.config.ledger_history_api();
     let bitmap_bucket_scan_budget = ledger_history_api.bitmap_bucket_scan_budget();
     let chunk_bucket_scan_budget = ledger_history_api.chunk_bucket_scan_budget();
+    let max_bitmap_filter_literals = ledger_history_api.max_bitmap_filter_literals();
+    let filter_query = filter
+        .as_ref()
+        .map(|filter| transaction_filter_to_query(filter, max_bitmap_filter_literals))
+        .transpose()?;
 
     let initial_state = CheckpointScanState::Init {
         start_checkpoint,

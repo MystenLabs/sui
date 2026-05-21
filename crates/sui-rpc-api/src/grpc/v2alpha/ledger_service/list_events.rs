@@ -72,7 +72,6 @@ const DEFAULT_LIMIT_ITEMS: u32 = 50;
 const MAX_LIMIT_ITEMS: u32 = 1000;
 const EVENT_READ_MASK_DEFAULT: &str = crate::read_mask_defaults::EVENT;
 const CHUNK_MAX: usize = 32;
-const MAX_BITMAP_FILTER_LITERALS: usize = 10;
 
 pub(crate) type ListEventsStream = BoxStream<'static, Result<ListEventsResponse, RpcError>>;
 
@@ -98,14 +97,14 @@ pub(crate) async fn list_events(
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
-    let filter_query = filter
-        .as_ref()
-        .map(|filter| event_filter_to_query(filter, MAX_BITMAP_FILTER_LITERALS))
-        .transpose()?;
-
     let ledger_history_api = service.config.ledger_history_api();
     let bitmap_bucket_scan_budget = ledger_history_api.bitmap_bucket_scan_budget();
     let chunk_bucket_scan_budget = ledger_history_api.chunk_bucket_scan_budget();
+    let max_bitmap_filter_literals = ledger_history_api.max_bitmap_filter_literals();
+    let filter_query = filter
+        .as_ref()
+        .map(|filter| event_filter_to_query(filter, max_bitmap_filter_literals))
+        .transpose()?;
 
     let initial_state = EventScanState::Init {
         start_checkpoint,

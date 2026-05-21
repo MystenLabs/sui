@@ -86,8 +86,9 @@ impl Default for ConcurrencyConfig {
         Self {
             request_bigtable_concurrency: 10,
             max_bitmap_filter_literals: 10,
-            bitmap_bucket_budget_tx: 1000,
-            bitmap_bucket_budget_event: 1000,
+            // Matches the fullnode's `ledger_history_api` default bitmap budget.
+            bitmap_bucket_budget_tx: 1024,
+            bitmap_bucket_budget_event: 1024,
         }
     }
 }

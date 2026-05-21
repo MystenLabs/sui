@@ -18,7 +18,6 @@ use crate::proto::google::rpc::bad_request::FieldViolation;
 
 const ORDERING_ASCENDING: i32 = ProtoOrdering::Ascending as i32;
 const ORDERING_DESCENDING: i32 = ProtoOrdering::Descending as i32;
-pub const MAX_CHECKPOINT_SCAN_WIDTH: u64 = 3_000_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Ordering {

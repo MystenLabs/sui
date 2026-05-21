@@ -67,7 +67,6 @@ use crate::ledger_history::watermark::terminal_boundary_watermark;
 const DEFAULT_LIMIT_ITEMS: u32 = 50;
 const MAX_LIMIT_ITEMS: u32 = 500;
 const CHUNK_MAX: usize = 32;
-const MAX_BITMAP_FILTER_LITERALS: usize = 10;
 const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::TRANSACTION;
 
 pub(crate) type ListTransactionsStream =
@@ -95,14 +94,14 @@ pub(crate) async fn list_transactions(
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
-    let filter_query = filter
-        .as_ref()
-        .map(|filter| transaction_filter_to_query(filter, MAX_BITMAP_FILTER_LITERALS))
-        .transpose()?;
-
     let ledger_history_api = service.config.ledger_history_api();
     let bitmap_bucket_scan_budget = ledger_history_api.bitmap_bucket_scan_budget();
     let chunk_bucket_scan_budget = ledger_history_api.chunk_bucket_scan_budget();
+    let max_bitmap_filter_literals = ledger_history_api.max_bitmap_filter_literals();
+    let filter_query = filter
+        .as_ref()
+        .map(|filter| transaction_filter_to_query(filter, max_bitmap_filter_literals))
+        .transpose()?;
 
     let initial_state = TransactionScanState::Init {
         start_checkpoint,
