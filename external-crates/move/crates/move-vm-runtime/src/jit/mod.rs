@@ -28,6 +28,15 @@ pub fn translate_package(
     system_packages: &BTreeMap<OriginalId, Arc<CachedPackage>>,
     loaded_package: verification::ast::Package,
 ) -> PartialVMResult<Package> {
+    let original_id = loaded_package.original_id();
+    let version_id = loaded_package.version_id();
+    let effective_system_package_count = system_packages.len();
+    tracing::info!(
+        %original_id,
+        %version_id,
+        effective_system_package_count,
+        "dual-replay: running JIT optimization/translation for package"
+    );
     let opt_package = to_optimized_form(loaded_package)?;
     execution::translate::package(natives, interner, system_packages, opt_package)
 }

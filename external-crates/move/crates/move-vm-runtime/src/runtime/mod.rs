@@ -21,7 +21,7 @@ use crate::{
 use move_binary_format::errors::VMResult;
 use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use move_vm_config::runtime::VMConfig;
-use tracing::{error, instrument};
+use tracing::{error, info, instrument};
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -97,8 +97,15 @@ impl MoveRuntime {
     /// `OriginalId`s are logged; the runtime always constructs.
     fn install_system_packages(&mut self, system_packages: SystemPackages) {
         if system_packages.is_empty() {
+            info!("dual-replay: no system packages supplied to MoveRuntime");
             return;
         }
+
+        let requested_system_package_count = system_packages.len();
+        info!(
+            requested_system_package_count,
+            "dual-replay: installing system packages into MoveRuntime"
+        );
 
         let filtered: Vec<SerializedPackage> = system_packages
             .iter()
@@ -131,6 +138,12 @@ impl MoveRuntime {
             .cloned()
             .collect();
 
+        let filtered_system_package_count = filtered.len();
+        info!(
+            requested_system_package_count,
+            filtered_system_package_count,
+            "dual-replay: filtered system packages for MoveRuntime install"
+        );
         let resolver = SystemPackages::new(filtered).into_resolver();
 
         // Split borrows of `self` so that the `&mut cache` borrow can coexist with the
@@ -163,7 +176,14 @@ impl MoveRuntime {
                 Ok(resolved) => {
                     for (_, p) in resolved {
                         let original_id = p.runtime.original_id;
-                        if !cache.add_system_package(p) {
+                        let version_id = p.runtime.version_id;
+                        if cache.add_system_package(p) {
+                            info!(
+                                %original_id,
+                                %version_id,
+                                "dual-replay: installed pinned system package"
+                            );
+                        } else {
                             error!(
                                 %original_id,
                                 "System package already registered at original_id; skipping duplicate",

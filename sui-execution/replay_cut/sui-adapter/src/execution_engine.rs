@@ -35,6 +35,33 @@ mod checked {
     use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
     use tracing::{info, instrument, trace, warn};
 
+    #[skip_checked_arithmetic]
+    thread_local! {
+        static DUAL_REPLAY_LAST_EXECUTION_LOOP_NS: std::cell::Cell<u64> =
+            std::cell::Cell::new(0);
+    }
+
+    static DUAL_REPLAY_EXECUTION_LOOP_LOG_COUNT: std::sync::atomic::AtomicU64 =
+        std::sync::atomic::AtomicU64::new(0);
+
+    pub fn dual_replay_take_last_execution_loop_ns() -> u64 {
+        DUAL_REPLAY_LAST_EXECUTION_LOOP_NS.with(|value| {
+            let ns = value.get();
+            value.set(0);
+            ns
+        })
+    }
+
+    fn dual_replay_record_execution_loop_ns(ns: u64) {
+        DUAL_REPLAY_LAST_EXECUTION_LOOP_NS.with(|value| value.set(ns));
+    }
+
+    fn dual_replay_should_log_execution_loop() -> bool {
+        let count =
+            DUAL_REPLAY_EXECUTION_LOOP_LOG_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        count < 5 || count % 100_000 == 0
+    }
+
     use crate::static_programmable_transactions as SPT;
     use crate::sui_types::gas::SuiGasStatusAPI;
     use crate::type_layout_resolver::TypeLayoutResolver;
@@ -746,6 +773,8 @@ mod checked {
         metrics: Arc<ExecutionMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> ResultWithTimings<Mode::ExecutionResults, Mode::Error> {
+        let dual_replay_execution_loop_start = std::time::Instant::now();
+        let dual_replay_tx_digest = tx_ctx.borrow().digest();
         let result = match transaction_kind {
             TransactionKind::ChangeEpoch(change_epoch) => {
                 let builder = ProgrammableTransactionBuilder::new();
@@ -1001,6 +1030,18 @@ mod checked {
         temporary_store
             .check_execution_results_consistency::<Mode>()
             .map_err(|e| (e, vec![]))?;
+        let dual_replay_execution_loop_ns =
+            dual_replay_execution_loop_start.elapsed().as_nanos() as u64;
+        dual_replay_record_execution_loop_ns(dual_replay_execution_loop_ns);
+        if dual_replay_should_log_execution_loop() {
+            #[skip_checked_arithmetic]
+            tracing::info!(
+                digest = %dual_replay_tx_digest,
+                execution_loop_ns = dual_replay_execution_loop_ns,
+                dual_replay_path = "replay_cut",
+                "dual-replay: execution_loop completed"
+            );
+        }
         Ok(result)
     }
 

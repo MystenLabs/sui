@@ -41,8 +41,18 @@ use tracing::instrument;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
 };
+
+static DUAL_REPLAY_DIRECT_SYSTEM_CALL_LOG_COUNT: AtomicU64 = AtomicU64::new(0);
+
+fn dual_replay_should_log_direct_system_call() -> bool {
+    let count = DUAL_REPLAY_DIRECT_SYSTEM_CALL_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
+    count < 20 || count % 100_000 == 0
+}
 
 // -------------------------------------------------------------------------------------------------
 // Translation Context and Definitions
@@ -165,7 +175,27 @@ impl PackageContext<'_> {
         };
 
         match known_fn_opt {
-            Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
+            Some(fun_ptr) => {
+                if vtable_entry.package_key() != self.original_id
+                    && dual_replay_should_log_direct_system_call()
+                {
+                    tracing::info!(
+                        user_original_id = %self.original_id,
+                        user_version_id = %self.version_id,
+                        target_original_id = %vtable_entry.package_key(),
+                        target_module = %self.interner.resolve_ident(
+                            &vtable_entry.intra_package_key().module_name,
+                            "module name"
+                        ),
+                        target_function = %self.interner.resolve_ident(
+                            &vtable_entry.intra_package_key().member_name,
+                            "function name"
+                        ),
+                        "dual-replay: direct system/framework call resolved by optimized JIT"
+                    );
+                }
+                Ok(Some(fun_ptr.ptr_clone()))
+            }
             None => Err(partial_vm_error!(
                 FUNCTION_RESOLUTION_FAILURE,
                 "Could not find function with name: {}::{}",

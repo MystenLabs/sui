@@ -60,6 +60,11 @@ impl Executor {
             sui_move_natives_replay_cut::all_natives(silent, protocol_config),
             protocol_config,
         )?);
+        tracing::warn!(
+            order = "base_then_tip",
+            timings = "outer_and_execution_loop",
+            "dual-replay: tx-backtest executor enabled"
+        );
         Ok(Executor(tip_runtime, base_runtime))
     }
 }
@@ -130,6 +135,8 @@ impl executor::Executor for Executor {
             )
         };
         let base_ns = base_start.elapsed().as_nanos() as u64;
+        let base_loop_ns =
+            sui_adapter_replay_cut::execution_engine::dual_replay_take_last_execution_loop_ns();
 
         let tip_start = std::time::Instant::now();
         let (tip_store, tip_gas_status, tip_effects, _tip_timings, _tip_result) =
@@ -152,12 +159,16 @@ impl executor::Executor for Executor {
                 &mut None,
             );
         let tip_ns = tip_start.elapsed().as_nanos() as u64;
+        let tip_loop_ns =
+            sui_adapter_latest::execution_engine::dual_replay_take_last_execution_loop_ns();
         self::latest_dual_replay::compare_dual_replay(
             (&base.0, &base.1, &base.2),
             (&tip_store, &tip_gas_status, &tip_effects),
             transaction_digest,
             base_ns,
             tip_ns,
+            base_loop_ns,
+            tip_loop_ns,
         );
         if let Err(error) = &base.4 {
             log_execution_error(transaction_digest, error);
@@ -224,6 +235,8 @@ impl executor::Executor for Executor {
             )
         };
         let base_ns = base_start.elapsed().as_nanos() as u64;
+        let base_loop_ns =
+            sui_adapter_replay_cut::execution_engine::dual_replay_take_last_execution_loop_ns();
 
         let tip_start = std::time::Instant::now();
         let (tip_store, tip_gas_status, tip_effects, _tip_timings, _tip_result) =
@@ -246,12 +259,16 @@ impl executor::Executor for Executor {
                 &mut None,
             );
         let tip_ns = tip_start.elapsed().as_nanos() as u64;
+        let tip_loop_ns =
+            sui_adapter_latest::execution_engine::dual_replay_take_last_execution_loop_ns();
         self::latest_dual_replay::compare_dual_replay(
             (&base.0, &base.1, &base.2),
             (&tip_store, &tip_gas_status, &tip_effects),
             transaction_digest,
             base_ns,
             tip_ns,
+            base_loop_ns,
+            tip_loop_ns,
         );
         if let Err(error) = &base.4 {
             log_execution_error(transaction_digest, error);
@@ -429,6 +446,7 @@ mod latest_dual_replay {
     use std::fs::{File, OpenOptions};
     use std::io::{BufWriter, Write};
     use std::path::Path;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::{Mutex, OnceLock};
     use sui_types::digests::TransactionDigest;
     use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -454,6 +472,8 @@ mod latest_dual_replay {
         digest: TransactionDigest,
         base_ns: u64,
         tip_ns: u64,
+        base_loop_ns: u64,
+        tip_loop_ns: u64,
     ) {
         let (_, base_gas, base_effects) = base;
         let (_, tip_gas, tip_effects) = tip;
@@ -471,10 +491,25 @@ mod latest_dual_replay {
             digest,
             base_ns,
             tip_ns,
+            base_loop_ns,
+            tip_loop_ns,
             base_gas_used,
             tip_gas_used,
             status_match,
         );
+        if should_log_completed_paths() {
+            tracing::info!(
+                %digest,
+                base_ns,
+                tip_ns,
+                base_loop_ns,
+                tip_loop_ns,
+                base_gas_used,
+                tip_gas_used,
+                status_match,
+                "dual-replay: both execution paths completed"
+            );
+        }
         let differs = {
             let status_differs = base_effects.status() != tip_effects.status();
             let gas_differs = !gas_within_tolerance(base_gas.gas_used(), tip_gas.gas_used());
@@ -492,6 +527,12 @@ mod latest_dual_replay {
     }
 
     static TIMINGS: OnceLock<Option<Mutex<TimingsSink>>> = OnceLock::new();
+    static COMPLETED_PATHS_LOG_COUNT: AtomicU64 = AtomicU64::new(0);
+
+    fn should_log_completed_paths() -> bool {
+        let count = COMPLETED_PATHS_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
+        count < 5 || count % 100_000 == 0
+    }
 
     fn timings() -> Option<&'static Mutex<TimingsSink>> {
         TIMINGS
@@ -510,7 +551,7 @@ mod latest_dual_replay {
                     Ok(mut f) => {
                         if is_new {
                             let _ = f.write_all(
-                                b"digest,base_ns,tip_ns,base_gas,tip_gas,status_match
+                                b"digest,base_ns,tip_ns,base_loop_ns,tip_loop_ns,base_gas,tip_gas,status_match
 ",
                             );
                         }
@@ -532,6 +573,8 @@ mod latest_dual_replay {
         digest: TransactionDigest,
         base_ns: u64,
         tip_ns: u64,
+        base_loop_ns: u64,
+        tip_loop_ns: u64,
         base_gas: u64,
         tip_gas: u64,
         status_match: bool,
@@ -540,8 +583,15 @@ mod latest_dual_replay {
         let Ok(mut guard) = sink.lock() else { return };
         if writeln!(
             guard.writer,
-            "{},{},{},{},{},{}",
-            digest, base_ns, tip_ns, base_gas, tip_gas, status_match as u8,
+            "{},{},{},{},{},{},{},{}",
+            digest,
+            base_ns,
+            tip_ns,
+            base_loop_ns,
+            tip_loop_ns,
+            base_gas,
+            tip_gas,
+            status_match as u8,
         )
         .is_ok()
         {
