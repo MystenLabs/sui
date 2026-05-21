@@ -38,8 +38,6 @@ use crate::ledger_history::query_options::ResolvedRange;
 
 use super::query_end::query_end;
 
-use super::bitmap_scan::BITMAP_BUCKET_SCAN_BUDGET;
-use super::bitmap_scan::CHUNK_BUCKET_SCAN_BUDGET;
 use super::bitmap_scan::EVENT_BITMAP_BUCKET_SIZE;
 use super::bitmap_scan::LedgerBitmapKind;
 use super::bitmap_scan::PendingBitmapBucket;
@@ -69,8 +67,6 @@ use crate::ledger_history::watermark::terminal_boundary_watermark;
 use event_seq::decode_event_seq;
 use event_seq::encode_event_seq;
 use event_seq::event_seq_lo;
-
-pub(super) const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 const DEFAULT_LIMIT_ITEMS: u32 = 50;
 const MAX_LIMIT_ITEMS: u32 = 1000;
@@ -107,6 +103,10 @@ pub(crate) async fn list_events(
         .map(|filter| event_filter_to_query(filter, MAX_BITMAP_FILTER_LITERALS))
         .transpose()?;
 
+    let ledger_history_api = service.config.ledger_history_api();
+    let bitmap_bucket_scan_budget = ledger_history_api.bitmap_bucket_scan_budget();
+    let chunk_bucket_scan_budget = ledger_history_api.chunk_bucket_scan_budget();
+
     let initial_state = EventScanState::Init {
         start_checkpoint,
         end_checkpoint,
@@ -119,7 +119,7 @@ pub(crate) async fn list_events(
             initial_state,
             limit_items,
             CHUNK_MAX,
-            BITMAP_BUCKET_SCAN_BUDGET,
+            bitmap_bucket_scan_budget,
             move |state, args: ChunkArgs| {
                 spawn_event_chunk(
                     service.clone(),
@@ -127,6 +127,7 @@ pub(crate) async fn list_events(
                     read_mask.clone(),
                     options.clone(),
                     args.scan_budget,
+                    chunk_bucket_scan_budget,
                     args.chunk_item_limit,
                     args.remaining_request_item_limit,
                     args.cancel,
@@ -170,6 +171,7 @@ fn spawn_event_chunk(
     read_mask: FieldMaskTree,
     options: QueryOptions,
     scan_budget: usize,
+    chunk_scan_budget: usize,
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: CancellationToken,
@@ -181,6 +183,7 @@ fn spawn_event_chunk(
             read_mask,
             options,
             scan_budget,
+            chunk_scan_budget,
             chunk_item_limit,
             remaining_request_item_limit,
             &cancel,
@@ -223,6 +226,7 @@ fn next_event_chunk(
     read_mask: FieldMaskTree,
     options: QueryOptions,
     scan_budget: usize,
+    chunk_scan_budget: usize,
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
@@ -283,6 +287,7 @@ fn next_event_chunk(
                 read_mask,
                 options,
                 remaining_scan_budget,
+                chunk_scan_budget,
                 chunk_item_limit,
                 remaining_request_item_limit,
                 cancel,
@@ -298,7 +303,7 @@ fn next_event_chunk(
             if cancel.is_cancelled() {
                 return Err(cancelled());
             }
-            let row_scan_limit = row_scan_budget.min(CHUNK_BUCKET_SCAN_BUDGET);
+            let row_scan_limit = row_scan_budget.min(chunk_scan_budget);
             let UnfilteredScan {
                 refs,
                 next_range,
@@ -370,7 +375,7 @@ fn next_event_chunk(
             end_position,
         } => {
             let hit_limit = chunk_item_limit.min(remaining_request_item_limit);
-            let chunk_scan_budget = remaining_scan_budget.min(CHUNK_BUCKET_SCAN_BUDGET);
+            let chunk_scan_budget = remaining_scan_budget.min(chunk_scan_budget);
             let hits = drain_bitmap_hits_with_budget(
                 service.clone(),
                 LedgerBitmapKind::Event,

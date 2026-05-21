@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::SocketAddr;
+use std::time::Duration;
 
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -76,6 +77,13 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ledger_history_indexing: Option<bool>,
 
+    /// Tunables for the v2alpha ledger-history list APIs (`list_transactions`,
+    /// `list_events`, `list_checkpoints`). These scan the historical inverted
+    /// indexes, unlike the live object-set listings (`list_owned_objects`,
+    /// `list_dynamic_fields`), so they carry their own time and scan-cost bounds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ledger_history_api: Option<LedgerHistoryApiConfig>,
+
     /// Configuration for rendering Objects based on the Display standard
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display: Option<DisplayConfig>,
@@ -114,6 +122,20 @@ impl RpcConfig {
 
     pub fn ledger_history_indexing(&self) -> bool {
         self.ledger_history_indexing.unwrap_or(false)
+    }
+
+    pub fn ledger_history_api(&self) -> &LedgerHistoryApiConfig {
+        const DEFAULT_LEDGER_HISTORY_API_CONFIG: LedgerHistoryApiConfig = LedgerHistoryApiConfig {
+            list_transactions_timeout_ms: None,
+            list_events_timeout_ms: None,
+            list_checkpoints_timeout_ms: None,
+            bitmap_bucket_scan_budget: None,
+            chunk_bucket_scan_budget: None,
+        };
+
+        self.ledger_history_api
+            .as_ref()
+            .unwrap_or(&DEFAULT_LEDGER_HISTORY_API_CONFIG)
     }
 
     pub fn display(&self) -> &DisplayConfig {
@@ -244,5 +266,88 @@ impl DisplayConfig {
 
     pub fn max_output_size(&self) -> usize {
         self.max_output_size.unwrap_or(1024 * 1024)
+    }
+}
+
+const DEFAULT_LEDGER_HISTORY_API_TIMEOUT_MS: u64 = 5_000;
+const DEFAULT_BITMAP_BUCKET_SCAN_BUDGET: usize = 1_024;
+const DEFAULT_CHUNK_BUCKET_SCAN_BUDGET: usize = 256;
+// A chunk never evaluates more buckets than the whole request is allowed, so the
+// per-chunk cap must not exceed the per-request budget. Enforced for the
+// defaults here; the accessors clamp configured values the same way.
+const _: () = assert!(DEFAULT_CHUNK_BUCKET_SCAN_BUDGET <= DEFAULT_BITMAP_BUCKET_SCAN_BUDGET);
+
+/// Tunables for the v2alpha ledger-history list APIs. Every field is optional and
+/// falls back to a built-in default; see the accessors for the effective values.
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct LedgerHistoryApiConfig {
+    /// Per-request wall-clock timeout for `list_transactions`, in milliseconds.
+    ///
+    /// Defaults to `5000` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_transactions_timeout_ms: Option<u64>,
+
+    /// Per-request wall-clock timeout for `list_events`, in milliseconds.
+    ///
+    /// Defaults to `5000` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_events_timeout_ms: Option<u64>,
+
+    /// Per-request wall-clock timeout for `list_checkpoints`, in milliseconds.
+    ///
+    /// Defaults to `5000` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_checkpoints_timeout_ms: Option<u64>,
+
+    /// Total evaluated-bucket budget for one filtered request, shared by all
+    /// three list APIs. Exhausting it ends the query with `SCAN_LIMIT` and a
+    /// resume cursor, bounding the worst-case scan cost of a sparse filter.
+    ///
+    /// Defaults to `1024` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bitmap_bucket_scan_budget: Option<usize>,
+
+    /// Per-chunk evaluated-bucket cap. A chunk that hits this while the request
+    /// budget remains emits a progress watermark and resumes in the next chunk,
+    /// so a long sparse scan reports incremental progress. Clamped to
+    /// `bitmap_bucket_scan_budget`.
+    ///
+    /// Defaults to `256` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chunk_bucket_scan_budget: Option<usize>,
+}
+
+impl LedgerHistoryApiConfig {
+    pub fn list_transactions_timeout(&self) -> Duration {
+        Duration::from_millis(
+            self.list_transactions_timeout_ms
+                .unwrap_or(DEFAULT_LEDGER_HISTORY_API_TIMEOUT_MS),
+        )
+    }
+
+    pub fn list_events_timeout(&self) -> Duration {
+        Duration::from_millis(
+            self.list_events_timeout_ms
+                .unwrap_or(DEFAULT_LEDGER_HISTORY_API_TIMEOUT_MS),
+        )
+    }
+
+    pub fn list_checkpoints_timeout(&self) -> Duration {
+        Duration::from_millis(
+            self.list_checkpoints_timeout_ms
+                .unwrap_or(DEFAULT_LEDGER_HISTORY_API_TIMEOUT_MS),
+        )
+    }
+
+    pub fn bitmap_bucket_scan_budget(&self) -> usize {
+        self.bitmap_bucket_scan_budget
+            .unwrap_or(DEFAULT_BITMAP_BUCKET_SCAN_BUDGET)
+    }
+
+    pub fn chunk_bucket_scan_budget(&self) -> usize {
+        self.chunk_bucket_scan_budget
+            .unwrap_or(DEFAULT_CHUNK_BUCKET_SCAN_BUDGET)
+            .min(self.bitmap_bucket_scan_budget())
     }
 }

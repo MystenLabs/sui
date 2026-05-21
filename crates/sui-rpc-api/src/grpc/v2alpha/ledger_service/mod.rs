@@ -31,7 +31,7 @@ impl LedgerService for RpcService {
     ) -> Result<tonic::Response<BoxStream<ListCheckpointsResponse>>, tonic::Status> {
         serve_list_stream(
             "list_checkpoints",
-            list_checkpoints::TIMEOUT,
+            self.config.ledger_history_api().list_checkpoints_timeout(),
             list_checkpoints::list_checkpoints(self.clone(), request.into_inner()),
         )
         .await
@@ -43,7 +43,7 @@ impl LedgerService for RpcService {
     ) -> Result<tonic::Response<BoxStream<ListTransactionsResponse>>, tonic::Status> {
         serve_list_stream(
             "list_transactions",
-            list_transactions::TIMEOUT,
+            self.config.ledger_history_api().list_transactions_timeout(),
             list_transactions::list_transactions(self.clone(), request.into_inner()),
         )
         .await
@@ -55,7 +55,7 @@ impl LedgerService for RpcService {
     ) -> Result<tonic::Response<BoxStream<ListEventsResponse>>, tonic::Status> {
         serve_list_stream(
             "list_events",
-            list_events::TIMEOUT,
+            self.config.ledger_history_api().list_events_timeout(),
             list_events::list_events(self.clone(), request.into_inner()),
         )
         .await
