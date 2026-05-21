@@ -212,12 +212,16 @@ List owned objects over gRPC with `grpcurl`:
 $ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5" }' <full node URL:port> sui.rpc.v2.StateService/ListOwnedObjects
 ```
 
-Filter for a coin type in GraphQL:
+Filter for a coin type in GraphQL. Pass the page size in `first` and the pagination cursor in `after`:
 
 ```graphql
 query {
   address(address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9") {
-    objects(first: 3, filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" }) {
+    objects(
+      first: 3,
+      after: "vBIzCwAAAADMAQBQlGUkKZV2Gebvp5pASmcU0RJuY/VR9LbH+3ZED4EYyQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAARjb2luAAAAAAAAAARDb2luAAAAAAAAAAEAAAAHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAA3N1aQAAAAAAAAADU1VJAAAAAAAAAAAB/////XBZUf9feyhb9cW+AOBraL10O9t0D9JAr+tIq2wXDJdl5/zP5w==",
+      filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" }
+    ) {
       nodes {
         address
       }
@@ -225,6 +229,8 @@ query {
   }
 }
 ```
+
+Omit `after` to fetch the first page. The cursor is opaque, so use one returned by a previous query rather than constructing it by hand.
 
 </details>
 
