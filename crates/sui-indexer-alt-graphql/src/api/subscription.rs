@@ -45,7 +45,7 @@ impl Subscription {
                             processed.clone(),
                         );
                         yield Ok(Checkpoint {
-                            sequence_number: processed.sequence_number,
+                            sequence_number: processed.summary.sequence_number,
                             scope,
                             streamed_data: Some(processed),
                         });
@@ -134,6 +134,10 @@ impl Subscription {
                             processed.clone(),
                         );
                         for tx in &processed.transactions {
+                            let digest = tx
+                                .contents
+                                .digest()
+                                .expect("ExecutedTransaction digest is infallible");
                             let events = tx.contents.events().unwrap_or_default();
                             for (idx, native) in events.into_iter().enumerate() {
                                 if !filter.matches(&native) {
@@ -141,11 +145,11 @@ impl Subscription {
                                 }
                                 yield Ok(Event {
                                     scope: scope.with_active_transaction_contents(
-                                        tx.digest,
+                                        digest,
                                         tx.contents.clone(),
                                     ),
                                     native,
-                                    transaction_digest: tx.digest,
+                                    transaction_digest: digest,
                                     sequence_number: idx as u64,
                                     timestamp_ms,
                                 });

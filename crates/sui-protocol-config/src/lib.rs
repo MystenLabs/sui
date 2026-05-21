@@ -351,6 +351,7 @@ const MAINNET_USDB: &str =
 //              Configure mainnet gasless allowlist with stablecoin types and $0.01 minimum
 //              transfer per stable.
 // Version 125: Enable granular_post_execution_checks.
+//              Enable timestamp_based_epoch_close on testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4975,6 +4976,9 @@ impl ProtocolConfig {
                 }
                 125 => {
                     cfg.feature_flags.granular_post_execution_checks = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.timestamp_based_epoch_close = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -5838,12 +5842,11 @@ mod test {
 
         let config = ProtocolConfig::get_for_max_version_UNSAFE();
         let rendered = config
-            .render::<serde_json::Value, _>(&mut Unmetered)
+            .render::<serde_json::Value>(&mut Unmetered)
             .expect("render should succeed");
 
         let max_args = rendered
             .get("max_arguments")
-            .and_then(|v| v.as_ref())
             .expect("max_arguments set at max version");
         assert!(
             max_args.is_number(),
@@ -5852,7 +5855,6 @@ mod test {
 
         let max_tx_size = rendered
             .get("max_tx_size_bytes")
-            .and_then(|v| v.as_ref())
             .expect("max_tx_size_bytes set at max version");
         assert!(
             max_tx_size.is_string(),
@@ -5872,13 +5874,11 @@ mod test {
         ]);
 
         let rendered = config
-            .render::<serde_json::Value, _>(&mut Unmetered)
+            .render::<serde_json::Value>(&mut Unmetered)
             .expect("render should succeed under Unmetered budget");
         let allowlist = rendered
             .get("gasless_allowed_token_types")
-            .expect("entry should be present")
-            .as_ref()
-            .expect("entry should be Some after the testing setter");
+            .expect("entry should be present after the testing setter");
 
         // u64 values render as strings to preserve JS precision; the tuple becomes a 2-element
         // JSON array.
@@ -5900,13 +5900,11 @@ mod test {
         )]);
 
         let rendered = config
-            .render::<prost_types::Value, _>(&mut Unmetered)
+            .render::<prost_types::Value>(&mut Unmetered)
             .expect("render to prost Value should succeed");
         let allowlist = rendered
             .get("gasless_allowed_token_types")
-            .expect("entry should be present")
-            .as_ref()
-            .expect("entry should be Some");
+            .expect("entry should be present after the testing setter");
 
         // Outer ListValue with one inner ListValue carrying [coin_type_string, amount_string].
         let Some(Kind::ListValue(outer)) = &allowlist.kind else {
@@ -5937,22 +5935,22 @@ mod test {
     }
 
     #[test]
-    fn render_emits_none_for_unset_protocol_versions() {
+    fn render_emits_null_for_unset_protocol_versions() {
         use mysten_common::rpc_format::Unmetered;
 
         let config = ProtocolConfig::get_for_version(1.into(), Chain::Unknown);
         let rendered = config
-            .render::<serde_json::Value, _>(&mut Unmetered)
+            .render::<serde_json::Value>(&mut Unmetered)
             .expect("render should succeed");
-        // The gasless allowlist key is present in every version's keyset, but with `None` value
-        // for versions that predate the feature. That matches `attr_map`'s existing semantics
-        // for scalar fields.
+        // The gasless allowlist key is present in every version's keyset, but renders as JSON
+        // `null` for versions that predate the feature. This keeps the keyset stable across
+        // protocol versions so clients can distinguish "unknown key" from "present but unset".
         let entry = rendered
             .get("gasless_allowed_token_types")
             .expect("key should be present for every protocol version");
         assert!(
-            entry.is_none(),
-            "value should be None for pre-feature protocol version",
+            entry.is_null(),
+            "value should be null for pre-feature protocol version, got {entry:?}",
         );
     }
 }

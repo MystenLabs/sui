@@ -28,18 +28,19 @@ use sui_rpc::proto::sui::rpc::v2alpha::event_literal;
 use sui_rpc::proto::sui::rpc::v2alpha::event_predicate;
 use sui_rpc::proto::sui::rpc::v2alpha::transaction_literal;
 use sui_rpc::proto::sui::rpc::v2alpha::transaction_predicate;
-use sui_rpc_api::ErrorReason;
-use sui_rpc_api::RpcError;
-use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
+
+use crate::ErrorReason;
+use crate::RpcError;
+use crate::proto::google::rpc::bad_request::FieldViolation;
 
 /// Convert a proto `TransactionFilter` DNF filter into a `BitmapQuery`.
 ///
 /// `max_literals` caps the total number of literals across all terms. Each
 /// literal can become one bitmap dimension stream, so this prevents one
 /// filter from monopolizing bitmap scan fanout.
-pub(crate) fn transaction_filter_to_query(
+pub fn transaction_filter_to_query(
     filter: &TransactionFilter,
     max_literals: usize,
 ) -> Result<BitmapQuery, RpcError> {
@@ -69,11 +70,10 @@ pub(crate) fn transaction_filter_to_query(
 
 /// Convert a proto `EventFilter` DNF filter into a `BitmapQuery`.
 ///
-/// The resulting query is evaluated against the event-keyed bitmap index
-/// (see `BitmapIndexSpec::event()`), so every leaf — including tx-level
-/// predicates like `Sender` — resolves precisely in event-space: no
-/// post-filter pass is required.
-pub(crate) fn event_filter_to_query(
+/// The resulting query is evaluated against the event-keyed bitmap index, so
+/// every leaf, including tx-level predicates like `Sender`, resolves precisely
+/// in event-space: no post-filter pass is required.
+pub fn event_filter_to_query(
     filter: &EventFilter,
     max_literals: usize,
 ) -> Result<BitmapQuery, RpcError> {
@@ -310,8 +310,6 @@ fn convert_event_predicate(
     }
 }
 
-// --- Leaf predicate helpers ---
-
 fn parse_address(hex: &str, field: &str) -> Result<[u8; 32], RpcError> {
     hex.parse::<SuiAddress>()
         .map(|a| a.to_inner())
@@ -330,8 +328,7 @@ fn convert_sender(f: &SenderFilter, field: &str) -> Result<Vec<u8>, RpcError> {
             .with_reason(ErrorReason::FieldMissing)
     })?;
     let bytes = parse_address(addr, field)?;
-    let key = encode_dimension_key(IndexDimension::Sender, &bytes);
-    Ok(key)
+    Ok(encode_dimension_key(IndexDimension::Sender, &bytes))
 }
 
 fn convert_affected_address(f: &AffectedAddressFilter, field: &str) -> Result<Vec<u8>, RpcError> {
@@ -341,8 +338,10 @@ fn convert_affected_address(f: &AffectedAddressFilter, field: &str) -> Result<Ve
             .with_reason(ErrorReason::FieldMissing)
     })?;
     let bytes = parse_address(addr, field)?;
-    let key = encode_dimension_key(IndexDimension::AffectedAddress, &bytes);
-    Ok(key)
+    Ok(encode_dimension_key(
+        IndexDimension::AffectedAddress,
+        &bytes,
+    ))
 }
 
 fn convert_affected_object(f: &AffectedObjectFilter, field: &str) -> Result<Vec<u8>, RpcError> {
@@ -356,8 +355,10 @@ fn convert_affected_object(f: &AffectedObjectFilter, field: &str) -> Result<Vec<
             .with_description(format!("invalid object_id: {e}"))
             .with_reason(ErrorReason::FieldInvalid)
     })?;
-    let key = encode_dimension_key(IndexDimension::AffectedObject, object_id.as_ref());
-    Ok(key)
+    Ok(encode_dimension_key(
+        IndexDimension::AffectedObject,
+        object_id.as_ref(),
+    ))
 }
 
 fn convert_move_call(f: &MoveCallFilter, field: &str) -> Result<Vec<u8>, RpcError> {
@@ -374,11 +375,8 @@ fn convert_move_call(f: &MoveCallFilter, field: &str) -> Result<Vec<u8>, RpcErro
             .into());
     }
     let pkg_bytes = parse_address(parts[0], field)?;
-    let module = parts.get(1).copied();
-    let function = parts.get(2).copied();
-    let value = move_call_value(&pkg_bytes, module, function);
-    let key = encode_dimension_key(IndexDimension::MoveCall, &value);
-    Ok(key)
+    let value = move_call_value(&pkg_bytes, parts.get(1).copied(), parts.get(2).copied());
+    Ok(encode_dimension_key(IndexDimension::MoveCall, &value))
 }
 
 fn convert_emit_module(f: &EmitModuleFilter, field: &str) -> Result<Vec<u8>, RpcError> {
@@ -396,8 +394,7 @@ fn convert_emit_module(f: &EmitModuleFilter, field: &str) -> Result<Vec<u8>, Rpc
     }
     let pkg_bytes = parse_address(parts[0], field)?;
     let value = emit_module_value(&pkg_bytes, parts.get(1).copied());
-    let key = encode_dimension_key(IndexDimension::EmitModule, &value);
-    Ok(key)
+    Ok(encode_dimension_key(IndexDimension::EmitModule, &value))
 }
 
 fn convert_event_type(f: &EventTypeFilter, field: &str) -> Result<Vec<u8>, RpcError> {
@@ -406,9 +403,6 @@ fn convert_event_type(f: &EventTypeFilter, field: &str) -> Result<Vec<u8>, RpcEr
             .with_description("type is required")
             .with_reason(ErrorReason::FieldMissing)
     })?;
-    // Split head (before any `<`) for prefix levels; keep the generic
-    // instantiation as a single trailing component so nested `::` inside
-    // type parameters don't confuse prefix splitting.
     let (head, generics) = match s.find('<') {
         Some(i) => (&s[..i], Some(&s[i..])),
         None => (s, None),
@@ -430,7 +424,6 @@ fn convert_event_type(f: &EventTypeFilter, field: &str) -> Result<Vec<u8>, RpcEr
             .into());
     }
     let instantiation_bcs = if generics.is_some() {
-        // Parse the full type tag to extract type parameters.
         let tag = sui_types::parse_sui_type_tag(s).map_err(|e| {
             FieldViolation::new(field)
                 .with_description(format!("invalid type: {e}"))
@@ -452,8 +445,7 @@ fn convert_event_type(f: &EventTypeFilter, field: &str) -> Result<Vec<u8>, RpcEr
         None
     };
     let value = event_type_value(&addr_bytes, module, name, instantiation_bcs.as_deref());
-    let key = encode_dimension_key(IndexDimension::EventType, &value);
-    Ok(key)
+    Ok(encode_dimension_key(IndexDimension::EventType, &value))
 }
 
 fn convert_event_stream_head(f: &EventStreamHeadFilter, field: &str) -> Result<Vec<u8>, RpcError> {
@@ -463,8 +455,10 @@ fn convert_event_stream_head(f: &EventStreamHeadFilter, field: &str) -> Result<V
             .with_reason(ErrorReason::FieldMissing)
     })?;
     let bytes = parse_address(stream_id, field)?;
-    let key = encode_dimension_key(IndexDimension::EventStreamHead, &bytes);
-    Ok(key)
+    Ok(encode_dimension_key(
+        IndexDimension::EventStreamHead,
+        &bytes,
+    ))
 }
 
 #[cfg(test)]

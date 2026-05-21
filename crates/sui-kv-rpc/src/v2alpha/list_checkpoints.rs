@@ -46,21 +46,21 @@ use crate::pipeline::pipelined_chunks;
 use crate::pipeline::pipelined_keyed_batches;
 use crate::pipeline::resolve_watermarks;
 use crate::pipeline::take_items;
-use crate::query_options::CheckpointRange;
-use crate::query_options::QueryOptions;
-use crate::query_options::QueryType;
-use crate::query_options::ResolvedRange;
 use crate::v2::get_checkpoint::checkpoint_columns;
 use crate::v2::get_transaction::compute_object_keys;
 use crate::v2::get_transaction::transaction_columns;
-use crate::v2alpha::watermark::advance_checkpoint_boundary;
-use crate::v2alpha::watermark::boundary_watermark;
-use crate::v2alpha::watermark::item_watermark;
-use crate::v2alpha::watermark::reached_range_end;
-use crate::v2alpha::watermark::terminal_boundary_watermark;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::error_contains;
+use sui_rpc_api::ledger_history::query_options::CheckpointRange;
+use sui_rpc_api::ledger_history::query_options::QueryOptions;
+use sui_rpc_api::ledger_history::query_options::QueryType;
+use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::watermark::advance_checkpoint_boundary;
+use sui_rpc_api::ledger_history::watermark::boundary_watermark;
+use sui_rpc_api::ledger_history::watermark::item_watermark;
+use sui_rpc_api::ledger_history::watermark::reached_range_end;
+use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
 
 use sui_rpc::proto::sui::rpc::v2alpha::CheckpointItem;
 use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
@@ -73,7 +73,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
 const DEFAULT_LIMIT_ITEMS: u32 = 10;
 const MAX_LIMIT_ITEMS: u32 = 100;
 const CHUNK_MAX: usize = 100;
-const READ_MASK_DEFAULT: &str = "sequence_number,digest";
+const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::CHECKPOINT;
 
 type CpWithTxs = (u64, CheckpointData, Vec<TransactionData>);
 type ResolvedCp = (u64, CheckpointData, Vec<TransactionData>, ObjectMap);
@@ -157,42 +157,42 @@ pub(crate) async fn list_checkpoints(
     let cp_columns: Arc<[&'static str]> = list_checkpoint_columns(&read_mask, needs_full).into();
 
     let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
-    let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
 
-    // Stage A: discover cp_seq values for the requested response. Filtered
-    // requests use bitmap-eval; the tx_seq watermarks it emits are
-    // translated to cp_seq watermarks by `filtered_checkpoint_seq_stream`
-    // before they reach the handler's loop. Unfiltered requests produce the
-    // cp range directly (cheap, no IO); every cp_seq becomes an item, so the
-    // last item watermark is the final resume cursor.
-    let seq_stream: BoxStream<'static, Result<Watermarked<u64>, anyhow::Error>> =
-        if let Some(filter) = &request.filter {
-            let tx_range = client.checkpoint_to_tx_range(cp_range.clone()).await?;
-            filtered_checkpoint_seq_stream(
-                &ctx,
-                filter,
-                tx_range,
-                limit_items,
-                options.clone(),
-                scan_budget,
-            )
-            .await?
-        } else {
-            // Unfiltered: items cover the resolved cp range densely;
-            // the last item's cursor is a sufficient resume point.
-            range_stream(cp_range.clone(), &options)
-                .map(|r| r.map(Watermarked::Item).map_err(anyhow::Error::new))
-                .boxed()
-        };
-    let seq_stream = take_items(seq_stream, limit_items);
-
-    // Stage B: Watermarked<cp_seq> -> Watermarked<(cp_seq, CheckpointData)>. One
-    // multi_get per chunk against the checkpoints table.
-    let cp_data_stream = pipelined_chunks(seq_stream, CHUNK_MAX, request_bigtable_concurrency, {
-        let client = client.clone();
-        let columns = cp_columns.clone();
-        move |seqs| fetch_checkpoint_data(client.clone(), columns.clone(), seqs)
-    });
+    // Stage A: discover checkpoint rows for the requested response. Filtered
+    // requests use sparse bitmap-eval over transactions and then fetch the
+    // deduped checkpoint rows. Unfiltered requests scan the dense checkpoint
+    // keyspace directly, bounded by limit_items.
+    let cp_data_stream: BoxStream<
+        'static,
+        Result<Watermarked<(u64, CheckpointData)>, anyhow::Error>,
+    > = if let Some(filter) = &request.filter {
+        let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
+        let tx_range = client.checkpoint_to_tx_range(cp_range.clone()).await?;
+        let seq_stream = filtered_checkpoint_seq_stream(
+            &ctx,
+            filter,
+            tx_range,
+            limit_items,
+            options.clone(),
+            scan_budget,
+        )
+        .await?;
+        let seq_stream = take_items(seq_stream, limit_items);
+        pipelined_chunks(seq_stream, CHUNK_MAX, request_bigtable_concurrency, {
+            let client = client.clone();
+            let columns = cp_columns.clone();
+            move |seqs| fetch_checkpoint_data(client.clone(), columns.clone(), seqs)
+        })
+    } else {
+        scan_checkpoint_data(
+            client.clone(),
+            cp_columns.clone(),
+            cp_range.clone(),
+            limit_items,
+            &options,
+        )
+        .await?
+    };
 
     // Fast path: read_mask doesn't request transactions or objects → render
     // directly from CheckpointData via the existing `checkpoint_to_response`
@@ -438,6 +438,21 @@ fn watermark_response(watermark: Watermark) -> ListCheckpointsResponse {
     let mut response = ListCheckpointsResponse::default();
     response.response = Some(list_checkpoints_response::Response::Watermark(watermark));
     response
+}
+
+async fn scan_checkpoint_data(
+    client: BigTableClient,
+    columns: Arc<[&'static str]>,
+    range: std::ops::Range<u64>,
+    limit: usize,
+    options: &QueryOptions,
+) -> Result<BoxStream<'static, Result<Watermarked<(u64, CheckpointData)>, anyhow::Error>>, RpcError>
+{
+    let column_filter = BigTableClient::column_filter(&columns);
+    let rows = client
+        .scan_checkpoints_stream(range, options.scan_direction(), limit, Some(column_filter))
+        .await?;
+    Ok(rows.map_ok(Watermarked::Item).boxed())
 }
 
 async fn fetch_checkpoint_data(
@@ -879,17 +894,6 @@ fn decode_checkpoint_row_key(key: &Bytes) -> Result<u64, RpcError> {
         .try_into()
         .map_err(|_| RpcError::new(tonic::Code::Internal, "invalid checkpoint row key length"))?;
     Ok(u64::from_be_bytes(bytes))
-}
-
-fn range_stream(
-    range: std::ops::Range<u64>,
-    options: &QueryOptions,
-) -> BoxStream<'static, Result<u64, RpcError>> {
-    if options.is_ascending() {
-        stream::iter(range.map(Ok::<_, RpcError>)).boxed()
-    } else {
-        stream::iter(range.rev().map(Ok::<_, RpcError>)).boxed()
-    }
 }
 
 /// Clamp a translated cp frontier so the emitted Boundary cursor never

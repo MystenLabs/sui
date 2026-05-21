@@ -4,12 +4,6 @@ description: Gasless stablecoin transfers on Sui enable peer-to-peer payments of
 keywords: [ usdc, stablecoins, sui dollar, usdsui, usdy, ausd, fdusd, buck, ysld, gasless, free tier ]
 ---
 
-:::caution 
-
-Gasless stablecoin transfers are currently only available on Testnet. They will be available on Mainnet in the future.
-
-:::
-
 Chain-specific gas fees can introduce several points of friction to end users and complicate institutional compliance for asset trading or payments. Eliminating chain-specific gas is a major simplification for regulated institutions to conduct payments without the burden of holding digital assets that might fluctuate in value.
 
 Gasless stablecoin transfers on Sui enable peer-to-peer payments of qualified stablecoins to execute without paying gas fees in SUI. The sender of the transaction does not need to hold SUI in their wallet. When the network is congested, the network prioritizes transactions that pay gas fees over gasless stablecoin transfers.
@@ -18,9 +12,11 @@ Gasless stablecoin transfers on Sui enable peer-to-peer payments of qualified st
 
 The stablecoins eligible for gasless stablecoin transfers are governed by the protocol configuration (`get_gasless_allowed_token_types` in `sui-types`) and can change across protocol versions. The current allowlist is 
 
+{/* TABLE:GASLESS_TOKENS — validated by scripts/validate-gasless-tokens.mjs against lib.rs */}
+
 | Symbol | Issuer | Package Address |
-| --------|--------------|--------------| 
-| USDC   | Circle | 0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC |
+| --------|--------------|--------------|
+| USDC | Circle | 0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC |
 | USDSUI | Bridge/Stripe | 0x44f838219cf67b058f3b37907b655f226153c18e33dfcd0da559a844fea9b1c1::usdsui::USDSUI |
 | SUI_USDE | Ethena | 0x41d587e5336f1c86cad50d38a7136db99333bb9bda91cea4ba69115defeb1402::sui_usde::SUI_USDE |
 | USDY | Ondo | 0x960b531667636f39e85867775f52f6b1f220a058c4de786905bdf761e06a56bb::usdy::USDY |
@@ -28,7 +24,6 @@ The stablecoins eligible for gasless stablecoin transfers are governed by the pr
 | AUSD | Agora | 0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2::ausd::AUSD |
 | USDB | Bucket Protocol | 0xe14726c336e81b32328e92afc37345d159f5b550b09fa92bd43640cfdd0a0cfd::usdb::USDB |
 
-[COMING SOON] To query the current allowlist programmatically, call `get_gasless_allowed_token_types` from the protocol config.
 
 ## What gasless stablecoin transfers don't cover
 
@@ -56,11 +51,11 @@ To integrate gasless stablecoins into wallets, wallet builders need to detect el
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Transaction } from '@mysten/sui/transactions';
 
-const USDC = '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
+const USDC = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC';
 
 const client = new SuiGrpcClient({
-	network: 'testnet',
-	baseUrl: 'https://fullnode.testnet.sui.io:443',
+	network: 'mainnet',
+	baseUrl: 'https://fullnode.mainnet.sui.io:443',
 });
 
 const tx = new Transaction();

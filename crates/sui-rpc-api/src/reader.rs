@@ -3,7 +3,10 @@
 
 use std::sync::Arc;
 
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_sdk_types::{EpochId, ValidatorCommittee};
+use sui_types::base_types::TransactionDigest;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::storage::ObjectKey;
 use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::{Error as StorageError, Result};
@@ -81,8 +84,6 @@ impl StateReader {
         sui_types::effects::TransactionEffects,
         Option<sui_types::effects::TransactionEvents>,
     )> {
-        use sui_types::effects::TransactionEffectsAPI;
-
         let transaction_digest = digest.into();
 
         let transaction = (*self
@@ -109,6 +110,78 @@ impl StateReader {
         let transaction = transaction.intent_message.value;
 
         Ok((transaction, signatures, effects, events))
+    }
+
+    pub fn multi_get_transaction_reads(
+        &self,
+        digests: &[sui_sdk_types::Digest],
+    ) -> crate::Result<Vec<TransactionRead>> {
+        let transaction_digests = digests
+            .iter()
+            .copied()
+            .map(Into::into)
+            .collect::<Vec<TransactionDigest>>();
+        let transactions = self.inner().multi_get_transactions(&transaction_digests);
+        let effects = self
+            .inner()
+            .multi_get_transaction_effects(&transaction_digests);
+        let events = self.inner().multi_get_events(&transaction_digests);
+
+        let mut reads = Vec::with_capacity(digests.len());
+        for (((digest, transaction_digest), transaction), (effects, events)) in digests
+            .iter()
+            .copied()
+            .zip_debug_eq(transaction_digests)
+            .zip_debug_eq(transactions)
+            .zip_debug_eq(effects.into_iter().zip_debug_eq(events))
+        {
+            let transaction = (*transaction.ok_or(TransactionNotFoundError(digest))?)
+                .clone()
+                .into_inner();
+            let effects = effects.ok_or(TransactionNotFoundError(digest))?;
+            let events = if effects.events_digest().is_some() {
+                events.ok_or(TransactionNotFoundError(digest))?.pipe(Some)
+            } else {
+                None
+            };
+
+            let transaction = transaction.into_data().into_inner();
+            let signatures = transaction.tx_signatures;
+            let transaction = transaction.intent_message.value;
+
+            let checkpoint = self.inner().get_transaction_checkpoint(&transaction_digest);
+            let timestamp_ms = if let Some(checkpoint) = checkpoint {
+                self.inner()
+                    .get_checkpoint_by_sequence_number(checkpoint)
+                    .map(|checkpoint| checkpoint.timestamp_ms)
+            } else {
+                None
+            };
+
+            let unchanged_loaded_runtime_objects = self
+                .inner()
+                .get_unchanged_loaded_runtime_objects(&transaction_digest);
+
+            reads.push(TransactionRead {
+                digest,
+                transaction,
+                signatures,
+                effects,
+                events,
+                checkpoint,
+                timestamp_ms,
+                unchanged_loaded_runtime_objects,
+            });
+        }
+
+        Ok(reads)
+    }
+
+    pub fn multi_get_events(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<sui_types::effects::TransactionEvents>> {
+        self.inner().multi_get_events(digests)
     }
 
     #[tracing::instrument(skip(self))]

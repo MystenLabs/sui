@@ -32,21 +32,11 @@ use crate::pipeline::pipelined_chunks;
 use crate::pipeline::pipelined_keyed_batches;
 use crate::pipeline::resolve_watermarks;
 use crate::pipeline::take_items;
-use crate::query_options::CheckpointRange;
-use crate::query_options::QueryOptions;
-use crate::query_options::QueryType;
-use crate::query_options::ResolvedRange;
 use crate::v2::get_transaction::compute_object_keys;
 use crate::v2::get_transaction::needs_object_types;
 use crate::v2::get_transaction::transaction_columns;
 use crate::v2::get_transaction::transaction_to_response;
 use crate::v2::get_transaction::validate_read_mask;
-use crate::v2alpha::watermark::advance_boundary_excluding_cp;
-use crate::v2alpha::watermark::boundary_cursor_cp;
-use crate::v2alpha::watermark::boundary_watermark;
-use crate::v2alpha::watermark::item_watermark;
-use crate::v2alpha::watermark::reached_range_end;
-use crate::v2alpha::watermark::terminal_boundary_watermark;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::error_contains;
 use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
@@ -56,6 +46,16 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionItem;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
+use sui_rpc_api::ledger_history::query_options::CheckpointRange;
+use sui_rpc_api::ledger_history::query_options::QueryOptions;
+use sui_rpc_api::ledger_history::query_options::QueryType;
+use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::watermark::advance_boundary_excluding_cp;
+use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
+use sui_rpc_api::ledger_history::watermark::boundary_watermark;
+use sui_rpc_api::ledger_history::watermark::item_watermark;
+use sui_rpc_api::ledger_history::watermark::reached_range_end;
+use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
 
 const DEFAULT_LIMIT_ITEMS: u32 = 50;
 const MAX_LIMIT_ITEMS: u32 = 500;
@@ -127,43 +127,32 @@ pub(crate) async fn list_transactions(
         .boxed());
     }
 
-    let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
+    let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
 
-    // Stage 1: discover tx_seq values for the requested response. Filtered
-    // requests stream from the bitmap eval (which emits per-bucket and
-    // periodic-frontier watermarks). Unfiltered requests synthesize Item-only
-    // output over the resolved range; every tx_seq becomes an item, so the last
-    // item watermark is the final resume cursor. `take_items` counts Items
-    // toward limit_items but lets watermarks pass through. Error type is
-    // `anyhow::Error` throughout so `BitmapScanLimitExceeded` survives in-band
-    // for the handler to downcast.
-    let seq_stream: BoxStream<'static, Result<Watermarked<u64>, anyhow::Error>> =
+    // Stage 1: discover tx_seq_digest rows for the requested response.
+    // Filtered requests are sparse bitmap hits and still use chunked
+    // multi_get lookups. Unfiltered requests scan the dense tx_seq_digest
+    // keyspace directly, bounded by limit_items.
+    let digest_stream: BoxStream<'static, Result<Watermarked<TxSeqDigestData>, anyhow::Error>> =
         if let Some(filter) = &request.filter {
+            let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
             let query = ctx.transaction_filter_query(filter)?;
-            client.eval_bitmap_query_stream(
+            let seq_stream = client.eval_bitmap_query_stream(
                 query,
                 tx_range.clone(),
                 BitmapIndexSpec::tx(),
                 options.scan_direction(),
                 scan_budget,
                 ctx.bitmap_scan_observer(),
-            )
+            );
+            let seq_stream = take_items(seq_stream, limit_items);
+            pipelined_chunks(seq_stream, CHUNK_MAX, request_bigtable_concurrency, {
+                let client = client.clone();
+                move |seqs| fetch_tx_seq_digests(client.clone(), seqs)
+            })
         } else {
-            range_stream(tx_range.clone(), &options)
-                .map(|r| r.map(Watermarked::Item).map_err(anyhow::Error::new))
-                .boxed()
+            scan_tx_seq_digests(client.clone(), tx_range.clone(), limit_items, &options).await?
         };
-    let seq_stream = take_items(seq_stream, limit_items);
-
-    let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
-
-    // Stage 2: tx_seq -> tx_seq_digest rows. Pipelined_chunks groups Items
-    // into BigTable multi_get chunks and passes watermarks through in
-    // input order.
-    let digest_stream = pipelined_chunks(seq_stream, CHUNK_MAX, request_bigtable_concurrency, {
-        let client = client.clone();
-        move |seqs| fetch_tx_seq_digests(client.clone(), seqs)
-    });
 
     let render_transaction_contents = should_render_transaction_contents(&read_mask);
     if !render_transaction_contents {
@@ -345,6 +334,18 @@ fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
     response
 }
 
+async fn scan_tx_seq_digests(
+    client: BigTableClient,
+    range: std::ops::Range<u64>,
+    limit: usize,
+    options: &QueryOptions,
+) -> Result<BoxStream<'static, Result<Watermarked<TxSeqDigestData>, anyhow::Error>>, RpcError> {
+    let rows = client
+        .scan_tx_seq_digests_stream(range, options.scan_direction(), limit)
+        .await?;
+    Ok(rows.map_ok(Watermarked::Item).boxed())
+}
+
 async fn fetch_tx_seq_digests(
     client: BigTableClient,
     seqs: Vec<u64>,
@@ -521,17 +522,6 @@ fn end_response(reason: QueryEndReason) -> ListTransactionsResponse {
     let mut response = ListTransactionsResponse::default();
     response.response = Some(list_transactions_response::Response::End(end));
     response
-}
-
-fn range_stream(
-    range: std::ops::Range<u64>,
-    options: &QueryOptions,
-) -> BoxStream<'static, Result<u64, RpcError>> {
-    if options.is_ascending() {
-        futures::stream::iter(range.map(Ok::<_, RpcError>)).boxed()
-    } else {
-        futures::stream::iter(range.rev().map(Ok::<_, RpcError>)).boxed()
-    }
 }
 
 #[cfg(test)]

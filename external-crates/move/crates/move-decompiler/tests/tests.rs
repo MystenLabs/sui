@@ -41,9 +41,9 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
     };
 
     let mut writer = Vec::new();
-    let env = Vanilla::default_environment();
-    let root_pkg: RootPackage<Vanilla> =
-        config.package_loader(pkg_dir, &env, Vanilla).load_sync()?;
+    let root_pkg: RootPackage<Vanilla> = config
+        .package_loader(pkg_dir, &Vanilla::default_environment(), Vanilla::new())
+        .load_sync()?;
 
     let model = model_builder::build(&mut writer, &root_pkg, &config)?;
 
@@ -94,8 +94,9 @@ fn run_full_test(file_path: &Path) -> datatest_stable::Result<()> {
 
     let mut writer = Vec::new();
     let env = Vanilla::default_environment();
-    let loaded_root_pkg: RootPackage<Vanilla> =
-        config.package_loader(pkg_dir, &env, Vanilla).load_sync()?;
+    let loaded_root_pkg: RootPackage<Vanilla> = config
+        .package_loader(pkg_dir, &env, Vanilla::new())
+        .load_sync()?;
     let root_pkg_info = loaded_root_pkg.package_info();
     let root_pkg = root_pkg_info.display_name();
 

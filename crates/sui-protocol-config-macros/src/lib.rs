@@ -41,9 +41,11 @@ use syn::{Data, DeriveInput, Fields, Type, parse_macro_input};
 /// ```
 ///
 /// Every field (scalar and non-scalar) is also emitted into a typed
-/// `render<F: Format, M: Meter>(&self, meter: &mut M) -> Result<BTreeMap<String, Option<F>>, MeterError>`
-/// method, where each value is produced via `mysten_common::rpc_format::ToFormat`. This is the
-/// path RPC code should use to expose protocol config to clients; the same call site can target
+/// `render<F: Format>(&self, meter: &mut impl Meter) -> Result<BTreeMap<String, F>, MeterError>`
+/// method, where each value is produced via `mysten_common::rpc_format::ToFormat`. Fields that
+/// aren't configured at the current protocol version render as `F::null(...)` rather than being
+/// absent from the map, so the keyset is stable across protocol versions. This is the path RPC
+/// code should use to expose protocol config to clients; the same call site can target
 /// `serde_json::Value`, `prost_types::Value`, or any other `Format` impl by choosing `F`.
 ///
 /// Scalar (`u16`/`u32`/`u64`/`bool`) fields continue to feed `ProtocolConfigValue` / `attr_map`
@@ -123,19 +125,18 @@ pub fn accessors_macro(input: TokenStream) -> TokenStream {
 
             /// Render every protocol-config attribute into the chosen `Format`.
             ///
-            /// The value is `Some(...)` when the field is set in this protocol version and
-            /// `None` when the field isn't configured at this version (matching `attr_map`'s
-            /// existing semantics for scalars).
-            pub fn render<F, M>(
+            /// Fields that aren't configured at this protocol version render as `F::null(...)`,
+            /// so the keyset is stable across versions and callers can distinguish "unknown
+            /// key" from "present but unset".
+            pub fn render<F>(
                 &self,
-                meter: &mut M,
+                meter: &mut impl ::mysten_common::rpc_format::Meter,
             ) -> ::std::result::Result<
-                std::collections::BTreeMap<String, Option<F>>,
+                std::collections::BTreeMap<String, F>,
                 ::mysten_common::rpc_format::MeterError,
             >
             where
                 F: ::mysten_common::rpc_format::Format,
-                M: ::mysten_common::rpc_format::Meter,
             {
                 let mut map = std::collections::BTreeMap::new();
                 #(#render_arms)*
@@ -237,11 +238,10 @@ fn expand_field(f: &AccessorField) -> ExpandedField {
 
     let render_arm = quote! {
         {
-            let value = self
-                .#field_name
-                .as_ref()
-                .map(|v| <_ as ::mysten_common::rpc_format::ToFormat>::to_format::<F, _>(v, meter))
-                .transpose()?;
+            let value = match self.#field_name.as_ref() {
+                Some(v) => <_ as ::mysten_common::rpc_format::ToFormat>::to_format::<F, _>(v, meter)?,
+                None => <F as ::mysten_common::rpc_format::Format>::null(meter)?,
+            };
             map.insert(stringify!(#field_name).to_owned(), value);
         }
     };

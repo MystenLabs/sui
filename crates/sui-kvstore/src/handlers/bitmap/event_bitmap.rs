@@ -12,6 +12,7 @@ use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_inverted_index::IndexDimension;
 use sui_inverted_index::for_each_event_dimension;
 use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::transaction::TransactionDataAPI;
 
 use crate::tables::event_bitmap_index;
 
@@ -41,12 +42,17 @@ impl BitmapIndexProcessor for EventBitmapProcessor {
 
         for (i, tx) in checkpoint.transactions.iter().enumerate() {
             let tx_seq = tx_lo + i as u64;
-            for_each_event_dimension(tx, |event_idx, dim, value| {
-                let event_seq = event_bitmap_index::encode_event_seq(tx_seq, event_idx);
-                let bucket_id = event_seq / event_bitmap_index::BUCKET_SIZE;
-                let bit_position = (event_seq % event_bitmap_index::BUCKET_SIZE) as u32;
-                emit(bucket_id, bit_position, dim, value);
-            });
+            for_each_event_dimension(
+                tx.transaction.sender(),
+                &tx.effects,
+                tx.events.as_ref(),
+                |event_idx, dim, value| {
+                    let event_seq = event_bitmap_index::encode_event_seq(tx_seq, event_idx);
+                    let bucket_id = event_seq / event_bitmap_index::BUCKET_SIZE;
+                    let bit_position = (event_seq % event_bitmap_index::BUCKET_SIZE) as u32;
+                    emit(bucket_id, bit_position, dim, value);
+                },
+            );
         }
     }
 
@@ -162,6 +168,42 @@ mod tests {
                 .bitmap
                 .contains(event_bitmap_index::event_seq_lo(101) as u32)
         );
+    }
+
+    #[tokio::test]
+    async fn emits_existence_bit_for_every_event() {
+        let checkpoint = TestCheckpointBuilder::new(0)
+            .with_network_total_transactions(100)
+            .start_transaction(1)
+            .with_events(vec![event(1), event(2)])
+            .finish_transaction()
+            .start_transaction(1)
+            .with_events(vec![event(3)])
+            .finish_transaction()
+            .build_checkpoint();
+
+        let values = BitmapIndexHandler::new(EventBitmapProcessor)
+            .process(&Arc::new(checkpoint))
+            .await
+            .unwrap();
+
+        let extant_key = event_bitmap_index::encode_row_key(
+            event_bitmap_index::SCHEMA_VERSION,
+            &encode_dimension_key(IndexDimension::EventExtant, &[]),
+            0,
+        );
+        let value = row(&values, &extant_key);
+        assert_eq!(value.bucket_id, 0);
+        // tx 100 emits 2 events (idx 0,1), tx 101 emits 1 (idx 0): 3 bits total,
+        // independent of the events' attributes.
+        assert_eq!(value.bitmap.len(), 3);
+        for (tx_seq, event_idx) in [(100, 0), (100, 1), (101, 0)] {
+            assert!(
+                value
+                    .bitmap
+                    .contains(event_bitmap_index::encode_event_seq(tx_seq, event_idx) as u32)
+            );
+        }
     }
 
     #[tokio::test]

@@ -11,15 +11,23 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_common::ZipDebugEqIteratorExt;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
+use roaring::RoaringBitmap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::Deserialize;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
+use sui_inverted_index::encode_dimension_key;
+use sui_inverted_index::for_each_event_dimension;
+use sui_inverted_index::for_each_transaction_dimension;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::ObjectID;
@@ -30,8 +38,9 @@ use sui_types::committee::EpochId;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{AccumulatorValue, TransactionEffectsAPI};
 use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::full_checkpoint_content::CheckpointTransaction;
+use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::layout_resolver::LayoutResolver;
-use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Data;
 use sui_types::object::Object;
@@ -39,6 +48,10 @@ use sui_types::object::Owner;
 use sui_types::storage::BackingPackageStore;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
+use sui_types::storage::LedgerBitmapBucket;
+use sui_types::storage::LedgerBitmapBucketIterator;
+use sui_types::storage::LedgerTxSeqDigest;
+use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::TransactionInfo;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -52,8 +65,52 @@ use typed_store::rocksdb::{MergeOperands, WriteOptions, compaction_filter::Decis
 use typed_store::traits::Map;
 
 const CURRENT_DB_VERSION: u64 = 4;
+
 // I tried increasing this to 100k and 1M and it didn't speed up indexing at all.
 const BALANCE_FLUSH_THRESHOLD: usize = 10_000;
+
+// Bitmap inverted index constants
+// A change to these constants requires bumping CURRENT_DB_VERSION
+const TX_BUCKET_SIZE: u64 = 65_536;
+// 2^28: 4,096 transactions per bucket. Must match sui-kvstore's
+// `event_bitmap_index::BUCKET_SIZE` and the reader's `EVENT_BITMAP_BUCKET_SIZE`.
+const EVENT_BUCKET_SIZE: u64 = 268_435_456;
+const EVENT_BITS: u32 = 16;
+const MAX_EVENTS_PER_TX: u32 = 1 << EVENT_BITS;
+const MAX_TX_SEQ: u64 = u64::MAX >> EVENT_BITS;
+
+const _: () = assert!(TX_BUCKET_SIZE <= u32::MAX as u64);
+const _: () = assert!(EVENT_BUCKET_SIZE <= u32::MAX as u64);
+const _: () = assert!(EVENT_BITS < u32::BITS);
+const _: () = assert!(EVENT_BITS < u64::BITS);
+const _: () = assert!(MAX_EVENTS_PER_TX as u64 == 1u64 << EVENT_BITS);
+const _: () = assert!(EVENT_BUCKET_SIZE.is_multiple_of(MAX_EVENTS_PER_TX as u64));
+
+fn checked_encode_event_seq(tx_seq: u64, event_idx: u32) -> Result<u64, StorageError> {
+    if event_idx >= MAX_EVENTS_PER_TX {
+        return Err(StorageError::custom(format!(
+            "event_idx {event_idx} exceeds packed event-seq limit {}",
+            MAX_EVENTS_PER_TX - 1
+        )));
+    }
+    if tx_seq > MAX_TX_SEQ {
+        return Err(StorageError::custom(format!(
+            "tx_seq {tx_seq} exceeds packed event-seq limit {MAX_TX_SEQ}"
+        )));
+    }
+    Ok((tx_seq << EVENT_BITS) | (event_idx as u64))
+}
+
+/// Lowest packed event_seq for a given `tx_seq` (idx 0), as an `Option` so
+/// the compaction filter (and other untrusted-input callers) get a clean
+/// `None` instead of an overflowing shift when `tx_seq > MAX_TX_SEQ`.
+fn checked_event_seq_lo(tx_seq: u64) -> Option<u64> {
+    if tx_seq <= MAX_TX_SEQ {
+        Some(tx_seq << EVENT_BITS)
+    } else {
+        None
+    }
+}
 
 fn bulk_ingestion_write_options() -> WriteOptions {
     let mut opts = WriteOptions::default();
@@ -90,6 +147,37 @@ fn get_available_memory() -> u64 {
 struct MetadataInfo {
     /// Version of the Database
     version: u64,
+}
+
+/// Per-DB rpc-index settings, persisted in their own column family so the
+/// schema `version` stays a clean monotonic number rather than carrying packed
+/// feature bits.
+///
+/// Stored as JSON inside an opaque `Vec<u8>` value (see [`encode_settings`])
+/// rather than as a bcs-encoded struct, so the settings can evolve without a
+/// schema break: every field carries `#[serde(default)]`, so a newer binary
+/// reading an older DB fills missing fields with defaults, and an older binary
+/// reading a newer DB ignores fields it doesn't know — safe in both upgrade
+/// directions. Add new flags here with `#[serde(default)]` and that property
+/// holds.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+struct IndexSettings {
+    /// Whether this DB was built with ledger-history indexing enabled.
+    #[serde(default)]
+    ledger_history_indexing: bool,
+}
+
+/// Serialize settings to the JSON bytes stored in the `settings` CF. JSON of a
+/// plain flag struct cannot fail, so this does not return a `Result`.
+fn encode_settings(settings: &IndexSettings) -> Vec<u8> {
+    serde_json::to_vec(settings).expect("IndexSettings is always JSON-serializable")
+}
+
+/// Decode `settings`-CF JSON bytes, defaulting on absent/corrupt data. With
+/// `#[serde(default)]` on every field, schema evolution never reaches the
+/// default-on-error path; only genuine corruption does.
+fn decode_settings(bytes: &[u8]) -> IndexSettings {
+    serde_json::from_slice(bytes).unwrap_or_default()
 }
 
 /// Checkpoint watermark type
@@ -211,13 +299,142 @@ pub struct PackageVersionInfo {
     pub storage_id: ObjectID,
 }
 
+/// Row of the `tx_seq_digest` table — direct mapping from `tx_sequence_number`
+/// to `(digest, event_count, tx_offset, checkpoint_number)`. `event_count` lets
+/// event listings enumerate a transaction's event_seqs without rereading the tx
+/// row. `tx_offset` is the transaction's zero-based position within its
+/// checkpoint, letting readers report a `(checkpoint, tx_offset)` coordinate
+/// without recomputing it from the checkpoint's base sequence number.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+pub struct TxSeqDigestInfo {
+    pub digest: TransactionDigest,
+    pub event_count: u32,
+    pub tx_offset: u32,
+    pub checkpoint_number: CheckpointSequenceNumber,
+}
+
+/// Row key for both bitmap CFs.
+///
+/// `dimension_key` is `[tag_byte][value_bytes]` per `sui-inverted-index`.
+/// `bucket_id` is the integer division `seq / BUCKET_SIZE` for whichever
+/// sequence space the CF is keyed by (tx_seq for `transaction_bitmap`, packed
+/// event_seq for `event_bitmap`).
+///
+/// typed-store encodes keys with bincode `with_big_endian().with_fixint_encoding()`,
+/// so the on-disk layout is:
+///   [8 B BE length(dimension_key)] [dimension_key bytes] [8 B BE bucket_id]
+/// Within a fixed `dimension_key`, range scans over `bucket_id` are
+/// numerically ordered. The compaction filter recovers `bucket_id` from the
+/// trailing 8 bytes.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct BitmapIndexKey {
+    pub dimension_key: Vec<u8>,
+    pub bucket_id: u64,
+}
+
+/// Value stored in the bitmap CFs: the raw bytes of `RoaringBitmap::serialize_into`.
+///
+/// typed-store BCS-wraps this on disk (ULEB128 length prefix + raw bitmap
+/// bytes). The merge operator decodes operands, ORs them, and re-encodes —
+/// see `bitmap_union_merge_operator`.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+pub struct BitmapBlob(pub Vec<u8>);
+
+impl From<RoaringBitmap> for BitmapBlob {
+    fn from(bm: RoaringBitmap) -> Self {
+        let mut buf = Vec::with_capacity(bm.serialized_size());
+        bm.serialize_into(&mut buf)
+            .expect("RoaringBitmap::serialize_into on Vec cannot fail");
+        Self(buf)
+    }
+}
+
+fn ledger_tx_seq_digest(tx_sequence_number: u64, info: TxSeqDigestInfo) -> LedgerTxSeqDigest {
+    LedgerTxSeqDigest {
+        tx_sequence_number,
+        digest: info.digest,
+        event_count: info.event_count,
+        tx_offset: info.tx_offset,
+        checkpoint_number: info.checkpoint_number,
+    }
+}
+
+fn decode_ledger_bitmap_bucket(
+    key: BitmapIndexKey,
+    blob: BitmapBlob,
+) -> Result<LedgerBitmapBucket, TypedStoreError> {
+    let bitmap = RoaringBitmap::deserialize_from(&blob.0[..]).map_err(|e| {
+        TypedStoreError::SerializationError(format!("decode ledger bitmap bucket: {e}"))
+    })?;
+    Ok(LedgerBitmapBucket {
+        bucket_id: key.bucket_id,
+        bitmap,
+    })
+}
+
+/// Which sequence space a bitmap CF is keyed by. Owns the whole-bucket
+/// removability math the `BitmapCompactionFilter` applies.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BitmapKind {
+    Transaction,
+    Event,
+}
+
+impl BitmapKind {
+    /// Returns true when every seq in `bucket_id` is strictly below
+    /// `pruned_tx_seq_exclusive` — i.e. the whole bucket row is safe to drop.
+    ///
+    /// Both kinds bucket by integer division, but in different sequence
+    /// spaces, while the prune watermark is always in tx-seq space:
+    /// `Transaction` buckets are tx-seq ranges, so the watermark compares
+    /// directly; `Event` buckets are packed-event-seq ranges, so the watermark
+    /// is first converted to its lowest event-seq (`checked_event_seq_lo`).
+    ///
+    /// All arithmetic is `checked_*`: `bucket_id` is untrusted input decoded
+    /// from a rocksdb key, and an overflow must not panic the compaction
+    /// thread — it conservatively returns `false` (keep) instead.
+    fn bucket_fully_pruned(self, bucket_id: u64, pruned_tx_seq_exclusive: u64) -> bool {
+        match self {
+            BitmapKind::Transaction => bucket_id
+                .checked_add(1)
+                .and_then(|b| b.checked_mul(TX_BUCKET_SIZE))
+                .map(|hi| hi <= pruned_tx_seq_exclusive)
+                .unwrap_or(false),
+            BitmapKind::Event => {
+                let bucket_hi = bucket_id
+                    .checked_add(1)
+                    .and_then(|b| b.checked_mul(EVENT_BUCKET_SIZE));
+                let threshold = checked_event_seq_lo(pruned_tx_seq_exclusive);
+                match (bucket_hi, threshold) {
+                    (Some(hi), Some(th)) => hi <= th,
+                    _ => false,
+                }
+            }
+        }
+    }
+}
+
 #[derive(Default, Clone)]
 pub struct IndexStoreOptions {
     pub events_compaction_filter: Option<EventsCompactionFilter>,
+    /// Shared exclusive tx-seq prune floor for compaction filters.
+    /// A zero floor keeps every bucket.
+    pub pruning_tx_seq_exclusive: Arc<AtomicU64>,
 }
 
 fn default_table_options() -> typed_store::rocks::DBOptions {
     typed_store::rocks::default_db_options().disable_write_throttling()
+}
+
+/// Like `default_table_options`, but honors range-delete tombstones immediately
+/// instead of ignoring them until compaction (the rocksdb default). `tx_seq_digest`
+/// is pruned with `schedule_delete_range` and `first_tx_seq_digest_key` reads the
+/// resulting pruning floor straight back, so tombstones must be visible to reads at
+/// once or the floor would not advance until a compaction happened to run.
+fn tx_seq_digest_table_options() -> typed_store::rocks::DBOptions {
+    let mut options = default_table_options();
+    options.rw_options = options.rw_options.clone().set_ignore_range_deletions(false);
+    options
 }
 
 fn events_table_options(
@@ -295,6 +512,128 @@ fn balance_table_options() -> typed_store::rocks::DBOptions {
         .set_compaction_filter("balance_zero_filter", balance_compaction_filter)
 }
 
+// Bitmap inverted index: merge operator, compaction filter, options.
+
+fn decode_bitmap_blob(bcs_bytes: &[u8]) -> Result<RoaringBitmap, anyhow::Error> {
+    let blob: BitmapBlob = bcs::from_bytes(bcs_bytes)?;
+    Ok(RoaringBitmap::deserialize_from(&blob.0[..])?)
+}
+
+fn encode_bitmap_blob(bm: &RoaringBitmap) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(bm.serialized_size());
+    bm.serialize_into(&mut buf)
+        .expect("RoaringBitmap::serialize_into on Vec cannot fail");
+    bcs::to_bytes(&BitmapBlob(buf)).expect("BCS encode of BitmapBlob cannot fail")
+}
+
+/// RocksDB merge operator for both bitmap CFs. ORs all operands (and any
+/// existing on-disk value) into a single bitmap.
+fn bitmap_union_merge_operator(
+    _key: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: &MergeOperands,
+) -> Option<Vec<u8>> {
+    let mut acc = match existing_val {
+        Some(v) => match decode_bitmap_blob(v) {
+            Ok(bm) => bm,
+            Err(e) => {
+                tracing::error!(
+                    "Failed to deserialize existing BitmapBlob during merge - data corruption: {e}"
+                );
+                return None;
+            }
+        },
+        None => RoaringBitmap::new(),
+    };
+
+    for operand in operands.iter() {
+        match decode_bitmap_blob(operand) {
+            Ok(bm) => acc |= bm,
+            Err(e) => {
+                tracing::error!(
+                    "Failed to deserialize BitmapBlob operand during merge - data corruption: {e}"
+                );
+                return None;
+            }
+        }
+    }
+
+    // Convert dense containers to run containers before serializing the
+    // accumulated bitmap. This is the on-disk representation (the merge
+    // operator's output is what RocksDB stores), and a bucket that matches
+    // many consecutive tx_seqs compresses substantially as runs. Mirrors the
+    // BigTable bitmap committer, which optimizes each row before writing.
+    // Operands are not optimized — they carry a bit or a handful, so there is
+    // nothing for run-encoding to collapse.
+    acc.optimize();
+    Some(encode_bitmap_blob(&acc))
+}
+
+/// Whole-bucket compaction filter for bitmap CFs. Reads the trailing 8 bytes
+/// of a typed-store key as `bucket_id` (bincode big-endian fixed-int), then
+/// removes the row iff the bucket is entirely below the current
+/// `tx_seq_pruning_watermark` exclusive value.
+///
+/// Never `Remove` on a parse failure: silent data loss is worse than a stuck
+/// row. The bucket math is `checked_*` because `bucket_id` is untrusted input
+/// from rocksdb — a corrupted key shouldn't be able to panic the compaction
+/// thread.
+#[derive(Clone)]
+pub struct BitmapCompactionFilter {
+    pruning_tx_seq_exclusive: Arc<AtomicU64>,
+    kind: BitmapKind,
+}
+
+impl BitmapCompactionFilter {
+    pub fn new(pruning_tx_seq_exclusive: Arc<AtomicU64>, kind: BitmapKind) -> Self {
+        Self {
+            pruning_tx_seq_exclusive,
+            kind,
+        }
+    }
+
+    pub fn filter(&self, key: &[u8], _value: &[u8]) -> Decision {
+        if key.len() < 8 {
+            warn!(
+                kind = ?self.kind,
+                "bitmap compaction filter saw key shorter than 8 bytes ({}); keeping",
+                key.len(),
+            );
+            return Decision::Keep;
+        }
+        let bucket_id =
+            u64::from_be_bytes(key[key.len() - 8..].try_into().expect("len checked above"));
+        let pruned_exclusive = self.pruning_tx_seq_exclusive.load(Ordering::Relaxed);
+
+        if self.kind.bucket_fully_pruned(bucket_id, pruned_exclusive) {
+            Decision::Remove
+        } else {
+            Decision::Keep
+        }
+    }
+}
+
+/// Default bitmap CF options. The merge operator must be present on every open;
+/// `bitmap_cf_options` adds the runtime compaction filter.
+fn bitmap_cf_default_options() -> typed_store::rocks::DBOptions {
+    default_table_options()
+        .set_merge_operator_associative("bitmap_union_merge", bitmap_union_merge_operator)
+}
+
+/// Bitmap CF options with the per-CF compaction filter attached.
+fn bitmap_cf_options(
+    filter_name: &str,
+    filter: BitmapCompactionFilter,
+) -> typed_store::rocks::DBOptions {
+    let mut options = bitmap_cf_default_options();
+    options
+        .options
+        .set_compaction_filter(filter_name, move |_level, key, value| {
+            filter.filter(key, value)
+        });
+    options
+}
+
 impl CoinIndexInfo {
     fn merge(&mut self, other: Self) {
         self.coin_metadata_object_id = self
@@ -325,6 +664,14 @@ struct IndexStoreTables {
     /// - version of the DB. Everytime a new table or schema is changed the version number needs to
     ///   be incremented.
     meta: DBMap<(), MetadataInfo>,
+
+    /// A singleton recording which optional features this DB was built with
+    /// (currently just ledger-history indexing). Kept separate from `meta` so
+    /// the schema `version` need not encode feature flags. The value is
+    /// `IndexSettings` as JSON bytes (see `IndexSettings`); auto-created on older
+    /// DBs, and a missing entry reads as `IndexSettings::default()` (all features
+    /// off).
+    settings: DBMap<(), Vec<u8>>,
 
     /// Table used to track watermark for the highest indexed checkpoint
     ///
@@ -384,6 +731,18 @@ struct IndexStoreTables {
 
     /// Authenticated events index by (stream_id, checkpoint_seq, transaction_idx, event_index)
     events_by_stream: DBMap<EventIndexKey, ()>,
+
+    /// `tx_sequence_number` → (digest, event_count, checkpoint_number).
+    #[default_options_override_fn = "tx_seq_digest_table_options"]
+    tx_seq_digest: DBMap<u64, TxSeqDigestInfo>,
+
+    /// Transaction bitmap index keyed by `(dimension_key, tx_seq bucket)`.
+    #[default_options_override_fn = "bitmap_cf_default_options"]
+    transaction_bitmap: DBMap<BitmapIndexKey, BitmapBlob>,
+
+    /// Event bitmap index keyed by `(dimension_key, packed event_seq bucket)`.
+    #[default_options_override_fn = "bitmap_cf_default_options"]
+    event_bitmap: DBMap<BitmapIndexKey, BitmapBlob>,
     // NOTE: Authors and Reviewers before adding any new tables ensure that they are either:
     // - bounded in size by the live object set
     // - are prune-able and have corresponding logic in the `prune` function
@@ -424,6 +783,33 @@ impl EventsCompactionFilter {
     }
 }
 
+/// Completely empty a column family and physically reclaim its disk. A single
+/// range tombstone over `[first, last)` (end-exclusive, so paired with a point
+/// delete of `last`) drops every row in O(1). The range is then compacted so
+/// the data is physically removed: this reclaims the space immediately rather
+/// than waiting for a background compaction, and makes the rows invisible to
+/// reads regardless of the CF's `ignore_range_deletions` setting.
+fn clear_table<K, V>(map: &DBMap<K, V>) -> Result<(), TypedStoreError>
+where
+    K: Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
+{
+    let first = map.safe_iter().next().transpose()?.map(|(k, _)| k);
+    let last = map
+        .reversed_safe_iter_with_bounds(None, None)?
+        .next()
+        .transpose()?
+        .map(|(k, _)| k);
+    let (Some(first), Some(last)) = (first, last) else {
+        return Ok(());
+    };
+    let mut batch = map.batch();
+    batch.schedule_delete_range(map, &first, &last)?;
+    batch.delete_batch(map, std::iter::once(&last))?;
+    batch.write()?;
+    map.compact_range(&first, &last)
+}
+
 impl IndexStoreTables {
     fn extract_version_if_package(
         object: &Object,
@@ -459,9 +845,28 @@ impl IndexStoreTables {
             table_options.insert(table_name, default_table_options());
         }
         table_options.insert("balance".to_string(), balance_table_options());
+        // Range-delete pruning needs tombstones honored by reads immediately.
+        table_options.insert("tx_seq_digest".to_string(), tx_seq_digest_table_options());
         table_options.insert(
             "events_by_stream".to_string(),
             events_table_options(index_options.events_compaction_filter),
+        );
+
+        let bitmap_filter_tx = BitmapCompactionFilter::new(
+            index_options.pruning_tx_seq_exclusive.clone(),
+            BitmapKind::Transaction,
+        );
+        let bitmap_filter_event = BitmapCompactionFilter::new(
+            index_options.pruning_tx_seq_exclusive.clone(),
+            BitmapKind::Event,
+        );
+        table_options.insert(
+            "transaction_bitmap".to_string(),
+            bitmap_cf_options("transaction_bitmap_filter", bitmap_filter_tx),
+        );
+        table_options.insert(
+            "event_bitmap".to_string(),
+            bitmap_cf_options("event_bitmap_filter", bitmap_filter_event),
         );
 
         IndexStoreTables::open_tables_read_write_with_deprecation_option(
@@ -487,12 +892,58 @@ impl IndexStoreTables {
         )
     }
 
-    fn needs_to_do_initialization(&self, checkpoint_store: &CheckpointStore) -> bool {
-        (match self.meta.get(&()) {
+    /// Whether the ledger-history feature was enabled when this DB was built,
+    /// as persisted in the `settings` CF. A missing entry (fresh or pre-feature
+    /// DB) reads as `false`.
+    fn persisted_ledger_history_indexing(&self) -> bool {
+        self.read_settings().ledger_history_indexing
+    }
+
+    /// Read the persisted settings, defaulting when the row is absent or
+    /// unreadable.
+    fn read_settings(&self) -> IndexSettings {
+        self.settings
+            .get(&())
+            .ok()
+            .flatten()
+            .map(|bytes| decode_settings(&bytes))
+            .unwrap_or_default()
+    }
+
+    fn needs_to_do_initialization(
+        &self,
+        checkpoint_store: &CheckpointStore,
+        ledger_history_indexing: bool,
+    ) -> bool {
+        let schema_stale = match self.meta.get(&()) {
             Ok(Some(metadata)) => metadata.version != CURRENT_DB_VERSION,
-            Ok(None) => true,
-            Err(_) => true,
-        }) || self.is_indexed_watermark_out_of_date(checkpoint_store)
+            Ok(None) | Err(_) => true,
+        };
+        // *Enabling* ledger history requires a full rebuild to backfill the
+        // historical rows. *Disabling* it does not — the base indexes stay
+        // valid, so the now-unused history CFs are dropped in place by
+        // `disable_ledger_history_indexing` instead.
+        let enabling = ledger_history_indexing && !self.persisted_ledger_history_indexing();
+        schema_stale || enabling || self.is_indexed_watermark_out_of_date(checkpoint_store)
+    }
+
+    /// Drop the ledger-history column families and clear the persisted feature
+    /// flag without rebuilding the rest of the index. Used when a node that had
+    /// ledger history enabled restarts with it disabled: the base indexes are
+    /// untouched, so only the now-unused history rows need to go. Idempotent —
+    /// it runs at open before the store goes live, so a crash mid-way just
+    /// re-runs it on the next start.
+    fn disable_ledger_history_indexing(&self) -> Result<(), TypedStoreError> {
+        clear_table(&self.tx_seq_digest)?;
+        clear_table(&self.transaction_bitmap)?;
+        clear_table(&self.event_bitmap)?;
+        self.settings.insert(
+            &(),
+            &encode_settings(&IndexSettings {
+                ledger_history_indexing: false,
+            }),
+        )?;
+        Ok(())
     }
 
     // Check if the index watermark is behind the highets_executed watermark.
@@ -537,12 +988,22 @@ impl IndexStoreTables {
             lowest_available_checkpoint..=highest_executed_checkpint
         });
 
-        if let Some(checkpoint_range) = checkpoint_range {
+        if let Some(checkpoint_range) = checkpoint_range.clone() {
             self.index_existing_checkpoints(
                 authority_store,
                 checkpoint_store,
                 checkpoint_range,
                 rpc_config,
+            )?;
+        }
+
+        if rpc_config.ledger_history_indexing()
+            && let Some(checkpoint_range) = checkpoint_range
+        {
+            self.backfill_ledger_history_indexes(
+                authority_store,
+                checkpoint_store,
+                checkpoint_range,
             )?;
         }
 
@@ -573,12 +1034,28 @@ impl IndexStoreTables {
             &highest_executed_checkpint.unwrap_or(0),
         )?;
 
-        self.meta.insert(
-            &(),
-            &MetadataInfo {
-                version: CURRENT_DB_VERSION,
-            },
+        // Write the schema version and the feature settings in one batch so the
+        // two can never be persisted independently.
+        let mut batch = self.meta.batch();
+        batch.insert_batch(
+            &self.meta,
+            [(
+                (),
+                MetadataInfo {
+                    version: CURRENT_DB_VERSION,
+                },
+            )],
         )?;
+        batch.insert_batch(
+            &self.settings,
+            [(
+                (),
+                encode_settings(&IndexSettings {
+                    ledger_history_indexing: rpc_config.ledger_history_indexing(),
+                }),
+            )],
+        )?;
+        batch.write()?;
 
         info!("Finished initializing RPC indexes");
 
@@ -627,11 +1104,80 @@ impl IndexStoreTables {
         Ok(())
     }
 
-    /// Prune data from this Index
+    /// Backfill ledger history rows over a freshly recreated rpc-index DB.
+    ///
+    /// Bulk writes disable WAL, so this flushes before `init()` writes the
+    /// `meta.version` / `settings` markers; otherwise a crash could persist
+    /// those markers without the rows they claim to cover.
+    fn backfill_ledger_history_indexes(
+        &self,
+        authority_store: &AuthorityStore,
+        checkpoint_store: &CheckpointStore,
+        checkpoint_range: std::ops::RangeInclusive<u64>,
+    ) -> Result<(), StorageError> {
+        info!("ledger history backfill: cps {checkpoint_range:?}");
+        let start_time = Instant::now();
+
+        checkpoint_range.clone().into_par_iter().try_for_each(
+            |seq| -> Result<(), StorageError> {
+                let cp_data = full_checkpoint_data_for_backfill(
+                    authority_store,
+                    checkpoint_store,
+                    seq,
+                )?
+                .ok_or_else(|| {
+                    // Missing retained data would leave a permanent hole.
+                    StorageError::missing(format!(
+                        "ledger history backfill: checkpoint {seq} is missing from local storage \
+                         but falls inside the retained backfill range {checkpoint_range:?}"
+                    ))
+                })?;
+                let mut batch = self.meta.batch();
+                self.write_ledger_history_rows_for_checkpoint(&cp_data, &mut batch)?;
+                batch
+                    .write_opt(bulk_ingestion_write_options())
+                    .map_err(StorageError::from)
+            },
+        )?;
+
+        // Flushing one CF flushes the whole shared RocksDB instance.
+        self.tx_seq_digest.flush().map_err(|e| {
+            StorageError::custom(format!("flush after ledger history backfill: {e}"))
+        })?;
+
+        info!(
+            "ledger history backfill took {} seconds",
+            start_time.elapsed().as_secs()
+        );
+        Ok(())
+    }
+
+    /// The lowest live key of `tx_seq_digest`: the ledger history pruning
+    /// floor in tx-seq space. `prune()` maintains the invariant that this
+    /// equals the highest fully-pruned tx_seq (exclusive): pruning
+    /// point-deletes `tx_seq_digest` rows below the floor, and forward
+    /// indexing only adds rows above it. Returns `None` when the CF is empty
+    /// (nothing indexed yet), which callers treat as floor 0.
+    fn first_tx_seq_digest_key(&self) -> Result<Option<u64>, TypedStoreError> {
+        match self.tx_seq_digest.safe_iter().next() {
+            Some(Ok((k, _))) => Ok(Some(k)),
+            Some(Err(e)) => Err(e),
+            None => Ok(None),
+        }
+    }
+
+    /// Prune data from this Index. `pruned_tx_seq_exclusive` is the absolute
+    /// tx-seq floor after this prune — the caller derives it from the
+    /// last-pruned checkpoint's `network_total_transactions`.
+    ///
+    /// When ledger history is enabled, the compaction-filter atomic is moved to
+    /// the new floor *after* the batch commits, so the atomic never leads disk.
     fn prune(
         &self,
         pruned_checkpoint_watermark: u64,
-        _checkpoint_contents_to_prune: &[CheckpointContents],
+        pruned_tx_seq_exclusive: u64,
+        ledger_history_enabled: bool,
+        pruning_atomic: &AtomicU64,
     ) -> Result<(), TypedStoreError> {
         let mut batch = self.watermark.batch();
 
@@ -640,7 +1186,25 @@ impl IndexStoreTables {
             [(Watermark::Pruned, pruned_checkpoint_watermark)],
         )?;
 
-        batch.write()
+        if ledger_history_enabled {
+            // First live `tx_seq_digest` key = current floor, read from disk so a
+            // prune skipped by a crash self-heals on the next call. The range
+            // delete shares the batch with the `Watermark::Pruned` insert above.
+            let prev_exclusive = self.first_tx_seq_digest_key()?.unwrap_or(0);
+            batch.schedule_delete_range(
+                &self.tx_seq_digest,
+                &prev_exclusive,
+                &pruned_tx_seq_exclusive,
+            )?;
+        }
+
+        batch.write()?;
+
+        if ledger_history_enabled {
+            // After the commit so the atomic never leads disk.
+            pruning_atomic.store(pruned_tx_seq_exclusive, Ordering::Relaxed);
+        }
+        Ok(())
     }
 
     /// Index a Checkpoint
@@ -649,6 +1213,7 @@ impl IndexStoreTables {
         checkpoint: &CheckpointData,
         _resolver: &mut dyn LayoutResolver,
         rpc_config: &sui_config::RpcConfig,
+        ledger_history_enabled: bool,
     ) -> Result<typed_store::rocks::DBBatch, StorageError> {
         debug!(
             checkpoint = checkpoint.checkpoint_summary.sequence_number,
@@ -664,6 +1229,11 @@ impl IndexStoreTables {
             rpc_config.authenticated_events_indexing(),
         )?;
         self.index_objects(checkpoint, &mut batch)?;
+
+        // Ledger history rows ride the same batch as `Watermark::Indexed`.
+        if ledger_history_enabled {
+            self.write_ledger_history_rows_for_checkpoint(checkpoint, &mut batch)?;
+        }
 
         batch.insert_batch(
             &self.watermark,
@@ -681,10 +1251,7 @@ impl IndexStoreTables {
         Ok(batch)
     }
 
-    fn extract_accumulator_version(
-        &self,
-        tx: &sui_types::full_checkpoint_content::CheckpointTransaction,
-    ) -> Option<u64> {
+    fn extract_accumulator_version(&self, tx: &CheckpointTransaction) -> Option<u64> {
         let TransactionKind::ProgrammableSystemTransaction(pt) =
             tx.transaction.transaction_data().kind()
         else {
@@ -709,7 +1276,7 @@ impl IndexStoreTables {
 
     fn index_transaction_events(
         &self,
-        tx: &sui_types::full_checkpoint_content::CheckpointTransaction,
+        tx: &CheckpointTransaction,
         checkpoint_seq: u64,
         tx_idx: u32,
         accumulator_version: Option<u64>,
@@ -862,6 +1429,142 @@ impl IndexStoreTables {
                 )?;
             }
         }
+
+        Ok(())
+    }
+
+    /// Emit `tx_seq_digest` rows and bitmap merge operands for every tx in
+    /// `checkpoint`. Shared by forward indexing (`index_checkpoint`) and the
+    /// rebuild-time ledger history backfill. There is no separate watermark:
+    /// `Watermark::Indexed` is the source of truth for coverage.
+    fn write_ledger_history_rows_for_checkpoint(
+        &self,
+        checkpoint: &CheckpointData,
+        batch: &mut typed_store::rocks::DBBatch,
+    ) -> Result<(), StorageError> {
+        let cp_seq = checkpoint.checkpoint_summary.sequence_number;
+        let net_total = checkpoint
+            .checkpoint_summary
+            .data()
+            .network_total_transactions;
+        let tx_count = checkpoint.transactions.len() as u64;
+        // `network_total_transactions` is cumulative *including* this cp.
+        // checked_sub: if the cp's network_total_transactions is somehow
+        // less than its own tx count, surface an error rather than wrap.
+        let tx_lo = net_total.checked_sub(tx_count).ok_or_else(|| {
+            StorageError::custom(format!(
+                "checkpoint {cp_seq}: network_total_transactions ({net_total}) \
+                 < tx_count ({tx_count})"
+            ))
+        })?;
+
+        // Build one ObjectSet covering all txs in the cp so the dimension
+        // extractor's object_set.get(ObjectKey) lookups work without per-tx
+        // allocation. Costs O(input_objects + output_objects) clones.
+        let mut object_set = ObjectSet::default();
+        for tx in &checkpoint.transactions {
+            for obj in tx.input_objects.iter().chain(tx.output_objects.iter()) {
+                object_set.insert(obj.clone());
+            }
+        }
+
+        // Group tx-space bitmap bits across the whole checkpoint so repeated
+        // dimensions in the same tx bucket produce one Rocks merge operand.
+        let mut tx_groups: FxHashMap<(Vec<u8>, u64), RoaringBitmap> = FxHashMap::default();
+
+        for (i, tx) in checkpoint.transactions.iter().enumerate() {
+            let tx_seq = tx_lo + i as u64;
+
+            let tx_data = tx.transaction.transaction_data();
+            let digest = *tx.transaction.digest();
+            let event_count = tx.events.as_ref().map(|e| e.data.len() as u32).unwrap_or(0);
+
+            // tx_seq_digest: one direct row per tx, no merge needed.
+            batch.insert_batch(
+                &self.tx_seq_digest,
+                [(
+                    tx_seq,
+                    TxSeqDigestInfo {
+                        digest,
+                        event_count,
+                        // `i` is the transaction's zero-based position within this checkpoint.
+                        tx_offset: i as u32,
+                        checkpoint_number: cp_seq,
+                    },
+                )],
+            )?;
+
+            // Tx-space bitmap: dedup dimension_keys within this tx, then add
+            // this tx's bit to the checkpoint-scoped bitmap group.
+            let tx_bucket = tx_seq / TX_BUCKET_SIZE;
+            let tx_bit = (tx_seq % TX_BUCKET_SIZE) as u32;
+            let mut tx_dim_keys: FxHashSet<Vec<u8>> = FxHashSet::default();
+            for_each_transaction_dimension(
+                tx_data,
+                &tx.effects,
+                tx.events.as_ref(),
+                &object_set,
+                |dim, value| {
+                    tx_dim_keys.insert(encode_dimension_key(dim, value));
+                },
+            );
+            for dim_key in tx_dim_keys {
+                tx_groups
+                    .entry((dim_key, tx_bucket))
+                    .or_default()
+                    .insert(tx_bit);
+            }
+
+            // Event-space bitmap: bits from multiple events of the same tx
+            // can share a (dim_key, bucket); group into a RoaringBitmap so
+            // we emit at most one operand per group.
+            let mut event_groups: FxHashMap<(Vec<u8>, u64), RoaringBitmap> = FxHashMap::default();
+            let mut event_seq_error = None;
+            for_each_event_dimension(
+                tx_data.sender(),
+                &tx.effects,
+                tx.events.as_ref(),
+                |event_idx, dim, value| {
+                    let event_seq = match checked_encode_event_seq(tx_seq, event_idx) {
+                        Ok(event_seq) => event_seq,
+                        Err(e) => {
+                            event_seq_error.get_or_insert(e);
+                            return;
+                        }
+                    };
+                    let bucket = event_seq / EVENT_BUCKET_SIZE;
+                    let bit = (event_seq % EVENT_BUCKET_SIZE) as u32;
+                    event_groups
+                        .entry((encode_dimension_key(dim, value), bucket))
+                        .or_default()
+                        .insert(bit);
+                },
+            );
+            if let Some(e) = event_seq_error {
+                return Err(e);
+            }
+            let event_ops = event_groups.into_iter().map(|((dim_key, bucket), bm)| {
+                (
+                    BitmapIndexKey {
+                        dimension_key: dim_key,
+                        bucket_id: bucket,
+                    },
+                    BitmapBlob::from(bm),
+                )
+            });
+            batch.partial_merge_batch(&self.event_bitmap, event_ops)?;
+        }
+
+        let tx_ops = tx_groups.into_iter().map(|((dim_key, bucket), bm)| {
+            (
+                BitmapIndexKey {
+                    dimension_key: dim_key,
+                    bucket_id: bucket,
+                },
+                BitmapBlob::from(bm),
+            )
+        });
+        batch.partial_merge_batch(&self.transaction_bitmap, tx_ops)?;
 
         Ok(())
     }
@@ -1144,6 +1847,14 @@ pub struct RpcIndexStore {
     tables: IndexStoreTables,
     pending_updates: Mutex<BTreeMap<u64, typed_store::rocks::DBBatch>>,
     rpc_config: sui_config::RpcConfig,
+    /// Shared with the bitmap compaction filters. Advanced by `prune()` after
+    /// the corresponding watermark batch commits, so compactions never see a
+    /// value that hasn't been persisted.
+    ledger_history_pruning_watermark: Arc<AtomicU64>,
+    /// True iff this rpc-index DB was built with ledger history indexing
+    /// enabled. Derived once at open from the persisted `settings` CF and used
+    /// as the gate for forward indexing and pruning.
+    ledger_history_enabled: bool,
 }
 
 impl RpcIndexStore {
@@ -1162,8 +1873,11 @@ impl RpcIndexStore {
         rpc_config: sui_config::RpcConfig,
     ) -> Self {
         let events_filter = EventsCompactionFilter::new(pruning_watermark);
+        // Internal-only tx-seq floor, hydrated from disk on open.
+        let ledger_history_pruning_watermark = Arc::new(AtomicU64::new(0));
         let index_options = IndexStoreOptions {
             events_compaction_filter: Some(events_filter),
+            pruning_tx_seq_exclusive: ledger_history_pruning_watermark,
         };
 
         Self::new_with_options(
@@ -1190,12 +1904,16 @@ impl RpcIndexStore {
         let path = Self::db_path(dir);
         let index_config = rpc_config.index_initialization_config();
 
+        let ledger_history_atomic = index_options.pruning_tx_seq_exclusive.clone();
+
         let tables = {
             let tables = IndexStoreTables::open_with_index_options(&path, index_options.clone());
 
-            // If the index tables are uninitialized or on an older version then we need to
-            // populate them
-            if tables.needs_to_do_initialization(checkpoint_store) {
+            // Rebuild if the schema or watermarks are stale, or ledger history
+            // is being enabled (which needs a backfill).
+            if tables
+                .needs_to_do_initialization(checkpoint_store, rpc_config.ledger_history_indexing())
+            {
                 let batch_size_limit;
 
                 let mut tables = {
@@ -1353,6 +2071,39 @@ impl RpcIndexStore {
                         events_table_options(index_options.events_compaction_filter.clone()),
                     );
 
+                    let bitmap_filter_tx = BitmapCompactionFilter::new(
+                        index_options.pruning_tx_seq_exclusive.clone(),
+                        BitmapKind::Transaction,
+                    );
+                    let bitmap_filter_event = BitmapCompactionFilter::new(
+                        index_options.pruning_tx_seq_exclusive.clone(),
+                        BitmapKind::Event,
+                    );
+                    let mut transaction_bitmap_opts = cf_options.clone();
+                    transaction_bitmap_opts = transaction_bitmap_opts
+                        .set_merge_operator_associative(
+                            "bitmap_union_merge",
+                            bitmap_union_merge_operator,
+                        );
+                    transaction_bitmap_opts.options.set_compaction_filter(
+                        "transaction_bitmap_filter",
+                        move |_level, key, value| bitmap_filter_tx.filter(key, value),
+                    );
+                    table_config_map
+                        .insert("transaction_bitmap".to_string(), transaction_bitmap_opts);
+
+                    let mut event_bitmap_opts = cf_options.clone();
+                    event_bitmap_opts = event_bitmap_opts.set_merge_operator_associative(
+                        "bitmap_union_merge",
+                        bitmap_union_merge_operator,
+                    );
+                    event_bitmap_opts
+                        .options
+                        .set_compaction_filter("event_bitmap_filter", move |_level, key, value| {
+                            bitmap_filter_event.filter(key, value)
+                        });
+                    table_config_map.insert("event_bitmap".to_string(), event_bitmap_opts);
+
                     IndexStoreTables::open_with_options(
                         &path,
                         options,
@@ -1398,7 +2149,8 @@ impl RpcIndexStore {
                 let reopened_tables =
                     IndexStoreTables::open_with_index_options(&path, index_options);
 
-                // Sanity check: verify the database version was persisted correctly
+                // Sanity check: verify the schema version and feature settings
+                // were persisted correctly.
                 let stored_version = reopened_tables
                     .meta
                     .get(&())
@@ -1406,41 +2158,91 @@ impl RpcIndexStore {
                     .expect("Metadata not found in reopened database");
                 assert_eq!(
                     stored_version.version, CURRENT_DB_VERSION,
-                    "Database version mismatch after flush and reopen: expected {}, found {}",
+                    "Database version mismatch after flush and reopen: expected {:#x}, found {:#x}",
                     CURRENT_DB_VERSION, stored_version.version
+                );
+                assert_eq!(
+                    reopened_tables.persisted_ledger_history_indexing(),
+                    rpc_config.ledger_history_indexing(),
+                    "ledger-history setting mismatch after flush and reopen"
                 );
 
                 reopened_tables
             } else {
+                // No rebuild needed. If ledger history was on and is now off,
+                // drop just those CFs rather than reindexing everything.
+                if tables.persisted_ledger_history_indexing()
+                    && !rpc_config.ledger_history_indexing()
+                {
+                    tables
+                        .disable_ledger_history_indexing()
+                        .expect("unable to disable ledger history indexing");
+                }
                 tables
             }
         };
+
+        // Hydrate before compaction filters can observe the default 0 floor.
+        Self::hydrate_ledger_history_pruning_atomic(&tables, &ledger_history_atomic);
+
+        // `ledger_history_enabled` is derived from the persisted `settings` CF,
+        // not directly from config.
+        let ledger_history_enabled = tables.persisted_ledger_history_indexing();
+        debug_assert_eq!(
+            ledger_history_enabled,
+            rpc_config.ledger_history_indexing(),
+            "ledger_history_enabled (from settings CF) must match the configured ledger_history_indexing flag"
+        );
 
         Self {
             tables,
             pending_updates: Default::default(),
             rpc_config,
+            ledger_history_pruning_watermark: ledger_history_atomic,
+            ledger_history_enabled,
         }
+    }
+
+    /// Hydrate the tx-seq pruning floor from the first live `tx_seq_digest` key.
+    fn hydrate_ledger_history_pruning_atomic(tables: &IndexStoreTables, atomic: &Arc<AtomicU64>) {
+        let persisted = tables.first_tx_seq_digest_key().ok().flatten().unwrap_or(0);
+        atomic.store(persisted, Ordering::Relaxed);
     }
 
     pub fn new_without_init(dir: &Path) -> Self {
         let path = Self::db_path(dir);
-        let tables = IndexStoreTables::open_with_index_options(path, IndexStoreOptions::default());
+
+        // Keep already-built ledger history indexes prunable in offline paths.
+        let ledger_history_atomic = Arc::new(AtomicU64::new(0));
+        let index_options = IndexStoreOptions {
+            events_compaction_filter: None,
+            pruning_tx_seq_exclusive: ledger_history_atomic.clone(),
+        };
+        let tables = IndexStoreTables::open_with_index_options(path, index_options);
+
+        let ledger_history_enabled = tables.persisted_ledger_history_indexing();
+        Self::hydrate_ledger_history_pruning_atomic(&tables, &ledger_history_atomic);
 
         Self {
             tables,
             pending_updates: Default::default(),
+            ledger_history_pruning_watermark: ledger_history_atomic,
             rpc_config: sui_config::RpcConfig::default(),
+            ledger_history_enabled,
         }
     }
 
     pub fn prune(
         &self,
         pruned_checkpoint_watermark: u64,
-        checkpoint_contents_to_prune: &[CheckpointContents],
+        pruned_tx_seq_exclusive: u64,
     ) -> Result<(), TypedStoreError> {
-        self.tables
-            .prune(pruned_checkpoint_watermark, checkpoint_contents_to_prune)
+        self.tables.prune(
+            pruned_checkpoint_watermark,
+            pruned_tx_seq_exclusive,
+            self.ledger_history_enabled,
+            &self.ledger_history_pruning_watermark,
+        )
     }
 
     /// Index a checkpoint and stage the index updated in `pending_updates`.
@@ -1455,7 +2257,12 @@ impl RpcIndexStore {
         let sequence_number = checkpoint.checkpoint_summary.sequence_number;
         let batch = self
             .tables
-            .index_checkpoint(checkpoint, resolver, &self.rpc_config)
+            .index_checkpoint(
+                checkpoint,
+                resolver,
+                &self.rpc_config,
+                self.ledger_history_enabled,
+            )
             .expect("db error");
 
         self.pending_updates
@@ -1573,6 +2380,142 @@ impl RpcIndexStore {
         &self,
     ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
         self.tables.watermark.get(&Watermark::Indexed)
+    }
+
+    fn ensure_ledger_history_enabled(&self) -> Result<(), TypedStoreError> {
+        if self.ledger_history_enabled {
+            Ok(())
+        } else {
+            Err(TypedStoreError::SerializationError(
+                "ledger history indexing is disabled".to_owned(),
+            ))
+        }
+    }
+
+    pub fn ledger_tx_seq_digest(
+        &self,
+        tx_seq: u64,
+    ) -> Result<Option<LedgerTxSeqDigest>, TypedStoreError> {
+        self.ensure_ledger_history_enabled()?;
+        Ok(self
+            .tables
+            .tx_seq_digest
+            .get(&tx_seq)?
+            .map(|info| ledger_tx_seq_digest(tx_seq, info)))
+    }
+
+    pub fn ledger_tx_seq_digest_multi_get(
+        &self,
+        tx_seqs: &[u64],
+    ) -> Result<Vec<Option<LedgerTxSeqDigest>>, TypedStoreError> {
+        self.ensure_ledger_history_enabled()?;
+        let rows = self
+            .tables
+            .tx_seq_digest
+            .multi_get(tx_seqs)?
+            .into_iter()
+            .zip_debug_eq(tx_seqs.iter().copied())
+            .map(|(info, tx_seq)| info.map(|info| ledger_tx_seq_digest(tx_seq, info)))
+            .collect();
+        Ok(rows)
+    }
+
+    pub fn ledger_tx_seq_digest_iter(
+        &self,
+        start: u64,
+        end_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerTxSeqDigestIterator<'_>, TypedStoreError> {
+        self.ensure_ledger_history_enabled()?;
+        if start >= end_exclusive {
+            return Ok(Box::new(std::iter::empty()));
+        }
+
+        let iter = if descending {
+            let upper = end_exclusive - 1;
+            self.tables
+                .tx_seq_digest
+                .reversed_safe_iter_with_bounds(Some(start), Some(upper))?
+        } else {
+            self.tables
+                .tx_seq_digest
+                .safe_iter_with_bounds(Some(start), Some(end_exclusive))
+        };
+
+        Ok(Box::new(iter.map(|result| {
+            result.map(|(tx_seq, info)| ledger_tx_seq_digest(tx_seq, info))
+        })))
+    }
+
+    pub fn transaction_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>, TypedStoreError> {
+        self.ensure_ledger_history_enabled()?;
+        Self::bitmap_bucket_iter(
+            &self.tables.transaction_bitmap,
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
+    }
+
+    pub fn event_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>, TypedStoreError> {
+        self.ensure_ledger_history_enabled()?;
+        Self::bitmap_bucket_iter(
+            &self.tables.event_bitmap,
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
+    }
+
+    fn bitmap_bucket_iter(
+        table: &DBMap<BitmapIndexKey, BitmapBlob>,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>, TypedStoreError> {
+        if start_bucket >= end_bucket_exclusive {
+            return Ok(Box::new(std::iter::empty()));
+        }
+
+        let lower = BitmapIndexKey {
+            dimension_key: dimension_key.clone(),
+            bucket_id: start_bucket,
+        };
+        let upper_exclusive = BitmapIndexKey {
+            dimension_key,
+            bucket_id: end_bucket_exclusive,
+        };
+        let upper_inclusive = BitmapIndexKey {
+            dimension_key: upper_exclusive.dimension_key.clone(),
+            bucket_id: end_bucket_exclusive - 1,
+        };
+
+        let iter: Box<
+            dyn Iterator<Item = Result<(BitmapIndexKey, BitmapBlob), TypedStoreError>> + '_,
+        > = if descending {
+            table.reversed_safe_iter_with_bounds(Some(lower), Some(upper_inclusive))?
+        } else {
+            table.safe_iter_with_bounds(Some(lower), Some(upper_exclusive))
+        };
+
+        Ok(Box::new(iter.map(|result| {
+            result.and_then(|(key, blob)| decode_ledger_bitmap_bucket(key, blob))
+        })))
     }
 }
 
@@ -1774,14 +2717,82 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
 
 // TODO figure out a way to dedup this logic. Today we'd need to do quite a bit of refactoring to
 // make it possible.
+/// Load full `CheckpointData` for `checkpoint` from local storage. Sibling
+/// of [`sparse_checkpoint_data_for_epoch_backfill`] that returns data for
+/// every cp (not just genesis / EoE) and always loads transaction events.
+///
+/// Returns `Ok(None)` if the cp's summary or contents are not present
+/// locally (e.g. pruned out of the underlying store).
+fn full_checkpoint_data_for_backfill(
+    authority_store: &AuthorityStore,
+    checkpoint_store: &CheckpointStore,
+    checkpoint: u64,
+) -> Result<Option<CheckpointData>, StorageError> {
+    let Some(summary) = checkpoint_store.get_checkpoint_by_sequence_number(checkpoint)? else {
+        return Ok(None);
+    };
+    let Some(contents) = checkpoint_store.get_checkpoint_contents(&summary.content_digest)? else {
+        return Ok(None);
+    };
+
+    let transaction_digests = contents
+        .iter()
+        .map(|execution_digests| execution_digests.transaction)
+        .collect::<Vec<_>>();
+    let transactions = authority_store
+        .multi_get_transaction_blocks(&transaction_digests)?
+        .into_iter()
+        .map(|maybe_transaction| {
+            maybe_transaction.ok_or_else(|| StorageError::custom("missing transaction"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let effects = authority_store
+        .multi_get_executed_effects(&transaction_digests)?
+        .into_iter()
+        .map(|maybe_effects| maybe_effects.ok_or_else(|| StorageError::custom("missing effects")))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Always load events: event-space dimensions need them, and tx-space
+    // dimensions include EmitModule / EventType / EventStreamHead which are
+    // sourced from events too.
+    let events = authority_store
+        .multi_get_events(&transaction_digests)
+        .map_err(|e| StorageError::custom(e.to_string()))?;
+
+    let mut full_transactions = Vec::with_capacity(transactions.len());
+    for ((tx, fx), ev) in transactions
+        .into_iter()
+        .zip_debug_eq(effects)
+        .zip_debug_eq(events)
+    {
+        let input_objects =
+            sui_types::storage::get_transaction_input_objects(authority_store, &fx)?;
+        let output_objects =
+            sui_types::storage::get_transaction_output_objects(authority_store, &fx)?;
+
+        full_transactions.push(CheckpointTransaction {
+            transaction: tx.into(),
+            effects: fx,
+            events: ev,
+            input_objects,
+            output_objects,
+        });
+    }
+
+    Ok(Some(CheckpointData {
+        checkpoint_summary: summary.into(),
+        checkpoint_contents: contents,
+        transactions: full_transactions,
+    }))
+}
+
 fn sparse_checkpoint_data_for_epoch_backfill(
     authority_store: &AuthorityStore,
     checkpoint_store: &CheckpointStore,
     checkpoint: u64,
     load_events: bool,
 ) -> Result<Option<CheckpointData>, StorageError> {
-    use sui_types::full_checkpoint_content::CheckpointTransaction;
-
     let summary = checkpoint_store
         .get_checkpoint_by_sequence_number(checkpoint)?
         .ok_or_else(|| StorageError::missing(format!("missing checkpoint {checkpoint}")))?;
@@ -1912,6 +2923,7 @@ mod tests {
 
         let index_options = IndexStoreOptions {
             events_compaction_filter: Some(compaction_filter),
+            pruning_tx_seq_exclusive: Arc::new(AtomicU64::new(0)),
         };
 
         let tables = IndexStoreTables::open_with_index_options(&db_path, index_options);
@@ -2072,6 +3084,946 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn checked_encode_event_seq_rejects_unrepresentable_values() {
+        assert!(
+            checked_encode_event_seq(0, MAX_EVENTS_PER_TX).is_err(),
+            "event_idx at MAX_EVENTS_PER_TX must be rejected"
+        );
+        assert!(
+            checked_encode_event_seq(MAX_TX_SEQ + 1, 0).is_err(),
+            "tx_seq past MAX_TX_SEQ must be rejected"
+        );
+    }
+
+    /// Compaction filter math: tx-bitmap whole-bucket removability around
+    /// the tx == 0 boundary. With the pruning atomic at 1, only tx_seq 0
+    /// is gone. Bucket 0 spans tx_seqs [0, 65_536), so it is NOT entirely
+    /// pruned and must be kept. This is exactly the off-by-one case the
+    /// exclusive floor is supposed to make explicit.
+    #[test]
+    fn bitmap_filter_keeps_bucket_with_live_tx_above_zero_watermark() {
+        let watermark = Arc::new(AtomicU64::new(1));
+        let filter = BitmapCompactionFilter::new(watermark.clone(), BitmapKind::Transaction);
+
+        let key = typed_store::be_fix_int_ser(&BitmapIndexKey {
+            dimension_key: vec![1, 2, 3],
+            bucket_id: 0,
+        });
+        assert!(matches!(filter.filter(&key, &[]), Decision::Keep));
+
+        // Once the watermark advances to TX_BUCKET_SIZE, bucket 0 becomes
+        // fully prunable (highest tx in bucket 0 is 65_535, exclusive of
+        // 65_536 means the next bucket starts there — everything below is
+        // pruned).
+        watermark.store(TX_BUCKET_SIZE, Ordering::Relaxed);
+        assert!(matches!(filter.filter(&key, &[]), Decision::Remove));
+    }
+
+    /// Compaction filter math: event-bitmap removability uses
+    /// `event_seq_lo(pruned_exclusive)` as the threshold, so its math is
+    /// scaled by EVENT_BITS relative to tx-bitmap.
+    #[test]
+    fn bitmap_filter_event_bucket_uses_event_seq_lo() {
+        let watermark = Arc::new(AtomicU64::new(0));
+        let filter = BitmapCompactionFilter::new(watermark.clone(), BitmapKind::Event);
+
+        let key = typed_store::be_fix_int_ser(&BitmapIndexKey {
+            dimension_key: vec![5],
+            bucket_id: 0,
+        });
+        // Watermark 0: nothing pruned → keep.
+        assert!(matches!(filter.filter(&key, &[]), Decision::Keep));
+
+        // The highest tx whose event_seq can fall in bucket 0 is
+        // (EVENT_BUCKET_SIZE / MAX_EVENTS_PER_TX) - 1. Need watermark to
+        // exceed that for bucket 0 to be fully prunable.
+        let txs_per_bucket = EVENT_BUCKET_SIZE / MAX_EVENTS_PER_TX as u64;
+        watermark.store(txs_per_bucket, Ordering::Relaxed);
+        assert!(matches!(filter.filter(&key, &[]), Decision::Remove));
+    }
+
+    /// Malformed keys must never be silently `Remove`d — silent data loss
+    /// is much worse than a stuck row. A too-short key and a key with a
+    /// bucket_id that would overflow the bucket-hi computation should
+    /// both be kept.
+    #[test]
+    fn bitmap_filter_keeps_malformed_keys() {
+        let watermark = Arc::new(AtomicU64::new(u64::MAX));
+        let filter = BitmapCompactionFilter::new(watermark.clone(), BitmapKind::Transaction);
+
+        assert!(matches!(filter.filter(b"short", &[]), Decision::Keep));
+        assert!(matches!(filter.filter(&[], &[]), Decision::Keep));
+
+        // bucket_id near u64::MAX would overflow `(b+1)*TX_BUCKET_SIZE`.
+        // The checked math returns None → keep.
+        let huge = typed_store::be_fix_int_ser(&BitmapIndexKey {
+            dimension_key: vec![],
+            bucket_id: u64::MAX - 1,
+        });
+        assert!(huge.len() >= 8);
+        assert!(matches!(filter.filter(&huge, &[]), Decision::Keep));
+    }
+
+    /// Round-trip the typed-store encoding: a `BitmapIndexKey` encoded via
+    /// `be_fix_int_ser` ends with the bucket_id as 8 big-endian bytes that
+    /// the compaction filter reads back. Guards against silent drift if
+    /// typed-store changes its key serializer.
+    #[test]
+    fn bitmap_filter_decodes_typed_store_keys() {
+        let watermark = Arc::new(AtomicU64::new(0));
+        let filter = BitmapCompactionFilter::new(watermark.clone(), BitmapKind::Transaction);
+
+        // Build a key with a bucket_id that, after advancing the watermark
+        // far enough, would be removable. Confirm the filter agrees.
+        let bucket_id = 7u64;
+        let key = typed_store::be_fix_int_ser(&BitmapIndexKey {
+            dimension_key: vec![0xAA, 0xBB, 0xCC],
+            bucket_id,
+        });
+        // First, with watermark = 0, definitely keep.
+        assert!(matches!(filter.filter(&key, &[]), Decision::Keep));
+
+        // Advance watermark past (bucket_id + 1) * TX_BUCKET_SIZE → remove.
+        watermark.store((bucket_id + 1) * TX_BUCKET_SIZE, Ordering::Relaxed);
+        assert!(matches!(filter.filter(&key, &[]), Decision::Remove));
+    }
+
+    /// The merge operator must OR multiple operands into a single bitmap —
+    /// not last-write-wins, which is what we'd get without it.
+    #[test]
+    fn bitmap_merge_operator_unions_operands() {
+        let mut bm_a = RoaringBitmap::new();
+        bm_a.insert(1);
+        bm_a.insert(5);
+        let blob_a = encode_bitmap_blob(&bm_a);
+
+        let mut bm_b = RoaringBitmap::new();
+        bm_b.insert(5);
+        bm_b.insert(7);
+        let blob_b = encode_bitmap_blob(&bm_b);
+
+        let mut bm_c = RoaringBitmap::new();
+        bm_c.insert(100);
+        let blob_c = encode_bitmap_blob(&bm_c);
+
+        // Simulate rocksdb feeding [blob_b, blob_c] as operands with no
+        // existing on-disk value (which is what happens on first merge into
+        // a new key).
+        //
+        // We can't easily construct a `MergeOperands` from outside rocksdb,
+        // so test the decode/encode round-trip via the helpers directly and
+        // assert the union over decoded bitmaps. This validates the data
+        // path the merge operator depends on; the operator's loop is a
+        // trivial `acc |= bm` on top.
+        let decoded_a = decode_bitmap_blob(&blob_a).expect("decode a");
+        let decoded_b = decode_bitmap_blob(&blob_b).expect("decode b");
+        let decoded_c = decode_bitmap_blob(&blob_c).expect("decode c");
+        let unioned = decoded_a | decoded_b | decoded_c;
+        let mut expected = RoaringBitmap::new();
+        for b in [1, 5, 7, 100] {
+            expected.insert(b);
+        }
+        assert_eq!(unioned, expected);
+    }
+
+    /// End-to-end: write merge operands across multiple "checkpoints" into a
+    /// real DBMap and confirm the merge operator unions them when read back.
+    /// This is the only test that exercises the in-rocksdb merge path,
+    /// since `bitmap_merge_operator_unions_operands` only round-trips the
+    /// helpers.
+    #[tokio::test]
+    async fn bitmap_merge_operator_unions_across_writes() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        let key = BitmapIndexKey {
+            dimension_key: vec![1, 2, 3],
+            bucket_id: 0,
+        };
+
+        // Write three merge operands targeting the same key. Without the
+        // merge operator, the last write would clobber the first two; with
+        // it, all bits should be present.
+        for bits in [vec![1u32, 2], vec![3, 4], vec![5, 6, 7]] {
+            let mut bm = RoaringBitmap::new();
+            for b in bits {
+                bm.insert(b);
+            }
+            let mut batch = tables.transaction_bitmap.batch();
+            batch
+                .partial_merge_batch(
+                    &tables.transaction_bitmap,
+                    [(key.clone(), BitmapBlob::from(bm))],
+                )
+                .unwrap();
+            batch.write().unwrap();
+        }
+
+        let blob = tables
+            .transaction_bitmap
+            .get(&key)
+            .unwrap()
+            .expect("merged row should exist");
+        let bm = RoaringBitmap::deserialize_from(&blob.0[..]).unwrap();
+        let got: Vec<u32> = bm.iter().collect();
+        assert_eq!(got, vec![1, 2, 3, 4, 5, 6, 7]);
+    }
+
+    /// Whole-bucket compaction-filter removal: write bits to buckets 0 and
+    /// 1, advance the pruning watermark past bucket 0 only, force a
+    /// compaction, then assert bucket 0 is gone and bucket 1 survives.
+    #[tokio::test]
+    async fn bitmap_filter_removes_whole_bucket_after_compaction() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+
+        let watermark = Arc::new(AtomicU64::new(0));
+        let index_options = IndexStoreOptions {
+            events_compaction_filter: None,
+            pruning_tx_seq_exclusive: watermark.clone(),
+        };
+        let tables = IndexStoreTables::open_with_index_options(&db_path, index_options);
+
+        let dim_key = vec![0x01, 0xAA];
+        let k0 = BitmapIndexKey {
+            dimension_key: dim_key.clone(),
+            bucket_id: 0,
+        };
+        let k1 = BitmapIndexKey {
+            dimension_key: dim_key.clone(),
+            bucket_id: 1,
+        };
+        let mut bm = RoaringBitmap::new();
+        bm.insert(0);
+
+        // Use a direct insert rather than a merge so we exercise the
+        // compaction filter on a regular value. (Merge interaction is
+        // covered by `bitmap_merge_operator_unions_across_writes`.)
+        let blob = BitmapBlob::from(bm);
+        let mut batch = tables.transaction_bitmap.batch();
+        batch
+            .insert_batch(
+                &tables.transaction_bitmap,
+                [(k0.clone(), blob.clone()), (k1.clone(), blob)],
+            )
+            .unwrap();
+        batch.write().unwrap();
+        tables.transaction_bitmap.flush().unwrap();
+
+        // Sanity-check: both buckets are present before advancing the
+        // watermark.
+        assert!(tables.transaction_bitmap.get(&k0).unwrap().is_some());
+        assert!(tables.transaction_bitmap.get(&k1).unwrap().is_some());
+
+        // Advance watermark past bucket 0 but not past bucket 1.
+        watermark.store(TX_BUCKET_SIZE, Ordering::Relaxed);
+
+        // Compact the entire keyspace with raw byte bounds to ensure we
+        // cover every encoded BitmapIndexKey, regardless of typed-store's
+        // length-prefix width.
+        tables
+            .transaction_bitmap
+            .compact_range_raw("transaction_bitmap", vec![], vec![0xFF; 128])
+            .unwrap();
+
+        assert!(
+            tables.transaction_bitmap.get(&k0).unwrap().is_none(),
+            "bucket 0 should have been removed by the compaction filter"
+        );
+        assert!(
+            tables.transaction_bitmap.get(&k1).unwrap().is_some(),
+            "bucket 1 should still be present (only bucket 0 was below the watermark)"
+        );
+    }
+
+    /// The retained backfill range must surface missing cps as an error,
+    /// not silently leave a permanent hole. This tests the
+    /// `ok_or_else(...)` conversion isolated from the full init path.
+    #[test]
+    fn backfill_missing_cp_in_retained_range_is_error() {
+        // Mirror the backfill closure: take the
+        // `Result<Option<CheckpointData>>` from the loader, and require
+        // `Some(cp_data)` for every cp in the retained range.
+        let checkpoint_range = 5u64..=10u64;
+        let seq = 7u64;
+        let loaded: Result<Option<CheckpointData>, StorageError> = Ok(None);
+
+        let result: Result<(), StorageError> = (|| {
+            let cp_data = loaded?.ok_or_else(|| {
+                StorageError::missing(format!(
+                    "ledger history backfill: checkpoint {seq} is missing from local storage \
+                     but falls inside the retained backfill range {checkpoint_range:?}"
+                ))
+            })?;
+            let _ = cp_data;
+            Ok(())
+        })();
+
+        let err = result.expect_err("missing cp must error out, not silently succeed");
+        let msg = err.to_string();
+        assert!(
+            msg.contains(&format!("checkpoint {seq}")),
+            "error should name the missing cp: {msg}"
+        );
+        assert!(
+            msg.contains("5..=10"),
+            "error should name the retained range: {msg}"
+        );
+    }
+
+    /// Existing watermark rows on disk encode `Indexed` and `Pruned` as serde
+    /// indexes 0 and 1. Reordering the enum (or inserting a variant before
+    /// them) would shift those discriminants and silently misread on-disk
+    /// rows. Hardcode the legacy bytes and confirm they still round-trip.
+    #[test]
+    fn legacy_watermark_bytes_still_deserialize() {
+        // BCS encodes a unit enum variant as a ULEB128 of its index.
+        let indexed_bytes = bcs::to_bytes(&Watermark::Indexed).unwrap();
+        let pruned_bytes = bcs::to_bytes(&Watermark::Pruned).unwrap();
+        assert_eq!(
+            indexed_bytes,
+            vec![0],
+            "Watermark::Indexed must encode as 0"
+        );
+        assert_eq!(pruned_bytes, vec![1], "Watermark::Pruned must encode as 1");
+
+        // Feed the canonical legacy bytes to the deserializer and confirm
+        // they still arrive at the right variants. This is the test that
+        // would catch an accidental reorder of the enum.
+        let decoded_indexed: Watermark = bcs::from_bytes(&[0]).unwrap();
+        let decoded_pruned: Watermark = bcs::from_bytes(&[1]).unwrap();
+        assert!(matches!(decoded_indexed, Watermark::Indexed));
+        assert!(matches!(decoded_pruned, Watermark::Pruned));
+    }
+
+    /// The schema version and the ledger-history feature flag are tracked
+    /// independently: the flag round-trips through the `settings` CF, and
+    /// *enabling* the feature forces a reinit while the schema version is
+    /// unchanged. *Disabling* it does not (that is handled in place).
+    #[tokio::test]
+    async fn settings_cf_round_trips_and_drives_reinit() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        // Stamp a current-schema DB built with ledger history disabled.
+        tables
+            .meta
+            .insert(
+                &(),
+                &MetadataInfo {
+                    version: CURRENT_DB_VERSION,
+                },
+            )
+            .unwrap();
+        tables
+            .settings
+            .insert(
+                &(),
+                &encode_settings(&IndexSettings {
+                    ledger_history_indexing: false,
+                }),
+            )
+            .unwrap();
+        assert!(!tables.persisted_ledger_history_indexing());
+
+        // An empty checkpoint store keeps the watermark check out of the way so
+        // we isolate the schema-version / feature-toggle logic.
+        let checkpoint_store = CheckpointStore::new_for_tests();
+
+        // Same schema, same feature setting => no reinit.
+        assert!(!tables.needs_to_do_initialization(&checkpoint_store, false));
+        // Same schema, but the feature was toggled on => reinit.
+        assert!(tables.needs_to_do_initialization(&checkpoint_store, true));
+
+        // Flip the persisted flag; it round-trips.
+        tables
+            .settings
+            .insert(
+                &(),
+                &encode_settings(&IndexSettings {
+                    ledger_history_indexing: true,
+                }),
+            )
+            .unwrap();
+        assert!(tables.persisted_ledger_history_indexing());
+        // Already enabled => no reinit.
+        assert!(!tables.needs_to_do_initialization(&checkpoint_store, true));
+        // Disabling does NOT force a rebuild — the history CFs are dropped in
+        // place instead.
+        assert!(!tables.needs_to_do_initialization(&checkpoint_store, false));
+    }
+
+    /// `disable_ledger_history_indexing` empties every ledger-history CF (not
+    /// all-but-the-last, the trap with end-exclusive range deletes) and clears
+    /// the persisted flag, while leaving the base indexes untouched.
+    #[tokio::test]
+    async fn disable_ledger_history_indexing_drops_history_cfs_in_place() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        // Seed a ledger-history DB with several rows in each history CF.
+        tables
+            .settings
+            .insert(
+                &(),
+                &encode_settings(&IndexSettings {
+                    ledger_history_indexing: true,
+                }),
+            )
+            .unwrap();
+        for tx_seq in 0..5u64 {
+            tables
+                .tx_seq_digest
+                .insert(
+                    &tx_seq,
+                    &TxSeqDigestInfo {
+                        digest: TransactionDigest::new([0; 32]),
+                        event_count: 0,
+                        tx_offset: 0,
+                        checkpoint_number: 0,
+                    },
+                )
+                .unwrap();
+        }
+        for bucket_id in 0..5u64 {
+            let key = BitmapIndexKey {
+                dimension_key: vec![1, 2, 3],
+                bucket_id,
+            };
+            tables
+                .transaction_bitmap
+                .insert(&key, &BitmapBlob(vec![0xab]))
+                .unwrap();
+            tables
+                .event_bitmap
+                .insert(&key, &BitmapBlob(vec![0xcd]))
+                .unwrap();
+        }
+        // A non-history CF that must survive the drop.
+        tables.watermark.insert(&Watermark::Indexed, &42).unwrap();
+
+        tables.disable_ledger_history_indexing().unwrap();
+
+        // Every history row is gone — including the last key in each CF.
+        assert!(tables.tx_seq_digest.is_empty());
+        assert!(tables.transaction_bitmap.is_empty());
+        assert!(tables.event_bitmap.is_empty());
+        assert_eq!(tables.first_tx_seq_digest_key().unwrap(), None);
+
+        // The flag is cleared and the base index is untouched.
+        assert!(!tables.persisted_ledger_history_indexing());
+        assert_eq!(tables.watermark.get(&Watermark::Indexed).unwrap(), Some(42));
+    }
+
+    /// `prune()` advances `Watermark::Pruned` and deletes the exact
+    /// tx_seq_digest range below the new tx-seq floor when enabled.
+    #[tokio::test]
+    async fn prune_maintains_ledger_history_state_when_active() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        // Seed rows to simulate an indexed ledger history subsystem.
+        let mut batch = tables.tx_seq_digest.batch();
+        for tx_seq in 0..5u64 {
+            batch
+                .insert_batch(
+                    &tables.tx_seq_digest,
+                    [(
+                        tx_seq,
+                        TxSeqDigestInfo {
+                            digest: TransactionDigest::new([0; 32]),
+                            event_count: 0,
+                            tx_offset: 0,
+                            checkpoint_number: 0,
+                        },
+                    )],
+                )
+                .unwrap();
+        }
+        batch.write().unwrap();
+
+        // Prune cp 1 with an absolute tx-seq floor of 3 → rows 0..3 should
+        // be deleted, the derived floor advances from 0 to 3.
+        let pruning_atomic = AtomicU64::new(0);
+        tables
+            .prune(1, 3, /*ledger_history_enabled=*/ true, &pruning_atomic)
+            .unwrap();
+        assert_eq!(pruning_atomic.load(Ordering::Relaxed), 3);
+
+        assert_eq!(tables.watermark.get(&Watermark::Pruned).unwrap(), Some(1));
+        for tx_seq in 0..3u64 {
+            assert!(tables.tx_seq_digest.get(&tx_seq).unwrap().is_none());
+        }
+        for tx_seq in 3..5u64 {
+            assert!(tables.tx_seq_digest.get(&tx_seq).unwrap().is_some());
+        }
+        assert_eq!(tables.first_tx_seq_digest_key().unwrap(), Some(3));
+    }
+
+    /// When disabled, `prune` must advance only `Watermark::Pruned`.
+    #[tokio::test]
+    async fn prune_skips_ledger_history_state_when_inactive() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        // Seed a tx_seq_digest row so we can confirm prune leaves it alone.
+        tables
+            .tx_seq_digest
+            .insert(
+                &0u64,
+                &TxSeqDigestInfo {
+                    digest: TransactionDigest::new([0; 32]),
+                    event_count: 0,
+                    tx_offset: 0,
+                    checkpoint_number: 0,
+                },
+            )
+            .unwrap();
+
+        let pruning_atomic = AtomicU64::new(0);
+        tables
+            .prune(
+                5,
+                3,
+                /*ledger_history_enabled=*/ false,
+                &pruning_atomic,
+            )
+            .unwrap();
+        assert_eq!(
+            pruning_atomic.load(Ordering::Relaxed),
+            0,
+            "disabled prune must not advance the compaction-filter atomic"
+        );
+        assert_eq!(
+            tables.watermark.get(&Watermark::Pruned).unwrap(),
+            Some(5),
+            "base pruning must still advance"
+        );
+        assert!(
+            tables.tx_seq_digest.get(&0u64).unwrap().is_some(),
+            "tx_seq_digest rows must remain untouched when inactive"
+        );
+    }
+
+    /// Forward `index_checkpoint` writes ledger history rows only when enabled.
+    #[tokio::test]
+    async fn index_checkpoint_gates_on_ledger_history_enabled() {
+        use sui_types::layout_resolver::LayoutResolver;
+        use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        // Non-zero cp seq to skip the genesis path in `index_epoch` (which
+        // expects a real system state object).
+        let checkpoint = TestCheckpointBuilder::new(1)
+            .start_transaction(1)
+            .finish_transaction()
+            .build_checkpoint();
+        let checkpoint_data: CheckpointData = checkpoint.into();
+
+        let rpc_config = sui_config::RpcConfig::default();
+
+        struct PanicResolver;
+        impl LayoutResolver for PanicResolver {
+            fn get_annotated_layout(
+                &mut self,
+                _struct_tag: &move_core_types::language_storage::StructTag,
+            ) -> Result<
+                move_core_types::annotated_value::MoveDatatypeLayout,
+                sui_types::error::SuiError,
+            > {
+                panic!("layout resolver should not be invoked by ledger history indexing");
+            }
+        }
+
+        // Disabled: no ledger history writes.
+        let batch = tables
+            .index_checkpoint(
+                &checkpoint_data,
+                &mut PanicResolver,
+                &rpc_config,
+                /*ledger_history_enabled=*/ false,
+            )
+            .expect("index_checkpoint failed");
+        batch.write().expect("batch write failed");
+        assert_eq!(tables.tx_seq_digest.safe_iter().count(), 0);
+        assert_eq!(tables.transaction_bitmap.safe_iter().count(), 0);
+        assert_eq!(tables.event_bitmap.safe_iter().count(), 0);
+
+        // Enabled → forward writes land.
+        let checkpoint2 = TestCheckpointBuilder::new(2)
+            .start_transaction(1)
+            .finish_transaction()
+            .build_checkpoint();
+        let checkpoint_data2: CheckpointData = checkpoint2.into();
+        let batch = tables
+            .index_checkpoint(
+                &checkpoint_data2,
+                &mut PanicResolver,
+                &rpc_config,
+                /*ledger_history_enabled=*/ true,
+            )
+            .expect("index_checkpoint failed");
+        batch.write().expect("batch write failed");
+        assert!(
+            tables.tx_seq_digest.safe_iter().count() > 0,
+            "tx_seq_digest must have rows when ledger_history_enabled=true"
+        );
+    }
+
+    /// `tx_offset` records each transaction's zero-based position *within its
+    /// checkpoint*, not its global `tx_sequence_number`, and restarts at 0 on
+    /// every checkpoint boundary.
+    #[tokio::test]
+    async fn index_checkpoint_records_within_checkpoint_tx_offset() {
+        use sui_types::layout_resolver::LayoutResolver;
+        use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+        let rpc_config = sui_config::RpcConfig::default();
+
+        struct PanicResolver;
+        impl LayoutResolver for PanicResolver {
+            fn get_annotated_layout(
+                &mut self,
+                _struct_tag: &move_core_types::language_storage::StructTag,
+            ) -> Result<
+                move_core_types::annotated_value::MoveDatatypeLayout,
+                sui_types::error::SuiError,
+            > {
+                panic!("layout resolver should not be invoked by ledger history indexing");
+            }
+        }
+
+        // Checkpoint 1: three txs over a non-zero tx-seq base (100), so the
+        // global tx_seqs are 100,101,102 — distinct from the offsets 0,1,2.
+        let checkpoint1: CheckpointData = TestCheckpointBuilder::new(1)
+            .with_network_total_transactions(100)
+            .start_transaction(0)
+            .finish_transaction()
+            .start_transaction(1)
+            .finish_transaction()
+            .start_transaction(2)
+            .finish_transaction()
+            .build_checkpoint()
+            .into();
+        tables
+            .index_checkpoint(&checkpoint1, &mut PanicResolver, &rpc_config, true)
+            .expect("index_checkpoint failed")
+            .write()
+            .expect("batch write failed");
+
+        // Checkpoint 2: two more txs; global tx_seqs continue at 103,104 but the
+        // offsets restart at 0.
+        let checkpoint2: CheckpointData = TestCheckpointBuilder::new(2)
+            .with_network_total_transactions(103)
+            .start_transaction(0)
+            .finish_transaction()
+            .start_transaction(1)
+            .finish_transaction()
+            .build_checkpoint()
+            .into();
+        tables
+            .index_checkpoint(&checkpoint2, &mut PanicResolver, &rpc_config, true)
+            .expect("index_checkpoint failed")
+            .write()
+            .expect("batch write failed");
+
+        let offset_by_tx_seq: std::collections::BTreeMap<u64, u32> = tables
+            .tx_seq_digest
+            .safe_iter()
+            .map(|row| row.map(|(tx_seq, info)| (tx_seq, info.tx_offset)))
+            .collect::<Result<_, _>>()
+            .unwrap();
+
+        assert_eq!(
+            offset_by_tx_seq,
+            std::collections::BTreeMap::from([(100, 0), (101, 1), (102, 2), (103, 0), (104, 1),]),
+            "tx_offset must be the within-checkpoint position, not the global tx_seq"
+        );
+    }
+
+    /// `prune()` commits the tx_seq_digest range delete and the
+    /// `Watermark::Pruned` advance in one atomic batch. After a successful
+    /// prune both halves are present: no tx_seq_digest row remains in the
+    /// deleted range, AND `Watermark::Pruned` is at the new value.
+    #[tokio::test]
+    async fn prune_commits_deletes_and_watermark_atomically() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        let mut batch = tables.tx_seq_digest.batch();
+        for tx_seq in 0..4u64 {
+            batch
+                .insert_batch(
+                    &tables.tx_seq_digest,
+                    [(
+                        tx_seq,
+                        TxSeqDigestInfo {
+                            digest: TransactionDigest::new([0; 32]),
+                            event_count: 0,
+                            tx_offset: 0,
+                            checkpoint_number: 0,
+                        },
+                    )],
+                )
+                .unwrap();
+        }
+        batch.write().unwrap();
+
+        let pruning_atomic = AtomicU64::new(0);
+        tables
+            .prune(1, 2, /*ledger_history_enabled=*/ true, &pruning_atomic)
+            .unwrap();
+
+        // After the single atomic batch lands, both halves are present: the
+        // deleted rows AND the advanced `Watermark::Pruned`.
+        assert_eq!(tables.watermark.get(&Watermark::Pruned).unwrap(), Some(1));
+        for tx_seq in 0..2u64 {
+            assert!(tables.tx_seq_digest.get(&tx_seq).unwrap().is_none());
+        }
+        for tx_seq in 2..4u64 {
+            assert!(tables.tx_seq_digest.get(&tx_seq).unwrap().is_some());
+        }
+        assert_eq!(tables.first_tx_seq_digest_key().unwrap(), Some(2));
+        assert_eq!(pruning_atomic.load(Ordering::Relaxed), 2);
+    }
+
+    /// Replaying a prune with an unchanged floor is a no-op: the second call
+    /// does not advance the compaction-filter atomic and leaves rows +
+    /// watermark untouched. Covers crash-replay where the pruner re-issues the
+    /// same prune.
+    #[tokio::test]
+    async fn prune_idempotent_replay() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        let mut batch = tables.tx_seq_digest.batch();
+        for tx_seq in 0..5u64 {
+            batch
+                .insert_batch(
+                    &tables.tx_seq_digest,
+                    [(
+                        tx_seq,
+                        TxSeqDigestInfo {
+                            digest: TransactionDigest::new([0; 32]),
+                            event_count: 0,
+                            tx_offset: 0,
+                            checkpoint_number: 0,
+                        },
+                    )],
+                )
+                .unwrap();
+        }
+        batch.write().unwrap();
+
+        let pruning_atomic = AtomicU64::new(0);
+        tables.prune(1, 3, true, &pruning_atomic).unwrap();
+        assert_eq!(pruning_atomic.load(Ordering::Relaxed), 3);
+        // Same floor again: nothing new to delete, floor already at 3.
+        tables.prune(1, 3, true, &pruning_atomic).unwrap();
+        assert_eq!(
+            pruning_atomic.load(Ordering::Relaxed),
+            3,
+            "replay must not move the atomic"
+        );
+        assert_eq!(tables.first_tx_seq_digest_key().unwrap(), Some(3));
+        for tx_seq in 3..5u64 {
+            assert!(tables.tx_seq_digest.get(&tx_seq).unwrap().is_some());
+        }
+    }
+
+    /// Consecutive prunes advance the floor across an existing range tombstone:
+    /// the second prune derives `prev_exclusive` from `first_tx_seq_digest_key`,
+    /// which must read *through* the first tombstone (only possible because the
+    /// CF is opened with `ignore_range_deletions = false`).
+    #[tokio::test]
+    async fn prune_consecutive_ranges_advance_floor() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        let tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        let mut batch = tables.tx_seq_digest.batch();
+        for tx_seq in 0..6u64 {
+            batch
+                .insert_batch(
+                    &tables.tx_seq_digest,
+                    [(
+                        tx_seq,
+                        TxSeqDigestInfo {
+                            digest: TransactionDigest::new([0; 32]),
+                            event_count: 0,
+                            tx_offset: 0,
+                            checkpoint_number: 0,
+                        },
+                    )],
+                )
+                .unwrap();
+        }
+        batch.write().unwrap();
+
+        let pruning_atomic = AtomicU64::new(0);
+        tables.prune(1, 3, true, &pruning_atomic).unwrap();
+        assert_eq!(pruning_atomic.load(Ordering::Relaxed), 3);
+        assert_eq!(tables.first_tx_seq_digest_key().unwrap(), Some(3));
+        // Second prune must see floor 3 (through the tombstone) and extend it to 5.
+        tables.prune(2, 5, true, &pruning_atomic).unwrap();
+        assert_eq!(pruning_atomic.load(Ordering::Relaxed), 5);
+        for tx_seq in 0..5u64 {
+            assert!(tables.tx_seq_digest.get(&tx_seq).unwrap().is_none());
+        }
+        assert_eq!(tables.first_tx_seq_digest_key().unwrap(), Some(5));
+    }
+
+    /// `new_without_init` must honor an already-built ledger history DB.
+    #[tokio::test]
+    async fn new_without_init_enables_ledger_history_for_db_with_ledger_history_setting() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+
+        // Seed a DB built with ledger history indexing.
+        {
+            let tables =
+                IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+            tables
+                .meta
+                .insert(
+                    &(),
+                    &MetadataInfo {
+                        version: CURRENT_DB_VERSION,
+                    },
+                )
+                .unwrap();
+            tables
+                .settings
+                .insert(
+                    &(),
+                    &encode_settings(&IndexSettings {
+                        ledger_history_indexing: true,
+                    }),
+                )
+                .unwrap();
+            let mut batch = tables.tx_seq_digest.batch();
+            for tx_seq in 100..105u64 {
+                batch
+                    .insert_batch(
+                        &tables.tx_seq_digest,
+                        [(
+                            tx_seq,
+                            TxSeqDigestInfo {
+                                digest: TransactionDigest::new([0; 32]),
+                                event_count: 0,
+                                tx_offset: 0,
+                                checkpoint_number: 0,
+                            },
+                        )],
+                    )
+                    .unwrap();
+            }
+            batch.write().unwrap();
+        }
+
+        let store = RpcIndexStore::new_without_init(temp_dir.path());
+        assert!(
+            store.ledger_history_enabled,
+            "new_without_init on a ledger-history DB must enable ledger history indexing"
+        );
+        let atomic = &store.ledger_history_pruning_watermark;
+        assert_eq!(
+            atomic.load(Ordering::Relaxed),
+            100,
+            "pruning atomic must be hydrated from the first tx_seq_digest key"
+        );
+
+        // Pruning through tx-seq floor 103 deletes rows [100, 103).
+        store.prune(7, 103).unwrap();
+
+        for tx_seq in 100..103u64 {
+            assert!(store.tables.tx_seq_digest.get(&tx_seq).unwrap().is_none());
+        }
+        for tx_seq in 103..105u64 {
+            assert!(store.tables.tx_seq_digest.get(&tx_seq).unwrap().is_some());
+        }
+        assert_eq!(
+            store.tables.first_tx_seq_digest_key().unwrap(),
+            Some(103),
+            "prune must advance the derived tx-seq floor"
+        );
+        assert_eq!(
+            atomic.load(Ordering::Relaxed),
+            103,
+            "prune must advance the compaction-filter atomic"
+        );
+    }
+
+    /// A DB without the ledger-history setting stays disabled in `new_without_init`.
+    #[tokio::test]
+    async fn new_without_init_disables_ledger_history_for_db_without_ledger_history_setting() {
+        // Case 1: fresh/empty DB.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let store = RpcIndexStore::new_without_init(temp_dir.path());
+        assert!(
+            !store.ledger_history_enabled,
+            "new_without_init on a fresh DB must leave ledger history indexing disabled"
+        );
+
+        store.prune(5, 0).unwrap();
+        assert_eq!(
+            store.tables.watermark.get(&Watermark::Pruned).unwrap(),
+            Some(5)
+        );
+        assert_eq!(
+            store.tables.first_tx_seq_digest_key().unwrap(),
+            None,
+            "disabled ledger history indexing must leave tx_seq_digest untouched"
+        );
+
+        // Case 2: a current-schema DB with no `settings` row (e.g. a pre-feature
+        // DB). The missing row must read as ledger history disabled.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+        {
+            let tables =
+                IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+            tables
+                .meta
+                .insert(
+                    &(),
+                    &MetadataInfo {
+                        version: CURRENT_DB_VERSION,
+                    },
+                )
+                .unwrap();
+        }
+        let store = RpcIndexStore::new_without_init(temp_dir.path());
+        assert!(
+            !store.ledger_history_enabled,
+            "new_without_init on a DB with no settings row must leave ledger history indexing disabled"
+        );
     }
 
     /// Parse the newest `OPTIONS-NNNNNN` file in `db_path` into a map keyed by

@@ -35,12 +35,10 @@ use tonic::transport::ServerTlsConfig;
 use tracing::error;
 
 mod bigtable_client;
-mod filter;
 mod object_cache;
 mod operation;
 mod package_store;
 mod pipeline;
-mod query_options;
 mod v2;
 mod v2alpha;
 
