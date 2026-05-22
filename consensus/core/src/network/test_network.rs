@@ -114,10 +114,6 @@ impl ValidatorNetworkService for Mutex<TestService> {
 
 #[async_trait]
 impl ObserverNetworkService for Mutex<TestService> {
-    fn is_commit_lagging(&self) -> bool {
-        false
-    }
-
     async fn handle_block(&self, _peer: PeerId, _block: Bytes) -> ConsensusResult<()> {
         unimplemented!("ObserverNetworkService handle_block not implemented for TestService")
     }

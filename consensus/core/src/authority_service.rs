@@ -21,7 +21,7 @@ use crate::{
     block_sync_service::BlockSyncService,
     block_verifier::BlockVerifier,
     commit::{CommitRange, TrustedCommit},
-    commit_vote_monitor::CommitVoteMonitor,
+    commit_vote_monitor::{CommitVoteMonitor, is_commit_lagging},
     context::Context,
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
@@ -31,8 +31,6 @@ use crate::{
     synchronizer::SynchronizerHandle,
     transaction_vote_tracker::TransactionVoteTracker,
 };
-
-pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
 
 /// Authority's network service implementation, agnostic to the actual networking stack used.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
@@ -243,12 +241,11 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // it is ok to reject after block verifications instead of before.
         let last_commit_index = self.dag_state.read().last_commit_index();
         let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
-        // The threshold to ignore block should be larger than commit_sync_batch_size,
-        // to avoid excessive block rejections and synchronizations.
-        if last_commit_index
-            + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
-            < quorum_commit_index
-        {
+        if is_commit_lagging(
+            self.context.as_ref(),
+            last_commit_index,
+            quorum_commit_index,
+        ) {
             self.context
                 .metrics
                 .node_metrics

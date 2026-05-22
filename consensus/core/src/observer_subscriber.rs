@@ -20,6 +20,7 @@ use tracing::{debug, info, warn};
 
 use crate::{
     block::BlockAPI,
+    commit_vote_monitor::{CommitVoteMonitor, is_commit_lagging},
     context::Context,
     dag_state::DagState,
     error::ConsensusError,
@@ -34,6 +35,7 @@ pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetwor
     context: Arc<Context>,
     network_client: Arc<C>,
     observer_service: Arc<S>,
+    commit_vote_monitor: Arc<CommitVoteMonitor>,
     dag_state: Arc<parking_lot::RwLock<DagState>>,
     subscription: Arc<Mutex<Option<JoinHandle<()>>>>,
     randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
@@ -45,6 +47,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         context: Arc<Context>,
         network_client: Arc<C>,
         observer_service: Arc<S>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         dag_state: Arc<parking_lot::RwLock<DagState>>,
         randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) -> Self {
@@ -52,6 +55,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             context,
             network_client,
             observer_service,
+            commit_vote_monitor,
             dag_state,
             subscription: Arc::new(Mutex::new(None)),
             randomness_signature_handler,
@@ -64,6 +68,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         let context = self.context.clone();
         let network_client = self.network_client.clone();
         let observer_service = self.observer_service.clone();
+        let commit_vote_monitor = self.commit_vote_monitor.clone();
         let dag_state = self.dag_state.clone();
         let randomness_signature_handler = self.randomness_signature_handler.clone();
 
@@ -75,6 +80,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             context,
             network_client,
             observer_service,
+            commit_vote_monitor,
             dag_state,
             peer,
             randomness_signature_handler,
@@ -93,6 +99,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         context: Arc<Context>,
         network_client: Arc<C>,
         observer_service: Arc<S>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         dag_state: Arc<parking_lot::RwLock<DagState>>,
         peer: PeerId,
         randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
@@ -169,7 +176,11 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                         // During catch-up (commit lagging behind quorum), drop silently --
                         // those rounds will arrive via checkpoint sync, same as lagging validators.
                         if let Some(handler) = &randomness_signature_handler
-                            && !observer_service.is_commit_lagging()
+                            && !is_commit_lagging(
+                                &context,
+                                dag_state.read().last_commit_index(),
+                                commit_vote_monitor.quorum_commit_index(),
+                            )
                         {
                             for sig in item.auxiliary_data.randomness_signatures {
                                 handler.handle_randomness_signature(sig);
@@ -357,10 +368,6 @@ mod tests {
 
     #[async_trait]
     impl ObserverNetworkService for ObserverSubscriberTestService {
-        fn is_commit_lagging(&self) -> bool {
-            false
-        }
-
         async fn handle_block(&self, peer: PeerId, block: Bytes) -> ConsensusResult<()> {
             self.handle_block_calls.lock().push((peer, block));
             Ok(())
@@ -401,12 +408,14 @@ mod tests {
         let observer_service = Arc::new(ObserverSubscriberTestService::new());
         let network_client = Arc::new(ObserverSubscriberTestClient::new());
         let store = Arc::new(MemStore::new());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
 
         let subscriber = ObserverSubscriber::new(
             context.clone(),
             network_client,
             observer_service.clone(),
+            commit_vote_monitor,
             dag_state,
             None,
         );
@@ -442,12 +451,14 @@ mod tests {
         let observer_service = Arc::new(ObserverSubscriberTestService::new());
         let network_client = Arc::new(ObserverSubscriberTestClient::new());
         let store = Arc::new(MemStore::new());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
 
         let subscriber = ObserverSubscriber::new(
             context.clone(),
             network_client,
             observer_service.clone(),
+            commit_vote_monitor,
             dag_state,
             None,
         );

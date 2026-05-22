@@ -298,9 +298,6 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
         peer: NodeId,
         commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)>;
-
-    /// Returns true if the local commit index is lagging too far behind the quorum.
-    fn is_commit_lagging(&self) -> bool;
 }
 
 /// Observer network client for communicating with validators' observer ports or other observers.

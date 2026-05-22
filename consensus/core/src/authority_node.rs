@@ -484,6 +484,7 @@ where
                 context.clone(),
                 observer_client,
                 observer_service.clone(),
+                commit_vote_monitor.clone(),
                 dag_state.clone(),
                 randomness_signature_handler,
             );

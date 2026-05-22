@@ -18,7 +18,7 @@ use crate::{
     block::{BlockAPI as _, SignedBlock, VerifiedBlock},
     block_sync_service::BlockSyncService,
     commit::{CommitRange, TrustedCommit},
-    commit_vote_monitor::CommitVoteMonitor,
+    commit_vote_monitor::{CommitVoteMonitor, is_commit_lagging},
     context::Context,
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
@@ -29,10 +29,6 @@ use crate::{
     },
     synchronizer::SynchronizerHandle,
 };
-
-// Is used to calculate the threshold for blocking blocks when the commit index is lagging too far from the quorum commit index.
-// This is a multiplier of the commit_sync_batch_size.
-pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
 
 /// Serves observer requests from observer or validator peers. It is the server-side
 /// counterpart to `ObserverNetworkClient`.
@@ -82,13 +78,6 @@ impl ObserverService {
 
 #[async_trait]
 impl ObserverNetworkService for ObserverService {
-    fn is_commit_lagging(&self) -> bool {
-        let last_commit_index = self.dag_state.read().last_commit_index();
-        let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
-        last_commit_index + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
-            < quorum_commit_index
-    }
-
     async fn handle_block(&self, peer: PeerId, block: Bytes) -> ConsensusResult<()> {
         fail_point_async!("consensus-rpc-response");
 
@@ -164,9 +153,13 @@ impl ObserverNetworkService for ObserverService {
         //
         // Since the main issue with too many suspended blocks is memory usage not CPU,
         // it is ok to reject after block verifications instead of before.
-        if self.is_commit_lagging() {
-            let last_commit_index = self.dag_state.read().last_commit_index();
-            let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
+        let last_commit_index = self.dag_state.read().last_commit_index();
+        let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
+        if is_commit_lagging(
+            self.context.as_ref(),
+            last_commit_index,
+            quorum_commit_index,
+        ) {
             self.context
                 .metrics
                 .node_metrics

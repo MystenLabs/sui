@@ -1937,6 +1937,7 @@ impl SuiNode {
                             new_epoch_store.clone(),
                             self.state_sync_handle.clone(),
                             self.randomness_handle.clone(),
+                            self.randomness_receiver_handle.clone(),
                             consensus_manager,
                             consensus_store_pruner,
                             weak_hasher,
@@ -1948,7 +1949,6 @@ impl SuiNode {
                             sui_tx_validator_metrics,
                             admission_queue,
                             new_role,
-                            self.randomness_receiver_handle.clone(),
                         )
                         .await?,
                     )
