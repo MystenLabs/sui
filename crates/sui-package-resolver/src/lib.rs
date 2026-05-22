@@ -3081,8 +3081,8 @@ mod tests {
                     .dependency_ids
                     .published
                     .values()
-                    .map(|dep_id| {
-                        let storage_id = AccountAddress::from(*dep_id);
+                    .map(|dep| {
+                        let storage_id = AccountAddress::from(dep.published_at);
                         let runtime_id = package_runtime_id(
                             &packages_by_storage_id
                                 .get(&storage_id)
