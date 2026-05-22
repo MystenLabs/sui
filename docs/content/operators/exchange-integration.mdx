@@ -62,7 +62,7 @@ Multisig and zkLogin use scheme-specific derivations and do not follow the simpl
 
 - **Multisig:** `BLAKE2b-256(flag_MultiSig || threshold || flag_1 || pk_1 || weight_1 || ... || flag_n || pk_n || weight_n)`, where `threshold` and each `weight_i` are encoded as little-endian bytes.
 
-- **zkLogin:** `BLAKE2b-256(flag_zkLogin || iss_len || iss || address_seed)`, where `iss_len` is the 1-byte length of the issuer string and `address_seed` is the unpadded 32-byte form.
+- **zkLogin:** `BLAKE2b-256(flag_zkLogin || iss_len || iss || address_seed)`, where `iss_len` is the 1-byte length of the issuer string and `address_seed` is the unpadded form with leading zero bytes removed.
 
 For every scheme, derive addresses through the [Sui SDKs](/references/sui-sdks) or the Sui CLI rather than hand-rolling the computation. Hand-rolling the keypair formula for a multisig or zkLogin account produces the wrong address. See [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview) for the per-scheme details, and the [`SuiAddress` implementations](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/base_types.rs) in `crates/sui-types/src/base_types.rs` for the byte-exact layout.
 
@@ -129,7 +129,7 @@ Use checkpoints as the canonical, ordered stream of finalized activity:
 
 For real-time pipelines, subscribe to the checkpoint stream over [gRPC](/develop/accessing-data/grpc/using-grpc), and read each checkpoint's transaction and event data from the response through a `FieldMask`. For ad hoc queries and replays, paginate over checkpoints, transactions, and events with [GraphQL](/develop/accessing-data/graphql/query-with-graphql), which supports cursor-based pagination and checkpoint-scoped consistency.
 
-For event consumption patterns, including filtering by sender, recipient, package, or event type, see [Using Events](/develop/accessing-data/using-events).
+For event consumption patterns, including filtering by sender, package, or event type, see [Using Events](/develop/accessing-data/using-events).
 
 ## SUI transfers
 
