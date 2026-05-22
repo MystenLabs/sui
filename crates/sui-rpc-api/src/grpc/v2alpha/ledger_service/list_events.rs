@@ -612,11 +612,17 @@ fn render_event_chunk(
                     ),
                 )
             })?;
-        let proto_event = service.render_event_to_proto(
+        #[allow(unused_mut)]
+        let mut proto_event = service.render_event_to_proto(
             event,
             read_mask,
             &sui_types::full_checkpoint_content::ObjectSet::default(),
         );
+        sui_macros::fail_point_if!("corrupt_authenticated_event", || {
+            if let Some(bcs) = proto_event.contents.as_mut() {
+                bcs.value = Some(vec![0xDE, 0xAD, 0xBE, 0xEF].into());
+            }
+        });
         checkpoint_boundary =
             advance_boundary_excluding_cp(checkpoint_boundary, row.checkpoint_number, options);
         let watermark = item_watermark(
