@@ -43,7 +43,6 @@ use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionKind;
 
-use crate::owned_object_index::OwnedObjectEntry;
 use crate::seed::SeedEntry;
 use crate::seed::SeedManifest;
 
@@ -360,14 +359,10 @@ fn test_owned_object_info_uses_index_metadata_until_deleted() {
     let object = make_gas_object(object_id, 7, Owner::AddressOwner(owner));
 
     store
-        .owned_index()
-        .write_owned_object_entries_for_initialization(&[OwnedObjectEntry {
-            owner,
-            object_ref: object.compute_object_reference(),
-            object_type: GasCoin::type_(),
-            balance: Some(1_000_000),
-        }])
-        .unwrap();
+        .local()
+        .write_object(&object)
+        .expect("object should write before index initialization");
+    store.owned_index().replace_from_objects([&object]).unwrap();
 
     let infos: Vec<_> = RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
         .expect("seeded owned-object iterator should build")
@@ -435,7 +430,7 @@ async fn test_owned_object_query_lazily_initializes_complete_index_from_seed_man
 
     let entries = store
         .owned_index()
-        .get_owned_object_entries()
+        .get_owned_object_infos()
         .expect("owned-object index should read");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].object_type, GasCoin::type_());

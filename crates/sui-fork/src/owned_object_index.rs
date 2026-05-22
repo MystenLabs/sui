@@ -18,7 +18,7 @@ use itertools::Itertools as _;
 
 use move_core_types::language_storage::StructTag;
 use sui_types::base_types::ObjectID;
-use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::object::Object;
 use sui_types::object::Owner;
@@ -37,56 +37,79 @@ use crate::ObjectKey;
 use crate::ObjectRead;
 use crate::VersionQuery;
 use crate::filesystem::INDICES_DIR;
-use sui_types::base_types::SequenceNumber;
 
 /// Typed-store owned-object index directory under `indices`.
 const OWNED_OBJECTS_INDEX_DB_DIR: &str = "owned_objects_db";
 /// Current owned-object index schema version.
 const OWNED_OBJECT_INDEX_VERSION: u64 = 1;
 
-/// Index entry for a live address-owned object.
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub(crate) struct OwnedObjectEntry {
-    pub(crate) owner: SuiAddress,
-    pub(crate) object_ref: ObjectRef,
-    pub(crate) object_type: StructTag,
-    pub(crate) balance: Option<u64>,
+/// Ordered owner index key.
+///
+/// Rows are grouped by owner, then by object type. Coin-like objects store `!balance` so ascending
+/// scans return the largest balances first, matching the v2 RPC index.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, serde::Deserialize, serde::Serialize)]
+struct OwnedObjectIndexKey {
+    owner: SuiAddress,
+    object_type: StructTag,
+    inverted_balance: Option<u64>,
+    object_id: ObjectID,
 }
 
-impl OwnedObjectEntry {
-    /// Build index metadata for live address-owned Move objects.
-    pub(crate) fn from_object(object: &Object) -> Option<Self> {
-        let owner = match &object.owner {
+impl OwnedObjectIndexKey {
+    fn from_object(object: &Object) -> Option<Self> {
+        let owner = match object.owner() {
             Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => *owner,
             _ => return None,
         };
         let object_type = object.struct_tag()?;
+        let inverted_balance = object.as_coin_maybe().map(|coin| !coin.value());
+
         Some(Self {
             owner,
-            object_ref: object.compute_object_reference(),
             object_type,
-            balance: object.as_coin_maybe().map(|coin| coin.value()),
+            inverted_balance,
+            object_id: object.id(),
         })
     }
-}
 
-/// Ordered owner index key. Scans over this table group rows by owner, then by object ID, which
-/// lets RPC pagination seek directly to `(owner, cursor_object_id)`.
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, serde::Deserialize, serde::Serialize)]
-struct OwnedObjectOwnerKey {
-    /// Address whose object list contains `object_id`.
-    owner: SuiAddress,
-    /// Object ID used for deterministic ordering and cursor lower bounds within one owner.
-    object_id: ObjectID,
-    /// Object type for filtering by type without a separate lookup.
-    object_type: StructTag,
-}
-
-impl From<&OwnedObjectEntry> for OwnedObjectOwnerKey {
-    fn from(entry: &OwnedObjectEntry) -> Self {
+    /// Rebuild the exact index key encoded in a v2 owned-object page token.
+    ///
+    /// Pagination is inclusive, so the next scan must resume from the full row key: type and
+    /// inverted balance are part of the ordering, not just metadata returned to the client.
+    fn from_cursor(cursor: OwnedObjectInfo) -> Self {
         Self {
-            owner: entry.owner,
-            object_id: entry.object_ref.0,
+            owner: cursor.owner,
+            object_type: cursor.object_type,
+            inverted_balance: cursor.balance.map(std::ops::Not::not),
+            object_id: cursor.object_id,
+        }
+    }
+
+    /// Construct the first possible key for an owner scan when there is no cursor.
+    ///
+    /// The owner index is ordered by `(owner, object_type, inverted_balance, object_id)`. A scan
+    /// therefore needs a concrete type in its lower bound: exact type filters start at that type,
+    /// while unfiltered scans use the smallest valid struct tag so every type for the owner is
+    /// reachable.
+    fn lower_bound(owner: SuiAddress, object_type: Option<&StructTag>) -> Self {
+        Self {
+            owner,
+            object_type: object_type.cloned().unwrap_or_else(min_struct_tag),
+            inverted_balance: None,
+            object_id: ObjectID::ZERO,
+        }
+    }
+
+    /// Convert an index row back to the RPC cursor/result shape.
+    ///
+    /// The key stores `!balance` for coin ordering; the API exposes the original balance.
+    fn into_owned_object_info(self, version: SequenceNumber) -> OwnedObjectInfo {
+        OwnedObjectInfo {
+            owner: self.owner,
+            object_type: self.object_type,
+            balance: self.inverted_balance.map(std::ops::Not::not),
+            object_id: self.object_id,
+            version,
         }
     }
 }
@@ -103,10 +126,8 @@ struct OwnedObjectIndexMetadata {
 struct OwnedObjectIndexTables {
     /// Initialization marker and schema version.
     meta: DBMap<(), OwnedObjectIndexMetadata>,
-    /// Canonical row per object ID, used when update paths only know the object ID.
-    by_object: DBMap<ObjectID, SequenceNumber>,
     /// Owner-ordered rows used by `list_owned_objects` and RPC pagination.
-    by_owner: DBMap<OwnedObjectOwnerKey, OwnedObjectEntry>,
+    objects: DBMap<OwnedObjectIndexKey, SequenceNumber>,
 }
 
 /// DBMap-backed owned-object index.
@@ -157,84 +178,85 @@ impl OwnedObjectIndexStore {
         }
     }
 
-    /// Read all entries from the owned-object index.
-    pub(crate) fn get_owned_object_entries(&self) -> anyhow::Result<Vec<OwnedObjectEntry>> {
+    /// Read all object infos from the owned-object index.
+    pub(crate) fn get_owned_object_infos(&self) -> anyhow::Result<Vec<OwnedObjectInfo>> {
         self.tables
-            .by_object
+            .objects
             .safe_iter()
-            .map(|entry| entry.map(|(_, entry)| entry).map_err(Into::into))
+            .map(|entry| {
+                entry
+                    .map(|(key, version)| key.into_owned_object_info(version))
+                    .map_err(Into::into)
+            })
             .collect()
     }
 
-    /// Read entries for one owner.
+    /// Read object infos for one owner.
     ///
-    /// The cursor is an inclusive object-ID lower bound because the v2 RPC page token stores the
+    /// The cursor is an inclusive full-key lower bound because the v2 RPC page token stores the
     /// first not-yet-returned object, not the last returned object.
-    pub(crate) fn get_owned_object_entries_for_owner(
+    pub(crate) fn scan_owner(
         &self,
         owner: SuiAddress,
-        cursor: Option<ObjectID>,
-    ) -> anyhow::Result<Vec<OwnedObjectEntry>> {
-        let lower = OwnedObjectOwnerKey {
-            owner,
-            object_id: cursor.unwrap_or(ObjectID::ZERO),
-        };
+        object_type: Option<&StructTag>,
+        cursor: Option<OwnedObjectInfo>,
+    ) -> anyhow::Result<Vec<OwnedObjectInfo>> {
+        let lower = cursor
+            .map(OwnedObjectIndexKey::from_cursor)
+            .unwrap_or_else(|| OwnedObjectIndexKey::lower_bound(owner, object_type));
 
         self.tables
-            .by_owner
+            .objects
             .safe_iter_with_bounds(Some(lower), None)
             .take_while(|entry| {
                 let Ok((key, _)) = entry else {
                     return true;
                 };
                 key.owner == owner
+                    && object_type
+                        .is_none_or(|filter| struct_tag_filter_matches(filter, &key.object_type))
             })
-            .map(|entry| entry.map(|(_, entry)| entry).map_err(Into::into))
+            .map(|entry| {
+                entry
+                    .map(|(key, version)| key.into_owned_object_info(version))
+                    .map_err(Into::into)
+            })
             .collect()
     }
 
     /// Apply local execution ownership changes to the owned-object index.
     pub(crate) fn apply_owned_object_index_updates<'a>(
         &self,
-        removed_object_ids: &[ObjectID],
-        written_objects: impl IntoIterator<Item = &'a Object>,
+        old_objects: impl IntoIterator<Item = &'a Object>,
+        new_objects: impl IntoIterator<Item = &'a Object>,
     ) -> anyhow::Result<()> {
-        let mut batch = self.tables.by_object.batch();
+        let mut batch = self.tables.objects.batch();
 
-        for object_id in removed_object_ids {
-            self.delete_owned_entry(&mut batch, *object_id)?;
-        }
-
-        for object in written_objects {
-            match OwnedObjectEntry::from_object(object) {
-                Some(entry) => self.upsert_owned_entry(&mut batch, entry)?,
-                None => self.delete_owned_entry(&mut batch, object.id())?,
-            }
-        }
+        self.delete_owned_objects(&mut batch, old_objects)?;
+        self.insert_owned_objects(&mut batch, new_objects)?;
 
         self.mark_owned_object_index_initialized(&mut batch)?;
         batch.write()?;
         Ok(())
     }
 
-    /// Initialize the owned-object index from a complete snapshot.
+    /// Initialize the owned-object index from a complete object snapshot.
     ///
     /// This replaces any existing rows and writes the metadata marker in the same batch, including
     /// when `entries` is empty. Do not use for updating the index. Use
     /// `apply_owned_object_index_updates` instead.
-    pub(crate) fn write_owned_object_entries_for_initialization(
+    pub(crate) fn replace_from_objects<'a>(
         &self,
-        entries: &[OwnedObjectEntry],
+        objects: impl IntoIterator<Item = &'a Object>,
     ) -> anyhow::Result<()> {
-        let mut batch = self.tables.by_object.batch();
+        let mut batch = self.tables.objects.batch();
 
-        for existing in self.get_owned_object_entries()? {
-            self.delete_owned_entry(&mut batch, existing.object_ref.0)?;
+        for entry in self.tables.objects.safe_iter() {
+            let (key, _) = entry?;
+            batch.delete_batch(&self.tables.objects, [key])?;
         }
 
-        for entry in entries {
-            self.upsert_owned_entry(&mut batch, entry.clone())?;
-        }
+        self.insert_owned_objects(&mut batch, objects)?;
 
         self.mark_owned_object_index_initialized(&mut batch)?;
         batch.write()?;
@@ -270,41 +292,44 @@ impl OwnedObjectIndexStore {
         Ok(())
     }
 
-    /// Remove an object's rows from both lookup tables.
-    ///
-    /// Removal starts from `by_object` because execution diffs often know only the object ID; the
-    /// stored entry provides the previous owner key needed to clean up `by_owner`.
-    fn delete_owned_entry(&self, batch: &mut DBBatch, object_id: ObjectID) -> anyhow::Result<()> {
-        if let Some(existing) = self.tables.by_object.get(&object_id)? {
-            batch.delete_batch(&self.tables.by_object, [object_id])?;
-            batch.delete_batch(
-                &self.tables.by_owner,
-                [OwnedObjectOwnerKey::from(&existing)],
-            )?;
+    /// Remove prior keys for address-owned, indexable objects.
+    fn delete_owned_objects<'a>(
+        &self,
+        batch: &mut DBBatch,
+        objects: impl IntoIterator<Item = &'a Object>,
+    ) -> anyhow::Result<()> {
+        for object in objects {
+            if let Some(key) = OwnedObjectIndexKey::from_object(object) {
+                batch.delete_batch(&self.tables.objects, [key])?;
+            }
         }
         Ok(())
     }
 
-    /// Insert or replace an owned-object row in both lookup tables.
-    ///
-    /// Deleting the prior row first handles owner transfers, where the old `by_owner` key is not
-    /// derivable from the new entry.
-    fn upsert_owned_entry(
+    /// Insert current keys for address-owned, indexable objects.
+    fn insert_owned_objects<'a>(
         &self,
         batch: &mut DBBatch,
-        entry: OwnedObjectEntry,
+        objects: impl IntoIterator<Item = &'a Object>,
     ) -> anyhow::Result<()> {
-        self.delete_owned_entry(batch, entry.object_ref.0)?;
-        batch.insert_batch(
-            &self.tables.by_object,
-            [(entry.object_ref.0, entry.clone())],
-        )?;
-        batch.insert_batch(
-            &self.tables.by_owner,
-            [(OwnedObjectOwnerKey::from(&entry), entry)],
-        )?;
+        for object in objects {
+            if let Some(key) = OwnedObjectIndexKey::from_object(object) {
+                batch.insert_batch(&self.tables.objects, [(key, object.version())])?;
+            }
+        }
         Ok(())
     }
+}
+
+/// Smallest valid struct tag used to begin owner-wide scans.
+///
+/// `StructTag` does not have a natural `MIN` constant, but DB scans need a concrete lower-bound
+/// key. This sentinel sorts before all framework and user package types because it uses address
+/// zero and the shortest valid identifiers.
+fn min_struct_tag() -> StructTag {
+    "0x0::A::A"
+        .parse()
+        .expect("minimum struct tag literal should parse")
 }
 
 /// Check if these two `StructTag`s match for the purposes of owned-object filtering. The filter
@@ -343,7 +368,7 @@ impl DataStore {
             );
         }
 
-        let mut entries = BTreeMap::new();
+        let mut indexed_objects = BTreeMap::new();
         if self.local().seed_manifest_exists() {
             let manifest = self.local().read_seed_manifest()?;
             if manifest.checkpoint != self.forked_at_checkpoint() {
@@ -379,13 +404,14 @@ impl DataStore {
                         self.forked_at_checkpoint(),
                     );
                 };
-                let entry = OwnedObjectEntry::from_object(&object).with_context(|| {
-                    format!(
+                if OwnedObjectIndexKey::from_object(&object).is_none() {
+                    bail!(
                         "seeded object {} is not an address-owned Move object",
                         seed_entry.object_ref.0,
-                    )
-                })?;
-                if entry.object_ref != seed_entry.object_ref {
+                    );
+                }
+                let object_ref = object.compute_object_reference();
+                if object_ref != seed_entry.object_ref {
                     bail!(
                         "seeded object {} metadata does not match fetched object at fork checkpoint {}",
                         seed_entry.object_ref.0,
@@ -394,13 +420,12 @@ impl DataStore {
                 }
 
                 self.local().write_object(&object)?;
-                entries.insert(entry.object_ref.0, entry);
+                indexed_objects.insert(object_ref.0, object);
             }
         }
 
-        let entries: Vec<_> = entries.into_values().collect();
         self.owned_index()
-            .write_owned_object_entries_for_initialization(&entries)
+            .replace_from_objects(indexed_objects.values())
     }
 
     /// Get owned objects for an address, optionally filtered by object type and paginated with a
@@ -423,27 +448,10 @@ impl DataStore {
     ) -> StorageResult<Vec<OwnedObjectInfo>> {
         self.ensure_owned_object_index_initialized()
             .map_err(|e| StorageError::custom(e.to_string()))?;
-        let cursor_object_id = cursor.map(|cursor| cursor.object_id);
-        let entries = self
-            .owned_index()
-            .get_owned_object_entries_for_owner(owner, cursor_object_id)
-            .map_err(|e| StorageError::custom(e.to_string()))?;
-
-        Ok(entries
-            .into_iter()
-            .filter(|entry| {
-                object_type
-                    .as_ref()
-                    .is_none_or(|filter| struct_tag_filter_matches(filter, &entry.object_type))
-            })
-            .map(|entry| OwnedObjectInfo {
-                owner: entry.owner,
-                object_type: entry.object_type,
-                balance: entry.balance,
-                object_id: entry.object_ref.0,
-                version: entry.object_ref.1,
-            })
-            .collect())
+        let _local_snapshot_guard = self.read_local_snapshot()?;
+        self.owned_index()
+            .scan_owner(owner, object_type.as_ref(), cursor)
+            .map_err(|e| StorageError::custom(e.to_string()))
     }
 }
 

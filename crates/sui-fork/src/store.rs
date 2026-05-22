@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::RwLockReadGuard;
@@ -163,7 +164,7 @@ impl DataStore {
         self.inner.gql.chain()
     }
 
-    fn read_local_snapshot(&self) -> StorageResult<RwLockReadGuard<'_, ()>> {
+    pub(crate) fn read_local_snapshot(&self) -> StorageResult<RwLockReadGuard<'_, ()>> {
         self.inner
             .local_snapshot_lock
             .read()
@@ -543,10 +544,25 @@ impl DataStore {
         let _local_snapshot_guard = self
             .write_local_snapshot()
             .context("failed to lock local snapshot for object update")?;
-        let removed_object_ids: Vec<_> = removed_objects
-            .iter()
-            .map(|removed| removed.object_id)
+
+        let affected_object_ids: BTreeSet<_> = written_objects
+            .keys()
+            .copied()
+            .chain(removed_objects.iter().map(|removed| removed.object_id))
             .collect();
+        let mut old_objects = Vec::new();
+        for object_id in affected_object_ids {
+            if let Some(object) = self
+                .inner
+                .local
+                .get_latest_object(&object_id)
+                .with_context(|| {
+                    format!("failed to read object {object_id} for owned-object index update")
+                })?
+            {
+                old_objects.push(object);
+            }
+        }
 
         for removed in &removed_objects {
             match removed.kind {
@@ -605,7 +621,7 @@ impl DataStore {
 
         self.inner
             .owned_index
-            .apply_owned_object_index_updates(&removed_object_ids, indexable_written_objects)
+            .apply_owned_object_index_updates(old_objects.iter(), indexable_written_objects)
             .context("failed to update owned-object index")
     }
 
@@ -633,7 +649,6 @@ impl DataStore {
         let local = FilesystemStore::new_with_root(root);
         Self::from_parts(forked_at_checkpoint, gql, local)
     }
-
 }
 
 /// Preserve effect removal categories before passing removals through `update_objects`, whose trait

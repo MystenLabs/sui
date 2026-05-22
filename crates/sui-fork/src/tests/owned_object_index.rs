@@ -6,14 +6,18 @@
 //! `src/tests/` but remains a child of the `owned_object_index` module and has full `super::*`
 //! access to crate-private items.
 
+use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
+use sui_types::gas_coin::GasCoin;
 use sui_types::object::MoveObject;
 use sui_types::object::Object;
 use sui_types::object::ObjectInner;
 use sui_types::object::Owner;
+use sui_types::storage::OwnedObjectInfo;
 
 use super::*;
 
@@ -24,8 +28,27 @@ fn test_store() -> (tempfile::TempDir, OwnedObjectIndexStore) {
     (dir, store)
 }
 
-fn make_object_with_owner(id: ObjectID, version: u64, owner: Owner) -> Object {
-    let move_obj = MoveObject::new_gas_coin(SequenceNumber::from_u64(version), id, 1_000_000);
+fn make_gas_object(id: ObjectID, version: u64, owner: Owner, value: u64) -> Object {
+    make_move_object(
+        MoveObject::new_gas_coin(SequenceNumber::from_u64(version), id, value),
+        owner,
+    )
+}
+
+fn make_coin_object(
+    id: ObjectID,
+    version: u64,
+    owner: Owner,
+    coin_type: TypeTag,
+    value: u64,
+) -> Object {
+    make_move_object(
+        MoveObject::new_coin(coin_type, SequenceNumber::from_u64(version), id, value),
+        owner,
+    )
+}
+
+fn make_move_object(move_obj: MoveObject, owner: Owner) -> Object {
     ObjectInner {
         owner,
         data: sui_types::object::Data::Move(move_obj),
@@ -35,102 +58,187 @@ fn make_object_with_owner(id: ObjectID, version: u64, owner: Owner) -> Object {
     .into()
 }
 
+fn custom_coin_type() -> TypeTag {
+    TypeTag::Struct(Box::new(
+        "0x42::custom_coin::CUSTOM"
+            .parse::<StructTag>()
+            .expect("custom coin type should parse"),
+    ))
+}
+
 #[test]
-fn test_owned_object_index_upserts_removes_and_stays_sorted() {
+fn test_owned_object_index_updates_transfers_and_deletes() {
     let (_dir, store) = test_store();
     let owner = SuiAddress::random_for_testing_only();
     let next_owner = SuiAddress::random_for_testing_only();
     let first_id = ObjectID::random();
     let second_id = ObjectID::random();
-    let first = make_object_with_owner(first_id, 1, Owner::AddressOwner(owner));
-    let second = make_object_with_owner(second_id, 1, Owner::AddressOwner(owner));
+    let first = make_gas_object(first_id, 1, Owner::AddressOwner(owner), 1_000_000);
+    let second = make_gas_object(second_id, 1, Owner::AddressOwner(owner), 1_000_000);
 
     assert!(!store.owned_object_index_exists().unwrap());
     store
-        .apply_owned_object_index_updates(&[], [&second, &first])
+        .apply_owned_object_index_updates(std::iter::empty(), [&second, &first])
         .unwrap();
     assert!(store.owned_object_index_exists().unwrap());
 
-    let entries = store.get_owned_object_entries().unwrap();
-    assert_eq!(entries.len(), 2);
+    let infos = store.scan_owner(owner, None, None).unwrap();
+    assert_eq!(infos.len(), 2);
+    assert!(infos[0].object_id < infos[1].object_id);
+    assert!(infos.iter().all(|info| info.owner == owner));
     assert!(
-        entries
-            .windows(2)
-            .all(|window| window[0].object_ref.0 < window[1].object_ref.0)
-    );
-    assert!(entries.iter().all(|entry| entry.owner == owner));
-    assert!(
-        entries
+        infos
             .iter()
-            .all(|entry| entry.object_type == sui_types::gas_coin::GasCoin::type_())
+            .all(|info| info.object_type == GasCoin::type_())
     );
-    assert!(entries.iter().all(|entry| entry.balance == Some(1_000_000)));
-    assert!(
-        entries
-            .iter()
-            .any(|entry| entry.object_ref == first.compute_object_reference())
-    );
-    assert!(
-        entries
-            .iter()
-            .any(|entry| entry.object_ref == second.compute_object_reference())
-    );
+    assert!(infos.iter().all(|info| info.balance == Some(1_000_000)));
 
-    let owner_entries = store
-        .get_owned_object_entries_for_owner(owner, None)
+    let infos_from_cursor = store
+        .scan_owner(owner, None, Some(infos[1].clone()))
         .unwrap();
-    assert_eq!(owner_entries, entries);
+    assert_eq!(infos_from_cursor.len(), 1);
+    assert_same_info(&infos_from_cursor[0], &infos[1]);
 
-    let owner_entries_from_cursor = store
-        .get_owned_object_entries_for_owner(owner, Some(entries[1].object_ref.0))
-        .unwrap();
-    assert_eq!(owner_entries_from_cursor.len(), 1);
-    assert_eq!(owner_entries_from_cursor[0], entries[1]);
+    assert!(store.scan_owner(next_owner, None, None).unwrap().is_empty());
 
-    let next_owner_entries = store
-        .get_owned_object_entries_for_owner(next_owner, None)
-        .unwrap();
-    assert!(next_owner_entries.is_empty());
-
-    let transferred = make_object_with_owner(first_id, 2, Owner::AddressOwner(next_owner));
+    let transferred = make_gas_object(first_id, 2, Owner::AddressOwner(next_owner), 1_000_000);
     store
-        .apply_owned_object_index_updates(&[], [&transferred])
+        .apply_owned_object_index_updates([&first], [&transferred])
         .unwrap();
-    let first_entry = store
-        .get_owned_object_entries()
+
+    let remaining_owner_infos = store.scan_owner(owner, None, None).unwrap();
+    assert_eq!(remaining_owner_infos.len(), 1);
+    assert_eq!(remaining_owner_infos[0].object_id, second_id);
+
+    let next_owner_infos = store
+        .scan_owner(next_owner, None, Some(owned_object_info(&transferred)))
+        .unwrap();
+    assert_eq!(next_owner_infos.len(), 1);
+    assert_info_matches_object(&next_owner_infos[0], &transferred);
+
+    store
+        .apply_owned_object_index_updates([&second], std::iter::empty())
+        .unwrap();
+    let infos = store.get_owned_object_infos().unwrap();
+    assert_eq!(infos.len(), 1);
+    assert_info_matches_object(&infos[0], &transferred);
+}
+
+#[test]
+fn test_owned_object_index_orders_coin_balances_descending() {
+    let (_dir, store) = test_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let low_id = ObjectID::random();
+    let high_id = ObjectID::random();
+    let low = make_gas_object(low_id, 1, Owner::AddressOwner(owner), 10);
+    let high = make_gas_object(high_id, 1, Owner::AddressOwner(owner), 1_000);
+
+    store
+        .apply_owned_object_index_updates(std::iter::empty(), [&low, &high])
+        .unwrap();
+
+    let infos = store
+        .scan_owner(owner, Some(&GasCoin::type_()), None)
+        .unwrap();
+    assert_eq!(
+        infos
+            .into_iter()
+            .map(|info| (info.object_id, info.balance))
+            .collect::<Vec<_>>(),
+        vec![(high_id, Some(1_000)), (low_id, Some(10))],
+    );
+}
+
+#[test]
+fn test_owned_object_index_filters_exact_and_wildcard_types() {
+    let (_dir, store) = test_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let gas_id = ObjectID::random();
+    let custom_id = ObjectID::random();
+    let gas = make_gas_object(gas_id, 1, Owner::AddressOwner(owner), 1_000_000);
+    let custom = make_coin_object(
+        custom_id,
+        1,
+        Owner::AddressOwner(owner),
+        custom_coin_type(),
+        7,
+    );
+    let custom_type = custom.struct_tag().expect("custom coin should have a type");
+    let wildcard_coin = "0x2::coin::Coin"
+        .parse::<StructTag>()
+        .expect("wildcard coin type should parse");
+
+    store
+        .apply_owned_object_index_updates(std::iter::empty(), [&gas, &custom])
+        .unwrap();
+
+    let gas_infos = store
+        .scan_owner(owner, Some(&GasCoin::type_()), None)
+        .unwrap();
+    assert_eq!(gas_infos.len(), 1);
+    assert_info_matches_object(&gas_infos[0], &gas);
+
+    let custom_infos = store.scan_owner(owner, Some(&custom_type), None).unwrap();
+    assert_eq!(custom_infos.len(), 1);
+    assert_info_matches_object(&custom_infos[0], &custom);
+
+    let wildcard_infos = store
+        .scan_owner(owner, Some(&wildcard_coin), None)
         .unwrap()
         .into_iter()
-        .find(|entry| entry.object_ref.0 == first_id)
-        .unwrap();
-    assert_eq!(first_entry.owner, next_owner);
-    assert_eq!(
-        first_entry.object_ref,
-        transferred.compute_object_reference()
-    );
-    assert_eq!(
-        first_entry.object_type,
-        sui_types::gas_coin::GasCoin::type_()
-    );
-    assert_eq!(first_entry.balance, Some(1_000_000));
-    let remaining_owner_entries = store
-        .get_owned_object_entries_for_owner(owner, None)
-        .unwrap();
-    assert_eq!(remaining_owner_entries.len(), 1);
-    assert_eq!(remaining_owner_entries[0].object_ref.0, second_id);
-    assert_eq!(
+        .map(|info| info.object_id)
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(wildcard_infos, [gas_id, custom_id].into_iter().collect(),);
+
+    let wrong_type = "0x2::clock::Clock"
+        .parse::<StructTag>()
+        .expect("wrong type should parse");
+    assert!(
         store
-            .get_owned_object_entries_for_owner(next_owner, Some(first_id))
+            .scan_owner(owner, Some(&wrong_type), None)
             .unwrap()
-            .into_iter()
-            .map(|entry| entry.object_ref)
-            .collect::<Vec<_>>(),
-        vec![transferred.compute_object_reference()],
+            .is_empty()
     );
+}
+
+#[test]
+fn test_replace_from_objects_clears_previous_rows_and_marks_empty() {
+    let (_dir, store) = test_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let object = make_gas_object(ObjectID::random(), 1, Owner::AddressOwner(owner), 1);
+
+    store.replace_from_objects([&object]).unwrap();
+    assert_eq!(store.get_owned_object_infos().unwrap().len(), 1);
 
     store
-        .apply_owned_object_index_updates(&[second_id], std::iter::empty::<&Object>())
+        .replace_from_objects(std::iter::empty::<&Object>())
         .unwrap();
-    let entries = store.get_owned_object_entries().unwrap();
-    assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0].object_ref.0, first_id);
+    assert!(store.owned_object_index_exists().unwrap());
+    assert!(store.get_owned_object_infos().unwrap().is_empty());
+}
+
+fn owned_object_info(object: &Object) -> OwnedObjectInfo {
+    let owner = match object.owner() {
+        Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => *owner,
+        _ => panic!("test object should be address-owned"),
+    };
+    OwnedObjectInfo {
+        owner,
+        object_type: object.struct_tag().expect("test object should have a type"),
+        balance: object.as_coin_maybe().map(|coin| coin.value()),
+        object_id: object.id(),
+        version: object.version(),
+    }
+}
+
+fn assert_info_matches_object(info: &OwnedObjectInfo, object: &Object) {
+    assert_same_info(info, &owned_object_info(object));
+}
+
+fn assert_same_info(actual: &OwnedObjectInfo, expected: &OwnedObjectInfo) {
+    assert_eq!(actual.owner, expected.owner);
+    assert_eq!(actual.object_type, expected.object_type);
+    assert_eq!(actual.balance, expected.balance);
+    assert_eq!(actual.object_id, expected.object_id);
+    assert_eq!(actual.version, expected.version);
 }
