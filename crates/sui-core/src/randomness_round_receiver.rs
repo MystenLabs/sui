@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
+
+use parking_lot::Mutex;
 
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::{tbls::ThresholdBls, types::ThresholdBls12381MinSig};
@@ -35,11 +38,14 @@ pub struct RandomnessSignatureMessage {
 
 const SIGNATURES_BROADCAST_CAPACITY: usize = 1000;
 const AUXILIARY_DATA_CHANNEL_SIZE: usize = 1000;
+const EXECUTED_ROUNDS_CACHE_CAPACITY: usize = 1000;
 
 pub struct RandomnessRoundReceiverHandle {
     consensus_signatures_tx: mysten_metrics::monitored_mpsc::Sender<bytes::Bytes>,
     vss_pk_tx: watch::Sender<Option<bls12381::G2Element>>,
     signatures_broadcast: broadcast::Sender<bytes::Bytes>,
+    #[cfg(test)]
+    executed_consensus_rounds: Arc<Mutex<BTreeSet<(EpochId, RandomnessRound)>>>,
     _task_handle: JoinHandle<()>,
 }
 
@@ -68,6 +74,8 @@ impl RandomnessRoundReceiverHandle {
             consensus_signatures_tx,
             vss_pk_tx,
             signatures_broadcast,
+            #[cfg(test)]
+            executed_consensus_rounds: Arc::new(Mutex::new(BTreeSet::new())),
             _task_handle: tokio::spawn(async move {
                 let _vss_pk_rx = vss_pk_rx;
                 futures::future::pending::<()>().await;
@@ -79,6 +87,11 @@ impl RandomnessRoundReceiverHandle {
     pub(crate) fn public_key_for_testing(&self) -> Option<bls12381::G2Element> {
         let rx = self.vss_pk_tx.subscribe();
         *rx.borrow()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn mark_round_executed(&self, epoch: EpochId, round: RandomnessRound) {
+        self.executed_consensus_rounds.lock().insert((epoch, round));
     }
 }
 
@@ -105,6 +118,10 @@ pub struct RandomnessRoundReceiver {
     /// signatures via consensus to non-committee peers (observers) syncing their state via consensus
     /// from a read-only capacity.
     signatures_broadcast: broadcast::Sender<bytes::Bytes>,
+    /// Tracks rounds whose randomness transaction executed successfully via the consensus relay
+    /// path. Prevents rebroadcast loops in observer-to-observer topologies (although in practice is not anticipated having such)
+    /// while still allowing retries for rounds that failed execution.
+    executed_consensus_rounds: Arc<Mutex<BTreeSet<(EpochId, RandomnessRound)>>>,
 }
 
 impl RandomnessRoundReceiver {
@@ -122,6 +139,7 @@ impl RandomnessRoundReceiver {
                 AUXILIARY_DATA_CHANNEL_SIZE,
             );
         let (vss_pk_tx, vss_pk_rx) = watch::channel(None);
+        let executed_consensus_rounds = Arc::new(Mutex::new(BTreeSet::new()));
 
         let rrr = RandomnessRoundReceiver {
             authority_state,
@@ -129,6 +147,7 @@ impl RandomnessRoundReceiver {
             consensus_signatures_rx,
             vss_pk_rx,
             signatures_broadcast: signatures_broadcast.clone(),
+            executed_consensus_rounds: executed_consensus_rounds.clone(),
         };
         let task_handle = spawn_monitored_task!(rrr.run());
 
@@ -136,6 +155,8 @@ impl RandomnessRoundReceiver {
             consensus_signatures_tx,
             vss_pk_tx,
             signatures_broadcast,
+            #[cfg(test)]
+            executed_consensus_rounds,
             _task_handle: task_handle,
         })
     }
@@ -167,7 +188,7 @@ impl RandomnessRoundReceiver {
     /// Signatures that are propagated via consensus state sync. This is meant to be used from nodes that are not part of the committee
     /// and are using consensus sync additionally to sync state.
     async fn handle_consensus_randomness_signature(
-        &self,
+        &mut self,
         vss_pk: bls12381::G2Element,
         data: &bytes::Bytes,
     ) {
@@ -197,6 +218,18 @@ impl RandomnessRoundReceiver {
             warn!(
                 "RandomnessRoundReceiver: invalid auxiliary signature \
                  for epoch {} round {}: {e}",
+                msg.epoch, msg.round
+            );
+            return;
+        }
+
+        if self
+            .executed_consensus_rounds
+            .lock()
+            .contains(&(msg.epoch, msg.round))
+        {
+            info!(
+                "RandomnessRoundReceiver: dropping already-executed auxiliary signature for epoch {} round {}",
                 msg.epoch, msg.round
             );
             return;
@@ -270,6 +303,7 @@ impl RandomnessRoundReceiver {
         }
 
         let authority_state = self.authority_state.clone();
+        let executed_consensus_rounds = self.executed_consensus_rounds.clone();
         spawn_monitored_task!(async move {
             // Wait for transaction execution in a separate task, to avoid deadlock in case of
             // out-of-order randomness generation. (Each RandomnessStateUpdate depends on the
@@ -315,6 +349,12 @@ impl RandomnessRoundReceiver {
             debug!(
                 "successfully executed randomness state update transaction at epoch {epoch}, round {round}"
             );
+
+            let cache = &mut *executed_consensus_rounds.lock();
+            cache.insert((epoch, round));
+            while cache.len() > EXECUTED_ROUNDS_CACHE_CAPACITY {
+                cache.pop_first();
+            }
         });
     }
 }
@@ -421,6 +461,36 @@ mod tests {
         let decoded: RandomnessSignatureMessage = bcs::from_bytes(&received).unwrap();
         assert_eq!(decoded.epoch, epoch);
         assert_eq!(decoded.round, round);
+    }
+
+    #[tokio::test]
+    async fn test_executed_consensus_signature_not_rebroadcast() {
+        let (sk, pk) = generate_keypair();
+        let state = TestAuthorityBuilder::new().build().await;
+        let epoch = state.epoch_store_for_testing().epoch();
+
+        let (_randomness_tx, randomness_rx) = mpsc::channel(1);
+        let handle = RandomnessRoundReceiver::spawn(state, randomness_rx);
+        let mut sig_rx = handle.subscribe_randomness_signatures();
+
+        handle.set_public_key(pk);
+        tokio::task::yield_now().await;
+
+        let round = RandomnessRound(1);
+        let sig = sign(&sk, &round.signature_message());
+        let msg = build_message(epoch, round, &sig);
+
+        // Simulate that round 1 has already been executed successfully.
+        handle.mark_round_executed(epoch, round);
+
+        handle.handle_randomness_signature(msg);
+
+        let result =
+            tokio::time::timeout(std::time::Duration::from_millis(200), sig_rx.recv()).await;
+        assert!(
+            result.is_err(),
+            "already-executed round should not be rebroadcast"
+        );
     }
 
     #[tokio::test]
