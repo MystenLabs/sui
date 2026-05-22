@@ -2,7 +2,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    path::Path,
+};
 
 use indexmap::IndexMap;
 use tracing::debug;
@@ -13,7 +17,7 @@ use crate::graph::PackageInfo;
 use crate::package::package_loader::{LoadType, PackageConfig};
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{
-    Environment, EphemeralDependencyInfo, LocalPub, PackageID, ParsedEphemeralPubs,
+    Environment, EphemeralDependencyInfo, LocalPub, OriginalID, PackageID, ParsedEphemeralPubs,
     ParsedPublishedFile, Publication, RenderToml,
 };
 use crate::{
@@ -218,6 +222,15 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// transitive dependencies). This includes the non-duplicate addresses only, sorted in topological order.
     pub fn sorted_packages(&self) -> Vec<PackageInfo<'_, F>> {
         self.filtered_graph.sorted_packages()
+    }
+
+    /// The original IDs of the root package's published direct dependencies.
+    pub fn direct_dependency_original_ids(&self) -> BTreeSet<OriginalID> {
+        self.package_info()
+            .direct_deps()
+            .values()
+            .filter_map(|dep| dep.published().map(|addrs| addrs.original_id))
+            .collect()
     }
 
     /// Update the dependencies in the lockfile for this environment to match the dependency graph

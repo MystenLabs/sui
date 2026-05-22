@@ -37,10 +37,10 @@ impl Environment {
     }
 }
 
-#[derive(Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PublishedID(pub AccountAddress);
 
-#[derive(Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OriginalID(pub AccountAddress);
 
 /// A pair of published-at and original-id; appears in various places

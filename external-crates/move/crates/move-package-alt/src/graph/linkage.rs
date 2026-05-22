@@ -51,6 +51,10 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// `p --> d`, if the linkage for `d` is different from `d`, then every path from the root to
     /// `p` must contain a package with an override dependency on `d2`.
     ///
+    /// Note: publish-time tree shaking (`sui/src/tree_shake.rs`) relies on this property — that
+    /// overrides are always direct dependencies and bubble up to a common ancestor — to compute
+    /// publishable linkage tables from only the root's direct dependencies.
+    ///
     /// The linkage table is constructed by starting at the root and walking down the dependency
     /// tree while maintaining a current set of overrides along the path; dependencies are first
     /// replaced with their overrides, and then recursively traversed. Once the linkage tables for
