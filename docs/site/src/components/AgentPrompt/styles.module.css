@@ -1,0 +1,124 @@
+/**
+ * Copyright (c) Mysten Labs, Inc.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Styles for the AgentPrompt callout. Theme-aware through Infima variables.
+ */
+
+.callout {
+  display: block;
+  margin: 0 0 1.75rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-left: 3px solid var(--ifm-color-primary);
+  border-radius: 8px;
+  background-color: var(--ifm-background-surface-color);
+}
+
+.eyebrow {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ifm-color-primary);
+}
+
+.title {
+  margin: 0.5rem 0 0.35rem;
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--ifm-heading-color);
+}
+
+.prompt {
+  margin: 0.35rem 0 0.9rem;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.copyBtn,
+.agentBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.copyBtn {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  background: transparent;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.copyBtn:hover {
+  border-color: var(--ifm-color-emphasis-500);
+  color: var(--ifm-heading-color);
+}
+
+.agentBtn {
+  border: 1px solid var(--ifm-color-primary);
+  background: var(--ifm-color-primary);
+  color: #ffffff;
+}
+
+.agentBtn:hover {
+  background: var(--ifm-color-primary-dark);
+  border-color: var(--ifm-color-primary-dark);
+}
+
+.caret {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.agentWrap {
+  position: relative;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 20;
+  min-width: 9rem;
+  padding: 0.3rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  background-color: var(--ifm-background-surface-color);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: 0.85rem;
+  font-family: inherit;
+  padding: 0.45rem 0.6rem;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ifm-color-emphasis-800);
+  cursor: pointer;
+}
+
+.item:hover {
+  background-color: var(--ifm-color-emphasis-200);
+  color: var(--ifm-heading-color);
+}
