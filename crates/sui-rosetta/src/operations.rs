@@ -1569,16 +1569,20 @@ impl Operations {
 
         let sender = SuiAddress::from_str(transaction.sender())?;
 
-        let gas_owner = if effects.gas_object.is_some() {
-            let gas_object = effects.gas_object();
-            let owner = gas_object.output_owner();
-            SuiAddress::from_str(owner.address())?
+        // Post-execution owner of the gas coin. This is empty when the gas coin no
+        // longer exists after execution: a `coin::send_funds` that moves the entire
+        // gas coin into an address balance (gasless / free-tier transfers) deletes
+        // the gas object, so its effects carry no output owner.
+        let gas_output_owner = effects.gas_object().output_owner().address();
+        let gas_owner = if !gas_output_owner.is_empty() {
+            SuiAddress::from_str(gas_output_owner)?
         } else if sender == SuiAddress::ZERO {
             // System transactions don't have a gas_object.
             sender
         } else {
-            // Address-balance gas payment: gas is paid from the sender's address balance,
-            // not from an explicit gas coin object. Use gas_payment owner from tx data.
+            // No gas coin output owner: either gas was paid from the sender's address
+            // balance (no gas coin object) or the gas coin was fully consumed/deleted.
+            // Either way the gas payment owner is the account that paid for the txn.
             SuiAddress::from_str(transaction.gas_payment().owner())?
         };
 
@@ -2072,6 +2076,87 @@ mod tests {
         };
         let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
         assert_eq!(data, parsed_data);
+
+        Ok(())
+    }
+
+    /// Regression test for the gas coin being fully consumed during execution.
+    /// A `coin::send_funds` that moves the entire gas coin into an address balance
+    /// (gasless / free-tier transfers) deletes the gas object, so its effects carry
+    /// a `ChangedObject` with no `output_owner`. Previously `try_from_executed_transaction`
+    /// fed the resulting empty owner string to `SuiAddress::from_str`, which produced
+    /// `FastCryptoError::InvalidInput` ("Invalid value was given to the function") and
+    /// failed the whole `/block` request. It must instead fall back to the gas payment
+    /// owner and attribute gas to it.
+    #[tokio::test]
+    async fn test_try_from_executed_transaction_deleted_gas_coin() -> Result<(), anyhow::Error> {
+        use std::num::NonZeroUsize;
+        use sui_rpc::client::Client;
+        use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
+        use sui_rpc::proto::sui::rpc::v2::{
+            ChangedObject, ExecutedTransaction, ExecutionStatus, GasCostSummary, TransactionEffects,
+        };
+
+        let sender = SuiAddress::random_for_testing_only();
+        let recipient = SuiAddress::random_for_testing_only();
+
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.pay_sui(vec![recipient], vec![1000]).unwrap();
+            builder.finish()
+        };
+        let gas_price = 10;
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![random_object_ref()],
+            pt,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
+        );
+        let transaction: Transaction = data.into();
+
+        // The gas object is present in effects but was deleted (consumed), so it has
+        // no output owner. (Proto structs are #[non_exhaustive], so build by mutation.)
+        let mut gas_object = ChangedObject::default();
+        gas_object.object_id = Some(ObjectID::random().to_string());
+        gas_object.output_state = Some(OutputObjectState::DoesNotExist as i32);
+        gas_object.output_owner = None;
+
+        let mut status = ExecutionStatus::default();
+        status.success = Some(true);
+
+        let mut gas_used = GasCostSummary::default();
+        gas_used.computation_cost = Some(1000);
+        gas_used.storage_cost = Some(0);
+        gas_used.storage_rebate = Some(0);
+        gas_used.non_refundable_storage_fee = Some(0);
+
+        let mut effects = TransactionEffects::default();
+        effects.status = Some(status);
+        effects.gas_used = Some(gas_used);
+        effects.gas_object = Some(gas_object);
+
+        let mut executed_tx = ExecutedTransaction::default();
+        executed_tx.transaction = Some(transaction);
+        executed_tx.effects = Some(effects);
+        executed_tx.events = None;
+        executed_tx.balance_changes = vec![];
+
+        // balance_changes is empty, so the coin metadata cache is never queried and a
+        // client that never connects is sufficient.
+        let cache = CoinMetadataCache::new(
+            Client::new("http://127.0.0.1:1").unwrap(),
+            NonZeroUsize::new(1).unwrap(),
+        );
+
+        let ops = Operations::try_from_executed_transaction(executed_tx, &cache).await?;
+
+        let gas_op = ops
+            .0
+            .iter()
+            .find(|op| op.type_ == OperationType::Gas)
+            .expect("expected a Gas operation");
+        assert_eq!(gas_op.account.as_ref().map(|a| a.address), Some(sender));
 
         Ok(())
     }
