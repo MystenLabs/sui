@@ -3263,7 +3263,7 @@ impl MysticetiConsensusHandler {
             // TODO: pause when execution is overloaded, so consensus can detect the backpressure.
             while let Some(consensus_commit) = commit_receiver.recv().await {
                 let commit_index = consensus_commit.commit_ref.index;
-                if !node_role.should_process_consensus_commits() {
+                if !node_role.process_consensus_commits() {
                     debug!(
                         commit_index,
                         "Observer skipping consensus commit processing"
