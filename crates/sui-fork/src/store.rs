@@ -852,7 +852,7 @@ impl SimulatorStore for DataStore {
     }
 
     fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
-        let objects = match self.get_owned_object_infos(owner, None, None).map(|infos| {
+        let objects = match self.get_owned_objects(owner, None, None).map(|infos| {
             infos
                 .into_iter()
                 .filter_map(|info| {

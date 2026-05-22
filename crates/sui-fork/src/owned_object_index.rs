@@ -55,6 +55,30 @@ struct OwnedObjectIndexKey {
     object_id: ObjectID,
 }
 
+/// Singleton metadata row used to distinguish an initialized-empty index from a missing index.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+struct OwnedObjectIndexMetadata {
+    /// Schema version of the typed-store owned-object index.
+    version: u64,
+}
+
+/// Typed-store tables for the owned-object index.
+#[derive(DBMapUtils)]
+struct OwnedObjectIndexTables {
+    /// Initialization marker and schema version.
+    meta: DBMap<(), OwnedObjectIndexMetadata>,
+    /// Owner-ordered rows used by `list_owned_objects` and RPC pagination.
+    objects: DBMap<OwnedObjectIndexKey, SequenceNumber>,
+}
+
+/// DBMap-backed owned-object index.
+///
+/// Held by value inside `DataStore`, which already shares all of its state through a single
+/// `Arc`, so this type needs neither its own `Arc` wrapper nor a `Clone` impl.
+pub(crate) struct OwnedObjectIndexStore {
+    tables: OwnedObjectIndexTables,
+}
+
 impl OwnedObjectIndexKey {
     fn from_object(object: &Object) -> Option<Self> {
         let owner = match object.owner() {
@@ -112,30 +136,6 @@ impl OwnedObjectIndexKey {
             version,
         }
     }
-}
-
-/// Singleton metadata row used to distinguish an initialized-empty index from a missing index.
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-struct OwnedObjectIndexMetadata {
-    /// Schema version of the typed-store owned-object index.
-    version: u64,
-}
-
-/// Typed-store tables for the owned-object index.
-#[derive(DBMapUtils)]
-struct OwnedObjectIndexTables {
-    /// Initialization marker and schema version.
-    meta: DBMap<(), OwnedObjectIndexMetadata>,
-    /// Owner-ordered rows used by `list_owned_objects` and RPC pagination.
-    objects: DBMap<OwnedObjectIndexKey, SequenceNumber>,
-}
-
-/// DBMap-backed owned-object index.
-///
-/// Held by value inside `DataStore`, which already shares all of its state through a single
-/// `Arc`, so this type needs neither its own `Arc` wrapper nor a `Clone` impl.
-pub(crate) struct OwnedObjectIndexStore {
-    tables: OwnedObjectIndexTables,
 }
 
 impl OwnedObjectIndexStore {
@@ -321,31 +321,6 @@ impl OwnedObjectIndexStore {
     }
 }
 
-/// Smallest valid struct tag used to begin owner-wide scans.
-///
-/// `StructTag` does not have a natural `MIN` constant, but DB scans need a concrete lower-bound
-/// key. This sentinel sorts before all framework and user package types because it uses address
-/// zero and the shortest valid identifiers.
-fn min_struct_tag() -> StructTag {
-    "0x0::A::A"
-        .parse()
-        .expect("minimum struct tag literal should parse")
-}
-
-/// Check if these two `StructTag`s match for the purposes of owned-object filtering. The filter
-/// may have empty type parameters, in which case they are ignored and only the address, module, and
-/// name are compared.
-///
-/// This allows a wildcard filter like `0x2::coin::Coin` to match all versions of the `Coin` struct,
-/// regardless of the type parameter (e.g., `0x2::coin::Coin<0x1::sui::SUI>`).
-pub(crate) fn struct_tag_filter_matches(filter: &StructTag, candidate: &StructTag) -> bool {
-    filter.address == candidate.address
-        && filter.module.as_ident_str() == candidate.module.as_ident_str()
-        && filter.name.as_ident_str() == candidate.name.as_ident_str()
-        && (filter.type_params.is_empty()
-            || filter.type_params.as_slice() == candidate.type_params.as_slice())
-}
-
 /// `DataStore`-level orchestration of the owned-object index: lazy seed initialization and the
 /// owner-listing reads that back the v2 RPC owned-object iterator.
 impl DataStore {
@@ -424,6 +399,7 @@ impl DataStore {
             }
         }
 
+        // Insert into DB the objects for index
         self.owned_index()
             .replace_from_objects(indexed_objects.values())
     }
@@ -436,16 +412,6 @@ impl DataStore {
         object_type: Option<StructTag>,
         cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Vec<OwnedObjectInfo>> {
-        self.get_owned_object_infos(owner, object_type, cursor)
-    }
-
-    /// Initialize the owned-object index when needed, then read complete indexed RPC metadata.
-    pub(crate) fn get_owned_object_infos(
-        &self,
-        owner: SuiAddress,
-        object_type: Option<StructTag>,
-        cursor: Option<OwnedObjectInfo>,
-    ) -> StorageResult<Vec<OwnedObjectInfo>> {
         self.ensure_owned_object_index_initialized()
             .map_err(|e| StorageError::custom(e.to_string()))?;
         let _local_snapshot_guard = self.read_local_snapshot()?;
@@ -453,6 +419,31 @@ impl DataStore {
             .scan_owner(owner, object_type.as_ref(), cursor)
             .map_err(|e| StorageError::custom(e.to_string()))
     }
+}
+
+/// Smallest valid struct tag used to begin owner-wide scans.
+///
+/// `StructTag` does not have a natural `MIN` constant, but DB scans need a concrete lower-bound
+/// key. This sentinel sorts before all framework and user package types because it uses address
+/// zero and the shortest valid identifiers.
+fn min_struct_tag() -> StructTag {
+    "0x0::A::A"
+        .parse()
+        .expect("minimum struct tag literal should parse")
+}
+
+/// Check if these two `StructTag`s match for the purposes of owned-object filtering. The filter
+/// may have empty type parameters, in which case they are ignored and only the address, module, and
+/// name are compared.
+///
+/// This allows a wildcard filter like `0x2::coin::Coin` to match all versions of the `Coin` struct,
+/// regardless of the type parameter (e.g., `0x2::coin::Coin<0x1::sui::SUI>`).
+pub(crate) fn struct_tag_filter_matches(filter: &StructTag, candidate: &StructTag) -> bool {
+    filter.address == candidate.address
+        && filter.module.as_ident_str() == candidate.module.as_ident_str()
+        && filter.name.as_ident_str() == candidate.name.as_ident_str()
+        && (filter.type_params.is_empty()
+            || filter.type_params.as_slice() == candidate.type_params.as_slice())
 }
 
 #[cfg(test)]
