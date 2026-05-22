@@ -237,7 +237,7 @@ impl AuthorityPerpetualTables {
             KeyIndexing::key_reduction(obj_ref_size, 16..(obj_ref_size - 16));
 
         let mut objects_config = KeySpaceConfig::new()
-            .with_max_dirty_keys(4 * default_max_dirty_keys())
+            .with_max_dirty_keys(16 * default_max_dirty_keys())
             .with_value_cache_size(value_cache_size);
         if matches!(db_options_override, Some(options) if options.enable_objects_compactor) {
             objects_config = objects_config.with_compactor(Box::new(objects_compactor));
