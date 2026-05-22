@@ -45,13 +45,7 @@ function track(event: string, props: Record<string, string>) {
   }
 }
 
-export default function AgentPrompt({
-  title,
-  prompt,
-}: {
-  title?: string;
-  prompt: string;
-}) {
+export default function AgentPrompt({ prompt }: { prompt: string }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -78,13 +72,13 @@ export default function AgentPrompt({
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(prompt);
     }
-    track("Docs: copy agent prompt", { title: title ?? "" });
+    track("Docs: copy agent prompt", {});
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
 
   const openAgent = (agent: Agent) => {
-    track("Docs: open agent prompt", { title: title ?? "", agent: agent.id });
+    track("Docs: open agent prompt", { agent: agent.id });
     if (typeof window !== "undefined") {
       window.open(agent.url(prompt), "_blank", "noopener");
     }
@@ -94,8 +88,7 @@ export default function AgentPrompt({
   return (
     <aside className={styles.callout}>
       <span className={styles.eyebrow}>Using an agent? Try this prompt</span>
-      {title && <p className={styles.title}>{title}</p>}
-      <p className={styles.prompt}>{prompt}</p>
+      <pre className={styles.prompt}>{prompt}</pre>
       <div className={styles.actions}>
         <button
           type="button"
