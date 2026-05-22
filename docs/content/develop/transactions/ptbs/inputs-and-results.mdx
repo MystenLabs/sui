@@ -4,6 +4,11 @@ description: Programmable transaction blocks accept two types of inputs (objects
 keywords: [PTB inputs, PTB results, pure values, object inputs, transaction arguments, BCS bytes, ObjectArg, programmable transaction blocks]
 ---
 
+<AgentPrompt
+  title={"Check PTB input serialization"}
+  prompt={"Review this PTB code for invalid pure inputs, custom structs/enums, object references, vectors/options, and command result usage."}
+/>
+
 Programmable transaction blocks (PTBs) operate on inputs and produce results. Inputs are the values you provide to the PTB, either objects on the network or pure values like numbers and strings. Results are the values that PTB commands produce, which subsequent commands in the same transaction can use. Together, inputs and results form the data flow through a PTB's execution.
 
 ## Inputs 

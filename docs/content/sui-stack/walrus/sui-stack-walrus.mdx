@@ -5,6 +5,11 @@ keywords: [walrus, blob storage, walrus SDK, OnlyFins, Sui Stack, upload, read, 
 last_verified: 2026-04-15
 ---
 
+<AgentPrompt
+  title={"Add Walrus-backed media storage"}
+  prompt={"Upload this app's media or NFT assets to Walrus, store the resulting blob references, and wire them into Sui object metadata or Display fields."}
+/>
+
 Walrus is a decentralized storage and data availability protocol built specifically for large binary files, or blobs. It uses Sui for coordination, payment, and governance, making it a natural storage layer for apps built on Sui.
 
 Each section explains a Walrus concept or operation and shows where it appears in the encrypted social media example [OnlyFins](only-fins.mdx). OnlyFins is a demo content platform where creators post images stored on [Walrus](https://docs.wal.app/), some encrypted with [Seal](https://seal-docs.wal.app/). Each post is a Sui object. Users request access onchain to unlock encrypted posts, demonstrating how Sui, Walrus, and Seal work together as a stack.

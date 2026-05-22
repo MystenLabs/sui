@@ -4,6 +4,11 @@ description: Packages published across Mainnet, Testnet, and Devnet each have di
 keywords: [ track address, track package address, package addresses, managing package addresses, managing addresses, tracking addresses, tracking packages, tracking mainnet address, track mainnet address, track testnet address, tracking testnet address, track devnet address, tracking devnet address, conflicting addresses, conflicting package addresses ]
 ---
 
+<AgentPrompt
+  title={"Migrate package address management"}
+  prompt={"Migrate this package to current Sui package address management using Move.lock / Published.toml conventions, then verify build and publish/test-publish behavior."}
+/>
+
 When you publish or upgrade a package, its address is tracked in the `Move.lock` file. A package's address is its package ID. This happens automatically, so you do not need to manually record or update hexadecimal addresses.
 
 When you publish or upgrade your package on multiple Sui networks (Mainnet, Testnet, Devnet), automated address management tracks separate addresses for each chain. Tracking is based on your active environment. You can run `sui client active-env` to see your current environment. For example, if your active environment is `testnet` and you publish a package, the `Move.lock` records the address for that package and associates it with `testnet`.

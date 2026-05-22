@@ -15,6 +15,11 @@ concepts:
   - transaction_effects
 ---
 
+<AgentPrompt
+  title={"Add scenario tests"}
+  prompt={"Create scenario tests for this Sui workflow, including multiple users, object ownership changes, and expected transaction failures."}
+/>
+
 This scenario testing example builds a small game system (heroes, XP tomes, and an access control list) and tests it end-to-end using Sui's [`test_scenario`](/develop/testing-debugging/) module. Each test simulates multiple transactions from different accounts, tracks object creation and transfer, and validates state changes across modules. 
 
 ## When to use this pattern

@@ -5,6 +5,11 @@ description: Sui provides a method of upgrading your packages while still retain
 keywords: [ upgrading packages, upgrade considerations, how to upgrade a package, how to upgrade, update package, update, how to update ]
 ---
 
+<AgentPrompt
+  title={"Upgrade an existing package"}
+  prompt={"Prepare an upgrade for this published Sui package. Check compatibility rules, build the upgrade transaction, identify the UpgradeCap, and document the exact upgrade steps."}
+/>
+
 Sui smart contracts are immutable package objects consisting of a collection of Move modules. Because packages are immutable, transactions can safely access their contents without full consensus (fastpath transactions). If packages were mutable, they would become [shared objects](/develop/objects/object-ownership/shared), which would require full consensus before completing a transaction.
 
 The inability to change packages, however, becomes a problem when considering the iterative nature of code development. Builders require the ability to update their code and pull changes from other developers while still being able to benefit from fastpath transactions. The Sui network provides a method for upgrading your packages while still retaining their immutable properties.

@@ -6,6 +6,11 @@ pagination_prev: null
 pagination_next: null
 ---
 
+<AgentPrompt
+  title="Set up Sui dev environment"
+  prompt="Set up this machine for Sui development: Install the Sui CLI with curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh, then run suiup install sui@testnet to get the Testnet-compatible toolchain. Run sui client to generate your keys and config, then prompt me to visit faucet.sui.io, enter the generated address, and fund it with test tokens."
+/>
+
 Sui is a scalable and performant layer-1 blockchain that is home to a complete stack of native primitives ideal for building decentralized applications. Such primitives, such as those for [encryption](https://seal-docs.wal.app/UsingSeal/), [data storage](https://docs.wal.app/usage/setup), verification, and access control, provide developers with every piece of the application stack without needing to use layer-2 chains or offchain solutions. 
 
 In contrast to other chains, Sui uses an [object-centric model](/develop/sui-architecture/object-model), where every item on the network is an object. [Transactions](/develop/transactions/txn-overview) use objects as input, which mutate an existing object or create new objects. Each object has a unique onchain ID.
