@@ -1,0 +1,95 @@
+---
+title: Sui Completion CLI
+description: Generate shell completion scripts for the Sui CLI.
+keywords: [sui completion, sui cli completion, shell completion, bash completion, zsh completion, fish completion]
+---
+
+The Sui CLI `completion` command generates shell completion scripts for the `sui` command. Install the generated script for your shell to complete Sui commands, subcommands, flags, and values from your terminal.
+
+<ImportContent source="cli-check-install" mode="snippet" />
+
+## Commands
+
+```sh
+$ sui completion --help
+```
+
+```sh
+Generate shell completion scripts for CLI
+
+Usage: sui completion --generate <GENERATOR>
+
+Options:
+      --generate <GENERATOR>  If provided, outputs the completion file for given shell [possible values: bash, elvish, fish, powershell, zsh]
+  -h, --help                  Print help
+```
+
+## Generate completion scripts
+
+Redirect the command output to a file for your shell:
+
+```sh
+sui completion --generate bash > sui.bash
+sui completion --generate zsh > _sui
+sui completion --generate fish > sui.fish
+```
+
+The command also supports `elvish` and `powershell` values for `--generate`.
+
+## Install completions
+
+Install the generated script in a directory loaded by your shell. Restart your shell after installation, or source the completion file directly when your shell supports it.
+
+### Bash
+
+For Bash, install the generated `sui.bash` file in a Bash completion directory. Common locations include:
+
+- Linux: `/etc/bash_completion.d/sui` for all users, or `~/.local/share/bash-completion/completions/sui` for one user.
+- macOS with Homebrew: `$(brew --prefix)/etc/bash_completion.d/sui`.
+
+For example, to install it for one user on Linux:
+
+```sh
+mkdir -p ~/.local/share/bash-completion/completions
+cp sui.bash ~/.local/share/bash-completion/completions/sui
+```
+
+To load the completion script for your current shell session only, run:
+
+```sh
+source sui.bash
+```
+
+### Zsh
+
+For Zsh, copy the generated `_sui` file to a directory in your `fpath`, then rebuild the completion cache:
+
+```sh
+mkdir -p ~/.zsh/completions
+cp _sui ~/.zsh/completions/_sui
+```
+
+Add the directory to `fpath` before `compinit` in your `~/.zshrc` if it is not already configured:
+
+```sh
+fpath=(~/.zsh/completions $fpath)
+autoload -Uz compinit
+compinit
+```
+
+After copying or updating the completion file, you might need to remove the Zsh completion cache and start a new shell:
+
+```sh
+rm -f ~/.zcompdump
+```
+
+### Fish
+
+For Fish, copy the generated `sui.fish` file to your Fish completions directory:
+
+```sh
+mkdir -p ~/.config/fish/completions
+cp sui.fish ~/.config/fish/completions/sui.fish
+```
+
+Fish loads completion files from this directory automatically.
