@@ -211,6 +211,68 @@ async fn simulate_respects_explicit_price_over_gasless() {
     assert!(returned.effects().status().success());
 }
 
+/// Explicitly setting gas_price=0 on a gasless-eligible tx must be accepted: the API should
+/// treat `price=0` the same as an unset price for purposes of gasless candidacy.
+#[sim_test]
+async fn simulate_explicit_gas_price_zero_accepted_for_gasless_eligible_tx() {
+    let mut test_env = setup_gasless_env().await;
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+    let (coin_type, coin_refs) =
+        setup_mintable_coin_env(&mut test_env, 0, &[(5_000, sender)]).await;
+    let tx = build_coin_send_funds_tx(sender, coin_refs[0], coin_type, recipient);
+
+    let response = connect(&test_env)
+        .await
+        .simulate_transaction(
+            SimulateTransactionRequest::new(to_unresolved_proto(tx, Some(0)))
+                .with_do_gas_selection(true),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+
+    let returned = response.transaction();
+    let gas_payment = returned.transaction().gas_payment();
+    assert_eq!(gas_payment.price, Some(0));
+    assert_eq!(gas_payment.budget, Some(0));
+    assert!(gas_payment.objects.is_empty());
+    assert!(returned.effects().status().success());
+}
+
+/// A fully-formed BCS gasless transaction (price=0, budget=0, no payment objects) must be
+/// accepted when do_gas_selection=true. The BCS path bypasses is_gasless_candidate to avoid
+/// second-guessing an explicit caller choice, but a BCS transaction already in gasless shape
+/// should be simulated as-is rather than being routed through the priced flow (which would
+/// fail because gas_price=0 < RGP).
+#[sim_test]
+async fn simulate_bcs_gasless_transaction_accepted() {
+    let mut test_env = setup_gasless_env().await;
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+    let (coin_type, coin_refs) =
+        setup_mintable_coin_env(&mut test_env, 0, &[(5_000, sender)]).await;
+    // wrap_tx already produces price=0, budget=0, payment=[] — a valid gasless shape.
+    // The Coin<T> input provides address-owned replay protection, so no ValidDuring needed.
+    let tx = build_coin_send_funds_tx(sender, coin_refs[0], coin_type, recipient);
+
+    let response = connect(&test_env)
+        .await
+        .simulate_transaction(
+            SimulateTransactionRequest::new(Transaction::from(tx)).with_do_gas_selection(true),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+
+    let returned = response.transaction();
+    let gas_payment = returned.transaction().gas_payment();
+    assert_eq!(gas_payment.price, Some(0));
+    assert_eq!(gas_payment.budget, Some(0));
+    assert!(gas_payment.objects.is_empty());
+    assert!(returned.effects().status().success());
+}
+
 /// A tx whose `Coin<T>` input is a type *not* on the gasless allowlist must not be classified
 /// as gasless-eligible: `is_gasless_candidate` should reject it via `check_gasless_object_inputs`,
 /// and the simulate flow should fall through to the priced flow rather than returning
