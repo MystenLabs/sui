@@ -1,5 +1,5 @@
 ---
-title: Sui Completion CLI
+title: Sui CLI completions
 description: Generate shell completion scripts for the Sui CLI.
 keywords: [sui completion, sui cli completion, shell completion, bash completion, zsh completion, fish completion]
 ---
@@ -17,11 +17,13 @@ $ sui completion --help
 ```sh
 Generate shell completion scripts for CLI
 
-Usage: sui completion --generate <GENERATOR>
+Usage: sui completion [OPTIONS] --generate <GENERATOR>
 
 Options:
       --generate <GENERATOR>  If provided, outputs the completion file for given shell [possible values: bash, elvish, fish, powershell, zsh]
+  -q, --quiet                 Display less output
   -h, --help                  Print help
+  -V, --version               Print version
 ```
 
 ## Generate completion scripts
