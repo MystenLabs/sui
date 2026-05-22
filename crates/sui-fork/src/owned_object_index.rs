@@ -10,7 +10,6 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -38,6 +37,7 @@ use crate::ObjectKey;
 use crate::ObjectRead;
 use crate::VersionQuery;
 use crate::filesystem::INDICES_DIR;
+use sui_types::base_types::SequenceNumber;
 
 /// Typed-store owned-object index directory under `indices`.
 const OWNED_OBJECTS_INDEX_DB_DIR: &str = "owned_objects_db";
@@ -78,6 +78,8 @@ struct OwnedObjectOwnerKey {
     owner: SuiAddress,
     /// Object ID used for deterministic ordering and cursor lower bounds within one owner.
     object_id: ObjectID,
+    /// Object type for filtering by type without a separate lookup.
+    object_type: StructTag,
 }
 
 impl From<&OwnedObjectEntry> for OwnedObjectOwnerKey {
@@ -102,15 +104,17 @@ struct OwnedObjectIndexTables {
     /// Initialization marker and schema version.
     meta: DBMap<(), OwnedObjectIndexMetadata>,
     /// Canonical row per object ID, used when update paths only know the object ID.
-    by_object: DBMap<ObjectID, OwnedObjectEntry>,
+    by_object: DBMap<ObjectID, SequenceNumber>,
     /// Owner-ordered rows used by `list_owned_objects` and RPC pagination.
     by_owner: DBMap<OwnedObjectOwnerKey, OwnedObjectEntry>,
 }
 
-/// DBMap-backed owned-object index. Clones share one table handle for this index root.
-#[derive(Clone)]
+/// DBMap-backed owned-object index.
+///
+/// Held by value inside `DataStore`, which already shares all of its state through a single
+/// `Arc`, so this type needs neither its own `Arc` wrapper nor a `Clone` impl.
 pub(crate) struct OwnedObjectIndexStore {
-    tables: Arc<OwnedObjectIndexTables>,
+    tables: OwnedObjectIndexTables,
 }
 
 impl OwnedObjectIndexStore {
@@ -134,12 +138,12 @@ impl OwnedObjectIndexStore {
     /// Open the typed-store table set at a concrete path.
     fn open_at(path: PathBuf) -> Self {
         Self {
-            tables: Arc::new(OwnedObjectIndexTables::open_tables_read_write(
+            tables: OwnedObjectIndexTables::open_tables_read_write(
                 path,
                 Self::metric_conf(),
                 None,
                 None,
-            )),
+            ),
         }
     }
 
@@ -273,7 +277,10 @@ impl OwnedObjectIndexStore {
     fn delete_owned_entry(&self, batch: &mut DBBatch, object_id: ObjectID) -> anyhow::Result<()> {
         if let Some(existing) = self.tables.by_object.get(&object_id)? {
             batch.delete_batch(&self.tables.by_object, [object_id])?;
-            batch.delete_batch(&self.tables.by_owner, [OwnedObjectOwnerKey::from(&existing)])?;
+            batch.delete_batch(
+                &self.tables.by_owner,
+                [OwnedObjectOwnerKey::from(&existing)],
+            )?;
         }
         Ok(())
     }
@@ -288,7 +295,10 @@ impl OwnedObjectIndexStore {
         entry: OwnedObjectEntry,
     ) -> anyhow::Result<()> {
         self.delete_owned_entry(batch, entry.object_ref.0)?;
-        batch.insert_batch(&self.tables.by_object, [(entry.object_ref.0, entry.clone())])?;
+        batch.insert_batch(
+            &self.tables.by_object,
+            [(entry.object_ref.0, entry.clone())],
+        )?;
         batch.insert_batch(
             &self.tables.by_owner,
             [(OwnedObjectOwnerKey::from(&entry), entry)],
