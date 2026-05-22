@@ -1367,6 +1367,7 @@ impl SuiNode {
             epoch_store,
             state_sync_handle,
             randomness_handle,
+            randomness_receiver_handle,
             consensus_manager,
             consensus_store_pruner,
             global_state_hasher,
@@ -1378,7 +1379,6 @@ impl SuiNode {
             sui_tx_validator_metrics,
             admission_queue,
             node_role,
-            randomness_receiver_handle,
         )
         .await
     }
@@ -1391,6 +1391,7 @@ impl SuiNode {
         epoch_store: Arc<AuthorityPerEpochStore>,
         state_sync_handle: state_sync::Handle,
         randomness_handle: randomness::Handle,
+        randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
         consensus_manager: Arc<ConsensusManager>,
         consensus_store_pruner: ConsensusStorePruner,
         state_hasher: Weak<GlobalStateHasher>,
@@ -1402,7 +1403,6 @@ impl SuiNode {
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
         admission_queue: Option<AdmissionQueueContext>,
         node_role: NodeRole,
-        randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
     ) -> Result<ValidatorComponents> {
         let checkpoint_service = Self::build_checkpoint_service(
             config,

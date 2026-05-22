@@ -62,14 +62,23 @@ impl RandomnessRoundReceiverHandle {
     pub fn new_for_testing() -> Arc<Self> {
         let (consensus_signatures_tx, _) =
             mysten_metrics::monitored_mpsc::channel("test_auxiliary", 1);
-        let (vss_pk_tx, _) = watch::channel(None);
+        let (vss_pk_tx, vss_pk_rx) = watch::channel(None);
         let (signatures_broadcast, _) = broadcast::channel(1);
         Arc::new(Self {
             consensus_signatures_tx,
             vss_pk_tx,
             signatures_broadcast,
-            _task_handle: tokio::spawn(futures::future::pending()),
+            _task_handle: tokio::spawn(async move {
+                let _vss_pk_rx = vss_pk_rx;
+                futures::future::pending::<()>().await;
+            }),
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn public_key_for_testing(&self) -> Option<bls12381::G2Element> {
+        let rx = self.vss_pk_tx.subscribe();
+        *rx.borrow()
     }
 }
 
