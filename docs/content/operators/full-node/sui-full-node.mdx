@@ -83,7 +83,7 @@ cmake
 
 ### Considerations to enable gRPC
 
-You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. See [Sui's data serving roadmap](/develop/accessing-data/data-serving#grpc-api) for guidance on the overall transition plan.
+You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. See [Sui's data serving roadmap](/develop/accessing-data/data-serving) for guidance on the overall transition plan.
 
 To serve the [gRPC API](/develop/accessing-data/grpc), you must enable it on your full node by indexing gRPC-specific data. During the initial gRPC indexing phase, your full node might not be able to handle other traffic, including the [**deprecated** JSON-RPC](/references/sui-api) requests. Plan your rollout carefully (such as using the `rolling upgrade` mechanism), and communicate any downtime to your customers and partners in advance. The time required to sync gRPC indexes depends on your full node's hardware and software configuration.
 
