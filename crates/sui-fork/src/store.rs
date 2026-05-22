@@ -1403,25 +1403,6 @@ impl RpcIndexes for DataStore {
             "ledger history indexes are not supported by fork store",
         ))
     }
-
-    fn authenticated_event_iter(
-        &self,
-        _stream_id: SuiAddress,
-        _start_checkpoint: u64,
-        _start_accumulator_version: Option<u64>,
-        _start_transaction_idx: Option<u32>,
-        _start_event_idx: Option<u32>,
-        _end_checkpoint: u64,
-        _limit: u32,
-    ) -> StorageResult<
-        Box<
-            dyn Iterator<
-                    Item = Result<(u64, u64, u32, u32, sui_types::event::Event), TypedStoreError>,
-                > + '_,
-        >,
-    > {
-        todo!("not supported yet")
-    }
 }
 
 #[cfg(test)]

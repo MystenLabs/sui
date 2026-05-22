@@ -6,28 +6,30 @@ use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use std::time::Duration;
 use sui_keys::keystore::AccountKeystore;
+use sui_light_client::authenticated_events::AuthenticatedEvent;
 use sui_light_client::authenticated_events::mmr::apply_stream_updates;
 use sui_light_client::proof::base::{Proof, ProofContents, ProofTarget, ProofVerifier};
 use sui_light_client::proof::committee::extract_new_committee_info;
-use sui_light_client::proof::ocs::{OCSInclusionProof, OCSProof, OCSTarget};
+use sui_light_client::proof::ocs::{OCSProof, OCSTarget};
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2::{Event, GetCheckpointRequest, GetEpochRequest};
-use sui_rpc_api::grpc::alpha::event_service_proto::event_service_client::EventServiceClient;
-use sui_rpc_api::grpc::alpha::event_service_proto::{
-    AuthenticatedEvent, ListAuthenticatedEventsRequest,
+use sui_rpc::proto::sui::rpc::v2::{GetCheckpointRequest, GetEpochRequest};
+use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as V2AlphaLedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2alpha::proof_service_client::ProofServiceClient;
+use sui_rpc::proto::sui::rpc::v2alpha::{
+    EventFilter, EventLiteral, EventPredicate, EventStreamHeadFilter, EventTerm,
+    GetCheckpointObjectProofRequest, GetCheckpointObjectProofResponse, ListEventsRequest,
+    QueryOptions, get_checkpoint_object_proof_response, list_events_response,
 };
-use sui_rpc_api::grpc::alpha::proof_service_proto::GetObjectInclusionProofRequest;
-use sui_rpc_api::grpc::alpha::proof_service_proto::proof_service_client::ProofServiceClient;
+use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk_types::ValidatorCommittee;
 use sui_types::accumulator_root as ar;
 use sui_types::accumulator_root::EventCommitment;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::Committee;
-use sui_types::digests::{Digest, ObjectDigest};
 use sui_types::dynamic_field::{DynamicFieldKey, Field};
 use sui_types::object::Object;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -35,9 +37,11 @@ use sui_types::transaction::TransactionData;
 use sui_types::{MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS};
 use test_cluster::{TestCluster, TestClusterBuilder};
 
-fn create_rpc_config_with_authenticated_events() -> sui_config::RpcConfig {
+/// Test cluster config that enables ledger history indexing, which is what
+/// backs the v2alpha ListEvents and ProofService endpoints.
+fn create_rpc_config_with_ledger_history() -> sui_config::RpcConfig {
     sui_config::RpcConfig {
-        authenticated_events_indexing: Some(true),
+        ledger_history_indexing: Some(true),
         enable_indexing: Some(true),
         ..Default::default()
     }
@@ -108,7 +112,7 @@ async fn emit_multiple_test_events(
     sender: SuiAddress,
     start_value: u64,
     count: u64,
-) -> sui_rpc_api::client::ExecutedTransaction {
+) -> ExecutedTransaction {
     let rgp = test_cluster.get_reference_gas_price().await;
     let mut ptb = ProgrammableTransactionBuilder::new();
     let start = ptb.pure(start_value).unwrap();
@@ -119,40 +123,6 @@ async fn emit_multiple_test_events(
         move_core_types::identifier::Identifier::new("emit_multiple").unwrap(),
         vec![],
         vec![start, cnt],
-    );
-    let gas_object = test_cluster
-        .wallet
-        .get_one_gas_object_owned_by_address(sender)
-        .await
-        .unwrap()
-        .unwrap();
-    let tx_data = TransactionData::new(
-        sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb.finish()),
-        sender,
-        gas_object,
-        50_000_000_000,
-        rgp,
-    );
-    test_cluster.sign_and_execute_transaction(&tx_data).await
-}
-
-async fn emit_large_test_event(
-    test_cluster: &TestCluster,
-    package_id: ObjectID,
-    sender: SuiAddress,
-    value: u64,
-    size: u64,
-) -> sui_rpc_api::client::ExecutedTransaction {
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let mut ptb = ProgrammableTransactionBuilder::new();
-    let val = ptb.pure(value).unwrap();
-    let sz = ptb.pure(size).unwrap();
-    ptb.programmable_move_call(
-        package_id,
-        move_core_types::identifier::Identifier::new("events").unwrap(),
-        move_core_types::identifier::Identifier::new("emit_large").unwrap(),
-        vec![],
-        vec![val, sz],
     );
     let gas_object = test_cluster
         .wallet
@@ -199,72 +169,130 @@ where
     unreachable!()
 }
 
-async fn query_authenticated_events(
-    rpc_url: &str,
-    stream_id: &str,
-    start_checkpoint: u64,
-    page_size: Option<u32>,
-) -> Result<
-    sui_rpc_api::grpc::alpha::event_service_proto::ListAuthenticatedEventsResponse,
-    tonic::Status,
-> {
-    let mut client = connect_with_retry(|| EventServiceClient::connect(rpc_url.to_owned())).await;
-
-    let mut req = ListAuthenticatedEventsRequest::default();
-    req.stream_id = Some(stream_id.to_string());
-    req.start_checkpoint = Some(start_checkpoint);
-    req.page_size = page_size;
-    req.page_token = None;
-
-    client
-        .list_authenticated_events(req)
-        .await
-        .map(|r| r.into_inner())
+fn build_event_stream_head_filter(stream_id: SuiAddress) -> EventFilter {
+    let head_filter = EventStreamHeadFilter::default().with_stream_id(stream_id.to_string());
+    let predicate = EventPredicate::default().with_event_stream_head(head_filter);
+    let literal = EventLiteral::default().with_include(predicate);
+    let term = EventTerm::default().with_literals(vec![literal]);
+    EventFilter::default().with_terms(vec![term])
 }
 
+/// Drive a single `ListEvents` server-streaming request, accumulating every
+/// emitted `EventItem` into `AuthenticatedEvent`s.
+async fn fetch_list_events_page(
+    client: &mut V2AlphaLedgerServiceClient<tonic::transport::Channel>,
+    request: ListEventsRequest,
+) -> Result<(Vec<AuthenticatedEvent>, Option<Vec<u8>>), tonic::Status> {
+    use futures::StreamExt;
+
+    let mut stream = client.list_events(request).await?.into_inner();
+    let mut events = Vec::new();
+    let mut last_cursor: Option<Vec<u8>> = None;
+
+    while let Some(frame) = stream.next().await {
+        let frame = frame?;
+        match frame.response {
+            Some(list_events_response::Response::Item(item)) => {
+                if let Some(cursor) = item.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
+                    last_cursor = Some(cursor.to_vec());
+                }
+                let event = AuthenticatedEvent::try_from(item).map_err(|e| {
+                    tonic::Status::internal(format!("failed to convert event: {e}"))
+                })?;
+                events.push(event);
+            }
+            Some(list_events_response::Response::Watermark(w)) => {
+                if let Some(cursor) = w.cursor.as_ref() {
+                    last_cursor = Some(cursor.to_vec());
+                }
+            }
+            Some(list_events_response::Response::End(_)) | Some(_) | None => {}
+        }
+    }
+
+    Ok((events, last_cursor))
+}
+
+/// Read mask covering everything the in-tree `AuthenticatedEvent`
+/// converter needs from a v2alpha `EventItem`. The server's default mask
+/// drops `contents`, so we request the full event explicitly.
+fn full_event_read_mask() -> FieldMask {
+    FieldMask::from_paths(["package_id", "module", "sender", "event_type", "contents"])
+}
+
+/// Issue one `ListEvents` call for the given stream and return the events
+/// it produces. Errors propagate so tests can assert specific status codes.
+async fn query_authenticated_events(
+    rpc_url: &str,
+    stream_id: SuiAddress,
+    start_checkpoint: u64,
+    page_size: Option<u32>,
+) -> Result<Vec<AuthenticatedEvent>, tonic::Status> {
+    let mut client =
+        connect_with_retry(|| V2AlphaLedgerServiceClient::connect(rpc_url.to_owned())).await;
+
+    let mut options = QueryOptions::default();
+    if let Some(size) = page_size {
+        options.set_limit_items(size);
+    }
+    let request = ListEventsRequest::default()
+        .with_read_mask(full_event_read_mask())
+        .with_start_checkpoint(start_checkpoint)
+        .with_filter(build_event_stream_head_filter(stream_id))
+        .with_options(options);
+
+    fetch_list_events_page(&mut client, request)
+        .await
+        .map(|(events, _)| events)
+}
+
+/// Page through `ListEvents` until the server reports no remaining matches,
+/// returning the full sequence.
 async fn list_authenticated_events(
     rpc_url: &str,
-    stream_id: &str,
+    stream_id: SuiAddress,
     start_checkpoint: u64,
     page_size: Option<u32>,
 ) -> Vec<AuthenticatedEvent> {
-    let mut event_client =
-        connect_with_retry(|| EventServiceClient::connect(rpc_url.to_owned())).await;
+    let mut client =
+        connect_with_retry(|| V2AlphaLedgerServiceClient::connect(rpc_url.to_owned())).await;
 
+    let filter = build_event_stream_head_filter(stream_id);
     let mut all_events = Vec::new();
-    let mut page_token: Option<Vec<u8>> = None;
-    let page_size_value = page_size.unwrap_or(1000);
+    let mut next_cursor: Option<Vec<u8>> = None;
+    let mut next_checkpoint = start_checkpoint;
 
     loop {
-        let mut req = ListAuthenticatedEventsRequest::default();
-        req.stream_id = Some(stream_id.to_string());
-        req.start_checkpoint = Some(start_checkpoint);
-        req.page_size = page_size;
-        req.page_token = page_token.clone();
+        let mut options = QueryOptions::default();
+        if let Some(size) = page_size {
+            options.set_limit_items(size);
+        }
+        if let Some(cursor) = next_cursor.clone() {
+            options.set_after(cursor);
+        }
+        let request = ListEventsRequest::default()
+            .with_read_mask(full_event_read_mask())
+            .with_start_checkpoint(next_checkpoint)
+            .with_filter(filter.clone())
+            .with_options(options);
 
-        let response = event_client
-            .list_authenticated_events(req)
-            .await
-            .unwrap()
-            .into_inner();
+        let (events, last_cursor) = fetch_list_events_page(&mut client, request).await.unwrap();
+        let event_count = events.len();
+        let last_checkpoint = events.last().map(|e| e.checkpoint);
+        all_events.extend(events);
 
-        let event_count = response.events.len();
-        all_events.extend(response.events);
-
-        if response.next_page_token.is_none()
-            || response.next_page_token.as_ref().unwrap().is_empty()
-        {
-            break;
+        match (last_cursor, last_checkpoint) {
+            (Some(cursor), Some(_)) if event_count > 0 => {
+                next_cursor = Some(cursor);
+            }
+            _ => break,
         }
 
-        page_token = response.next_page_token;
-
-        assert!(
-            event_count <= page_size_value as usize,
-            "Page should not exceed page_size. Got {} events, expected <= {}",
-            event_count,
-            page_size_value
-        );
+        // Cursor-bounded paging: advance the lower checkpoint so the next
+        // request scans strictly past the last returned event.
+        if let Some(cp) = last_checkpoint {
+            next_checkpoint = cp;
+        }
     }
 
     all_events
@@ -276,7 +304,7 @@ async fn verify_events_with_stream_head(
     events: &[AuthenticatedEvent],
     expected_event_count: u64,
 ) {
-    let stream_id = sui_types::base_types::SuiAddress::from(package_id);
+    let stream_id = SuiAddress::from(package_id);
     let event_stream_head_id = get_event_stream_head_object_id(stream_id).unwrap();
 
     let mut proof_client =
@@ -297,8 +325,8 @@ async fn verify_events_with_stream_head(
         .await
         .expect("Failed to build epoch cache");
 
-    let first_event_checkpoint = events[0].checkpoint.unwrap();
-    let last_event_checkpoint = events.last().unwrap().checkpoint.unwrap();
+    let first_event_checkpoint = events[0].checkpoint;
+    let last_event_checkpoint = events.last().unwrap().checkpoint;
 
     let first_stream_head = fetch_and_verify_event_stream_head(
         &mut proof_client,
@@ -324,24 +352,27 @@ async fn verify_events_with_stream_head(
         expected_event_count
     );
 
-    let events_by_accum_version: Vec<Vec<EventCommitment>> = events
+    // Group events by checkpoint to match the framework MMR fold (one merkle
+    // tree per checkpoint, one MMR fold per tree).
+    let events_by_checkpoint: Vec<Vec<EventCommitment>> = events
         .iter()
-        .filter(|event| event.checkpoint.unwrap() > first_event_checkpoint)
+        .filter(|event| event.checkpoint > first_event_checkpoint)
         .map(|event| {
-            let commitment = convert_grpc_event_to_commitment(event)
-                .expect("should convert event to commitment");
-            let accumulator_version = event
-                .accumulator_version
-                .expect("Missing accumulator_version");
-            (accumulator_version, commitment)
+            let commitment = EventCommitment::new(
+                event.checkpoint,
+                event.transaction_offset,
+                event.event_index as u64,
+                event.event.digest(),
+            );
+            (event.checkpoint, commitment)
         })
-        .chunk_by(|(version, _)| *version)
+        .chunk_by(|(checkpoint, _)| *checkpoint)
         .into_iter()
         .map(|(_, group)| group.map(|(_, commitment)| commitment).collect())
         .collect();
 
     let calculated_stream_head =
-        apply_stream_updates(&first_stream_head.value, events_by_accum_version);
+        apply_stream_updates(&first_stream_head.value, events_by_checkpoint);
 
     assert_eq!(
         calculated_stream_head.num_events, last_stream_head.value.num_events,
@@ -354,103 +385,7 @@ async fn verify_events_with_stream_head(
     );
 }
 
-fn proto_object_ref_to_sui_object_ref(
-    object_ref_proto: &sui_rpc::proto::sui::rpc::v2::ObjectReference,
-) -> Result<(ObjectID, SequenceNumber, ObjectDigest), String> {
-    let object_id_str = object_ref_proto
-        .object_id
-        .as_ref()
-        .ok_or("Missing object_id")?;
-    let object_id =
-        ObjectID::from_str(object_id_str).map_err(|e| format!("Invalid object_id: {}", e))?;
-
-    let version = SequenceNumber::from_u64(object_ref_proto.version.ok_or("Missing version")?);
-
-    let digest_str = object_ref_proto.digest.as_ref().ok_or("Missing digest")?;
-    let digest =
-        ObjectDigest::from_str(digest_str).map_err(|e| format!("Invalid digest: {}", e))?;
-
-    Ok((object_id, version, digest))
-}
-
-fn proto_bytes_to_digest(bytes: &[u8]) -> Result<Digest, String> {
-    let digest: [u8; 32] = bytes
-        .try_into()
-        .map_err(|_| format!("Invalid digest length: expected 32, got {}", bytes.len()))?;
-    Ok(Digest::new(digest))
-}
-
-fn proto_ocs_inclusion_proof_to_light_client_proof(
-    grpc_proof: &sui_rpc_api::grpc::alpha::proof_service_proto::OcsInclusionProof,
-) -> Result<OCSInclusionProof, String> {
-    let merkle_proof_bytes = grpc_proof
-        .merkle_proof
-        .as_ref()
-        .ok_or("Missing merkle_proof")?;
-    let merkle_proof = bcs::from_bytes(merkle_proof_bytes)
-        .map_err(|e| format!("Failed to deserialize merkle_proof: {}", e))?;
-
-    let leaf_index = grpc_proof.leaf_index.ok_or("Missing leaf_index")? as usize;
-
-    let tree_root_bytes = grpc_proof.tree_root.as_ref().ok_or("Missing tree_root")?;
-    let tree_root = proto_bytes_to_digest(tree_root_bytes)?;
-
-    Ok(OCSInclusionProof {
-        merkle_proof,
-        leaf_index,
-        tree_root,
-    })
-}
-
-fn convert_grpc_event_to_commitment(
-    auth_event: &AuthenticatedEvent,
-) -> Result<EventCommitment, String> {
-    let checkpoint = auth_event.checkpoint.ok_or("Missing checkpoint")?;
-    let transaction_idx = auth_event
-        .transaction_idx
-        .ok_or("Missing transaction_idx")? as u64;
-    let event_idx = auth_event.event_idx.ok_or("Missing event_idx")? as u64;
-
-    let event = auth_event.event.as_ref().ok_or("Missing event")?;
-    let bcs_contents = event.contents.as_ref().ok_or("Missing event contents")?;
-    let bcs_bytes = bcs_contents.value.as_ref().ok_or("Missing BCS value")?;
-
-    let package_id = event.package_id.as_ref().ok_or("Missing package_id")?;
-    let module = event.module.as_ref().ok_or("Missing module")?;
-    let sender = event.sender.as_ref().ok_or("Missing sender")?;
-    let event_type = event.event_type.as_ref().ok_or("Missing event_type")?;
-
-    let package_id = sui_types::base_types::ObjectID::from_hex_literal(package_id)
-        .map_err(|e| format!("Failed to parse package_id: {}", e))?;
-    let module = move_core_types::identifier::Identifier::new(module.as_str())
-        .map_err(|e| format!("Failed to parse module: {}", e))?;
-    let sender = sui_types::base_types::SuiAddress::from_str(sender)
-        .map_err(|e| format!("Failed to parse sender: {}", e))?;
-    let type_tag: move_core_types::language_storage::StructTag = event_type
-        .parse()
-        .map_err(|e| format!("Failed to parse event_type: {}", e))?;
-
-    let sui_event = sui_types::event::Event {
-        package_id,
-        transaction_module: module,
-        sender,
-        type_: type_tag,
-        contents: bcs_bytes.to_vec(),
-    };
-
-    let digest = sui_event.digest();
-
-    Ok(EventCommitment::new(
-        checkpoint,
-        transaction_idx,
-        event_idx,
-        digest,
-    ))
-}
-
-fn get_event_stream_head_object_id(
-    stream_id: sui_types::base_types::SuiAddress,
-) -> Result<sui_types::base_types::ObjectID, String> {
+fn get_event_stream_head_object_id(stream_id: SuiAddress) -> Result<ObjectID, String> {
     let key = ar::AccumulatorKey { owner: stream_id };
     let type_tag = move_core_types::language_storage::TypeTag::Struct(Box::new(StructTag {
         address: SUI_FRAMEWORK_ADDRESS,
@@ -471,7 +406,7 @@ fn get_event_stream_head_object_id(
 async fn get_committee_for_epoch_via_api(
     ledger_client: &mut LedgerServiceClient<tonic::transport::Channel>,
     epoch: u64,
-) -> Result<sui_types::committee::Committee, String> {
+) -> Result<Committee, String> {
     let response = ledger_client
         .get_epoch(GetEpochRequest::new(epoch).with_read_mask(FieldMask::from_paths(["committee"])))
         .await
@@ -491,7 +426,7 @@ async fn get_committee_for_epoch_via_api(
         )
     })?;
 
-    Ok(sui_types::committee::Committee::from(sdk_committee))
+    Ok(Committee::from(sdk_committee))
 }
 
 async fn get_last_checkpoint_of_epoch(
@@ -617,15 +552,87 @@ async fn build_epoch_cache(
     Ok(EpochCache { committees })
 }
 
-async fn verify_ocs_inclusion_proof(
+fn proto_node_to_local(
+    proto: &sui_rpc::proto::sui::rpc::v2alpha::MerkleNode,
+) -> Result<fastcrypto::merkle::Node, String> {
+    use sui_rpc::proto::sui::rpc::v2alpha::merkle_node;
+    let node = proto.node.as_ref().ok_or("MerkleNode missing oneof")?;
+    match node {
+        merkle_node::Node::Empty(_) => Ok(fastcrypto::merkle::Node::Empty),
+        merkle_node::Node::Digest(bytes) => {
+            let arr: [u8; 32] = bytes
+                .as_ref()
+                .try_into()
+                .map_err(|_| format!("Invalid digest length: {}", bytes.len()))?;
+            Ok(fastcrypto::merkle::Node::Digest(arr))
+        }
+        _ => Err("Unknown MerkleNode variant".to_string()),
+    }
+}
+
+fn proto_inclusion_proof_to_local(
+    proto: &sui_rpc::proto::sui::rpc::v2alpha::OcsInclusionProof,
+) -> Result<sui_light_client::proof::ocs::OCSInclusionProof, String> {
+    let merkle_proof_proto = proto.merkle_proof.as_ref().ok_or("Missing merkle_proof")?;
+    let nodes = merkle_proof_proto
+        .path
+        .iter()
+        .map(proto_node_to_local)
+        .collect::<Result<Vec<_>, _>>()?;
+    let merkle_proof = fastcrypto::merkle::MerkleProof::new(&nodes);
+    let leaf_index = proto.leaf_index.ok_or("Missing leaf_index")? as usize;
+    let tree_root_bytes = proto.tree_root.as_ref().ok_or("Missing tree_root")?;
+    let tree_root_arr: [u8; 32] = tree_root_bytes
+        .as_ref()
+        .try_into()
+        .map_err(|_| format!("Invalid tree_root length: {}", tree_root_bytes.len()))?;
+    let tree_root = sui_types::digests::Digest::new(tree_root_arr);
+
+    Ok(sui_light_client::proof::ocs::OCSInclusionProof {
+        merkle_proof,
+        leaf_index,
+        tree_root,
+    })
+}
+
+fn proto_object_ref_to_sui_object_ref(
+    object_ref_proto: &sui_rpc::proto::sui::rpc::v2::ObjectReference,
+) -> Result<sui_types::base_types::ObjectRef, String> {
+    let object_id_str = object_ref_proto
+        .object_id
+        .as_ref()
+        .ok_or("Missing object_id")?;
+    let object_id =
+        ObjectID::from_str(object_id_str).map_err(|e| format!("Invalid object_id: {}", e))?;
+
+    let version = sui_types::base_types::SequenceNumber::from_u64(
+        object_ref_proto.version.ok_or("Missing version")?,
+    );
+
+    let digest_str = object_ref_proto.digest.as_ref().ok_or("Missing digest")?;
+    let digest = sui_types::digests::ObjectDigest::from_str(digest_str)
+        .map_err(|e| format!("Invalid digest: {}", e))?;
+
+    Ok((object_id, version, digest))
+}
+
+fn verify_ocs_inclusion_proof(
     epoch_cache: &EpochCache,
     checkpoint_summary: &sui_types::messages_checkpoint::CertifiedCheckpointSummary,
-    object_ref_proto: &sui_rpc::proto::sui::rpc::v2::ObjectReference,
-    grpc_proof: &sui_rpc_api::grpc::alpha::proof_service_proto::OcsInclusionProof,
+    response: &GetCheckpointObjectProofResponse,
     checkpoint_seq: u64,
 ) -> Result<(), String> {
+    let proof = response.proof.as_ref().ok_or("Missing proof")?;
+    let inclusion_proof = match proof {
+        get_checkpoint_object_proof_response::Proof::Inclusion(p) => p,
+        _ => return Err("Expected inclusion proof".to_string()),
+    };
+    let object_ref_proto = inclusion_proof
+        .object_ref
+        .as_ref()
+        .ok_or("Missing object_ref")?;
     let object_ref = proto_object_ref_to_sui_object_ref(object_ref_proto)?;
-    let ocs_inclusion_proof = proto_ocs_inclusion_proof_to_light_client_proof(grpc_proof)?;
+    let ocs_inclusion_proof = proto_inclusion_proof_to_local(inclusion_proof)?;
 
     let target = OCSTarget::new_inclusion_target(object_ref);
 
@@ -653,17 +660,29 @@ async fn fetch_and_verify_event_stream_head(
     object_id: ObjectID,
     checkpoint: u64,
 ) -> Field<ar::AccumulatorKey, ar::EventStreamHead> {
-    let mut req = GetObjectInclusionProofRequest::default();
-    req.object_id = Some(object_id.to_string());
-    req.checkpoint = Some(checkpoint);
+    let request = GetCheckpointObjectProofRequest::default()
+        .with_object_id(object_id.to_string())
+        .with_checkpoint(checkpoint);
 
     let response = proof_client
-        .get_object_inclusion_proof(req)
+        .get_checkpoint_object_proof(request)
         .await
         .unwrap()
         .into_inner();
 
-    let object_ref = response.object_ref.expect("object_ref should be present");
+    let proof = response.proof.as_ref().expect("proof should be present");
+    let inclusion_proof = match proof {
+        get_checkpoint_object_proof_response::Proof::Inclusion(p) => p,
+        get_checkpoint_object_proof_response::Proof::NonInclusion(_) => {
+            panic!("expected inclusion proof at checkpoint {checkpoint}");
+        }
+        _ => panic!("unknown proof variant"),
+    };
+
+    let object_ref = inclusion_proof
+        .object_ref
+        .as_ref()
+        .expect("object_ref should be present");
 
     assert!(
         object_ref.object_id.is_some(),
@@ -678,10 +697,6 @@ async fn fetch_and_verify_event_stream_head(
         "digest should be present in object_ref"
     );
 
-    let inclusion_proof = response
-        .inclusion_proof
-        .expect("inclusion_proof should be present");
-
     assert!(
         inclusion_proof.merkle_proof.is_some(),
         "merkle_proof should be present"
@@ -691,10 +706,13 @@ async fn fetch_and_verify_event_stream_head(
         "tree_root should be present"
     );
 
-    let object_data_bytes = response.object_data.expect("object_data should be present");
+    let object_data_bytes = inclusion_proof
+        .object_data
+        .as_ref()
+        .expect("object_data should be present");
 
     let object: Object =
-        bcs::from_bytes(&object_data_bytes).expect("should deserialize object from BCS");
+        bcs::from_bytes(object_data_bytes).expect("should deserialize object from BCS");
 
     let move_obj = object.data.try_as_move().expect("should be move object");
     let stream_head: Field<ar::AccumulatorKey, ar::EventStreamHead> = move_obj
@@ -723,15 +741,8 @@ async fn fetch_and_verify_event_stream_head(
         .try_into()
         .expect("Failed to convert checkpoint");
 
-    verify_ocs_inclusion_proof(
-        epoch_cache,
-        &checkpoint_data.summary,
-        &object_ref,
-        &inclusion_proof,
-        checkpoint,
-    )
-    .await
-    .expect("EventStreamHead inclusion proof should verify with committee");
+    verify_ocs_inclusion_proof(epoch_cache, &checkpoint_data.summary, &response, checkpoint)
+        .expect("OCS inclusion proof verification failed");
 
     stream_head
 }
@@ -744,7 +755,7 @@ async fn list_authenticated_events_end_to_end() {
             cfg
         });
 
-    let rpc_config = create_rpc_config_with_authenticated_events();
+    let rpc_config = create_rpc_config_with_ledger_history();
 
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
@@ -766,86 +777,62 @@ async fn list_authenticated_events_end_to_end() {
         emit_test_event(&test_cluster, package_id, sender, 100 + i).await;
     }
 
-    let all_events =
-        list_authenticated_events(test_cluster.rpc_url(), &package_id.to_string(), 0, None).await;
+    let stream_id = SuiAddress::from(package_id);
+    let all_events = list_authenticated_events(test_cluster.rpc_url(), stream_id, 0, None).await;
 
     let count = all_events.len();
     assert_eq!(count, 10, "expected 10 authenticated events, got {count}");
 
-    let found = all_events.iter().any(|event| match &event.event {
-        Some(Event {
-            contents: Some(bcs),
-            ..
-        }) => bcs.value.as_ref().is_some_and(|v| !v.is_empty()),
-        _ => false,
-    });
-    assert!(found, "expected authenticated event for the stream");
+    assert!(
+        all_events
+            .iter()
+            .any(|event| !event.event.contents.is_empty()),
+        "expected non-empty event contents"
+    );
 
     verify_events_with_stream_head(&test_cluster, package_id, &all_events, 10).await;
 }
 
 #[sim_test]
-async fn list_authenticated_events_page_size_validation() {
-    let rpc_config = create_rpc_config_with_authenticated_events();
-
-    let test_cluster = test_cluster::TestClusterBuilder::new()
-        .with_rpc_config(rpc_config)
-        .build()
-        .await;
-    let sender = test_cluster.wallet.config.keystore.addresses()[0];
-
-    let response =
-        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(1500))
-            .await
-            .unwrap();
-
-    assert!(response.events.is_empty());
-}
-
-#[sim_test]
 async fn list_authenticated_events_start_beyond_highest() {
-    let rpc_config = create_rpc_config_with_authenticated_events();
+    let rpc_config = create_rpc_config_with_ledger_history();
 
-    let test_cluster = test_cluster::TestClusterBuilder::new()
+    let test_cluster = TestClusterBuilder::new()
         .with_rpc_config(rpc_config)
         .build()
         .await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let probe_response =
-        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(1))
+    // Probe the ledger so we have some indexed history to bound against,
+    // then request a far-future checkpoint. The server should report no
+    // matching events without erroring.
+    let _ = query_authenticated_events(test_cluster.rpc_url(), sender, 0, Some(1))
+        .await
+        .unwrap();
+
+    let response =
+        query_authenticated_events(test_cluster.rpc_url(), sender, u64::MAX / 2, Some(10))
             .await
             .unwrap();
-    let highest = probe_response.highest_indexed_checkpoint.unwrap_or(0);
 
-    let response = query_authenticated_events(
-        test_cluster.rpc_url(),
-        &sender.to_string(),
-        highest + 1000,
-        Some(10),
-    )
-    .await
-    .unwrap();
-
-    assert!(response.events.is_empty());
+    assert!(response.is_empty());
 }
 
 #[sim_test]
-async fn list_authenticated_events_pruned_checkpoint_error() {
-    let rpc_config = create_rpc_config_with_authenticated_events();
+async fn list_authenticated_events_no_events_for_stream() {
+    let rpc_config = create_rpc_config_with_ledger_history();
 
-    let test_cluster = test_cluster::TestClusterBuilder::new()
+    let test_cluster = TestClusterBuilder::new()
         .with_rpc_config(rpc_config)
         .build()
         .await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let response =
-        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(10))
-            .await
-            .unwrap();
+    let response = query_authenticated_events(test_cluster.rpc_url(), sender, 0, Some(10))
+        .await
+        .unwrap();
 
-    assert!(response.events.is_empty());
+    assert!(response.is_empty());
 }
 
 #[sim_test]
@@ -856,23 +843,21 @@ async fn authenticated_events_disabled_test() {
             cfg
         });
 
-    let test_cluster = test_cluster::TestClusterBuilder::new().build().await;
+    // No `ledger_history_indexing` enabled — the v2alpha ListEvents endpoint
+    // should reject the request with `Unimplemented`.
+    let test_cluster = TestClusterBuilder::new().build().await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
-    let result =
-        query_authenticated_events(test_cluster.rpc_url(), &sender.to_string(), 0, Some(10)).await;
+    let result = query_authenticated_events(test_cluster.rpc_url(), sender, 0, Some(10)).await;
 
-    assert!(
-        result.is_err(),
-        "Expected error when authenticated events indexing is disabled"
-    );
-
-    let error = result.unwrap_err();
+    let error = result.expect_err("ListEvents should fail when ledger history indexing is off");
     assert_eq!(error.code(), tonic::Code::Unimplemented);
     assert!(
         error
             .message()
-            .contains("Authenticated events indexing is disabled")
+            .contains("ledger history indexing is disabled"),
+        "got: {}",
+        error.message()
     );
 }
 
@@ -885,7 +870,7 @@ async fn authenticated_events_backfill_test() {
         });
 
     let rpc_config = sui_config::RpcConfig {
-        authenticated_events_indexing: Some(false),
+        ledger_history_indexing: Some(false),
         enable_indexing: Some(true),
         ..Default::default()
     };
@@ -910,7 +895,7 @@ async fn authenticated_events_backfill_test() {
 
         if let Some(ref mut rpc_config) = new_fullnode_config.rpc {
             rpc_config.enable_indexing = Some(true);
-            rpc_config.authenticated_events_indexing = Some(true);
+            rpc_config.ledger_history_indexing = Some(true);
         }
 
         let new_fullnode_handle = test_cluster
@@ -920,31 +905,30 @@ async fn authenticated_events_backfill_test() {
         new_fullnode_handle.rpc_url.clone()
     };
 
+    let stream_id = SuiAddress::from(package_id);
     let start = tokio::time::Instant::now();
-    let response = loop {
-        let response =
-            query_authenticated_events(&rpc_url_with_indexing, &package_id.to_string(), 0, None)
-                .await
-                .unwrap();
+    let events = loop {
+        let events = list_authenticated_events(&rpc_url_with_indexing, stream_id, 0, None).await;
 
-        if response.events.len() == 5 {
-            break response;
+        if events.len() == 5 {
+            break events;
         }
 
         if start.elapsed() > tokio::time::Duration::from_secs(30) {
             panic!(
                 "Timeout waiting for backfill to complete. Found {} events, expected 5",
-                response.events.len()
+                events.len()
             );
         }
 
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     };
 
-    let count = response.events.len();
     assert_eq!(
-        count, 5,
-        "expected 5 authenticated events after backfill, got {count}"
+        events.len(),
+        5,
+        "expected 5 authenticated events after backfill, got {}",
+        events.len()
     );
 }
 
@@ -956,7 +940,7 @@ async fn authenticated_events_multiple_events_per_transaction() {
             cfg
         });
 
-    let rpc_config = create_rpc_config_with_authenticated_events();
+    let rpc_config = create_rpc_config_with_ledger_history();
 
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
@@ -969,21 +953,10 @@ async fn authenticated_events_multiple_events_per_transaction() {
 
     let _response = emit_multiple_test_events(&test_cluster, package_id, sender, 100, 3).await;
 
-    let mut event_client =
-        connect_with_retry(|| EventServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
+    let stream_id = SuiAddress::from(package_id);
+    let events = list_authenticated_events(test_cluster.rpc_url(), stream_id, 0, None).await;
 
-    let mut req = ListAuthenticatedEventsRequest::default();
-    req.stream_id = Some(package_id.to_string());
-    req.start_checkpoint = Some(0);
-    req.page_size = None;
-    req.page_token = None;
-    let response = event_client
-        .list_authenticated_events(req)
-        .await
-        .unwrap()
-        .into_inner();
-
-    let count = response.events.len();
+    let count = events.len();
     assert_eq!(
         count, 3,
         "expected 3 authenticated events (all from one transaction), got {count}"
@@ -994,17 +967,12 @@ async fn authenticated_events_multiple_events_per_transaction() {
         value: u64,
     }
 
-    let values: Vec<u64> = response
-        .events
+    let values: Vec<u64> = events
         .iter()
         .filter_map(|event| {
-            event.event.as_ref().and_then(|e| {
-                e.contents.as_ref().and_then(|c| {
-                    c.value
-                        .as_ref()
-                        .and_then(|v| bcs::from_bytes::<E>(v).ok().map(|e| e.value))
-                })
-            })
+            bcs::from_bytes::<E>(&event.event.contents)
+                .ok()
+                .map(|e| e.value)
         })
         .collect();
 
@@ -1013,14 +981,13 @@ async fn authenticated_events_multiple_events_per_transaction() {
     assert!(values.contains(&101), "should contain event with value 101");
     assert!(values.contains(&102), "should contain event with value 102");
 
-    let tx_indices: std::collections::HashSet<u32> = response
-        .events
+    let tx_offsets: std::collections::HashSet<u64> = events
         .iter()
-        .filter_map(|event| event.transaction_idx)
+        .map(|event| event.transaction_offset)
         .collect();
 
     assert_eq!(
-        tx_indices.len(),
+        tx_offsets.len(),
         1,
         "all events should be from the same transaction"
     );
@@ -1034,7 +1001,7 @@ async fn test_pagination() {
             cfg
         });
 
-    let rpc_config = create_rpc_config_with_authenticated_events();
+    let rpc_config = create_rpc_config_with_ledger_history();
 
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
@@ -1049,9 +1016,8 @@ async fn test_pagination() {
         emit_multiple_test_events(&test_cluster, package_id, sender, i * 5, 5).await;
     }
 
-    let all_events =
-        list_authenticated_events(test_cluster.rpc_url(), &package_id.to_string(), 0, Some(7))
-            .await;
+    let stream_id = SuiAddress::from(package_id);
+    let all_events = list_authenticated_events(test_cluster.rpc_url(), stream_id, 0, Some(7)).await;
 
     assert_eq!(
         all_events.len(),
@@ -1063,15 +1029,17 @@ async fn test_pagination() {
     verify_events_with_stream_head(&test_cluster, package_id, &all_events, 25).await;
 }
 
+/// When the requested checkpoint did not modify the EventStreamHead, the
+/// server returns a non-inclusion proof rather than an inclusion proof.
 #[sim_test]
-async fn test_object_inclusion_proof_error_code() {
+async fn test_object_inclusion_proof_returns_non_inclusion() {
     let _guard: sui_protocol_config::OverrideGuard =
         ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
             cfg.enable_authenticated_event_streams_for_testing();
             cfg
         });
 
-    let rpc_config = create_rpc_config_with_authenticated_events();
+    let rpc_config = create_rpc_config_with_ledger_history();
 
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
@@ -1080,7 +1048,7 @@ async fn test_object_inclusion_proof_error_code() {
         .await;
 
     let package_id = publish_test_package(&test_cluster).await;
-    let stream_id = sui_types::base_types::SuiAddress::from(package_id);
+    let stream_id = SuiAddress::from(package_id);
     let event_stream_head_id = get_event_stream_head_object_id(stream_id).unwrap();
 
     let highest_checkpoint = test_cluster.fullnode_handle.sui_node.with(|node| {
@@ -1094,99 +1062,24 @@ async fn test_object_inclusion_proof_error_code() {
     let mut proof_client =
         connect_with_retry(|| ProofServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
 
-    let mut req = GetObjectInclusionProofRequest::default();
-    req.object_id = Some(event_stream_head_id.to_string());
-    req.checkpoint = Some(highest_checkpoint);
+    let request = GetCheckpointObjectProofRequest::default()
+        .with_object_id(event_stream_head_id.to_string())
+        .with_checkpoint(highest_checkpoint);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
-
-    assert!(
-        result.is_err(),
-        "Should fail to get inclusion proof at checkpoint where object was not modified"
-    );
-
-    let error = result.unwrap_err();
-    assert_eq!(
-        error.code(),
-        tonic::Code::FailedPrecondition,
-        "Expected FailedPrecondition error code, got {:?}",
-        error.code()
-    );
-
-    assert!(
-        error.message().contains("was not written at checkpoint"),
-        "Error message should explain object was not written at checkpoint. Got: {}",
-        error.message()
-    );
-}
-
-#[sim_test]
-async fn test_size_based_pagination() {
-    let _guard: sui_protocol_config::OverrideGuard =
-        ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-            cfg.enable_authenticated_event_streams_for_testing();
-            cfg
-        });
-
-    let rpc_config = create_rpc_config_with_authenticated_events();
-
-    let test_cluster = TestClusterBuilder::new()
-        .disable_fullnode_pruning()
-        .with_rpc_config(rpc_config)
-        .build()
-        .await;
-
-    let package_id = publish_test_package(&test_cluster).await;
-    let sender = test_cluster.wallet.config.keystore.addresses()[0];
-
-    emit_large_test_event(&test_cluster, package_id, sender, 1, 200_000).await;
-    emit_large_test_event(&test_cluster, package_id, sender, 2, 200_000).await;
-    emit_large_test_event(&test_cluster, package_id, sender, 3, 200_000).await;
-    emit_large_test_event(&test_cluster, package_id, sender, 4, 200_000).await;
-
-    let mut event_client =
-        connect_with_retry(|| EventServiceClient::connect(test_cluster.rpc_url().to_owned())).await;
-
-    let mut req = ListAuthenticatedEventsRequest::default();
-    req.stream_id = Some(package_id.to_string());
-    req.start_checkpoint = Some(0);
-    req.page_size = Some(10);
-    req.page_token = None;
-
-    let first_response = event_client
-        .list_authenticated_events(req)
+    let response = proof_client
+        .get_checkpoint_object_proof(request)
         .await
-        .unwrap()
+        .expect("non-inclusion proof should succeed")
         .into_inner();
 
+    let proof = response.proof.expect("proof should be present");
     assert!(
-        first_response.events.len() < 4,
-        "Should get fewer than 4 events due to size limit (512 KiB). Got {} events",
-        first_response.events.len()
+        matches!(
+            proof,
+            get_checkpoint_object_proof_response::Proof::NonInclusion(_)
+        ),
+        "expected non-inclusion proof at a checkpoint that did not modify the EventStreamHead"
     );
-
-    assert!(
-        !first_response.events.is_empty(),
-        "Should get at least 1 event (forward progress guarantee)"
-    );
-
-    assert!(
-        first_response.next_page_token.is_some(),
-        "Should have next_page_token since not all events were returned"
-    );
-
-    let all_events =
-        list_authenticated_events(test_cluster.rpc_url(), &package_id.to_string(), 0, Some(10))
-            .await;
-
-    assert_eq!(
-        all_events.len(),
-        4,
-        "expected 4 total events across all pages, got {}",
-        all_events.len()
-    );
-
-    verify_events_with_stream_head(&test_cluster, package_id, &all_events, 4).await;
 }
 
 #[sim_test]
@@ -1203,7 +1096,7 @@ async fn authenticated_events_multiple_commits_per_checkpoint() {
             cfg
         });
 
-    let rpc_config = create_rpc_config_with_authenticated_events();
+    let rpc_config = create_rpc_config_with_ledger_history();
 
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
@@ -1301,36 +1194,39 @@ async fn authenticated_events_multiple_commits_per_checkpoint() {
         .collect();
     futures::future::try_join_all(bundle_tasks).await.unwrap();
 
-    let all_events =
-        list_authenticated_events(test_cluster.rpc_url(), &package_id.to_string(), 0, None).await;
+    let stream_id = SuiAddress::from(package_id);
 
-    assert_eq!(
-        all_events.len(),
-        event_count as usize,
-        "expected all events, got {}",
-        all_events.len()
-    );
+    // The ledger history index runs behind execution; poll until every event
+    // is indexed (or fail after a timeout).
+    let deadline = tokio::time::Instant::now() + tokio::time::Duration::from_secs(30);
+    let all_events = loop {
+        let events = list_authenticated_events(test_cluster.rpc_url(), stream_id, 0, None).await;
+        if events.len() == event_count as usize {
+            break events;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            panic!(
+                "Timed out waiting for {} indexed events; only saw {}",
+                event_count,
+                events.len()
+            );
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    };
 
+    // With many transactions packed into few checkpoints, at least one
+    // checkpoint should carry events from multiple distinct transactions.
     let mut events_by_checkpoint: std::collections::HashMap<u64, std::collections::HashSet<u64>> =
         std::collections::HashMap::new();
     for event in &all_events {
-        if let (Some(checkpoint), Some(accumulator_version)) =
-            (event.checkpoint, event.accumulator_version)
-        {
-            events_by_checkpoint
-                .entry(checkpoint)
-                .or_default()
-                .insert(accumulator_version);
-        }
+        events_by_checkpoint
+            .entry(event.checkpoint)
+            .or_default()
+            .insert(event.transaction_offset);
     }
-
-    let checkpoint_with_multiple_versions = events_by_checkpoint
-        .iter()
-        .find(|(_, versions)| versions.len() > 1);
-
     assert!(
-        checkpoint_with_multiple_versions.is_some(),
-        "Expected at least one checkpoint with multiple accumulator versions (multiple commits), but found none. Events by checkpoint: {:?}",
+        events_by_checkpoint.values().any(|txs| txs.len() > 1),
+        "expected at least one checkpoint with events from multiple transactions, got: {:?}",
         events_by_checkpoint
     );
 

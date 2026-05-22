@@ -66,8 +66,3 @@ tonic-web.workspace = true
 # virtual-time deadline tests in `grpc::deadline`.
 tokio = { workspace = true, features = ["test-util"] }
 
-[build-dependencies]
-tonic-prost-build.workspace = true
-protox.workspace = true
-walkdir.workspace = true
-serde_json.workspace = true
