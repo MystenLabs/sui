@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use itertools::Itertools;
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use std::time::Duration;
@@ -20,9 +19,11 @@ use sui_rpc::proto::sui::rpc::v2::{GetCheckpointRequest, GetEpochRequest};
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as V2AlphaLedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::proof_service_client::ProofServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::{
-    EventFilter, EventLiteral, EventPredicate, EventStreamHeadFilter, EventTerm,
-    GetCheckpointObjectProofRequest, GetCheckpointObjectProofResponse, ListEventsRequest,
-    QueryOptions, get_checkpoint_object_proof_response, list_events_response,
+    AffectedObjectFilter, EventFilter, EventLiteral, EventPredicate, EventStreamHeadFilter,
+    EventTerm, GetCheckpointObjectProofRequest, GetCheckpointObjectProofResponse,
+    ListEventsRequest, ListTransactionsRequest, QueryEndReason, QueryOptions, TransactionFilter,
+    TransactionLiteral, TransactionPredicate, TransactionTerm,
+    get_checkpoint_object_proof_response, list_events_response, list_transactions_response,
 };
 use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk_types::ValidatorCommittee;
@@ -175,6 +176,156 @@ fn build_event_stream_head_filter(stream_id: SuiAddress) -> EventFilter {
     let literal = EventLiteral::default().with_include(predicate);
     let term = EventTerm::default().with_literals(vec![literal]);
     EventFilter::default().with_terms(vec![term])
+}
+
+fn build_affected_object_filter(object_id: ObjectID) -> TransactionFilter {
+    let predicate = TransactionPredicate::default().with_affected_object(
+        AffectedObjectFilter::default().with_object_id(object_id.to_string()),
+    );
+    let literal = TransactionLiteral::default().with_include(predicate);
+    let term = TransactionTerm::default().with_literals(vec![literal]);
+    TransactionFilter::default().with_terms(vec![term])
+}
+
+/// List every settle_events transaction that touched the given
+/// `EventStreamHead` object in `[start_checkpoint, end_checkpoint)`. Each
+/// settle_events call mutates the stream head, so filtering by
+/// `affected_object = event_stream_head_object_id` returns exactly the
+/// per-stream settlement boundaries. Returns ascending
+/// `(checkpoint, transaction_offset)` pairs.
+async fn fetch_settlements_for_range(
+    client: &mut V2AlphaLedgerServiceClient<tonic::transport::Channel>,
+    stream_head_object_id: ObjectID,
+    start_checkpoint: u64,
+    end_checkpoint_exclusive: u64,
+) -> Result<Vec<(u64, u64)>, tonic::Status> {
+    use futures::StreamExt;
+
+    let filter = build_affected_object_filter(stream_head_object_id);
+    let read_mask = FieldMask::from_paths(["checkpoint"]);
+    let mut all = Vec::new();
+    let mut cursor: Option<Vec<u8>> = None;
+
+    loop {
+        let mut options = QueryOptions::default().with_limit_items(1000);
+        if let Some(c) = cursor.clone() {
+            options.set_after(c);
+        }
+        let mut request = ListTransactionsRequest::default()
+            .with_read_mask(read_mask.clone())
+            .with_start_checkpoint(start_checkpoint)
+            .with_filter(filter.clone())
+            .with_options(options);
+        if end_checkpoint_exclusive > start_checkpoint {
+            request = request.with_end_checkpoint(end_checkpoint_exclusive);
+        }
+
+        let mut response = client.list_transactions(request).await?.into_inner();
+        let mut end_reason: Option<QueryEndReason> = None;
+        let mut last_cursor: Option<Vec<u8>> = None;
+
+        while let Some(frame) = response.next().await {
+            let frame = frame?;
+            match frame.response {
+                Some(list_transactions_response::Response::Item(item)) => {
+                    if let Some(c) = item.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
+                        last_cursor = Some(c.to_vec());
+                    }
+                    let checkpoint = item
+                        .transaction
+                        .as_ref()
+                        .and_then(|tx| tx.checkpoint)
+                        .ok_or_else(|| {
+                            tonic::Status::internal("settlement tx missing checkpoint")
+                        })?;
+                    let tx_offset = item.transaction_offset.ok_or_else(|| {
+                        tonic::Status::internal("settlement tx missing transaction_offset")
+                    })?;
+                    all.push((checkpoint, tx_offset));
+                }
+                Some(list_transactions_response::Response::Watermark(w)) => {
+                    if let Some(c) = w.cursor.as_ref() {
+                        last_cursor = Some(c.to_vec());
+                    }
+                }
+                Some(list_transactions_response::Response::End(end)) => {
+                    end_reason = QueryEndReason::try_from(end.reason).ok();
+                }
+                Some(_) | None => {}
+            }
+        }
+
+        if matches!(
+            end_reason,
+            Some(QueryEndReason::ItemLimit) | Some(QueryEndReason::ScanLimit),
+        ) {
+            cursor = last_cursor;
+            continue;
+        }
+        break;
+    }
+
+    Ok(all)
+}
+
+/// Bucket events into per-settlement MMR-fold batches. Each event maps to
+/// the next settlement transaction with `(cp == event.cp, tx_offset >=
+/// event.tx_offset)`; events sharing a settlement key form one batch.
+/// Events at checkpoints `<= floor_checkpoint` are dropped (the caller
+/// uses this to skip already-verified initial state).
+fn bucket_events_by_settlement(
+    events: &[AuthenticatedEvent],
+    settlements: &[(u64, u64)],
+    floor_checkpoint: u64,
+) -> Vec<Vec<EventCommitment>> {
+    let mut batches: Vec<Vec<EventCommitment>> = Vec::new();
+    let mut current_key: Option<(u64, u64)> = None;
+    let mut current_batch: Vec<EventCommitment> = Vec::new();
+    let mut settlement_idx: usize = 0;
+
+    for event in events {
+        if event.checkpoint <= floor_checkpoint {
+            continue;
+        }
+
+        while settlement_idx < settlements.len()
+            && (settlements[settlement_idx].0 < event.checkpoint
+                || (settlements[settlement_idx].0 == event.checkpoint
+                    && settlements[settlement_idx].1 < event.transaction_offset))
+        {
+            settlement_idx += 1;
+        }
+        assert!(
+            settlement_idx < settlements.len() && settlements[settlement_idx].0 == event.checkpoint,
+            "no settlement transaction covering event at (cp={}, tx_offset={})",
+            event.checkpoint,
+            event.transaction_offset,
+        );
+
+        let settlement_key = settlements[settlement_idx];
+        let commitment = EventCommitment::new(
+            event.checkpoint,
+            event.transaction_offset,
+            event.event_index as u64,
+            event.event.digest(),
+        );
+
+        match current_key {
+            Some(key) if key == settlement_key => current_batch.push(commitment),
+            _ => {
+                if !current_batch.is_empty() {
+                    batches.push(std::mem::take(&mut current_batch));
+                }
+                current_batch.push(commitment);
+                current_key = Some(settlement_key);
+            }
+        }
+    }
+
+    if !current_batch.is_empty() {
+        batches.push(current_batch);
+    }
+    batches
 }
 
 /// Drive a single `ListEvents` server-streaming request, accumulating every
@@ -352,27 +503,29 @@ async fn verify_events_with_stream_head(
         expected_event_count
     );
 
-    // Group events by checkpoint to match the framework MMR fold (one merkle
-    // tree per checkpoint, one MMR fold per tree).
-    let events_by_checkpoint: Vec<Vec<EventCommitment>> = events
-        .iter()
-        .filter(|event| event.checkpoint > first_event_checkpoint)
-        .map(|event| {
-            let commitment = EventCommitment::new(
-                event.checkpoint,
-                event.transaction_offset,
-                event.event_index as u64,
-                event.event.digest(),
-            );
-            (event.checkpoint, commitment)
-        })
-        .chunk_by(|(checkpoint, _)| *checkpoint)
-        .into_iter()
-        .map(|(_, group)| group.map(|(_, commitment)| commitment).collect())
-        .collect();
+    // Bucket events into per-settlement MMR-fold batches. The framework
+    // runs one `settle_events` per consensus commit per stream, so a
+    // checkpoint that aggregates multiple commits has multiple folds at
+    // the same `checkpoint_seq`. We need the corresponding settlement
+    // boundaries to reconstruct each fold separately — fetch them via
+    // `ListTransactions` filtered to the stream's `EventStreamHead`.
+    let mut ledger_v2alpha = V2AlphaLedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .expect("connect v2alpha ledger");
+    let settlements = fetch_settlements_for_range(
+        &mut ledger_v2alpha,
+        event_stream_head_id,
+        first_event_checkpoint,
+        last_event_checkpoint.saturating_add(1),
+    )
+    .await
+    .expect("fetch settlement transactions");
+
+    let events_by_settlement =
+        bucket_events_by_settlement(events, &settlements, first_event_checkpoint);
 
     let calculated_stream_head =
-        apply_stream_updates(&first_stream_head.value, events_by_checkpoint);
+        apply_stream_updates(&first_stream_head.value, events_by_settlement);
 
     assert_eq!(
         calculated_stream_head.num_events, last_stream_head.value.num_events,
@@ -1230,6 +1383,34 @@ async fn authenticated_events_multiple_commits_per_checkpoint() {
         events_by_checkpoint
     );
 
+    // Events must be ordered (checkpoint asc, transaction_offset asc,
+    // event_index asc) — this is what the v2alpha contract guarantees and
+    // what downstream MMR consumers depend on.
+    for window in all_events.windows(2) {
+        let prev = (
+            window[0].checkpoint,
+            window[0].transaction_offset,
+            window[0].event_index,
+        );
+        let next = (
+            window[1].checkpoint,
+            window[1].transaction_offset,
+            window[1].event_index,
+        );
+        assert!(
+            prev < next,
+            "events must be strictly ordered; got {:?} then {:?}",
+            prev,
+            next,
+        );
+    }
+
+    // Replay the on-chain MMR with per-settlement bucketing. Multiple
+    // consensus commits in one checkpoint produce multiple `settle_events`
+    // calls per stream (each its own MMR fold), so reconstructing the
+    // chain head needs settlement boundaries — which
+    // `verify_events_with_stream_head` pulls via
+    // `ListTransactions(affected_object = event_stream_head)`.
     verify_events_with_stream_head(
         &test_cluster,
         package_id,
