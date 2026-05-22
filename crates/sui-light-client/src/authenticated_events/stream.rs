@@ -8,13 +8,17 @@ use futures::stream::Stream;
 use mysten_common::debug_fatal;
 use std::sync::Arc;
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
+use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as V2AlphaLedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::{
-    EventFilter, EventLiteral, EventPredicate, EventStreamHeadFilter, EventTerm, ListEventsRequest,
-    QueryEndReason, QueryOptions, list_events_response,
+    AffectedObjectFilter, EventFilter, EventLiteral, EventPredicate, EventStreamHeadFilter,
+    EventTerm, ListEventsRequest, ListTransactionsRequest, QueryEndReason, QueryOptions,
+    TransactionFilter, TransactionLiteral, TransactionPredicate, TransactionTerm,
+    list_events_response, list_transactions_response,
 };
 use sui_types::accumulator_root::{EventCommitment, EventStreamHead};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use tokio::sync::mpsc;
+use tonic::transport::Channel;
 
 struct EventStreamState {
     client: Arc<AuthenticatedEventsClient>,
@@ -216,8 +220,21 @@ impl EventStreamState {
         let default_head = EventStreamHead::default();
         let old_head = self.verified_stream_head.as_ref().unwrap_or(&default_head);
 
+        let (start_cp, end_cp) = match (events.first(), events.last()) {
+            (Some(first), Some(last)) => (first.checkpoint, last.checkpoint),
+            _ => (up_to_checkpoint, up_to_checkpoint),
+        };
+        let mut ledger_service = self.client.ledger_service_v2alpha();
+        let settlements = fetch_settlements_for_range(
+            &mut ledger_service,
+            self.stream_object_id,
+            start_cp,
+            end_cp.saturating_add(1),
+        )
+        .await?;
+
         let accumulated_events =
-            Self::group_events_by_checkpoint(events, self.last_verified_checkpoint);
+            Self::bucket_events_by_settlement(events, &settlements, self.last_verified_checkpoint)?;
 
         let new_stream_head = self
             .client
@@ -260,18 +277,30 @@ impl EventStreamState {
         Ok(())
     }
 
-    /// Group events by their containing checkpoint, in scan order. The new
-    /// v2alpha API doesn't expose the per-settlement `accumulator_version`,
-    /// so we match the on-chain MMR fold by treating every checkpoint as a
-    /// single batch — the framework's `apply_stream_updates` folds one
-    /// per-checkpoint Merkle root into the MMR at a time.
-    fn group_events_by_checkpoint(
+    /// Bucket events into per-settlement MMR-fold batches.
+    ///
+    /// The framework runs one `settle_events` (and one `add_to_mmr` fold)
+    /// per consensus commit per stream, so a checkpoint that aggregates
+    /// multiple commits has multiple folds at the same `checkpoint_seq`.
+    /// Each event belongs to the next settlement transaction that follows
+    /// it within the same checkpoint — i.e. the smallest
+    /// `(checkpoint, tx_offset)` settlement boundary with
+    /// `checkpoint == event.checkpoint` and `tx_offset >= event.transaction_offset`.
+    ///
+    /// Events sharing a settlement key form one batch (one merkle root,
+    /// one MMR fold). Both `events` and `settlements` must be sorted in
+    /// `(checkpoint, tx_offset)` order; this walks them with a single
+    /// pointer and errors out if any event has no covering settlement
+    /// (which would mean we under-fetched the settlement range).
+    fn bucket_events_by_settlement(
         events: &[AuthenticatedEvent],
+        settlements: &[(u64, u64)],
         last_verified_checkpoint: u64,
-    ) -> Vec<Vec<EventCommitment>> {
+    ) -> Result<Vec<Vec<EventCommitment>>, ClientError> {
         let mut accumulated_events: Vec<Vec<EventCommitment>> = Vec::new();
-        let mut current_checkpoint: Option<u64> = None;
+        let mut current_key: Option<(u64, u64)> = None;
         let mut current_batch: Vec<EventCommitment> = Vec::new();
+        let mut settlement_idx: usize = 0;
 
         for event in events {
             if event.checkpoint <= last_verified_checkpoint {
@@ -283,26 +312,46 @@ impl EventStreamState {
                 continue;
             }
 
-            let digest = event.event.digest();
+            // Advance the settlement cursor past any boundary strictly
+            // before the event in `(cp, tx_offset)` order. Equal-offset
+            // matches stay because the settlement transaction at offset S
+            // covers the user events with `tx_offset <= S`.
+            while settlement_idx < settlements.len()
+                && (settlements[settlement_idx].0 < event.checkpoint
+                    || (settlements[settlement_idx].0 == event.checkpoint
+                        && settlements[settlement_idx].1 < event.transaction_offset))
+            {
+                settlement_idx += 1;
+            }
+
+            if settlement_idx >= settlements.len()
+                || settlements[settlement_idx].0 != event.checkpoint
+            {
+                return Err(ClientError::VerificationError(format!(
+                    "no settlement transaction found covering event at \
+                     (checkpoint {}, tx_offset {})",
+                    event.checkpoint, event.transaction_offset
+                )));
+            }
+
+            let settlement_key = settlements[settlement_idx];
             let commitment = EventCommitment::new(
                 event.checkpoint,
                 event.transaction_offset,
                 event.event_index as u64,
-                digest,
+                event.event.digest(),
             );
 
-            match current_checkpoint {
-                None => {
-                    current_checkpoint = Some(event.checkpoint);
+            match current_key {
+                Some(key) if key == settlement_key => {
                     current_batch.push(commitment);
                 }
-                Some(checkpoint) if checkpoint == event.checkpoint => {
+                _ => {
+                    if !current_batch.is_empty() {
+                        accumulated_events.push(std::mem::take(&mut current_batch));
+                    }
                     current_batch.push(commitment);
-                }
-                Some(_) => {
-                    accumulated_events.push(std::mem::take(&mut current_batch));
-                    current_batch.push(commitment);
-                    current_checkpoint = Some(event.checkpoint);
+                    current_key = Some(settlement_key);
                 }
             }
         }
@@ -311,8 +360,112 @@ impl EventStreamState {
             accumulated_events.push(current_batch);
         }
 
-        accumulated_events
+        Ok(accumulated_events)
     }
+}
+
+/// List every settle_events transaction that touched the given
+/// `EventStreamHead` object in `[start_checkpoint, end_checkpoint)`. Each
+/// settle_events call mutates the stream head, so filtering
+/// `ListTransactions` by `affected_object = event_stream_head_object_id`
+/// returns exactly the per-stream settlement boundaries.
+///
+/// Returns a vector of `(checkpoint, transaction_offset)` sorted
+/// ascending — the same order the events stream uses, which lets
+/// downstream bucketing walk both with a single cursor.
+async fn fetch_settlements_for_range(
+    client: &mut V2AlphaLedgerServiceClient<Channel>,
+    stream_object_id: ObjectID,
+    start_checkpoint: u64,
+    end_checkpoint_exclusive: u64,
+) -> Result<Vec<(u64, u64)>, ClientError> {
+    let filter = build_affected_object_filter(stream_object_id);
+    // We only need `checkpoint` from the embedded transaction — the
+    // `transaction_offset` is a top-level field on every `TransactionItem`.
+    let read_mask = FieldMask::from_paths(["checkpoint"]);
+
+    let mut all: Vec<(u64, u64)> = Vec::new();
+    let mut cursor: Option<Vec<u8>> = None;
+
+    loop {
+        let mut options = QueryOptions::default().with_limit_items(1000);
+        if let Some(c) = cursor.clone() {
+            options.set_after(c);
+        }
+        let mut request = ListTransactionsRequest::default()
+            .with_read_mask(read_mask.clone())
+            .with_start_checkpoint(start_checkpoint)
+            .with_filter(filter.clone())
+            .with_options(options);
+        if end_checkpoint_exclusive > start_checkpoint {
+            request = request.with_end_checkpoint(end_checkpoint_exclusive);
+        }
+
+        let mut response = client
+            .list_transactions(request)
+            .await
+            .map_err(ClientError::RpcError)?
+            .into_inner();
+
+        let mut end_reason: Option<QueryEndReason> = None;
+        let mut last_cursor: Option<Vec<u8>> = None;
+
+        while let Some(frame) = response.next().await {
+            let frame = frame.map_err(ClientError::RpcError)?;
+            match frame.response {
+                Some(list_transactions_response::Response::Item(item)) => {
+                    if let Some(c) = item.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
+                        last_cursor = Some(c.to_vec());
+                    }
+                    let checkpoint = item
+                        .transaction
+                        .as_ref()
+                        .and_then(|tx| tx.checkpoint)
+                        .ok_or_else(|| {
+                            ClientError::InternalError(
+                                "settlement transaction missing checkpoint".to_string(),
+                            )
+                        })?;
+                    let tx_offset = item.transaction_offset.ok_or_else(|| {
+                        ClientError::InternalError(
+                            "settlement transaction missing transaction_offset".to_string(),
+                        )
+                    })?;
+                    all.push((checkpoint, tx_offset));
+                }
+                Some(list_transactions_response::Response::Watermark(w)) => {
+                    if let Some(c) = w.cursor.as_ref() {
+                        last_cursor = Some(c.to_vec());
+                    }
+                }
+                Some(list_transactions_response::Response::End(end)) => {
+                    end_reason = QueryEndReason::try_from(end.reason).ok();
+                }
+                Some(_) | None => {}
+            }
+        }
+
+        if matches!(
+            end_reason,
+            Some(QueryEndReason::ItemLimit) | Some(QueryEndReason::ScanLimit)
+        ) {
+            // More work remains for this scan; resume from the watermark
+            // cursor on the next request.
+            cursor = last_cursor;
+            continue;
+        }
+        break;
+    }
+
+    Ok(all)
+}
+
+fn build_affected_object_filter(object_id: ObjectID) -> TransactionFilter {
+    let object_filter = AffectedObjectFilter::default().with_object_id(object_id.to_string());
+    let predicate = TransactionPredicate::default().with_affected_object(object_filter);
+    let literal = TransactionLiteral::default().with_include(predicate);
+    let term = TransactionTerm::default().with_literals(vec![literal]);
+    TransactionFilter::default().with_terms(vec![term])
 }
 
 fn build_event_stream_head_filter(stream_id: SuiAddress) -> EventFilter {
