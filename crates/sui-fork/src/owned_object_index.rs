@@ -171,10 +171,10 @@ impl OwnedObjectIndexStore {
     /// Use a stable DB name while disabling interval-based sampling for synchronous tests.
     fn metric_conf() -> MetricConf {
         MetricConf {
-            db_name: "sui-fork-owned-index".to_owned(),
             read_sample_interval: SamplingInterval::new(Duration::ZERO, 0),
             write_sample_interval: SamplingInterval::new(Duration::ZERO, 0),
             iter_sample_interval: SamplingInterval::new(Duration::ZERO, 0),
+            ..MetricConf::new("sui-fork-owned-index")
         }
     }
 
