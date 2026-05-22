@@ -5,9 +5,13 @@ keywords: [ validator, fire drill, sui fire-drill, metadata rotation, key rotati
 sidebar_label: Fire Drill
 ---
 
-The `sui fire-drill` command helps validator operators rehearse operational procedures. Currently, it supports the `metadata-rotation` drill, which stages new validator keys and network addresses for the next epoch.
+The `sui fire-drill` command helps validator operators rehearse operational procedures. Currently, it supports the `metadata-rotation` drill, which generates new validator keys and ports, then stages them as next-epoch metadata.
 
-Use this command only for validator operations planning or controlled fire drills. It submits onchain transactions that update the validator's next-epoch metadata and writes a replacement validator configuration file.
+:::caution
+
+Use this command only for planned, controlled validator fire drills. It submits onchain validator metadata transactions. If the local validator configuration, firewall rules, and restart timing are not coordinated with the onchain next-epoch metadata, the validator can be unreachable, miss participation, or experience downtime after the epoch changes.
+
+:::
 
 ## What the metadata rotation drill does
 
@@ -16,13 +20,13 @@ Use this command only for validator operations planning or controlled fire drill
 1. Reads the validator node configuration file and validator account key.
 2. Creates a backup configuration file named `node_config_backup.yaml` in the same directory as the validator configuration.
 3. Generates new protocol, network, and worker keys.
-4. Selects new local ports and updates the validator network, P2P, primary, and worker addresses.
+4. Selects new local ports for the existing validator multiaddrs.
 5. Writes the generated next-epoch configuration to `<validator-config>.next_epoch`.
 6. Submits onchain transactions to set the validator's next-epoch keys and addresses.
-7. Waits for the next epoch.
-8. Replaces the original validator configuration with the generated next-epoch configuration.
+7. Blocks and waits for the next epoch.
+8. Replaces the original validator configuration with the generated next-epoch configuration after the epoch changes.
 
-The drill does not restart the validator process or update host firewall rules for the new ports.
+The drill does not restart the validator process or update host firewall rules for the new ports. Keep the command running while it waits for the epoch change, and use that time to prepare the firewall and restart plan.
 
 ## Prerequisites
 
@@ -34,6 +38,7 @@ Before running the drill, make sure you have:
 - Enough SUI in the validator account to pay for metadata update transaction fees.
 - Operational access to update firewall rules for the new TCP and UDP ports.
 - A plan to restart the validator node immediately after the epoch changes so it reloads the updated configuration.
+- A current, timestamped copy of the validator configuration stored outside the command output directory.
 
 ## Run the drill
 
@@ -48,24 +53,37 @@ Replace the example paths and `FULLNODE_RPC_URL` with values for your deployment
 
 The command writes two files next to the validator configuration:
 
-- `node_config_backup.yaml`: a backup of the original configuration.
-- `<validator-config>.next_epoch`: the generated configuration containing the new keys and addresses.
+- `node_config_backup.yaml`: a backup of the original configuration. This filename is fixed and can overwrite an older backup in the same directory. Copy it to a timestamped location if you need to keep historical backups.
+- `<validator-config>.next_epoch`: the generated configuration containing the new keys and ports.
 
 ## Manual follow-up
 
-After the command submits the metadata update transactions, prepare the host for the new addresses before the next epoch starts:
+After the command submits the metadata update transactions, it waits for the next epoch. While it is waiting, prepare the host for the staged next-epoch metadata:
 
-1. Review the command output to identify the new TCP and UDP ports.
-2. Update firewall rules, such as `iptables` rules, to allow the new ports.
-3. When the next epoch starts and the command replaces the validator configuration, restart the validator node so it loads the new configuration.
-4. Confirm that the validator is healthy and reachable after restart.
+1. Review the command output to identify the generated TCP and UDP ports.
+2. Update firewall rules, such as `iptables` rules, to allow the generated ports.
+3. Compare the generated local configuration with the validator's onchain next-epoch metadata.
+4. Keep the command running until it detects the next epoch and replaces the validator configuration.
+5. Restart the validator node so it loads the new configuration.
+6. Confirm that the validator is healthy, reachable, and participating after restart.
+
+## Verification
+
+Before considering the fire drill complete:
+
+- Check that the command completed without errors.
+- Confirm the active validator configuration matches the intended next-epoch keys and ports.
+- Check the validator's onchain metadata and verify that the expected next-epoch values became active after the epoch change.
+- Confirm peers can reach the validator on the generated network, P2P, primary, and worker ports.
+- Monitor validator health, logs, metrics, and participation after restart.
 
 ## Recovery
 
-If the drill does not complete or the validator fails to start with the generated configuration:
+If the drill does not complete or the validator fails to start with the generated configuration, first determine which metadata transactions succeeded and whether the epoch has already changed.
 
-- Use `node_config_backup.yaml` to restore the previous validator configuration.
-- Check whether any next-epoch metadata transactions already succeeded before retrying.
-- Verify that firewall rules and service configuration match the generated addresses and ports.
+If the onchain next-epoch metadata transactions succeeded but the process exited before replacing the local configuration, do not blindly restore `node_config_backup.yaml`. The old local configuration might no longer match the metadata that becomes active at the next epoch. Instead, compare onchain metadata with local files and deliberately choose one path:
+
+- Roll forward by applying `<validator-config>.next_epoch`, updating firewall rules, and restarting the validator.
+- Restore the previous configuration only if the onchain metadata and epoch state make that safe, or after submitting corrective metadata for a later epoch.
 
 Run the command again only after confirming the current onchain validator metadata and local configuration state.
