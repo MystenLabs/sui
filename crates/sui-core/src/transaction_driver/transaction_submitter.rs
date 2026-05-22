@@ -249,6 +249,10 @@ impl TransactionSubmitter {
                 ping_type: request.ping_type,
                 result: Err(()),
             });
+            // The request hung until the timeout fired. This can happen when the cached connection
+            // has silently gone dead (e.g. the validator restarted) and the transport never
+            // detected it. Drop the connection so the next attempt re-establishes a fresh one.
+            client.authority_client().reconnect();
             TransactionRequestError::TimedOutSubmittingTransaction
         })?
         .map_err(|error| {
