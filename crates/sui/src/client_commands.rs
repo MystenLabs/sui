@@ -2115,8 +2115,8 @@ pub(crate) fn check_for_unpublished_deps(
         ",
             package_dependencies
                 .unpublished
-                .into_iter()
-                .map(|n| n.to_string())
+                .values()
+                .map(|dep| dep.name.to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         );
@@ -3693,6 +3693,7 @@ pub(crate) async fn pkg_tree_shake(
             // println!("{}", pkgs_to_keep.contains(pkg_name));
             pkgs_to_keep.contains(pkg_name)
         })
+        .map(|(pkg_name, dep)| (pkg_name, dep.published_at))
         .collect();
 
     info!("Pkgs to keep {pkgs_to_keep:#?}");
