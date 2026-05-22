@@ -1,0 +1,8 @@
+[package]
+name = "duplicate_direct"
+edition = "2024"
+implicit-dependencies = false
+
+[dependencies]
+a0 = { local = "../A", rename-from = "a" }
+a1 = { local = "../A_ALT", rename-from = "a" }
