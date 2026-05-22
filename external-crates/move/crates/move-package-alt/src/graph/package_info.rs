@@ -121,6 +121,13 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
             .map(|publication| &publication.addresses)
     }
 
+    /// The version this package is published at, if it is published.
+    pub fn version(&self) -> Option<u64> {
+        self.package()
+            .publication()
+            .map(|publication| publication.version)
+    }
+
     /// Returns true if the node is the root of the package graph
     pub fn is_root(&self) -> bool {
         self.graph
