@@ -58,7 +58,7 @@ Sui addresses do not need onchain initialization. You can spend from an address 
 
 For the key-pair schemes Pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1, and Passkey, a Sui address is a 32-byte value derived as [BLAKE2b](https://www.blake2.net/)-256 of the 1-byte signature scheme flag concatenated with the public key bytes (`flag || pubkey`).
 
-Multisig and zkLogin use scheme-specific derivations and do not follow the simple `flag || pubkey` rule:
+Multisig and zkLogin use scheme-specific derivations and do not follow the basic `flag || pubkey` rule:
 
 - **Multisig:** `BLAKE2b-256(flag_MultiSig || threshold || flag_1 || pk_1 || weight_1 || ... || flag_n || pk_n || weight_n)`, where `threshold` and each `weight_i` are encoded as little-endian bytes.
 
@@ -161,7 +161,7 @@ The network fixes the total voting power across all validators at 10,000, simila
 
 The current entry functions in the [`sui_system` Move module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move) for staking are listed below. These signatures are the source of truth, because they change with system package upgrades, so verify against the linked Move source before you ship.
 
-- `request_add_stake`: Add stake to a validator's staking pool. The resulting `StakedSui` object is transferred to the sender.
+- `request_add_stake`: Add stake to a validator's staking pool. The function transfers the resulting `StakedSui` object to the sender.
 
     ```move
     public entry fun request_add_stake(
@@ -184,7 +184,7 @@ The current entry functions in the [`sui_system` Move module](https://github.com
     )
     ```
 
-- `request_withdraw_stake`: Withdraw stake from a validator's staking pool. The unstaked SUI coin is transferred to the sender.
+- `request_withdraw_stake`: Withdraw stake from a validator's staking pool. The function transfers the unstaked SUI coin to the sender.
 
     ```move
     public entry fun request_withdraw_stake(
