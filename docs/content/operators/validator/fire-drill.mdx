@@ -1,0 +1,71 @@
+---
+title: Validator Fire Drill
+description: Use the Sui fire-drill command to rehearse validator metadata rotation.
+keywords: [ validator, fire drill, sui fire-drill, metadata rotation, key rotation, address rotation ]
+sidebar_label: Fire Drill
+---
+
+The `sui fire-drill` command helps validator operators rehearse operational procedures. Currently, it supports the `metadata-rotation` drill, which stages new validator keys and network addresses for the next epoch.
+
+Use this command only for validator operations planning or controlled fire drills. It submits onchain transactions that update the validator's next-epoch metadata and writes a replacement validator configuration file.
+
+## What the metadata rotation drill does
+
+`sui fire-drill metadata-rotation` performs the following actions:
+
+1. Reads the validator node configuration file and validator account key.
+2. Creates a backup configuration file named `node_config_backup.yaml` in the same directory as the validator configuration.
+3. Generates new protocol, network, and worker keys.
+4. Selects new local ports and updates the validator network, P2P, primary, and worker addresses.
+5. Writes the generated next-epoch configuration to `<validator-config>.next_epoch`.
+6. Submits onchain transactions to set the validator's next-epoch keys and addresses.
+7. Waits for the next epoch.
+8. Replaces the original validator configuration with the generated next-epoch configuration.
+
+The drill does not restart the validator process or update host firewall rules for the new ports.
+
+## Prerequisites
+
+Before running the drill, make sure you have:
+
+- An active validator node configuration file, such as `validator.yaml`.
+- The validator account key file.
+- A reliable full node RPC URL for the target network.
+- Enough SUI in the validator account to pay for metadata update transaction fees.
+- Operational access to update firewall rules for the new TCP and UDP ports.
+- A plan to restart the validator node immediately after the epoch changes so it reloads the updated configuration.
+
+## Run the drill
+
+```sh
+$ sui fire-drill metadata-rotation \
+  --sui-node-config-path /path/to/validator.yaml \
+  --account-key-path /path/to/account.key \
+  --fullnode-rpc-url FULLNODE_RPC_URL
+```
+
+Replace the example paths and `FULLNODE_RPC_URL` with values for your deployment.
+
+The command writes two files next to the validator configuration:
+
+- `node_config_backup.yaml`: a backup of the original configuration.
+- `<validator-config>.next_epoch`: the generated configuration containing the new keys and addresses.
+
+## Manual follow-up
+
+After the command submits the metadata update transactions, prepare the host for the new addresses before the next epoch starts:
+
+1. Review the command output to identify the new TCP and UDP ports.
+2. Update firewall rules, such as `iptables` rules, to allow the new ports.
+3. When the next epoch starts and the command replaces the validator configuration, restart the validator node so it loads the new configuration.
+4. Confirm that the validator is healthy and reachable after restart.
+
+## Recovery
+
+If the drill does not complete or the validator fails to start with the generated configuration:
+
+- Use `node_config_backup.yaml` to restore the previous validator configuration.
+- Check whether any next-epoch metadata transactions already succeeded before retrying.
+- Verify that firewall rules and service configuration match the generated addresses and ports.
+
+Run the command again only after confirming the current onchain validator metadata and local configuration state.

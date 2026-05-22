@@ -662,6 +662,7 @@ suiStackSidebar: [
       'operators/validator/validator-config',
       'operators/validator/validator-tasks',
       'operators/validator/node-tools',
+      'operators/validator/fire-drill',
       'operators/validator/validator-rewards',
       'operators/validator/alerts',
 		],
