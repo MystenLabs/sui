@@ -153,7 +153,7 @@ async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object)
         .await;
 }
 
-#[test]
+#[tokio::test]
 fn test_advance_clock_executes_and_persists() {
     let (mut sim, _config, _temp) = test_simulacrum();
     let initial_ts = sim.store().get_clock().timestamp_ms;
@@ -182,7 +182,7 @@ fn test_advance_clock_executes_and_persists() {
     assert_eq!(persisted_effects.unwrap(), effects);
 }
 
-#[test]
+#[tokio::test]
 fn test_transfer_sui_executes_and_persists() {
     let (mut sim, config, _temp) = test_simulacrum();
 
@@ -273,7 +273,7 @@ fn test_transfer_sui_executes_and_persists() {
     assert_eq!(updated_gas.value(), expected);
 }
 
-#[test]
+#[tokio::test]
 fn test_owned_objects_tracks_address_owner_transfers() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -300,7 +300,7 @@ fn test_owned_objects_tracks_address_owner_transfers() {
     assert_eq!(recipient_objects[0].version(), SequenceNumber::from_u64(2));
 }
 
-#[test]
+#[tokio::test]
 fn test_owned_objects_tracks_consensus_address_owner_writes() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -336,7 +336,7 @@ fn test_owned_objects_tracks_consensus_address_owner_writes() {
     );
 }
 
-#[test]
+#[tokio::test]
 fn test_owned_objects_removes_non_address_owned_transitions() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -351,7 +351,7 @@ fn test_owned_objects_removes_non_address_owned_transitions() {
     assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 0);
 }
 
-#[test]
+#[tokio::test]
 fn test_owned_object_info_uses_index_metadata_until_deleted() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -499,7 +499,7 @@ async fn test_local_execution_before_owned_query_preserves_other_seeded_entries(
     assert_eq!(recipient_infos[0].version, SequenceNumber::from_u64(2));
 }
 
-#[test]
+#[tokio::test]
 fn test_missing_owned_index_after_local_checkpoint_advancement_fails_closed() {
     let (_temp, store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -534,7 +534,7 @@ fn test_missing_owned_index_after_local_checkpoint_advancement_fails_closed() {
     );
 }
 
-#[test]
+#[tokio::test]
 fn test_local_deletion_removes_current_object_but_preserves_historical_lookup() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -575,7 +575,7 @@ fn test_local_deletion_removes_current_object_but_preserves_historical_lookup() 
     );
 }
 
-#[test]
+#[tokio::test]
 fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -617,7 +617,7 @@ fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
     );
 }
 
-#[test]
+#[tokio::test]
 fn test_unwrapped_write_clears_wrapped_latest_and_reindexes_owner() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -657,7 +657,7 @@ fn test_unwrapped_write_clears_wrapped_latest_and_reindexes_owner() {
     assert_eq!(recipient_objects[0].id(), object_id);
 }
 
-#[test]
+#[tokio::test]
 fn test_terminal_deleted_latest_prevents_reindexing_written_object() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -684,7 +684,7 @@ fn test_terminal_deleted_latest_prevents_reindexing_written_object() {
     );
 }
 
-#[test]
+#[tokio::test]
 fn test_removed_objects_from_effects_preserves_removal_kind() {
     let owner = SuiAddress::random_for_testing_only();
     let deleted_id = ObjectID::random();
@@ -750,7 +750,7 @@ fn test_removed_objects_from_effects_preserves_removal_kind() {
     );
 }
 
-#[test]
+#[tokio::test]
 fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -797,7 +797,7 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
     assert_eq!(page_from_cursor[0].object_id, infos[1].object_id);
 }
 
-#[test]
+#[tokio::test]
 fn test_cloned_store_shares_owned_object_snapshot_guard() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();

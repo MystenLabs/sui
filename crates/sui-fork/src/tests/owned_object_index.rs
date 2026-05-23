@@ -66,7 +66,7 @@ fn custom_coin_type() -> TypeTag {
     ))
 }
 
-#[test]
+#[tokio::test]
 fn test_owned_object_index_updates_transfers_and_deletes() {
     let (_dir, store) = test_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -124,7 +124,7 @@ fn test_owned_object_index_updates_transfers_and_deletes() {
     assert_info_matches_object(&infos[0], &transferred);
 }
 
-#[test]
+#[tokio::test]
 fn test_owned_object_index_orders_coin_balances_descending() {
     let (_dir, store) = test_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -149,7 +149,7 @@ fn test_owned_object_index_orders_coin_balances_descending() {
     );
 }
 
-#[test]
+#[tokio::test]
 fn test_owned_object_index_filters_exact_and_wildcard_types() {
     let (_dir, store) = test_store();
     let owner = SuiAddress::random_for_testing_only();
@@ -201,7 +201,7 @@ fn test_owned_object_index_filters_exact_and_wildcard_types() {
     );
 }
 
-#[test]
+#[tokio::test]
 fn test_replace_from_objects_clears_previous_rows_and_marks_empty() {
     let (_dir, store) = test_store();
     let owner = SuiAddress::random_for_testing_only();
