@@ -67,7 +67,7 @@ fn custom_coin_type() -> TypeTag {
 }
 
 #[tokio::test]
-fn test_owned_object_index_updates_transfers_and_deletes() {
+async fn test_owned_object_index_updates_transfers_and_deletes() {
     let (_dir, store) = test_store();
     let owner = SuiAddress::random_for_testing_only();
     let next_owner = SuiAddress::random_for_testing_only();
@@ -125,7 +125,7 @@ fn test_owned_object_index_updates_transfers_and_deletes() {
 }
 
 #[tokio::test]
-fn test_owned_object_index_orders_coin_balances_descending() {
+async fn test_owned_object_index_orders_coin_balances_descending() {
     let (_dir, store) = test_store();
     let owner = SuiAddress::random_for_testing_only();
     let low_id = ObjectID::random();
@@ -150,7 +150,7 @@ fn test_owned_object_index_orders_coin_balances_descending() {
 }
 
 #[tokio::test]
-fn test_owned_object_index_filters_exact_and_wildcard_types() {
+async fn test_owned_object_index_filters_exact_and_wildcard_types() {
     let (_dir, store) = test_store();
     let owner = SuiAddress::random_for_testing_only();
     let gas_id = ObjectID::random();
@@ -202,7 +202,7 @@ fn test_owned_object_index_filters_exact_and_wildcard_types() {
 }
 
 #[tokio::test]
-fn test_replace_from_objects_clears_previous_rows_and_marks_empty() {
+async fn test_replace_from_objects_clears_previous_rows_and_marks_empty() {
     let (_dir, store) = test_store();
     let owner = SuiAddress::random_for_testing_only();
     let object = make_gas_object(ObjectID::random(), 1, Owner::AddressOwner(owner), 1);

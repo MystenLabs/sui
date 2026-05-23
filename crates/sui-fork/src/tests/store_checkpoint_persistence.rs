@@ -29,7 +29,7 @@ fn build_checkpoint(sequence: u64) -> (VerifiedCheckpoint, CheckpointContents) {
 }
 
 #[tokio::test]
-fn insert_checkpoint_pair_persists_both_to_disk() {
+async fn insert_checkpoint_pair_persists_both_to_disk() {
     let temp = tempfile::tempdir().expect("tempdir");
     let mut store = DataStore::new_for_testing(temp.path().to_path_buf());
     let (checkpoint, contents) = build_checkpoint(42);
@@ -48,7 +48,7 @@ fn insert_checkpoint_pair_persists_both_to_disk() {
 }
 
 #[tokio::test]
-fn post_fork_sequence_miss_returns_none_without_remote() {
+async fn post_fork_sequence_miss_returns_none_without_remote() {
     let temp = tempfile::tempdir().expect("tempdir");
     let store = DataStore::new_for_testing(temp.path().to_path_buf());
     // `new_for_testing` pins `forked_at_checkpoint = 0`, so any positive
@@ -60,7 +60,7 @@ fn post_fork_sequence_miss_returns_none_without_remote() {
 }
 
 #[tokio::test]
-fn insert_checkpoint_and_contents_are_independent() {
+async fn insert_checkpoint_and_contents_are_independent() {
     let temp = tempfile::tempdir().expect("tempdir");
     let mut store = DataStore::new_for_testing(temp.path().to_path_buf());
     let (checkpoint, contents) = build_checkpoint(5);

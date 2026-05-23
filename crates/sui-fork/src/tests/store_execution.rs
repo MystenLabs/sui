@@ -154,7 +154,7 @@ async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object)
 }
 
 #[tokio::test]
-fn test_advance_clock_executes_and_persists() {
+async fn test_advance_clock_executes_and_persists() {
     let (mut sim, _config, _temp) = test_simulacrum();
     let initial_ts = sim.store().get_clock().timestamp_ms;
 
@@ -183,7 +183,7 @@ fn test_advance_clock_executes_and_persists() {
 }
 
 #[tokio::test]
-fn test_transfer_sui_executes_and_persists() {
+async fn test_transfer_sui_executes_and_persists() {
     let (mut sim, config, _temp) = test_simulacrum();
 
     // Pick a sender from the genesis keystore and a gas coin owned by the sender.
@@ -274,7 +274,7 @@ fn test_transfer_sui_executes_and_persists() {
 }
 
 #[tokio::test]
-fn test_owned_objects_tracks_address_owner_transfers() {
+async fn test_owned_objects_tracks_address_owner_transfers() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let recipient = SuiAddress::random_for_testing_only();
@@ -301,7 +301,7 @@ fn test_owned_objects_tracks_address_owner_transfers() {
 }
 
 #[tokio::test]
-fn test_owned_objects_tracks_consensus_address_owner_writes() {
+async fn test_owned_objects_tracks_consensus_address_owner_writes() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
@@ -337,7 +337,7 @@ fn test_owned_objects_tracks_consensus_address_owner_writes() {
 }
 
 #[tokio::test]
-fn test_owned_objects_removes_non_address_owned_transitions() {
+async fn test_owned_objects_removes_non_address_owned_transitions() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
@@ -352,7 +352,7 @@ fn test_owned_objects_removes_non_address_owned_transitions() {
 }
 
 #[tokio::test]
-fn test_owned_object_info_uses_index_metadata_until_deleted() {
+async fn test_owned_object_info_uses_index_metadata_until_deleted() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
@@ -500,7 +500,7 @@ async fn test_local_execution_before_owned_query_preserves_other_seeded_entries(
 }
 
 #[tokio::test]
-fn test_missing_owned_index_after_local_checkpoint_advancement_fails_closed() {
+async fn test_missing_owned_index_after_local_checkpoint_advancement_fails_closed() {
     let (_temp, store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object = make_gas_object(ObjectID::random(), 1, Owner::AddressOwner(owner));
@@ -535,7 +535,7 @@ fn test_missing_owned_index_after_local_checkpoint_advancement_fails_closed() {
 }
 
 #[tokio::test]
-fn test_local_deletion_removes_current_object_but_preserves_historical_lookup() {
+async fn test_local_deletion_removes_current_object_but_preserves_historical_lookup() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
@@ -576,7 +576,7 @@ fn test_local_deletion_removes_current_object_but_preserves_historical_lookup() 
 }
 
 #[tokio::test]
-fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
+async fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
@@ -618,7 +618,7 @@ fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
 }
 
 #[tokio::test]
-fn test_unwrapped_write_clears_wrapped_latest_and_reindexes_owner() {
+async fn test_unwrapped_write_clears_wrapped_latest_and_reindexes_owner() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let recipient = SuiAddress::random_for_testing_only();
@@ -658,7 +658,7 @@ fn test_unwrapped_write_clears_wrapped_latest_and_reindexes_owner() {
 }
 
 #[tokio::test]
-fn test_terminal_deleted_latest_prevents_reindexing_written_object() {
+async fn test_terminal_deleted_latest_prevents_reindexing_written_object() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
@@ -685,7 +685,7 @@ fn test_terminal_deleted_latest_prevents_reindexing_written_object() {
 }
 
 #[tokio::test]
-fn test_removed_objects_from_effects_preserves_removal_kind() {
+async fn test_removed_objects_from_effects_preserves_removal_kind() {
     let owner = SuiAddress::random_for_testing_only();
     let deleted_id = ObjectID::random();
     let deleted_ref = (
@@ -751,7 +751,7 @@ fn test_removed_objects_from_effects_preserves_removal_kind() {
 }
 
 #[tokio::test]
-fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
+async fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let other_owner = SuiAddress::random_for_testing_only();
@@ -798,7 +798,7 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
 }
 
 #[tokio::test]
-fn test_cloned_store_shares_owned_object_snapshot_guard() {
+async fn test_cloned_store_shares_owned_object_snapshot_guard() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
