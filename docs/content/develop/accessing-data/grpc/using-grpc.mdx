@@ -4,12 +4,18 @@ description: Learn how to use gRPC clients for the Sui network with grpcurl, Buf
 keywords: [ grpc, grpc client, grpcurl, typescript grpc, golang grpc, python grpc, sui grpc tutorial ]
 ---
 
-This guide provides practical examples for querying the Sui network using gRPC. For core concepts, see the [corresponding concepts page](/develop/accessing-data/grpc/what-is-grpc).
+This guide covers low-level gRPC concepts and shows how to build clients using `grpcurl`, Buf CLI, and language-specific proto tooling. For core concepts, see the [corresponding concepts page](/develop/accessing-data/grpc/what-is-grpc).
+
+:::tip TypeScript developers
+
+If you are using TypeScript, the `@mysten/sui` SDK provides `SuiGrpcClient` — a high-level, type-safe client that wraps the gRPC API. See [TypeScript SDK Examples](/develop/accessing-data/grpc/grpc-examples) for practical examples with real request and response shapes. The raw gRPC examples below are for languages without an SDK or for advanced use cases.
+
+:::
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
 
-Before you begin, ensure you have access to a [gRPC](/develop/accessing-data/grpc)-enabled Sui full node. Check the [list of RPC and data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) that support gRPC on their full nodes, and contact a provider directly to request access.
+Before you begin, ensure you have access to a [gRPC](/develop/accessing-data/grpc)-enabled Sui full node. Sui Foundation operates public full nodes for each network (for example, `fullnode.mainnet.sui.io`, `fullnode.testnet.sui.io`). You can also contact an RPC provider directly to request access — check the [Sui Discord](https://discord.gg/sui) for an up-to-date list of providers that support gRPC.
 
 If your provider doesn't yet support gRPC, you can:
 
@@ -245,7 +251,7 @@ client.GetTransaction(request, (err: any, response: any) => {
 #### Step 3: Run the sample client
 
 ```shell
-npx tsx c
+npx tsx client.ts
 ```
 
 - `proto-loader` handles any nested `.proto` files. Just make sure paths and imports are correct.
