@@ -140,6 +140,7 @@ fn head_ref(exp: &Exp) -> Option<&Exp> {
         Exp::IfElse(cond, _, _) => Some(cond),
         Exp::Switch(subj, _, _) => Some(subj),
         Exp::Match(subj, _, _) => Some(subj),
+        Exp::MatchLit(subj, _) => Some(subj),
         // No safe head to substitute through:
         //   - Loop/While bodies execute repeatedly; substituting in would change frequency.
         //   - Seq has multiple items; the head idea doesn't compose cleanly here (a `Seq`
@@ -174,6 +175,7 @@ fn head_mut(exp: &mut Exp) -> Option<&mut Exp> {
         Exp::IfElse(cond, _, _) => Some(cond),
         Exp::Switch(subj, _, _) => Some(subj),
         Exp::Match(subj, _, _) => Some(subj),
+        Exp::MatchLit(subj, _) => Some(subj),
         Exp::Loop(_, _)
         | Exp::While(_, _, _)
         | Exp::Seq(_)

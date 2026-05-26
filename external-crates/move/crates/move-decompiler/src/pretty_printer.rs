@@ -762,6 +762,19 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                     .concat_space(D::parens(recur(context, subject)))
                     .concat_space(braces_block(arms_doc))
             }
+            Exp::MatchLit(scrutinee, arms) => {
+                let arms_doc = Doc::intersperse(
+                    arms.iter().map(|(lit, body)| {
+                        D::text(lit.to_string())
+                            .concat_space(D::text("=>"))
+                            .concat_space(e_block(context, body))
+                    }),
+                    D::text(",").concat(D::line()),
+                );
+                D::text("match")
+                    .concat_space(D::parens(recur(context, scrutinee)))
+                    .concat_space(braces_block(arms_doc))
+            }
             Exp::Primitive { op, args } => primitive_op_doc(context, op, args),
             Exp::Data { op, args } => data_op_doc(context, op, args),
             Exp::Unpack(struct_ty, items, exp) => {
