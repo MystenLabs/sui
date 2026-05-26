@@ -726,13 +726,18 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
     let l8 = big_vector::borrow_slice_mut(&mut l0.staking_infos, l9);
     let l10 = big_vector::get_slice_length(freeze(l8));
     let l4 = 0u64;
+    let loop_27_sel;
     let (l12, l5, l7);
     loop {
-        assert!(l4 < l6, C12);
+        if (l4 >= l6) {
+            loop_27_sel = 1u32;
+            break
+        };
         l12 = big_vector::borrow_from_slice_mut(l8, l4 % l11);
         if (*(&l12.user) == l2) {
             l5 = 0u64;
             l7 = &l12.tails.len();
+            loop_27_sel = 0u32;
             break
         };
         if (l4 + 1u64 < l6 && l4 + 1u64 == l9 * l11 + l10) {
@@ -742,15 +747,23 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
         };
         l4 = l4 + 1u64;
     };
-    while (l5 < l7) {
-        if (*(&l14[*(&(&l12.tails)[l5]) - 1u64]) == l1) {
-            let l13 = object_table::remove(&mut l0.tails, l1);
-            if (vector::is_empty(&l12.tails)) {
-                
+    match (loop_27_sel) {
+        0 => {
+            while (l5 < l7) {
+                if (*(&l14[*(&(&l12.tails)[l5]) - 1u64]) == l1) {
+                    let l13 = object_table::remove(&mut l0.tails, l1);
+                    if (vector::is_empty(&l12.tails)) {
+                        
+                    };
+                    return l13
+                };
+                l5 = l5 + 1u64;
             };
-            return l13
-        };
-        l5 = l5 + 1u64;
+            abort C12
+        },
+        1 => {
+            abort C12
+        }
     }
 }
 

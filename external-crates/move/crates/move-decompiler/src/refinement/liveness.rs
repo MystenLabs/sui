@@ -117,6 +117,12 @@ impl NameCounts {
                     self.visit(body);
                 }
             }
+            E::MatchLit(subject, arms) => {
+                self.visit(subject);
+                for (_, body) in arms {
+                    self.visit(body);
+                }
+            }
             E::Switch(subject, _, arms) => {
                 self.visit(subject);
                 for (_, body) in arms {
@@ -276,6 +282,10 @@ fn any_use_kept_live(exp: &Exp, name: &str, l: &Liveness) -> bool {
             any_use_kept_live(s, name, l)
                 || arms.iter().any(|(_, _, b)| any_use_kept_live(b, name, l))
         }
+        E::MatchLit(s, arms) => {
+            any_use_kept_live(s, name, l)
+                || arms.iter().any(|(_, b)| any_use_kept_live(b, name, l))
+        }
         E::Primitive { args, .. } | E::Data { args, .. } => {
             args.iter().any(|a| any_use_kept_live(a, name, l))
         }
@@ -374,6 +384,13 @@ impl Builder {
                     let lb = self.compute(body, live_out);
                     let after = subtract_fields(&lb, fields);
                     merged.extend(after);
+                }
+                self.compute(subject, &merged)
+            }
+            E::MatchLit(subject, arms) => {
+                let mut merged = BTreeSet::new();
+                for (_, body) in arms {
+                    merged.extend(self.compute(body, live_out));
                 }
                 self.compute(subject, &merged)
             }
@@ -557,6 +574,12 @@ fn collect_referenced_names(exp: &Exp, out: &mut BTreeSet<String>) {
                 collect_referenced_names(body, out);
             }
         }
+        Exp::MatchLit(cond, arms) => {
+            collect_referenced_names(cond, out);
+            for (_, body) in arms {
+                collect_referenced_names(body, out);
+            }
+        }
         Exp::Loop(_, body) => collect_referenced_names(body, out),
         Exp::While(_, cond, body) => {
             collect_referenced_names(cond, out);
@@ -652,6 +675,12 @@ fn collect_local_names_exp(exp: &Exp, out: &mut BTreeSet<Symbol>) {
                 for (_, n) in fields {
                     out.insert(Symbol::from(n.as_str()));
                 }
+                collect_local_names_exp(body, out);
+            }
+        }
+        Exp::MatchLit(c, arms) => {
+            collect_local_names_exp(c, out);
+            for (_, body) in arms {
                 collect_local_names_exp(body, out);
             }
         }
