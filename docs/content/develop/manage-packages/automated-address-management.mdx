@@ -1,8 +1,15 @@
 ---
-title: Automated Address Management
-description: Packages published across Mainnet, Testnet, and Devnet each have different addresses. Automated address management tracks these addresses for you.
+title: Automated Address Management (Legacy, pre-v1.63)
+sidebar_label: Address Management (Legacy)
+description: "Legacy documentation for the pre-v1.63 Move.lock-based address tracking system. For the current package system, see Move Package Management."
 keywords: [ track address, track package address, package addresses, managing package addresses, managing addresses, tracking addresses, tracking packages, tracking mainnet address, track mainnet address, track testnet address, tracking testnet address, track devnet address, tracking devnet address, conflicting addresses, conflicting package addresses ]
 ---
+
+:::warning Legacy documentation
+
+This page describes the **pre-v1.63** address management system that used `Move.lock` and `published-at` fields in `Move.toml`. See [Move Package Management](/develop/manage-packages/move-package-management) for the current system, and [the migration guide](/references/package-managers/package-manager-migration) for how to migrate.
+
+:::
 
 When you publish or upgrade a package, its address is tracked in the `Move.lock` file. A package's address is its package ID. This happens automatically, so you do not need to manually record or update hexadecimal addresses.
 
