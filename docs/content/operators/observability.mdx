@@ -3,6 +3,10 @@ title: Logging, Tracing, Metrics, and Observability
 sidebar_label: Observability
 ---
 
+<AgentPrompt
+  prompt={"Add structured logging for transaction digest, sender, package/function, status, gas, and user-visible errors so support can debug failed Sui transactions."}
+/>
+
 Good observability capabilities are key to the development and growth of Sui. The distributed and asynchronous nature of Sui, with multiple client and validator processes distributed over a potentially global network, makes this more challenging.
 
 The observability stack in Sui builds on the [Tokio tracing](https://tokio.rs/blog/2019-08-tracing) library. The rest of this topic highlights specific aspects of achieving good observability through structured logging and metrics in Sui.

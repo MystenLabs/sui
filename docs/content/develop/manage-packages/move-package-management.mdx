@@ -4,6 +4,10 @@ description: Learn how to use the Move package manager system.
 keywords: [ move, move reference, package management, package manager, move packages, move package management ]
 ---
 
+<AgentPrompt
+  prompt={"Inspect this Move package's Move.toml, Move.lock, and dependencies. Fix dependency declarations, prefer MVR where appropriate, and verify sui move build works."}
+/>
+
 A Move package is a collection of Move modules that you publish together as a single object on the Sui blockchain. Packages can depend on other packages and can be upgraded over time while maintaining their onchain identity. The Move package manager helps you manage dependencies and publish packages to the network.
 
 :::info
