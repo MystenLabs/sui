@@ -50,14 +50,14 @@ Response: {
   "data": {
     "package_P1": {
       "pageInfo": {
-        "startCursor": "CAIQARgAIAM=",
-        "endCursor": "CAIQARgAIAY=",
+        "startCursor": "AAMAAAAAAAAA",
+        "endCursor": "AAYAAAAAAAAA",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "CAIQARgAIAM=",
+          "cursor": "AAMAAAAAAAAA",
           "node": {
             "digest": "9wVRECEuu5WhSAzJwtDk486guCbiaUAwnxnAbHginR1q",
             "effects": {
@@ -69,7 +69,7 @@ Response: {
           }
         },
         {
-          "cursor": "CAIQARgAIAQ=",
+          "cursor": "AAQAAAAAAAAA",
           "node": {
             "digest": "3WZvjvWrR5F511dy51Pvb5YsGtHURTLfhtSMkrnXf9PV",
             "effects": {
@@ -81,7 +81,7 @@ Response: {
           }
         },
         {
-          "cursor": "CAIQARgAIAU=",
+          "cursor": "AAUAAAAAAAAA",
           "node": {
             "digest": "5ma3thPxDhon8m27ckiNTrjiDCgBsxyJsNXBHVLrC6LF",
             "effects": {
@@ -93,7 +93,7 @@ Response: {
           }
         },
         {
-          "cursor": "CAIQARgAIAY=",
+          "cursor": "AAYAAAAAAAAA",
           "node": {
             "digest": "AuJvwdgpBvZbeC5vJK1aeDeZjTFgSHZM91441apw5iWy",
             "effects": {
@@ -108,14 +108,14 @@ Response: {
     },
     "package_module_P1M1": {
       "pageInfo": {
-        "startCursor": "CAIQARgAIAM=",
-        "endCursor": "CAIQARgAIAY=",
+        "startCursor": "AAMAAAAAAAAA",
+        "endCursor": "AAYAAAAAAAAA",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "CAIQARgAIAM=",
+          "cursor": "AAMAAAAAAAAA",
           "node": {
             "digest": "9wVRECEuu5WhSAzJwtDk486guCbiaUAwnxnAbHginR1q",
             "effects": {
@@ -127,7 +127,7 @@ Response: {
           }
         },
         {
-          "cursor": "CAIQARgAIAQ=",
+          "cursor": "AAQAAAAAAAAA",
           "node": {
             "digest": "3WZvjvWrR5F511dy51Pvb5YsGtHURTLfhtSMkrnXf9PV",
             "effects": {
@@ -139,7 +139,7 @@ Response: {
           }
         },
         {
-          "cursor": "CAIQARgAIAY=",
+          "cursor": "AAYAAAAAAAAA",
           "node": {
             "digest": "AuJvwdgpBvZbeC5vJK1aeDeZjTFgSHZM91441apw5iWy",
             "effects": {
@@ -154,14 +154,14 @@ Response: {
     },
     "package_module_member_P1M1f2": {
       "pageInfo": {
-        "startCursor": "CAIQARgAIAQ=",
-        "endCursor": "CAIQARgAIAQ=",
+        "startCursor": "AAQAAAAAAAAA",
+        "endCursor": "AAQAAAAAAAAA",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "CAIQARgAIAQ=",
+          "cursor": "AAQAAAAAAAAA",
           "node": {
             "digest": "3WZvjvWrR5F511dy51Pvb5YsGtHURTLfhtSMkrnXf9PV",
             "effects": {
@@ -176,14 +176,14 @@ Response: {
     },
     "package_P1_sentAddress_B": {
       "pageInfo": {
-        "startCursor": "CAIQARgAIAY=",
-        "endCursor": "CAIQARgAIAY=",
+        "startCursor": "AAYAAAAAAAAA",
+        "endCursor": "AAYAAAAAAAAA",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "CAIQARgAIAY=",
+          "cursor": "AAYAAAAAAAAA",
           "node": {
             "digest": "AuJvwdgpBvZbeC5vJK1aeDeZjTFgSHZM91441apw5iWy",
             "effects": {

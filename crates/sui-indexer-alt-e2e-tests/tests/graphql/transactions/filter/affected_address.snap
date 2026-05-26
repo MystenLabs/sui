@@ -72,14 +72,14 @@ Response: {
   "data": {
     "transactionsA": {
       "pageInfo": {
-        "startCursor": "CAIQARgAIAA=",
-        "endCursor": "CAIQARgAIAo=",
+        "startCursor": "AAAAAAAAAAAA",
+        "endCursor": "AAoAAAAAAAAA",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "CAIQARgAIAA=",
+          "cursor": "AAAAAAAAAAAA",
           "node": {
             "digest": "G7nq5tVG2CuHG9wmeq7JHDCN7q43PLBfC6W2D6eHffjT",
             "effects": {
@@ -91,7 +91,7 @@ Response: {
           }
         },
         {
-          "cursor": "CAIQARgAIAI=",
+          "cursor": "AAIAAAAAAAAA",
           "node": {
             "digest": "74XecJe2t2baP9fJgfxrBuc7YpX1Nrc7S38wwoYTxdLL",
             "effects": {
@@ -103,7 +103,7 @@ Response: {
           }
         },
         {
-          "cursor": "CAIQARgAIAU=",
+          "cursor": "AAUAAAAAAAAA",
           "node": {
             "digest": "eWoMLEnM56LdkHTKN2wovLADEPDwdWgs64FNFrZjwTB",
             "effects": {
@@ -115,7 +115,7 @@ Response: {
           }
         },
         {
-          "cursor": "CAIQARgAIAg=",
+          "cursor": "AAgAAAAAAAAA",
           "node": {
             "digest": "6YXfMwrxN7ywdKKmApgZKQ4CyYHGEcyrvyL1ucoNU5Fr",
             "effects": {
@@ -127,7 +127,7 @@ Response: {
           }
         },
         {
-          "cursor": "CAIQARgAIAo=",
+          "cursor": "AAoAAAAAAAAA",
           "node": {
             "digest": "2TjbhBBC1GK3DoaGdvw22dwD6z1cyMpwHuPzNMHSw6E4",
             "effects": {
@@ -142,14 +142,14 @@ Response: {
     },
     "transactionsA_sentByC": {
       "pageInfo": {
-        "startCursor": "CAIQARgAIAg=",
-        "endCursor": "CAIQARgAIAg=",
+        "startCursor": "AAgAAAAAAAAA",
+        "endCursor": "AAgAAAAAAAAA",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "CAIQARgAIAg=",
+          "cursor": "AAgAAAAAAAAA",
           "node": {
             "digest": "6YXfMwrxN7ywdKKmApgZKQ4CyYHGEcyrvyL1ucoNU5Fr",
             "effects": {
@@ -164,14 +164,14 @@ Response: {
     },
     "transactionsB": {
       "pageInfo": {
-        "startCursor": "CAIQARgAIAA=",
-        "endCursor": "CAIQARgAIAo=",
+        "startCursor": "AAAAAAAAAAAA",
+        "endCursor": "AAoAAAAAAAAA",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "CAIQARgAIAA=",
+          "cursor": "AAAAAAAAAAAA",
           "node": {
             "digest": "G7nq5tVG2CuHG9wmeq7JHDCN7q43PLBfC6W2D6eHffjT",
             "effects": {
@@ -183,7 +183,7 @@ Response: {
           }
         },
         {
-          "cursor": "CAIQARgAIAU=",
+          "cursor": "AAUAAAAAAAAA",
           "node": {
             "digest": "eWoMLEnM56LdkHTKN2wovLADEPDwdWgs64FNFrZjwTB",
             "effects": {
@@ -195,7 +195,7 @@ Response: {
           }
         },
         {
-          "cursor": "CAIQARgAIAo=",
+          "cursor": "AAoAAAAAAAAA",
           "node": {
             "digest": "2TjbhBBC1GK3DoaGdvw22dwD6z1cyMpwHuPzNMHSw6E4",
             "effects": {
@@ -210,14 +210,14 @@ Response: {
     },
     "transactionsC": {
       "pageInfo": {
-        "startCursor": "CAIQARgAIAA=",
-        "endCursor": "CAIQARgAIAo=",
+        "startCursor": "AAAAAAAAAAAA",
+        "endCursor": "AAoAAAAAAAAA",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "CAIQARgAIAA=",
+          "cursor": "AAAAAAAAAAAA",
           "node": {
             "digest": "G7nq5tVG2CuHG9wmeq7JHDCN7q43PLBfC6W2D6eHffjT",
             "effects": {
@@ -229,7 +229,7 @@ Response: {
           }
         },
         {
-          "cursor": "CAIQARgAIAg=",
+          "cursor": "AAgAAAAAAAAA",
           "node": {
             "digest": "6YXfMwrxN7ywdKKmApgZKQ4CyYHGEcyrvyL1ucoNU5Fr",
             "effects": {
@@ -241,7 +241,7 @@ Response: {
           }
         },
         {
-          "cursor": "CAIQARgAIAo=",
+          "cursor": "AAoAAAAAAAAA",
           "node": {
             "digest": "2TjbhBBC1GK3DoaGdvw22dwD6z1cyMpwHuPzNMHSw6E4",
             "effects": {
