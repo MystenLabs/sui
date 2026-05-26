@@ -30,7 +30,7 @@ use sui_types::transaction::{
 };
 
 use crate::errors::Error;
-use crate::types::ConstructionMetadata;
+use crate::types::{AuxData, ConstructionMetadata};
 pub use consolidate_to_fungible::ConsolidateAllStakedSuiToFungible;
 pub(crate) use consolidate_to_fungible::consolidate_to_fungible_pt;
 pub use merge_and_redeem::MergeAndRedeemFungibleStakedSui;
@@ -38,11 +38,11 @@ pub(crate) use merge_and_redeem::merge_and_redeem_fss_pt;
 pub use pay_coin::PayCoin;
 pub(crate) use pay_coin::pay_coin_pt;
 pub use pay_sui::PaySui;
-use pay_sui::{pay_sui_pt_ab_gas, pay_sui_pt_coin_gas};
+pub(crate) use pay_sui::{pay_sui_pt_ab_gas, pay_sui_pt_coin_gas};
 pub use stake::Stake;
-use stake::{stake_pt_ab_gas, stake_pt_coin_gas};
+pub(crate) use stake::{stake_pt_ab_gas, stake_pt_coin_gas};
 pub use withdraw_stake::WithdrawStake;
-use withdraw_stake::withdraw_stake_pt;
+pub(crate) use withdraw_stake::withdraw_stake_pt;
 
 mod consolidate_to_fungible;
 mod merge_and_redeem;
@@ -98,7 +98,7 @@ pub trait TryConstructTransaction {
 }
 
 #[enum_dispatch(TryConstructTransaction)]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum InternalOperation {
     PaySui(PaySui),
     PayCoin(PayCoin),
@@ -121,6 +121,30 @@ impl InternalOperation {
             | InternalOperation::MergeAndRedeemFungibleStakedSui(
                 MergeAndRedeemFungibleStakedSui { sender, .. },
             ) => *sender,
+        }
+    }
+
+    /// Derive the out-of-band `AuxData` for this operation: the
+    /// handful of Rosetta-level labels `/parse` cannot reconstruct from the PTB
+    /// (PayCoin currency, FSS validator, FSS redeem mode + cap). `/metadata`
+    /// calls this to populate the wrapper.
+    pub fn aux(&self) -> AuxData {
+        match self {
+            InternalOperation::PayCoin(p) => AuxData::PayCoin {
+                currency: p.currency.clone(),
+            },
+            InternalOperation::ConsolidateAllStakedSuiToFungible(c) => AuxData::Consolidate {
+                validator: c.validator,
+            },
+            InternalOperation::MergeAndRedeemFungibleStakedSui(m) => AuxData::MergeAndRedeem {
+                validator: m.validator,
+                redeem_mode: m.redeem_mode.clone(),
+                amount: m.amount,
+            },
+            // Fully reconstructable from the PTB — no aux data needed.
+            InternalOperation::PaySui(_)
+            | InternalOperation::Stake(_)
+            | InternalOperation::WithdrawStake(_) => AuxData::None,
         }
     }
 
