@@ -453,7 +453,7 @@ impl AccountKeystore for External {
                 })
                 .map_err(|e| anyhow!("Failed to parse key response from external signer: {}", e))?,
             Err(create_error) => {
-                let create_not_supported = matches!(
+                let should_use_existing_key = matches!(
                     &create_error,
                     ExternalExecError::JsonRpc(JsonRpcError::RemoteError(error))
                         if error.code == CREATE_KEY_UNSUPPORTED_USE_EXISTING_ERROR_CODE
@@ -461,7 +461,7 @@ impl AccountKeystore for External {
                 );
 
                 // Ledger signers cannot generate keys, so fall back to adding an existing key.
-                if !create_not_supported {
+                if !should_use_existing_key {
                     return Err(anyhow!(
                         "Failed to create a new key on the external signer: {create_error}"
                     ));
