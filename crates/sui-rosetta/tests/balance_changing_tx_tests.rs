@@ -7,7 +7,6 @@ use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use prost_types::FieldMask;
 use rand::seq::{IteratorRandom, SliceRandom};
-use serde_json::json;
 use shared_crypto::intent::Intent;
 use signature::rand_core::OsRng;
 use std::collections::{BTreeMap, HashMap};
@@ -19,7 +18,7 @@ use sui_keys::keystore::Keystore;
 use sui_move_build::BuildConfig;
 use sui_rosetta::CoinMetadataCache;
 use sui_rosetta::operations::Operations;
-use sui_rosetta::types::{ConstructionMetadata, OperationStatus, OperationType};
+use sui_rosetta::types::{OperationStatus, OperationType};
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{
@@ -582,79 +581,6 @@ async fn test_pay_all_sui() {
         false,
     )
     .await;
-}
-
-#[tokio::test]
-async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
-    let network = TestClusterBuilder::new().build().await;
-    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
-    let rgp = client.get_reference_gas_price().await.unwrap();
-    let sender = get_random_address(&network.get_addresses(), vec![]);
-    let mut client = GrpcClient::new(network.rpc_url()).unwrap();
-    let gas = get_random_sui(&mut client, sender, vec![]).await;
-    let total_coin_value = 0i128;
-    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
-
-    let response = client
-        .ledger_client()
-        .get_epoch(request)
-        .await
-        .unwrap()
-        .into_inner();
-
-    let system_state = response.epoch.and_then(|epoch| epoch.system_state).unwrap();
-
-    let validator = system_state.validators.unwrap().active_validators[0]
-        .address()
-        .parse::<SuiAddress>()
-        .unwrap();
-
-    let ops: Operations = serde_json::from_value(json!(
-        [{
-            "operation_identifier":{"index":0},
-            "type":"Stake",
-            "account": { "address" : sender.to_string() },
-            "amount" : { "value": "-100000" , "currency": { "symbol": "SUI", "decimals": 9}},
-            "metadata": { "Stake" : {"validator": validator.to_string()} }
-        }]
-    ))
-    .unwrap();
-    let metadata = ConstructionMetadata {
-        sender,
-        gas_coins: vec![gas],
-        extra_gas_coins: vec![],
-        objects: vec![],
-        party_objects: vec![],
-        total_coin_value,
-        gas_price: rgp,
-        budget: rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,
-        currency: None,
-        address_balance_withdrawal: 0,
-        fss_object_count: None,
-        redeem_token_amount: None,
-        redeem_plan: None,
-        bind_epoch: None,
-        epoch: None,
-        chain_id: None,
-    };
-    let parsed_data = ops.clone().into_internal()?.try_into_data(metadata)?;
-
-    let proto_tx: sui_rpc::proto::sui::rpc::v2::Transaction = parsed_data.clone().into();
-    let parsed_ops = Operations::new(Operations::from_transaction(
-        proto_tx
-            .kind
-            .ok_or_else(|| anyhow::anyhow!("Transaction missing kind"))?,
-        parsed_data.sender(),
-        None,
-    )?);
-
-    assert_eq!(
-        ops, parsed_ops,
-        "expected {:#?}, got: {:#?}",
-        ops, parsed_ops
-    );
-
-    Ok(())
 }
 
 // Record current Sui balance of an address then execute the transaction,

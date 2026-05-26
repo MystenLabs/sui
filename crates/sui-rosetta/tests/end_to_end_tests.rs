@@ -4388,7 +4388,7 @@ async fn test_e2e_parse_consolidate_1_stake_0_fss() {
     else {
         panic!("wrong metadata variant");
     };
-    assert!(v.is_none(), "validator must be None from parser");
+    assert_eq!(v, Some(validator));
     assert_eq!(staked_sui_ids.len(), 1);
     assert!(fss_ids.is_empty());
 }
@@ -5393,8 +5393,9 @@ async fn run_merge_redeem_and_parse(
 fn assert_merge_redeem_parse_ops(
     ops: &[sui_rosetta::operations::Operation],
     expected_sender: SuiAddress,
+    expected_validator: SuiAddress,
     expected_fss_count: usize,
-    expected_mode: Option<sui_rosetta::types::RedeemMode>,
+    expected_mode: sui_rosetta::types::RedeemMode,
 ) {
     assert_eq!(ops.len(), 1, "expected exactly one parsed op");
     assert_eq!(ops[0].type_, OperationType::MergeAndRedeemFungibleStakedSui);
@@ -5408,18 +5409,16 @@ fn assert_merge_redeem_parse_ops(
     else {
         panic!("wrong metadata variant: {:?}", ops[0].metadata);
     };
-    assert!(validator.is_none(), "validator must be None from parser");
-    // AtLeast carries `min_sui` decoded from the on-chain `balance::split`
-    // guard; All and the unknown-partial mode emit no amount.
+    assert_eq!(validator, Some(expected_validator));
     match expected_mode {
-        Some(sui_rosetta::types::RedeemMode::AtLeast) => {
-            assert!(amount.is_some(), "AtLeast parse should recover min_sui");
+        sui_rosetta::types::RedeemMode::All => {
+            assert!(amount.is_none(), "All mode has no amount");
         }
         _ => {
-            assert!(amount.is_none(), "amount must be None from parser");
+            assert!(amount.is_some(), "AtLeast/AtMost should carry the amount");
         }
     }
-    assert_eq!(redeem_mode, expected_mode);
+    assert_eq!(redeem_mode, Some(expected_mode));
     assert_eq!(fss_ids.len(), expected_fss_count);
 }
 
@@ -5446,7 +5445,13 @@ async fn test_e2e_parse_merge_redeem_single_fss_all() {
 
     let ops =
         run_merge_redeem_and_parse(&rosetta_client, keystore, sender, validator, None, "All").await;
-    assert_merge_redeem_parse_ops(&ops, sender, 1, Some(sui_rosetta::types::RedeemMode::All));
+    assert_merge_redeem_parse_ops(
+        &ops,
+        sender,
+        validator,
+        1,
+        sui_rosetta::types::RedeemMode::All,
+    );
 }
 
 /// F=1, AtLeast partial redeem.
@@ -5479,13 +5484,12 @@ async fn test_e2e_parse_merge_redeem_single_fss_atleast() {
         "AtLeast",
     )
     .await;
-    // The PTB carries a balance::split + balance::join guard, so the parser
-    // can distinguish AtLeast from AtMost.
     assert_merge_redeem_parse_ops(
         &ops,
         sender,
+        validator,
         1,
-        Some(sui_rosetta::types::RedeemMode::AtLeast),
+        sui_rosetta::types::RedeemMode::AtLeast,
     );
 }
 
@@ -5519,7 +5523,13 @@ async fn test_e2e_parse_merge_redeem_single_fss_atmost() {
         "AtMost",
     )
     .await;
-    assert_merge_redeem_parse_ops(&ops, sender, 1, None);
+    assert_merge_redeem_parse_ops(
+        &ops,
+        sender,
+        validator,
+        1,
+        sui_rosetta::types::RedeemMode::AtMost,
+    );
 }
 
 /// F=3, All mode.
@@ -5545,7 +5555,13 @@ async fn test_e2e_parse_merge_redeem_three_fss_all() {
 
     let ops =
         run_merge_redeem_and_parse(&rosetta_client, keystore, sender, validator, None, "All").await;
-    assert_merge_redeem_parse_ops(&ops, sender, 3, Some(sui_rosetta::types::RedeemMode::All));
+    assert_merge_redeem_parse_ops(
+        &ops,
+        sender,
+        validator,
+        3,
+        sui_rosetta::types::RedeemMode::All,
+    );
 }
 
 /// F=3, AtLeast partial.
@@ -5581,8 +5597,9 @@ async fn test_e2e_parse_merge_redeem_three_fss_atleast() {
     assert_merge_redeem_parse_ops(
         &ops,
         sender,
+        validator,
         3,
-        Some(sui_rosetta::types::RedeemMode::AtLeast),
+        sui_rosetta::types::RedeemMode::AtLeast,
     );
 }
 
@@ -5616,7 +5633,13 @@ async fn test_e2e_parse_merge_redeem_three_fss_atmost() {
         "AtMost",
     )
     .await;
-    assert_merge_redeem_parse_ops(&ops, sender, 3, None);
+    assert_merge_redeem_parse_ops(
+        &ops,
+        sender,
+        validator,
+        3,
+        sui_rosetta::types::RedeemMode::AtMost,
+    );
 }
 
 /// Multi-validator: FSS on both A and B; redeem only from A.
@@ -5672,7 +5695,13 @@ async fn test_e2e_parse_merge_redeem_multi_validator_isolation() {
         run_merge_redeem_and_parse(&rosetta_client, keystore, sender, validator_a, None, "All")
             .await;
     // Exactly 1 FSS (A's).
-    assert_merge_redeem_parse_ops(&ops, sender, 1, Some(sui_rosetta::types::RedeemMode::All));
+    assert_merge_redeem_parse_ops(
+        &ops,
+        sender,
+        validator_a,
+        1,
+        sui_rosetta::types::RedeemMode::All,
+    );
 }
 
 // ================================================================================
