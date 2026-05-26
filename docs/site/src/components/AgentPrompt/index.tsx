@@ -13,7 +13,6 @@
 //   />
 
 import React, { useEffect, useRef, useState } from "react";
-import { useLocation } from "@docusaurus/router";
 import styles from "./styles.module.css";
 
 interface Agent {
@@ -40,17 +39,10 @@ const AGENTS: Agent[] = [
   },
 ];
 
-function track(event: string, props: Record<string, string>) {
-  if (typeof window !== "undefined") {
-    (window as any).__plausible_instance__?.track(event, { props });
-  }
-}
-
 export default function AgentPrompt({ prompt }: { prompt: string }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const { pathname } = useLocation();
 
   useEffect(() => {
     if (!open) return;
@@ -74,13 +66,11 @@ export default function AgentPrompt({ prompt }: { prompt: string }) {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(prompt);
     }
-    track("Docs: copy agent prompt", { path: pathname });
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
 
   const openAgent = (agent: Agent) => {
-    track("Docs: open agent prompt", { agent: agent.id, path: pathname });
     if (typeof window !== "undefined") {
       window.open(agent.url(prompt), "_blank", "noopener");
     }
@@ -94,7 +84,7 @@ export default function AgentPrompt({ prompt }: { prompt: string }) {
       <div className={styles.actions}>
         <button
           type="button"
-          className={styles.copyBtn}
+          className={`${styles.copyBtn} plausible-event-name=copy+agent+prompt`}
           onClick={copyPrompt}
         >
           {copied ? "Copied" : "Copy prompt"}
@@ -119,7 +109,7 @@ export default function AgentPrompt({ prompt }: { prompt: string }) {
                   key={agent.id}
                   type="button"
                   role="menuitem"
-                  className={styles.item}
+                  className={`${styles.item} plausible-event-name=open+agent+prompt+${agent.id}`}
                   onClick={() => openAgent(agent)}
                 >
                   {agent.label}
