@@ -96,6 +96,8 @@ fn entry_label(s: &D::Structured) -> Option<NodeIndex> {
         DS::Loop(label, _) => Some(*label),
         DS::Seq(items) => items.iter().find_map(entry_label),
         DS::Break(_) | DS::Continue(_) | DS::Jump(_, _) => None,
+        // Dispatch synthesis nodes carry no CFG entry of their own.
+        DS::Let(_) | DS::Assign(_, _) | DS::Match(_, _) => None,
     }
 }
 
@@ -132,7 +134,10 @@ fn elide_tail_jump_to(s: &mut D::Structured, target: NodeIndex) {
         | DS::Break(_)
         | DS::Continue(_)
         | DS::Jump(_, _)
-        | DS::JumpIf(_, _, _, _) => {}
+        | DS::JumpIf(_, _, _, _)
+        | DS::Let(_)
+        | DS::Assign(_, _)
+        | DS::Match(_, _) => {}
     }
 }
 
@@ -189,19 +194,51 @@ fn structure_loop(
         println!("structuring loop at node {loop_head:#?}");
     }
     let (loop_nodes, succ_nodes) = graph.find_loop_nodes(loop_head);
-    // succ_nodes is a HashSet; take the lowest index for determinism.
-    let succ_node = succ_nodes.iter().copied().min();
+
+    // Partition succs into "owned by this loop's scope" (dominated by `loop_head`) and the
+    // rest. Only owned succs become part of this loop's structure — unowned ones are
+    // latch-bound to an enclosing scope (outer-loop break/continue target, or a join in an
+    // ancestor's region) and their Jumps stay raw for the outer pass to handle.
+    let owned_succs: Vec<NodeIndex> = {
+        let mut v: Vec<NodeIndex> = graph
+            .dom_tree
+            .get(loop_head)
+            .all_children()
+            .filter(|n| succ_nodes.contains(n))
+            .collect();
+        v.sort_by_key(|n| n.index());
+        v
+    };
     if config.debug_print.structuring {
         println!("  loop nodes: {loop_nodes:#?}");
         println!("  successor nodes: {succ_nodes:#?}");
+        println!("  owned succs: {owned_succs:?}");
     }
+
+    // Decide between dispatch mode (multiple owned succs → synthesize a sel local + match)
+    // and classic single-exit mode (`insert_breaks` rewrites Jumps to the chosen succ as
+    // `Break(loop_head)`). For classic mode we pick `min(succ_nodes)` as the break target
+    // even when it's NOT dominated by `loop_head` — an unowned succ is still a real exit
+    // edge of the loop, and rewriting its Jump as `Break(loop_head)` correctly lands at
+    // whatever the outer scope places after the loop. Only the post-loop body placement
+    // (below) is gated on ownership.
+    let dispatch_mode = owned_succs.len() > 1;
+    let succ_for_insert_breaks: Option<NodeIndex> = if dispatch_mode {
+        // Suppress single-target break-rewriting: in dispatch mode EVERY owned-succ Jump gets
+        // rewritten to `Assign(sel, k); Break(loop_head)` by the dispatch pass below, not by
+        // `insert_breaks`.
+        None
+    } else {
+        succ_nodes.iter().copied().min()
+    };
+
     structure_acyclic(
         config,
         graph,
         structured_blocks,
         loop_head,
         input,
-        /*loop_succ*/ succ_node,
+        /*loop_succ*/ succ_for_insert_breaks,
     );
 
     // Emit body nodes in reverse post-order restricted to `loop_nodes`. After
@@ -221,30 +258,191 @@ fn structure_loop(
         let Some(node) = structured_blocks.remove(&node) else {
             continue;
         };
-        let result = insert_breaks(&loop_nodes, loop_head, succ_node, node);
+        let result = insert_breaks(&loop_nodes, loop_head, succ_for_insert_breaks, node);
         loop_body.push(result);
     }
     // Drop tail-Jumps in body[i] that target body[i+1]'s entry: RPO adjacency makes them
     // jumps to their own fall-through.
     elide_inter_item_gotos(&mut loop_body);
 
-    let seq = D::Structured::Seq(loop_body);
-    graph.update_loop_info(loop_head);
-    let mut result = D::Structured::Loop(loop_head, Box::new(seq));
-    if let Some(succ_node) = succ_node
-        && graph
-            .dom_tree
-            .get(loop_head)
-            .all_children()
-            .any(|child| child == succ_node)
-    {
-        if let Some(succ_structured) = structured_blocks.remove(&succ_node) {
-            result = D::Structured::Seq(vec![result, succ_structured]);
-        } else if config.debug_print.structuring {
-            println!("  failed to find successor node {succ_node:?} in structured blocks");
+    if dispatch_mode {
+        // Multi-succ loop: synthesize a dispatch local `loop_<N>_sel`, rewrite every
+        // owned-succ Jump in the loop body to `sel = k; break`, and emit a `match (sel)`
+        // after the loop with one arm per owned succ.
+        //
+        // NMG (Yakdan 2015) §3.3 — "loop refinement": when a loop has multiple exit
+        // targets, introduce a fresh exit-selector variable to normalize to a single
+        // structural break, then dispatch on the selector post-loop. This is what NMG
+        // would emit; Move's labeled `break 'L` could also express many of these cases
+        // with nested labeled blocks (ALT 3), but dispatch is uniform and avoids
+        // structural shape mismatches when the post-loop cascade isn't strictly linear.
+        let sel_name = format!("loop_{}_sel", loop_head.index());
+        let dispatch_map: HashMap<NodeIndex, u64> = owned_succs
+            .iter()
+            .enumerate()
+            .map(|(idx, &succ)| (succ, idx as u64))
+            .collect();
+        let mut body_seq = D::Structured::Seq(loop_body);
+        rewrite_jumps_for_dispatch(&mut body_seq, &dispatch_map, &sel_name, loop_head);
+        graph.update_loop_info(loop_head);
+        let loop_expr = D::Structured::Loop(loop_head, Box::new(body_seq));
+
+        // Build the dispatch arms. NMG step 2: each arm is the CASCADE TAIL starting at its
+        // owned succ — the succ's body, followed by the body of `cascade_next(succ)`, etc.,
+        // until we hit a succ with no cascade-next or a cycle. Bodies are cloned so the
+        // same body can appear in multiple arms; `elide_inter_item_gotos` then drops tail
+        // Jumps that target the next item's entry (e.g. `205_body`'s trailing `Jump(213)`
+        // becomes structural fall-through once `213_body` is placed right after).
+        //
+        // `cascade_next(s)` is the unique owned succ in s's CFG out-edges. When s has
+        // multiple owned-succ out-neighbors the cascade isn't linear; we pick the
+        // lowest-indexed one (the rest will surface as gotos for now). Phase 3 (the
+        // `if (sel <= k)` compression refinement) inverts this duplication into a flat
+        // cascade — the duplication here is the load-bearing soundness step that lets that
+        // refinement run.
+        let owned_set: HashSet<NodeIndex> = owned_succs.iter().copied().collect();
+        // `cascade_next(s)` is the lowest-indexed owned succ reachable by a CFG out-edge
+        // from anywhere in s's dom-subtree (excluding the subtree itself). Looking at s's
+        // direct CFG out-edges isn't enough: when s's body contains nested structure (e.g.
+        // an inner loop), the "exit" of s is the CFG edge leaving that nested structure,
+        // not s's immediate successor. Walking the subtree's exits captures that without
+        // having to inspect the post-structuring form.
+        let cascade_next: HashMap<NodeIndex, NodeIndex> = owned_succs
+            .iter()
+            .filter_map(|&s| {
+                let subtree: HashSet<NodeIndex> = graph
+                    .dom_tree
+                    .get(s)
+                    .all_children()
+                    .chain(std::iter::once(s))
+                    .collect();
+                let mut exits: Vec<NodeIndex> = subtree
+                    .iter()
+                    .flat_map(|n| graph.cfg.neighbors_directed(*n, Direction::Outgoing))
+                    .filter(|n| !subtree.contains(n) && owned_set.contains(n) && *n != s)
+                    .collect();
+                exits.sort_by_key(|n| n.index());
+                exits.dedup();
+                exits.into_iter().next().map(|n| (s, n))
+            })
+            .collect();
+        let mut succ_bodies: HashMap<NodeIndex, D::Structured> = HashMap::new();
+        for &s in &owned_succs {
+            if let Some(body) = structured_blocks.remove(&s) {
+                succ_bodies.insert(s, body);
+            } else if config.debug_print.structuring {
+                println!("  dispatch: missing body for owned succ {s:?}");
+            }
         }
+        let mut arms: Vec<(u64, D::Structured)> = Vec::with_capacity(owned_succs.len());
+        for (idx, &succ) in owned_succs.iter().enumerate() {
+            // Walk the cascade chain, breaking on cycles.
+            let mut chain = vec![succ];
+            let mut current = succ;
+            let mut seen: HashSet<NodeIndex> = std::iter::once(succ).collect();
+            while let Some(&next) = cascade_next.get(&current) {
+                if !seen.insert(next) {
+                    break;
+                }
+                chain.push(next);
+                current = next;
+            }
+            let mut arm_items: Vec<D::Structured> = chain
+                .iter()
+                .filter_map(|n| succ_bodies.get(n).cloned())
+                .collect();
+            // RPO-adjacency elision: each chained body's trailing Jump-to-next-chain-item
+            // becomes structural fall-through once we place those bodies adjacent.
+            elide_inter_item_gotos(&mut arm_items);
+            arms.push((idx as u64, D::Structured::Seq(arm_items)));
+        }
+        let result = D::Structured::Seq(vec![
+            D::Structured::Let(sel_name.clone()),
+            loop_expr,
+            D::Structured::Match(sel_name, arms),
+        ]);
+        structured_blocks.insert(loop_head, result);
+    } else {
+        // Single-owned-succ (or zero) case: classic post-loop sibling placement. Jumps to
+        // the chosen succ already became `Break(loop_head)` in `insert_breaks`. Only the
+        // OWNED succ's body gets placed here — unowned succs (latch-bound to an outer
+        // scope) are placed by that outer scope's pass; we just leave them in
+        // `structured_blocks` for it to consume.
+        let seq = D::Structured::Seq(loop_body);
+        graph.update_loop_info(loop_head);
+        let mut result = D::Structured::Loop(loop_head, Box::new(seq));
+        if let Some(succ_node) = succ_for_insert_breaks
+            && owned_succs.contains(&succ_node)
+            && let Some(succ_structured) = structured_blocks.remove(&succ_node)
+        {
+            result = D::Structured::Seq(vec![result, succ_structured]);
+        }
+        structured_blocks.insert(loop_head, result);
     }
-    structured_blocks.insert(loop_head, result);
+}
+
+/// In dispatch mode, walk `s` and rewrite each `Jump(_, target)` (and `JumpIf` arm) where
+/// `target` is an owned succ to `Seq[Assign(sel_name, tag), Break(loop_head)]`. Descends
+/// through nested constructs INCLUDING `Loop` bodies — a labeled `break 'outer` from inside
+/// a contained loop correctly exits both that loop and ours, so the dispatch works from any
+/// depth. JumpIfs with at least one owned-succ target are lowered to `IfElse`; arms whose
+/// target isn't in the dispatch map retain their raw Jump for the outer scope to handle.
+fn rewrite_jumps_for_dispatch(
+    s: &mut D::Structured,
+    dispatch_map: &HashMap<NodeIndex, u64>,
+    sel_name: &str,
+    loop_head: NodeIndex,
+) {
+    use D::Structured as DS;
+    let dispatch_for = |target: NodeIndex| -> Option<DS> {
+        dispatch_map.get(&target).map(|&tag| {
+            DS::Seq(vec![
+                DS::Assign(sel_name.to_string(), tag),
+                DS::Break(loop_head),
+            ])
+        })
+    };
+    match s {
+        DS::Jump(_, target) => {
+            if let Some(replacement) = dispatch_for(*target) {
+                *s = replacement;
+            }
+        }
+        DS::JumpIf(src, code, then_target, else_target) => {
+            let then_dispatch = dispatch_for(*then_target);
+            let else_dispatch = dispatch_for(*else_target);
+            if then_dispatch.is_some() || else_dispatch.is_some() {
+                let then_body = then_dispatch.unwrap_or(DS::Jump(*src, *then_target));
+                let else_body = else_dispatch.unwrap_or(DS::Jump(*src, *else_target));
+                *s = DS::IfElse(*code, Box::new(then_body), Box::new(Some(else_body)));
+            }
+        }
+        DS::Seq(items) => {
+            for item in items.iter_mut() {
+                rewrite_jumps_for_dispatch(item, dispatch_map, sel_name, loop_head);
+            }
+        }
+        DS::IfElse(_, conseq, alt) => {
+            rewrite_jumps_for_dispatch(conseq, dispatch_map, sel_name, loop_head);
+            if let Some(alt_inner) = alt.as_mut().as_mut() {
+                rewrite_jumps_for_dispatch(alt_inner, dispatch_map, sel_name, loop_head);
+            }
+        }
+        DS::Switch(_, _, cases) => {
+            for (_, body) in cases.iter_mut() {
+                rewrite_jumps_for_dispatch(body, dispatch_map, sel_name, loop_head);
+            }
+        }
+        DS::Loop(_, body) => {
+            rewrite_jumps_for_dispatch(body, dispatch_map, sel_name, loop_head);
+        }
+        DS::Block(_)
+        | DS::Break(_)
+        | DS::Continue(_)
+        | DS::Let(_)
+        | DS::Assign(_, _)
+        | DS::Match(_, _) => {}
+    }
 }
 
 fn insert_breaks(
@@ -360,6 +558,18 @@ fn insert_breaks(
                 .collect::<Vec<_>>();
             DS::Switch(code, enum_, result)
         }
+        DS::Let(_) | DS::Assign(_, _) => node,
+        // Dispatch arms may contain cloned copies of an inner loop's succ bodies, and those
+        // clones can carry Jumps to ANCESTOR loops' heads/succs (continue/break to an outer
+        // scope). Recurse so the outer `insert_breaks` pass — which walks our entire
+        // structured form when classifying its own body's Jumps — sees through the match
+        // and reclassifies those Jumps correctly.
+        DS::Match(name, arms) => DS::Match(
+            name,
+            arms.into_iter()
+                .map(|(tag, body)| (tag, insert_breaks(loop_nodes, loop_head, succ_node, body)))
+                .collect(),
+        ),
     }
 }
 
@@ -987,7 +1197,17 @@ fn flatten_sequence(s: &mut D::Structured) {
             }
         }
         DS::Loop(_, body) => flatten_sequence(body),
-        DS::Block(_) | DS::Break(_) | DS::Continue(_) | DS::Jump(_, _) | DS::JumpIf(_, _, _, _) => {
+        DS::Match(_, arms) => {
+            for (_, body) in arms.iter_mut() {
+                flatten_sequence(body);
+            }
         }
+        DS::Block(_)
+        | DS::Break(_)
+        | DS::Continue(_)
+        | DS::Jump(_, _)
+        | DS::JumpIf(_, _, _, _)
+        | DS::Let(_)
+        | DS::Assign(_, _) => {}
     }
 }

@@ -493,6 +493,7 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
     let l32 = 0u64;
     let l31 = big_vector::borrow_slice(&l36.share, l32);
     let l22 = 0u64;
+    let loop_58_sel;
     let (l24, l29);
     loop {
         if (l22 < l25) {
@@ -510,19 +511,131 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
         if (l22 == l25) {
             l29 = C25;
             l24 = 0u64;
+            loop_58_sel = 0u32;
             break
         };
-        unstructured {
-            goto 'label_142;
+        loop_58_sel = 1u32;
+        break
+    };
+    let (l13, l14, l15, l16, l17, l18, l19, l21, l23, l26, l27, l28, l30, reg_309, reg_310);
+    match (loop_58_sel) {
+        0 => {
+            while (l24 < &l36.reward_tokens.len()) {
+                (&mut l29).push_back(0u64);
+                l24 = l24 + 1u64;
+            };
+            big_vector::push_back(&mut l36.share, Share { user: l35, share: l29, u64_padding: vector[0u64, l20], bcs_padding: C37 });
+            l30 = big_vector::borrow_mut(&mut l36.share, l22);
+            l26 = *(&(&l30.u64_padding)[C7])as u256 * l20 - *(&(&l30.u64_padding)[C8])as u256 * *(&(&l36.config)[C12])as u256 / 3600000u256 / 10000u256as u64;
+            *(&mut (&mut l30.u64_padding)[C8]) = l20;
+            l19 = balance::value(&l6);
+            *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l19;
+            *(&mut (&mut l36.share_supply)[C10]) = *(&(&l36.share_supply)[C10]) + l19;
+            l13 = if (*(&(&l30.share)[C8]) < l7) {
+                *(&(&l30.share)[C8])
+            } else {
+                l7
+            };
+            l21 = l13;
+            *(&mut (&mut l30.share)[C7]) = *(&(&l30.share)[C7]) + l21;
+            *(&mut (&mut l36.share_supply)[C7]) = *(&(&l36.share_supply)[C7]) + l21;
+            *(&mut (&mut l30.share)[C8]) = *(&(&l30.share)[C8]) - l21;
+            *(&mut (&mut l36.share_supply)[C8]) = *(&(&l36.share_supply)[C8]) - l21;
+            l14 = if (*(&(&l30.share)[C9]) < l8) {
+                *(&(&l30.share)[C9])
+            } else {
+                l8
+            };
+            l23 = l14;
+            *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l23;
+            *(&mut (&mut l36.share_supply)[C10]) = *(&(&l36.share_supply)[C10]) + l23;
+            *(&mut (&mut l30.share)[C9]) = *(&(&l30.share)[C9]) - l23;
+            *(&mut (&mut l36.share_supply)[C9]) = *(&(&l36.share_supply)[C9]) - l23;
+            l28 = 0u64;
+            if (l9 > 0u64) {
+                l16 = &l36.reward_tokens;
+                l15 = type_name::get();
+                (reg_309, reg_310) = vector::index_of(l16, &l15);
+                l27 = reg_310;
+                if (reg_309) {
+                    l17 = if (*(&(&l30.share)[l27 + 5u64]) < l9) {
+                        *(&(&l30.share)[l27 + 5u64])
+                    } else {
+                        l9
+                    };
+                    l28 = l17;
+                    *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l28;
+                    *(&mut (&mut l36.share_supply)[C10]) = *(&(&l36.share_supply)[C10]) + l28;
+                    *(&mut (&mut l30.share)[l27 + 5u64]) = *(&(&l30.share)[l27 + 5u64]) - l28;
+                    *(&mut (&mut l36.share_supply)[l27 + 5u64]) = *(&(&l36.share_supply)[l27 + 5u64]) - l28
+                }
+            };
+            *(&mut (&mut l30.u64_padding)[C7]) = *(&(&l30.share)[C7]) + *(&(&l30.share)[C10])as u128 * *(&(&l36.info)[C13])as u128 / 10000u128as u64;
+            assert!(l19 + l21 + l23 + l28 > 0u64, C8);
+            l18 = l19 >= *(&(&l36.config)[C8]) && l19 % *(&(&l36.config)[C8]) == 0u64;
+            assert!(l18, C10);
+            assert!(l19 >= *(&(&l36.config)[C9]), C11);
+            assert!(*(&(&l36.share_supply)[C10]) + *(&(&l36.share_supply)[C7]) <= *(&(&l36.config)[C7]), C9);
+            event::emit(UserEvent { action: ascii::string(C39), log: vector[l5, *(&(&l36.info)[C8]), l19, l21, l23, l28, l26], bcs_padding: C21 });
+            dynamic_field::add(&mut l4.id, ascii::string(C6), l34);
+            return
+        },
+        1 => {
+            l30 = big_vector::borrow_mut(&mut l36.share, l22);
+            l26 = *(&(&l30.u64_padding)[C7])as u256 * l20 - *(&(&l30.u64_padding)[C8])as u256 * *(&(&l36.config)[C12])as u256 / 3600000u256 / 10000u256as u64;
+            *(&mut (&mut l30.u64_padding)[C8]) = l20;
+            l19 = balance::value(&l6);
+            *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l19;
+            *(&mut (&mut l36.share_supply)[C10]) = *(&(&l36.share_supply)[C10]) + l19;
+            l13 = if (*(&(&l30.share)[C8]) < l7) {
+                *(&(&l30.share)[C8])
+            } else {
+                l7
+            };
+            l21 = l13;
+            *(&mut (&mut l30.share)[C7]) = *(&(&l30.share)[C7]) + l21;
+            *(&mut (&mut l36.share_supply)[C7]) = *(&(&l36.share_supply)[C7]) + l21;
+            *(&mut (&mut l30.share)[C8]) = *(&(&l30.share)[C8]) - l21;
+            *(&mut (&mut l36.share_supply)[C8]) = *(&(&l36.share_supply)[C8]) - l21;
+            l14 = if (*(&(&l30.share)[C9]) < l8) {
+                *(&(&l30.share)[C9])
+            } else {
+                l8
+            };
+            l23 = l14;
+            *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l23;
+            *(&mut (&mut l36.share_supply)[C10]) = *(&(&l36.share_supply)[C10]) + l23;
+            *(&mut (&mut l30.share)[C9]) = *(&(&l30.share)[C9]) - l23;
+            *(&mut (&mut l36.share_supply)[C9]) = *(&(&l36.share_supply)[C9]) - l23;
+            l28 = 0u64;
+            if (l9 > 0u64) {
+                l16 = &l36.reward_tokens;
+                l15 = type_name::get();
+                (reg_309, reg_310) = vector::index_of(l16, &l15);
+                l27 = reg_310;
+                if (reg_309) {
+                    l17 = if (*(&(&l30.share)[l27 + 5u64]) < l9) {
+                        *(&(&l30.share)[l27 + 5u64])
+                    } else {
+                        l9
+                    };
+                    l28 = l17;
+                    *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l28;
+                    *(&mut (&mut l36.share_supply)[C10]) = *(&(&l36.share_supply)[C10]) + l28;
+                    *(&mut (&mut l30.share)[l27 + 5u64]) = *(&(&l30.share)[l27 + 5u64]) - l28;
+                    *(&mut (&mut l36.share_supply)[l27 + 5u64]) = *(&(&l36.share_supply)[l27 + 5u64]) - l28
+                }
+            };
+            *(&mut (&mut l30.u64_padding)[C7]) = *(&(&l30.share)[C7]) + *(&(&l30.share)[C10])as u128 * *(&(&l36.info)[C13])as u128 / 10000u128as u64;
+            assert!(l19 + l21 + l23 + l28 > 0u64, C8);
+            l18 = l19 >= *(&(&l36.config)[C8]) && l19 % *(&(&l36.config)[C8]) == 0u64;
+            assert!(l18, C10);
+            assert!(l19 >= *(&(&l36.config)[C9]), C11);
+            assert!(*(&(&l36.share_supply)[C10]) + *(&(&l36.share_supply)[C7]) <= *(&(&l36.config)[C7]), C9);
+            event::emit(UserEvent { action: ascii::string(C39), log: vector[l5, *(&(&l36.info)[C8]), l19, l21, l23, l28, l26], bcs_padding: C21 });
+            dynamic_field::add(&mut l4.id, ascii::string(C6), l34);
+            return
         }
-    };
-    while (l24 < &l36.reward_tokens.len()) {
-        (&mut l29).push_back(0u64);
-        l24 = l24 + 1u64;
-    };
-    big_vector::push_back(&mut l36.share, Share { user: l35, share: l29, u64_padding: vector[0u64, l20], bcs_padding: C37 });
-    unstructured {
-        goto 'label_142;
     }
 }
 

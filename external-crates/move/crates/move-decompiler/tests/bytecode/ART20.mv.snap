@@ -1303,37 +1303,51 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
         let l20 = &l1.len();
         let l17 = 0u64;
         let l15 = false;
+        let loop_81_sel;
         let (l13, l18);
         loop {
-            if (l17 < l20) {
-                let l25 = &mut (&mut l1)[l17];
-                if (*(&l25.collection_id) == l14 && *(&l25.asset_id) == l11 && !(l15)) {
-                    l13 = false;
-                    l18 = 0u64;
+            if (l17 >= l20) {
+                loop_81_sel = 1u32;
+                break
+            };
+            let l25 = &mut (&mut l1)[l17];
+            if (*(&l25.collection_id) == l14 && *(&l25.asset_id) == l11 && !(l15)) {
+                l13 = false;
+                l18 = 0u64;
+                loop_81_sel = 0u32;
+                break
+            };
+            l17 = l17 + 1u64;
+        };
+        match (loop_81_sel) {
+            0 => {
+                loop {
+                    if (l18 < &l2.len()) {
+                        let l12 = &mut (&mut l2)[l18];
+                        if (!(*(&l12.collection_id) == l14 && *(&l12.balance) > 0u64)) {
+                            l18 = l18 + 1u64;
+                            continue
+                        };
+                        *(&mut l12.balance) = xf_ART20::safe_sub(*(&l12.balance), 1u64);
+                        l13 = true;
+                    };
+                    assert!(l13, C6);
+                    (&mut l26).push_back(l21);
+                    (&mut l9).push_back(1u64);
+                    transfer::transfer(vector::remove(&mut l1, l17), l4);
+                    l15 = true;
                     break
                 };
-                l17 = l17 + 1u64;
+                assert!(l15, C15);
+                l16 = l16 + 1u64;
+                continue
+            },
+            1 => {
+                assert!(l15, C15);
+                l16 = l16 + 1u64;
+                continue
             }
-        };
-        loop {
-            if (l18 < &l2.len()) {
-                let l12 = &mut (&mut l2)[l18];
-                if (!(*(&l12.collection_id) == l14 && *(&l12.balance) > 0u64)) {
-                    l18 = l18 + 1u64;
-                    continue
-                };
-                *(&mut l12.balance) = xf_ART20::safe_sub(*(&l12.balance), 1u64);
-                l13 = true;
-            };
-            assert!(l13, C6);
-            (&mut l26).push_back(l21);
-            (&mut l9).push_back(1u64);
-            transfer::transfer(vector::remove(&mut l1, l17), l4);
-            l15 = true;
-            break
-        };
-        assert!(l15, C15);
-        l16 = l16 + 1u64;
+        }
     };
     while (l19 < &l2.len()) {
         if (*(&(&mut (&mut l2)[l19]).balance) == 0u64) {

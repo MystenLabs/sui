@@ -684,37 +684,57 @@ public fun update_all(l0: &x8_State, l1: vector<u8>, l2: vector<PriceInfoObject>
     let l10 = clock::timestamp_ms(l7) / 1000u64;
     let l11 = state::get_stale_price_threshold_secs(l0);
     let l13 = true;
+    let loop_15_sel;
+    let l16;
     loop {
-        if (l12 < l14) {
-            let l15 = price::get_timestamp(&pyth::get_price_unsafe(&(&l2)[l12]));
-            let l17 = option::get_with_default(&(&l3)[l12], l11);
-            if (l15 > l10) {
-                if (l15 - l10 >= l17) {
-                    l13 = false;
-                }
-            } else {
-                if (l10 - l15 < l17) {
-                    l13 = false;
-                }
-            };
-            l12 = l12 + 1u64;
-        } else {
+        if (l12 >= l14) {
             if (l13) {
                 l12 = 0u64;
+                loop_15_sel = 0u32;
                 break
             };
             let l18 = vaa::parse_and_verify(l4, l5, l7);
-            let l16 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l18, l7);
+            l16 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l18, l7);
             l12 = 0u64;
-            unstructured {
-                goto 'label_103;
+            loop_15_sel = 1u32;
+            break
+        };
+        let l15 = price::get_timestamp(&pyth::get_price_unsafe(&(&l2)[l12]));
+        let l17 = option::get_with_default(&(&l3)[l12], l11);
+        if (l15 > l10) {
+            if (l15 - l10 >= l17) {
+                l13 = false;
             }
-        }
-    };
-    while (l12 < l14) {
-        transfer::public_share_object((&mut l2).pop_back());
+        } else {
+            if (l10 - l15 < l17) {
+                l13 = false;
+            }
+        };
         l12 = l12 + 1u64;
     };
-    std::vector::destroy_empty(l2)
+    match (loop_15_sel) {
+        0 => {
+            while (l12 < l14) {
+                transfer::public_share_object((&mut l2).pop_back());
+                l12 = l12 + 1u64;
+            };
+            std::vector::destroy_empty(l2);
+            return
+        },
+        1 => {
+            while (l12 < l14) {
+                l16 = pyth::update_single_price_feed(l0, l16, &mut (&mut l2)[l12], coin::split(l6, state::get_base_update_fee(l0), l8), l7);
+                l12 = l12 + 1u64;
+            };
+            hot_potato_vector::destroy(l16);
+            l12 = 0u64;
+            while (l12 < l14) {
+                transfer::public_share_object((&mut l2).pop_back());
+                l12 = l12 + 1u64;
+            };
+            std::vector::destroy_empty(l2);
+            return
+        }
+    }
 }
 
