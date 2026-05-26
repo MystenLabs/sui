@@ -81,6 +81,12 @@ pub enum Error {
     #[error("Retries exhausted while getting balance. try again.")]
     #[strum(props(retriable = "true"))]
     RetryExhausted(String),
+
+    // Appended last so existing `ErrorType` discriminant positions — and thus the
+    // Rosetta wire `code` integers — stay stable.
+    #[error("Coin metadata temporarily unavailable: {0}")]
+    #[strum(props(retriable = "true"))]
+    CoinMetadataUnavailable(String),
 }
 
 impl From<SuiErrorKind> for Error {

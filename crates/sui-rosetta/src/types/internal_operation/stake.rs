@@ -27,7 +27,7 @@ use super::{
     withdraw_coin_from_address_balance,
 };
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Stake {
     pub sender: SuiAddress,
     pub validator: SuiAddress,
