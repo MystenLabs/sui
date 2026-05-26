@@ -8,6 +8,12 @@ Chain-specific gas fees can introduce several points of friction to end users an
 
 Gasless stablecoin transfers on Sui enable peer-to-peer payments of qualified stablecoins to execute without paying gas fees in SUI. The sender of the transaction does not need to hold SUI in their wallet. When the network is congested, the network prioritizes transactions that pay gas fees over gasless stablecoin transfers.
 
+:::caution 
+
+All gasless stablecoin transfers have a minimum transfer balance of 0.01. Transfers below this minimum will not be executed.
+
+:::
+
 ## Eligible stablecoins
 
 The stablecoins eligible for gasless stablecoin transfers are governed by the protocol configuration (`get_gasless_allowed_token_types` in `sui-types`) and can change across protocol versions. The current allowlist is 
@@ -34,6 +40,10 @@ Gasless stablecoin transfers are narrow by design. A transaction qualifies only 
 - No objects are written during the transaction, and all input coins are consumed or converted to address balances.
 
 If the user is sending SUI, sending a non-allowlisted token, or executing any other Move call (NFT mint, swap, app interaction), the gasless stablecoin transfer does not apply and the transaction requires a normal gas payment.
+
+## Monitoring gasless stablecoin transfers
+
+Transactions for gasless stablecoin transfers can be monitored through SuiVision, [such as this example transaction](https://testnet.suivision.xyz/txblock/BptFuauZXfwQZAGX1wbQ6iz4sDnv5kJBBeVEn1ZzewPy). 
 
 ## Supporting gasless stablecoin transfers 
 

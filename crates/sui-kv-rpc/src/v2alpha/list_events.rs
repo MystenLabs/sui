@@ -28,6 +28,7 @@ use tracing::info;
 
 use crate::PackageResolver;
 use crate::bigtable_client::BigTableClient;
+use crate::config::PipelineStage;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
 use crate::pipeline::ResolvedWatermarked;
@@ -57,10 +58,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::list_events_response;
 
-const DEFAULT_LIMIT_ITEMS: u32 = 50;
-const MAX_LIMIT_ITEMS: u32 = 1000;
 const EVENT_READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EVENT;
-const CHUNK_MAX: usize = 100;
 
 pub(crate) type ListEventsStream = BoxStream<'static, Result<ListEventsResponse, RpcError>>;
 
@@ -73,6 +71,10 @@ pub(crate) async fn list_events(
     let client: BigTableClient = ctx.client().clone();
     let resolver: crate::PackageResolver = ctx.package_resolver().clone();
     let checkpoint_hi_exclusive = ctx.checkpoint_hi_exclusive();
+    let lh = ctx.ledger_history();
+    let endpoint = lh.list_events();
+    let tx_seq_digest_stage = lh.stage(PipelineStage::TxSeqDigest);
+    let transactions_stage = lh.stage(PipelineStage::Transactions);
 
     let checkpoint_range = CheckpointRange::from_request(
         request.start_checkpoint,
@@ -82,8 +84,8 @@ pub(crate) async fn list_events(
     let read_mask = Arc::new(validate_event_read_mask(request.read_mask)?);
     let options = QueryOptions::from_proto(
         request.options.as_ref(),
-        DEFAULT_LIMIT_ITEMS,
-        MAX_LIMIT_ITEMS,
+        endpoint.default_limit_items,
+        endpoint.max_limit_items,
         QueryType::Events,
         request.filter.as_ref(),
     )?;
@@ -161,7 +163,12 @@ pub(crate) async fn list_events(
                 })
                 .boxed()
         } else {
-            unfiltered_event_refs(client.clone(), event_range.clone(), options.clone())
+            unfiltered_event_refs(
+                client.clone(),
+                event_range.clone(),
+                options.clone(),
+                endpoint.max_limit_items as usize,
+            )
         };
     let ref_stream = take_items(event_ref_stream, limit_items);
 
@@ -170,10 +177,15 @@ pub(crate) async fn list_events(
     // so we skip this stage there.
     let ref_with_digest_stream: BoxStream<'static, Result<Watermarked<EventRef>, anyhow::Error>> =
         if filtered {
-            pipelined_chunks(ref_stream, CHUNK_MAX, request_bigtable_concurrency, {
-                let client = client.clone();
-                move |refs| attach_tx_seq_digests(client.clone(), refs)
-            })
+            pipelined_chunks(
+                ref_stream,
+                tx_seq_digest_stage.chunk_size,
+                tx_seq_digest_stage.concurrency,
+                {
+                    let client = client.clone();
+                    move |refs| attach_tx_seq_digests(client.clone(), refs)
+                },
+            )
         } else {
             ref_stream
         };
@@ -183,8 +195,8 @@ pub(crate) async fn list_events(
     // Stage C: Watermarked<EventRef> -> Watermarked<(EventRef, TransactionData)>.
     let tx_ref_stream = pipelined_chunks(
         ref_with_digest_stream,
-        CHUNK_MAX,
-        request_bigtable_concurrency,
+        transactions_stage.chunk_size,
+        transactions_stage.concurrency,
         {
             let client = client.clone();
             let columns = columns.clone();
@@ -507,6 +519,7 @@ fn unfiltered_event_refs(
     client: BigTableClient,
     event_range: std::ops::Range<u64>,
     options: QueryOptions,
+    source_limit: usize,
 ) -> BoxStream<'static, Result<Watermarked<EventRef>, anyhow::Error>> {
     async_stream::try_stream! {
         let lower_bound = event_range.start;
@@ -514,7 +527,6 @@ fn unfiltered_event_refs(
         let Some(tx_range) = tx_range_for_event_range(event_range) else {
             return;
         };
-        let source_limit = MAX_LIMIT_ITEMS as usize;
         let (scan_range, scan_limited, frontier_tx) =
             clamp_tx_scan_range(tx_range, source_limit, &options);
         let rows = client

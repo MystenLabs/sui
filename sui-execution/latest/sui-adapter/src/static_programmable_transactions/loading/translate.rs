@@ -15,7 +15,7 @@ use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{
     base_types::TxContext,
     error::ExecutionErrorTrait,
-    object::Owner,
+    object::{ObjectPermissions, Owner},
     transaction::{self as P, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability},
 };
 
@@ -93,9 +93,15 @@ fn input<Mode: ExecutionMode>(
             };
             let tag: StructTag = ty.clone().into();
             let ty = env.load_type_from_struct(&tag)?;
-            let arg = match obj.owner {
-                Owner::AddressOwner(_) => L::ObjectArg::OwnedObject(oref),
-                Owner::Immutable => L::ObjectArg::ImmObject(oref),
+            let arg = match &obj.owner {
+                Owner::AddressOwner(_) => L::ObjectArg {
+                    kind: L::ObjectArgKind::OwnedObject(oref),
+                    refined_permissions: ObjectPermissions::ALL,
+                },
+                Owner::Immutable => L::ObjectArg {
+                    kind: L::ObjectArgKind::ImmObject(oref),
+                    refined_permissions: ObjectPermissions::IMMUTABLE_USAGE,
+                },
                 Owner::ObjectOwner(_)
                 | Owner::Shared { .. }
                 | Owner::ConsensusAddressOwner { .. } => {
@@ -104,7 +110,23 @@ fn input<Mode: ExecutionMode>(
                         "Unexpected owner for ImmOrOwnedObject: {:?}",
                         obj.owner,
                     );
-                    L::ObjectArg::OwnedObject(oref)
+                    let kind = L::ObjectArgKind::OwnedObject(oref);
+                    L::ObjectArg {
+                        kind,
+                        refined_permissions: ObjectPermissions::ALL,
+                    }
+                }
+                Owner::Party { permissions, .. } => {
+                    assert_invariant!(
+                        Mode::allow_arbitrary_values(),
+                        "Unexpected owner for ImmOrOwnedObject: {:?}",
+                        obj.owner,
+                    );
+                    let refined_permissions = permissions.permissions_for(&tx_context.sender());
+                    L::ObjectArg {
+                        kind: L::ObjectArgKind::OwnedObject(oref),
+                        refined_permissions,
+                    }
                 }
             };
             (L::InputArg::Object(arg), L::InputType::Fixed(ty))
@@ -120,24 +142,30 @@ fn input<Mode: ExecutionMode>(
             };
             let tag: StructTag = ty.clone().into();
             let ty = env.load_type_from_struct(&tag)?;
-            let kind = match obj.owner {
+            let owner_permissions = match &obj.owner {
                 Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                     assert_invariant!(
                         Mode::allow_arbitrary_values(),
                         "Unexpected owner for SharedObject: {:?}",
                         obj.owner
                     );
-                    L::SharedObjectKind::Party
+                    ObjectPermissions::ALL
                 }
-                Owner::Shared { .. } => L::SharedObjectKind::Legacy,
-                Owner::ConsensusAddressOwner { .. } => L::SharedObjectKind::Party,
+                Owner::Shared { .. } => ObjectPermissions::LEGACY_SHARED_OBJECT,
+                Owner::ConsensusAddressOwner { .. } => ObjectPermissions::ALL,
+                Owner::Party { permissions, .. } => {
+                    permissions.permissions_for(&tx_context.sender())
+                }
+            };
+            let refined_permissions = refine_permissions::<Mode>(mutability, owner_permissions)?;
+            let kind = L::ObjectArgKind::ConsensusObject {
+                id,
+                initial_shared_version,
             };
             (
-                L::InputArg::Object(L::ObjectArg::SharedObject {
-                    id,
-                    initial_shared_version,
-                    mutability: object_mutability(mutability),
+                L::InputArg::Object(L::ObjectArg {
                     kind,
+                    refined_permissions,
                 }),
                 L::InputType::Fixed(ty),
             )
@@ -189,12 +217,26 @@ fn input<Mode: ExecutionMode>(
     })
 }
 
-fn object_mutability(mutability: SharedObjectMutability) -> L::ObjectMutability {
-    match mutability {
-        SharedObjectMutability::Mutable => L::ObjectMutability::Mutable,
-        SharedObjectMutability::NonExclusiveWrite => L::ObjectMutability::NonExclusiveWrite,
-        SharedObjectMutability::Immutable => L::ObjectMutability::Immutable,
-    }
+fn refine_permissions<Mode: ExecutionMode>(
+    mutability: SharedObjectMutability,
+    permissions: ObjectPermissions,
+) -> Result<ObjectPermissions, Mode::Error> {
+    Ok(match mutability {
+        SharedObjectMutability::Mutable | SharedObjectMutability::NonExclusiveWrite => {
+            assert_invariant!(
+                permissions.can_use_mutably(),
+                "Mutable shared object usage requires mutable usage permission"
+            );
+            permissions
+        }
+        SharedObjectMutability::Immutable => {
+            assert_invariant!(
+                permissions.can_use_immutably(),
+                "Immutable shared object usage requires immutable usage permission"
+            );
+            ObjectPermissions::IMMUTABLE_USAGE
+        }
+    })
 }
 
 fn command<Mode: ExecutionMode>(

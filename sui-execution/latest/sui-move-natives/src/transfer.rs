@@ -248,6 +248,7 @@ pub fn party_transfer_internal(
         owner: address.into(),
     };
     object_runtime_transfer(context, owner, ty, obj)?;
+    // TODO check permissions for transfer
     let cost = context.gas_used();
     Ok(NativeResult::ok(cost, smallvec![]))
 }
@@ -282,7 +283,7 @@ pub fn freeze_object(
     let obj = safe_unwrap!(args.pop_back());
 
     object_runtime_transfer(context, Owner::Immutable, ty, obj)?;
-
+    // TODO check permissions for transfer
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 
@@ -324,6 +325,7 @@ pub fn share_object(
         ty,
         obj,
     )?;
+    // TODO check permissions for transfer
     let cost = context.gas_used();
     Ok(match transfer_result {
         // New means the ID was created in this transaction

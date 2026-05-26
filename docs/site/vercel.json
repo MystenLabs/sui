@@ -1267,7 +1267,7 @@
     },
     {
       "source": "/exchange-integration-guide",
-      "destination": "/references/exchange-integration-guide",
+      "destination": "/operators/exchange-integration",
       "permanent": true
     },
     {

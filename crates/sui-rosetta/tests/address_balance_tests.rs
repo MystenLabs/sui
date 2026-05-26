@@ -1675,3 +1675,98 @@ async fn test_address_balance_gas_payment_parsing() {
         "Operations should not be empty for address-balance gas payment"
     );
 }
+
+/// End-to-end regression for the Coinbase free-tier crash (PR #26756): a
+/// `coin::send_funds<SUI>` that moves the *entire gas coin* into an address
+/// balance deletes the gas object, so its effects carry no output owner.
+/// `try_from_executed_transaction` previously fed that empty owner string to
+/// `SuiAddress::from_str`, producing `FastCryptoError::InvalidInput`
+/// ("Invalid value was given to the function") and failing the whole `/block`
+/// request. It must instead parse, attributing gas to the gas payment owner.
+#[tokio::test]
+async fn test_send_gas_coin_to_address_balance_parses() {
+    use sui_rosetta::types::OperationType;
+    use sui_types::transaction::Argument;
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .with_accounts(single_coin_accounts())
+        .with_epoch_duration_ms(36000000)
+        .build()
+        .await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
+
+    // Send the entire gas coin into the sender's own address balance. The account has
+    // a single coin, so it is both the gas coin and the funds being sent: it gets
+    // consumed (deleted), leaving effects.gas_object with no output owner — the exact
+    // shape from the Coinbase failure.
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let recipient_arg = ptb.pure(sender).unwrap();
+    ptb.command(Command::move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::from(sui_types::coin::COIN_MODULE_NAME),
+        Identifier::new("send_funds").unwrap(),
+        vec![sui_types::gas_coin::GAS::type_tag()],
+        vec![Argument::GasCoin, recipient_arg],
+    ));
+    let pt = ptb.finish();
+
+    let price = client.get_reference_gas_price().await.unwrap();
+    let budget = 500_000_000u64;
+    let (_, gas_object_data) = test_cluster
+        .wallet
+        .gas_for_owner_budget(sender, budget, BTreeSet::new())
+        .await
+        .unwrap();
+    let gas_object = gas_object_data.compute_object_reference();
+    let tx_data = TransactionData::new_programmable(sender, vec![gas_object], pt, budget, price);
+    let sig = keystore
+        .sign_secure(
+            &tx_data.sender(),
+            &tx_data,
+            shared_crypto::intent::Intent::sui_transaction(),
+        )
+        .await
+        .unwrap();
+    let signed_tx = sui_types::transaction::Transaction::from_data(tx_data, vec![sig]);
+    let response = test_utils::execute_transaction(&mut client, &signed_tx)
+        .await
+        .unwrap();
+    assert!(
+        response.effects().status().success(),
+        "send_funds(GasCoin) into address balance failed: {:?}",
+        response.effects().status().error()
+    );
+
+    // Precondition: the gas coin was deleted, so its effects carry no output owner.
+    // Assert it so the test fails loudly if execution ever stops producing this shape.
+    assert!(
+        response
+            .effects()
+            .gas_object()
+            .output_owner()
+            .address()
+            .is_empty(),
+        "expected a deleted gas object with no output owner; test no longer covers the regression"
+    );
+
+    // The fix: parsing succeeds instead of erroring with InvalidInput.
+    let ops = fetch_transaction_and_get_operations(&test_cluster, *signed_tx.digest(), &coin_cache)
+        .await
+        .expect("rosetta failed to parse send_funds(GasCoin) transaction");
+
+    // Gas must be attributed to the gas payment owner (the sender) via the fallback.
+    let gas_op = ops
+        .into_iter()
+        .find(|op| op.type_ == OperationType::Gas)
+        .expect("expected a Gas operation");
+    assert_eq!(
+        gas_op.account.map(|a| a.address),
+        Some(sender),
+        "Gas should be attributed to the gas payment owner"
+    );
+}

@@ -229,7 +229,7 @@ export default {
 
   gettingStartedSidebar: [
     'getting-started',
-    'getting-started/agent-skills',
+    { type: 'link', label: 'Skills', href: '/skills' },
     {
       type: 'category',
       label: 'Hello, World!',

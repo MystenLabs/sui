@@ -18,15 +18,16 @@ Version 1.63 introduced major changes to the Move package system. This document 
 
 :::warning Active environment not found
 
-If the CLI displays `Your active environment is not present in Move.toml`, add an `[environments]` section:
+If the CLI displays `Your active environment is not present in Move.toml`, the most likely cause is that you are on a local or ephemeral network (Localnet, Devnet). These networks should not be added to the `[environments]` section. Instead, use `sui client test-publish` to publish on ephemeral networks.
+
+If you do need to add a persistent environment (for example, a custom Devnet deployment), add an `[environments]` section with the chain ID:
 
 ```toml
 [environments]
-testnet = { chain-id = "4c78adac" }
-mainnet = { chain-id = "35834a8a" }
+devnet = "aba3e445"
 ```
 
-Use `sui client chain-identifier` to find the chain ID for your network. For local or ephemeral deployments, use `sui client test-publish` instead.
+Use `sui client chain-identifier` to find the chain ID for your network. Note that `mainnet` and `testnet` are implicitly available and do not need to be listed.
 
 :::
 

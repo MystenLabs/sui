@@ -16,20 +16,22 @@ Errors in this section relate to Sui addresses.
 
 #### `Failed to build Move modules: Unresolved addresses found.`
 
-You are trying to use a named address, such as `std` or similar, within your code or a dependency, but you did not assign that address a value in the `Move.toml` file.
+You are trying to use a named address within your code or a dependency, but the package system cannot resolve it. This typically means you are referencing a package that is not listed in your `[dependencies]` section.
 
 ##### Solution
 
-Add an entry for each unresolved address to the `[addresses]` section of your `Move.toml` file. 
+Add the missing package as a dependency in your `Move.toml`. For example, if you are using a module from `example_dep`, add it to your `[dependencies]`:
 
 ```toml
-[addresses]
-std = "0x1"
+[dependencies]
+example_dep = { git = "https://github.com/example/repo.git", subdir = "packages/dep", rev = "main" }
 ```
+
+System packages like `std` and `sui` are included implicitly and do not need to be listed.
 
 **Resources**
 
-- [The Move Book: Manifests](https://move-book.com/references/package-managers/manifest-reference)
+- [Move Package Management](/develop/manage-packages/move-package-management)
 
 ---
 
@@ -75,19 +77,19 @@ Specify the full URL path, including `http://` or `https://`.
 
 The system cannot find one or more of the dependencies you list in your Move package's `Move.toml` file. The system cannot find a dependency if:
 
-- Your path is incorrect, contains a typo, or does not exist.
+- Your dependency path is incorrect, contains a typo, or does not exist.
 
-- Your manifest file does not exist.
+- Your dependency's manifest file (`Move.toml`) does not exist at the specified location.
 
-- You have not initialized it properly. 
+- You have not initialized the dependency properly. 
 
 ##### Solution
 
-Check your `Move.toml` and verify each dependency you list has the correct path, and each path contains a valid `Move.toml` file. Ensure there are no typos and that you have initialized all dependencies. 
+Check your `Move.toml` and verify each dependency you list has the correct path, and each path contains a valid `Move.toml` file. Ensure there are no typos and that you have initialized all dependencies.
 
 **Resources**
 
-- [The Move Book: Manifests](https://move-book.com/references/package-managers/manifest-reference)
+- [Move Package Management](/develop/manage-packages/move-package-management)
 
 ---
 
@@ -458,23 +460,25 @@ tx.transferObjects([coin], recipient); // ✅
 
 #### `Your active environment is not present in Move.toml`
 
-The Sui CLI cannot find the environment alias you use (such as `devnet` or `testnet`) in the `[environments]` section of your `Move.toml` file.
+The Sui CLI cannot match your active environment to an environment in your package configuration. The `mainnet` and `testnet` environments are implicitly available, so this error most commonly occurs when you are connected to a local or ephemeral network (Localnet, Devnet).
 
 ##### Solution
 
-Add an `[environments]` section to your `Move.toml` with the environment alias and chain ID:
+If you are on **Localnet or Devnet**, use `sui client test-publish` instead of `sui client publish`. Ephemeral networks should not be added to the `[environments]` section because their addresses change frequently and would pollute your `Published.toml`.
+
+If you need to add a persistent custom environment, add an `[environments]` section to your `Move.toml` with the chain ID:
 
 ```toml
 [environments]
-mainnet = { chain-id = "35834a8a" }
-testnet = { chain-id = "4c78adac" }
+devnet = "aba3e445"
 ```
 
-Look up the chain ID for your network with `sui client chain-identifier`. For local or ephemeral deployments, use `sui client test-publish` instead.
+Look up the chain ID for your network with `sui client chain-identifier`.
 
 **Resources**
 
 - [Move Package Management](/develop/manage-packages/move-package-management)
+- [Ephemeral publication](/develop/manage-packages/move-package-management#test-publish)
 
 ---
 

@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.73.0"
+    "version": "1.74.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "124",
+              "maxSupportedProtocolVersion": "125",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1387,6 +1387,7 @@
                 "gasless_transaction_drop_safety": false,
                 "gasless_verify_remaining_balance": false,
                 "generate_df_type_layouts": false,
+                "granular_post_execution_checks": false,
                 "hardened_otw_check": false,
                 "ignore_execution_time_observations_after_certs_closed": false,
                 "include_cancelled_randomness_txns_in_prologue": false,
@@ -2260,6 +2261,7 @@
                 "gasless_transaction_drop_safety": false,
                 "gasless_verify_remaining_balance": false,
                 "generate_df_type_layouts": false,
+                "granular_post_execution_checks": false,
                 "groth16_prepare_verifying_key_bls12381_cost_base": "52",
                 "groth16_prepare_verifying_key_bn254_cost_base": "52",
                 "groth16_verify_groth16_proof_internal_bls12381_cost_base": "52",
@@ -8022,6 +8024,12 @@
       "ObjectID": {
         "$ref": "#/components/schemas/Hex"
       },
+      "ObjectPermissions": {
+        "description": "A bitflag set of `ObjectPermission`s.",
+        "type": "integer",
+        "format": "uint64",
+        "minimum": 0.0
+      },
       "ObjectRead": {
         "oneOf": [
           {
@@ -8431,6 +8439,41 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "description": "Object is sequenced via consensus with per-address permissions. Each address can be granted a subset of [`ObjectPermission`] flags. Addresses not explicitly listed fall back to the default permissions.",
+            "type": "object",
+            "required": [
+              "Party"
+            ],
+            "properties": {
+              "Party": {
+                "type": "object",
+                "required": [
+                  "permissions",
+                  "start_version"
+                ],
+                "properties": {
+                  "permissions": {
+                    "description": "The permission map for this object.",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/Party"
+                      }
+                    ]
+                  },
+                  "start_version": {
+                    "description": "The version at which the object most recently became a party object. Serves the same function as `initial_shared_version`, except it may change if the object's Owner type changes.",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/SequenceNumber2"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -8630,6 +8673,31 @@
                 "type": "null"
               }
             ]
+          }
+        }
+      },
+      "Party": {
+        "description": "Per-address permission map for a party-owned object. Addresses not in `members` receive `default_permissions`.",
+        "type": "object",
+        "required": [
+          "default_permissions",
+          "members"
+        ],
+        "properties": {
+          "default_permissions": {
+            "description": "The default permissions, used for any party member not explicitly listed in `members`.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectPermissions"
+              }
+            ]
+          },
+          "members": {
+            "description": "The permissions for each party member.",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ObjectPermissions"
+            }
           }
         }
       },

@@ -240,6 +240,9 @@ pub fn end_transaction(
                     .or_default()
                     .insert(id);
             }
+            Owner::Party { .. } => {
+                unimplemented!("Party does not exist for this execution version")
+            }
         }
     }
 
@@ -869,6 +872,9 @@ fn transaction_effects(
             Owner::Immutable => frozen.push(id),
             Owner::ConsensusAddressOwner { owner, .. } => {
                 transferred_to_account.push((pack_id(id), Value::address(owner.into())))
+            }
+            Owner::Party { .. } => {
+                unimplemented!("Party does not exist for this execution version")
             }
         }
     }

@@ -83,7 +83,7 @@ cmake
 
 ### Considerations to enable gRPC
 
-You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. See [Sui's data serving roadmap](/develop/accessing-data/data-serving#grpc-api) for guidance on the overall transition plan.
+You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. See [Sui's data serving roadmap](/develop/accessing-data/data-serving) for guidance on the overall transition plan.
 
 To serve the [gRPC API](/develop/accessing-data/grpc), you must enable it on your full node by indexing gRPC-specific data. During the initial gRPC indexing phase, your full node might not be able to handle other traffic, including the [**deprecated** JSON-RPC](/references/sui-api) requests. Plan your rollout carefully (such as using the `rolling upgrade` mechanism), and communicate any downtime to your customers and partners in advance. The time required to sync gRPC indexes depends on your full node's hardware and software configuration.
 
@@ -105,7 +105,7 @@ The `rpc` configuration block supports additional settings. The most important o
 
 Refer to the [full node YAML template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml) for the complete list of available `rpc` options.
 
-You can reclaim this storage by disabling JSON-RPC after all your client applications have migrated from JSON-RPC. All applications must migrate to gRPC or [GraphQL RPC](/develop/accessing-data/custom-indexer/custom-indexers) by July 2026. Add the following to the `fullnode.yaml` configuration of your full node to selectively disable JSON-RPC on it:
+You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. All applications must migrate to gRPC or [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) by July 2026. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
 
 ```sh
 
@@ -147,6 +147,70 @@ The Sui repository includes a guide on running a full node through [Docker Compo
 This alone is not suitable for a production environment, but you can use it to get a full node up and running quickly on a virtual machine or local machine for development purposes.
 See [Running a full node](#running-a-full-node) for instructions relevant to production use cases.
 
+Run the commands in this section from the same folder. Replace `branch-name` in URLs with the branch that matches your target network, such as `mainnet`, `testnet`, or `devnet`.
+
+1. Install [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/). Docker Desktop includes Docker Compose.
+
+1. On Linux, install the build prerequisites:
+
+    ```sh
+    $ apt update \
+    && apt install -y --no-install-recommends \
+    tzdata \
+    ca-certificates \
+    build-essential \
+    pkg-config \
+    cmake
+    ```
+
+1. Download the `docker-compose.yaml` file:
+
+    ```sh
+    $ curl -fLO https://raw.githubusercontent.com/MystenLabs/sui/branch-name/docker/fullnode/docker-compose.yaml
+    ```
+
+    The compose file pins a specific `mysten/sui-node` image tag. Update that tag to the version and network you target before you start the node.
+
+1. Download the `fullnode-template.yaml` file:
+
+    ```sh
+    $ curl -fLO https://github.com/MystenLabs/sui/raw/branch-name/crates/sui-config/data/fullnode-template.yaml
+    ```
+
+1. Download the `genesis.blob` file for your target network. Replace `<network>` with `mainnet`, `testnet`, or `devnet`:
+
+    ```sh
+    $ curl -fLO https://github.com/MystenLabs/sui-genesis/raw/main/<network>/genesis.blob
+    ```
+
+1. Start the full node in detached mode:
+
+    ```sh
+    $ docker compose up -d
+    ```
+
+    Use `docker compose` (Compose v2). On hosts that still run the standalone Compose v1 binary, the command is `docker-compose up -d`.
+
+### Building from source
+
+You can also build `sui-node` directly from the Sui repository using [Cargo](https://doc.rust-lang.org/cargo/), the Rust package manager.
+
+1. Install the prerequisites listed in [Software requirements](#software-requirements).
+
+1. Clone the Sui repository, replacing `branch-name` with the branch for your target network:
+
+    ```sh
+    $ git clone https://github.com/MystenLabs/sui.git -b branch-name
+    $ cd sui
+    ```
+
+1. Follow [Setting up a full node](#setting-up-a-full-node) to prepare `fullnode.yaml` and download the genesis blob.
+
+1. Build and run `sui-node` from source:
+
+    ```sh
+    $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
+    ```
 
 ### Setting up a full node
 

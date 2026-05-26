@@ -37,8 +37,6 @@ use crate::ledger_history::query_options::ResolvedRange;
 
 use super::query_end::query_end;
 
-use super::bitmap_scan::BITMAP_BUCKET_SCAN_BUDGET;
-use super::bitmap_scan::CHUNK_BUCKET_SCAN_BUDGET;
 use super::bitmap_scan::LedgerBitmapKind;
 use super::bitmap_scan::PendingBitmapBucket;
 use super::bitmap_scan::TX_BITMAP_BUCKET_SIZE;
@@ -66,12 +64,6 @@ use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::reached_range_end;
 use crate::ledger_history::watermark::terminal_boundary_watermark;
 
-pub(super) const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-
-const DEFAULT_LIMIT_ITEMS: u32 = 50;
-const MAX_LIMIT_ITEMS: u32 = 500;
-const CHUNK_MAX: usize = 32;
-const MAX_BITMAP_FILTER_LITERALS: usize = 10;
 const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::TRANSACTION;
 
 pub(crate) type ListTransactionsStream =
@@ -90,10 +82,15 @@ pub(crate) async fn list_transactions(
     let filtered = filter.is_some();
     validate_checkpoint_bounds(start_checkpoint, end_checkpoint)?;
     let read_mask = validate_read_mask(request.read_mask)?;
+    let ledger_history = service.config.ledger_history();
+    let endpoint = ledger_history.list_transactions();
+    let bitmap_bucket_scan_budget = ledger_history.bitmap_bucket_scan_budget();
+    let chunk_bucket_scan_budget = ledger_history.chunk_bucket_scan_budget();
+    let max_bitmap_filter_literals = ledger_history.max_bitmap_filter_literals();
     let options = QueryOptions::from_proto(
         request_options.as_ref(),
-        DEFAULT_LIMIT_ITEMS,
-        MAX_LIMIT_ITEMS,
+        endpoint.default_limit_items,
+        endpoint.max_limit_items,
         QueryType::Transactions,
         filter.as_ref(),
     )?;
@@ -101,7 +98,7 @@ pub(crate) async fn list_transactions(
     let ordering = options.ordering;
     let filter_query = filter
         .as_ref()
-        .map(|filter| transaction_filter_to_query(filter, MAX_BITMAP_FILTER_LITERALS))
+        .map(|filter| transaction_filter_to_query(filter, max_bitmap_filter_literals))
         .transpose()?;
 
     let initial_state = TransactionScanState::Init {
@@ -116,8 +113,8 @@ pub(crate) async fn list_transactions(
         let mut scan = ChunkedScan::new(
             initial_state,
             limit_items,
-            CHUNK_MAX,
-            BITMAP_BUCKET_SCAN_BUDGET,
+            endpoint.chunk_max,
+            bitmap_bucket_scan_budget,
             move |state, args: ChunkArgs| {
                 spawn_transaction_chunk(
                     service.clone(),
@@ -125,6 +122,7 @@ pub(crate) async fn list_transactions(
                     read_mask.clone(),
                     options.clone(),
                     args.scan_budget,
+                    chunk_bucket_scan_budget,
                     args.chunk_item_limit,
                     args.remaining_request_item_limit,
                     render_contents,
@@ -167,6 +165,7 @@ fn spawn_transaction_chunk(
     read_mask: FieldMaskTree,
     options: QueryOptions,
     scan_budget: usize,
+    chunk_scan_budget: usize,
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     render_contents: bool,
@@ -180,6 +179,7 @@ fn spawn_transaction_chunk(
             options,
             render_contents,
             scan_budget,
+            chunk_scan_budget,
             chunk_item_limit,
             remaining_request_item_limit,
             &cancel,
@@ -219,6 +219,7 @@ fn next_transaction_chunk(
     options: QueryOptions,
     render_contents: bool,
     scan_budget: usize,
+    chunk_scan_budget: usize,
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
@@ -308,7 +309,7 @@ fn next_transaction_chunk(
                 end_position,
             } => {
                 let hit_limit = chunk_item_limit.min(remaining_request_item_limit);
-                let chunk_scan_budget = remaining_scan_budget.min(CHUNK_BUCKET_SCAN_BUDGET);
+                let chunk_scan_budget = remaining_scan_budget.min(chunk_scan_budget);
                 let hits = drain_bitmap_hits_with_budget(
                     service.clone(),
                     LedgerBitmapKind::Transaction,

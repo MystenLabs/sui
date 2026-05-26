@@ -54,87 +54,6 @@ use sui_types::storage::ObjectKey;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
-/// Read-side concurrency budgets for v2alpha list APIs.
-#[derive(Clone, Copy, Debug)]
-pub struct ConcurrencyConfig {
-    /// Per-request semaphore capacity gating downstream BigTable reads on
-    /// `BigTableClient`.
-    pub request_bigtable_concurrency: usize,
-    /// Maximum bitmap scan fanout accepted in one filter request. Each
-    /// literal can become one bitmap dimension stream; bitmap scans do not
-    /// consume downstream request permits.
-    pub max_bitmap_filter_literals: usize,
-    /// Per-request evaluated-bucket budget for filtered tx-bitmap scans,
-    /// shared across all DNF dimensions of one query. Caps how many fetched
-    /// buckets the eval evaluates, NOT how many bucket reads BigTable
-    /// receives — at exhaustion each leaf stream may have fetched one
-    /// additional bucket that is discarded rather than evaluated, so
-    /// observed reads can exceed this by up to `max_bitmap_filter_literals`.
-    /// Bounds wall time and resource cost; clients page transparently via
-    /// the returned cursor on SCAN_LIMIT.
-    pub bitmap_bucket_budget_tx: u64,
-    /// Per-request evaluated-bucket budget for filtered event-bitmap scans.
-    /// Event buckets cover far fewer source-domain positions than tx buckets,
-    /// so this is tuned separately even though we currently default both to
-    /// the same number. Same fetched-vs-evaluated semantics as
-    /// `bitmap_bucket_budget_tx`.
-    pub bitmap_bucket_budget_event: u64,
-}
-
-impl Default for ConcurrencyConfig {
-    fn default() -> Self {
-        Self {
-            request_bigtable_concurrency: 10,
-            max_bitmap_filter_literals: 10,
-            bitmap_bucket_budget_tx: 1000,
-            bitmap_bucket_budget_event: 1000,
-        }
-    }
-}
-
-impl ConcurrencyConfig {
-    /// Reject configurations that cannot make forward progress.
-    pub fn validate(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(
-            self.request_bigtable_concurrency > 0,
-            "request_bigtable_concurrency must be greater than zero",
-        );
-        anyhow::ensure!(
-            self.max_bitmap_filter_literals > 0,
-            "max_bitmap_filter_literals must be greater than zero",
-        );
-        anyhow::ensure!(
-            self.bitmap_bucket_budget_tx > 0,
-            "bitmap_bucket_budget_tx must be greater than zero",
-        );
-        anyhow::ensure!(
-            self.bitmap_bucket_budget_event > 0,
-            "bitmap_bucket_budget_event must be greater than zero",
-        );
-        // Each leaf bitmap stream needs at least one bucket fetch to emit its
-        // first watermark; the eval's merged watermark stays `None` until every
-        // child has reported. If the per-request budget is smaller than the
-        // accepted literal count, a SCAN_LIMIT can fire before any merged
-        // watermark reaches the wire, leaving the client with a cursor-less
-        // QueryEnd it cannot resume from.
-        anyhow::ensure!(
-            self.bitmap_bucket_budget_tx >= self.max_bitmap_filter_literals as u64,
-            "bitmap_bucket_budget_tx ({}) must be >= max_bitmap_filter_literals ({}) \
-             so every leaf stream gets at least one bucket before SCAN_LIMIT",
-            self.bitmap_bucket_budget_tx,
-            self.max_bitmap_filter_literals,
-        );
-        anyhow::ensure!(
-            self.bitmap_bucket_budget_event >= self.max_bitmap_filter_literals as u64,
-            "bitmap_bucket_budget_event ({}) must be >= max_bitmap_filter_literals ({}) \
-             so every leaf stream gets at least one bucket before SCAN_LIMIT",
-            self.bitmap_bucket_budget_event,
-            self.max_bitmap_filter_literals,
-        );
-        Ok(())
-    }
-}
-
 /// Stage label values for the `permit_wait_ms` metric. `&'static str` so they
 /// satisfy `with_label_values` zero-allocation.
 pub(crate) mod stage {
@@ -771,33 +690,5 @@ mod tests {
             .collect();
         assert_eq!(by_stage.get("transactions"), Some(&1));
         assert_eq!(by_stage.get("objects"), Some(&1));
-    }
-
-    #[test]
-    fn validate_rejects_budget_below_literal_cap() {
-        // Per-request budgets must be at least the accepted-literal cap, so
-        // every leaf bitmap stream gets a bucket fetch before SCAN_LIMIT.
-        let mut cfg = ConcurrencyConfig {
-            max_bitmap_filter_literals: 10,
-            bitmap_bucket_budget_tx: 5,
-            ..ConcurrencyConfig::default()
-        };
-        let err = cfg.validate().expect_err("budget < literal cap must fail");
-        assert!(
-            err.to_string().contains("bitmap_bucket_budget_tx"),
-            "error mentions the tx budget: {err}"
-        );
-
-        cfg.bitmap_bucket_budget_tx = 10;
-        cfg.bitmap_bucket_budget_event = 9;
-        let err = cfg.validate().expect_err("budget < literal cap must fail");
-        assert!(
-            err.to_string().contains("bitmap_bucket_budget_event"),
-            "error mentions the event budget: {err}"
-        );
-
-        cfg.bitmap_bucket_budget_event = 10;
-        cfg.validate()
-            .expect("equal budget and literal cap is valid");
     }
 }
