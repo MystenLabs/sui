@@ -21,7 +21,7 @@ use crate::errors::Error;
 
 use super::{TransactionObjectData, TryConstructTransaction, simulate_transaction};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct WithdrawStake {
     pub sender: SuiAddress,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
