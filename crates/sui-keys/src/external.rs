@@ -756,9 +756,8 @@ impl AccountKeystore for External {
 #[cfg(test)]
 mod tests {
     use super::{
-        External, ExternalExecError, JSON_RPC_METHOD_NOT_FOUND_ERROR_CODE,
-        CREATE_KEY_UNSUPPORTED_USE_EXISTING_ERROR_CODE, MockCommandRunner, StdCommandRunner,
-        StoredKey,
+        CREATE_KEY_UNSUPPORTED_USE_EXISTING_ERROR_CODE, External, ExternalExecError,
+        JSON_RPC_METHOD_NOT_FOUND_ERROR_CODE, MockCommandRunner, StdCommandRunner, StoredKey,
     };
     use crate::external::ProvisionMode;
     use crate::key_identity::KeyIdentity;
