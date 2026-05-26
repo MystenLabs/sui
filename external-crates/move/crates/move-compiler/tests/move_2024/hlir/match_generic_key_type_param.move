@@ -18,14 +18,15 @@ module 0x2::M {
         Variant { inner: Inner<T> },
     }
 
-    public fun extract_value<T: key + store>(outer: Outer<T>): u64 {
+    // The function returns the asset so the non-drop T is not silently discarded.
+    public fun extract_value<T: key + store>(outer: Outer<T>): (u64, T) {
         match (outer) {
             Outer::Variant {
-                inner: Inner { asset: _asset, state: State::Active { value } },
-            } => value,
+                inner: Inner { asset, state: State::Active { value } },
+            } => (value, asset),
             Outer::Variant {
-                inner: Inner { asset: _asset, state: State::Idle },
-            } => 0,
+                inner: Inner { asset, state: State::Idle },
+            } => (0, asset),
         }
     }
 }
