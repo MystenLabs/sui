@@ -394,7 +394,13 @@ impl Proposer for ValidatorProposer {
                 let missing_leader_hosts: Vec<&str> = leader_slots
                     .iter()
                     .filter(|slot| !dag_state.contains_cached_block_at_slot(**slot))
-                    .map(|slot| self.context.committee.authority(slot.authority).hostname.as_str())
+                    .map(|slot| {
+                        self.context
+                            .committee
+                            .authority(slot.authority)
+                            .hostname
+                            .as_str()
+                    })
                     .collect();
                 if !missing_leader_hosts.is_empty() {
                     debug!(
