@@ -20,8 +20,8 @@ Diagrams in Sui documentation follow the [C4 model for software architecture](ht
 | **C4 level** | **Diagram type** | **Sui example** | **Scope and audience** |
 | --- | --- | --- | --- |
 | Level 1: System context | Context diagram | Sui network and external wallets | Stakeholders and decision makers; shows what the system is and who uses it |
-| Level 2: Container | Architecture diagram | Full Node, Indexer, RPC Server, Archival Store | Developers; shows major deployable units and their data flows |
-| Level 3: Component | Component diagram | Move VM, Consensus Engine, Object Store inside Full Node | Engineers and contributors; shows internal structure of a container |
+| Level 2: Container | Architecture diagram | Sui Full Node, Indexer, RPC Server, Archival Store | Developers; shows major deployable units and their data flows |
+| Level 3: Component | Component diagram | Move VM, Consensus Engine, Object Store inside a Sui Full Node | Engineers and contributors; shows internal structure of a container |
 | Level 4: Code | Sequence or flow diagram | Transaction lifecycle through Move bytecode execution | Implementers; shows call sequences, state changes, decision logic |
 
 A single diagram must not mix C4 levels. For example, a container-level architecture diagram must not embed component-level detail inside a node. If that detail is necessary, create a companion diagram at the appropriate level and cross-reference it in the caption.
@@ -36,7 +36,7 @@ A single diagram must not mix C4 levels. For example, a container-level architec
 
 ## Tooling
 
-Two tools cover every diagram in the Sui docs: Mermaid for basic diagrams that live alongside prose in version control, and Claude Design for complex C4 diagrams that need precise visual control.
+2 tools cover every diagram in the Sui docs: Mermaid for basic diagrams that live alongside prose in version control, and Claude Design for complex C4 diagrams that need precise visual control.
 
 ### When to use each tool
 
@@ -61,7 +61,39 @@ Use Claude Design when any of the following apply:
 
 Because Sui documentation is maintained as docs-as-code in GitHub, Mermaid is a strong choice for diagrams that change frequently or need to stay in sync with code. As plain text, Mermaid diagrams are easy to version control, review in pull requests, and update without a separate design tool.
 
-The Sui brand theme is applied to every Mermaid diagram automatically through the Docusaurus site configuration. Do not include a `themeVariables` frontmatter block inside the fenced `mermaid` code block. Write the diagram body only, and the brand colors, line color, and font apply on render.
+The Sui brand theme maps Mermaid's theme variables to the brand palette: Black for primary nodes, Gray 500 for secondary, Sui Blue 500 for tertiary nodes and lines, white text on dark fills, and Inter as the font. The full theme is the following.
+
+```yaml
+config:
+  theme: base
+  themeVariables:
+    primaryColor: '#000000'
+    primaryTextColor: '#FFFFFF'
+    primaryBorderColor: '#6C7584'
+    secondaryColor: '#6C7584'
+    secondaryTextColor: '#FFFFFF'
+    tertiaryColor: '#298DFF'
+    tertiaryTextColor: '#FFFFFF'
+    lineColor: '#298DFF'
+    background: '#FFFFFF'
+    mainBkg: '#000000'
+    secondBkg: '#6C7584'
+    noteBkgColor: '#E6F1FB'
+    noteTextColor: '#000000'
+    noteBorderColor: '#298DFF'
+    activationBkgColor: '#298DFF'
+    activationBorderColor: '#185FA5'
+    fontSize: '14px'
+    fontFamily: 'Inter, sans-serif'
+    signalColor: '#298DFF'
+    signalTextColor: '#298DFF'
+    labelBoxBkgColor: '#000000'
+    labelBoxBorderColor: '#6C7584'
+    labelTextColor: '#FFFFFF'
+    loopTextColor: '#FFFFFF'
+```
+
+You do not need to include this block. The theme is applied to every Mermaid diagram automatically through the Docusaurus site configuration, so write only the diagram body inside the fenced `mermaid` code block and the brand colors, line color, and font apply on render.
 
 ```mermaid
 flowchart LR
@@ -70,7 +102,7 @@ flowchart LR
     B -->|No| D[REJECT TRANSACTION]
 ```
 
-If a diagram must temporarily override a brand color (rare, and only with documentation reviewer approval), use a per-diagram `themeVariables` block to override only the specific variable. Do not paste the full 26-variable block.
+If a diagram must temporarily override a brand color (rare, and only with documentation reviewer approval), add a `themeVariables` block that overrides only the specific variable. Do not paste the full block back in.
 
 ### Claude Design
 
@@ -82,15 +114,23 @@ Visit the [Sui Docs Diagrams repo](https://github.com/jon-mysten/sui-docs-diagra
 
 Claude Design ([claude.ai/design](https://claude.ai/design)) is the recommended tool for diagrams that exceed Mermaid's practical limits. It produces SVG output that conforms to the Sui brand palette, the C4 model, and the layout rules in this document when configured with the Sui Docs Diagrams package.
 
-#### Setup, one time
+#### One-time setup
 
-1. Download the latest release from the [Sui Docs Diagrams releases page](https://github.com/jon-mysten/sui-docs-diagrams/releases/latest). Two files are needed:
-   - `sui-docs-claude-design.zip`, the design system content
-   - `sui-docs-fonts.zip`, the brand fonts bundle (uploaded through a separate path)
+The fastest way to set up the design system is to link the GitHub repository directly, so Claude Design pulls the files without a download step.
+
+1. Open [claude.ai/design](https://claude.ai/design) and create a new design system.
+2. In the **Link code on GitHub** slot, paste the repository URL `https://github.com/jon-mysten/sui-docs-diagrams`. Claude Design pulls the design system content directly from the repository.
+3. When Claude Design displays the Missing brand fonts banner after onboarding, click the **Upload fonts** button and add the font files. The fonts live in `assets/fonts/` in the repository, or download `sui-docs-fonts.zip` from the [releases page](https://github.com/jon-mysten/sui-docs-diagrams/releases/latest) for a flat bundle. Claude Design's font analyzer is a separate ingestion path from the code link, so this step is needed regardless of setup method.
+4. Attach the repository's top-level `DESIGN.md` file to the first chat project you create. This file codifies the C4 rules, casing, shapes, colors, and arrow taxonomy. Claude Design references it as the source of truth for compliance.
+
+##### Alternative: upload from a download
+
+If you prefer not to link the repository, or your environment cannot reach GitHub, download and upload the package manually.
+
+1. Download the latest release from the [Sui Docs Diagrams releases page](https://github.com/jon-mysten/sui-docs-diagrams/releases/latest). 2 files are needed: `sui-docs-claude-design.zip` (the design system content) and `sui-docs-fonts.zip` (the brand fonts bundle).
 2. Open [claude.ai/design](https://claude.ai/design) and create a new design system.
 3. Drag the files from each subdirectory of `sui-docs-claude-design.zip` into the matching Claude Design upload slot. The package's `UPLOAD-GUIDE.md` documents the slot-by-slot mapping.
-4. When Claude Design displays the Missing brand fonts banner after onboarding, click the **Upload fonts** button and drop in `sui-docs-fonts.zip`. Claude Design's font analyzer is a separate ingestion path from the design system upload.
-5. Attach the package's top-level `DESIGN.md` file to the first chat project you create. This file codifies the C4 rules, casing, shapes, colors, and arrow taxonomy. Claude Design references it as the source of truth for compliance.
+4. Complete the font and `DESIGN.md` steps (3 and 4) from the GitHub method above.
 
 #### Creating a diagram
 
@@ -102,11 +142,11 @@ Claude Design ([claude.ai/design](https://claude.ai/design)) is the recommended 
 
 #### What the package enforces
 
-The Sui Docs Diagrams package ships with four static audits the package author runs before any diagram ships:
+The Sui Docs Diagrams package ships with 4 static audits the package author runs before any diagram ships:
 
 - `audit-contrast.py`: every text-on-fill pairing meets its WCAG 2.1 threshold.
 - `audit-node-sizing.py`: every node-internal text element fits with at least 16px of horizontal padding per side.
-- `audit-arrow-routing.py`: every forward arrow has at most one 90-degree turn; backward arrows are tagged and capped at three turns.
+- `audit-arrow-routing.py`: every forward arrow has at most one 90-degree turn; backward arrows are tagged and capped at 3 turns.
 - `audit-label-overlap.py`: no arrow stroke passes within 8px of any text label's bounding box.
 
 When Claude Design produces output for you, run these audits against the exported SVG before committing.
@@ -127,7 +167,7 @@ The Sui brand core palette colors are:
 | Gray 500 | `#6C7584` | Secondary nodes, supporting components |
 | Sui Blue 500 | `#298DFF` | Arrows, tertiary nodes, callouts |
 
-The recommended use column describes best-practice guidance, not hard requirements. Any color that exactly matches a hex value in the core palette, Extended Blue (Blue 50 to 900), or Extended Gray (Gray 50 to 900) palette is acceptable, provided it maintains WCAG AA graphic contrast (3:1). Colors outside these palettes are not permitted. If more than 3 fill colors are required to maintain clarity, expand into the Gray extended palette first, then the Blue extended palette. See the extended palette at [https://live.standards.site/sui-media-kit/sui-color](https://live.standards.site/sui-media-kit/sui-color).
+The recommended use column describes best-practice guidance, not hard requirements. Any color that exactly matches a hex value in the core palette, Extended Blue (Blue 50 to 900), or Extended Gray (Gray 50 to 900) palette is acceptable, provided it maintains WCAG AA graphic contrast (3:1). Colors outside these palettes are not permitted. If more than 3 fill colors are required to maintain clarity, expand into the Gray extended palette first, then the Blue extended palette. See the [extended color palette](https://live.standards.site/sui-media-kit/sui-color) in the Sui Brand Kit.
 
 Sui Blue 500 on the white canvas measures 3.31 to 1, which passes the 3:1 graphic threshold but fails the 4.5:1 body-text threshold. For arrow labels, step labels, captions, and any Sui-blue text at 12px or smaller on white, use Sui Blue 600 (`#1759C4`), which measures 6.44 to 1. Arrow strokes themselves remain Sui Blue 500.
 
@@ -172,7 +212,7 @@ Each shape encodes a specific C4 element. Do not repurpose shapes for elements t
 | Rectangle (outline only) | Person or actor | External users or operator roles. Use Gray 500 outline with black label text. |
 | Rectangle with dashed border | External system | Third-party services outside the Sui boundary. Use Gray 500 dashed stroke. |
 | Diamond | Decision node | Conditional logic in flowcharts and sequence diagrams only. Not used in architecture or context diagrams. |
-| Three stacked rack units with status dots | Database or data store | Persistent storage: Postgres DB, object store, archival store. Use the provided `server-icon-minimal.svg` from the design system package. The icon's native viewBox is 120 by 120; it renders at any size. Sentence-case label sits centered below the icon. |
+| 3 stacked rack units with status dots | Database or data store | Persistent storage: Postgres DB, object store, archival store. Use the provided `server-icon-minimal.svg` from the design system package. The icon's native viewBox is 120 by 120; it renders at any size. Sentence-case label sits centered below the icon. |
 | Labeled group boundary rectangle | Boundary or zone | Operator-controlled boundaries such as Data indexer operator stack in the data-serving diagram. Use Gray 700 outline, sentence-case label at top-left, outside any node. |
 
 ### Color and emphasis
@@ -211,9 +251,9 @@ Architecture diagrams (C4 Level 2 and Level 3) use one of the following routing 
 
 - **Pattern 1, direct aligned:** Source and target share an x coordinate. Draw a straight vertical line (zero turns) from the source's bottom edge to the target's top edge.
 - **Pattern 2, direct offset:** Source and target do not share an x coordinate. Drop vertically from the source's bottom-center to exactly the target's vertical center (`target_y + target_height / 2`). Turn 90 degrees and enter the target's left or right side, whichever is closer to the source.
-- **Pattern 3, convergent:** Two or more sources feed a single target. Each source gets its own independent one-turn arrow following Pattern 2. Do not merge the arrows into a shared trunk.
-- **Pattern 4, divergent (fan-out):** One source feeds two or more targets. Each target gets its own independent one-turn arrow originating from a different x position on the source's bottom edge.
-- **Pattern 5, backward (target above source):** This is the only multi-turn pattern. Route the arrow around the outside of the diagram bounds and tag the path with `data-flow="backward"`. If a diagram has more than one backward flow, the diagram is too complex and should be split or its layout restructured so the dependency runs top-to-bottom in the first place.
+- **Pattern 3, convergent:** 2 or more sources feed a single target. Each source gets its own independent one-turn arrow following Pattern 2. Do not merge the arrows into a shared trunk.
+- **Pattern 4, divergent (fan-out):** 1 source feeds 2 or more targets. Each target gets its own independent one-turn arrow originating from a different x position on the source's bottom edge.
+- **Pattern 5, backward (target above source):** This is the only multi-turn pattern. Route the arrow around the outside of the diagram bounds and tag the path with `data-flow="backward"`. If a diagram has more than 1 backward flow, the diagram is too complex and should be split or its layout restructured so the dependency runs top-to-bottom in the first place.
 
 Diagonal connectors in an architecture diagram are a compliance failure. They are acceptable only in radial Level 1 context layouts where the system box sits at the center and actors arrange around it.
 
@@ -225,7 +265,7 @@ Labels sit on the longest straight segment of the arrow they describe, in the mi
 - **Patterns 2, 3, and 4:** Label sits centered above the horizontal segment, 6px above the line.
 - **Pattern 5:** Label sits centered above the bottom horizontal run.
 
-Labels must not overlap any arrow stroke in the diagram (the label's own arrow or any other). The minimum clearance between a label's bounding box and the nearest arrow stroke is 8px. When two arrows would place their labels in overlapping positions (common in convergent and divergent patterns), offset each label vertically by 16px so the labels stack rather than collide.
+Labels must not overlap any arrow stroke in the diagram (the label's own arrow or any other). The minimum clearance between a label's bounding box and the nearest arrow stroke is 8px. When 2 arrows would place their labels in overlapping positions (common in convergent and divergent patterns), offset each label vertically by 16px so the labels stack rather than collide.
 
 ### Accessibility
 
