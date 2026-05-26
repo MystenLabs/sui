@@ -42,7 +42,7 @@ const AGENTS: Agent[] = [
 
 function track(event: string, props: Record<string, string>) {
   if (typeof window !== "undefined") {
-    (window as any).__plausible_instance__?.track(event, { props });
+    (window as any).__plausible_track__?.(event, { props });
   }
 }
 

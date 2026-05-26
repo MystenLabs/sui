@@ -27,7 +27,7 @@ function CopyCommand({ command }) {
           // is attached as a custom property so individual install commands
           // can be told apart if more copy buttons are added later.
           if (typeof window !== "undefined") {
-            window.__plausible_instance__?.track(
+            window.__plausible_track__?.(
               "Skills: copy install command",
               { props: { command } },
             );
