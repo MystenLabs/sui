@@ -155,19 +155,16 @@ public fun validate_heartbeat<T0>(l0: &mut CrankConfig, l1: &mut Vault<T0>, l2: 
     } else {
         let l6 = *(dynamic_field::borrow(&l0.id, l7));
         if (l11 - l6 > C13) {
-            let l13 = dynamic_field::borrow_mut(&mut l0.id, l5);
-            *l13 = l10;
-            let l12 = dynamic_field::borrow_mut(&mut l0.id, l7);
-            *l12 = l11
+            *(dynamic_field::borrow_mut(&mut l0.id, l5)) = l10;
+            *(dynamic_field::borrow_mut(&mut l0.id, l7)) = l11
         } else {
             let l8 = *(dynamic_field::borrow(&l0.id, l5));
             if (l8 > 0u64) {
-                let l4 = if (l10 > l8) {
+                assert!(if (l10 > l8) {
                     l10 - l8
                 } else {
                     l8 - l10
-                };
-                assert!(l4as u128 * 10000u128 / l8as u128as u64 <= C12, C10)
+                }as u128 * 10000u128 / l8as u128as u64 <= C12, C10)
             }
         }
     };
@@ -182,12 +179,11 @@ public fun validate_reroute<T0>(l0: &mut CrankConfig, l1: &ApyRegistry, l2: &Str
     let l8 = apy::get_total_apy(l1, l4);
     let l12 = apy::get_total_apy(l1, l5);
     assert!(l12 > l8, C7);
-    let l7 = if (l8 == 0u64) {
+    let l11 = if (l8 == 0u64) {
         10000u64
     } else {
         l12 - l8 * 10000u64 / l8
     };
-    let l11 = l7;
     assert!(l11 >= *(&l0.min_spread_bps), C3);
     floors::assert_spread(l11);
     assert!(l12 >= *(&l0.min_apy_bps), C4);
@@ -201,8 +197,7 @@ public fun validate_reroute<T0>(l0: &mut CrankConfig, l1: &ApyRegistry, l2: &Str
     apy::assert_not_stale(l1, l5, l6);
     let reg_103;
     (reg_102, reg_103) = strategy::decode_strategy(l5);
-    let l13 = reg_103;
-    if (l13 == 2u8) {
+    if (reg_103 == 2u8) {
         assert!(!(vault::is_depeg_active(l3)), C11)
     };
     *(&mut l0.last_reroute_ms) = l10;
