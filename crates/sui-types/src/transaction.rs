@@ -3448,7 +3448,20 @@ impl TransactionDataAPI for TransactionDataV1 {
             }
         }
 
-        self.validity_check_no_gas_check(config)?;
+        self.kind().validity_check(config)?;
+
+        if config.enable_gasless() && self.is_gasless_transaction() {
+            let TransactionKind::ProgrammableTransaction(pt) = &self.kind else {
+                debug_fatal!("gasless transaction is not a ProgrammableTransaction");
+                return Err(UserInputError::Unsupported(
+                    "Gasless transactions must be programmable transactions".to_string(),
+                )
+                .into());
+            };
+            pt.validate_gasless_transaction(config)?;
+        }
+
+        self.check_sponsorship()?;
         Ok(())
     }
 
@@ -3526,22 +3539,6 @@ impl TransactionDataAPI for TransactionDataV1 {
 }
 
 impl TransactionDataV1 {
-    fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        self.kind().validity_check(config)?;
-
-        if config.enable_gasless() && self.is_gasless_transaction() {
-            let TransactionKind::ProgrammableTransaction(pt) = &self.kind else {
-                debug_fatal!("gasless transaction is not a ProgrammableTransaction");
-                return Err(UserInputError::Unsupported(
-                    "Gasless transactions must be programmable transactions".to_string(),
-                ));
-            };
-            pt.validate_gasless_transaction(config)?;
-        }
-
-        self.check_sponsorship()
-    }
-
     fn accumulate_funds_withdrawals(
         &self,
         chain_identifier: ChainIdentifier,
