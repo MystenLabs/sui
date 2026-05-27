@@ -51,7 +51,7 @@ fun cim(l0: u8): bool {
         let l8 = constants::post_only();
         let l4 = l13 == &l8 || {
             let l10 = constants::immediate_or_cancel();
-            let l3 = !(l13 == &l10) && {
+            let l3 = l13 != &l10 && {
                 let l12 = constants::fill_or_kill();
                 let l2 = if (l13 == &l12) {
                     false
