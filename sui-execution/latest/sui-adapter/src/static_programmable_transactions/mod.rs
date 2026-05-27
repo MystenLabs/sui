@@ -90,7 +90,7 @@ pub fn execute<Mode: ExecutionMode>(
     };
     linkage::component_based_linkage::refine_per_component_linkage::<Mode::Error>(
         &mut txn,
-        linkage::component_based_linkage::SourceCriterion::MutRef,
+        linkage::component_based_linkage::SourceCriterion::AnyValue,
         &linkage_analysis,
         &package_store,
     )
