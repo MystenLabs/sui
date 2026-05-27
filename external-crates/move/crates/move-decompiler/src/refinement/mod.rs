@@ -10,6 +10,7 @@ mod hoist_arm_assignments;
 mod hoist_dual_continue;
 mod hoist_tail_continue;
 mod introduce_while;
+mod liveness;
 mod loop_to_seq;
 mod reconstruct_match;
 mod recover_asserts;
@@ -22,7 +23,8 @@ mod swap_continue_break_else;
 mod swap_continue_fallthrough;
 mod utils;
 
-pub use collect_uses::{collect_local_names, collect_uses};
+pub use collect_uses::collect_uses;
+pub use liveness::collect_local_names;
 
 pub type Refinement = fn(&mut Exp) -> bool;
 
