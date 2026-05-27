@@ -431,6 +431,25 @@ function processSource(name, config) {
   }
 
   console.log(`✅ ${name}: transformed ${count} files → ${config.targetPath}/`);
+
+  // Validate: fail if the source repo contains .md files not in fileMap or exclude
+  const allSourceFiles = fs.readdirSync(sourceDir).filter((f) => f.endsWith(".md"));
+  const mappedFiles = new Set(Object.keys(config.fileMap || {}));
+  const excludedFiles = new Set(config.exclude || []);
+  const unmapped = allSourceFiles.filter(
+    (f) => !mappedFiles.has(f) && !excludedFiles.has(f),
+  );
+
+  if (unmapped.length > 0) {
+    console.error(
+      `\n❌ ${name}: found ${unmapped.length} unmapped .md file(s) in ${config.sourcePath}/:\n` +
+        unmapped.map((f) => `   - ${f}`).join("\n") +
+        `\n\nEvery .md file in the source must have an entry in external-docs.json ` +
+        `fileMap (to include it) or exclude (to skip it), and a corresponding ` +
+        `sidebar entry in sidebars.js.\n`,
+    );
+    process.exit(1);
+  }
 }
 
 function main() {
