@@ -36,23 +36,22 @@ impl Refine for NegateComparison {
         else {
             return false;
         };
-        if args.len() != 1 {
+        let [inner] = args.as_mut_slice() else {
             return false;
-        }
+        };
         let Exp::Primitive {
             op: inner_op,
             args: inner_args,
-        } = &mut args[0]
+        } = inner
         else {
             return false;
         };
         let Some(dual) = dual_op(inner_op) else {
             return false;
         };
-        let new_args = std::mem::take(inner_args);
         *exp = Exp::Primitive {
             op: dual,
-            args: new_args,
+            args: std::mem::take(inner_args),
         };
         true
     }
