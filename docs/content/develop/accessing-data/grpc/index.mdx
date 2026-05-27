@@ -6,7 +6,7 @@ keywords: ['gRPC', 'Protocol Buffers', 'Sui API', 'full node', 'data access', 'i
 
 gRPC offers a high-performance, efficient communication protocol that uses [Protocol Buffers](https://protobuf.dev/overview/) for fast, compact data serialization. Its strongly typed interfaces reduce runtime errors and simplify client and server development across multiple languages. 
 
-The [Sui Full Node gRPC API](/references/fullnode-protocol) provides a fast, type-safe, and efficient interface for interacting with the Sui blockchain. Designed for power users, indexers, explorers, and decentralized apps, this API enables access to Sui data with high performance and low latency.
+The [Sui Full Node gRPC API](/references/fullnode-protocol) provides a fast, type-safe, and efficient interface for interacting with the Sui blockchain. Use gRPC for backend systems, indexers, typed clients, low-latency point lookups, transaction submission, simulation, and streaming subscriptions. For frontends, tools, dynamic-language clients, and flexible filtered historical queries, consider [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc). Full node gRPC is limited by the node's retention; query an [Archival Service](/develop/accessing-data/archival-store) endpoint directly when you need higher-retention point lookups.
 
 import DocCardList from '@theme/DocCardList';
 

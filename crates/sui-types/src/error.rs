@@ -1166,22 +1166,43 @@ impl std::fmt::Debug for SuiError {
 }
 
 pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub type ExecutionErrorMetadata = BTreeMap<String, String>;
 
 /// A trait for execution errors that provides common methods for accessing error information and creating new errors.
 pub trait ExecutionErrorTrait:
-    From<ExecutionError> + Debug + std::error::Error + Send + Sync + Sized
+    From<ExecutionError> + Debug + std::error::Error + Send + Sync + Sized + 'static
 {
+    fn new(
+        failure: ExecutionFailure,
+        source: Option<BoxError>,
+        metadata: ExecutionErrorMetadata,
+    ) -> Self;
+
+    fn from_execution_failure(failure: ExecutionFailure) -> Self {
+        Self::new(failure, None, ExecutionErrorMetadata::default())
+    }
+
+    fn from_kind(kind: ExecutionErrorKind) -> Self {
+        Self::from_execution_failure(ExecutionFailure::new(kind, None))
+    }
+
+    fn new_with_source<E>(kind: ExecutionErrorKind, source: E) -> Self
+    where
+        E: Into<BoxError>,
+    {
+        Self::new(
+            ExecutionFailure::new(kind, None),
+            Some(source.into()),
+            ExecutionErrorMetadata::default(),
+        )
+    }
+
     fn with_command_index(self, command: CommandIndex) -> Self;
     fn kind(&self) -> &ExecutionErrorKind;
     fn command(&self) -> Option<CommandIndex>;
-    // TODO remove, source ref should be used before instantiating this trait or after making it concrete
-    fn source_ref(&self) -> Option<&(dyn std::error::Error + 'static)>;
 
     fn to_execution_failure(&self) -> ExecutionFailure {
-        ExecutionFailure {
-            error: self.kind().clone(),
-            command: self.command(),
-        }
+        ExecutionFailure::new(self.kind().clone(), self.command())
     }
 }
 
@@ -1243,6 +1264,20 @@ impl ExecutionError {
 }
 
 impl ExecutionErrorTrait for ExecutionError {
+    fn new(
+        failure: ExecutionFailure,
+        source: Option<BoxError>,
+        _metadata: ExecutionErrorMetadata,
+    ) -> Self {
+        let ExecutionFailure { error, command } = failure;
+        let err = ExecutionError::new(error, source);
+        if let Some(command) = command {
+            err.with_command_index(command)
+        } else {
+            err
+        }
+    }
+
     fn with_command_index(self, command: CommandIndex) -> Self {
         self.with_command_index(command)
     }
@@ -1254,9 +1289,125 @@ impl ExecutionErrorTrait for ExecutionError {
     fn command(&self) -> Option<CommandIndex> {
         self.command()
     }
+}
 
-    fn source_ref(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.inner.source.as_deref().map(|e| e as _)
+#[derive(Debug)]
+pub struct ExecutionErrorContext {
+    kind: ExecutionErrorKind,
+    metadata: ExecutionErrorMetadata,
+    source: Option<BoxError>,
+    command: Option<CommandIndex>,
+}
+
+impl ExecutionErrorContext {
+    pub fn kind(&self) -> &ExecutionErrorKind {
+        &self.kind
+    }
+
+    pub fn command(&self) -> Option<CommandIndex> {
+        self.command
+    }
+
+    pub fn metadata_with_source(&self) -> Option<ExecutionErrorMetadata> {
+        let mut metadata = self.metadata.clone();
+        if let Some(source) = self.source.as_ref() {
+            metadata.insert("source".to_string(), source.to_string());
+        }
+
+        (!metadata.is_empty()).then_some(metadata)
+    }
+
+    pub fn to_execution_status(&self) -> (ExecutionErrorKind, Option<CommandIndex>) {
+        (self.kind().clone(), self.command())
+    }
+}
+
+impl ExecutionErrorTrait for ExecutionErrorContext {
+    fn new(
+        failure: ExecutionFailure,
+        source: Option<BoxError>,
+        metadata: ExecutionErrorMetadata,
+    ) -> Self {
+        let ExecutionFailure { error, command } = failure;
+        Self {
+            kind: error,
+            metadata,
+            source,
+            command,
+        }
+    }
+
+    fn with_command_index(self, command: CommandIndex) -> Self {
+        Self {
+            command: Some(command),
+            ..self
+        }
+    }
+
+    fn kind(&self) -> &ExecutionErrorKind {
+        self.kind()
+    }
+
+    fn command(&self) -> Option<CommandIndex> {
+        self.command()
+    }
+}
+
+impl std::fmt::Display for ExecutionErrorContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExecutionErrorContext: {:?}", self)
+    }
+}
+
+impl std::error::Error for ExecutionErrorContext {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source.as_deref().map(|e| e as _)
+    }
+}
+
+impl From<ExecutionErrorKind> for ExecutionErrorContext {
+    fn from(kind: ExecutionErrorKind) -> Self {
+        <Self as ExecutionErrorTrait>::from_kind(kind)
+    }
+}
+
+impl From<ExecutionFailure> for ExecutionErrorContext {
+    fn from(value: ExecutionFailure) -> Self {
+        <Self as ExecutionErrorTrait>::from_execution_failure(value)
+    }
+}
+
+impl From<ExecutionError> for ExecutionErrorContext {
+    fn from(value: ExecutionError) -> Self {
+        let ExecutionError { inner } = value;
+        let ExecutionErrorInner {
+            kind,
+            source,
+            command,
+        } = *inner;
+        Self {
+            kind,
+            metadata: BTreeMap::new(),
+            source,
+            command,
+        }
+    }
+}
+
+impl From<ExecutionErrorContext> for ExecutionError {
+    fn from(value: ExecutionErrorContext) -> Self {
+        let ExecutionErrorContext {
+            kind,
+            metadata: _,
+            source,
+            command,
+        } = value;
+        let err = ExecutionError::new(kind, source);
+        if let Some(command) = command {
+            err.with_command_index(command)
+        } else {
+            err
+        }
     }
 }
 
@@ -1280,13 +1431,7 @@ impl From<ExecutionErrorKind> for ExecutionError {
 
 impl From<ExecutionFailure> for ExecutionError {
     fn from(value: ExecutionFailure) -> Self {
-        let ExecutionFailure { error, command } = value;
-        let err = ExecutionError::from_kind(error);
-        if let Some(command) = command {
-            err.with_command_index(command)
-        } else {
-            err
-        }
+        <Self as ExecutionErrorTrait>::from_execution_failure(value)
     }
 }
 

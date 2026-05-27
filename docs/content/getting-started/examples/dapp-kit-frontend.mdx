@@ -1,5 +1,5 @@
 ---
-title: Sui dApp Kit Frontend
+title: dApp Kit
 description: Build a React frontend that connects a wallet, mints an NFT through a Move contract, queries owned objects, and refreshes the UI automatically using Sui dApp Kit and React Query.
 keywords: [example, dapp-kit, react, wallet, nft, mint, query, react-query, frontend, bootcamp]
 example_id: dapp-kit-frontend-bootcamp
@@ -213,7 +213,7 @@ The following sections address common issues with this example.
 
 **Cause:** The `StructType` filter in `OwnedObjects.tsx` does not match the deployed contract's full type path, or the component did not invalidate the React Query cache.
 
-**Fix:** Verify the `StructType` matches `PACKAGE_ID::hero::Hero` exactly. Confirm `invalidateQueries` uses the same query key as the `useQuery` call.
+**Fix:** Verify the `StructType` matches `PACKAGE_ID::hero::Hero` exactly. Confirm `invalidateQueries` uses the same query key as the `useQuery` call. If you are reading through a separately indexed API after execution, wait for indexing before invalidating. GraphQL execution-attached selections can often return transaction effects and related execution data in the same request without waiting for a follow-up indexed query.
 
 ### `signAndExecuteTransaction` fails silently
 

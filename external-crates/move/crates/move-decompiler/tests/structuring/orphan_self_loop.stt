@@ -1,0 +1,11 @@
+// An entry self-loop with an orphan self-loop node that's unreachable from the entry. Both
+// {0} and {1} are terminal SCCs of the original CFG, so `add_infinite_loop_post_dominators`
+// adds an impossible edge to each. Structuring's DFS post-order starts from node 0 and never
+// visits node 1, so the unreachable orphan is silently dropped and the output is just the
+// entry's loop.
+//
+//   ->0     ->1
+//    \_|     \_|
+
+code,0,0
+code,1,1

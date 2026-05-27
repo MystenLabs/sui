@@ -16,7 +16,7 @@ error[E03013]: positional call mismatch
   │
   = Remove '()' arguments from this pattern
 
-warning[W04039]: unable to determine principal type for literal
+warning[W04039]: unable to determine literal's type
   ┌─ tests/move_2024/matching/invalid_or_binding_at_pattern.move:6:23
   │
 6 │             x @ (E::B(0) | E::A(_)) => match (x) {

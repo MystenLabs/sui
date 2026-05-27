@@ -22,9 +22,6 @@ use crate::store::BigTableStore;
 /// We cap at half which is still very large.
 const MAX_MUTATIONS_PER_BATCH: usize = 50_000;
 
-/// This is the batch size the official java client from Google uses.
-pub const DEFAULT_MAX_ROWS: usize = 100;
-
 /// Extension of `Processor` that specifies a BigTable table name.
 pub trait BigTableProcessor: Processor<Value = Entry> {
     /// The BigTable table to write rows to.
@@ -71,7 +68,7 @@ where
     ) -> Self {
         Self {
             processor,
-            max_rows: config.max_rows.unwrap_or(DEFAULT_MAX_ROWS),
+            max_rows: config.max_rows_or_default(),
             rate_limiter,
         }
     }

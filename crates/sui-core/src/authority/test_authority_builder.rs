@@ -327,6 +327,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .unwrap_or(0),
             0,
             Arc::new(SubmittedTransactionCacheMetrics::new(&registry)),
+            None,
         )
         .expect("failed to create authority per epoch store");
 
@@ -368,7 +369,6 @@ impl<'a> TestAuthorityBuilder<'a> {
                     &checkpoint_store,
                     &epoch_store,
                     &cache_traits.backing_package_store,
-                    pruner_watermarks.checkpoint_id.clone(),
                     sui_config::RpcConfig::default(),
                 )
                 .await,
@@ -434,7 +434,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 Arc::downgrade(&epoch_store),
                 consensus_client,
                 randomness::Handle::new_stub(),
-                config.protocol_key_pair(),
+                Some(config.protocol_key_pair()),
             )
             .await;
             if let Some(randomness_manager) = randomness_manager {

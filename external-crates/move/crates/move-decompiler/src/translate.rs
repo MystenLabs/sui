@@ -11,10 +11,14 @@ use crate::{
 };
 
 use crate::ast::Exp;
-use move_model_2::{model::Model, source_kind::SourceKind};
+use indexmap::IndexMap;
+use move_model_2::{
+    model::{Model, Module as MModule},
+    source_kind::SourceKind,
+};
 use move_stackless_bytecode_2::ast as SB;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 // -------------------------------------------------------------------------------------------------
 // Entry
@@ -29,7 +33,9 @@ pub fn model_with_config<S: SourceKind>(
     config: &Config,
     model: Model<S>,
 ) -> anyhow::Result<Out::Decompiled<S>> {
-    let stackless = move_stackless_bytecode_2::from_model(&model, /* optimize */ true)?;
+    // Don't optimize the stackless bytecode: we want to faithfully decompile what the
+    // bytecode actually contains.
+    let stackless = move_stackless_bytecode_2::from_model(&model, /* optimize */ false)?;
     let packages = packages(config, &model, stackless);
     Ok(Out::Decompiled { model, packages })
 }
@@ -49,16 +55,18 @@ fn packages<S: SourceKind>(
         .collect()
 }
 
-fn package<S: SourceKind>(config: &Config, _model: &Model<S>, sb_pkg: SB::Package) -> Out::Package {
+fn package<S: SourceKind>(config: &Config, model: &Model<S>, sb_pkg: SB::Package) -> Out::Package {
     let SB::Package {
         name,
         address,
         modules,
     } = sb_pkg;
+    let pkg = model.package(&address);
     let modules = modules
         .into_iter()
         .map(|(module_name, m)| {
-            let decompiled_module = module(config, m);
+            let resolved = pkg.module(module_name);
+            let decompiled_module = module(config, resolved, m);
             (module_name, decompiled_module)
         })
         .collect();
@@ -73,22 +81,134 @@ fn package<S: SourceKind>(config: &Config, _model: &Model<S>, sb_pkg: SB::Packag
 // Module
 // -------------------------------------------------------------------------------------------------
 
-pub fn module(config: &Config, module: SB::Module) -> Out::Module {
-    let SB::Module { name, functions } = module;
+pub fn module<S: SourceKind>(
+    config: &Config,
+    resolved: MModule<'_, S>,
+    sb_module: SB::Module,
+) -> Out::Module {
+    let SB::Module { name, functions } = sb_module;
 
     let functions = functions
         .into_iter()
-        .map(|(name, fun)| (name, function(config, fun)))
+        .map(|(name, fun)| (name, function(config, resolved, fun)))
         .collect();
 
-    Out::Module { name, functions }
+    let structs = collect_structs(&resolved);
+    let enums = collect_enums(&resolved);
+
+    let mut module = Out::Module {
+        name,
+        structs,
+        enums,
+        functions,
+        uses: BTreeMap::new(),
+        type_uses: BTreeMap::new(),
+    };
+
+    let current_mid = resolved.id();
+    let used = build_used(&module, &resolved);
+    crate::refinement::collect_uses(&mut module, current_mid, &used);
+    module
+}
+
+/// Convert each compiled struct in `resolved` into our `ast::Struct`. Fields' types are
+/// translated via `Type::from_normalized`, leaving every `Datatype` reference as `Qualified`
+/// initially; `collect_uses` rewrites those to `Aliased` after counting.
+fn collect_structs<S: SourceKind>(resolved: &MModule<'_, S>) -> IndexMap<Symbol, Out::Struct> {
+    let mut out = IndexMap::new();
+    for s in resolved.structs() {
+        let compiled = s.compiled();
+        let fields = compiled
+            .fields
+            .0
+            .iter()
+            .map(|(name, field)| (*name, Out::Type::from_normalized(&field.type_)))
+            .collect();
+        out.insert(
+            s.name(),
+            Out::Struct {
+                name: s.name(),
+                abilities: compiled.abilities,
+                type_parameters: compiled.type_parameters.clone(),
+                fields,
+            },
+        );
+    }
+    out
+}
+
+fn collect_enums<S: SourceKind>(resolved: &MModule<'_, S>) -> IndexMap<Symbol, Out::Enum> {
+    let mut out = IndexMap::new();
+    for e in resolved.enums() {
+        let compiled = e.compiled();
+        let variants = compiled
+            .variants
+            .iter()
+            .map(|(vname, variant)| {
+                let fields = variant
+                    .fields
+                    .0
+                    .iter()
+                    .map(|(name, field)| (*name, Out::Type::from_normalized(&field.type_)))
+                    .collect();
+                Out::Variant {
+                    name: *vname,
+                    fields,
+                }
+            })
+            .collect();
+        out.insert(
+            e.name(),
+            Out::Enum {
+                name: e.name(),
+                abilities: compiled.abilities,
+                type_parameters: compiled.type_parameters.clone(),
+                variants,
+            },
+        );
+    }
+    out
+}
+
+/// Names that no module alias may use: every function, struct, enum, variant, and field
+/// name declared in this module, plus every local introduced or referenced in any function
+/// body. Aliases shadowing these would produce ambiguous or wrong decompiled source.
+fn build_used<S: SourceKind>(module: &Out::Module, resolved: &MModule<'_, S>) -> BTreeSet<Symbol> {
+    let mut out = crate::refinement::collect_local_names(module);
+
+    // Function names in this module.
+    for name in module.functions.keys() {
+        out.insert(*name);
+    }
+
+    // Struct, enum, variant, and field names declared in this module.
+    for s in resolved.structs() {
+        out.insert(s.name());
+        for field in s.compiled().fields.0.keys() {
+            out.insert(*field);
+        }
+    }
+    for e in resolved.enums() {
+        out.insert(e.name());
+        for v in e.variants() {
+            out.insert(v.name());
+            for field in v.compiled().fields.0.keys() {
+                out.insert(*field);
+            }
+        }
+    }
+    out
 }
 
 // -------------------------------------------------------------------------------------------------
 // Function
 // -------------------------------------------------------------------------------------------------
 
-fn function(config: &Config, fun: SB::Function) -> Out::Function {
+fn function<S: SourceKind>(
+    config: &Config,
+    resolved_module: MModule<'_, S>,
+    fun: SB::Function,
+) -> Out::Function {
     if config.debug_print.print_function_heading() {
         println!("DECOMPILING FUNCTION {}", fun.name);
     }
@@ -98,23 +218,67 @@ fn function(config: &Config, fun: SB::Function) -> Out::Function {
             println!("Block {}:\n{blk}", lbl);
         }
     }
+    // Pull the compiled function's signature so parameter/return types end up in the AST,
+    // available to `collect_uses` for alias rewriting. The first `parameters.len()` local
+    // indices are the parameters; `term_reconstruction` renders local id `i` as `l{i}`, so
+    // parameter names are `l0..l{N-1}` (we generate them at print time from this count).
+    let model_fun = resolved_module.function(fun.name);
+    let compiled = model_fun.maybe_compiled();
+    let parameters: Vec<Out::Type> = compiled
+        .map(|f| {
+            f.parameters
+                .iter()
+                .map(|t| Out::Type::from_normalized(t))
+                .collect()
+        })
+        .unwrap_or_default();
+    let returns: Vec<Out::Type> = compiled
+        .map(|f| {
+            f.return_
+                .iter()
+                .map(|t| Out::Type::from_normalized(t))
+                .collect()
+        })
+        .unwrap_or_default();
+    let visibility = compiled.map(|f| f.visibility).unwrap_or_default();
+    let is_entry = compiled.map(|f| f.is_entry).unwrap_or(false);
+    let type_parameters = compiled
+        .map(|f| f.type_parameters.clone())
+        .unwrap_or_default();
+    let param_names: Vec<String> = (0..parameters.len()).map(|i| format!("l{i}")).collect();
     let (name, terms, input, entry) = make_input(fun);
     if config.debug_print.input {
         print_heading("input");
         println!("{input:?}");
     }
-    let structured = crate::structuring::structure(config, input, entry);
+    let (structured, unstructured_blocks) = crate::structuring::structure(config, input, entry);
     if config.debug_print.structured {
         print_heading("structured");
         println!("{}", structured.to_test_string());
     }
     let mut code = generate_output(terms, structured);
+    // Block markers exist only to give surviving `Unstructured(Goto)`s something to point
+    // at. Keep `Block(N, _)` iff some surviving goto targets `N`; strip the rest. Functions
+    // with no surviving gotos shed every marker, restoring pre-Block adjacency for the
+    // refinement pipeline.
+    let targets = collect_goto_targets(&code);
+    strip_untargeted_blocks(&mut code, &targets);
+    crate::structuring::hoist_declarations::hoist_declarations(&mut code, param_names);
     crate::refinement::refine(&mut code);
     if config.debug_print.decompiled_code {
         print_heading("refined code");
         println!("{code}");
     }
-    Out::Function { name, code }
+    Out::Function {
+        name,
+        visibility,
+        is_entry,
+        type_parameters,
+        parameters,
+        returns,
+        code,
+        unstructured_blocks,
+    }
 }
 
 fn make_input(
@@ -136,7 +300,6 @@ fn make_input(
 
     let blocks_iter = basic_blocks.iter();
     let mut next_blocks_iter = basic_blocks.iter().skip(1);
-    let mut let_binds = HashSet::new();
 
     for (lbl, block) in blocks_iter {
         let label = lbl;
@@ -150,11 +313,12 @@ fn make_input(
         } else {
             None
         };
-        // Extract terms and input for the block
+        // Per-block: the block's first StoreLoc of each local emits `let X = e`, the rest
+        // `X = e`. Cross-block coordination — hoisting `let X;` out of arm scopes when X is
+        // shared with siblings or seen by later items — happens later in `hoist_declarations`.
+        let mut let_binds: HashSet<SB::RegId> = HashSet::new();
         let blk_terms = generate_term_block(block, &mut let_binds);
         let blk_input = extract_input(block, next_block_label);
-
-        // Insert into the maps
 
         terms.insert((*label as u32).into(), blk_terms);
         input.insert((*label as u32).into(), blk_input);
@@ -183,12 +347,27 @@ fn extract_input(block: &SB::BasicBlock, next_block_label: Option<SB::Label>) ->
                 condition: _,
                 then_label,
                 else_label,
-            } => DI::Condition(
-                (block.label as u32).into(),
-                (block.label as u32).into(),
-                (*then_label as u32).into(),
-                (*else_label as u32).into(),
-            ),
+            } => {
+                // A degenerate JumpIf whose two arms target the same label is just an
+                // unconditional jump with a dead condition. The compiler can leave these
+                // around when an arm body is empty (`if (c) {}`) and the optimizer forwards
+                // the empty arm to the join. Lower it as `Code` so structuring isn't asked
+                // to handle a Condition whose successors aren't dominated by it.
+                if then_label == else_label {
+                    DI::Code(
+                        (block.label as u32).into(),
+                        (block.label as u32).into(),
+                        Some((*then_label as u32).into()),
+                    )
+                } else {
+                    DI::Condition(
+                        (block.label as u32).into(),
+                        (block.label as u32).into(),
+                        (*then_label as u32).into(),
+                        (*else_label as u32).into(),
+                    )
+                }
+            }
             SI::VariantSwitch {
                 condition: _,
                 enum_,
@@ -227,18 +406,172 @@ fn extract_input(block: &SB::BasicBlock, next_block_label: Option<SB::Label>) ->
     }
 }
 
+/// Collect every label that a surviving `Unstructured(Goto(_))` targets. Block markers
+/// whose ID is in this set are kept (for cross-referencing); the rest are stripped.
+fn collect_goto_targets(exp: &Exp) -> HashSet<u64> {
+    let mut out = HashSet::new();
+    collect_goto_targets_into(exp, &mut out);
+    out
+}
+
+fn collect_goto_targets_into(exp: &Exp, out: &mut HashSet<u64>) {
+    use crate::ast::UnstructuredNode;
+    match exp {
+        Exp::Unstructured(nodes) => {
+            for n in nodes {
+                match n {
+                    UnstructuredNode::Goto(label) => {
+                        out.insert(*label);
+                    }
+                    UnstructuredNode::Labeled(_, body) | UnstructuredNode::Statement(body) => {
+                        collect_goto_targets_into(body, out);
+                    }
+                }
+            }
+        }
+        Exp::Block(_, body)
+        | Exp::Loop(_, body)
+        | Exp::Assign(_, body)
+        | Exp::LetBind(_, body)
+        | Exp::Abort(body)
+        | Exp::Borrow(_, body)
+        | Exp::Unpack(_, _, body)
+        | Exp::UnpackVariant(_, _, _, body)
+        | Exp::VecUnpack(_, body) => collect_goto_targets_into(body, out),
+        Exp::While(_, c, b) => {
+            collect_goto_targets_into(c, out);
+            collect_goto_targets_into(b, out);
+        }
+        Exp::IfElse(c, t, alt) => {
+            collect_goto_targets_into(c, out);
+            collect_goto_targets_into(t, out);
+            if let Some(a) = alt.as_ref().as_ref() {
+                collect_goto_targets_into(a, out);
+            }
+        }
+        Exp::Switch(c, _, arms) => {
+            collect_goto_targets_into(c, out);
+            for (_, e) in arms {
+                collect_goto_targets_into(e, out);
+            }
+        }
+        Exp::Match(c, _, arms) => {
+            collect_goto_targets_into(c, out);
+            for (_, _, e) in arms {
+                collect_goto_targets_into(e, out);
+            }
+        }
+        Exp::Seq(es) | Exp::Return(es) | Exp::Call(_, es) => {
+            for e in es {
+                collect_goto_targets_into(e, out);
+            }
+        }
+        Exp::Primitive { args, .. } | Exp::Data { args, .. } => {
+            for a in args {
+                collect_goto_targets_into(a, out);
+            }
+        }
+        Exp::Break(_)
+        | Exp::Continue(_)
+        | Exp::Declare(_)
+        | Exp::Value(_)
+        | Exp::Variable(_)
+        | Exp::Constant(_) => {}
+    }
+}
+
+/// Recursively strip every `Exp::Block(id, body)` whose `id` is not in `targets`, leaving
+/// targeted blocks intact. A block keeps its wrapper iff some surviving goto names its ID;
+/// untargeted wrappers would only fragment the AST for refinements without aiding the
+/// reader.
+fn strip_untargeted_blocks(exp: &mut Exp, targets: &HashSet<u64>) {
+    // First collapse this node if it's an un-targeted Block. The loop chases nested
+    // un-targeted wrappers in a single pass.
+    while let Exp::Block(id, body) = exp
+        && !targets.contains(id)
+    {
+        let inner = std::mem::replace(body.as_mut(), Exp::Seq(vec![]));
+        *exp = inner;
+    }
+    // Then recur into children, including the inside of any kept `Block`.
+    match exp {
+        Exp::Block(_, body)
+        | Exp::Loop(_, body)
+        | Exp::Assign(_, body)
+        | Exp::LetBind(_, body)
+        | Exp::Abort(body)
+        | Exp::Borrow(_, body)
+        | Exp::Unpack(_, _, body)
+        | Exp::UnpackVariant(_, _, _, body)
+        | Exp::VecUnpack(_, body) => strip_untargeted_blocks(body, targets),
+        Exp::While(_, c, b) => {
+            strip_untargeted_blocks(c, targets);
+            strip_untargeted_blocks(b, targets);
+        }
+        Exp::IfElse(c, t, alt) => {
+            strip_untargeted_blocks(c, targets);
+            strip_untargeted_blocks(t, targets);
+            if let Some(a) = alt.as_mut().as_mut() {
+                strip_untargeted_blocks(a, targets);
+            }
+        }
+        Exp::Switch(c, _, arms) => {
+            strip_untargeted_blocks(c, targets);
+            for (_, e) in arms {
+                strip_untargeted_blocks(e, targets);
+            }
+        }
+        Exp::Match(c, _, arms) => {
+            strip_untargeted_blocks(c, targets);
+            for (_, _, e) in arms {
+                strip_untargeted_blocks(e, targets);
+            }
+        }
+        Exp::Seq(es) | Exp::Return(es) | Exp::Call(_, es) => {
+            for e in es {
+                strip_untargeted_blocks(e, targets);
+            }
+        }
+        Exp::Primitive { args, .. } | Exp::Data { args, .. } => {
+            for a in args {
+                strip_untargeted_blocks(a, targets);
+            }
+        }
+        Exp::Unstructured(nodes) => {
+            use crate::ast::UnstructuredNode;
+            for n in nodes {
+                if let UnstructuredNode::Labeled(_, body) | UnstructuredNode::Statement(body) = n {
+                    strip_untargeted_blocks(body, targets);
+                }
+            }
+        }
+        Exp::Break(_)
+        | Exp::Continue(_)
+        | Exp::Declare(_)
+        | Exp::Value(_)
+        | Exp::Variable(_)
+        | Exp::Constant(_) => {}
+    }
+}
+
 fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Structured) -> Exp {
     match structured {
-        D::Structured::Break => Out::Exp::Break,
-        D::Structured::Continue => Out::Exp::Continue,
-        D::Structured::Block(lbl) => terms.remove(&(lbl as u32).into()).unwrap(),
-        D::Structured::Loop(body) => Out::Exp::Loop(Box::new(generate_output(terms, *body))),
+        D::Structured::Break(label) => Out::Exp::Break(Some(label.index() as u64)),
+        D::Structured::Continue(label) => Out::Exp::Continue(Some(label.index() as u64)),
+        D::Structured::Block(lbl) => {
+            let term = terms.remove(&(lbl as u32).into()).unwrap();
+            Out::Exp::Block(lbl, Box::new(term))
+        }
+        D::Structured::Loop(label, body) => Out::Exp::Loop(
+            Some(label.index() as u64),
+            Box::new(generate_output(terms, *body)),
+        ),
         D::Structured::Seq(seq) => {
-            let seq = seq
+            let items = seq
                 .into_iter()
                 .map(|s| generate_output(terms.clone(), s))
                 .collect();
-            Out::Exp::Seq(seq)
+            Out::Exp::Seq(items)
         }
         D::Structured::IfElse(lbl, conseq, alt) => {
             let term = terms.remove(&(lbl as u32).into()).unwrap();
@@ -248,13 +581,21 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             };
             // When a cond block has list of exp before the jump, we need to pop the conditional statement and
             let (cond, mut exps) = (seq.pop().unwrap(), seq);
-            let alt_exp = alt.map(|a| generate_output(terms.clone(), a));
+            // Drop an alt that collapsed to an empty Seq (typically from `LatchKind::InLoop`
+            // in `insert_breaks`); otherwise the output renders with empty `else { }` braces.
+            let alt_exp = alt.and_then(|a| {
+                let e = generate_output(terms.clone(), a);
+                match &e {
+                    Exp::Seq(items) if items.is_empty() => None,
+                    _ => Some(e),
+                }
+            });
             exps.push(Out::Exp::IfElse(
                 Box::new(cond),
                 Box::new(generate_output(terms.clone(), *conseq)),
                 Box::new(alt_exp),
             ));
-            Out::Exp::Seq(exps)
+            Out::Exp::Block(lbl, Box::new(Out::Exp::Seq(exps)))
         }
         D::Structured::Switch(lbl, enum_, cases) => {
             let term = terms.remove(&(lbl as u32).into()).unwrap();
@@ -267,14 +608,21 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
                 .into_iter()
                 .map(|(v, c)| (v, generate_output(terms.clone(), c)))
                 .collect();
-            exps.push(Out::Exp::Switch(Box::new(cond), enum_, cases));
-            Out::Exp::Seq(exps)
+            exps.push(Out::Exp::Switch(
+                Box::new(cond),
+                Out::TypeRef::Qualified(Out::ModuleRef::Qualified(enum_.0), enum_.1),
+                cases,
+            ));
+            Out::Exp::Block(lbl, Box::new(Out::Exp::Seq(exps)))
         }
-        D::Structured::Jump(target) => {
+        D::Structured::Jump(src, target) => {
             let label = target.index() as u64;
+            // Surviving Jump becomes a real goto; tag the line with its creation site so
+            // the corpus driver can break down residue by category.
+            eprintln!("GOTO[{}] -> label_{}", src.as_tag(), label);
             Out::Exp::Unstructured(vec![Out::UnstructuredNode::Goto(label)])
         }
-        D::Structured::JumpIf(code, then_target, else_target) => {
+        D::Structured::JumpIf(src, code, then_target, else_target) => {
             let term = terms.remove(&(code as u32).into()).unwrap();
             let Exp::Seq(mut seq) = term else {
                 panic!("Expected Seq for JumpIf condition")
@@ -283,6 +631,12 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
 
             let then_label = then_target.index() as u64;
             let else_label = else_target.index() as u64;
+            eprintln!(
+                "GOTO[{}] -> label_{}/label_{}",
+                src.as_tag(),
+                then_label,
+                else_label
+            );
 
             seq.push(Out::Exp::IfElse(
                 Box::new(cond),
@@ -293,7 +647,9 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
                     Out::UnstructuredNode::Goto(else_label),
                 ]))),
             ));
-            Out::Exp::Seq(seq)
+            Out::Exp::Block(code, Box::new(Out::Exp::Seq(seq)))
         }
     }
 }
+
+// -------------------------------------------------------------------------------------------------

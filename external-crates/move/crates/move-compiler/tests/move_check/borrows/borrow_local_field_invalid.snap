@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E07003]: invalid operation, could create dangling a reference
+error[E07003]: invalid operation, could create a dangling reference
    ┌─ tests/move_check/borrows/borrow_local_field_invalid.move:14:9
    │
 12 │         let f = &v.f;

@@ -3,13 +3,18 @@
 
 use crate::authenticated_events::ClientError;
 use crate::proof::ocs::OCSInclusionProof;
+use fastcrypto::hash::Blake2b256;
+use fastcrypto::merkle::{MerkleProof as FastcryptoMerkleProof, Node};
 use std::str::FromStr;
-use sui_rpc_api::grpc::alpha::proof_service_proto::OcsInclusionProof as ProtoOcsInclusionProof;
-use sui_types::base_types::ObjectID;
+use sui_rpc::proto::sui::rpc::v2alpha::{
+    MerkleNode as ProtoMerkleNode, MerkleProof as ProtoMerkleProof,
+    OcsInclusionProof as ProtoOcsInclusionProof, merkle_node,
+};
+use sui_types::base_types::{ObjectID, ObjectRef};
 
 pub(super) fn proto_object_ref_to_sui_object_ref(
     proto: &sui_rpc::proto::sui::rpc::v2::ObjectReference,
-) -> Result<sui_types::base_types::ObjectRef, ClientError> {
+) -> Result<ObjectRef, ClientError> {
     let object_id_str = proto
         .object_id
         .as_ref()
@@ -34,15 +39,59 @@ pub(super) fn proto_object_ref_to_sui_object_ref(
     Ok((object_id, version, digest))
 }
 
+fn proto_merkle_node_to_fastcrypto_node(proto: &ProtoMerkleNode) -> Result<Node, ClientError> {
+    let node = proto
+        .node
+        .as_ref()
+        .ok_or_else(|| ClientError::InternalError("MerkleNode missing oneof".to_string()))?;
+    match node {
+        merkle_node::Node::Empty(_) => Ok(Node::Empty),
+        merkle_node::Node::Digest(bytes) => {
+            let arr: [u8; 32] = bytes.as_ref().try_into().map_err(|_| {
+                ClientError::InternalError(format!(
+                    "Invalid merkle node digest length: expected 32 bytes, got {}",
+                    bytes.len()
+                ))
+            })?;
+            Ok(Node::Digest(arr))
+        }
+        _ => Err(ClientError::InternalError(
+            "Unknown MerkleNode variant".to_string(),
+        )),
+    }
+}
+
+fn proto_merkle_proof_to_fastcrypto_proof(
+    proto: &ProtoMerkleProof,
+) -> Result<FastcryptoMerkleProof<Blake2b256>, ClientError> {
+    let nodes = proto
+        .path
+        .iter()
+        .map(proto_merkle_node_to_fastcrypto_node)
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(FastcryptoMerkleProof::new(&nodes))
+}
+
+fn proto_tree_root_to_digest(
+    bytes: &bytes::Bytes,
+) -> Result<sui_types::digests::Digest, ClientError> {
+    let arr: [u8; 32] = bytes.as_ref().try_into().map_err(|_| {
+        ClientError::InternalError(format!(
+            "Invalid tree_root length: expected 32 bytes, got {}",
+            bytes.len()
+        ))
+    })?;
+    Ok(sui_types::digests::Digest::new(arr))
+}
+
 pub(super) fn proto_ocs_inclusion_proof_to_light_client_proof(
     proto: &ProtoOcsInclusionProof,
 ) -> Result<OCSInclusionProof, ClientError> {
-    let merkle_proof_bytes = proto
+    let merkle_proof_proto = proto
         .merkle_proof
         .as_ref()
         .ok_or_else(|| ClientError::InternalError("Missing merkle_proof".to_string()))?;
-
-    let merkle_proof: fastcrypto::merkle::MerkleProof = bcs::from_bytes(merkle_proof_bytes)?;
+    let merkle_proof = proto_merkle_proof_to_fastcrypto_proof(merkle_proof_proto)?;
 
     let leaf_index = proto
         .leaf_index
@@ -53,16 +102,7 @@ pub(super) fn proto_ocs_inclusion_proof_to_light_client_proof(
         .tree_root
         .as_ref()
         .ok_or_else(|| ClientError::InternalError("Missing tree_root".to_string()))?;
-
-    if tree_root_bytes.len() != 32 {
-        return Err(ClientError::InternalError(format!(
-            "Invalid tree_root length: {}",
-            tree_root_bytes.len()
-        )));
-    }
-    let mut tree_root_arr = [0u8; 32];
-    tree_root_arr.copy_from_slice(tree_root_bytes);
-    let tree_root = sui_types::digests::Digest::new(tree_root_arr);
+    let tree_root = proto_tree_root_to_digest(tree_root_bytes)?;
 
     Ok(OCSInclusionProof {
         merkle_proof,

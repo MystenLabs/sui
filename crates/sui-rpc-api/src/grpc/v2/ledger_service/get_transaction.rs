@@ -25,7 +25,7 @@ use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::full_checkpoint_content::ObjectSet;
 
 pub const MAX_BATCH_REQUESTS: usize = 200;
-pub const READ_MASK_DEFAULT: &str = "digest";
+pub const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::TRANSACTION;
 
 #[tracing::instrument(skip(service))]
 pub fn get_transaction(
@@ -165,7 +165,7 @@ pub fn batch_get_transactions(
     Ok(BatchGetTransactionsResponse::new(transactions))
 }
 
-fn render_executed_transaction(
+pub(crate) fn render_executed_transaction(
     service: &RpcService,
     crate::reader::TransactionRead {
         digest,

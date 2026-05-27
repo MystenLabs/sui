@@ -4,7 +4,12 @@
 import React from "react";
 import { useHits } from "react-instantsearch";
 import { useHistory } from "@docusaurus/router";
-import { truncateAtWord, getDeepestHierarchyLabel } from "./utils";
+import {
+  truncateAtWord,
+  getDeepestHierarchyLabel,
+  getHierarchyBreadcrumbs,
+  cleanTooltipText,
+} from "./utils";
 
 export default function CustomHitsContent({ name }) {
   const { hits: items } = useHits();
@@ -52,35 +57,44 @@ export default function CustomHitsContent({ name }) {
   return (
     <>
       {Object.entries(grouped).map(([key, group], index) => {
+        const pageCrumbs = getHierarchyBreadcrumbs(group[0].hierarchy);
+        const pageTitle =
+          pageCrumbs.length > 0
+            ? pageCrumbs[Math.min(1, pageCrumbs.length - 1)]
+            : "[no title]";
+
         return (
           <div
-            className="p-6 pb-[40px] mb-6 bg-sui-gray-35 rounded-[20px]"
+            className="p-6 pb-6 mb-6 bg-sui-gray-35 dark:bg-sui-gray-85 rounded-2xl"
             key={index}
           >
-            <div className="text-xl text-sui-gray-3s font-semibold mb-4">
-              {group[0].hierarchy?.lvl1 ||
-                group[0].hierarchy?.lvl0 ||
-                "[no title]"}
+            <div className="text-lg font-semibold mb-1 text-gray-900 dark:text-white">
+              {pageTitle}
             </div>
-            <div className="">
+            {pageCrumbs.length > 0 && (
+              <div className="text-xs text-gray-500 dark:text-sui-gray-50 mb-4">
+                {pageCrumbs.join(" > ")}
+              </div>
+            )}
+            <div className="space-y-3">
               {group.map((hit, i) => {
-                const level = hit.type;
-                let sectionTitle = hit.lvl0;
-                if (level === "content") {
-                  sectionTitle = getDeepestHierarchyLabel(hit.hierarchy);
-                } else {
-                  sectionTitle = hit.hierarchy?.[level] || level;
-                }
+                const hitCrumbs = getHierarchyBreadcrumbs(hit.hierarchy);
+                const sectionTitle =
+                  hitCrumbs.length > 0
+                    ? hitCrumbs[hitCrumbs.length - 1]
+                    : cleanTooltipText(
+                        getDeepestHierarchyLabel(hit.hierarchy),
+                      );
 
                 const hitHost = new URL(hit.url).host;
                 const isInternal = hitHost === currentHost;
 
                 return (
-                  <div key={i} className="mb-2">
+                  <div key={i} className="py-1">
                     {isInternal ? (
                       <button
                         onClick={() => history.push(new URL(hit.url).pathname)}
-                        className="text-base text-blue-600 hover:text-sui-blue underline text-left bg-transparent border-0 pl-0 cursor-pointer font-[Inter]"
+                        className="text-sm text-blue-700 dark:text-sui-blue-light hover:text-sui-blue-dark dark:hover:text-white font-medium underline text-left bg-transparent border-0 pl-0 cursor-pointer"
                       >
                         {sectionTitle}
                       </button>
@@ -89,19 +103,21 @@ export default function CustomHitsContent({ name }) {
                         href={hit.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-base text-blue-600 underline pb-2"
+                        className="text-sm text-blue-700 dark:text-sui-blue-light hover:text-sui-blue-dark dark:hover:text-white font-medium underline"
                       >
                         {sectionTitle}
                       </a>
                     )}
-                    <p
-                      className="font-normal text-base text-sui-gray-5s"
-                      dangerouslySetInnerHTML={{
-                        __html: hit.content
-                          ? truncateAtWord(hit._highlightResult.content.value)
-                          : "",
-                      }}
-                    />
+                    {hit.content && (
+                      <p
+                        className="font-normal text-sm text-gray-600 dark:text-sui-gray-45 mt-1"
+                        dangerouslySetInnerHTML={{
+                          __html: truncateAtWord(
+                            hit._highlightResult.content.value,
+                          ),
+                        }}
+                      />
+                    )}
                   </div>
                 );
               })}

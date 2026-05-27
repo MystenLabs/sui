@@ -30,10 +30,12 @@ use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 type EnvironmentID = String;
+type EnvironmentName = String;
 
 #[derive(Deserialize)]
 struct ResolveRequest {
     env: EnvironmentID,
+    env_name: EnvironmentName,
     data: RequestData,
 }
 
@@ -112,7 +114,10 @@ fn parse_input() -> BTreeMap<RequestID, ResolveRequest> {
 /// Process [request], creating a [Response] with the given [id]
 /// Ends the process if an [Exit] variant is discovered
 fn process_request(id: RequestID, request: ResolveRequest) -> Response<serde_json::Value> {
-    debug!("Resolving request `{id}` for environment {}.", request.env);
+    debug!(
+        "Resolving request `{id}` for environment `{}` (id `{}`).",
+        request.env_name, request.env
+    );
     match request.data {
         RequestData::Stdio(exit) => {
             if let Some(line) = exit.stderr {

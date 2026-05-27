@@ -97,6 +97,7 @@ pub fn run_typing_analysis(
         compiler_analysis_info,
         type_params: BTreeMap::new(),
         expression_scope: OrdMap::new(),
+        current_macro_call_loc: None,
     };
 
     process_typed_modules(

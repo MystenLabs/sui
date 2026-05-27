@@ -5,7 +5,10 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::ensure;
+use prometheus::HistogramVec;
 use prometheus::Registry;
+use prometheus::register_histogram_vec_with_registry;
+use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::CHECKPOINTS_BY_DIGEST_PIPELINE;
 use sui_kvstore::CHECKPOINTS_PIPELINE;
@@ -31,9 +34,26 @@ use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
 use tracing::error;
 
+mod bigtable_client;
+mod config;
+mod object_cache;
+mod operation;
 mod package_store;
+mod pipeline;
 mod v2;
+mod v2alpha;
 
+use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_server::LedgerServiceServer as KvLedgerServiceServer;
+
+use bigtable_client::Metrics as BigTableLimiterMetrics;
+pub use config::KvRpcConfig;
+pub use config::LedgerHistoryConfig;
+pub use config::LedgerHistoryMethodConfig;
+pub use config::PipelineStage;
+pub use config::ResolvedLedgerHistoryMethodConfig;
+pub use config::ResolvedStageConfig;
+pub use config::StageConfig;
+pub use config::StagesConfig;
 use package_store::BigTablePackageStore;
 
 pub const DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 6] = [
@@ -45,7 +65,69 @@ pub const DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 6] = [
     EPOCH_END_PIPELINE,
 ];
 
+pub const EXPERIMENTAL_QUERY_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 3] = ALPHA_PIPELINE_NAMES;
+
 pub type PackageResolver = Arc<Resolver<Arc<dyn PackageStore>>>;
+
+#[derive(Clone)]
+pub(crate) struct KvRpcMetrics {
+    bigtable_limiter: Arc<BigTableLimiterMetrics>,
+    response_render_latency_ms: HistogramVec,
+    stream_item_yield_wait_ms: HistogramVec,
+    bitmap_buckets_evaluated: HistogramVec,
+}
+
+impl KvRpcMetrics {
+    fn new(registry: &Registry) -> Arc<Self> {
+        Arc::new(Self {
+            bigtable_limiter: BigTableLimiterMetrics::new(registry),
+            response_render_latency_ms: register_histogram_vec_with_registry!(
+                "kv_rpc_response_render_latency_ms",
+                "Wall time spent rendering one v2alpha response item.",
+                &["method"],
+                prometheus::exponential_buckets(0.01, 2.0, 18).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            stream_item_yield_wait_ms: register_histogram_vec_with_registry!(
+                "kv_rpc_stream_item_yield_wait_ms",
+                "Wall time from yielding one v2alpha response item until the stream is polled again.",
+                &["method"],
+                prometheus::exponential_buckets(0.01, 2.0, 18).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            bitmap_buckets_evaluated: register_histogram_vec_with_registry!(
+                "kv_rpc_bitmap_buckets_evaluated",
+                "Buckets evaluated against the per-request bitmap scan budget. Caps at the configured budget; actual backend bucket reads may exceed it by up to max_bitmap_filter_literals (one extra fetched-and-discarded bucket per leaf stream at exhaustion). Tail near the per-request cap means clients are hitting SCAN_LIMIT and paging.",
+                &["method"],
+                // Exponential 1..2048: many requests evaluate few buckets
+                // (small or empty scans), a tail saturates at the default 1k cap.
+                prometheus::exponential_buckets(1.0, 2.0, 12).unwrap(),
+                registry,
+            )
+            .unwrap(),
+        })
+    }
+
+    fn observe_response_render(&self, method: &'static str, elapsed: std::time::Duration) {
+        self.response_render_latency_ms
+            .with_label_values(&[method])
+            .observe(elapsed.as_secs_f64() * 1000.0);
+    }
+
+    fn observe_stream_item_yield_wait(&self, method: &'static str, elapsed: std::time::Duration) {
+        self.stream_item_yield_wait_ms
+            .with_label_values(&[method])
+            .observe(elapsed.as_secs_f64() * 1000.0);
+    }
+
+    fn observe_bitmap_buckets_evaluated(&self, method: &'static str, buckets: u64) {
+        self.bitmap_buckets_evaluated
+            .with_label_values(&[method])
+            .observe(buckets as f64);
+    }
+}
 
 #[derive(Clone)]
 pub struct KvRpcServer {
@@ -56,6 +138,8 @@ pub struct KvRpcServer {
     service_info_watermark_pipelines: Vec<&'static str>,
     cache: Arc<RwLock<Option<GetServiceInfoResponse>>>,
     package_resolver: PackageResolver,
+    metrics: Arc<KvRpcMetrics>,
+    pub(crate) ledger_history: LedgerHistoryConfig,
 }
 
 /// Optional configuration for the gRPC server (TLS, metrics, reflection).
@@ -64,6 +148,7 @@ pub struct ServerConfig {
     pub tls_identity: Option<Identity>,
     pub metrics_registry: Option<Registry>,
     pub enable_reflection: bool,
+    pub enable_experimental_query_apis: bool,
 }
 
 impl KvRpcServer {
@@ -78,7 +163,9 @@ impl KvRpcServer {
         credentials_path: Option<String>,
         pool_config: PoolConfig,
         service_info_watermark_pipelines: Vec<&'static str>,
+        ledger_history: LedgerHistoryConfig,
     ) -> anyhow::Result<Self> {
+        ledger_history.validate()?;
         let mut client = BigTableClient::new_remote_with_credentials(
             instance_id,
             project_id,
@@ -99,12 +186,15 @@ impl KvRpcServer {
             .expect("failed to fetch genesis checkpoint from the KV store");
         let summary = genesis.summary.expect("genesis checkpoint missing summary");
         let chain_id = ChainIdentifier::from(summary.digest());
+        let metrics = KvRpcMetrics::new(registry);
         Self::init(
             client,
             chain_id,
             server_version,
             checkpoint_bucket,
             service_info_watermark_pipelines,
+            metrics,
+            ledger_history,
         )
     }
 
@@ -116,12 +206,17 @@ impl KvRpcServer {
         checkpoint_bucket: Option<String>,
     ) -> anyhow::Result<Self> {
         let client = BigTableClient::new_local(host, instance_id).await?;
+        // Emulator/test path: metrics are inert (no scrape endpoint), but the
+        // request-scoped BigTable wrapper still expects a handle.
+        let metrics = KvRpcMetrics::new(&Registry::default());
         Self::init(
             client,
             ChainIdentifier::from(sui_types::digests::CheckpointDigest::default()),
             server_version,
             checkpoint_bucket,
-            DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec(),
+            default_service_info_watermark_pipelines(false),
+            metrics,
+            LedgerHistoryConfig::default(),
         )
     }
 
@@ -131,11 +226,14 @@ impl KvRpcServer {
         server_version: Option<ServerVersion>,
         checkpoint_bucket: Option<String>,
         service_info_watermark_pipelines: Vec<&'static str>,
+        metrics: Arc<KvRpcMetrics>,
+        ledger_history: LedgerHistoryConfig,
     ) -> anyhow::Result<Self> {
         ensure!(
             !service_info_watermark_pipelines.is_empty(),
             "at least one service info watermark pipeline must be configured"
         );
+        ledger_history.validate()?;
 
         let cache = Arc::new(RwLock::new(None));
 
@@ -152,6 +250,8 @@ impl KvRpcServer {
             service_info_watermark_pipelines,
             cache,
             package_resolver,
+            metrics,
+            ledger_history,
         };
 
         let server_clone = server.clone();
@@ -200,15 +300,19 @@ impl KvRpcServer {
         // backs a gRPC service mounted below. Consumed by both the
         // reflection services and the metrics allowlist so they cannot drift
         // out of sync.
-        let file_descriptor_sets: &[&[u8]] = &[
+        let enable_experimental_query_apis = config.enable_experimental_query_apis;
+        let mut file_descriptor_sets: Vec<&'static [u8]> = vec![
             sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
             sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET,
             sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
         ];
+        if enable_experimental_query_apis {
+            file_descriptor_sets.push(sui_rpc::proto::sui::rpc::v2alpha::FILE_DESCRIPTOR_SET);
+        }
 
         let registry = config.metrics_registry.unwrap_or_default();
         let grpc_method_allowlist = Arc::new(grpc_method_paths_from_file_descriptor_sets(
-            file_descriptor_sets,
+            &file_descriptor_sets,
         )?);
         let mut router = builder
             .layer(CallbackLayer::new(
@@ -217,12 +321,16 @@ impl KvRpcServer {
                     grpc_method_allowlist,
                 ),
             ))
-            .add_service(LedgerServiceServer::new(self));
+            .add_service(LedgerServiceServer::new(self.clone()));
+
+        if enable_experimental_query_apis {
+            router = router.add_service(KvLedgerServiceServer::new(self));
+        }
 
         if config.enable_reflection {
             let mut reflection_v1_builder = tonic_reflection::server::Builder::configure();
             let mut reflection_v1alpha_builder = tonic_reflection::server::Builder::configure();
-            for fds in file_descriptor_sets {
+            for &fds in &file_descriptor_sets {
                 reflection_v1_builder =
                     reflection_v1_builder.register_encoded_file_descriptor_set(fds);
                 reflection_v1alpha_builder =
@@ -249,4 +357,14 @@ impl KvRpcServer {
 
         Ok(service)
     }
+}
+
+pub fn default_service_info_watermark_pipelines(
+    enable_experimental_query_apis: bool,
+) -> Vec<&'static str> {
+    let mut pipelines = DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec();
+    if enable_experimental_query_apis {
+        pipelines.extend_from_slice(&EXPERIMENTAL_QUERY_SERVICE_INFO_WATERMARK_PIPELINES);
+    }
+    pipelines
 }

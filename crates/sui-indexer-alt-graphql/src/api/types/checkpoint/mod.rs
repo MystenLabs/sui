@@ -9,6 +9,7 @@ use async_graphql::Object;
 use async_graphql::connection::Connection;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
+use sui_types::digests::CheckpointDigest;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::messages_checkpoint::CheckpointContents as NativeCheckpointContents;
@@ -40,6 +41,12 @@ use crate::task::streaming::ProcessedCheckpoint;
 use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
+
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum Error {
+    #[error("Cannot specify both `sequenceNumber` and `digest` on `Query.checkpoint`")]
+    BothBoundsSet,
+}
 
 pub(crate) struct Checkpoint {
     pub(crate) sequence_number: u64,
@@ -265,6 +272,26 @@ impl Checkpoint {
             sequence_number,
             streamed_data: None,
         })
+    }
+
+    /// Resolve a checkpoint by its digest. Translates the digest to a sequence number via the
+    /// configured KV reader, then delegates to `with_sequence_number` so all downstream resolvers
+    /// behave the same as the sequence-number path.
+    pub(crate) async fn by_digest(
+        ctx: &Context<'_>,
+        scope: Scope,
+        digest: CheckpointDigest,
+    ) -> Result<Option<Self>, RpcError> {
+        let kv_loader: &KvLoader = ctx.data()?;
+        let Some(sequence_number) = kv_loader
+            .load_one_checkpoint_seq_by_digest(digest)
+            .await
+            .context("Failed to look up checkpoint by digest")?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Self::with_sequence_number(scope, Some(sequence_number)))
     }
 
     /// Paginate through checkpoints with filters applied.

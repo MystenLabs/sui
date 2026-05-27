@@ -4,11 +4,11 @@ description: An Object Display must be explicitly created and then maintained by
 keywords: [ Object Display, object, display, display properties, object properties, sui::display, Sui utility objects ]
 ---
 
-:::danger
+:::info
 
-Object Display V2 will be available in Sui v1.68. Check the [release schedule](https://www.sui.io/networkinfo) to learn when v1.68 is available on Devnet, Testnet, and Mainnet.
+Object Display V2 is the current Object Display standard. If you manage a display from Move code, use the `sui::display_registry` APIs.
 
-All existing V1 displays will be migrated to V2 in a **system snapshot migration**. You do not need to do anything upfront. After the snapshot, you can claim the capability when you are ready (see [Migrating to V2](#migrating-to-v2)).
+A system snapshot migration migrated existing V1 displays to V2. If you need to manage a migrated display, claim the capability when you are ready (see [Migrating to V2](#migrating-to-v2)).
 
 :::
 
@@ -42,43 +42,34 @@ In Object Display V1, you could have N displays per type and had to use events t
 
 ## Example
 
-The `display::new<T>` call creates a `Display`, either in a custom function or module initializer, or as part of a programmable transaction. The following code sample demonstrates how to create a `Display`:
+The `display_registry::new_with_publisher<T>` call creates a V2 `Display<T>` and `DisplayCap<T>` for a type. The display object has a deterministic derived ID, and the capability authorizes future updates.
 ```move
-module sui::display;
+module sui::display_registry;
 
-/// Get a new Display object for the `T`.
-/// Publisher must be the publisher of the T, `from_package`
-/// check is performed.
-public fun new<T>(pub: &Publisher): Display<T> { /* ... */ }
+public fun new_with_publisher<T>(
+    registry: &mut DisplayRegistry,
+    publisher: &mut Publisher,
+    ctx: &mut TxContext,
+): (Display<T>, DisplayCap<T>);
 ```
 
-After you create the `Display`, you can modify it. The following code sample demonstrates how to modify a `Display`:
+After you create the `Display<T>`, set its fields with `display_registry::set`, remove fields with `display_registry::unset`, or clear all fields with `display_registry::clear`. Each update requires the matching `DisplayCap<T>`.
 ```move
-module sui::display;
+module sui::display_registry;
 
-/// Sets multiple fields at once
-public fun add_multiple(
-    self: &mut Display,
-    keys: vector<String>,
-    values: vector<String>
-) { /* ... */ }
+public fun set<T>(
+    display: &mut Display<T>,
+    cap: &DisplayCap<T>,
+    name: String,
+    value: String,
+);
 
-/// Edit a single field
-public fun edit(self: &mut Display, key: String, value: String) { /* ... */ }
+public fun unset<T>(display: &mut Display<T>, cap: &DisplayCap<T>, name: String);
 
-/// Remove a key from Display
-public fun remove(self: &mut Display, key: String ) { /* ... */ }
+public fun clear<T>(display: &mut Display<T>, cap: &DisplayCap<T>);
 ```
 
-Next, the `update_version` call applies the changes and sets the `Display` for the `T` by emitting an event. Full nodes receive the event and use the data in the event to retrieve a template for the type.
-
-The following code sample demonstrates how to use the `update_version` call:
-```move
-module sui::display;
-
-/// Update the version of Display and emit an event
-public fun update_version(self: &mut Display) { /* ... */ }
-```
+When the display is ready, share it with `display_registry::share(display)`. Unlike V1, V2 does not rely on emitting an event and then scanning historical events to discover the display.
 
 ## Object Display patterns
 
@@ -141,7 +132,7 @@ public struct CapyManagerCap has key, store { id: UID }
 
 :::caution
 
-All existing V1 displays are migrated to V2 in a **system snapshot migration**. You do not need to do anything upfront. After the snapshot, for each type the single V2 `Display<T>` exists with `cap_id: none` until the capability is claimed.
+A **system snapshot migration** migrated existing V1 displays to V2. You do not need to do anything upfront. After the snapshot, for each type the single V2 `Display<T>` exists with `cap_id: none` until the capability is claimed.
 
 :::
 

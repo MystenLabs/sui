@@ -1,0 +1,9 @@
+[package]
+name = "generic_event"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+generic_event = "0x0"

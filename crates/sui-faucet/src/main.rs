@@ -7,6 +7,7 @@ use std::sync::Arc;
 use sui_config::sui_config_dir;
 use sui_faucet::{AppState, create_wallet_context, start_faucet};
 use sui_faucet::{FaucetConfig, LocalFaucet};
+use sui_futures::service::Error as ServiceError;
 
 // Define the `GIT_REVISION` and `VERSION` consts
 bin_version::bin_version!();
@@ -26,5 +27,9 @@ async fn main() -> Result<(), anyhow::Error> {
         config,
     });
 
-    start_faucet(app_state).await
+    match start_faucet(app_state).await?.main().await {
+        Ok(()) | Err(ServiceError::Terminated) => Ok(()),
+        Err(ServiceError::Aborted) => Err(anyhow::anyhow!("Faucet aborted during shutdown")),
+        Err(ServiceError::Task(e)) => Err(e),
+    }
 }

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
   ┌─ tests/move_check/liveness/dead_refs_simple_invalid.move:5:13
   │
 4 │         let x_ref = &mut x;
@@ -13,7 +13,7 @@ error[E07002]: mutable ownership violated
 5 │         _ = x;
   │             ^ Invalid copy of variable 'x'
 
-error[E07003]: invalid operation, could create dangling a reference
+error[E07003]: invalid operation, could create a dangling reference
   ┌─ tests/move_check/liveness/dead_refs_simple_invalid.move:6:13
   │
 4 │         let x_ref = &mut x;
@@ -22,7 +22,7 @@ error[E07003]: invalid operation, could create dangling a reference
 6 │         _ = move x;
   │             ^^^^^^ Invalid move of variable 'x'
 
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
    ┌─ tests/move_check/liveness/dead_refs_simple_invalid.move:13:13
    │
 12 │         let x_ref = &mut x;
@@ -30,7 +30,7 @@ error[E07002]: mutable ownership violated
 13 │         _ = x;
    │             ^ Invalid copy of variable 'x'
 
-error[E07003]: invalid operation, could create dangling a reference
+error[E07003]: invalid operation, could create a dangling reference
    ┌─ tests/move_check/liveness/dead_refs_simple_invalid.move:14:13
    │
 12 │         let x_ref = &mut x;

@@ -9,6 +9,7 @@ use futures::future::join_all;
 use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::fmt::Write;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -28,6 +29,7 @@ use sui_storage::object_store::util::PerEpochManifest;
 use sui_storage::object_store::util::{build_object_store, end_of_epoch_data, fetch_checkpoint};
 use sui_types::committee::QUORUM_THRESHOLD;
 use sui_types::crypto::AuthorityPublicKeyBytes;
+use sui_types::digests::ChainIdentifier;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::messages_grpc::LayoutGenerationOption;
 use sui_types::multiaddr::Multiaddr;
@@ -70,6 +72,8 @@ use typed_store::DBMetrics;
 pub mod commands;
 pub mod db_tool;
 mod formal_snapshot_util;
+#[cfg(all(feature = "tideconsole", not(windows)))]
+pub mod tideconsole_cmd;
 
 #[derive(
     Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum, Default,
@@ -789,6 +793,7 @@ pub async fn download_formal_snapshot(
     network: Chain,
     verify: SnapshotVerifyMode,
     max_retries: usize,
+    metrics_port: u16,
 ) -> Result<(), anyhow::Error> {
     let m = MultiProgress::new();
     let msg = format!(
@@ -804,8 +809,8 @@ pub async fn download_formal_snapshot(
     }
 
     // Start prometheus server so that we can serve metrics during snapshot download
-    let registry_service =
-        mysten_metrics::start_prometheus_server("127.0.0.1:9184".parse().unwrap());
+    let metrics_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), metrics_port);
+    let registry_service = mysten_metrics::start_prometheus_server(metrics_addr);
     let prometheus_registry = registry_service.default_registry();
     DBMetrics::init(registry_service.clone());
     mysten_metrics::init_metrics(&prometheus_registry);
@@ -815,7 +820,16 @@ pub async fn download_formal_snapshot(
         None,
         None,
     ));
-    let genesis = Genesis::load(genesis).unwrap();
+    let genesis = Genesis::load(genesis)?;
+    let genesis_chain = ChainIdentifier::from(*genesis.checkpoint().digest()).chain();
+    if genesis_chain != network {
+        return Err(anyhow!(
+            "Genesis file is for chain {}, but formal snapshot download is configured for --network {}. \
+            Use the matching genesis.blob or pass the correct --network flag.",
+            genesis_chain.as_str(),
+            network.as_str(),
+        ));
+    }
     let genesis_committee = genesis.committee();
     let committee_store = Arc::new(CommitteeStore::new(
         path.join("epochs"),
@@ -1024,9 +1038,20 @@ pub async fn download_formal_snapshot(
     // After a large backfill, rebuild the tidehunter control region to reclaim disk space
     // and reduce startup time. No-op when compiled without tidehunter.
     #[cfg(tidehunter)]
-    perpetual_db
-        .force_rebuild_control_region()
-        .expect("Failed to rebuild tidehunter control region after snapshot restore");
+    {
+        perpetual_db
+            .force_rebuild_control_region()
+            .expect("Failed to rebuild tidehunter control region after snapshot restore");
+        // The tidehunter Db spawns background threads (periodic snapshot, relocator,
+        // flusher pool, etc.) that own file handles inside the staging directory.
+        // Wait for them to exit before renaming staging -> live, otherwise a
+        // periodic timer could try to open a new file under the (now missing) path.
+        println!(
+            "Waiting for tidehunter background threads to finish before renaming staging to live"
+        );
+        perpetual_db.wait_for_tidehunter_background_threads();
+        println!("Tidehunter background threads finished, proceeding with rename");
+    }
 
     let new_path = path.parent().unwrap().join("live");
     if new_path.exists() {

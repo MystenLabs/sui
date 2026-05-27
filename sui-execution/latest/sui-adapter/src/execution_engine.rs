@@ -274,40 +274,6 @@ mod checked {
         );
 
         let status = if let Err(error) = &execution_result {
-            // Elaborate errors in logs if they are unexpected or their status is terse.
-            use ExecutionErrorKind as K;
-            match error.kind() {
-                K::InvariantViolation | K::VMInvariantViolation => {
-                    debug_fatal!(
-                        "INVARIANT VIOLATION! Txn Digest: {}, Source: {:?}",
-                        transaction_digest,
-                        error.source_ref(),
-                    );
-                }
-
-                K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
-                    #[skip_checked_arithmetic]
-                    tracing::debug!(
-                        kind = ?error.kind(),
-                        tx_digest = ?transaction_digest,
-                        "Verification Error. Source: {:?}",
-                        error.source_ref(),
-                    );
-                }
-
-                K::PublishUpgradeMissingDependency | K::PublishUpgradeDependencyDowngrade => {
-                    #[skip_checked_arithmetic]
-                    tracing::debug!(
-                        kind = ?error.kind(),
-                        tx_digest = ?transaction_digest,
-                        "Publish/Upgrade Error. Source: {:?}",
-                        error.source_ref(),
-                    )
-                }
-
-                _ => (),
-            };
-
             ExecutionStatus::new_failure(error.to_execution_failure())
         } else {
             ExecutionStatus::Success
@@ -333,8 +299,9 @@ mod checked {
                 .check_ownership_invariants(
                     &transaction_signer,
                     &sponsor,
-                    &mut gas_charger,
+                    &gas_charger,
                     &mutable_inputs,
+                    &input_reservations,
                     is_epoch_change,
                 )
                 .unwrap()
@@ -500,10 +467,9 @@ mod checked {
                         Mode::ExecutionResults,
                         Mode::Error,
                     > = match execution_params {
-                        ExecutionOrEarlyError::Err(early_execution_error) => Err((
-                            ExecutionError::new(early_execution_error, None).into(),
-                            vec![],
-                        )),
+                        ExecutionOrEarlyError::Err(early_execution_error) => {
+                            Err((Mode::Error::from_kind(early_execution_error), vec![]))
+                        }
                         ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
                             store,
                             temporary_store,
@@ -553,9 +519,10 @@ mod checked {
             && let Err(msg) = temporary_store
                 .check_gasless_execution_requirements(withdrawal_reservations.as_ref())
         {
-            result = Err(
-                ExecutionError::new_with_source(ExecutionErrorKind::InsufficientGas, msg).into(),
-            );
+            result = Err(Mode::Error::new_with_source(
+                ExecutionErrorKind::InsufficientGas,
+                msg,
+            ));
         }
 
         let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
@@ -681,14 +648,13 @@ mod checked {
                 );
                 Ok(())
             }
-            LimitThresholdCrossed::Hard(_, lim) => Err(ExecutionError::new_with_source(
+            LimitThresholdCrossed::Hard(_, lim) => Err(Mode::Error::new_with_source(
                 ExecutionErrorKind::EffectsTooLarge {
                     current_size: effects_estimated_size as u64,
                     max_size: lim as u64,
                 },
                 "Transaction effects are too large",
-            )
-            .into()),
+            )),
         }
     }
 
@@ -721,14 +687,13 @@ mod checked {
                     )
                 }
                 LimitThresholdCrossed::Hard(_, lim) => {
-                    return Err(ExecutionError::new_with_source(
+                    return Err(Mode::Error::new_with_source(
                         ExecutionErrorKind::WrittenObjectsTooLarge {
                             current_size: written_objects_size as u64,
                             max_size: lim as u64,
                         },
                         "Written objects size crossed hard limit",
-                    )
-                    .into());
+                    ));
                 }
             };
         }
@@ -890,9 +855,7 @@ mod checked {
                 rewritten_inputs,
                 pt,
                 trace_builder_opt,
-            )
-            // TODO push Mode::Error lower into the call stack and remove into()
-            .map_err(|(e, timings)| (e.into(), timings)),
+            ),
             TransactionKind::ProgrammableSystemTransaction(pt) => {
                 SPT::execute::<execution_mode::System<Mode::Error>>(
                     protocol_config,
@@ -906,8 +869,7 @@ mod checked {
                     pt,
                     trace_builder_opt,
                 )
-                // TODO push Mode::Error lower into the call stack and remove into()
-                .map_err(|(e, _)| (e.into(), vec![]))?;
+                .map_err(|(e, _)| (e, vec![]))?;
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::EndOfEpochTransaction(txns) => {
@@ -1037,9 +999,8 @@ mod checked {
             }
         }?;
         temporary_store
-            .check_execution_results_consistency()
-            // TODO push Mode::Error lower into the call stack and remove into()
-            .map_err(|e| (e.into(), vec![]))?;
+            .check_execution_results_consistency::<Mode>()
+            .map_err(|e| (e, vec![]))?;
         Ok(result)
     }
 
@@ -1077,10 +1038,10 @@ mod checked {
         (storage_rewards, computation_rewards)
     }
 
-    pub fn construct_advance_epoch_pt(
+    pub fn construct_advance_epoch_pt<Mode: ExecutionMode>(
         mut builder: ProgrammableTransactionBuilder,
         params: &AdvanceEpochParams,
-    ) -> Result<ProgrammableTransaction, ExecutionError> {
+    ) -> Result<ProgrammableTransaction, Mode::Error> {
         // Step 1: Create storage and computation rewards.
         let (storage_rewards, computation_rewards) = mint_epoch_rewards_in_pt(&mut builder, params);
 
@@ -1198,9 +1159,8 @@ mod checked {
             reward_slashing_rate: protocol_config.reward_slashing_rate(),
             epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
         };
-        // TODO push Mode::Error lower into the call stack and remove (implicit) into()
-        let advance_epoch_pt = construct_advance_epoch_pt(builder, &params)?;
-        let result = SPT::execute::<execution_mode::System>(
+        let advance_epoch_pt = construct_advance_epoch_pt::<Mode>(builder, &params)?;
+        let result = SPT::execute::<execution_mode::System<Mode::Error>>(
             protocol_config,
             metrics.clone(),
             move_vm,
@@ -1352,7 +1312,7 @@ mod checked {
             );
             builder.finish()
         };
-        SPT::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System<Mode::Error>>(
             protocol_config,
             metrics,
             move_vm,
@@ -1364,7 +1324,6 @@ mod checked {
             pt,
             trace_builder_opt,
         )
-        // TODO push Mode::Error lower into the call stack and remove (implicit) into()
         .map_err(|(e, _)| e)?;
         Ok(())
     }
@@ -1501,7 +1460,7 @@ mod checked {
             );
             builder.finish()
         };
-        SPT::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System<Mode::Error>>(
             protocol_config,
             metrics,
             move_vm,
@@ -1574,7 +1533,7 @@ mod checked {
             );
             builder.finish()
         };
-        SPT::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System<Mode::Error>>(
             protocol_config,
             metrics,
             move_vm,

@@ -28,7 +28,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// The index of an authority in the consensus committee.
@@ -577,7 +576,7 @@ impl VersionedDkgMessage {
 
     pub fn create(
         dkg_version: u64,
-        party: Arc<dkg_v1::Party<bls12381::G2Element, bls12381::G2Element>>,
+        party: &dkg_v1::Party<bls12381::G2Element, bls12381::G2Element>,
     ) -> FastCryptoResult<VersionedDkgMessage> {
         assert_eq!(dkg_version, 1, "BUG: invalid DKG version");
         let msg = party.create_message(&mut rand::thread_rng())?;
@@ -615,10 +614,10 @@ impl VersionedDkgConfirmation {
         }
     }
 
-    pub fn unwrap_v1(&self) -> &dkg_v1::Confirmation<bls12381::G2Element> {
+    pub fn as_v1(&self) -> Option<&dkg_v1::Confirmation<bls12381::G2Element>> {
         match self {
-            VersionedDkgConfirmation::V1(msg) => msg,
-            _ => panic!("BUG: expected V1 confirmation"),
+            VersionedDkgConfirmation::V1(msg) => Some(msg),
+            _ => None,
         }
     }
 

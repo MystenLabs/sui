@@ -51,7 +51,13 @@ DeepBook Predict is documented here as a Testnet integration surface. The smart 
 
 ## Public server endpoints
 
-The public server provides render-ready market, vault, portfolio, and history data.
+The public server base URL is `https://predict-server.testnet.mystenlabs.com`. Use it to retrieve render-ready market, vault, portfolio, and history data.
+
+The following example queries the market state for a Predict object:
+
+```bash
+$ curl https://predict-server.testnet.mystenlabs.com/predicts/0xc8736204d12f0a7277c86388a68bf8a194b0a14c5538ad13f22cbd8e2a38028a/state
+```
 
 ### Protocol and market state
 

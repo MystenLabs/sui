@@ -229,9 +229,8 @@ pub(crate) mod address_owned_objects_query {
     use anyhow::Error;
     use anyhow::anyhow;
     use cynic::QueryBuilder as _;
-    use move_core_types::language_storage::StructTag;
-    use sui_types::SUI_FRAMEWORK_ADDRESS;
     use sui_types::base_types::ObjectID;
+    use sui_types::base_types::ObjectRef;
     use sui_types::base_types::SequenceNumber;
     use sui_types::base_types::SuiAddress as SuiAddressType;
     use sui_types::digests::ObjectDigest;
@@ -245,12 +244,7 @@ pub(crate) mod address_owned_objects_query {
     /// Lightweight metadata for an address-owned object at a checkpoint.
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub(crate) struct AddressOwnedObject {
-        pub(crate) object_id: ObjectID,
-        pub(crate) version: SequenceNumber,
-        pub(crate) digest: ObjectDigest,
-        pub(crate) owner: SuiAddressType,
-        pub(crate) object_type: StructTag,
-        pub(crate) balance: Option<u64>,
+        pub(crate) object_ref: ObjectRef,
     }
 
     #[derive(cynic::QueryVariables)]
@@ -326,50 +320,7 @@ pub(crate) mod address_owned_objects_query {
         address: SuiAddress,
         version: Option<u64>,
         digest: Option<String>,
-        owner: Option<Owner>,
-        contents: Option<MoveValue>,
     }
-
-    #[derive(cynic::InlineFragments)]
-    #[cynic(schema_module = "crate::gql::queries::schema")]
-    pub(crate) enum Owner {
-        AddressOwner(AddressOwner),
-        #[cynic(fallback)]
-        Other,
-    }
-
-    #[derive(cynic::QueryFragment)]
-    #[cynic(schema_module = "crate::gql::queries::schema")]
-    pub(crate) struct AddressOwner {
-        address: Option<OwnerAddress>,
-    }
-
-    #[derive(cynic::QueryFragment)]
-    #[cynic(
-        graphql_type = "Address",
-        schema_module = "crate::gql::queries::schema"
-    )]
-    pub(crate) struct OwnerAddress {
-        address: SuiAddress,
-    }
-
-    #[derive(cynic::QueryFragment)]
-    #[cynic(schema_module = "crate::gql::queries::schema")]
-    pub(crate) struct MoveValue {
-        #[cynic(rename = "type")]
-        object_type: Option<MoveType>,
-        json: Option<Json>,
-    }
-
-    #[derive(cynic::QueryFragment)]
-    #[cynic(schema_module = "crate::gql::queries::schema")]
-    pub(crate) struct MoveType {
-        repr: String,
-    }
-
-    #[derive(cynic::Scalar, Debug, Clone)]
-    #[cynic(graphql_type = "JSON")]
-    pub(crate) struct Json(pub serde_json::Value);
 
     #[derive(cynic::Scalar, Debug, Clone)]
     #[cynic(graphql_type = "SuiAddress")]
@@ -415,9 +366,7 @@ pub(crate) mod address_owned_objects_query {
             };
 
             for node in objects.nodes {
-                if let Some(entry) = decode_move_object(node)? {
-                    entries.push(entry);
-                }
+                entries.push(decode_move_object(node)?);
             }
 
             if !objects.page_info.has_next_page {
@@ -429,43 +378,7 @@ pub(crate) mod address_owned_objects_query {
         Ok(entries)
     }
 
-    fn coin_balance_from_json(
-        object_type: &StructTag,
-        json: Option<&serde_json::Value>,
-    ) -> Option<u64> {
-        if object_type.address != SUI_FRAMEWORK_ADDRESS
-            || object_type.module.as_ident_str().as_str() != "coin"
-            || object_type.name.as_ident_str().as_str() != "Coin"
-        {
-            return None;
-        }
-
-        let balance = json?.get("balance")?;
-        balance
-            .as_u64()
-            .or_else(|| balance.as_str().and_then(|value| value.parse().ok()))
-    }
-
-    fn decode_move_object(node: MoveObject) -> Result<Option<AddressOwnedObject>, Error> {
-        let owner = match node.owner {
-            Some(Owner::AddressOwner(owner)) => owner
-                .address
-                .ok_or_else(|| anyhow!("address-owned seed entry is missing owner address"))?
-                .address
-                .0
-                .parse::<SuiAddressType>()
-                .with_context(|| format!("invalid seed owner for object {}", node.address.0))?,
-            _ => return Ok(None),
-        };
-        let contents = node
-            .contents
-            .ok_or_else(|| anyhow!("seed object {} is missing contents", node.address.0))?;
-        let object_type = contents
-            .object_type
-            .ok_or_else(|| anyhow!("seed object {} is missing type", node.address.0))?
-            .repr
-            .parse::<StructTag>()
-            .with_context(|| format!("invalid seed object type for {}", node.address.0))?;
+    fn decode_move_object(node: MoveObject) -> Result<AddressOwnedObject, Error> {
         let object_id = node
             .address
             .0
@@ -479,23 +392,15 @@ pub(crate) mod address_owned_objects_query {
         let version = node
             .version
             .ok_or_else(|| anyhow!("seed object {object_id} is missing version"))?;
-        let balance =
-            coin_balance_from_json(&object_type, contents.json.as_ref().map(|json| &json.0));
 
-        Ok(Some(AddressOwnedObject {
-            object_id,
-            version: SequenceNumber::from_u64(version),
-            digest,
-            owner,
-            object_type,
-            balance,
-        }))
+        Ok(AddressOwnedObject {
+            object_ref: (object_id, SequenceNumber::from_u64(version), digest),
+        })
     }
 
     #[cfg(test)]
     mod tests {
         use sui_types::base_types::ObjectID;
-        use sui_types::gas_coin::GasCoin;
         use sui_types::object::Object;
         use sui_types::object::Owner as SuiOwner;
         use wiremock::Mock;
@@ -558,51 +463,16 @@ pub(crate) mod address_owned_objects_query {
             })
         }
 
-        fn address_owned_node(object: &Object, owner: SuiAddressType) -> serde_json::Value {
+        fn address_object_node(object: &Object) -> serde_json::Value {
             serde_json::json!({
                 "address": object.id().to_string(),
                 "version": object.version().value(),
                 "digest": object.digest().to_string(),
-                "owner": {
-                    "__typename": "AddressOwner",
-                    "address": { "address": owner.to_string() },
-                },
-                "contents": {
-                    "type": { "repr": object.struct_tag().unwrap().to_canonical_string(true) },
-                    "json": { "balance": "123" },
-                }
             })
-        }
-
-        fn consensus_owned_node(object: &Object, owner: SuiAddressType) -> serde_json::Value {
-            serde_json::json!({
-                "address": object.id().to_string(),
-                "version": object.version().value(),
-                "digest": object.digest().to_string(),
-                "owner": {
-                    "__typename": "ConsensusAddressOwner",
-                    "address": { "address": owner.to_string() },
-                },
-                "contents": {
-                    "type": { "repr": object.struct_tag().unwrap().to_canonical_string(true) },
-                    "json": { "balance": "456" },
-                }
-            })
-        }
-
-        #[test]
-        fn coin_balance_from_json_reads_string_balance() {
-            let ty = GasCoin::type_();
-            let json = serde_json::json!({
-                "id": "0x1",
-                "balance": "42",
-            });
-
-            assert_eq!(coin_balance_from_json(&ty, Some(&json)), Some(42));
         }
 
         #[tokio::test]
-        async fn query_paginates_and_skips_non_address_owned_objects() {
+        async fn query_paginates_address_owned_object_refs_without_owner() {
             let server = MockServer::start().await;
             let owner = SuiAddressType::random_for_testing_only();
             let first = Object::with_id_owner_version_for_testing(
@@ -618,7 +488,6 @@ pub(crate) mod address_owned_objects_query {
                     owner,
                 },
             );
-
             Mock::given(method("POST"))
                 .and(path("/"))
                 .and(body_partial_json(serde_json::json!({
@@ -626,7 +495,7 @@ pub(crate) mod address_owned_objects_query {
                 })))
                 .respond_with(
                     ResponseTemplate::new(200).set_body_json(address_objects_response(
-                        vec![address_owned_node(&first, owner)],
+                        vec![address_object_node(&first)],
                         true,
                         Some("cursor-1"),
                     )),
@@ -640,7 +509,7 @@ pub(crate) mod address_owned_objects_query {
                 })))
                 .respond_with(
                     ResponseTemplate::new(200).set_body_json(address_objects_response(
-                        vec![consensus_owned_node(&second, owner)],
+                        vec![address_object_node(&second)],
                         false,
                         None,
                     )),
@@ -654,10 +523,9 @@ pub(crate) mod address_owned_objects_query {
                 .await
                 .expect("address seed should resolve");
 
-            assert_eq!(entries.len(), 1);
-            assert_eq!(entries[0].object_id, first.id());
-            assert_eq!(entries[0].version, first.version());
-            assert_eq!(entries[0].balance, Some(123));
+            assert_eq!(entries.len(), 2);
+            assert_eq!(entries[0].object_ref, first.compute_object_reference());
+            assert_eq!(entries[1].object_ref, second.compute_object_reference());
 
             let requests = server
                 .received_requests()
@@ -671,8 +539,11 @@ pub(crate) mod address_owned_objects_query {
                 .and_then(serde_json::Value::as_str)
                 .expect("query string should be present");
             assert!(query.contains("address(address: $address)"));
-            assert!(query.contains("... on AddressOwner"));
-            assert!(!query.contains("ConsensusAddressOwner"));
+            assert!(query.contains("version"));
+            assert!(query.contains("digest"));
+            assert!(!query.contains("owner"));
+            assert!(!query.contains("contents"));
+            assert!(!query.contains("balance"));
         }
 
         #[tokio::test]
@@ -710,6 +581,399 @@ pub(crate) mod address_owned_objects_query {
                     .expect("missing objects should resolve")
                     .is_empty()
             );
+        }
+    }
+}
+
+pub(crate) mod object_seed_query {
+    use sui_types::base_types::ObjectID;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::base_types::SuiAddress as SuiAddressType;
+    use sui_types::digests::ObjectDigest;
+    use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+
+    use super::address_owned_objects_query::AddressOwnedObject;
+    use super::*;
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub(crate) enum ObjectSeedMetadata {
+        Missing,
+        NonAddressOwned,
+        AddressOwned(AddressOwnedObject),
+    }
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    #[cynic(graphql_type = "SuiAddress")]
+    pub(crate) struct SuiAddress(pub String);
+
+    #[derive(cynic::InputObject, Debug)]
+    #[cynic(graphql_type = "ObjectKey")]
+    pub(crate) struct ObjectKey {
+        pub address: SuiAddress,
+        pub version: Option<u64>,
+        pub root_version: Option<u64>,
+        pub at_checkpoint: Option<u64>,
+    }
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct ObjectSeedArgs {
+        pub keys: Vec<ObjectKey>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "ObjectSeedArgs",
+        graphql_type = "Query",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct Query {
+        #[arguments(keys: $keys)]
+        multi_get_objects: Vec<Option<ObjectSeedObject>>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(graphql_type = "Object", schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct ObjectSeedObject {
+        version: Option<u64>,
+        digest: Option<String>,
+        owner: Option<Owner>,
+    }
+
+    #[derive(cynic::InlineFragments)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) enum Owner {
+        AddressOwner(AddressOwner),
+        ConsensusAddressOwner(ConsensusAddressOwner),
+        #[cynic(fallback)]
+        Other,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct AddressOwner {
+        address: Option<OwnerAddress>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct ConsensusAddressOwner {
+        address: Option<OwnerAddress>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        graphql_type = "Address",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct OwnerAddress {
+        address: SuiAddress,
+    }
+
+    const MAX_KEYS_SIZE: usize = 30;
+
+    pub(crate) async fn query(
+        object_ids: &[ObjectID],
+        checkpoint: CheckpointSequenceNumber,
+        client: &GraphQLClient,
+    ) -> Result<Vec<ObjectSeedMetadata>, Error> {
+        let mut results = Vec::with_capacity(object_ids.len());
+
+        for object_ids in object_ids.chunks(MAX_KEYS_SIZE) {
+            let keys = object_ids
+                .iter()
+                .map(|object_id| ObjectKey {
+                    address: SuiAddress(object_id.to_string()),
+                    version: None,
+                    root_version: None,
+                    at_checkpoint: Some(checkpoint),
+                })
+                .collect();
+            let operation = Query::build(ObjectSeedArgs { keys });
+            let response = client.run_query(&operation).await.with_context(|| {
+                format!("failed to query object seeds at checkpoint {checkpoint}")
+            })?;
+            let data = response.data.with_context(|| {
+                format!(
+                    "missing data in object seed query response at checkpoint {checkpoint}: {:?}",
+                    response.errors,
+                )
+            })?;
+
+            if data.multi_get_objects.len() != object_ids.len() {
+                return Err(anyhow!(
+                    "object seed query returned {} results for {} object IDs",
+                    data.multi_get_objects.len(),
+                    object_ids.len(),
+                ));
+            }
+
+            for (object_id, object) in object_ids.iter().copied().zip_eq(data.multi_get_objects) {
+                results.push(decode_object_seed(object_id, object)?);
+            }
+        }
+
+        Ok(results)
+    }
+
+    fn decode_object_seed(
+        object_id: ObjectID,
+        object: Option<ObjectSeedObject>,
+    ) -> Result<ObjectSeedMetadata, Error> {
+        let Some(object) = object else {
+            return Ok(ObjectSeedMetadata::Missing);
+        };
+        match object.owner {
+            Some(Owner::AddressOwner(owner)) => parse_owner_address(owner.address, &object_id)?,
+            Some(Owner::ConsensusAddressOwner(owner)) => {
+                parse_owner_address(owner.address, &object_id)?
+            }
+            _ => return Ok(ObjectSeedMetadata::NonAddressOwned),
+        };
+        let digest = object
+            .digest
+            .with_context(|| format!("seed object {object_id} is missing digest"))?
+            .parse::<ObjectDigest>()
+            .with_context(|| format!("invalid seed object digest for {object_id}"))?;
+        let version = object
+            .version
+            .with_context(|| format!("seed object {object_id} is missing version"))?;
+
+        Ok(ObjectSeedMetadata::AddressOwned(AddressOwnedObject {
+            object_ref: (object_id, SequenceNumber::from_u64(version), digest),
+        }))
+    }
+
+    fn parse_owner_address(
+        address: Option<OwnerAddress>,
+        object_id: &ObjectID,
+    ) -> Result<SuiAddressType, Error> {
+        address
+            .with_context(|| format!("seed object {object_id} is missing owner address"))?
+            .address
+            .0
+            .parse::<SuiAddressType>()
+            .with_context(|| format!("invalid seed owner for object {object_id}"))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use sui_types::base_types::ObjectID;
+        use sui_types::object::Object;
+        use sui_types::object::Owner as SuiOwner;
+        use wiremock::Mock;
+        use wiremock::MockServer;
+        use wiremock::ResponseTemplate;
+        use wiremock::matchers::body_partial_json;
+        use wiremock::matchers::method;
+        use wiremock::matchers::path;
+
+        use super::*;
+        use crate::Node;
+
+        fn object_seed_response(nodes: Vec<serde_json::Value>) -> serde_json::Value {
+            serde_json::json!({
+                "data": {
+                    "multiGetObjects": nodes,
+                }
+            })
+        }
+
+        fn address_owned_object_node(object: &Object, owner: SuiAddressType) -> serde_json::Value {
+            serde_json::json!({
+                "version": object.version().value(),
+                "digest": object.digest().to_string(),
+                "owner": {
+                    "__typename": "AddressOwner",
+                    "address": { "address": owner.to_string() },
+                }
+            })
+        }
+
+        fn consensus_owned_object_node(
+            object: &Object,
+            owner: SuiAddressType,
+        ) -> serde_json::Value {
+            serde_json::json!({
+                "version": object.version().value(),
+                "digest": object.digest().to_string(),
+                "owner": {
+                    "__typename": "ConsensusAddressOwner",
+                    "address": { "address": owner.to_string() },
+                }
+            })
+        }
+
+        fn assert_object_seed_query_shape(query: &str) {
+            assert!(query.contains("multiGetObjects"));
+            assert!(query.contains("version"));
+            assert!(query.contains("digest"));
+            assert!(query.contains("... on AddressOwner"));
+            assert!(query.contains("... on ConsensusAddressOwner"));
+            assert!(!query.contains("objectBcs"));
+
+            let object_selection_before_owner = query
+                .split("multiGetObjects")
+                .nth(1)
+                .expect("query should include multiGetObjects")
+                .split("owner")
+                .next()
+                .expect("query should include owner");
+            assert!(
+                !object_selection_before_owner
+                    .lines()
+                    .any(|line| line.trim() == "address"),
+                "object seed query should not request Object.address",
+            );
+        }
+
+        #[tokio::test]
+        async fn query_returns_address_owned_metadata_without_object_bcs() {
+            let server = MockServer::start().await;
+            let owner = SuiAddressType::random_for_testing_only();
+            let first = Object::with_id_owner_version_for_testing(
+                ObjectID::random(),
+                SequenceNumber::from_u64(7),
+                SuiOwner::AddressOwner(owner),
+            );
+            let second = Object::with_id_owner_version_for_testing(
+                ObjectID::random(),
+                SequenceNumber::from_u64(8),
+                SuiOwner::ConsensusAddressOwner {
+                    start_version: SequenceNumber::from_u64(8),
+                    owner,
+                },
+            );
+            let missing = ObjectID::random();
+
+            Mock::given(method("POST"))
+                .and(path("/"))
+                .and(body_partial_json(serde_json::json!({
+                    "variables": {
+                        "keys": [
+                            {
+                                "address": first.id().to_string(),
+                                "atCheckpoint": 10,
+                            },
+                            {
+                                "address": missing.to_string(),
+                                "atCheckpoint": 10,
+                            },
+                            {
+                                "address": second.id().to_string(),
+                                "atCheckpoint": 10,
+                            },
+                        ],
+                    }
+                })))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_json(object_seed_response(vec![
+                        address_owned_object_node(&first, owner),
+                        serde_json::Value::Null,
+                        consensus_owned_object_node(&second, owner),
+                    ])),
+                )
+                .mount(&server)
+                .await;
+
+            let gql = GraphQLClient::new(Node::Custom(server.uri()), "test")
+                .expect("graphql client should build");
+            let entries = query(&[first.id(), missing, second.id()], 10, &gql)
+                .await
+                .expect("object seeds should resolve");
+
+            assert_eq!(entries.len(), 3);
+            assert_eq!(
+                entries[0],
+                ObjectSeedMetadata::AddressOwned(AddressOwnedObject {
+                    object_ref: first.compute_object_reference(),
+                })
+            );
+            assert_eq!(entries[1], ObjectSeedMetadata::Missing);
+            assert_eq!(
+                entries[2],
+                ObjectSeedMetadata::AddressOwned(AddressOwnedObject {
+                    object_ref: second.compute_object_reference(),
+                })
+            );
+
+            let requests = server
+                .received_requests()
+                .await
+                .expect("wiremock should record requests");
+            let request_body: serde_json::Value = requests[0]
+                .body_json()
+                .expect("request body should be json");
+            let query = request_body
+                .get("query")
+                .and_then(serde_json::Value::as_str)
+                .expect("query string should be present");
+            assert_object_seed_query_shape(query);
+        }
+
+        #[tokio::test]
+        async fn query_errors_on_malformed_object_seed_metadata() {
+            let owner = SuiAddressType::random_for_testing_only();
+            let object = Object::with_id_owner_version_for_testing(
+                ObjectID::random(),
+                SequenceNumber::from_u64(7),
+                SuiOwner::AddressOwner(owner),
+            );
+
+            for (node, expected_error) in [
+                (
+                    serde_json::json!({
+                        "version": object.version().value(),
+                        "digest": null,
+                        "owner": {
+                            "__typename": "AddressOwner",
+                            "address": { "address": owner.to_string() },
+                        }
+                    }),
+                    "missing digest",
+                ),
+                (
+                    serde_json::json!({
+                        "version": null,
+                        "digest": object.digest().to_string(),
+                        "owner": {
+                            "__typename": "AddressOwner",
+                            "address": { "address": owner.to_string() },
+                        }
+                    }),
+                    "missing version",
+                ),
+                (
+                    serde_json::json!({
+                        "version": object.version().value(),
+                        "digest": object.digest().to_string(),
+                        "owner": {
+                            "__typename": "AddressOwner",
+                            "address": null,
+                        }
+                    }),
+                    "missing owner address",
+                ),
+            ] {
+                let server = MockServer::start().await;
+                Mock::given(method("POST"))
+                    .and(path("/"))
+                    .respond_with(
+                        ResponseTemplate::new(200).set_body_json(object_seed_response(vec![node])),
+                    )
+                    .mount(&server)
+                    .await;
+
+                let gql = GraphQLClient::new(Node::Custom(server.uri()), "test")
+                    .expect("graphql client should build");
+                let err = query(&[object.id()], 10, &gql)
+                    .await
+                    .expect_err("malformed object seed metadata should fail");
+
+                assert!(
+                    err.to_string().contains(expected_error),
+                    "expected error containing {expected_error:?}, got {err:?}",
+                );
+            }
         }
     }
 }

@@ -118,6 +118,30 @@ impl LedgerGrpcReader {
             .context("Failed to deserialize checkpoint summary")
     }
 
+    /// Resolve a checkpoint digest to its sequence number via the ledger service. Returns `None`
+    /// if no checkpoint with that digest is known.
+    pub async fn checkpoint_seq_by_digest(
+        &self,
+        digest: sui_types::digests::CheckpointDigest,
+    ) -> anyhow::Result<Option<u64>> {
+        use grpc::GetCheckpointRequest;
+        use prost_types::FieldMask;
+        use sui_rpc::field::FieldMaskUtil;
+
+        let sdk_digest = sui_sdk_types::Digest::new(digest.inner().to_owned());
+        let request = GetCheckpointRequest::by_digest(&sdk_digest)
+            .with_read_mask(FieldMask::from_paths(["sequence_number"]));
+
+        match self.get_checkpoint(request).await {
+            Ok(response) => {
+                let checkpoint = response.checkpoint.context("No checkpoint returned")?;
+                Ok(checkpoint.sequence_number)
+            }
+            Err(status) if status.code() == tonic::Code::NotFound => Ok(None),
+            Err(e) => Err(anyhow::anyhow!(e)),
+        }
+    }
+
     // Public wrapper methods for gRPC calls with metrics instrumentation
 
     pub async fn get_checkpoint(

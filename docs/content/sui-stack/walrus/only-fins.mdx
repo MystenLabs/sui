@@ -132,7 +132,9 @@ This combination means Walrus handles storage and availability, Seal handles key
 
 - [x] [Node.js](https://nodejs.org/) 18 or later, with [pnpm](https://pnpm.io/installation) installed
 
-- [x] A Sui wallet ([Slush Wallet](https://slush.app/) or another compatible wallet) or willingness to use [Enoki](https://portal.enoki.mystenlabs.com/) zkLogin
+- [x] A Sui wallet ([Slush Wallet](https://slush.app/) or another compatible wallet) or
+
+- [x] [Enoki](https://portal.enoki.mystenlabs.com/) zkLogin
 
 </TabItem>
 </Tabs>
@@ -277,14 +279,6 @@ The `usePostDecryption` hook fetches encrypted images from Walrus and decrypts t
 <ImportContent source="frontend/src/hooks/usePostDecryption.ts" mode="code" org="MystenLabs" repo="onlyfins-example-app" fun="usePostDecryption" />
 
 For each encrypted post the user has access to, the hook builds a `seal_approve_access` transaction, retrieves the decryption key from the Seal key servers, fetches the encrypted blob from Walrus, and decrypts it locally. It auto-detects the image MIME type from the first bytes of the decrypted data.
-
-### Session key management
-
-The `SessionKeyProvider` manages cryptographic session keys with a 30-minute TTL that Seal requires.
-
-<ImportContent source="frontend/src/providers/SessionKeyProvider.tsx" mode="code" org="MystenLabs" repo="onlyfins-example-app" fun="SessionKeyProvider" />
-
-The provider persists session keys to localStorage and validates them on mount. When a key expires, the app shows a modal prompting the user to sign a new session key. The provider cleans up keys when the wallet disconnects.
 
 ## Common modifications
 

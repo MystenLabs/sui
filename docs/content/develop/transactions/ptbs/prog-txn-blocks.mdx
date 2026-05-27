@@ -4,13 +4,19 @@ description: Programmable transaction blocks are a group of commands that comple
 keywords: [ programmable transaction blocks, transaction blocks, program transaction blocks, PTB, PTBs, what are PTBs, what is PTB, transaction group, programmable group of transactions, program transaction block, block of transactions, group of transactions ]
 ---
 
+:::tip Local network prerequisite
+
+If you connect to Localnet, verify your local node is running first. See [Connecting to a local network](/getting-started/onboarding/local-network).
+
+:::
+
 Transactions on Sui are composed of groups of commands that execute on inputs to define the result of the transaction. Referred to as **programmable transaction blocks (PTBs)**, these groups of commands define all user transactions on Sui. PTBs allow a user to call multiple Move functions, manage their objects, and manage their coins in a single transaction without publishing a new Move package. Designed with automation and transaction builders in mind, PTBs are a lightweight and flexible way of generating transactions. 
 
 However, more intricate programming patterns, such as loops, are not supported. In such cases, you must publish a new Move package.
 
 The individual transaction commands within a PTB execute in order. You can use the results from one transaction command in any subsequent transaction command within the PTB. The effects of each transaction command in the block, such as object modifications or transfers, are applied atomically at the end of the transaction. If one transaction command fails, the entire block fails and no effects from the commands are applied.
 
-A PTB can perform up to 1,024 unique operations in a single execution, whereas transactions on traditional blockchains would require 1,024 individual executions to accomplish the same result. This structure also promotes cheaper gas fees. The cost of facilitating individual transactions is always more than the cost of those same transactions blocked together in a PTB.
+A PTB can perform up to 1,024 unique operations in a single execution, whereas transactions on traditional blockchains would require 1,024 individual executions to accomplish the same result. This structure also results in cheaper gas fees. The cost of facilitating individual transactions is always more than the cost of those same transactions blocked together in a PTB.
 
 ## Transaction components
 
@@ -86,15 +92,15 @@ For the execution of PTBs, the input vector is populated by the input objects or
 
 ### Start of execution
 
-At the beginning of execution, the PTB runtime takes the input objects and loads them into the input array. The objects are already verified by the network, checking rules like existence and valid ownership. The pure value bytes are also loaded into the array but not validated until usage.
+At the beginning of execution, the PTB runtime loads the input objects into the input array. The network already verifies the objects, checking rules like existence and valid ownership. The pure value bytes are also loaded into the array but not validated until usage.
 
-The most important consideration at this stage is the effects on the gas coin. At the beginning of execution, the maximum gas budget (in terms of SUI) is withdrawn from the gas coin. Any unused gas is returned to the gas coin at the end of execution, even if the coin has changed owners.
+The most important consideration at this stage is the effects on the gas coin. At the beginning of execution, the system withdraws the maximum gas budget (in terms of SUI) from the gas coin. The system returns any unused gas to the gas coin at the end of execution, even if the coin has changed owners.
 
 ### Object consumption 
 
 All objects created or returned by Move commands must either be consumed (destroyed, transferred, or used by another command) or explicitly dropped if the type has the `drop` ability. 
 
-In a PTB, if you create an object through a Move command and do not destroy, transfer, or use it in a subsequent command, the transaction will fail with an error. 
+In a PTB, if you create an object through a Move command and do not destroy, transfer, or use it in a subsequent command, the transaction fails with an error. 
 
 ### Pre-execution validation
 
@@ -134,7 +140,7 @@ Borrowing follows additional rules to ensure safe reference usage:
 
 #### Special object handling
 
-Object inputs have the type `T` of the underlying object. The exception is `ObjectArg::Receiving` inputs, which have type `sui::transfer::Receiving<T>`. This wrapper indicates the object is owned by another object, not the sender. Call `sui::transfer::receive` with the parent object to unwrap it and prove ownership.
+Object inputs have the type `T` of the underlying object. `ObjectArg::Receiving` inputs are the exception and have type `sui::transfer::Receiving<T>`. This wrapper indicates the object is owned by another object, not the sender. Call `sui::transfer::receive` with the parent object to unwrap it and prove ownership.
 
 Shared objects have restrictions on by value usage to ensure they remain shared or are deleted by the end of the transaction:
 
@@ -155,7 +161,7 @@ Previously, `entry` functions had signature restrictions that limited their para
 :::
 
 **Return types:**
-Move calls cannot return references (`&T` or `&mut T`). However, this restriction will be lifted in the future.
+Move calls cannot return references (`&T` or `&mut T`).
 
 **Private generics:**
 Some framework functions have type parameters that can only be instantiated with types defined in the same module. Since PTBs are not modules, they cannot supply these types and therefore cannot call these functions directly. For example, certain `sui::transfer` functions like `transfer` and `share_object` require a type defined in the calling module, and as such cannot be called from a PTB. Instead, use the `public_transfer` and `public_share_object` variants.
@@ -167,7 +173,7 @@ Some framework functions have type parameters that can only be instantiated with
 
 A non-public `entry` function is a function declared with `entry` that is **not** `public`. It is either private (`entry fun f()`) or `public(package)` (`public(package) entry fun f()`). These functions can be called directly in PTBs but not from other packages.
 
-Non-public `entry` functions have a single restriction: their arguments cannot be in a "hot" clique (see below) when the function is called. The intuition behind this restriction is to ensure that arguments to non-public `entry` functions are not entangled with outstanding [hot potato](https://move-book.com/programmability/hot-potato-pattern) values that could force behavior after the function executes.
+Non-public `entry` functions have a single restriction: their arguments cannot be in a "hot" clique (see below) when the function is called. This restriction ensures that arguments to non-public `entry` functions are not entangled with outstanding [hot potato](https://move-book.com/programmability/hot-potato-pattern) values that could force behavior after the function executes.
 
 **Hot potato values**
 
@@ -175,7 +181,7 @@ A value is a hot potato if its type has neither the `drop` nor the `store` abili
 
 **Cliques**
 
-The system tracks which values are entangled using cliques. As described above, the intuition behind to goal is to prevent hot potato values from forcing behavior outside of the call to the non-public `entry` function. The cliques provide a modeling of this "entanglement" by keeping a count of how many hot potato values are live and which values they have interacted with:
+The system tracks which values are entangled using cliques. As described above, the goal is to prevent hot potato values from forcing behavior outside of the call to the non-public `entry` function. The cliques provide a modeling of this "entanglement" by keeping a count of how many hot potato values are live and which values they have interacted with:
 
 - Each PTB input starts in its own clique with a hot count of 0.
 - When values are used together as arguments in a command, their cliques merge. The hot counts add together.
@@ -275,7 +281,7 @@ Both commands embed their module bytes and dependency IDs directly in the comman
 
 - Takes exactly one PTB argument: a `sui::package::UpgradeTicket` (by value).
 - Returns a single `sui::package::UpgradeReceipt`.
-- Does not call `init` functions. Newly added modules in an upgrade cannot have `init` functions. This restriction will be lifted in a future release.
+- Does not call `init` functions. Newly added modules in an upgrade cannot have `init` functions.
 - The module digest and package ID in the ticket must match exactly.
 - The upgrade policy (compatible, additive, dep-only) is enforced from the ticket.
 

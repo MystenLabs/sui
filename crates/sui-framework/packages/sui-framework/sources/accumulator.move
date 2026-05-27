@@ -21,6 +21,11 @@ fun create(ctx: &TxContext) {
     })
 }
 
+#[test_only]
+public fun create_for_testing(ctx: &TxContext) {
+    create(ctx);
+}
+
 public(package) fun root_id(accumulator_root: &AccumulatorRoot): &UID {
     &accumulator_root.id
 }

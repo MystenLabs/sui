@@ -140,7 +140,7 @@ impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
         let is_grpc = request
             .headers
             .get(&http::header::CONTENT_TYPE)
-            .is_some_and(|header| header == tonic::metadata::GRPC_CONTENT_TYPE);
+            .is_some_and(is_grpc_content_type);
 
         let path = compute_metric_label(
             is_grpc,
@@ -177,16 +177,17 @@ fn compute_metric_label(
     grpc_method_allowlist: &HashSet<String>,
 ) -> Cow<'static, str> {
     match (is_grpc, matched_path) {
-        (true, Some(matched)) => {
-            if grpc_method_allowlist.contains(uri_path) {
-                Cow::Owned(uri_path.to_owned())
-            } else {
-                Cow::Owned(matched.to_owned())
-            }
-        }
+        (true, _) if grpc_method_allowlist.contains(uri_path) => Cow::Owned(uri_path.to_owned()),
+        (true, Some(matched)) => Cow::Owned(matched.to_owned()),
         (false, Some(matched)) => Cow::Owned(matched.to_owned()),
         (_, None) => Cow::Borrowed("unknown"),
     }
+}
+
+fn is_grpc_content_type(content_type: &http::HeaderValue) -> bool {
+    content_type
+        .as_bytes()
+        .starts_with(tonic::metadata::GRPC_CONTENT_TYPE.as_bytes())
 }
 
 pub struct RpcMetricsCallbackHandler {
@@ -205,15 +206,8 @@ impl ResponseHandler for RpcMetricsCallbackHandler {
         let status = if response
             .headers
             .get(&http::header::CONTENT_TYPE)
-            .is_some_and(|content_type| {
-                content_type
-                    .as_bytes()
-                    // check if the content-type starts_with 'application/grpc' in order to
-                    // consider this as a gRPC request. A prefix comparison is done instead of a
-                    // full equality check in order to account for the various types of
-                    // content-types that are considered as gRPC traffic.
-                    .starts_with(tonic::metadata::GRPC_CONTENT_TYPE.as_bytes())
-            }) {
+            .is_some_and(is_grpc_content_type)
+        {
             let code = response
                 .headers
                 .get(&GRPC_STATUS)
@@ -353,14 +347,17 @@ mod tests {
             "sui.rpc.v2",
             &[("LedgerService", &["GetCheckpoint", "GetTransaction"])],
         );
-        let alpha = fds("sui.rpc.alpha", &[("EventService", &["Subscribe"])]);
+        let v2alpha = fds(
+            "sui.rpc.v2alpha",
+            &[("ProofService", &["GetCheckpointObjectProof"])],
+        );
 
-        let paths = grpc_method_paths_from_file_descriptor_sets(&[&v2, &alpha]).unwrap();
+        let paths = grpc_method_paths_from_file_descriptor_sets(&[&v2, &v2alpha]).unwrap();
 
         assert_eq!(paths.len(), 3);
         assert!(paths.contains("/sui.rpc.v2.LedgerService/GetCheckpoint"));
         assert!(paths.contains("/sui.rpc.v2.LedgerService/GetTransaction"));
-        assert!(paths.contains("/sui.rpc.alpha.EventService/Subscribe"));
+        assert!(paths.contains("/sui.rpc.v2alpha.ProofService/GetCheckpointObjectProof"));
     }
 
     #[test]
@@ -382,6 +379,20 @@ mod tests {
             &allowlist,
         );
         assert_eq!(label, "/sui.rpc.v2.LedgerService/GetCheckpoint");
+    }
+
+    #[test]
+    fn known_grpc_method_without_matched_path_uses_uri_path_label() {
+        let mut allowlist = HashSet::new();
+        allowlist.insert("/sui.rpc.v2alpha.LedgerService/ListTransactions".to_owned());
+
+        let label = compute_metric_label(
+            true,
+            "/sui.rpc.v2alpha.LedgerService/ListTransactions",
+            None,
+            &allowlist,
+        );
+        assert_eq!(label, "/sui.rpc.v2alpha.LedgerService/ListTransactions");
     }
 
     #[test]
@@ -412,5 +423,18 @@ mod tests {
         let allowlist = HashSet::new();
         let label = compute_metric_label(true, "/no/match", None, &allowlist);
         assert_eq!(label, "unknown");
+    }
+
+    #[test]
+    fn grpc_content_type_accepts_codec_suffixes() {
+        assert!(is_grpc_content_type(&http::HeaderValue::from_static(
+            "application/grpc"
+        )));
+        assert!(is_grpc_content_type(&http::HeaderValue::from_static(
+            "application/grpc+proto"
+        )));
+        assert!(!is_grpc_content_type(&http::HeaderValue::from_static(
+            "application/json"
+        )));
     }
 }

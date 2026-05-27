@@ -188,6 +188,8 @@ impl From<crate::object::Owner> for Owner {
                 start_version: start_version.value(),
                 owner: owner.into(),
             },
+            // TODO(Party WIP)
+            crate::object::Owner::Party { .. } => todo!("Party WIP"),
         }
     }
 }

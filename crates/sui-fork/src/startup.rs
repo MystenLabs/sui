@@ -3,9 +3,12 @@
 
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
+use anyhow::anyhow;
 use prometheus::Registry;
 use rand::rngs::OsRng;
 use tracing::info;
@@ -13,32 +16,95 @@ use tracing::info;
 use simulacrum::Simulacrum;
 use simulacrum::store::in_mem_store::KeyStore;
 use sui_protocol_config::ProtocolVersion;
-use sui_rpc_api::subscription::{SubscriptionService, SubscriptionServiceHandle};
-use sui_rpc_api::{RpcService, ServerVersion};
+use sui_rpc_api::RpcService;
+use sui_rpc_api::ServerVersion;
+use sui_rpc_api::subscription::SubscriptionService;
+use sui_rpc_api::subscription::SubscriptionServiceHandle;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::storage::RpcStateReader;
-use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
+use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 
 use crate::Node;
 use crate::context::Context;
+use crate::filesystem::FilesystemStore;
 use crate::proto::forking::forking_service_server::ForkingServiceServer;
 use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::rpc::forking_service::ForkingServiceImpl;
 use crate::seed::SeedInput;
+use crate::seed::ensure_seed_manifest_matches;
 use crate::store::DataStore;
+
+/// Checkpoint selected for startup, plus whether existing local fork state was found.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ResolvedStartCheckpoint {
+    pub(crate) checkpoint: Option<CheckpointSequenceNumber>,
+    pub(crate) resuming: bool,
+}
+
+/// Resolve the fork checkpoint from local state when possible.
+///
+/// Explicit data directories can be inspected directly before the remote
+/// GraphQL client asks for latest. Default roots cannot be inspected without a
+/// checkpoint because their path contains the checkpoint.
+pub(crate) fn resolve_start_checkpoint_from_local(
+    node: &Node,
+    requested_checkpoint: Option<CheckpointSequenceNumber>,
+    data_dir: Option<&Path>,
+) -> Result<ResolvedStartCheckpoint> {
+    let local = match (data_dir, requested_checkpoint) {
+        (Some(data_dir), _) => Some(FilesystemStore::new_with_root(data_dir.to_path_buf())),
+        (None, Some(checkpoint)) => Some(FilesystemStore::new(node, checkpoint, None)?),
+        (None, None) => None,
+    };
+
+    let Some(local) = local else {
+        return Ok(ResolvedStartCheckpoint {
+            checkpoint: requested_checkpoint,
+            resuming: false,
+        });
+    };
+
+    if local.seed_manifest_exists() {
+        let manifest = local.read_seed_manifest()?;
+        ensure_seed_manifest_matches(&manifest, &node.network_name(), requested_checkpoint)?;
+        return Ok(ResolvedStartCheckpoint {
+            checkpoint: Some(manifest.checkpoint),
+            resuming: true,
+        });
+    }
+
+    if requested_checkpoint.is_some() {
+        return Ok(ResolvedStartCheckpoint {
+            checkpoint: requested_checkpoint,
+            resuming: local
+                .get_highest_checkpoint_sequence_number_if_exists()?
+                .is_some(),
+        });
+    }
+
+    let checkpoint = local.get_highest_checkpoint_sequence_number_if_exists()?;
+    Ok(ResolvedStartCheckpoint {
+        checkpoint,
+        resuming: checkpoint.is_some(),
+    })
+}
 
 /// Initialize a forked network by fetching the fork checkpoint from the remote
 /// endpoint when needed, applying seed metadata, and starting a local Simulacrum
 /// instance from the highest checkpoint already persisted locally. Also builds
 /// the checkpoint subscription broker; the returned handle must be passed to
 /// [`run`] so the gRPC server exposes the streaming RPC.
+///
+/// `data_dir` is the root folder where the fork state is persisted. If `None`, a default path is
+/// used. See the `[FileSystemStore]` docs for details.
 pub async fn initialize(
     node: Node,
     forked_at_checkpoint: CheckpointSequenceNumber,
     version: &str,
-    data_dir: Option<std::path::PathBuf>,
+    data_dir: Option<PathBuf>,
     seed_input: SeedInput,
 ) -> Result<(Context, SubscriptionServiceHandle)> {
     // 1. Create DataStore — empty local cache, GraphQL wired up.
@@ -49,11 +115,7 @@ pub async fn initialize(
     // 2. Download and persist the startup checkpoint (summary + contents),
     //    then read the summary back through the cache-aware getter.
     data_store.download_and_persist_startup_checkpoint()?;
-    let manifest =
-        crate::seed::prepare_seed_manifest(&data_store, node.network_name(), &seed_input).await?;
-    if let Some(manifest) = &manifest {
-        crate::seed::initialize_owned_index_from_seed(&data_store, manifest)?;
-    }
+    crate::seed::prepare_seed_manifest(&data_store, node.network_name(), &seed_input).await?;
     let checkpoint = data_store
         .get_highest_verified_checkpoint()?
         .ok_or_else(|| anyhow!("checkpoint {} not found", forked_at_checkpoint))?;
@@ -173,5 +235,111 @@ fn override_validators(
         }
         #[cfg(msim)]
         _ => anyhow::bail!("unsupported system state variant"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_types::messages_checkpoint::VerifiedCheckpoint;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+    use crate::seed::SeedManifest;
+
+    use super::*;
+
+    fn write_manifest(root: &Path, network: &str, checkpoint: CheckpointSequenceNumber) {
+        FilesystemStore::new_with_root(root.to_path_buf())
+            .write_seed_manifest(&SeedManifest {
+                network: network.to_owned(),
+                checkpoint,
+                entries: Vec::new(),
+            })
+            .expect("seed manifest should write");
+    }
+
+    fn write_checkpoint(root: &Path, sequence: CheckpointSequenceNumber) {
+        let checkpoint = VerifiedCheckpoint::new_unchecked(
+            TestCheckpointBuilder::new(sequence)
+                .build_checkpoint()
+                .summary,
+        );
+        FilesystemStore::new_with_root(root.to_path_buf())
+            .write_checkpoint_summary(&checkpoint)
+            .expect("checkpoint summary should write");
+    }
+
+    #[test]
+    fn resolve_start_checkpoint_uses_manifest_when_checkpoint_is_omitted() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        write_manifest(temp.path(), "mainnet", 42);
+
+        let resolved = resolve_start_checkpoint_from_local(&Node::Mainnet, None, Some(temp.path()))
+            .expect("checkpoint resolution should not fail");
+
+        assert_eq!(
+            resolved,
+            ResolvedStartCheckpoint {
+                checkpoint: Some(42),
+                resuming: true,
+            }
+        );
+    }
+
+    #[test]
+    fn resolve_start_checkpoint_rejects_requested_checkpoint_mismatch() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        write_manifest(temp.path(), "mainnet", 42);
+
+        let err = resolve_start_checkpoint_from_local(&Node::Mainnet, Some(43), Some(temp.path()))
+            .expect_err("checkpoint mismatch should fail");
+
+        assert!(
+            err.to_string()
+                .contains("does not match requested checkpoint")
+        );
+    }
+
+    #[test]
+    fn resolve_start_checkpoint_rejects_network_mismatch() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        write_manifest(temp.path(), "testnet", 42);
+
+        let err = resolve_start_checkpoint_from_local(&Node::Mainnet, None, Some(temp.path()))
+            .expect_err("network mismatch should fail");
+
+        assert!(err.to_string().contains("does not match requested network"));
+    }
+
+    #[test]
+    fn resolve_start_checkpoint_falls_back_to_legacy_latest_checkpoint() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        write_checkpoint(temp.path(), 17);
+
+        let resolved = resolve_start_checkpoint_from_local(&Node::Mainnet, None, Some(temp.path()))
+            .expect("checkpoint resolution should not fail");
+
+        assert_eq!(
+            resolved,
+            ResolvedStartCheckpoint {
+                checkpoint: Some(17),
+                resuming: true,
+            }
+        );
+    }
+
+    #[test]
+    fn resolve_start_checkpoint_returns_none_for_fresh_start() {
+        let temp = tempfile::tempdir().expect("tempdir");
+
+        let resolved = resolve_start_checkpoint_from_local(&Node::Mainnet, None, Some(temp.path()))
+            .expect("checkpoint resolution should not fail");
+
+        assert_eq!(
+            resolved,
+            ResolvedStartCheckpoint {
+                checkpoint: None,
+                resuming: false,
+            }
+        );
     }
 }

@@ -343,6 +343,9 @@ pub enum ToolCommand {
         /// Defaults to 3 retries. Set to 0 to disable retries.
         #[clap(long = "max-retries", default_value = "3")]
         max_retries: usize,
+        /// Port for the Prometheus metrics server. Defaults to 9184.
+        #[clap(long = "metrics-port", default_value = "9184")]
+        metrics_port: u16,
     },
 
     #[clap(name = "replay")]
@@ -369,6 +372,21 @@ pub enum ToolCommand {
         chain: Option<String>,
         #[command(subcommand)]
         cmd: ReplayToolCommand,
+    },
+
+    /// Interactive Rhai shell for inspecting a TideHunter database.
+    #[cfg(all(feature = "tideconsole", not(windows)))]
+    #[command(name = "tideconsole")]
+    TideConsole {
+        /// Path to a TideHunter database directory to open on startup (bound to variable 'db').
+        #[arg(short, long)]
+        db: Option<PathBuf>,
+        /// Rhai snippet to evaluate non-interactively, then exit.
+        #[arg(short, long)]
+        exec: Option<String>,
+        /// Path to a Rhai script file to evaluate non-interactively, then exit.
+        #[arg(short, long)]
+        script: Option<PathBuf>,
     },
 }
 
@@ -659,6 +677,7 @@ impl ToolCommand {
                 latest,
                 verbose,
                 max_retries,
+                metrics_port,
             } => {
                 if !verbose {
                     tracing_handle
@@ -788,6 +807,7 @@ impl ToolCommand {
                     network,
                     verify,
                     max_retries,
+                    metrics_port,
                 )
                 .await?;
             }
@@ -957,6 +977,11 @@ impl ToolCommand {
             } => {
                 execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, chain, cmd)
                     .await?;
+            }
+            #[cfg(all(feature = "tideconsole", not(windows)))]
+            ToolCommand::TideConsole { db, exec, script } => {
+                tokio::task::spawn_blocking(move || crate::tideconsole_cmd::run(db, exec, script))
+                    .await??;
             }
         };
         Ok(())

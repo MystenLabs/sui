@@ -35,6 +35,7 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::{
     FundsWithdrawSchedulerTypeConfig, GlobalStateHashV2EnabledCallback,
     GlobalStateHashV2EnabledConfig, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
+    ValidatorObserverConfigCallback,
 };
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -1150,6 +1151,8 @@ pub struct TestClusterBuilder {
 
     execution_time_observer_config: Option<sui_config::node::ExecutionTimeObserverConfig>,
 
+    validator_observer_config: Option<ValidatorObserverConfigCallback>,
+
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
 
     peer_deny_sync_config_callback:
@@ -1198,6 +1201,7 @@ impl TestClusterBuilder {
                 })),
             rpc_config: None,
             execution_time_observer_config: None,
+            validator_observer_config: None,
             state_sync_config: None,
             peer_deny_sync_config_callback: None,
             #[cfg(msim)]
@@ -1227,6 +1231,11 @@ impl TestClusterBuilder {
         config: sui_config::node::ExecutionTimeObserverConfig,
     ) -> Self {
         self.execution_time_observer_config = Some(config);
+        self
+    }
+
+    pub fn with_validator_observer_config(mut self, c: ValidatorObserverConfigCallback) -> Self {
+        self.validator_observer_config = Some(c);
         self
     }
 
@@ -1596,6 +1605,10 @@ impl TestClusterBuilder {
 
         if self.disable_fullnode_pruning {
             builder = builder.with_disable_fullnode_pruning();
+        }
+
+        if let Some(validator_observer_config) = self.validator_observer_config.take() {
+            builder = builder.with_validator_observer_config(validator_observer_config);
         }
 
         #[cfg(msim)]

@@ -247,7 +247,7 @@ impl store::SequentialStore for Db {
         ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>,
     {
         let mut conn = self.connect().await?;
-        AsyncConnection::transaction(&mut conn, |conn| f(conn)).await
+        AsyncConnection::transaction(&mut conn, async |conn| f(conn).await).await
     }
 }
 

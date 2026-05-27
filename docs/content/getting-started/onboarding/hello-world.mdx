@@ -6,6 +6,10 @@ pagination_prev: null
 pagination_next: null
 ---
 
+<AgentPrompt
+  prompt={"Clone the https://github.com/MystenLabs/sui-stack-hello-world example app, build and publish the Move package at move/hello-world to Testnet, then call its entry function and show me the resulting object and transaction on SuiVision."}
+/>
+
 You'll build a "Hello, World!" program to learn the fundamentals of programming on Sui. You create programs on Sui by writing and deploying smart contracts to the network.
 
 The most basic unit of storage on Sui is an [object](/develop/sui-architecture/object-model). Other blockchains typically structure storage using key-value stores. Sui centers storage around objects with unique ID addresses onchain. Every Sui smart contract is an object that manipulates other objects.
@@ -133,21 +137,21 @@ To mutate `Greeting`, the function `update_text` takes the input `(&mut Greeting
 
 The Ethereum Virtual Machine adopts a gas-based resource safety strategy. Every opcode on an EVM chain has an associated gas price that makes transactions costly, preventing the network from running a single transaction indefinitely. 
 
-## Build the Move package 
+## Build the Move package
 
 Before you can publish a Move package to the network, you must first build it. Building your package is necessary because the `.move` source file is a human-readable piece of code, while the network can only understand bytecode.
 
 To build your "Hello, World!" package, first confirm your working directory is `~/sui-stack-hello-world/move/hello-world`, then run the following command:
 
 ```
-$ sui move build 
+$ sui move build
 ```
 
 The build process fetches and compiles the dependencies defined in the `Move.toml` file. The Move compiler checks your `.move` code for type errors, syntax errors, and enforces [resource safety](#resource-safety), then translates your `.move` code into bytecode that Sui can execute.
 
-:::info 
+:::info
 
-You must build your package before you can publish it, but also before you test it. You cannot run tests (`sui move test`) on your code until it has been built.
+Both `sui move test` and `sui client publish` automatically build your package first, so running `sui move build` separately is optional. It is useful for catching compilation errors early before you test or publish.
 
 :::
 

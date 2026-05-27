@@ -227,14 +227,6 @@ The `EncryptionHistory` struct stores versioned encrypted DEKs as a `TableVec` o
 
 Each entry in the `deks` table is an encrypted DEK blob (up to 1024 bytes). The key version is the index into this table. The identity format `[group_id (32 bytes)][key_version (8 bytes)]` ensures each DEK maps to exactly 1 group and version.
 
-### Messaging client setup
-
-The `MessagingClientProvider` initializes the SDK client with Seal, Walrus, and relayer configuration.
-
-<ImportContent source="chat-app/src/providers/MessagingClientContext.tsx" mode="code" org="MystenLabs" repo="sui-stack-messaging" fun="MessagingClientProvider" />
-
-The provider creates a `SuiStackMessagingClient` that composes the Sui client with Seal (for DEK encryption and decryption), a Walrus storage adapter (for file attachments), and an HTTP relayer transport. The `DappKitSigner` bridges the wallet's signing capability to the SDK's signer interface.
-
 ### Sending and receiving messages
 
 The `useMessages` hook manages the full message lifecycle: fetching history, subscribing for updates, sending, editing, and deleting.

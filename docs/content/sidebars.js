@@ -161,6 +161,7 @@ export default {
       link: { type: 'doc', id: 'develop/accessing-data/index' },
       items: [
         'develop/accessing-data/data-serving',
+        'develop/accessing-data/json-rpc-migration',
         {
           type: 'category',
           label: 'gRPC',
@@ -229,7 +230,7 @@ export default {
 
   gettingStartedSidebar: [
     'getting-started',
-    'getting-started/agent-skills',
+    { type: 'link', label: 'Skills', href: '/skills' },
     {
       type: 'category',
       label: 'Hello, World!',
@@ -259,16 +260,34 @@ export default {
       label: 'Example Apps',
       link: { type: 'doc', id: 'getting-started/examples/index'},
       items: [
-          'getting-started/examples/capability-pattern',
-          'getting-started/examples/dapp-kit-frontend',
-          'getting-started/examples/derived-objects',
-          'getting-started/examples/event-indexer',
-          'getting-started/examples/first-dapp',
-          'getting-started/examples/lootbox-ctf',
-          'getting-started/examples/merchant-ctf',
-          'getting-started/examples/plinko',
-          'getting-started/examples/scenario-testing',
-          'getting-started/examples/staking-ctf',
+        {
+          type: 'category',
+          label: 'Move Patterns',
+          items: [
+            'getting-started/examples/capability-pattern',
+            'getting-started/examples/derived-objects',
+            'getting-started/examples/scenario-testing',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Frontend Apps',
+          items: [
+            'getting-started/examples/dapp-kit-frontend',
+            'getting-started/examples/nft-app',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Digital Assets',
+          items: [
+            'getting-started/examples/lootbox-ctf',
+            'getting-started/examples/merchant-ctf',
+            'getting-started/examples/staking-ctf',
+          ],
+        },
+        'getting-started/examples/event-indexer',
+        'getting-started/examples/plinko',
       ]
     },
     'getting-started/tooling',
@@ -501,9 +520,15 @@ suiStackSidebar: [
       label: 'Walrus',
       link: { type: 'doc', id: 'sui-stack/walrus/index' },
       items: [
+        {
+          type: 'link',
+          label: 'Walrus Docs',
+          href: 'https://docs.wal.app',
+        },
         'sui-stack/walrus/sui-stack-walrus',
         'sui-stack/walrus/indexer-walrus',
         'sui-stack/walrus/only-fins',
+        'sui-stack/walrus/sui-stack-walrus-sites',
       ],
     },
     {
@@ -511,8 +536,26 @@ suiStackSidebar: [
       label: 'Seal',
       link: { type: 'doc', id: 'sui-stack/seal/index' },
       items: [
+        {
+          type: 'link',
+          label: 'Seal Docs',
+          href: 'https://seal-docs.wal.app',
+        },
         'sui-stack/seal/sui-stack-seal',
         'sui-stack/seal/sui-chat-app',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'SuiNS',
+      link: { type: 'doc', id: 'sui-stack/suins/index' },
+      items: [
+        {
+          type: 'link',
+          label: 'SuiNS Docs',
+          href: 'https://docs.suins.io',
+        },
+        'sui-stack/suins/sui-stack-suins',
       ],
     },
     {
@@ -545,9 +588,22 @@ suiStackSidebar: [
     {
       type: 'category',
       label: 'DeepBook',
-      items: [
-        'onchain-finance/deepbookv3/deepbook',
-        'onchain-finance/deepbook-margin/deepbook-margin',
+	  items: [
+		{
+          type: 'link',
+          label: 'DeepBookV3',
+          href: 'https://docs.sui.io/onchain-finance/deepbookv3/deepbook',
+        },
+		{
+          type: 'link',
+          label: 'DeepBook Margin',
+          href: 'https://docs.sui.io/onchain-finance/deepbook-margin/design',
+        },
+		{
+          type: 'link',
+          label: 'DeepBook Predict',
+          href: 'https://docs.sui.io/onchain-finance/deepbook-predict/design',
+        },
       ],
     },
     {

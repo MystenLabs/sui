@@ -14,7 +14,8 @@ use tracing::info;
 
 use simulacrum::SimulatorStore;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::{SuiError, SuiErrorKind};
+use sui_types::error::SuiError;
+use sui_types::error::SuiErrorKind;
 use sui_types::storage::get_transaction_input_objects;
 use sui_types::storage::get_transaction_output_objects;
 use sui_types::transaction::TransactionData;

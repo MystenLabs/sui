@@ -46,7 +46,7 @@ error[E04024]: invalid usage of immutable variable
 30 │     resource.value = 20; // Modifying the resource
    │     ^^^^^^^^^^^^^^ Invalid mutable borrow of immutable variable 'resource'
 
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:30:5
    │
 29 │     let ref1 = &resource;

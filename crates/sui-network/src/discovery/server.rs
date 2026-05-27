@@ -3,13 +3,13 @@
 
 use super::{
     Discovery, DiscoveryMessage, MAX_PEERS_TO_SEND, SignedNodeInfo, SignedVersionedNodeInfo, State,
-    VerifiedSignedVersionedNodeInfo,
+    VerifiedSignedVersionedNodeInfo, is_trusted_peer,
 };
 use anemo::{PeerId, Request, Response, types::PeerInfo};
 use rand::seq::IteratorRandom;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, OnceLock, RwLock},
 };
 use sui_config::p2p::AccessType;
@@ -35,7 +35,25 @@ pub struct GetKnownPeersResponseV3 {
 pub(super) struct Server {
     pub(super) state: Arc<RwLock<State>>,
     pub(super) configured_peers: Arc<OnceLock<HashMap<PeerId, PeerInfo>>>,
+    pub(super) chain_peers: Arc<RwLock<HashSet<PeerId>>>,
     pub(super) mailbox_sender: mpsc::Sender<DiscoveryMessage>,
+}
+
+impl Server {
+    #[allow(clippy::result_large_err)]
+    fn is_requester_trusted(&self, peer_id: Option<&PeerId>) -> Result<bool, anemo::rpc::Status> {
+        let Some(peer_id) = peer_id else {
+            return Ok(false);
+        };
+        let configured_peers = self.configured_peers.get().ok_or_else(|| {
+            anemo::rpc::Status::internal("configured_peers has not been initialized yet")
+        })?;
+        Ok(is_trusted_peer(
+            peer_id,
+            configured_peers,
+            &self.chain_peers,
+        ))
+    }
 }
 
 #[anemo::async_trait]
@@ -50,20 +68,11 @@ impl Discovery for Server {
             .clone()
             .ok_or_else(|| anemo::rpc::Status::internal("own_info has not been initialized yet"))?;
 
+        let requester_is_trusted = self.is_requester_trusted(request.peer_id())?;
         let should_share = |info: &super::VerifiedSignedNodeInfo| match info.access_type {
             AccessType::Public => true,
             AccessType::Private => false,
-            AccessType::Trusted => {
-                // Share Trusted peers only with other preconfigured peers.
-                self.configured_peers
-                    .get()
-                    .and_then(|configured_peers| {
-                        request
-                            .peer_id()
-                            .map(|id| configured_peers.contains_key(id))
-                    })
-                    .unwrap_or(false)
-            }
+            AccessType::Trusted => requester_is_trusted,
         };
 
         let known_peers = if state.known_peers.len() < MAX_PEERS_TO_SEND {
@@ -138,16 +147,11 @@ impl Discovery for Server {
             anemo::rpc::Status::internal("own_info_v2 has not been initialized yet")
         })?;
 
+        let requester_is_trusted = self.is_requester_trusted(requester_peer_id.as_ref())?;
         let should_share = |info: &VerifiedSignedVersionedNodeInfo| match info.access_type() {
             AccessType::Public => true,
             AccessType::Private => false,
-            AccessType::Trusted => self
-                .configured_peers
-                .get()
-                .and_then(|configured_peers| {
-                    requester_peer_id.map(|id| configured_peers.contains_key(&id))
-                })
-                .unwrap_or(false),
+            AccessType::Trusted => requester_is_trusted,
         };
 
         let known_peers = if state.known_peers_v2.len() < MAX_PEERS_TO_SEND {

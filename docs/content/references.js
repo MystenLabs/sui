@@ -90,6 +90,7 @@ const references = [
 			'references/cli/cheatsheet',
 			'references/cli/client',
 			'references/cli/ptb',
+			'references/cli/completion',
 			'references/cli/keytool',
 			'references/cli/external-signers',
 			'references/cli/move',
@@ -214,6 +215,7 @@ const references = [
 			'references/contribute/code-of-conduct',
 			'references/contribute/style-guide',
 			'references/contribute/mdx-components',
+			'references/contribute/diagram-standards',
 		],
 	},
 ];

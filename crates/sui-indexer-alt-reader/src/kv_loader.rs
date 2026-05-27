@@ -15,6 +15,7 @@ use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_types::balance_change::BalanceChange as NativeBalanceChange;
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::AuthorityQuorumSignInfo;
+use sui_types::digests::CheckpointDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::digests::TransactionEffectsDigest;
 use sui_types::effects::TransactionEffects;
@@ -31,6 +32,7 @@ use tonic::transport::Uri;
 
 use crate::bigtable_reader::BigtableArgs;
 use crate::bigtable_reader::BigtableReader;
+use crate::checkpoints::CheckpointDigestKey;
 use crate::checkpoints::CheckpointKey;
 use crate::error::Error;
 use crate::events::StoredTransactionEvents;
@@ -296,6 +298,38 @@ impl KvLoader {
                 })
                 .transpose(),
             Self::LedgerGrpc(loader) => loader.load_one(key).await,
+        }
+    }
+
+    /// Resolve a checkpoint digest to its sequence number. Returns `None` if the digest is not
+    /// found in the configured reader. Used by `Query.checkpoint(digest:)` to translate a
+    /// caller-supplied digest into the sequence number that downstream resolvers consume.
+    ///
+    /// Only the PG path goes through the DataLoader (its `Loader<CheckpointDigestKey>` impl can
+    /// batch via `eq_any`). The BigTable and LedgerGrpc paths call the reader directly because
+    /// their backends only support single-digest lookup, so DataLoader can't add real batching;
+    /// it would only fan keys out into N parallel backend requests.
+    pub async fn load_one_checkpoint_seq_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> Result<Option<u64>, Error> {
+        match self {
+            Self::Pg(loader) => loader.load_one(CheckpointDigestKey(digest)).await,
+            Self::Bigtable(loader) => {
+                let checkpoint = loader
+                    .loader()
+                    .checkpoint_by_digest(digest)
+                    .await
+                    .map_err(Error::from)?;
+                Ok(checkpoint
+                    .and_then(|c| c.summary)
+                    .map(|s| s.sequence_number))
+            }
+            Self::LedgerGrpc(loader) => loader
+                .loader()
+                .checkpoint_seq_by_digest(digest)
+                .await
+                .map_err(Error::from),
         }
     }
 

@@ -1211,6 +1211,9 @@ mod checked {
             Owner::ConsensusAddressOwner { .. } => {
                 unimplemented!("ConsensusAddressOwner does not exist for this execution version")
             }
+            Owner::Party { .. } => {
+                unimplemented!("Party does not exist for this execution version")
+            }
         };
         let owner = obj.owner.clone();
         let version = obj.version();

@@ -2,6 +2,17 @@
 
 module 5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim;
 
+// -- uses -- 
+
+use 0x1::string;
+use 0x2::display;
+use 0x2::object;
+use 0x2::package;
+use 0x2::transfer;
+use 0x2::tx_context;
+use 0x2::vec_set;
+use 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim;
+
 // -- structs -- 
 
 public struct DEEPClaimNFT
@@ -37,7 +48,7 @@ public fun get_description(l0: &0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6
 }
 
 public fun get_id(l0: &0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::DEEPClaimNFT): address {
-    return 0x2::object::uid_to_address(&l0.id)
+    return object::uid_to_address(&l0.id)
 }
 
 public fun get_image_url(l0: &0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::DEEPClaimNFT): &0x1::string::String {
@@ -49,35 +60,42 @@ public fun get_name(l0: &0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00
 }
 
 fun init(l0: 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::NFT_CLAIM, l1: &mut 0x2::tx_context::TxContext) {
-    let l3 = vector[0x1::string::utf8(C0), 0x1::string::utf8(C1), 0x1::string::utf8(C2)];
-    let l5 = vector[0x1::string::utf8(C3), 0x1::string::utf8(C4), 0x1::string::utf8(C5)];
-    let l4 = 0x2::package::claim(l0, l1);
-    let l2 = 0x2::display::new_with_fields(&l4, l3, l5, l1);
-    0x2::display::update_version(&mut l2);
-    0x2::transfer::public_transfer(l4, 0x2::tx_context::sender(freeze(l1)));
-    0x2::transfer::public_transfer(l2, 0x2::tx_context::sender(freeze(l1)));
-    0x2::transfer::transfer(ClaimCap { id: 0x2::object::new(l1), claimed: 0x2::vec_set::empty() }, 0x2::tx_context::sender(freeze(l1)))
+    {
+        let l3 = vec![string::utf8(C0), string::utf8(C1), string::utf8(C2)];
+        let l5 = vec![string::utf8(C3), string::utf8(C4), string::utf8(C5)];
+        let l4 = package::claim(l0, l1);
+        let l2 = display::new_with_fields(&l4, l3, l5, l1);
+        display::update_version(&mut l2);
+        transfer::public_transfer(l4, tx_context::sender(freeze(l1)));
+        transfer::public_transfer(l2, tx_context::sender(freeze(l1)));
+        transfer::transfer(ClaimCap { id: object::new(l1), claimed: vec_set::empty() }, tx_context::sender(freeze(l1)));
+        return
+    }
 }
 
 public entry fun mint_batch(l0: &mut 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::ClaimCap, l1: vector<address>, l2: &mut 0x2::tx_context::TxContext) {
-    let l3 = 0u64;
-    let l4 = &l1.len();
-    while (l3 < l4) {
-        let l5 = *(&(&l1)[l3]);
-        if (!(0x2::vec_set::contains(&l0.claimed, &l5))) {
-            0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::mint_single(l0, l5, l2)
-        } else {
-            
+    {
+        let l3 = 0u64;
+        let l4 = &l1.len();
+        while (l3 < l4) {
+            let l5 = *(&(&l1)[l3]);
+            if (!(vec_set::contains(&l0.claimed, &l5))) {
+                nft_claim::mint_single(l0, l5, l2)
+            } else {
+                
+            };
+            l3 = l3 + 1u64;
         };
         l3 = l3 + 1u64;
     }
 }
 
 public fun mint_single(l0: &mut 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::ClaimCap, l1: address, l2: &mut 0x2::tx_context::TxContext) {
-    if (!(0x2::vec_set::contains(&l0.claimed, &l1))) {
-        let l3 = DEEPClaimNFT { id: 0x2::object::new(l2), name: 0x1::string::utf8(C3), description: 0x1::string::utf8(C4), image_url: 0x1::string::utf8(C5) };
-        0x2::vec_set::insert(&mut l0.claimed, l1);
-        0x2::transfer::transfer(l3, l1)
+    if (!(vec_set::contains(&l0.claimed, &l1))) {
+        let l3 = DEEPClaimNFT { id: object::new(l2), name: string::utf8(C3), description: string::utf8(C4), image_url: string::utf8(C5) };
+        vec_set::insert(&mut l0.claimed, l1);
+        transfer::transfer(l3, l1);
+        return
     } else {
         abort 0u64
     }

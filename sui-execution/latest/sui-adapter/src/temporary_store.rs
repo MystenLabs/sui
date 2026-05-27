@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::{GasCharger, PaymentLocation};
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
@@ -22,7 +23,7 @@ use sui_types::execution::{
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::layout_resolver::LayoutResolver;
-use sui_types::object::Data;
+use sui_types::object::{Data, ObjectPermissions};
 use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::{
@@ -314,6 +315,15 @@ impl<'backing> TemporaryStore<'backing> {
         gas_charger: &mut GasCharger,
         epoch: EpochId,
     ) -> (InnerTemporaryStore, TransactionEffects) {
+        // Defense-in-depth: Owner::Party is not yet supported as an effect output. There are
+        // no constructions of `Owner::Party` yet so a hard assert should be safe.
+        for (id, obj) in &self.execution_results.written_objects {
+            assert!(
+                !matches!(obj.owner, Owner::Party { .. }),
+                "Party-owned objects are not yet supported (object {id})"
+            );
+        }
+
         self.update_object_version_and_prev_tx();
         // This must happens before merge_accumulator_events.
         let accumulator_running_max_withdraws = self.calculate_accumulator_running_max_withdraws();
@@ -745,15 +755,16 @@ impl TemporaryStore<'_> {
         &self,
         sender: &SuiAddress,
         sponsor: &Option<SuiAddress>,
-        gas_charger: &mut GasCharger,
+        gas_charger: &GasCharger,
         mutable_inputs: &HashSet<ObjectID>,
+        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
         let gas_objs: HashSet<&ObjectID> = gas_charger.used_coins().map(|g| &g.0).collect();
         let gas_owner = sponsor.as_ref().unwrap_or(sender);
 
         // mark input objects as authenticated
-        let mut authenticated_for_mutation: HashSet<_> = self
+        let objects_authenticated_for_mutation: HashSet<SuiAddress> = self
             .input_objects
             .iter()
             .filter_map(|(id, obj)| {
@@ -784,6 +795,16 @@ impl TemporaryStore<'_> {
                         // us from catching this.
                         None
                     }
+                    Owner::Party { permissions, .. } => {
+                        let sender_permissions = permissions.permissions_for(sender);
+                        let sponsor_permissions = sponsor
+                            .as_ref()
+                            .map(|s| permissions.permissions_for(s))
+                            .unwrap_or(ObjectPermissions::NONE);
+                        (sender_permissions | sponsor_permissions)
+                            .can_use_mutably()
+                            .then_some(id)
+                    }
                     Owner::ObjectOwner(_parent) => {
                         unreachable!(
                             "Input objects must be address owned, shared, consensus, or immutable"
@@ -800,13 +821,27 @@ impl TemporaryStore<'_> {
             // Add any object IDs generated in the object runtime during execution to the
             // authenticated set (i.e., new (non-package) objects, and possibly ephemeral UIDs).
             .chain(self.generated_runtime_ids.iter().copied())
+            .map(SuiAddress::from)
             .collect();
 
         // Add sender and sponsor (if present) to authenticated set
-        authenticated_for_mutation.insert((*sender).into());
-        if let Some(sponsor) = sponsor {
-            authenticated_for_mutation.insert((*sponsor).into());
-        }
+        let mut authenticated_for_mutation = {
+            assert!(
+                !objects_authenticated_for_mutation.contains(sender),
+                "Sender cannot be an object"
+            );
+            assert!(
+                sponsor
+                    .is_none_or(|sponsor| !objects_authenticated_for_mutation.contains(&sponsor)),
+                "Sponsor cannot be an object"
+            );
+            let mut s = objects_authenticated_for_mutation.clone();
+            s.insert(*sender);
+            if let Some(sponsor) = sponsor {
+                s.insert(*sponsor);
+            }
+            s
+        };
 
         // check all modified objects are authenticated
         let mut objects_to_authenticate = self
@@ -817,7 +852,7 @@ impl TemporaryStore<'_> {
             .collect::<Vec<_>>();
 
         while let Some(to_authenticate) = objects_to_authenticate.pop() {
-            if authenticated_for_mutation.contains(&to_authenticate) {
+            if authenticated_for_mutation.contains(&to_authenticate.into()) {
                 // object has already been authenticated
                 continue;
             }
@@ -855,12 +890,13 @@ impl TemporaryStore<'_> {
                     }
                     // We mutated a shared object -- we checked if this object was in the
                     // authenticated set at the top of this loop and it wasn't so this is a failure.
-                    owner @ Owner::Shared { .. } => {
+                    owner @ Owner::Shared { .. } | owner @ Owner::Party { .. } => {
                         panic!(
                             "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
                              Potentially covering objects in: {authenticated_for_mutation:#?}"
                         );
                     }
+
                     Owner::Immutable => {
                         assert!(
                             is_epoch_change,
@@ -880,9 +916,82 @@ impl TemporaryStore<'_> {
             };
 
             // we now assume the object is authenticated and check the parent
-            authenticated_for_mutation.insert(to_authenticate);
+            authenticated_for_mutation.insert(to_authenticate.into());
             objects_to_authenticate.push(parent);
         }
+
+        // Check that all funds accumulator splits are authorized
+        let sui_balance_type =
+            sui_types::balance::Balance::type_tag(sui_types::gas_coin::GAS::type_tag());
+        let gas_payment_address_balance =
+            gas_charger
+                .gas_payment_location()
+                .and_then(|location| match location {
+                    PaymentLocation::Coin(_) => None,
+                    PaymentLocation::AddressBalance(address) => Some(address),
+                });
+        let mut funds_net_changes: BTreeMap<(SuiAddress, TypeTag), i128> = BTreeMap::new();
+        for event in self.execution_results.accumulator_events.iter() {
+            let amount = match event.write.value {
+                AccumulatorValue::Integer(a) => a as i128,
+                AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
+                    assert!(
+                        !sui_types::balance::Balance::is_balance_type(&event.write.address.ty),
+                        "Non-integer accumulator changes should not be balances"
+                    );
+                    continue;
+                }
+            };
+            let signed = match event.write.operation {
+                AccumulatorOperation::Split => -amount,
+                AccumulatorOperation::Merge => amount,
+            };
+            let address = event.write.address.address;
+            let type_tag = &event.write.address.ty;
+            let key = (address, type_tag.clone());
+            *funds_net_changes.entry(key.clone()).or_insert(0) += signed;
+            // Authorized if it is:
+            // - A merge/deposit (anyone can deposit)
+            // - A withdrawal
+            //   - with a corresponding input reservation
+            //   - from an object authenticated for mutation
+            //   - for the gas payment (potentially from a GasCoin send_funds transfer)
+            let authorized = match event.write.operation {
+                AccumulatorOperation::Merge => true,
+                AccumulatorOperation::Split => {
+                    input_reservations.contains_key(&key)
+                        || objects_authenticated_for_mutation.contains(&address)
+                        || (*type_tag == sui_balance_type
+                            && gas_payment_address_balance
+                                .is_some_and(|gas_addr| gas_addr == address))
+                }
+            };
+            assert!(
+                authorized,
+                "Unauthenticated funds-accumulator Split at address {address} for type \
+                 {type_tag}: no input reservation, address is not an authenticated object, and \
+                 it is not the final gas payment address balance"
+            );
+        }
+
+        // For all net negative changes (net withdrawals), the net changes _must_ be less than the
+        // reservation amount, or it must be from an object. This excludes the final gas payment
+        // address since the case where that withdrawal is allowed should be a net positive (or
+        // zero) since it occurs only in the case where the gas coin is transferred via send_funds
+        for (key, change) in funds_net_changes {
+            // skip if deposit or for an object
+            if change >= 0 || objects_authenticated_for_mutation.contains(&key.0) {
+                continue;
+            }
+            let reservation = input_reservations.get(&key).copied().unwrap_or(0) as u128;
+            let withdrawn = change.unsigned_abs();
+            assert!(
+                withdrawn <= reservation,
+                "Net withdrawal of {withdrawn} for {key:?} exceeds input reservation of \
+                 {reservation}"
+            );
+        }
+
         Ok(())
     }
 }
@@ -945,7 +1054,9 @@ impl TemporaryStore<'_> {
         }
     }
 
-    pub fn check_execution_results_consistency(&self) -> Result<(), ExecutionError> {
+    pub fn check_execution_results_consistency<Mode: ExecutionMode>(
+        &self,
+    ) -> Result<(), Mode::Error> {
         assert_invariant!(
             self.execution_results
                 .created_object_ids
@@ -1195,6 +1306,10 @@ impl TemporaryStore<'_> {
             let amount = match event.write.value {
                 AccumulatorValue::Integer(amount) => amount as i128,
                 AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
+                    assert_invariant!(
+                        !sui_types::balance::Balance::is_balance_type(&event.write.address.ty),
+                        "Non-integer accumulator changes should not be balances"
+                    );
                     continue;
                 }
             };
@@ -1392,6 +1507,16 @@ fn was_object_mutated(object: &Object, original: &Object) -> bool {
         (Owner::AddressOwner(a), Owner::AddressOwner(b)) => a == b,
         (Owner::Immutable, Owner::Immutable) => true,
         (Owner::ObjectOwner(a), Owner::ObjectOwner(b)) => a == b,
+        (
+            Owner::Party {
+                permissions: a,
+                start_version: _,
+            },
+            Owner::Party {
+                permissions: b,
+                start_version: _,
+            },
+        ) => a == b,
 
         // Keep the left hand side of the match exhaustive to catch future
         // changes to Owner
@@ -1399,7 +1524,8 @@ fn was_object_mutated(object: &Object, original: &Object) -> bool {
         | (Owner::Immutable, _)
         | (Owner::ObjectOwner(_), _)
         | (Owner::Shared { .. }, _)
-        | (Owner::ConsensusAddressOwner { .. }, _) => false,
+        | (Owner::ConsensusAddressOwner { .. }, _)
+        | (Owner::Party { .. }, _) => false,
     };
 
     !data_equal || !owner_equal

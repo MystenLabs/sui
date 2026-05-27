@@ -97,7 +97,7 @@ For prunable pipelines, calculate the `first-checkpoint` based on your retention
 
 #### Examples
 
-**Unprunable pipeline (from genesis via GCS bucket):**
+**Unprunable pipeline (from genesis through GCS bucket):**
 ```sh
 $ sui-indexer-alt indexer \
     --config unpruned.toml \
@@ -134,11 +134,11 @@ $ sui-indexer-alt indexer \
 
 :::info
 
-`https://checkpoints.mainnet.sui.io` retains only the most recent 30 days of checkpoints. For Mainnet backfills older than 30 days or from genesis, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4`.
+`https://checkpoints.mainnet.sui.io` and `https://checkpoints.testnet.sui.io` retain only the most recent 30 days of checkpoints. For full-retention backfills older than 30 days or from genesis, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4` for Mainnet or `gs://mysten-testnet-checkpoints-use4` through `--remote-store-gcs mysten-testnet-checkpoints-use4` for Testnet.
 
 If the checkpoint bucket you are using has Requester Pays enabled, configure GCS credentials and a billing project when using `--remote-store-gcs`. In Sui's object store config, the relevant fields are `google_service_account` and `google_project_id`. `google_project_id` is sent as the `x-goog-user-project` header required by GCS Requester Pays.
 
-For more on Requester Pays, see [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays). For source selection and steady-state operation guidance, see [Running a Remote Store](/operators/data-management/remote-store-setup) and [Archival Stack Setup](/operators/data-management/archival-stack-setup). In general, `https://checkpoints.mainnet.sui.io` should not be your default source in steady state if a full node gRPC endpoint is available.
+For more on Requester Pays, see [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays). For source selection and steady-state operation guidance, see [Running a Remote Store](/operators/data-management/remote-store-setup) and [Archival Stack Setup](/operators/data-management/archival-stack-setup). In general, public HTTPS checkpoint endpoints should not be your default source in steady state if a full node gRPC endpoint is available.
 
 :::
 
@@ -355,7 +355,7 @@ $ sui-indexer-alt-consistent-store restore \
     --remote-store-url https://checkpoints.mainnet.sui.io
 ```
 
-`https://checkpoints.mainnet.sui.io` retains only the most recent 30 days of checkpoints. For Mainnet backfills older than 30 days, use `gs://mysten-mainnet-checkpoints-use4` via the indexing framework's `--remote-store-gcs mysten-mainnet-checkpoints-use4` option instead of `--remote-store-url`.
+`https://checkpoints.mainnet.sui.io` and `https://checkpoints.testnet.sui.io` retain only the most recent 30 days of checkpoints. For full-retention backfills older than 30 days, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4` for Mainnet or `gs://mysten-testnet-checkpoints-use4` through `--remote-store-gcs mysten-testnet-checkpoints-use4` for Testnet instead of `--remote-store-url`.
 
 ### Run command
 
@@ -383,7 +383,7 @@ $ sui-indexer-alt-consistent-store run \
     --remote-store-url https://checkpoints.mainnet.sui.io
 ```
 
-For Mainnet full-history backfill, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4` rather than `--remote-store-url`.
+For full-retention backfill, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4` for Mainnet or `gs://mysten-testnet-checkpoints-use4` through `--remote-store-gcs mysten-testnet-checkpoints-use4` for Testnet rather than `--remote-store-url`.
 
 ### Run config recommendations
 

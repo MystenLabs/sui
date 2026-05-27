@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
    ┌─ tests/move_2024/borrows/freeze_field_invalid.move:12:9
    │
 11 │         let f = &mut s.f;
@@ -13,7 +13,7 @@ error[E07002]: mutable ownership violated
 12 │         freeze(s);
    │         ^^^^^^^^^ Invalid freeze.
 
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
    ┌─ tests/move_2024/borrows/freeze_field_invalid.move:19:9
    │
 18 │         let g = &mut s.f;

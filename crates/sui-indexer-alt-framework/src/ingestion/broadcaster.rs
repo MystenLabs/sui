@@ -83,7 +83,8 @@ where
 
         // If the first attempt at streaming connection fails, we back off for an initial number
         // of checkpoints to process using ingestion. This value doubles on each subsequent failure.
-        let mut streaming_backoff_batch_size = config.streaming_backoff_initial_batch_size as u64;
+        let mut streaming_backoff_batch_size =
+            config.streaming_backoff_initial_batch_size.get() as u64;
 
         // Initialize the overall checkpoint_hi watermark to start_cp.
         // This value is updated every outer loop iteration after both streaming and broadcasting complete.
@@ -251,7 +252,7 @@ where
     };
 
     // We have successfully connected and peeked, reset backoff batch size.
-    *streaming_backoff_batch_size = config.streaming_backoff_initial_batch_size as u64;
+    *streaming_backoff_batch_size = config.streaming_backoff_initial_batch_size.get() as u64;
 
     let network_latest_cp = *checkpoint_envelope.checkpoint.summary.sequence_number();
     let ingestion_end = network_latest_cp.min(end_cp);
@@ -373,6 +374,7 @@ async fn send_checkpoint(
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
+    use std::num::NonZeroUsize;
     use std::ops::Range;
     use std::sync::Arc;
     use std::time::Duration;
@@ -385,6 +387,10 @@ mod tests {
     use crate::metrics::tests::test_ingestion_metrics;
 
     use super::*;
+
+    fn non_zero(value: usize) -> NonZeroUsize {
+        NonZeroUsize::new(value).expect("test value is non-zero")
+    }
 
     /// Create a mock `IngestionClient` that serves synthetic checkpoints for the given
     /// sequence-number range.
@@ -402,7 +408,7 @@ mod tests {
         IngestionConfig {
             ingest_concurrency: ConcurrencyConfig::Fixed { value: 2 },
             retry_interval_ms: 100,
-            streaming_backoff_initial_batch_size: 2,
+            streaming_backoff_initial_batch_size: non_zero(2),
             streaming_backoff_max_batch_size: 16,
             streaming_connection_timeout_ms: 100,
             streaming_statement_timeout_ms: 100,
@@ -869,7 +875,7 @@ mod tests {
             0..20,
             Some(streaming_service),
             IngestionConfig {
-                streaming_backoff_initial_batch_size: 5,
+                streaming_backoff_initial_batch_size: non_zero(5),
                 ..test_config()
             },
             mock_client_with_range(0..20, metrics.clone()),
@@ -909,7 +915,7 @@ mod tests {
             0..20,
             Some(streaming_client),
             IngestionConfig {
-                streaming_backoff_initial_batch_size: 5,
+                streaming_backoff_initial_batch_size: non_zero(5),
                 ..test_config()
             },
             mock_client_with_range(0..20, metrics.clone()),
@@ -1036,7 +1042,7 @@ mod tests {
 
         let metrics = test_ingestion_metrics();
         let config = IngestionConfig {
-            streaming_backoff_initial_batch_size: 5,
+            streaming_backoff_initial_batch_size: non_zero(5),
             ..test_config()
         };
         let mut svc = broadcaster(
@@ -1079,7 +1085,7 @@ mod tests {
 
         let metrics = test_ingestion_metrics();
         let config = IngestionConfig {
-            streaming_backoff_initial_batch_size: 5,
+            streaming_backoff_initial_batch_size: non_zero(5),
             ..test_config()
         };
         let mut svc = broadcaster(

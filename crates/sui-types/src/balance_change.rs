@@ -66,14 +66,20 @@ impl std::fmt::Debug for BalanceChange {
     }
 }
 
-fn coins(objects: &[Object]) -> impl Iterator<Item = (&SuiAddress, TypeTag, u64)> + '_ {
-    objects.iter().filter_map(|object| {
+fn coins<'a, I>(objects: I) -> impl Iterator<Item = (&'a SuiAddress, TypeTag, u64)> + 'a
+where
+    I: IntoIterator<Item = &'a Object> + 'a,
+{
+    objects.into_iter().filter_map(|object| {
         let address = match object.owner() {
             Owner::AddressOwner(sui_address)
             | Owner::ObjectOwner(sui_address)
             | Owner::ConsensusAddressOwner {
                 owner: sui_address, ..
             } => sui_address,
+            // We could report balance changes for each address? Though that might be confusing
+            // TODO(Party WIP)
+            Owner::Party { .. } => todo!("Party WIP"),
             Owner::Shared { .. } | Owner::Immutable => return None,
         };
         let (coin_type, balance) = Coin::extract_balance_if_coin(object).ok().flatten()?;
@@ -148,6 +154,42 @@ pub fn derive_detailed_balance_changes(
     input_objects: &[Object],
     output_objects: &[Object],
 ) -> Vec<DetailedBalanceChange> {
+    derive_detailed_balance_changes_inner(effects, input_objects, output_objects)
+}
+
+/// `ObjectSet`-keyed sibling of [`derive_detailed_balance_changes`]: looks
+/// up input and output objects in `objects` rather than taking pre-collected
+/// `&[Object]` slices, so callers that already hold an `ObjectSet` don't
+/// have to materialize separate `Vec<Object>`s.
+pub fn derive_detailed_balance_changes_2(
+    effects: &TransactionEffects,
+    objects: &ObjectSet,
+) -> Vec<DetailedBalanceChange> {
+    let input_objects = effects
+        .modified_at_versions()
+        .into_iter()
+        .filter_map(|(object_id, version)| objects.get(&ObjectKey(object_id, version)));
+    let output_objects = effects
+        .all_changed_objects()
+        .into_iter()
+        .filter_map(|(object_ref, _owner, _kind)| objects.get(&object_ref.into()));
+
+    derive_detailed_balance_changes_inner(effects, input_objects, output_objects)
+}
+
+/// Shared implementation behind [`derive_detailed_balance_changes`] and
+/// [`derive_detailed_balance_changes_2`]. Generic over the input/output
+/// object iterators so callers can stream `&Object` references straight from
+/// an [`ObjectSet`] without cloning into intermediate `Vec<Object>`s.
+fn derive_detailed_balance_changes_inner<'a, I, O>(
+    effects: &TransactionEffects,
+    input_objects: I,
+    output_objects: O,
+) -> Vec<DetailedBalanceChange>
+where
+    I: IntoIterator<Item = &'a Object> + 'a,
+    O: IntoIterator<Item = &'a Object> + 'a,
+{
     // 1. subtract all input coins
     let balances = coins(input_objects).fold(
         std::collections::BTreeMap::<_, (i128, i128)>::new(),
@@ -194,54 +236,16 @@ pub fn derive_balance_changes_2(
     effects: &TransactionEffects,
     objects: &ObjectSet,
 ) -> Vec<BalanceChange> {
-    let input_objects = effects
-        .modified_at_versions()
+    derive_detailed_balance_changes_2(effects, objects)
         .into_iter()
-        .filter_map(|(object_id, version)| objects.get(&ObjectKey(object_id, version)).cloned())
-        .collect::<Vec<_>>();
-    let output_objects = effects
-        .all_changed_objects()
-        .into_iter()
-        .filter_map(|(object_ref, _owner, _kind)| objects.get(&object_ref.into()).cloned())
-        .collect::<Vec<_>>();
-
-    // 1. subtract all input coins
-    let balances = coins(&input_objects).fold(
-        std::collections::BTreeMap::<_, i128>::new(),
-        |mut acc, (address, coin_type, balance)| {
-            *acc.entry((*address, coin_type)).or_default() -= balance as i128;
-            acc
-        },
-    );
-
-    // 2. add all mutated/output coins
-    let balances =
-        coins(&output_objects).fold(balances, |mut acc, (address, coin_type, balance)| {
-            *acc.entry((*address, coin_type)).or_default() += balance as i128;
-            acc
-        });
-
-    // 3. add address balance changes from accumulator events
-    let balances = address_balance_changes_from_accumulator_events(effects).fold(
-        balances,
-        |mut acc, (address, coin_type, signed_amount)| {
-            *acc.entry((address, coin_type)).or_default() += signed_amount;
-            acc
-        },
-    );
-
-    balances
-        .into_iter()
-        .filter_map(|((address, coin_type), amount)| {
-            if amount == 0 {
-                return None;
+        // Filter out when coin and address changes net to 0
+        .filter_map(|detailed_change| {
+            let change = BalanceChange::from(detailed_change);
+            if change.amount == 0 {
+                None
+            } else {
+                Some(change)
             }
-
-            Some(BalanceChange {
-                address,
-                coin_type,
-                amount,
-            })
         })
         .collect()
 }

@@ -283,7 +283,6 @@
 - [Mdx Components](https://docs.sui.io/references/contribute/mdx-components.md)
 - [Style Guide](https://docs.sui.io/references/contribute/style-guide.md)
 - [Sui Environment](https://docs.sui.io/references/contribute/sui-environment.md)
-- [Exchange Integration Guide](https://docs.sui.io/references/exchange-integration-guide.md)
 - [Framework](https://docs.sui.io/references/framework.md)
 
 ### References/Framework/Sui Bridge

@@ -53,7 +53,6 @@ pub mod transaction_orchestrator;
 mod transaction_outputs;
 mod transaction_signing_filter;
 pub mod validator_client_monitor;
-pub mod verify_indexes;
 
 #[cfg(test)]
 #[path = "unit_tests/congestion_control_tests.rs"]

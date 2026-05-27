@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_2024/expansion/macro_identifier_invalid_type_parameter.move:3:19
   │
 3 │     macro fun foo<$_, $__, $_t>() {}
@@ -13,7 +13,7 @@ error[E02010]: invalid name
   │
   = Type parameter names starting with '$' indicate that their arguments do not have to satisfy certain constraints before the macro is expanded, meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_2024/expansion/macro_identifier_invalid_type_parameter.move:3:23
   │
 3 │     macro fun foo<$_, $__, $_t>() {}
@@ -21,7 +21,7 @@ error[E02010]: invalid name
   │
   = Type parameter names starting with '$' indicate that their arguments do not have to satisfy certain constraints before the macro is expanded, meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_2024/expansion/macro_identifier_invalid_type_parameter.move:3:28
   │
 3 │     macro fun foo<$_, $__, $_t>() {}

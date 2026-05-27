@@ -8,8 +8,9 @@ use futures::FutureExt;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
+use sui_types::{
+    messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary},
+    node_role::NodeRole,
 };
 use tokio::{sync::mpsc, time::sleep};
 
@@ -79,6 +80,7 @@ async fn test_consensus_manager() {
         consensus_config,
         &registry_service,
         consensus_client,
+        sui_types::node_role::NodeRole::Validator,
     );
 
     let boot_counter = *manager.boot_counter.lock().await;
@@ -162,6 +164,7 @@ async fn test_consensus_manager_address_update() {
         consensus_config,
         &registry_service,
         consensus_client,
+        NodeRole::Validator,
     ));
 
     // Start consensus

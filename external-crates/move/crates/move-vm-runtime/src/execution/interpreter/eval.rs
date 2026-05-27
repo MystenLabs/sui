@@ -905,7 +905,6 @@ fn call_function(
     });
 
     // Charge gas
-    let module_id = function.module_id(&run_context.vtables.interner);
     let last_n_operands = state
         .last_n_operands(function.arg_count())
         .map_err(|e| set_err_info!(run_context.interner(), state.call_stack.current_frame, e))?;
@@ -913,24 +912,14 @@ fn call_function(
     if ty_args.is_empty() {
         // Charge for a non-generic call
         gas_meter
-            .charge_call(
-                &module_id,
-                &function.name_str(&run_context.vtables.interner),
-                last_n_operands,
-                (function.local_count() as u64).into(),
-            )
+            .charge_call(last_n_operands, (function.local_count() as u64).into())
             .map_err(|e| {
                 set_err_info!(run_context.interner(), state.call_stack.current_frame, e)
             })?;
     } else {
         // Charge for a generic call
         gas_meter
-            .charge_call_generic(
-                &module_id,
-                &function.name_str(&run_context.vtables.interner),
-                last_n_operands,
-                (function.local_count() as u64).into(),
-            )
+            .charge_call_generic(last_n_operands, (function.local_count() as u64).into())
             .map_err(|e| {
                 set_err_info!(run_context.interner(), state.call_stack.current_frame, e)
             })?;

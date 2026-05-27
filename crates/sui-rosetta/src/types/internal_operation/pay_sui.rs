@@ -127,6 +127,8 @@ impl TryConstructTransaction for PaySui {
                     address_balance_withdrawal: address_balance_withdrawl,
                     fss_object_count: None,
                     redeem_token_amount: None,
+                    redeem_plan: None,
+                    bind_epoch: None,
                 })
             }
             _ => {
@@ -168,6 +170,8 @@ impl TryConstructTransaction for PaySui {
                     address_balance_withdrawal,
                     fss_object_count: None,
                     redeem_token_amount: None,
+                    redeem_plan: None,
+                    bind_epoch: None,
                 })
             }
         }

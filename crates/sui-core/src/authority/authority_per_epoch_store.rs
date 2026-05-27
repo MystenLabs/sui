@@ -64,6 +64,7 @@ use sui_types::messages_consensus::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, TimestampMs,
     VersionedDkgConfirmation, check_total_jwk_size,
 };
+use sui_types::node_role::{FullNodeSyncMode, NodeRole};
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{BackingPackageStore, InputKey, ObjectStore};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
@@ -472,6 +473,10 @@ pub struct AuthorityPerEpochStore {
     /// Waiters for barrier transactions. Used by execution scheduler to wait for
     /// barrier transaction (keyed by the same AccumulatorSettlement key as settlements).
     barrier_registrations: Arc<Mutex<HashMap<TransactionKey, BarrierRegistration>>>,
+
+    /// The node's role for this epoch, derived from committee membership and
+    /// the configured sync mode. Computed once at construction.
+    node_role: NodeRole,
 }
 enum SettlementRegistration {
     Ready(Vec<VerifiedExecutableTransaction>),
@@ -509,7 +514,9 @@ pub struct AuthorityEpochTables {
     /// to disk.
     signed_effects_digests: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
-    /// Signatures of transaction certificates that are executed locally.
+    /// No longer used.
+    #[allow(dead_code)]
+    #[deprecated(note = "column family retained only for backward DB compatibility")]
     transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
 
     /// Next available shared object versions for each shared object.
@@ -1072,6 +1079,7 @@ impl AuthorityPerEpochStore {
         highest_executed_checkpoint: CheckpointSequenceNumber,
         previous_epoch_last_checkpoint: CheckpointSequenceNumber,
         submitted_transaction_cache_metrics: Arc<SubmittedTransactionCacheMetrics>,
+        fullnode_sync_mode: Option<FullNodeSyncMode>,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -1278,6 +1286,7 @@ impl AuthorityPerEpochStore {
             finalized_transactions_cache,
             settlement_registrations: Default::default(),
             barrier_registrations: Default::default(),
+            node_role: NodeRole::from_committee(&committee, &name, fullnode_sync_mode),
         });
 
         s.update_buffer_stake_metric();
@@ -1333,6 +1342,7 @@ impl AuthorityPerEpochStore {
         mut randomness_manager: RandomnessManager,
     ) -> SuiResult<()> {
         let reporter = randomness_manager.reporter();
+
         let result = randomness_manager.start_dkg().await;
         if self
             .randomness_manager
@@ -1343,10 +1353,19 @@ impl AuthorityPerEpochStore {
                 "BUG: `set_randomness_manager` called more than once; this should never happen"
             );
         }
-        if self.randomness_reporter.set(reporter).is_err() {
-            debug_fatal!(
-                "BUG: `set_randomness_manager` called more than once; this should never happen"
-            );
+        match reporter {
+            Some(reporter) => {
+                if self.randomness_reporter.set(reporter).is_err() {
+                    debug_fatal!(
+                        "BUG: `set_randomness_manager` called more than once; this should never happen"
+                    );
+                }
+            }
+            None => {
+                if self.node_role.is_validator() {
+                    debug_fatal!("expected a RandomnessReporter for a validator");
+                }
+            }
         }
         result
     }
@@ -1446,6 +1465,7 @@ impl AuthorityPerEpochStore {
         object_store: Arc<dyn ObjectStore + Send + Sync>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         epoch_last_checkpoint: CheckpointSequenceNumber,
+        fullnode_sync_mode: Option<FullNodeSyncMode>,
     ) -> SuiResult<Arc<Self>> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
@@ -1468,6 +1488,7 @@ impl AuthorityPerEpochStore {
             epoch_last_checkpoint,
             epoch_last_checkpoint,
             self.submitted_transaction_cache.metrics(),
+            fullnode_sync_mode,
         )
     }
 
@@ -1492,6 +1513,7 @@ impl AuthorityPerEpochStore {
             object_store,
             expensive_safety_check_config,
             epoch_last_checkpoint,
+            None,
         )
         .expect("failed to create new authority per epoch store")
     }
@@ -1900,18 +1922,6 @@ impl AuthorityPerEpochStore {
             .map(|t| t.into()))
     }
 
-    #[instrument(level = "trace", skip_all)]
-    pub fn insert_tx_cert_sig(
-        &self,
-        tx_digest: &TransactionDigest,
-        cert_sig: &AuthorityStrongQuorumSignInfo,
-    ) -> SuiResult {
-        let tables = self.tables()?;
-        Ok(tables
-            .transaction_cert_signatures
-            .insert(tx_digest, cert_sig)?)
-    }
-
     /// Record that a transaction has been executed in the current epoch.
     /// Used by checkpoint builder to cull dependencies from previous epochs.
     #[instrument(level = "trace", skip_all)]
@@ -2112,13 +2122,6 @@ impl AuthorityPerEpochStore {
             }
         }
         Ok(cached)
-    }
-
-    pub fn get_transaction_cert_sig(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> SuiResult<Option<AuthorityStrongQuorumSignInfo>> {
-        Ok(self.tables()?.transaction_cert_signatures.get(tx_digest)?)
     }
 
     /// Gets owned object locks, checking quarantine first then falling back to DB.
@@ -3855,9 +3858,14 @@ impl AuthorityPerEpochStore {
             .get_observations()
     }
 
+    /// Returns the role of this node for the current epoch.
+    pub fn node_role(&self) -> NodeRole {
+        self.node_role
+    }
+
     /// Whether this node is a validator in this epoch.
     pub fn is_validator(&self) -> bool {
-        self.committee.authority_exists(&self.name)
+        self.node_role().is_validator()
     }
 }
 
