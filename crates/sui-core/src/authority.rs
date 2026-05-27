@@ -110,8 +110,8 @@ use crate::jsonrpc_index::IndexStore;
 use crate::jsonrpc_index::{
     CoinInfo, IndexStoreCacheUpdates, IndexStoreCacheUpdatesWithLocks, ObjectIndexChanges,
 };
-use mysten_common::{debug_fatal, debug_fatal_no_invariant};
-use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
+use mysten_common::debug_fatal;
+use shared_crypto::intent::{Intent, IntentScope};
 use sui_config::genesis::Genesis;
 use sui_config::node::{DBCheckpointConfig, ExpensiveSafetyCheckConfig};
 use sui_framework::{BuiltInFramework, SystemPackage};
