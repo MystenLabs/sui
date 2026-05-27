@@ -30,8 +30,7 @@ module action {
             },
             Action::ChangeSpeed { pos0: reg_13 } => {
                 let Action::ChangeSpeed { pos0: reg_15 } = &mut l3;
-                let l4 = reg_15 : &mut u64;
-                *l4 = l1
+                *reg_15 : &mut u64 = l1
                 return 
             },
         }

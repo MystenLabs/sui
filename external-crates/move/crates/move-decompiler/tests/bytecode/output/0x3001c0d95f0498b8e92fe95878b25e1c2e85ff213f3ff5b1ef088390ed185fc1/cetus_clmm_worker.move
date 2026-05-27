@@ -236,21 +236,18 @@ public entry fun add_collateral_single<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T
     let l49 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l23), freeze(l32), l38, l39, l40);
     let l21 = &l0.position_operator_cap;
     let l20 = l1;
-    let l19 = l2;
     let l18 = &l51;
     let l17 = l5;
-    let l16 = l6;
     let l15 = l8;
     let l43 = l5;
     let l42 = l4;
     let l41 = l0;
-    let l44 = vault::before_add_collateral(l21, l20, l19, l18, l17, l16, l15, cetus_clmm_worker::health(freeze(l41), freeze(l42), l43), l49, cetus_clmm_worker::is_reserve_consistent(), l13, l14);
+    let l44 = vault::before_add_collateral(l21, l20, l2, l18, l17, l6, l15, cetus_clmm_worker::health(freeze(l41), freeze(l42), l43), l49, cetus_clmm_worker::is_reserve_consistent(), l13, l14);
     let l46 = vault::extract_add_collateral_context_coin_send(&mut l44, l14);
     let l48 = vault::get_add_collateral_context_debt(&l44);
     assert!(table::contains(&l0.shares, l5), C35);
     let l53 = *(table::borrow(&l0.shares, l5));
-    let l22 = l53;
-    let l45 = cetus_clmm_worker::share_to_balance(freeze(l0), l22);
+    let l45 = cetus_clmm_worker::share_to_balance(freeze(l0), l53);
     let l47 = cetus_clmm_worker::work_inner(l0, l3, l4, l5, l46, l7, l48, l9, l10, l13, l14);
     if (coin::value(&l47) == 0u64) {
         coin::destroy_zero(l47)
@@ -272,8 +269,7 @@ public entry fun add_collateral_single<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T
     let l29 = l0;
     vault::after_add_collateral(l36, l35, l34, l33, cetus_clmm_worker::health(freeze(l29), freeze(l30), l31), l50, cetus_clmm_worker::is_reserve_consistent());
     let l52 = *(table::borrow(&l0.shares, l5));
-    let l37 = l52;
-    assert!(cetus_clmm_worker::share_to_balance(freeze(l0), l37) > l45, C36)
+    assert!(cetus_clmm_worker::share_to_balance(freeze(l0), l52) > l45, C36)
 }
 
 public entry fun add_collateral_single_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &mut GlobalStorage, l2: &mut Storage, l3: &GlobalConfig, l4: &mut Pool<T1, T0>, l5: u64, l6: Coin<T0>, l7: Coin<T1>, l8: bool, l9: u8, l10: vector<u8>, l11: &Aggregator, l12: &Aggregator, l13: &Clock, l14: &mut TxContext) {
@@ -288,19 +284,16 @@ public entry fun add_collateral_single_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T
     let l49 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l24), freeze(l33), l39, l40, l41);
     assert!(table::contains(&l0.shares, l5), C35);
     let l53 = *(table::borrow(&l0.shares, l5));
-    let l42 = l53;
-    let l45 = cetus_clmm_worker::share_to_balance(freeze(l0), l42);
+    let l45 = cetus_clmm_worker::share_to_balance(freeze(l0), l53);
     let l23 = &l0.position_operator_cap;
     let l22 = l1;
-    let l21 = l2;
     let l20 = &l51;
     let l19 = l5;
-    let l18 = l6;
     let l17 = l8;
     let l16 = l5;
     let l15 = l4;
     let l43 = l0;
-    let l44 = vault::before_add_collateral(l23, l22, l21, l20, l19, l18, l17, cetus_clmm_worker::health_reverse(freeze(l43), freeze(l15), l16), l49, cetus_clmm_worker::is_reserve_consistent(), l13, l14);
+    let l44 = vault::before_add_collateral(l23, l22, l2, l20, l19, l6, l17, cetus_clmm_worker::health_reverse(freeze(l43), freeze(l15), l16), l49, cetus_clmm_worker::is_reserve_consistent(), l13, l14);
     let l46 = vault::extract_add_collateral_context_coin_send(&mut l44, l14);
     let l48 = vault::get_add_collateral_context_debt(&l44);
     let l47 = cetus_clmm_worker::work_inner_reverse(l0, l3, l4, l5, l46, l7, l48, l9, l10, l13, l14);
@@ -324,15 +317,13 @@ public entry fun add_collateral_single_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T
     let l30 = l0;
     vault::after_add_collateral(l37, l36, l35, l34, cetus_clmm_worker::health_reverse(freeze(l30), freeze(l31), l32), l50, cetus_clmm_worker::is_reserve_consistent());
     let l52 = *(table::borrow(&l0.shares, l5));
-    let l38 = l52;
-    assert!(cetus_clmm_worker::share_to_balance(freeze(l0), l38) > l45, C36)
+    assert!(cetus_clmm_worker::share_to_balance(freeze(l0), l52) > l45, C36)
 }
 
 fun add_share<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: u64, l2: u128, l3: u128) {
     if (l2 > 0u128) {
-        let l5 = l3;
         let l4 = l2;
-        let l9 = cetus_clmm_worker::balance_to_share_inner(freeze(l0), l4, l5);
+        let l9 = cetus_clmm_worker::balance_to_share_inner(freeze(l0), l4, l3);
         assert!(l9 > 0u128, C3);
         let l10 = &mut l0.shares;
         let l6 = l1;
@@ -389,10 +380,8 @@ public fun collect_reward<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &
         let l10 = balance::value(&l16);
         if (l10 > 0u64) {
             let (reg_101, reg_102) = cetus_clmm_utils::swap_exact(l1, l4, coin::zero(l9), coin::from_balance(l16, l9), false, true, l10, l8, l9);
-            let l18 = reg_102;
-            let l17 = reg_101;
-            coin::destroy_zero(l18);
-            let l13 = coin::into_balance(l17);
+            coin::destroy_zero(reg_102);
+            let l13 = coin::into_balance(reg_101);
             let l20 = mole_math::mul_div(balance::value(&l13), *(&l0.reinvest_bounty_bps), C43);
             if (balance::value(&l13) >= l20) {
                 let l22 = balance::split(&mut l13, l20);
@@ -428,10 +417,8 @@ public fun collect_reward_all_reverse<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1
         let l10 = balance::value(&l16);
         if (l10 > 0u64) {
             let (reg_101, reg_102) = cetus_clmm_utils::swap_exact_reverse(l1, l4, coin::zero(l9), coin::from_balance(l16, l9), false, true, l10, l8, l9);
-            let l18 = reg_102;
-            let l17 = reg_101;
-            coin::destroy_zero(l18);
-            let l13 = coin::into_balance(l17);
+            coin::destroy_zero(reg_102);
+            let l13 = coin::into_balance(reg_101);
             let l20 = mole_math::mul_div(balance::value(&l13), *(&l0.reinvest_bounty_bps), C43);
             if (balance::value(&l13) >= l20) {
                 let l22 = balance::split(&mut l13, l20);
@@ -468,20 +455,16 @@ public fun collect_reward_all_reverse_one_other<T0, T1, T2, T3>(l0: &mut WorkerI
         if (l12 > 0u64) {
             if (l9) {
                 let (reg_103, reg_104) = cetus_clmm_utils::swap_exact_reverse(l1, l4, coin::zero(l11), coin::from_balance(l19, l11), false, true, l12, l10, l11);
-                let l22 = reg_104;
-                let l20 = reg_103;
-                coin::destroy_zero(l22);
-                let l15 = coin::into_balance(l20);
+                coin::destroy_zero(reg_104);
+                let l15 = coin::into_balance(reg_103);
                 let l25 = mole_math::mul_div(balance::value(&l15), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l15) >= l25) {
                     let l27 = balance::split(&mut l15, l25);
                 }
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact_reverse(l1, l5, coin::zero(l11), coin::from_balance(l19, l11), false, true, l12, l10, l11);
-                let l23 = reg_144;
-                let l21 = reg_143;
-                coin::destroy_zero(l23);
-                let l18 = coin::into_balance(l21);
+                coin::destroy_zero(reg_144);
+                let l18 = coin::into_balance(reg_143);
                 let l29 = mole_math::mul_div(balance::value(&l18), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l18) >= l29) {
                     let l31 = balance::split(&mut l18, l29);
@@ -519,20 +502,16 @@ public fun collect_reward_all_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut Wo
         if (l16 > 0u64) {
             if (l12) {
                 let (reg_103, reg_104) = cetus_clmm_utils::swap_exact_reverse(l1, l4, coin::zero(l15), coin::from_balance(l26, l15), false, true, l16, l14, l15);
-                let l32 = reg_104;
-                let l28 = reg_103;
-                coin::destroy_zero(l32);
-                let l20 = coin::into_balance(l28);
+                coin::destroy_zero(reg_104);
+                let l20 = coin::into_balance(reg_103);
                 let l37 = mole_math::mul_div(balance::value(&l20), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l20) >= l37) {
                     let l40 = balance::split(&mut l20, l37);
                 }
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact_reverse(l1, l5, coin::zero(l15), coin::from_balance(l26, l15), false, true, l16, l14, l15);
-                let l33 = reg_144;
-                let l30 = reg_143;
-                coin::destroy_zero(l33);
-                let l24 = coin::into_balance(l30);
+                coin::destroy_zero(reg_144);
+                let l24 = coin::into_balance(reg_143);
                 let l43 = mole_math::mul_div(balance::value(&l24), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l24) >= l43) {
                     let l46 = balance::split(&mut l24, l43);
@@ -548,20 +527,16 @@ public fun collect_reward_all_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut Wo
         if (l17 > 0u64) {
             if (l13) {
                 let (reg_206, reg_207) = cetus_clmm_utils::swap_exact_reverse(l1, l6, coin::zero(l15), coin::from_balance(l27, l15), false, true, l17, l14, l15);
-                let l34 = reg_207;
-                let l29 = reg_206;
-                coin::destroy_zero(l34);
-                let l21 = coin::into_balance(l29);
+                coin::destroy_zero(reg_207);
+                let l21 = coin::into_balance(reg_206);
                 let l38 = mole_math::mul_div(balance::value(&l21), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l21) >= l38) {
                     let l41 = balance::split(&mut l21, l38);
                 }
             } else {
                 let (reg_246, reg_247) = cetus_clmm_utils::swap_exact_reverse(l1, l7, coin::zero(l15), coin::from_balance(l27, l15), false, true, l17, l14, l15);
-                let l35 = reg_247;
-                let l31 = reg_246;
-                coin::destroy_zero(l35);
-                let l25 = coin::into_balance(l31);
+                coin::destroy_zero(reg_247);
+                let l25 = coin::into_balance(reg_246);
                 let l44 = mole_math::mul_div(balance::value(&l25), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l25) >= l44) {
                     let l47 = balance::split(&mut l25, l44);
@@ -599,20 +574,16 @@ public fun collect_reward_one_other<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1, 
         if (l12 > 0u64) {
             if (l9) {
                 let (reg_103, reg_104) = cetus_clmm_utils::swap_exact(l1, l4, coin::zero(l11), coin::from_balance(l19, l11), false, true, l12, l10, l11);
-                let l22 = reg_104;
-                let l20 = reg_103;
-                coin::destroy_zero(l22);
-                let l15 = coin::into_balance(l20);
+                coin::destroy_zero(reg_104);
+                let l15 = coin::into_balance(reg_103);
                 let l25 = mole_math::mul_div(balance::value(&l15), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l15) >= l25) {
                     let l27 = balance::split(&mut l15, l25);
                 }
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact(l1, l5, coin::zero(l11), coin::from_balance(l19, l11), false, true, l12, l10, l11);
-                let l23 = reg_144;
-                let l21 = reg_143;
-                coin::destroy_zero(l23);
-                let l18 = coin::into_balance(l21);
+                coin::destroy_zero(reg_144);
+                let l18 = coin::into_balance(reg_143);
                 let l29 = mole_math::mul_div(balance::value(&l18), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l18) >= l29) {
                     let l31 = balance::split(&mut l18, l29);
@@ -649,10 +620,8 @@ public fun collect_reward_pool_reverse<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T
         let l10 = balance::value(&l16);
         if (l10 > 0u64) {
             let (reg_101, reg_102) = cetus_clmm_utils::swap_exact(l1, l4, coin::zero(l9), coin::from_balance(l16, l9), false, true, l10, l8, l9);
-            let l18 = reg_102;
-            let l17 = reg_101;
-            coin::destroy_zero(l18);
-            let l13 = coin::into_balance(l17);
+            coin::destroy_zero(reg_102);
+            let l13 = coin::into_balance(reg_101);
             let l20 = mole_math::mul_div(balance::value(&l13), *(&l0.reinvest_bounty_bps), C43);
             if (balance::value(&l13) >= l20) {
                 let l22 = balance::split(&mut l13, l20);
@@ -689,20 +658,16 @@ public fun collect_reward_pool_reverse_one_other<T0, T1, T2, T3>(l0: &mut Worker
         if (l12 > 0u64) {
             if (l9) {
                 let (reg_103, reg_104) = cetus_clmm_utils::swap_exact(l1, l4, coin::zero(l11), coin::from_balance(l19, l11), false, true, l12, l10, l11);
-                let l22 = reg_104;
-                let l20 = reg_103;
-                coin::destroy_zero(l22);
-                let l15 = coin::into_balance(l20);
+                coin::destroy_zero(reg_104);
+                let l15 = coin::into_balance(reg_103);
                 let l25 = mole_math::mul_div(balance::value(&l15), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l15) >= l25) {
                     let l27 = balance::split(&mut l15, l25);
                 }
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact(l1, l5, coin::zero(l11), coin::from_balance(l19, l11), false, true, l12, l10, l11);
-                let l23 = reg_144;
-                let l21 = reg_143;
-                coin::destroy_zero(l23);
-                let l18 = coin::into_balance(l21);
+                coin::destroy_zero(reg_144);
+                let l18 = coin::into_balance(reg_143);
                 let l29 = mole_math::mul_div(balance::value(&l18), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l18) >= l29) {
                     let l31 = balance::split(&mut l18, l29);
@@ -740,20 +705,16 @@ public fun collect_reward_pool_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
         if (l16 > 0u64) {
             if (l12) {
                 let (reg_103, reg_104) = cetus_clmm_utils::swap_exact(l1, l4, coin::zero(l15), coin::from_balance(l26, l15), false, true, l16, l14, l15);
-                let l32 = reg_104;
-                let l28 = reg_103;
-                coin::destroy_zero(l32);
-                let l20 = coin::into_balance(l28);
+                coin::destroy_zero(reg_104);
+                let l20 = coin::into_balance(reg_103);
                 let l37 = mole_math::mul_div(balance::value(&l20), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l20) >= l37) {
                     let l40 = balance::split(&mut l20, l37);
                 }
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact(l1, l5, coin::zero(l15), coin::from_balance(l26, l15), false, true, l16, l14, l15);
-                let l33 = reg_144;
-                let l30 = reg_143;
-                coin::destroy_zero(l33);
-                let l24 = coin::into_balance(l30);
+                coin::destroy_zero(reg_144);
+                let l24 = coin::into_balance(reg_143);
                 let l43 = mole_math::mul_div(balance::value(&l24), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l24) >= l43) {
                     let l46 = balance::split(&mut l24, l43);
@@ -769,20 +730,16 @@ public fun collect_reward_pool_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
         if (l17 > 0u64) {
             if (l13) {
                 let (reg_206, reg_207) = cetus_clmm_utils::swap_exact(l1, l6, coin::zero(l15), coin::from_balance(l27, l15), false, true, l17, l14, l15);
-                let l34 = reg_207;
-                let l29 = reg_206;
-                coin::destroy_zero(l34);
-                let l21 = coin::into_balance(l29);
+                coin::destroy_zero(reg_207);
+                let l21 = coin::into_balance(reg_206);
                 let l38 = mole_math::mul_div(balance::value(&l21), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l21) >= l38) {
                     let l41 = balance::split(&mut l21, l38);
                 }
             } else {
                 let (reg_246, reg_247) = cetus_clmm_utils::swap_exact(l1, l7, coin::zero(l15), coin::from_balance(l27, l15), false, true, l17, l14, l15);
-                let l35 = reg_247;
-                let l31 = reg_246;
-                coin::destroy_zero(l35);
-                let l25 = coin::into_balance(l31);
+                coin::destroy_zero(reg_247);
+                let l25 = coin::into_balance(reg_246);
                 let l44 = mole_math::mul_div(balance::value(&l25), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l25) >= l44) {
                     let l47 = balance::split(&mut l25, l44);
@@ -819,10 +776,8 @@ public fun collect_reward_swap_reverse<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T
         let l10 = balance::value(&l16);
         if (l10 > 0u64) {
             let (reg_101, reg_102) = cetus_clmm_utils::swap_exact_reverse(l1, l4, coin::zero(l9), coin::from_balance(l16, l9), false, true, l10, l8, l9);
-            let l18 = reg_102;
-            let l17 = reg_101;
-            coin::destroy_zero(l18);
-            let l13 = coin::into_balance(l17);
+            coin::destroy_zero(reg_102);
+            let l13 = coin::into_balance(reg_101);
             let l20 = mole_math::mul_div(balance::value(&l13), *(&l0.reinvest_bounty_bps), C43);
             if (balance::value(&l13) >= l20) {
                 let l22 = balance::split(&mut l13, l20);
@@ -859,20 +814,16 @@ public fun collect_reward_swap_reverse_one_other<T0, T1, T2, T3>(l0: &mut Worker
         if (l12 > 0u64) {
             if (l9) {
                 let (reg_103, reg_104) = cetus_clmm_utils::swap_exact_reverse(l1, l4, coin::zero(l11), coin::from_balance(l19, l11), false, true, l12, l10, l11);
-                let l22 = reg_104;
-                let l20 = reg_103;
-                coin::destroy_zero(l22);
-                let l15 = coin::into_balance(l20);
+                coin::destroy_zero(reg_104);
+                let l15 = coin::into_balance(reg_103);
                 let l25 = mole_math::mul_div(balance::value(&l15), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l15) >= l25) {
                     let l27 = balance::split(&mut l15, l25);
                 }
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact_reverse(l1, l5, coin::zero(l11), coin::from_balance(l19, l11), false, true, l12, l10, l11);
-                let l23 = reg_144;
-                let l21 = reg_143;
-                coin::destroy_zero(l23);
-                let l18 = coin::into_balance(l21);
+                coin::destroy_zero(reg_144);
+                let l18 = coin::into_balance(reg_143);
                 let l29 = mole_math::mul_div(balance::value(&l18), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l18) >= l29) {
                     let l31 = balance::split(&mut l18, l29);
@@ -910,20 +861,16 @@ public fun collect_reward_swap_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
         if (l16 > 0u64) {
             if (l12) {
                 let (reg_103, reg_104) = cetus_clmm_utils::swap_exact_reverse(l1, l4, coin::zero(l15), coin::from_balance(l26, l15), false, true, l16, l14, l15);
-                let l32 = reg_104;
-                let l28 = reg_103;
-                coin::destroy_zero(l32);
-                let l20 = coin::into_balance(l28);
+                coin::destroy_zero(reg_104);
+                let l20 = coin::into_balance(reg_103);
                 let l37 = mole_math::mul_div(balance::value(&l20), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l20) >= l37) {
                     let l40 = balance::split(&mut l20, l37);
                 }
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact_reverse(l1, l5, coin::zero(l15), coin::from_balance(l26, l15), false, true, l16, l14, l15);
-                let l33 = reg_144;
-                let l30 = reg_143;
-                coin::destroy_zero(l33);
-                let l24 = coin::into_balance(l30);
+                coin::destroy_zero(reg_144);
+                let l24 = coin::into_balance(reg_143);
                 let l43 = mole_math::mul_div(balance::value(&l24), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l24) >= l43) {
                     let l46 = balance::split(&mut l24, l43);
@@ -939,20 +886,16 @@ public fun collect_reward_swap_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
         if (l17 > 0u64) {
             if (l13) {
                 let (reg_206, reg_207) = cetus_clmm_utils::swap_exact_reverse(l1, l6, coin::zero(l15), coin::from_balance(l27, l15), false, true, l17, l14, l15);
-                let l34 = reg_207;
-                let l29 = reg_206;
-                coin::destroy_zero(l34);
-                let l21 = coin::into_balance(l29);
+                coin::destroy_zero(reg_207);
+                let l21 = coin::into_balance(reg_206);
                 let l38 = mole_math::mul_div(balance::value(&l21), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l21) >= l38) {
                     let l41 = balance::split(&mut l21, l38);
                 }
             } else {
                 let (reg_246, reg_247) = cetus_clmm_utils::swap_exact_reverse(l1, l7, coin::zero(l15), coin::from_balance(l27, l15), false, true, l17, l14, l15);
-                let l35 = reg_247;
-                let l31 = reg_246;
-                coin::destroy_zero(l35);
-                let l25 = coin::into_balance(l31);
+                coin::destroy_zero(reg_247);
+                let l25 = coin::into_balance(reg_246);
                 let l44 = mole_math::mul_div(balance::value(&l25), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l25) >= l44) {
                     let l47 = balance::split(&mut l25, l44);
@@ -990,20 +933,16 @@ public fun collect_reward_two_others<T0, T1, T2, T3, T4>(l0: &mut WorkerInfo<T0,
         if (l16 > 0u64) {
             if (l12) {
                 let (reg_103, reg_104) = cetus_clmm_utils::swap_exact(l1, l4, coin::zero(l15), coin::from_balance(l26, l15), false, true, l16, l14, l15);
-                let l32 = reg_104;
-                let l28 = reg_103;
-                coin::destroy_zero(l32);
-                let l20 = coin::into_balance(l28);
+                coin::destroy_zero(reg_104);
+                let l20 = coin::into_balance(reg_103);
                 let l37 = mole_math::mul_div(balance::value(&l20), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l20) >= l37) {
                     let l40 = balance::split(&mut l20, l37);
                 }
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact(l1, l5, coin::zero(l15), coin::from_balance(l26, l15), false, true, l16, l14, l15);
-                let l33 = reg_144;
-                let l30 = reg_143;
-                coin::destroy_zero(l33);
-                let l24 = coin::into_balance(l30);
+                coin::destroy_zero(reg_144);
+                let l24 = coin::into_balance(reg_143);
                 let l43 = mole_math::mul_div(balance::value(&l24), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l24) >= l43) {
                     let l46 = balance::split(&mut l24, l43);
@@ -1019,20 +958,16 @@ public fun collect_reward_two_others<T0, T1, T2, T3, T4>(l0: &mut WorkerInfo<T0,
         if (l17 > 0u64) {
             if (l13) {
                 let (reg_206, reg_207) = cetus_clmm_utils::swap_exact(l1, l6, coin::zero(l15), coin::from_balance(l27, l15), false, true, l17, l14, l15);
-                let l34 = reg_207;
-                let l29 = reg_206;
-                coin::destroy_zero(l34);
-                let l21 = coin::into_balance(l29);
+                coin::destroy_zero(reg_207);
+                let l21 = coin::into_balance(reg_206);
                 let l38 = mole_math::mul_div(balance::value(&l21), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l21) >= l38) {
                     let l41 = balance::split(&mut l21, l38);
                 }
             } else {
                 let (reg_246, reg_247) = cetus_clmm_utils::swap_exact(l1, l7, coin::zero(l15), coin::from_balance(l27, l15), false, true, l17, l14, l15);
-                let l35 = reg_247;
-                let l31 = reg_246;
-                coin::destroy_zero(l35);
-                let l25 = coin::into_balance(l31);
+                coin::destroy_zero(reg_247);
+                let l25 = coin::into_balance(reg_246);
                 let l44 = mole_math::mul_div(balance::value(&l25), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l25) >= l44) {
                     let l47 = balance::split(&mut l25, l44);
@@ -1135,22 +1070,18 @@ public fun health<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Pool<T0, T1>, l2
     let l6 = cetus_clmm_worker::share_to_balance_inner(l9, *(&l0.total_share), l7);
     let (reg_25, reg_26) = position::tick_range(option::borrow(&l0.position_nft));
     let (reg_33, reg_34) = clmm_math::get_amount_by_liquidity(reg_25, reg_26, pool::current_tick_index(l1), pool::current_sqrt_price(l1), l9, false);
-    let l11 = reg_34;
-    let l10 = reg_33;
     let l3 = if (l9 == 0u128) {
         0u64
     } else {
-        mole_math::mul_div_u128(l6, l10as u128, l9)as u64
+        mole_math::mul_div_u128(l6, reg_33as u128, l9)as u64
     };
-    let l12 = l3;
     let l4 = if (l9 == 0u128) {
         0u64
     } else {
-        mole_math::mul_div_u128(l6, l11as u128, l9)as u64
+        mole_math::mul_div_u128(l6, reg_34as u128, l9)as u64
     };
-    let l13 = l4;
-    let l5 = pool::calculate_swap_result(l1, false, true, l13);
-    return pool::calculated_swap_result_amount_out(&l5) + l12
+    let l5 = pool::calculate_swap_result(l1, false, true, l4);
+    return pool::calculated_swap_result_amount_out(&l5) + l3
 }
 
 public fun health_reverse<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Pool<T1, T0>, l2: u64): u64 {
@@ -1164,22 +1095,18 @@ public fun health_reverse<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Pool<T1,
     let l6 = cetus_clmm_worker::share_to_balance_inner(l9, *(&l0.total_share), l7);
     let (reg_25, reg_26) = position::tick_range(option::borrow(&l0.position_nft));
     let (reg_33, reg_34) = clmm_math::get_amount_by_liquidity(reg_25, reg_26, pool::current_tick_index(l1), pool::current_sqrt_price(l1), l9, false);
-    let l10 = reg_34;
-    let l11 = reg_33;
     let l3 = if (l9 == 0u128) {
         0u64
     } else {
-        mole_math::mul_div_u128(l6, l10as u128, l9)as u64
+        mole_math::mul_div_u128(l6, reg_34as u128, l9)as u64
     };
-    let l12 = l3;
     let l4 = if (l9 == 0u128) {
         0u64
     } else {
-        mole_math::mul_div_u128(l6, l11as u128, l9)as u64
+        mole_math::mul_div_u128(l6, reg_33as u128, l9)as u64
     };
-    let l13 = l4;
-    let l5 = pool::calculate_swap_result(l1, true, true, l13);
-    return pool::calculated_swap_result_amount_out(&l5) + l12
+    let l5 = pool::calculate_swap_result(l1, true, true, l4);
+    return pool::calculated_swap_result_amount_out(&l5) + l3
 }
 
 fun init(l0: &mut TxContext) {
@@ -1248,17 +1175,14 @@ public fun is_stable<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &GlobalStorage
     cetus_clmm_worker::checked_package_version(l0);
     let l7 = *(&l0.config);
     let (reg_5, reg_6) = cetus_clmm_utils::get_pool_price_amount_ratio(l2);
-    let l16 = reg_6;
-    let l15 = reg_5;
     let l13 = worker_config::get_oracle(l1, l7);
     let (reg_15, reg_16) = oracle_medianizer::get_price_generic(l1, l13, l3, l4, l5);
-    let l8 = reg_16;
     let l14 = reg_15;
     let l12 = cetus_clmm_worker::now_seconds(l5);
-    if (l8 + 86400u64 <= l12) {
+    if (reg_16 + 86400u64 <= l12) {
         return false
     };
-    let l9 = l16 * math::pow(10u64, 8u8)as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals))as u128 / l15 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals))as u128as u64;
+    let l9 = reg_6 * math::pow(10u64, 8u8)as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals))as u128 / reg_5 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals))as u128as u64;
     let l10 = worker_config::get_max_price_diff(l1, l7, cetus_clmm_worker::get_mole_cetus_worker_addr());
     let l11 = worker_config::get_max_price_diff_scale();
     let l6 = if (l9 * l11 > l14 * l10) {
@@ -1276,17 +1200,14 @@ public fun is_stable_reverse<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Globa
     cetus_clmm_worker::checked_package_version(l0);
     let l7 = *(&l0.config);
     let (reg_5, reg_6) = cetus_clmm_utils::get_pool_price_amount_ratio(l2);
-    let l15 = reg_6;
-    let l16 = reg_5;
     let l13 = worker_config::get_oracle(l1, l7);
     let (reg_15, reg_16) = oracle_medianizer::get_price_generic(l1, l13, l3, l4, l5);
-    let l8 = reg_16;
     let l14 = reg_15;
     let l12 = cetus_clmm_worker::now_seconds(l5);
-    if (l8 + 86400u64 <= l12) {
+    if (reg_16 + 86400u64 <= l12) {
         return false
     };
-    let l9 = l16 * math::pow(10u64, 8u8)as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals))as u128 / l15 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals))as u128as u64;
+    let l9 = reg_5 * math::pow(10u64, 8u8)as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals))as u128 / reg_6 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals))as u128as u64;
     let l10 = worker_config::get_max_price_diff(l1, l7, cetus_clmm_worker::get_mole_cetus_worker_addr());
     let l11 = worker_config::get_max_price_diff_scale();
     let l6 = if (l9 * l11 > l14 * l10) {
@@ -1324,11 +1245,9 @@ public entry fun kill<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &mut Glob
     emergency::assert_no_emergency(global_storage::borrow_emergency_status(freeze(l1)));
     let l26 = vault::get_position_signer(freeze(l9));
     let l19 = l8;
-    let l18 = l7;
-    let l17 = l6;
     let l16 = l4;
     let l15 = l1;
-    let l24 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l15), freeze(l16), l17, l18, l19);
+    let l24 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l15), freeze(l16), l6, l7, l19);
     let l14 = &l0.position_operator_cap;
     let l13 = l1;
     let l12 = l2;
@@ -1348,11 +1267,9 @@ public entry fun kill_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &
     emergency::assert_no_emergency(global_storage::borrow_emergency_status(freeze(l1)));
     let l26 = vault::get_position_signer(freeze(l9));
     let l19 = l8;
-    let l18 = l7;
-    let l17 = l6;
     let l16 = l4;
     let l15 = l1;
-    let l24 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l15), freeze(l16), l17, l18, l19);
+    let l24 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l15), freeze(l16), l6, l7, l19);
     let l14 = &l0.position_operator_cap;
     let l13 = l1;
     let l12 = l2;
@@ -1371,20 +1288,18 @@ fun liquidate<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &mut Pool<T0, T1>
     let l6 = cetus_clmm_worker::remove_share(l0, l3);
     let (reg_17, reg_18) = cetus_clmm_worker::strategy_execute(l0, l2, l1, coin::zero(l5), coin::zero(l5), l6, 0u64, C39, coder::encode_u64(0u64), l4, l5);
     let l8 = reg_18;
-    let l7 = reg_17;
     assert!(coin::value(&l8) == 0u64, C23);
     coin::destroy_zero(l8);
-    return l7
+    return reg_17
 }
 
 fun liquidate_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &mut Pool<T1, T0>, l2: &GlobalConfig, l3: u64, l4: &Clock, l5: &mut TxContext): Coin<T0> {
     let l6 = cetus_clmm_worker::remove_share(l0, l3);
     let (reg_17, reg_18) = cetus_clmm_worker::strategy_execute_reverse(l0, l2, l1, coin::zero(l5), coin::zero(l5), l6, 0u64, C39, coder::encode_u64(0u64), l4, l5);
     let l8 = reg_18;
-    let l7 = reg_17;
     assert!(coin::value(&l8) == 0u64, C23);
     coin::destroy_zero(l8);
-    return l7
+    return reg_17
 }
 
 fun now_seconds(l0: &Clock): u64 {
@@ -1429,9 +1344,8 @@ fun rebalance_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConf
     let l11 = tx_context::sender(freeze(l10));
     assert!(cetus_clmm_worker::is_rebalancer(freeze(l0), l11), C31);
     let (reg_16, reg_17) = position::tick_range(option::borrow(&l0.position_nft));
-    let l25 = reg_17;
     let l12 = if (i32::as_u32(reg_16) == l3) {
-        i32::as_u32(l25) == l4
+        i32::as_u32(reg_17) == l4
     } else {
         false
     };
@@ -1459,10 +1373,8 @@ fun rebalance_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConf
     };
     if (l15) {
         let (reg_99, reg_100) = cetus_clmm_worker::strategy_execute(l0, l1, l2, coin::from_balance(l17, l10), coin::from_balance(l18, l10), 0u128, 0u64, C38, l8, l9, l10);
-        let l20 = reg_100;
-        let l19 = reg_99;
-        let l16 = if (coin::value(&l19) <= l6) {
-            coin::value(&l20) <= l7
+        let l16 = if (coin::value(&reg_99) <= l6) {
+            coin::value(&reg_100) <= l7
         } else {
             false
         };
@@ -1480,9 +1392,8 @@ fun rebalance_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &Gl
     let l11 = tx_context::sender(freeze(l10));
     assert!(cetus_clmm_worker::is_rebalancer(freeze(l0), l11), C31);
     let (reg_16, reg_17) = position::tick_range(option::borrow(&l0.position_nft));
-    let l25 = reg_17;
     let l12 = if (i32::as_u32(reg_16) == l3) {
-        i32::as_u32(l25) == l4
+        i32::as_u32(reg_17) == l4
     } else {
         false
     };
@@ -1510,10 +1421,8 @@ fun rebalance_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &Gl
     };
     if (l15) {
         let (reg_99, reg_100) = cetus_clmm_worker::strategy_execute_reverse(l0, l1, l2, coin::from_balance(l17, l10), coin::from_balance(l18, l10), 0u128, 0u64, C38, l8, l9, l10);
-        let l20 = reg_100;
-        let l19 = reg_99;
-        let l16 = if (coin::value(&l19) <= l6) {
-            coin::value(&l20) <= l7
+        let l16 = if (coin::value(&reg_99) <= l6) {
+            coin::value(&reg_100) <= l7
         } else {
             false
         };
@@ -1624,10 +1533,8 @@ fun reinvest_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfi
     };
     assert!(!(l10), C28);
     let (reg_54, reg_55) = cetus_clmm_worker::strategy_execute(l0, l1, l2, coin::from_balance(l12, l8), coin::from_balance(l13, l8), 0u128, 0u64, C38, l6, l7, l8);
-    let l15 = reg_55;
-    let l14 = reg_54;
-    let l11 = if (coin::value(&l14) <= l4) {
-        coin::value(&l15) <= l5
+    let l11 = if (coin::value(&reg_54) <= l4) {
+        coin::value(&reg_55) <= l5
     } else {
         false
     };
@@ -1650,10 +1557,8 @@ fun reinvest_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &Glo
     };
     assert!(!(l10), C28);
     let (reg_54, reg_55) = cetus_clmm_worker::strategy_execute_reverse(l0, l1, l2, coin::from_balance(l12, l8), coin::from_balance(l13, l8), 0u128, 0u64, C38, l6, l7, l8);
-    let l15 = reg_55;
-    let l14 = reg_54;
-    let l11 = if (coin::value(&l14) <= l4) {
-        coin::value(&l15) <= l5
+    let l11 = if (coin::value(&reg_54) <= l4) {
+        coin::value(&reg_55) <= l5
     } else {
         false
     };
@@ -1936,7 +1841,6 @@ fun work_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l
     let l14 = position::liquidity(option::borrow(&l0.position_nft)) - l12;
     let (reg_51, reg_52) = cetus_clmm_worker::strategy_execute(l0, l1, l2, l4, l5, l12, l6, l7, l8, l9, l10);
     let l16 = reg_52;
-    let l15 = reg_51;
     let l13 = position::liquidity(option::borrow(&l0.position_nft)) - l14;
     if (coin::value(&l16) == 0u64) {
         coin::destroy_zero(l16)
@@ -1944,7 +1848,7 @@ fun work_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l
         pay::keep(l16, freeze(l10))
     };
     cetus_clmm_worker::add_share(l0, l3, l13, l14);
-    return l15
+    return reg_51
 }
 
 fun work_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T1, T0>, l3: u64, l4: Coin<T0>, l5: Coin<T1>, l6: u64, l7: u8, l8: vector<u8>, l9: &Clock, l10: &mut TxContext): Coin<T0> {
@@ -1960,7 +1864,6 @@ fun work_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalC
     let l14 = position::liquidity(option::borrow(&l0.position_nft)) - l12;
     let (reg_51, reg_52) = cetus_clmm_worker::strategy_execute_reverse(l0, l1, l2, l4, l5, l12, l6, l7, l8, l9, l10);
     let l16 = reg_52;
-    let l15 = reg_51;
     let l13 = position::liquidity(option::borrow(&l0.position_nft)) - l14;
     if (coin::value(&l16) == 0u64) {
         coin::destroy_zero(l16)
@@ -1968,7 +1871,7 @@ fun work_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalC
         pay::keep(l16, freeze(l10))
     };
     cetus_clmm_worker::add_share(l0, l3, l13, l14);
-    return l15
+    return reg_51
 }
 
 public entry fun work_none<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &mut GlobalStorage, l2: &mut Storage, l3: &GlobalConfig, l4: &mut Pool<T0, T1>, l5: u64, l6: u64, l7: u64, l8: u8, l9: vector<u8>, l10: &Aggregator, l11: &Aggregator, l12: &Clock, l13: &mut TxContext) {
