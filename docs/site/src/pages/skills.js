@@ -18,7 +18,7 @@ function CopyCommand({ command }) {
       <code className={styles.installCmd}>{command}</code>
       <button
         type="button"
-        className={`${styles.copyBtn} plausible-event-name=skills+copy+install`}
+        className={`${styles.copyBtn} plausible-event-name=skills+copy+install plausible-event-command=install+all`}
         onClick={() => {
           if (typeof navigator !== "undefined" && navigator.clipboard) {
             navigator.clipboard.writeText(command);
