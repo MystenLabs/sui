@@ -5486,8 +5486,8 @@ async fn test_validator_execution_does_not_store_error_metadata() {
         .unwrap();
     assert!(
         fullnode_metadata
-            .attributes
-            .get("source")
+            .message
+            .as_deref()
             .is_some_and(|source| source.contains("bad_function"))
     );
 }

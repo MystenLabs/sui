@@ -11,6 +11,7 @@ use crate::digests::{
 };
 use crate::dynamic_field::DynamicFieldType;
 use crate::effects::{TransactionEffects, TransactionEvents};
+use crate::error::ExecutionErrorMetadata;
 use crate::full_checkpoint_content::{Checkpoint, ExecutedTransaction, ObjectSet};
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint,
@@ -146,6 +147,13 @@ pub trait ReadStore: ObjectStore {
         digest: &TransactionDigest,
     ) -> Option<Vec<ObjectKey>>;
 
+    fn get_execution_error_metadata(
+        &self,
+        _digest: &TransactionDigest,
+    ) -> Option<ExecutionErrorMetadata> {
+        None
+    }
+
     fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
@@ -222,6 +230,7 @@ pub trait ReadStore: ObjectStore {
                 signatures: tx.tx_signatures().to_vec(),
                 effects: fx.clone(),
                 events,
+                execution_error_metadata: self.get_execution_error_metadata(tx.digest()),
                 unchanged_loaded_runtime_objects: self
                     .get_unchanged_loaded_runtime_objects(tx.digest())
                     //TODO Do we throw an error or just stub in an empty vector?
@@ -360,6 +369,13 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
         (*self).get_unchanged_loaded_runtime_objects(digest)
     }
 
+    fn get_execution_error_metadata(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<ExecutionErrorMetadata> {
+        (*self).get_execution_error_metadata(digest)
+    }
+
     fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
@@ -478,6 +494,13 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
         (**self).get_unchanged_loaded_runtime_objects(digest)
     }
 
+    fn get_execution_error_metadata(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<ExecutionErrorMetadata> {
+        (**self).get_execution_error_metadata(digest)
+    }
+
     fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
@@ -594,6 +617,13 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
         digest: &TransactionDigest,
     ) -> Option<Vec<ObjectKey>> {
         (**self).get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn get_execution_error_metadata(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<ExecutionErrorMetadata> {
+        (**self).get_execution_error_metadata(digest)
     }
 
     fn get_transaction_checkpoint(

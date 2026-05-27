@@ -19,9 +19,11 @@ use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::resolver::{ModuleResolver, SerializedPackage};
+use prost::Message as _;
 use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
+use sui_rpc::proto::sui::rpc::v2::ExecutionErrorMetadata as RpcExecutionErrorMetadata;
 use sui_types::error::{ExecutionErrorMetadata, SuiErrorKind, UserInputError};
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
@@ -348,7 +350,19 @@ impl AuthorityStore {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<ExecutionErrorMetadata>, TypedStoreError> {
-        self.perpetual_tables.execution_error_metadata.get(digest)
+        self.perpetual_tables
+            .execution_error_metadata
+            .get(digest)?
+            .map(|bytes| {
+                RpcExecutionErrorMetadata::decode(bytes.as_slice())
+                    .map(|metadata| ExecutionErrorMetadata::from(&metadata))
+            })
+            .transpose()
+            .map_err(|err| {
+                TypedStoreError::SerializationError(format!(
+                    "failed to decode execution error metadata: {err}"
+                ))
+            })
     }
 
     pub fn multi_get_effects<'a>(
@@ -872,11 +886,12 @@ impl AuthorityStore {
         }
 
         if let Some(metadata) = execution_error_metadata
-            && !metadata.attributes.is_empty()
+            && !metadata.is_empty()
         {
+            let metadata: RpcExecutionErrorMetadata = metadata.into();
             write_batch.insert_batch(
                 &self.perpetual_tables.execution_error_metadata,
-                [(transaction_digest, metadata)],
+                [(transaction_digest, metadata.encode_to_vec())],
             )?;
         }
 

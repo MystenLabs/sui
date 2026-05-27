@@ -499,6 +499,7 @@ fn render_full_checkpoint(
                 signatures: tx.signatures.unwrap_or_default(),
                 effects,
                 events: tx.events,
+                execution_error_metadata: None,
                 unchanged_loaded_runtime_objects: tx.unchanged_loaded_runtime_objects,
             })
         })

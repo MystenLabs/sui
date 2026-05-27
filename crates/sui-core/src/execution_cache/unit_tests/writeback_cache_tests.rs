@@ -557,12 +557,7 @@ async fn test_committed() {
 async fn test_execution_error_metadata_round_trip() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
-        let metadata = ExecutionErrorMetadata {
-            attributes: BTreeMap::from([(
-                "source".to_string(),
-                "Object runtime cached objects limit reached".to_string(),
-            )]),
-        };
+        let metadata = ExecutionErrorMetadata::new("Object runtime cached objects limit reached");
         s.outputs.execution_error_metadata = Some(metadata.clone());
 
         let tx = s.do_tx().await;

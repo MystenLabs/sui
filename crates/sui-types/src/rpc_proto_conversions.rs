@@ -220,6 +220,7 @@ impl TryFrom<&ExecutedTransaction> for crate::full_checkpoint_content::ExecutedT
                 .iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
+            execution_error_metadata: None,
         })
     }
 }
@@ -1183,6 +1184,32 @@ impl From<crate::execution_status::ExecutionStatus> for ExecutionStatus {
 //
 // ExecutionError
 //
+
+pub use sui_rpc::proto::sui::rpc::v2::ExecutionErrorMetadata;
+
+impl From<crate::execution_status::ExecutionErrorMetadata> for ExecutionErrorMetadata {
+    fn from(metadata: crate::error::ExecutionErrorMetadata) -> Self {
+        let mut message = Self::default();
+        message.message = metadata.message;
+        message
+    }
+}
+
+impl From<&crate::execution_status::ExecutionErrorMetadata> for ExecutionErrorMetadata {
+    fn from(metadata: &crate::error::ExecutionErrorMetadata) -> Self {
+        let mut message = Self::default();
+        message.message = metadata.message.clone();
+        message
+    }
+}
+
+impl From<&ExecutionErrorMetadata> for crate::execution_status::ExecutionErrorMetadata {
+    fn from(metadata: &ExecutionErrorMetadata) -> Self {
+        Self {
+            message: metadata.message.clone(),
+        }
+    }
+}
 
 fn size_error(size: u64, max_size: u64) -> SizeError {
     let mut message = SizeError::default();

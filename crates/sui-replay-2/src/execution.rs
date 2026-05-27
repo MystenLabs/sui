@@ -129,25 +129,26 @@ pub fn execute_transaction_to_effects(
         Some(error) => ExecutionOrEarlyError::Err(error),
         None => ExecutionOrEarlyError::Ok(()),
     };
-    let (inner_store, gas_status, effects, _execution_timing, result) = executor
-        .executor
-        .execute_transaction_to_effects_and_execution_error(
-            &store,
-            protocol_config,
-            executor.execution_metrics.clone(),
-            false, // expensive checks
-            execution_params,
-            &epoch,
-            epoch_start_timestamp,
-            input_objects,
-            txn_data.gas_data().clone(),
-            gas_status,
-            txn_data.kind().clone(),
-            None, // compat_args
-            txn_data.sender(),
-            digest,
-            trace_builder_opt,
-        );
+    let (inner_store, gas_status, effects, _execution_timing, result, _execution_error_metadata) =
+        executor
+            .executor
+            .execute_transaction_to_effects_and_execution_error(
+                &store,
+                protocol_config,
+                executor.execution_metrics.clone(),
+                false, // expensive checks
+                execution_params,
+                &epoch,
+                epoch_start_timestamp,
+                input_objects,
+                txn_data.gas_data().clone(),
+                gas_status,
+                txn_data.kind().clone(),
+                None, // compat_args
+                txn_data.sender(),
+                digest,
+                trace_builder_opt,
+            );
     let ReplayStore {
         object_cache,
         checkpoint: _,
@@ -175,7 +176,7 @@ pub fn execute_transaction_to_effects(
 
     debug!(op = "execute_tx", phase = "end", "execution");
     Ok((
-        result.map_err(ExecutionError::from),
+        result,
         TxnContextAndEffects {
             txn_data,
             execution_effects: effects,

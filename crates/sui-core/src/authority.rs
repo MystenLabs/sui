@@ -139,9 +139,7 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{
-    ExecutionError, ExecutionErrorContext, ExecutionErrorMetadata, SuiErrorKind, UserInputError,
-};
+use sui_types::error::{ExecutionError, ExecutionErrorMetadata, SuiErrorKind, UserInputError};
 use sui_types::event::EventID;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionErrorKind;
@@ -1920,36 +1918,37 @@ impl AuthorityState {
         // error reporting. Validators use the lean execution path and intentionally return no
         // sidecar metadata so effects stay independent of non-consensus data.
         if is_fullnode {
-            let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
-                .execute_transaction_to_effects_and_execution_error(
-                    store,
-                    protocol_config,
-                    self.metrics.execution_metrics.clone(),
-                    enable_expensive_checks,
-                    execution_params,
-                    epoch_id,
-                    epoch_timestamp_ms,
-                    input_objects,
-                    gas_data,
-                    gas_status,
-                    kind,
-                    rewritten_inputs,
-                    signer,
-                    tx_digest,
-                    &mut None,
-                );
-
-            let execution_error_metadata = execution_error
-                .as_ref()
-                .err()
-                .and_then(ExecutionErrorContext::metadata_with_source);
+            let (
+                inner_temp_store,
+                gas_status,
+                effects,
+                timings,
+                execution_error,
+                execution_error_metadata,
+            ) = executor.execute_transaction_to_effects_and_execution_error(
+                store,
+                protocol_config,
+                self.metrics.execution_metrics.clone(),
+                enable_expensive_checks,
+                execution_params,
+                epoch_id,
+                epoch_timestamp_ms,
+                input_objects,
+                gas_data,
+                gas_status,
+                kind,
+                rewritten_inputs,
+                signer,
+                tx_digest,
+                &mut None,
+            );
 
             (
                 inner_temp_store,
                 gas_status,
                 effects,
                 timings,
-                execution_error.map_err(ExecutionError::from),
+                execution_error,
                 execution_error_metadata,
             )
         } else {

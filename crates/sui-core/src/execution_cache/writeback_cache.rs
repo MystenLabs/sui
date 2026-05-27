@@ -997,7 +997,7 @@ impl WritebackCache {
             .insert(tx_digest, unchanged_loaded_runtime_objects.clone());
 
         if let Some(metadata) = execution_error_metadata
-            && !metadata.attributes.is_empty()
+            && !metadata.is_empty()
         {
             self.metrics.record_cache_write("execution_error_metadata");
             self.dirty

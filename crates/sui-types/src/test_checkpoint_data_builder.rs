@@ -648,6 +648,7 @@ impl TestCheckpointBuilder {
                     signatures: sender_signed.tx_signatures,
                     effects: tx.effects,
                     events: tx.events,
+                    execution_error_metadata: None,
                     unchanged_loaded_runtime_objects: Vec::new(),
                 }
             })

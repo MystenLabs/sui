@@ -123,6 +123,8 @@ pub(crate) fn load_checkpoint(
             signatures: tx.tx_signatures().to_vec(),
             effects: fx.clone(),
             events,
+            execution_error_metadata: transaction_cache_reader
+                .get_execution_error_metadata(tx.digest()),
             unchanged_loaded_runtime_objects: transaction_cache_reader
                 .get_unchanged_loaded_runtime_objects(tx.digest())
                 // We don't write empty sets to the DB to save space, so if this load went through

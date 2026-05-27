@@ -919,8 +919,8 @@ fn create_genesis_transaction(
         let (kind, signer, mut gas_data) = transaction_data.execution_parts();
         gas_data.payment = vec![];
         let input_objects = CheckedInputObjects::new_for_genesis(vec![]);
-        let (inner_temp_store, _, effects, _timings, _execution_error) = executor
-            .execute_transaction_to_effects_and_execution_error(
+        let (inner_temp_store, _, effects, _timings, _execution_error, _execution_error_metadata) =
+            executor.execute_transaction_to_effects_and_execution_error(
                 &InMemoryStorage::new(Vec::new()),
                 protocol_config,
                 metrics,

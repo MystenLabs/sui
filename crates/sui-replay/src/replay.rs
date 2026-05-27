@@ -792,8 +792,8 @@ impl LocalExec {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
-        let (inner_store, gas_status, effects, _timings, result) = executor
-            .execute_transaction_to_effects_and_execution_error(
+        let (inner_store, gas_status, effects, _timings, result, _execution_error_metadata) =
+            executor.execute_transaction_to_effects_and_execution_error(
                 &self,
                 protocol_config,
                 metrics.clone(),
@@ -834,7 +834,7 @@ impl LocalExec {
             required_objects: all_required_objects,
             local_exec_temporary_store: Some(inner_store),
             local_exec_effects: effects,
-            local_exec_status: Some(result.map_err(ExecutionError::from)),
+            local_exec_status: Some(result),
         })
     }
 
@@ -988,7 +988,7 @@ impl LocalExec {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
-        let (_, _, effects, _timings, exec_res) = executor
+        let (_, _, effects, _timings, exec_res, _execution_error_metadata) = executor
             .execute_transaction_to_effects_and_execution_error(
                 &store,
                 &protocol_config,
@@ -1015,7 +1015,7 @@ impl LocalExec {
             required_objects,
             local_exec_temporary_store: None, // We dont capture it for cert exec run
             local_exec_effects: effects,
-            local_exec_status: Some(exec_res.map_err(ExecutionError::from)),
+            local_exec_status: Some(exec_res),
         })
     }
 

@@ -1167,35 +1167,24 @@ impl std::fmt::Debug for SuiError {
 
 pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-#[derive(Clone, Eq, PartialEq, JsonSchema, Serialize, Deserialize, prost::Message)]
+/// Additional fullnode execution details captured for failed transactions.
+/// This metadata is stored as a non-consensus sidecar and can be different across fullnode versions.
+/// Not a part of chain state.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ExecutionErrorMetadata {
-    #[prost(btree_map = "string, string", tag = "1")]
-    pub attributes: BTreeMap<String, String>,
+    /// Human-readable execution error detail intended for diagnostics and user-facing APIs.
+    pub message: Option<String>,
 }
 
-#[cfg(test)]
-mod execution_error_metadata_tests {
-    use super::ExecutionErrorMetadata;
-    use prost::Message;
-    use std::collections::BTreeMap;
+impl ExecutionErrorMetadata {
+    pub fn new(source: impl Into<String>) -> Self {
+        Self {
+            message: Some(source.into()),
+        }
+    }
 
-    #[test]
-    fn execution_error_metadata_protobuf_round_trip() {
-        let metadata = ExecutionErrorMetadata {
-            attributes: BTreeMap::from([(
-                "source".to_string(),
-                "Object runtime cached objects limit reached".to_string(),
-            )]),
-        };
-
-        let encoded = metadata.encode_to_vec();
-        let decoded = ExecutionErrorMetadata::decode(encoded.as_slice()).unwrap();
-
-        assert_eq!(decoded, metadata);
-        assert_eq!(
-            decoded.attributes.get("source").map(String::as_str),
-            Some("Object runtime cached objects limit reached")
-        );
+    pub fn is_empty(&self) -> bool {
+        self.message.as_deref().is_none_or(str::is_empty)
     }
 }
 
@@ -1342,12 +1331,10 @@ impl ExecutionErrorContext {
     pub fn metadata_with_source(&self) -> Option<ExecutionErrorMetadata> {
         let mut metadata = self.metadata.clone();
         if let Some(source) = self.source.as_ref() {
-            metadata
-                .attributes
-                .insert("source".to_string(), source.to_string());
+            metadata.message.get_or_insert_with(|| source.to_string());
         }
 
-        (!metadata.attributes.is_empty()).then_some(metadata)
+        (!metadata.is_empty()).then_some(metadata)
     }
 
     pub fn to_execution_status(&self) -> (ExecutionErrorKind, Option<CommandIndex>) {
