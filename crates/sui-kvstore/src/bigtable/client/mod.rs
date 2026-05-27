@@ -10,8 +10,6 @@ use std::future::Future;
 use std::ops::Range;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -23,6 +21,7 @@ use bytes::Bytes;
 use futures::StreamExt;
 use gcp_auth::TokenProvider;
 use prometheus::Registry;
+use sui_futures::task::TaskGuard;
 use sui_inverted_index::ScanDirection;
 use sui_types::base_types::EpochId;
 use sui_types::base_types::ObjectID;
@@ -130,32 +129,6 @@ pub struct BigTableClient {
     metrics: Option<Arc<KvMetrics>>,
     app_profile_id: Option<String>,
 }
-
-struct AbortOnDrop<T> {
-    handle: tokio::task::JoinHandle<T>,
-}
-
-impl<T> AbortOnDrop<T> {
-    fn new(handle: tokio::task::JoinHandle<T>) -> Self {
-        Self { handle }
-    }
-}
-
-impl<T> Future for AbortOnDrop<T> {
-    type Output = std::result::Result<T, tokio::task::JoinError>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.get_mut().handle).poll(cx)
-    }
-}
-
-impl<T> Drop for AbortOnDrop<T> {
-    fn drop(&mut self) {
-        self.handle.abort();
-    }
-}
-
-impl<T> Unpin for AbortOnDrop<T> {}
 
 impl BigTableClient {
     pub async fn new_local(host: String, instance_id: String) -> Result<Self> {
@@ -1364,7 +1337,7 @@ impl BigTableClient {
 }
 
 type TxSeqDigestScanStream = futures::stream::BoxStream<'static, Result<TxSeqDigestData>>;
-type TxSeqDigestScanTask = AbortOnDrop<Result<TxSeqDigestScanStream>>;
+type TxSeqDigestScanTask = TaskGuard<Result<TxSeqDigestScanStream>>;
 
 fn spawn_tx_seq_digest_bucket_scan(
     mut client: BigTableClient,
@@ -1372,7 +1345,7 @@ fn spawn_tx_seq_digest_bucket_scan(
     direction: ScanDirection,
     descending: bool,
 ) -> TxSeqDigestScanTask {
-    AbortOnDrop::new(tokio::spawn(async move {
+    TaskGuard::new(tokio::spawn(async move {
         open_tx_seq_digest_bucket_scan(&mut client, bucket_range, direction, descending).await
     }))
 }
