@@ -1227,14 +1227,10 @@ impl IndexStoreTables {
         checkpoint: &Checkpoint,
         batch: &mut typed_store::rocks::DBBatch,
     ) -> Result<(), StorageError> {
-        let object_set = &checkpoint.object_set;
         for tx in &checkpoint.transactions {
-            let input_objects: Vec<Object> = tx.input_objects(object_set).cloned().collect();
-            let output_objects: Vec<Object> = tx.output_objects(object_set).cloned().collect();
-            let balance_changes = sui_types::balance_change::derive_detailed_balance_changes(
+            let balance_changes = sui_types::balance_change::derive_detailed_balance_changes_2(
                 &tx.effects,
-                &input_objects,
-                &output_objects,
+                &checkpoint.object_set,
             )
             .into_iter()
             .filter_map(|change| {
