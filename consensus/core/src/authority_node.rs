@@ -7,6 +7,7 @@ use consensus_config::{
     Committee, ConsensusProtocolConfig, NetworkKeyPair, NetworkPublicKey, Parameters,
     ProtocolKeyPair,
 };
+use consensus_config::{ChainType, ConsensusProtocolConfig};
 use consensus_types::block::Round;
 use itertools::Itertools;
 use mysten_network::Multiaddr;
@@ -272,7 +273,8 @@ where
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
         let store = Arc::new(RocksDBStore::new(
             store_path,
-            context.parameters.use_fifo_compaction,
+            context.parameters.use_fifo_compaction
+                && context.protocol_config.chain() != ChainType::Mainnet,
         ));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
