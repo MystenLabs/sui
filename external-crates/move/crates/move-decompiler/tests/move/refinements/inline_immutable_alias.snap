@@ -1,0 +1,9 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module inline_immutable_alias {
+    public fun stage () {
+        return l0 + l1 + l0 + l1
+    }
+
+}

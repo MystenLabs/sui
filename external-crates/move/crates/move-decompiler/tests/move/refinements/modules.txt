@@ -1,1 +1,2 @@
+inline_immutable_alias
 simplify_borrow_deref
