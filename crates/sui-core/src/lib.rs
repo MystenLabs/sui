@@ -35,6 +35,7 @@ pub mod mysticeti_adapter;
 pub mod overload_monitor;
 mod par_index_live_object_set;
 pub(crate) mod post_consensus_tx_reorder;
+pub mod randomness_round_receiver;
 pub mod rpc_index;
 pub mod runtime;
 pub mod safe_client;

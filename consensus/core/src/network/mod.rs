@@ -239,8 +239,27 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
 }
 
+/// Handler for randomness round signatures exchanged between validators and
+/// observer nodes via the consensus block stream.
+pub trait RandomnessSignatureHandler: Send + Sync + 'static {
+    /// Called by the observer subscriber for each randomness round signature
+    /// received from the block stream.
+    fn handle_randomness_signature(&self, data: Bytes);
+
+    /// Returns a receiver for broadcast randomness signatures. Called by
+    /// the observer service to merge signatures into the outgoing block stream.
+    fn subscribe_randomness_signatures(&self) -> tokio::sync::broadcast::Receiver<Bytes>;
+}
+
+/// A single item in the observer block stream, carrying both blocks and auxiliary data.
+pub(crate) struct ObserverStreamItem {
+    pub(crate) blocks: Vec<Bytes>,
+    pub(crate) auxiliary_data: observer::AuxiliaryData,
+}
+
 /// Observer block stream type.
-pub(crate) type ObserverBlockStream = Pin<Box<dyn Stream<Item = Vec<Bytes>> + Send + 'static>>;
+pub(crate) type ObserverBlockStream =
+    Pin<Box<dyn Stream<Item = ObserverStreamItem> + Send + 'static>>;
 
 /// Observer network service for handling requests from observer nodes.
 /// Unlike ValidatorNetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)

@@ -21,7 +21,7 @@ use crate::{
     block_sync_service::BlockSyncService,
     block_verifier::BlockVerifier,
     commit::{CommitRange, TrustedCommit},
-    commit_vote_monitor::CommitVoteMonitor,
+    commit_vote_monitor::{CommitVoteMonitor, is_commit_lagging},
     context::Context,
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
@@ -31,8 +31,6 @@ use crate::{
     synchronizer::SynchronizerHandle,
     transaction_vote_tracker::TransactionVoteTracker,
 };
-
-pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
 
 /// Authority's network service implementation, agnostic to the actual networking stack used.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
@@ -243,12 +241,11 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // it is ok to reject after block verifications instead of before.
         let last_commit_index = self.dag_state.read().last_commit_index();
         let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
-        // The threshold to ignore block should be larger than commit_sync_batch_size,
-        // to avoid excessive block rejections and synchronizations.
-        if last_commit_index
-            + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
-            < quorum_commit_index
-        {
+        if is_commit_lagging(
+            self.context.as_ref(),
+            last_commit_index,
+            quorum_commit_index,
+        ) {
             self.context
                 .metrics
                 .node_metrics
@@ -572,7 +569,7 @@ type BroadcastedBlockStream = BroadcastStream<ExtendedBlock>;
 /// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
 /// this tolerates lags with only logging, without yielding errors.
 pub(crate) struct BroadcastStream<T> {
-    peer: PeerId,
+    peer: Option<PeerId>,
     // Stores the receiver across poll_next() calls.
     inner: ReusableBoxFuture<
         'static,
@@ -584,7 +581,7 @@ pub(crate) struct BroadcastStream<T> {
     // Maximum number of items to return per poll.
     max_items_per_poll: usize,
     // Counts total subscriptions / active BroadcastStreams.
-    subscription_counter: Arc<SubscriptionCounter>,
+    subscription_counter: Option<Arc<SubscriptionCounter>>,
 }
 
 impl<T: 'static + Clone + Send> BroadcastStream<T> {
@@ -602,10 +599,21 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
             }
         }
         Self {
-            peer,
+            peer: Some(peer),
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
             max_items_per_poll,
-            subscription_counter,
+            subscription_counter: Some(subscription_counter),
+        }
+    }
+
+    /// Creates a stream without subscription tracking.
+    pub fn new_untracked(rx: broadcast::Receiver<T>, max_items_per_poll: usize) -> Self {
+        assert!(max_items_per_poll > 0, "max_items_per_poll must be > 0");
+        Self {
+            peer: None,
+            inner: ReusableBoxFuture::new(make_recv_future(rx)),
+            max_items_per_poll,
+            subscription_counter: None,
         }
     }
 }
@@ -632,10 +640,7 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
                             Err(broadcast::error::TryRecvError::Empty) => break,
                             Err(broadcast::error::TryRecvError::Closed) => break,
                             Err(broadcast::error::TryRecvError::Lagged(n)) => {
-                                warn!(
-                                    "Block BroadcastedBlockStream {} lagged by {} messages",
-                                    self.peer, n
-                                );
+                                warn!("BroadcastStream {:?} lagged by {} messages", self.peer, n);
                                 break;
                             }
                         }
@@ -645,14 +650,11 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
                     return task::Poll::Ready(Some(items));
                 }
                 Err(broadcast::error::RecvError::Closed) => {
-                    info!("Block BroadcastedBlockStream {} closed", self.peer);
+                    info!("BroadcastStream {:?} closed", self.peer);
                     return task::Poll::Ready(None);
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
-                    warn!(
-                        "Block BroadcastedBlockStream {} lagged by {} messages",
-                        self.peer, n
-                    );
+                    warn!("BroadcastStream {:?} lagged by {} messages", self.peer, n);
                     // Re-arm the future and loop to await the next item.
                     self.inner.set(make_recv_future(rx));
                     continue;
@@ -664,7 +666,9 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
 
 impl<T> Drop for BroadcastStream<T> {
     fn drop(&mut self) {
-        if let Err(err) = self.subscription_counter.decrement(&self.peer) {
+        if let (Some(counter), Some(peer)) = (&self.subscription_counter, &self.peer)
+            && let Err(err) = counter.decrement(peer)
+        {
             match err {
                 ConsensusError::Shutdown => {}
                 _ => panic!("Unexpected error: {err}"),
@@ -682,8 +686,6 @@ async fn make_recv_future<T: Clone>(
     let result = rx.recv().await;
     (result, rx)
 }
-
-// TODO: add a unit test for BroadcastStream.
 
 #[cfg(test)]
 mod tests {

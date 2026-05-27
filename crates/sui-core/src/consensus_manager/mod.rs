@@ -13,6 +13,7 @@ use consensus_config::{
 };
 use consensus_core::{
     Clock, CommitConsumerArgs, CommitConsumerMonitor, CommitIndex, ConsensusAuthority, NetworkType,
+    RandomnessSignatureHandler,
 };
 use core::panic;
 use fastcrypto::traits::KeyPair as _;
@@ -245,6 +246,7 @@ impl ConsensusManager {
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_handler_initializer: ConsensusHandlerInitializer,
         tx_validator: SuiTxValidator,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) {
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
@@ -349,6 +351,7 @@ impl ConsensusManager {
             commit_consumer,
             registry.clone(),
             *boot_counter,
+            randomness_signature_handler,
         )
         .await;
         let client = authority.transaction_client();

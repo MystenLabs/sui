@@ -15,7 +15,7 @@ use prometheus::Registry;
 use tracing::{info, warn};
 
 use crate::{
-    BlockAPI as _, CommitConsumerArgs,
+    BlockAPI as _, CommitConsumerArgs, RandomnessSignatureHandler,
     authority_service::AuthorityService,
     block_manager::BlockManager,
     block_sync_service::BlockSyncService,
@@ -70,6 +70,7 @@ impl ConsensusAuthority {
         // has been running. It's useful for making decisions on whether amnesia recovery should run.
         // When `boot_counter` is 0, `ConsensusAuthority` will initiate the process of amnesia recovery if that's enabled in the parameters.
         boot_counter: u64,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) -> Self {
         match network_type {
             NetworkType::Tonic => {
@@ -85,6 +86,7 @@ impl ConsensusAuthority {
                     commit_consumer,
                     registry,
                     boot_counter,
+                    randomness_signature_handler,
                 )
                 .await;
                 Self::WithTonic(authority)
@@ -176,6 +178,7 @@ where
         commit_consumer: CommitConsumerArgs,
         registry: Registry,
         boot_counter: u64,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) -> Self {
         let metrics = initialise_metrics(registry);
 
@@ -453,6 +456,7 @@ where
                     transaction_vote_tracker.clone(),
                     synchronizer.clone(),
                     block_sync_service.clone(),
+                    randomness_signature_handler.clone(),
                 ));
                 network_manager
                     .start_observer_server(observer_service)
@@ -473,13 +477,16 @@ where
                 transaction_vote_tracker.clone(),
                 synchronizer.clone(),
                 block_sync_service.clone(),
+                randomness_signature_handler.clone(),
             ));
 
             let observer_subscriber = ObserverSubscriber::new(
                 context.clone(),
                 observer_client,
                 observer_service.clone(),
+                commit_vote_monitor.clone(),
                 dag_state.clone(),
+                randomness_signature_handler,
             );
 
             network_manager
@@ -664,6 +671,7 @@ mod tests {
             commit_consumer,
             registry,
             0,
+            None,
         )
         .await;
 
@@ -705,6 +713,7 @@ mod tests {
             commit_consumer,
             registry,
             0,
+            None,
         )
         .await;
 
@@ -820,6 +829,7 @@ mod tests {
             observer_commit_consumer,
             Registry::new(),
             0,
+            None,
         )
         .await;
         // The relevant endpoints are now implemented for the synchronizer and commit_syncer components, so the Observer node should be able to catch up and
@@ -1255,6 +1265,7 @@ mod tests {
             commit_consumer,
             registry,
             boot_counter,
+            None,
         )
         .await;
 
