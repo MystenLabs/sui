@@ -14,6 +14,7 @@ mod inline_immutable_alias;
 mod introduce_while;
 mod liveness;
 mod loop_to_seq;
+mod negate_comparison;
 mod reconstruct_match;
 mod recover_asserts;
 mod remove_trailing_continue;
@@ -46,6 +47,7 @@ const REFINEMENTS: &[Refinement] = &[
     remove_trailing_continue::refine,
     remove_trailing_return::refine,
     simplify_borrow_deref::refine,
+    negate_comparison::refine,
     simplify_if::refine,
     bool_if_simplify::refine,
     recover_asserts::refine,
