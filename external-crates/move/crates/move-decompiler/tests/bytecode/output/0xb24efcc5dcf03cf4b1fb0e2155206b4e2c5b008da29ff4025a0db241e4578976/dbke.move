@@ -46,24 +46,20 @@ public fun caw<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut BalanceManager, l2: &
 
 fun cim(l0: u8): bool {
     let l13 = &l0;
-    let l7 = l13;
     let l6 = ct::cpsos();
-    let l5 = if (l7 == &l6) {
+    let l5 = if (l13 == &l6) {
         true
     } else {
-        let l9 = l13;
         let l8 = constants::post_only();
-        let l4 = if (l9 == &l8) {
+        let l4 = if (l13 == &l8) {
             true
         } else {
-            let l11 = l13;
             let l10 = constants::immediate_or_cancel();
-            let l3 = if (l11 == &l10) {
+            let l3 = if (l13 == &l10) {
                 false
             } else {
-                let l1 = l13;
                 let l12 = constants::fill_or_kill();
-                let l2 = if (l1 == &l12) {
+                let l2 = if (l13 == &l12) {
                     false
                 } else {
                     false
@@ -236,8 +232,7 @@ fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64,
     if (l8 < l6) {
         return (0u64, ct::e_insufficient_quantity())
     };
-    let l16 = l9;
-    let l15 = if (l16) {
+    let l15 = if (l9) {
         let l25 = l2as u128 * constants::float_scaling_u128() / l7as u128as u64;
         let l21 = l25 % l5 + l5;
         if (l25 < l21) {

@@ -228,21 +228,10 @@ public entry fun add_collateral_single<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T
     cetus_clmm_worker::checked_package_version(freeze(l0));
     emergency::assert_no_emergency(global_storage::borrow_emergency_status(freeze(l1)));
     let l51 = vault::get_position_signer(freeze(l14));
-    let l40 = l13;
-    let l39 = l12;
-    let l38 = l11;
-    let l32 = l4;
-    let l23 = l1;
-    let l49 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l23), freeze(l32), l38, l39, l40);
+    let l49 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l1), freeze(l4), l11, l12, l13);
     let l21 = &l0.position_operator_cap;
-    let l20 = l1;
     let l18 = &l51;
-    let l17 = l5;
-    let l15 = l8;
-    let l43 = l5;
-    let l42 = l4;
-    let l41 = l0;
-    let l44 = vault::before_add_collateral(l21, l20, l2, l18, l17, l6, l15, cetus_clmm_worker::health(freeze(l41), freeze(l42), l43), l49, cetus_clmm_worker::is_reserve_consistent(), l13, l14);
+    let l44 = vault::before_add_collateral(l21, l1, l2, l18, l5, l6, l8, cetus_clmm_worker::health(freeze(l0), freeze(l4), l5), l49, cetus_clmm_worker::is_reserve_consistent(), l13, l14);
     let l46 = vault::extract_add_collateral_context_coin_send(&mut l44, l14);
     let l48 = vault::get_add_collateral_context_debt(&l44);
     assert!(table::contains(&l0.shares, l5), C35);
@@ -254,20 +243,9 @@ public entry fun add_collateral_single<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T
     } else {
         pay::keep(l47, freeze(l14))
     };
-    let l28 = l13;
-    let l27 = l12;
-    let l26 = l11;
-    let l25 = l4;
-    let l24 = l1;
-    let l50 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l24), freeze(l25), l26, l27, l28);
+    let l50 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l1), freeze(l4), l11, l12, l13);
     let l36 = &l0.position_operator_cap;
-    let l35 = l1;
-    let l34 = l44;
-    let l33 = l8;
-    let l31 = l5;
-    let l30 = l4;
-    let l29 = l0;
-    vault::after_add_collateral(l36, l35, l34, l33, cetus_clmm_worker::health(freeze(l29), freeze(l30), l31), l50, cetus_clmm_worker::is_reserve_consistent());
+    vault::after_add_collateral(l36, l1, l44, l8, cetus_clmm_worker::health(freeze(l0), freeze(l4), l5), l50, cetus_clmm_worker::is_reserve_consistent());
     let l52 = *(table::borrow(&l0.shares, l5));
     assert!(cetus_clmm_worker::share_to_balance(freeze(l0), l52) > l45, C36)
 }
@@ -276,24 +254,13 @@ public entry fun add_collateral_single_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T
     cetus_clmm_worker::checked_package_version(freeze(l0));
     emergency::assert_no_emergency(global_storage::borrow_emergency_status(freeze(l1)));
     let l51 = vault::get_position_signer(freeze(l14));
-    let l41 = l13;
-    let l40 = l12;
-    let l39 = l11;
-    let l33 = l4;
-    let l24 = l1;
-    let l49 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l24), freeze(l33), l39, l40, l41);
+    let l49 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l1), freeze(l4), l11, l12, l13);
     assert!(table::contains(&l0.shares, l5), C35);
     let l53 = *(table::borrow(&l0.shares, l5));
     let l45 = cetus_clmm_worker::share_to_balance(freeze(l0), l53);
     let l23 = &l0.position_operator_cap;
-    let l22 = l1;
     let l20 = &l51;
-    let l19 = l5;
-    let l17 = l8;
-    let l16 = l5;
-    let l15 = l4;
-    let l43 = l0;
-    let l44 = vault::before_add_collateral(l23, l22, l2, l20, l19, l6, l17, cetus_clmm_worker::health_reverse(freeze(l43), freeze(l15), l16), l49, cetus_clmm_worker::is_reserve_consistent(), l13, l14);
+    let l44 = vault::before_add_collateral(l23, l1, l2, l20, l5, l6, l8, cetus_clmm_worker::health_reverse(freeze(l0), freeze(l4), l5), l49, cetus_clmm_worker::is_reserve_consistent(), l13, l14);
     let l46 = vault::extract_add_collateral_context_coin_send(&mut l44, l14);
     let l48 = vault::get_add_collateral_context_debt(&l44);
     let l47 = cetus_clmm_worker::work_inner_reverse(l0, l3, l4, l5, l46, l7, l48, l9, l10, l13, l14);
@@ -302,32 +269,19 @@ public entry fun add_collateral_single_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T
     } else {
         pay::keep(l47, freeze(l14))
     };
-    let l29 = l13;
-    let l28 = l12;
-    let l27 = l11;
-    let l26 = l4;
-    let l25 = l1;
-    let l50 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l25), freeze(l26), l27, l28, l29);
+    let l50 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l1), freeze(l4), l11, l12, l13);
     let l37 = &l0.position_operator_cap;
-    let l36 = l1;
-    let l35 = l44;
-    let l34 = l8;
-    let l32 = l5;
-    let l31 = l4;
-    let l30 = l0;
-    vault::after_add_collateral(l37, l36, l35, l34, cetus_clmm_worker::health_reverse(freeze(l30), freeze(l31), l32), l50, cetus_clmm_worker::is_reserve_consistent());
+    vault::after_add_collateral(l37, l1, l44, l8, cetus_clmm_worker::health_reverse(freeze(l0), freeze(l4), l5), l50, cetus_clmm_worker::is_reserve_consistent());
     let l52 = *(table::borrow(&l0.shares, l5));
     assert!(cetus_clmm_worker::share_to_balance(freeze(l0), l52) > l45, C36)
 }
 
 fun add_share<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: u64, l2: u128, l3: u128) {
     if (l2 > 0u128) {
-        let l4 = l2;
-        let l9 = cetus_clmm_worker::balance_to_share_inner(freeze(l0), l4, l3);
+        let l9 = cetus_clmm_worker::balance_to_share_inner(freeze(l0), l2, l3);
         assert!(l9 > 0u128, C3);
         let l10 = &mut l0.shares;
-        let l6 = l1;
-        let l7 = if (table::contains(freeze(l10), l6)) {
+        let l7 = if (table::contains(freeze(l10), l1)) {
             table::borrow_mut(l10, l1)
         } else {
             table::add(l10, l1, 0u128);
@@ -1115,8 +1069,7 @@ fun init(l0: &mut TxContext) {
 
 public entry fun initialize<T0, T1, T2>(l0: &AdminCap, l1: &x5_AdminCap, l2: &x3_AdminCap, l3: &mut GlobalStorage, l4: &mut WorkerInfoStore, l5: &CoinMetadata<T0>, l6: &CoinMetadata<T1>, l7: &GlobalConfig, l8: &mut Pool<T0, T1>, l9: address, l10: u64, l11: address, l12: u64, l13: u32, l14: u32, l15: &mut TxContext) {
     let l18 = cetus_clmm_worker::get_mole_cetus_worker_addr();
-    let l16 = l18;
-    assert!(!(worker_config::is_worker_info_registered(freeze(l4), l16)), C1);
+    assert!(!(worker_config::is_worker_info_registered(freeze(l4), l18)), C1);
     assert!(vault::is_vault_initialized(freeze(l3)), C12);
     let l20 = vault::acquire_position_operator_cap(l1);
     let l17 = C44;
@@ -1131,8 +1084,7 @@ public entry fun initialize<T0, T1, T2>(l0: &AdminCap, l1: &x5_AdminCap, l2: &x3
 
 public entry fun initialize_reverse<T0, T1, T2>(l0: &AdminCap, l1: &x5_AdminCap, l2: &x3_AdminCap, l3: &mut GlobalStorage, l4: &mut WorkerInfoStore, l5: &CoinMetadata<T0>, l6: &CoinMetadata<T1>, l7: &GlobalConfig, l8: &mut Pool<T1, T0>, l9: address, l10: u64, l11: address, l12: u64, l13: u32, l14: u32, l15: &mut TxContext) {
     let l18 = cetus_clmm_worker::get_mole_cetus_worker_addr();
-    let l16 = l18;
-    assert!(!(worker_config::is_worker_info_registered(freeze(l4), l16)), C1);
+    assert!(!(worker_config::is_worker_info_registered(freeze(l4), l18)), C1);
     assert!(vault::is_vault_initialized(freeze(l3)), C12);
     let l20 = vault::acquire_position_operator_cap(l1);
     let l17 = C44;
@@ -1244,19 +1196,10 @@ public entry fun kill<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &mut Glob
     cetus_clmm_worker::checked_package_version(freeze(l0));
     emergency::assert_no_emergency(global_storage::borrow_emergency_status(freeze(l1)));
     let l26 = vault::get_position_signer(freeze(l9));
-    let l19 = l8;
-    let l16 = l4;
-    let l15 = l1;
-    let l24 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l15), freeze(l16), l6, l7, l19);
+    let l24 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l1), freeze(l4), l6, l7, l8);
     let l14 = &l0.position_operator_cap;
-    let l13 = l1;
-    let l12 = l2;
     let l11 = &l26;
-    let l10 = l5;
-    let l22 = l5;
-    let l21 = l4;
-    let l20 = l0;
-    let l25 = vault::before_kill(l14, l13, l12, l11, l10, cetus_clmm_worker::health(freeze(l20), freeze(l21), l22), l24, l8, l9);
+    let l25 = vault::before_kill(l14, l1, l2, l11, l5, cetus_clmm_worker::health(freeze(l0), freeze(l4), l5), l24, l8, l9);
     let l23 = cetus_clmm_worker::liquidate(l0, l4, l3, l5, l8, l9);
     vault::merge_kill_context_coin_back(&mut l25, l23);
     vault::after_kill(&l0.position_operator_cap, l1, l2, &l26, l25, l9)
@@ -1266,19 +1209,10 @@ public entry fun kill_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &
     cetus_clmm_worker::checked_package_version(freeze(l0));
     emergency::assert_no_emergency(global_storage::borrow_emergency_status(freeze(l1)));
     let l26 = vault::get_position_signer(freeze(l9));
-    let l19 = l8;
-    let l16 = l4;
-    let l15 = l1;
-    let l24 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l15), freeze(l16), l6, l7, l19);
+    let l24 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l1), freeze(l4), l6, l7, l8);
     let l14 = &l0.position_operator_cap;
-    let l13 = l1;
-    let l12 = l2;
     let l11 = &l26;
-    let l10 = l5;
-    let l22 = l5;
-    let l21 = l4;
-    let l20 = l0;
-    let l25 = vault::before_kill(l14, l13, l12, l11, l10, cetus_clmm_worker::health_reverse(freeze(l20), freeze(l21), l22), l24, l8, l9);
+    let l25 = vault::before_kill(l14, l1, l2, l11, l5, cetus_clmm_worker::health_reverse(freeze(l0), freeze(l4), l5), l24, l8, l9);
     let l23 = cetus_clmm_worker::liquidate_reverse(l0, l4, l3, l5, l8, l9);
     vault::merge_kill_context_coin_back(&mut l25, l23);
     vault::after_kill(&l0.position_operator_cap, l1, l2, &l26, l25, l9)
@@ -1655,8 +1589,7 @@ public entry fun set_rebalancers_ok<T0, T1, T2>(l0: &AdminCap, l1: &mut WorkerIn
     while (l6 > 0u64) {
         l6 = l6 - 1u64;
         let l5 = l8.pop_back();
-        let l4 = l5;
-        if (table::contains(freeze(l7), l4)) {
+        if (table::contains(freeze(l7), l5)) {
             *(table::borrow_mut(l7, l5)) = l3
         } else {
             table::add(l7, l5, l3)
@@ -1678,8 +1611,7 @@ public entry fun set_reinvestor_bounty_bps<T0, T1, T2>(l0: &AdminCap, l1: &mut W
 public entry fun set_reinvestor_ok<T0, T1, T2>(l0: &AdminCap, l1: &mut WorkerInfo<T0, T1, T2>, l2: address, l3: bool) {
     cetus_clmm_worker::checked_package_version(freeze(l1));
     let l5 = &mut l1.ok_reinvestors;
-    let l4 = l2;
-    if (table::contains(freeze(l5), l4)) {
+    if (table::contains(freeze(l5), l2)) {
         *(table::borrow_mut(l5, l2)) = l3
     } else {
         table::add(l5, l2, l3)
@@ -1694,8 +1626,7 @@ public entry fun set_reinvestors_ok<T0, T1, T2>(l0: &AdminCap, l1: &mut WorkerIn
     while (l6 > 0u64) {
         l6 = l6 - 1u64;
         let l5 = l8.pop_back();
-        let l4 = l5;
-        if (table::contains(freeze(l7), l4)) {
+        if (table::contains(freeze(l7), l5)) {
             *(table::borrow_mut(l7, l5)) = l3
         } else {
             table::add(l7, l5, l3)
@@ -1711,8 +1642,7 @@ public entry fun set_strategies_ok<T0, T1, T2>(l0: &AdminCap, l1: &mut WorkerInf
     while (l5 > 0u64) {
         l5 = l5 - 1u64;
         let l8 = l7.pop_back();
-        let l4 = l8;
-        if (table::contains(freeze(l6), l4)) {
+        if (table::contains(freeze(l6), l8)) {
             *(table::borrow_mut(l6, l8)) = l3
         } else {
             table::add(l6, l8, l3)
@@ -1723,8 +1653,7 @@ public entry fun set_strategies_ok<T0, T1, T2>(l0: &AdminCap, l1: &mut WorkerInf
 public entry fun set_strategy_ok<T0, T1, T2>(l0: &AdminCap, l1: &mut WorkerInfo<T0, T1, T2>, l2: u8, l3: bool) {
     cetus_clmm_worker::checked_package_version(freeze(l1));
     let l5 = &mut l1.ok_strategies;
-    let l4 = l2;
-    if (table::contains(freeze(l5), l4)) {
+    if (table::contains(freeze(l5), l2)) {
         *(table::borrow_mut(l5, l2)) = l3
     } else {
         table::add(l5, l2, l3)
@@ -1915,12 +1844,7 @@ public entry fun work_single<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &m
     cetus_clmm_worker::checked_package_version(freeze(l0));
     emergency::assert_no_emergency(global_storage::borrow_emergency_status(freeze(l1)));
     let l37 = vault::get_position_signer(freeze(l15));
-    let l26 = l14;
-    let l25 = l13;
-    let l24 = l12;
-    let l23 = l4;
-    let l22 = l1;
-    let l35 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l22), freeze(l23), l24, l25, l26);
+    let l35 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l1), freeze(l4), l12, l13, l14);
     let (reg_35, reg_36) = vault::before_work(&l0.position_operator_cap, l1, l2, &l37, l5, cetus_clmm_worker::get_mole_cetus_worker_addr(), l6, l8, l35, l14, l15);
     let l32 = reg_36;
     let l38 = reg_35;
@@ -1931,18 +1855,10 @@ public entry fun work_single<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &m
     let l31 = cetus_clmm_worker::work_inner(l0, l3, l4, l5, l30, l7, l34, l10, l11, l14, l15);
     vault::merge_work_context_coin_back(l39, l31);
     if (l34 > 0u64) {
-        let l16 = l39;
         let l29 = l5;
-        let l28 = l4;
-        let l27 = l0;
-        vault::set_work_context_health(l16, cetus_clmm_worker::health(freeze(l27), freeze(l28), l29))
+        vault::set_work_context_health(l39, cetus_clmm_worker::health(freeze(l0), freeze(l4), l29))
     };
-    let l21 = l14;
-    let l20 = l13;
-    let l19 = l12;
-    let l18 = l4;
-    let l17 = l1;
-    let l36 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l17), freeze(l18), l19, l20, l21);
+    let l36 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l1), freeze(l4), l12, l13, l14);
     let l33 = vault::after_work(&l0.position_operator_cap, l1, l2, &l37, l38, l9, l36, l14, l15);
     coin::join(&mut l32, l33);
     if (coin::value(&l32) == 0u64) {
@@ -1956,12 +1872,7 @@ public entry fun work_single_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>
     cetus_clmm_worker::checked_package_version(freeze(l0));
     emergency::assert_no_emergency(global_storage::borrow_emergency_status(freeze(l1)));
     let l37 = vault::get_position_signer(freeze(l15));
-    let l26 = l14;
-    let l25 = l13;
-    let l24 = l12;
-    let l23 = l4;
-    let l22 = l1;
-    let l35 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l22), freeze(l23), l24, l25, l26);
+    let l35 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l1), freeze(l4), l12, l13, l14);
     let (reg_35, reg_36) = vault::before_work(&l0.position_operator_cap, l1, l2, &l37, l5, cetus_clmm_worker::get_mole_cetus_worker_addr(), l6, l8, l35, l14, l15);
     let l32 = reg_36;
     let l38 = reg_35;
@@ -1972,18 +1883,10 @@ public entry fun work_single_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>
     let l31 = cetus_clmm_worker::work_inner_reverse(l0, l3, l4, l5, l30, l7, l34, l10, l11, l14, l15);
     vault::merge_work_context_coin_back(l39, l31);
     if (l34 > 0u64) {
-        let l16 = l39;
         let l29 = l5;
-        let l28 = l4;
-        let l27 = l0;
-        vault::set_work_context_health(l16, cetus_clmm_worker::health_reverse(freeze(l27), freeze(l28), l29))
+        vault::set_work_context_health(l39, cetus_clmm_worker::health_reverse(freeze(l0), freeze(l4), l29))
     };
-    let l21 = l14;
-    let l20 = l13;
-    let l19 = l12;
-    let l18 = l4;
-    let l17 = l1;
-    let l36 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l17), freeze(l18), l19, l20, l21);
+    let l36 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l1), freeze(l4), l12, l13, l14);
     let l33 = vault::after_work(&l0.position_operator_cap, l1, l2, &l37, l38, l9, l36, l14, l15);
     coin::join(&mut l32, l33);
     if (coin::value(&l32) == 0u64) {

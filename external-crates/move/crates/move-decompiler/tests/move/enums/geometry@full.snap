@@ -37,8 +37,7 @@ public fun get_area(l0: Shape): u64 {
 
 public fun get_square_side(l0: &Shape): u64 {
     let l2 = l0;
-    let l1 = l2;
-    match (l1) {
+    match (l2) {
         Square { side: reg_7 } => {
             let Shape::Square { side: reg_9 } = &l2;
             return *reg_9 : &u64
@@ -51,8 +50,7 @@ public fun get_square_side(l0: &Shape): u64 {
 
 public fun get_triangle_size(l0: &Shape): ( u64, u64) {
     let l3 = l0;
-    let l2 = l3;
-    match (l2) {
+    match (l3) {
         Square => {
             abort C0
         },

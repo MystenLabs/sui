@@ -52,8 +52,7 @@ public fun increase_speed(l0: &mut Action, l1: u64) {
 public fun speed(l0: &Action): u64 {
     let l1;
     let l3 = l0;
-    let l2 = l3;
-    match (l2) {
+    match (l3) {
         Stop => {
             abort 0u64
         },
