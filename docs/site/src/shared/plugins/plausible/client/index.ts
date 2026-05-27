@@ -56,6 +56,7 @@ export async function onRouteDidUpdate({ location }: { location: Location }) {
         apiHost: opts.apiHost,
         hashMode: !!opts.hashMode,
         trackLocalhost: !!opts.trackLocalhost,
+        autoCapturePageviews: false,
       });
       if (instance) {
         (window as any).__plausible_instance__ = instance;
