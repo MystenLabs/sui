@@ -23,6 +23,7 @@ mod remove_trailing_continue;
 mod remove_trailing_return;
 mod simplify_borrow_deref;
 mod simplify_if;
+mod simplify_zero_compare;
 mod strip_loop_labels;
 mod swap_continue_break;
 mod swap_continue_break_else;
@@ -50,6 +51,7 @@ const REFINEMENTS: &[Refinement] = &[
     remove_trailing_continue::refine,
     remove_trailing_return::refine,
     simplify_borrow_deref::refine,
+    simplify_zero_compare::refine,
     negate_comparison::refine,
     simplify_if::refine,
     bool_if_simplify::refine,
