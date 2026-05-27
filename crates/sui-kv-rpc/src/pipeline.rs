@@ -5,57 +5,25 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
 use std::task::Poll;
 
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream;
 use futures::stream::BoxStream;
+use sui_futures::task::TaskGuard;
 use sui_rpc_api::RpcError;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::sync::mpsc;
 use tokio::task::JoinError;
-use tokio::task::JoinHandle;
 
 // Re-export so handler-layer code can spell the marker type without
 // directly importing from sui-inverted-index. The pipeline shape lives
 // in this module; sui-inverted-index just happens to define the carrier
 // type the bitmap eval already produces.
 pub(crate) use sui_inverted_index::Watermarked;
-
-/// Wraps a spawned task's `JoinHandle` so dropping the wrapper aborts the
-/// task — releasing any BigTable permit or drainer slot the task holds —
-/// while still allowing the handle to be awaited to surface a panic. Mirrors
-/// the pattern in `sui-kvstore`'s bigtable client (`AbortOnDrop`).
-struct AbortOnDrop<T> {
-    handle: JoinHandle<T>,
-}
-
-impl<T> AbortOnDrop<T> {
-    fn new(handle: JoinHandle<T>) -> Self {
-        Self { handle }
-    }
-}
-
-impl<T> Future for AbortOnDrop<T> {
-    type Output = Result<T, JoinError>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.get_mut().handle).poll(cx)
-    }
-}
-
-impl<T> Drop for AbortOnDrop<T> {
-    fn drop(&mut self) {
-        self.handle.abort();
-    }
-}
-
-impl<T> Unpin for AbortOnDrop<T> {}
 
 /// One ordered frame handed from the [`pipelined_chunks`] dispatcher task to
 /// its consumer. `Items` carries a live row receiver (filled by a spawned
@@ -65,7 +33,7 @@ impl<T> Unpin for AbortOnDrop<T> {}
 enum FrameHandle<O, E> {
     Items {
         rx: mpsc::UnboundedReceiver<Result<O, E>>,
-        drain: AbortOnDrop<()>,
+        drain: TaskGuard<()>,
         _slot: OwnedSemaphorePermit,
     },
     Watermark(u64),
@@ -207,7 +175,7 @@ where
                         });
                         FrameHandle::Items {
                             rx: row_rx,
-                            drain: AbortOnDrop::new(drain),
+                            drain: TaskGuard::new(drain),
                             _slot: slot,
                         }
                     }
@@ -230,7 +198,7 @@ where
 
     // Built BEFORE the generator and moved in, so dropping the returned stream
     // (even unpolled) drops the guard and tears the dispatcher down.
-    let dispatcher_guard = AbortOnDrop::new(dispatcher);
+    let dispatcher_guard = TaskGuard::new(dispatcher);
 
     async_stream::try_stream! {
         let dispatcher_guard = dispatcher_guard;
@@ -1437,7 +1405,7 @@ mod tests {
         // With N>1 and a consumer that never pulls, the eager dispatcher spawns
         // drainers for queued frames ahead of consumption — each acquires a
         // BigTable permit. Dropping the output must abort those queued drainers
-        // (via their FrameHandle's AbortOnDrop) and release their permits.
+        // (via their FrameHandle's TaskGuard) and release their permits.
         let upstream = ok_items(0..4u64);
         let limiter = Arc::new(Semaphore::new(4));
 
