@@ -37,7 +37,7 @@ pub struct RandomnessSignatureMessage {
 }
 
 const SIGNATURES_BROADCAST_CAPACITY: usize = 1000;
-const AUXILIARY_DATA_CHANNEL_SIZE: usize = 1000;
+const CONSENSUS_SIGNATURES_CHANNEL_SIZE: usize = 1000;
 const EXECUTED_ROUNDS_CACHE_CAPACITY: usize = 1000;
 
 pub struct RandomnessRoundReceiverHandle {
@@ -136,7 +136,7 @@ impl RandomnessRoundReceiver {
         let (consensus_signatures_tx, consensus_signatures_rx) =
             mysten_metrics::monitored_mpsc::channel(
                 "consensus_randomness_round_signatures",
-                AUXILIARY_DATA_CHANNEL_SIZE,
+                CONSENSUS_SIGNATURES_CHANNEL_SIZE,
             );
         let (vss_pk_tx, vss_pk_rx) = watch::channel(None);
         let executed_consensus_rounds = Arc::new(Mutex::new(BTreeSet::new()));
