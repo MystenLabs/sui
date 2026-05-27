@@ -541,7 +541,72 @@ suiStackSidebar: [
           href: 'https://seal-docs.wal.app',
         },
         'sui-stack/seal/sui-stack-seal',
-        'sui-stack/seal/sui-chat-app',
+        {
+          type: 'link',
+          label: 'Messaging SDK Chat App Example →',
+          href: '/sui-stack/messaging/chat-app',
+        },
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Messaging SDK',
+      link: { type: 'doc', id: 'sui-stack/messaging/index' },
+      items: [
+        {
+          type: 'category',
+          label: 'Getting Started',
+          collapsed: true,
+          items: [
+            'sui-stack/messaging/installation',
+            'sui-stack/messaging/setup',
+            'sui-stack/messaging/examples',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Architecture',
+          collapsed: true,
+          items: [
+            'sui-stack/messaging/encryption',
+            'sui-stack/messaging/security',
+            'sui-stack/messaging/relayer',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Guides',
+          collapsed: true,
+          items: [
+            'sui-stack/messaging/attachments',
+            'sui-stack/messaging/archive-recovery',
+            'sui-stack/messaging/group-discovery',
+            'sui-stack/messaging/extending',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Reference',
+          collapsed: true,
+          items: [
+            'sui-stack/messaging/api-reference',
+            'sui-stack/messaging/testing',
+            'sui-stack/messaging/community-contributed',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Examples',
+          collapsed: true,
+          items: [
+            'sui-stack/messaging/chat-app',
+          ],
+        },
+        {
+          type: 'link',
+          label: 'GitHub Repo',
+          href: 'https://github.com/MystenLabs/sui-stack-messaging',
+        },
       ],
     },
     {

@@ -36,6 +36,7 @@ src/static/awesome-sui-gaming/
 static/awesome-sui/
 
 scripts/.cache/
+.cache-external-docs/
 
 ## Subtrees
 ../docs/subtree/
