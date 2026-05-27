@@ -27,15 +27,12 @@ impl Refine for SimplifyBorrowDeref {
         else {
             return false;
         };
-        if args.len() != 1 {
+        let [Exp::Borrow(_, _)] = args.as_slice() else {
             return false;
-        }
-        if !matches!(&args[0], Exp::Borrow(_, _)) {
-            return false;
-        }
-        // Pull the inner expression out of the borrow and replace the whole node.
-        let Exp::Borrow(_, inner) = args.pop().unwrap() else {
-            unreachable!("matched above")
+        };
+        // Owned destructure: the slice pattern above guarantees one Borrow arg.
+        let Some(Exp::Borrow(_, inner)) = args.pop() else {
+            unreachable!()
         };
         *exp = *inner;
         true
