@@ -340,6 +340,7 @@ pub(crate) async fn make_authority(
         commit_consumer,
         registry,
         boot_counter,
+        None,
     )
     .await;
 
