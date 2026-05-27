@@ -1,0 +1,21 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+assertion_line: 72
+---
+module simplify_borrow_deref {
+    public fun deref_in_guard () {
+        return         if (l0) {
+1u64        } else {
+0u64        }
+
+    }
+
+    public fun deref_local () {
+        return l0
+    }
+
+    public fun deref_local_mut () {
+        return l0
+    }
+
+}
