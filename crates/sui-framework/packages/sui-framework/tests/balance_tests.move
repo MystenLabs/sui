@@ -104,7 +104,7 @@ fun object_owned_balance() {
 
     scenario.next_tx(@0x1);
     let accumulator = scenario.take_shared<AccumulatorRoot>();
-    let accumulator_address = accumulator.id.to_address();
+    let accumulator_address = accumulator.id().to_address();
     balance::create_for_testing<SUI>(1000).send_funds(accumulator_address);
     assert!(balance::settled_funds_value<SUI>(&accumulator, accumulator_address) == 1000);
     test_scenario::return_shared(accumulator);
