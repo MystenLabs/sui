@@ -357,6 +357,7 @@ const config = {
       "data-mcp-enabled": "true",
       "data-mcp-server-url": "https://sui.mcp.kapa.ai",
       "data-mcp-button-text": "Use Sui MCP Server",
+      "data-chat-disclaimer": "**New:** Install [Sui Agent Skills](https://docs.sui.io/skills) to supercharge your AI coding agent with Sui expertise.",
       async: true,
     },
   ],
@@ -381,6 +382,12 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
+      announcementBar: {
+        id: "skills_launch",
+        content:
+          'New: <a href="/skills">Sui Agent Skills</a> — drop pre-built skills into Claude Code, Cursor, Codex, and other AI coding agents.',
+        isCloseable: true,
+      },
       image: "img/sui-doc-og.png",
       mermaid: {
         theme: {
