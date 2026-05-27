@@ -9,6 +9,7 @@ mod fuse_let;
 mod hoist_arm_assignments;
 mod hoist_dual_continue;
 mod hoist_tail_continue;
+mod inline_single_use_bindings;
 mod introduce_while;
 mod liveness;
 mod loop_to_seq;
@@ -48,6 +49,7 @@ const REFINEMENTS: &[Refinement] = &[
     swap_continue_break::refine,
     swap_continue_break_else::refine,
     swap_continue_fallthrough::refine,
+    inline_single_use_bindings::refine,
 ];
 
 // -------------------------------------------------------------------------------------------------

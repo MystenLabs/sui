@@ -13,10 +13,7 @@ module geometry {
             },
             Shape::Triangle { base: reg_11, height: reg_12 } => {
                 let Shape::Triangle { base: reg_14, height: reg_15 } = l4;
-                let l2 = reg_15 : u64;
-                let l5 = reg_14 : u64;
-                let l6 = l2;
-                l5 * l6 / 2u64
+                reg_14 : u64 * reg_15 : u64 / 2u64
             },
         };
         return l1
@@ -45,10 +42,7 @@ module geometry {
             },
             Shape::Triangle { base: reg_7, height: reg_8 } => {
                 let Shape::Triangle { base: reg_10, height: reg_11 } = &l3;
-                let l1 = reg_11 : &u64;
-                let l4 = reg_10 : &u64;
-                let l5 = l1;
-                return                 *l4                *l5
+                return                 *reg_10 : &u64                *reg_11 : &u64
             },
         }
     }
@@ -59,8 +53,7 @@ module geometry {
         match(l2: Shape) {
             Shape::Square { side: reg_8 } => {
                 let Shape::Square { side: reg_10 } = &mut l3;
-                let l4 = reg_10 : &mut u64;
-                *l4 = l1
+                *reg_10 : &mut u64 = l1
                 return 
             },
             Shape::Triangle => {
@@ -78,11 +71,8 @@ module geometry {
             },
             Shape::Triangle { base: reg_8, height: reg_9 } => {
                 let Shape::Triangle { base: reg_11, height: reg_12 } = &mut l5;
-                let l3 = reg_12 : &mut u64;
-                let l6 = reg_11 : &mut u64;
-                let l7 = l3;
-                *l6 = l1
-                *l7 = l2
+                *reg_11 : &mut u64 = l1
+                *reg_12 : &mut u64 = l2
                 return 
             },
         }

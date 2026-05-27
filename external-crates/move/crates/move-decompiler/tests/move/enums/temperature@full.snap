@@ -36,8 +36,7 @@ public fun f(): Temperature {
 }
 
 public fun is_temperature_fahrenheit(l0: &Temperature): bool {
-    let l2 = l0;
-    let l1 = match (l2) {
+    let l1 = match (l0) {
         Fahrenheit { pos0: reg_3 } => {
             true
         },
