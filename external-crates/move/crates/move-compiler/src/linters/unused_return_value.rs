@@ -9,7 +9,7 @@ use crate::{
     cfgir::{
         CFGContext,
         absint::{BlockStates, JoinResult},
-        cfg::{CFG, ImmForwardCFG},
+        cfg::ImmForwardCFG,
         visitor::{
             LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
         },
@@ -19,8 +19,8 @@ use crate::{
     editions::Flavor,
     hlir::{
         ast::{
-            BaseType_, Command, Command_, LValue, LValue_, Label, ModuleCall, SingleType,
-            SingleType_, Type, Type_, Var,
+            BaseType_, Command, Command_, Exp, LValue, LValue_, Label, ModuleCall, SingleType,
+            SingleType_, Type, Type_, UnannotatedExp_, Var,
         },
         translate::{DisplayVar, display_var},
     },
@@ -29,29 +29,23 @@ use crate::{
     sui_mode::{SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME},
 };
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 pub struct UnusedReturnValue;
 
 pub struct UnusedReturnValueAI {
     is_sui: bool,
-    return_blocks: BTreeSet<Label>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ValueId {
-    block: Label,
-    cmd_idx: usize,
-    var: Symbol,
-}
+/// Function unique index derived from the block label + command index within the block
+pub type CommandIndex = (Label, usize);
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Value {
     /// Pure-call result not yet bound to a named local.
     Fresh(Loc),
     /// Bound to one or more named locals; `id -> originating call loc`. Joins union the maps.
-    Bound(BTreeMap<ValueId, Loc>),
+    Bound(BTreeMap<CommandIndex, Loc>),
     #[default]
     Other,
 }
@@ -63,7 +57,7 @@ pub struct State {
 
 pub struct ExecutionContext {
     diags: Diagnostics,
-    location: (Label, usize),
+    current_command: (Label, usize),
 }
 
 impl SimpleAbsIntConstructor for UnusedReturnValue {
@@ -71,7 +65,7 @@ impl SimpleAbsIntConstructor for UnusedReturnValue {
 
     fn new<'a>(
         context: &'a CFGContext<'a>,
-        cfg: &ImmForwardCFG,
+        _cfg: &ImmForwardCFG,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {
         if context.attributes.is_test_or_test_only()
@@ -84,19 +78,7 @@ impl SimpleAbsIntConstructor for UnusedReturnValue {
             return None;
         }
         let is_sui = context.env.package_config(context.package).flavor == Flavor::Sui;
-        let return_blocks = cfg
-            .block_labels()
-            .filter(|lbl| {
-                matches!(
-                    cfg.commands(*lbl).last(),
-                    Some((_, sp!(_, Command_::Return { .. })))
-                )
-            })
-            .collect();
-        Some(UnusedReturnValueAI {
-            is_sui,
-            return_blocks,
-        })
+        Some(UnusedReturnValueAI { is_sui })
     }
 }
 
@@ -106,55 +88,16 @@ impl SimpleAbsInt for UnusedReturnValueAI {
 
     fn finish(
         &mut self,
-        final_states: BTreeMap<Label, BlockStates<State>>,
-        mut diags: Diagnostics,
+        _final_states: BTreeMap<Label, BlockStates<State>>,
+        diags: Diagnostics,
     ) -> Diagnostics {
-        if self.return_blocks.is_empty() {
-            return diags;
-        }
-        let per_return: Vec<BTreeMap<ValueId, Loc>> = self
-            .return_blocks
-            .iter()
-            .filter_map(|lbl| {
-                let post = final_states.get(lbl)?.post.as_ref()?;
-                let mut m = BTreeMap::new();
-                for ls in post.locals.values() {
-                    if let LocalState::Available(_, v) = ls {
-                        let ids = match v {
-                            Value::Bound(ids) => ids,
-                            Value::Fresh(_) => {
-                                debug_assert!(false, "should never store a fresh value in a local");
-                                continue;
-                            }
-                            Value::Other => continue,
-                        };
-                        m.extend(ids);
-                    }
-                }
-                if m.is_empty() { None } else { Some(m) }
-            })
-            .collect();
-        if per_return.is_empty() {
-            return diags;
-        }
-        // intersect the unused from each return block
-        let mut iter = per_return.into_iter();
-        let mut unused = iter.next().unwrap();
-        for m in iter {
-            unused.retain(|id, _| m.contains_key(id));
-        }
-
-        // report an error for each unused value
-        for (_id, loc) in unused {
-            diags.add(unused_return_value_warning(loc));
-        }
         diags
     }
 
     fn start_command(&self, label: Label, idx: usize, _: &mut State) -> ExecutionContext {
         ExecutionContext {
             diags: Diagnostics::new(),
-            location: (label, idx),
+            current_command: (label, idx),
         }
     }
 
@@ -178,13 +121,45 @@ impl SimpleAbsInt for UnusedReturnValueAI {
         let Command_::IgnoreAndPop { exp, .. } = &cmd.value else {
             return false;
         };
+        // Report any popped, unused value. Collecting based on call sites
         let values = self.exp(context, state, exp);
+        let mut sites = BTreeMap::new();
         for v in values {
-            if let Value::Fresh(call_loc) = v {
-                context.add_diag(unused_return_value_warning(call_loc));
+            match v {
+                Value::Fresh(call_loc) => {
+                    sites.insert(context.current_command, call_loc);
+                }
+                Value::Bound(v_sites) => {
+                    sites.extend(v_sites);
+                }
+                Value::Other => (),
             }
         }
-        true
+        for loc in sites.into_values() {
+            context.add_diag(unused_return_value_warning(loc));
+        }
+        false
+    }
+
+    fn exp_custom(
+        &self,
+        _context: &mut ExecutionContext,
+        state: &mut State,
+        e: &Exp,
+    ) -> Option<Vec<Value>> {
+        // If the local is copied or borrowed, this will not free the value, but does mean that
+        // the value is now "used". We can update the value as being used to prevent any
+        // erroneous error reporting... though this likely will never happen
+        let var = match &e.exp.value {
+            UnannotatedExp_::Copy { var, .. } | UnannotatedExp_::BorrowLocal(_, var) => var,
+            _ => return None,
+        };
+        if state.locals().get(var).is_some() {
+            state
+                .locals_mut()
+                .insert(*var, LocalState::Available(e.exp.loc, Value::Other));
+        }
+        None
     }
 
     fn call_custom(
@@ -230,13 +205,7 @@ impl SimpleAbsInt for UnusedReturnValueAI {
             // The compiler already generates warnings for unused locals.
             _ if matches!(display_var, DisplayVar::Orig(_)) => Value::Other,
             Value::Fresh(call_loc) => {
-                let (block, cmd_idx) = context.location;
-                let id = ValueId {
-                    block,
-                    cmd_idx,
-                    var: var.0.value,
-                };
-                Value::Bound(BTreeMap::from([(id, *call_loc)]))
+                Value::Bound(BTreeMap::from([(context.current_command, *call_loc)]))
             }
             Value::Bound(_) | Value::Other => value.clone(),
         };
@@ -264,16 +233,19 @@ impl SimpleDomain for State {
 
     fn join_value(v1: &Value, v2: &Value) -> Value {
         match (v1, v2) {
+            (Value::Fresh(_), v) | (v, Value::Fresh(_)) => {
+                debug_assert!(
+                    false,
+                    "A fresh value should never reach the end of the block"
+                );
+                v.clone()
+            }
+            (Value::Other, v) | (v, Value::Other) => v.clone(),
             (Value::Bound(m1), Value::Bound(m2)) => {
                 let mut m = m1.clone();
-                for (id, loc) in m2 {
-                    m.insert(*id, *loc);
-                }
+                m.extend(m2);
                 Value::Bound(m)
             }
-            // One side lost tracking - drop. `MaybeUnavailable` from the framework's
-            // `LocalState` join still hides consumed-on-one-branch values from `finish`.
-            _ => Value::Other,
         }
     }
 

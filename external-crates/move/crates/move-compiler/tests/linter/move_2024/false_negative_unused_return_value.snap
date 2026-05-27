@@ -5,10 +5,4 @@ info:
   edition: 2024.alpha
   lint: true
 ---
-warning[W09003]: unused assignment
-   ┌─ tests/linter/move_2024/false_negative_unused_return_value.move:16:9
-   │
-16 │     let mut x = pure(1); // no warn: x is later overwritten before being used
-   │         ^^^^^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
-   │
-   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
