@@ -13,7 +13,7 @@ module bool_if_simplify {
     }
 
     public fun neg () {
-        let l1 = !(l0 == 0u64);
+        let l1 = l0 != 0u64;
         return l1
     }
 

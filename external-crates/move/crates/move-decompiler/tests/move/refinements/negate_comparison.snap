@@ -1,0 +1,29 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module negate_comparison {
+    public fun not_eq () {
+        return l0 != l1
+    }
+
+    public fun not_ge () {
+        return l0 < l1
+    }
+
+    public fun not_gt () {
+        return l0 <= l1
+    }
+
+    public fun not_le () {
+        return l0 > l1
+    }
+
+    public fun not_lt () {
+        return l0 >= l1
+    }
+
+    public fun not_neq () {
+        return l0 == l1
+    }
+
+}

@@ -18,7 +18,7 @@ public fun ident(l0: u64): bool {
 }
 
 public fun neg(l0: u64): bool {
-    let l1 = !(l0 == 0u64);
+    let l1 = l0 != 0u64;
     return l1
 }
 
