@@ -18,7 +18,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use sui_config::transaction_deny_config::{
-    PeerDenySyncConfig, SharedDenyRuleThreshold, SharedDenyRuleset, ValidatorEligibility,
+    DefaultDenyBucket, DenyElementKind, PeerDenySyncConfig, SharedDenyRuleThreshold,
+    SharedDenyRuleset, ValidatorEligibility,
 };
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
@@ -66,6 +67,22 @@ fn prelisted(
     SharedDenyRuleset {
         name: name.to_string(),
         rules,
+        threshold: SharedDenyRuleThreshold {
+            eligibility,
+            stake_threshold_percent: threshold_percent,
+        },
+    }
+}
+
+fn default_bucket(
+    name: &str,
+    kinds: &[DenyElementKind],
+    eligibility: ValidatorEligibility,
+    threshold_percent: u16,
+) -> DefaultDenyBucket {
+    DefaultDenyBucket {
+        name: name.to_string(),
+        element_kinds: kinds.iter().copied().collect(),
         threshold: SharedDenyRuleThreshold {
             eligibility,
             stake_threshold_percent: threshold_percent,
@@ -209,6 +226,16 @@ fn effective_denies_obj(handle: &SuiNodeHandle, id: ObjectID) -> bool {
             .load()
             .get_object_deny_set()
             .contains(&id)
+    })
+}
+
+fn effective_user_transaction_disabled(handle: &SuiNodeHandle) -> bool {
+    handle.with(|node| {
+        node.state()
+            .transaction_deny_config_manager()
+            .effective_config()
+            .load()
+            .user_transaction_disabled()
     })
 }
 
@@ -430,17 +457,19 @@ async fn test_eligibility_filters_votes() {
     assert!(ruleset_is_active(&observer, "deny"));
 }
 
-/// The "default" bucket threshold-gates each proposed rule element independently: a
-/// well-supported element activates while a less-proposed one in the same proposals
-/// does not.
+/// A default bucket threshold-gates each proposed rule element of one of its
+/// `element_kinds` independently: a well-supported element activates while a
+/// less-proposed one in the same proposals does not.
 #[sim_test]
 async fn test_default_per_element_voting() {
     let _guard = enable_protocol_flags();
     let cluster = build_cluster(|_me, _all| PeerDenySyncConfig {
-        default_threshold: Some(SharedDenyRuleThreshold {
-            eligibility: all_eligible(),
-            stake_threshold_percent: 60,
-        }),
+        default_buckets: vec![default_bucket(
+            "objs",
+            &[DenyElementKind::Object],
+            all_eligible(),
+            60,
+        )],
         ..Default::default()
     })
     .await;
@@ -463,7 +492,7 @@ async fn test_default_per_element_voting() {
     ));
 }
 
-/// A rule element counts toward both its pre-listed ruleset and the default bucket
+/// A rule element counts toward both its pre-listed ruleset and a default bucket
 /// independently. Here the pre-listed ruleset's threshold is unreachable, but the
 /// default bucket still applies the element.
 #[sim_test]
@@ -477,10 +506,12 @@ async fn test_element_counts_for_both_prelisted_and_default() {
             // 90% is unreachable with only 3/4 validators voting (7500 < 9000).
             90,
         )],
-        default_threshold: Some(SharedDenyRuleThreshold {
-            eligibility: all_eligible(),
-            stake_threshold_percent: 50,
-        }),
+        default_buckets: vec![default_bucket(
+            "objs",
+            &[DenyElementKind::Object],
+            all_eligible(),
+            50,
+        )],
         ..Default::default()
     })
     .await;
@@ -497,6 +528,48 @@ async fn test_element_counts_for_both_prelisted_and_default() {
         observer,
         ObjectID::from_single_byte(1)
     ));
+}
+
+/// Two default buckets with different thresholds operate independently: the lower
+/// bucket activates when stake crosses its bar; the higher bucket does not, even
+/// though every validator's proposal contains an element of the higher bucket's kind.
+/// In particular `UserTransactionDisabled` placed in a high-threshold bucket can be
+/// kept off even with majority votes, while object deny-list entries in a
+/// low-threshold bucket activate as usual.
+#[sim_test]
+async fn test_default_buckets_segregate_kinds() {
+    let _guard = enable_protocol_flags();
+    let cluster = build_cluster(|_me, _all| PeerDenySyncConfig {
+        default_buckets: vec![
+            default_bucket("objs", &[DenyElementKind::Object], all_eligible(), 60),
+            default_bucket(
+                "kill-switches",
+                &[DenyElementKind::UserTransactionDisabled],
+                all_eligible(),
+                90,
+            ),
+        ],
+        ..Default::default()
+    })
+    .await;
+    let handles = cluster.all_validator_handles();
+    let observer = &handles[3];
+
+    let proposal = TransactionDenyRules {
+        object_deny_list: [ObjectID::from_single_byte(1)].into_iter().collect(),
+        user_transaction_disabled: true,
+        ..Default::default()
+    };
+    // 3/4 validators broadcast — 7500 stake = 75%. Above the 60% obj bucket but
+    // below the 90% kill-switch bucket.
+    for h in handles.iter().take(3) {
+        broadcast_and_wait(&handles, h, Some(proposal.clone())).await;
+    }
+    assert!(effective_denies_obj(
+        observer,
+        ObjectID::from_single_byte(1)
+    ));
+    assert!(!effective_user_transaction_disabled(observer));
 }
 
 /// A validator's own broadcast loops back through consensus and counts toward its own

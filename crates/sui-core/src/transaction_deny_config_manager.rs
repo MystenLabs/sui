@@ -27,7 +27,7 @@ use prometheus::{
     IntGauge, IntGaugeVec, Registry, register_int_gauge_vec_with_registry,
     register_int_gauge_with_registry,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use sui_config::transaction_deny_config::{
     PeerDenySyncConfig, TransactionDenyConfig, ValidatorEligibility,
@@ -37,7 +37,7 @@ use sui_types::base_types::ConciseableName;
 use sui_types::committee::{Committee, StakeUnit, TOTAL_VOTING_POWER};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::SharedTransactionDenyConfig;
-use sui_types::transaction_deny_rules::{DenyElement, TransactionDenyRules};
+use sui_types::transaction_deny_rules::{DenyElement, DenyElementKind, TransactionDenyRules};
 use tracing::{debug, info};
 use typed_store::Map;
 
@@ -100,7 +100,7 @@ impl TransactionDenyConfigManager {
 
         info!(
             rulesets = sync_config.rulesets.len(),
-            has_default = sync_config.default_threshold.is_some(),
+            default_buckets = sync_config.default_buckets.len(),
             seeded_proposals = peer_configs.len(),
             "TransactionDenyConfigManager initialized",
         );
@@ -169,15 +169,18 @@ impl TransactionDenyConfigManager {
         if msgs.is_empty() {
             return Ok(());
         }
-        let committee = self.committee.load();
         let (evaluation, active_proposals) = {
             let mut peer_configs = self.peer_configs.lock();
+            // Load the committee inside the critical section so this batch is validated
+            // and evaluated against a single committee snapshot — even if
+            // `update_for_committee` is concurrently swapping the committee.
+            let committee = self.committee.load();
             let mut accepted = false;
             for msg in msgs {
                 let authority = msg.authority();
                 let generation = msg.generation();
                 if !committee.authority_exists(&authority) {
-                    debug!(
+                    info!(
                         authority = %authority.concise(),
                         "Dropping UpdateTransactionDenyConfig: sender not in committee",
                     );
@@ -228,9 +231,12 @@ impl TransactionDenyConfigManager {
     /// since the stake distribution may have shifted even with no departures. Called at
     /// epoch transitions and at startup.
     pub fn update_for_committee(&self, committee: Arc<Committee>) -> SuiResult<()> {
-        self.committee.store(committee.clone());
         let (evaluation, active_proposals) = {
             let mut peer_configs = self.peer_configs.lock();
+            // Swap the committee inside the critical section so any concurrent
+            // `apply_updates` either sees the old committee with the old peer set or
+            // the new committee with the pruned peer set — never a mismatched pair.
+            self.committee.store(committee.clone());
             let to_remove: Vec<AuthorityName> = peer_configs
                 .keys()
                 .filter(|name| !committee.authority_exists(name))
@@ -360,6 +366,8 @@ pub struct PrelistedRulesetStatus {
 }
 
 pub struct DefaultBucketStatus {
+    pub name: String,
+    pub element_kinds: BTreeSet<DenyElementKind>,
     pub stake_threshold_percent: u16,
     pub eligible_stake: StakeUnit,
     pub applied_elements: Vec<DenyElement>,
@@ -371,7 +379,7 @@ pub struct DenyConfigEvaluation {
     /// this is the config to enforce, not a delta.
     pub effective_rules: TransactionDenyRules,
     pub prelisted: Vec<PrelistedRulesetStatus>,
-    pub default: Option<DefaultBucketStatus>,
+    pub defaults: Vec<DefaultBucketStatus>,
 }
 
 /// Returns true if `voted` is at least `percent`% of `eligible` stake.
@@ -410,9 +418,9 @@ fn eligible_stake(
 ///
 /// Each pre-listed ruleset is evaluated independently — a proposal counts as a vote for
 /// *every* pre-listed ruleset whose rules it is a superset of (including
-/// nested/overlapping rulesets). The "default" bucket considers every element of every
-/// eligible proposal, regardless of whether that element also belongs to a pre-listed
-/// ruleset.
+/// nested/overlapping rulesets). Each default bucket considers proposed elements
+/// whose `DenyElementKind` it claims, threshold-gating them individually. Element kinds
+/// not claimed by any bucket cannot be activated through the default path.
 pub fn evaluate_deny_configs(
     local_rules: &TransactionDenyRules,
     sync_config: &PeerDenySyncConfig,
@@ -452,33 +460,63 @@ pub fn evaluate_deny_configs(
         })
         .collect();
 
-    let default = sync_config.default_threshold.as_ref().map(|threshold| {
-        let eligible_stake = eligible_stake(&threshold.eligibility, stakes);
-        let mut element_stake: BTreeMap<DenyElement, StakeUnit> = BTreeMap::new();
-        for (name, rules) in votes {
-            if !threshold.eligibility.is_eligible(name) {
-                continue;
-            }
-            let Some(stake) = stakes.get(name) else {
+    // Build a kind → bucket-index lookup once. `validate()` guarantees each kind
+    // appears in at most one bucket.
+    let kind_to_bucket: BTreeMap<DenyElementKind, usize> = sync_config
+        .default_buckets
+        .iter()
+        .enumerate()
+        .flat_map(|(idx, bucket)| bucket.element_kinds.iter().map(move |k| (*k, idx)))
+        .collect();
+
+    // For each bucket, accumulate per-element stake from voters eligible for that
+    // bucket. Initialize one entry per bucket so the parallel index lookup is safe.
+    let mut per_bucket_element_stake: Vec<BTreeMap<DenyElement, StakeUnit>> =
+        vec![BTreeMap::new(); sync_config.default_buckets.len()];
+    for (name, rules) in votes {
+        let Some(stake) = stakes.get(name) else {
+            continue;
+        };
+        for element in rules.elements() {
+            let Some(&bucket_idx) = kind_to_bucket.get(&element.kind()) else {
                 continue;
             };
-            for element in rules.elements() {
-                *element_stake.entry(element).or_default() += *stake;
+            let bucket = &sync_config.default_buckets[bucket_idx];
+            if !bucket.threshold.eligibility.is_eligible(name) {
+                continue;
             }
+            *per_bucket_element_stake[bucket_idx]
+                .entry(element)
+                .or_default() += *stake;
         }
-        let applied_elements: Vec<DenyElement> = element_stake
-            .into_iter()
-            .filter(|(_, stake)| {
-                meets_threshold(*stake, eligible_stake, threshold.stake_threshold_percent)
-            })
-            .map(|(element, _)| element)
-            .collect();
-        DefaultBucketStatus {
-            stake_threshold_percent: threshold.stake_threshold_percent,
-            eligible_stake,
-            applied_elements,
-        }
-    });
+    }
+
+    let defaults: Vec<DefaultBucketStatus> = sync_config
+        .default_buckets
+        .iter()
+        .zip_eq(per_bucket_element_stake)
+        .map(|(bucket, element_stake)| {
+            let eligible_stake = eligible_stake(&bucket.threshold.eligibility, stakes);
+            let applied_elements: Vec<DenyElement> = element_stake
+                .into_iter()
+                .filter(|(_, stake)| {
+                    meets_threshold(
+                        *stake,
+                        eligible_stake,
+                        bucket.threshold.stake_threshold_percent,
+                    )
+                })
+                .map(|(element, _)| element)
+                .collect();
+            DefaultBucketStatus {
+                name: bucket.name.clone(),
+                element_kinds: bucket.element_kinds.clone(),
+                stake_threshold_percent: bucket.threshold.stake_threshold_percent,
+                eligible_stake,
+                applied_elements,
+            }
+        })
+        .collect();
 
     let mut effective_rules = local_rules.clone();
     for (ruleset, status) in sync_config.rulesets.iter().zip_eq(&prelisted) {
@@ -486,7 +524,7 @@ pub fn evaluate_deny_configs(
             effective_rules.merge(&ruleset.rules);
         }
     }
-    if let Some(default) = &default {
+    for default in &defaults {
         for element in &default.applied_elements {
             effective_rules.apply_element(element);
         }
@@ -495,7 +533,7 @@ pub fn evaluate_deny_configs(
     DenyConfigEvaluation {
         effective_rules,
         prelisted,
-        default,
+        defaults,
     }
 }
 
@@ -575,7 +613,8 @@ pub struct TransactionDenyConfigMetrics {
     local: DenyRulesGauges,
     effective: DenyRulesGauges,
     active_proposals: IntGauge,
-    default_applied_elements: IntGauge,
+    default_bucket_applied_elements: IntGaugeVec,
+    default_bucket_eligible_stake: IntGaugeVec,
     shared_config_active: IntGaugeVec,
     shared_config_voted_bps: IntGaugeVec,
     shared_config_eligible_stake: IntGaugeVec,
@@ -598,9 +637,17 @@ impl TransactionDenyConfigMetrics {
                 registry,
             )
             .unwrap(),
-            default_applied_elements: register_int_gauge_with_registry!(
-                "tx_deny_default_applied_elements",
-                "Number of rule elements activated via the default (per-element) bucket",
+            default_bucket_applied_elements: register_int_gauge_vec_with_registry!(
+                "tx_deny_default_bucket_applied_elements",
+                "Number of rule elements activated via this default bucket",
+                &["bucket"],
+                registry,
+            )
+            .unwrap(),
+            default_bucket_eligible_stake: register_int_gauge_vec_with_registry!(
+                "tx_deny_default_bucket_eligible_stake",
+                "Total eligible voting stake (denominator) for this default bucket",
+                &["bucket"],
                 registry,
             )
             .unwrap(),
@@ -651,11 +698,15 @@ impl TransactionDenyConfigMetrics {
                 .set(status.eligible_stake as i64);
         }
 
-        let default_applied = evaluation
-            .default
-            .as_ref()
-            .map_or(0, |d| d.applied_elements.len());
-        self.default_applied_elements.set(default_applied as i64);
+        for default in &evaluation.defaults {
+            let labels = &[default.name.as_str()];
+            self.default_bucket_applied_elements
+                .with_label_values(labels)
+                .set(default.applied_elements.len() as i64);
+            self.default_bucket_eligible_stake
+                .with_label_values(labels)
+                .set(default.eligible_stake as i64);
+        }
     }
 }
 
@@ -672,8 +723,8 @@ mod tests {
     use super::*;
     use fastcrypto::traits::VerifyingKey;
     use sui_config::transaction_deny_config::{
-        SharedDenyRuleThreshold, SharedDenyRuleset, TransactionDenyConfigBuilder,
-        ValidatorEligibility,
+        DefaultDenyBucket, SharedDenyRuleThreshold, SharedDenyRuleset,
+        TransactionDenyConfigBuilder, ValidatorEligibility,
     };
     use sui_types::base_types::{ObjectID, dbg_addr};
     use sui_types::messages_consensus::SharedTransactionDenyConfigV1;
@@ -703,6 +754,22 @@ mod tests {
         SharedDenyRuleset {
             name: name.to_string(),
             rules,
+            threshold: SharedDenyRuleThreshold {
+                eligibility,
+                stake_threshold_percent: threshold,
+            },
+        }
+    }
+
+    fn default_bucket(
+        name: &str,
+        kinds: &[DenyElementKind],
+        eligibility: ValidatorEligibility,
+        threshold: u16,
+    ) -> DefaultDenyBucket {
+        DefaultDenyBucket {
+            name: name.to_string(),
+            element_kinds: kinds.iter().copied().collect(),
             threshold: SharedDenyRuleThreshold {
                 eligibility,
                 stake_threshold_percent: threshold,
@@ -859,10 +926,12 @@ mod tests {
         let stakes = equal_stakes(&names);
         let local = TransactionDenyConfigBuilder::new().build();
         let sync = PeerDenySyncConfig {
-            default_threshold: Some(SharedDenyRuleThreshold {
-                eligibility: ValidatorEligibility::default(),
-                stake_threshold_percent: 50,
-            }),
+            default_buckets: vec![default_bucket(
+                "objs",
+                &[DenyElementKind::Object],
+                ValidatorEligibility::default(),
+                50,
+            )],
             ..Default::default()
         };
 
@@ -883,9 +952,9 @@ mod tests {
                 .object_deny_list
                 .contains(&ObjectID::from_single_byte(2))
         );
-        let default = eval.default.unwrap();
+        assert_eq!(eval.defaults.len(), 1);
         assert_eq!(
-            default.applied_elements,
+            eval.defaults[0].applied_elements,
             vec![DenyElement::Object(ObjectID::from_single_byte(1))]
         );
     }
@@ -899,10 +968,12 @@ mod tests {
         // Pre-listed ruleset `c` requires 90% (unreachable here); default requires 50%.
         let sync = PeerDenySyncConfig {
             rulesets: vec![prelisted("c", rules_with_objects(&[1]), all, 90)],
-            default_threshold: Some(SharedDenyRuleThreshold {
-                eligibility: ValidatorEligibility::default(),
-                stake_threshold_percent: 50,
-            }),
+            default_buckets: vec![default_bucket(
+                "objs",
+                &[DenyElementKind::Object],
+                ValidatorEligibility::default(),
+                50,
+            )],
             ..Default::default()
         };
         // 3/4 propose object 1: pre-listed ruleset `c` stays inactive (below 90%),
@@ -918,6 +989,138 @@ mod tests {
                 .object_deny_list
                 .contains(&ObjectID::from_single_byte(1))
         );
+    }
+
+    #[test]
+    fn evaluate_default_buckets_segregate_by_kind() {
+        // Two buckets with different thresholds. All four validators vote both an
+        // object and `UserTransactionDisabled`. The object kind is in bucket A at
+        // 50% (≤ 75% achieved, activates); the kill-switch kind is in bucket B at
+        // 90% (> 75% achieved, does not activate).
+        let names: Vec<_> = (1..=4).map(fake_name).collect();
+        let stakes = equal_stakes(&names);
+        let local = TransactionDenyConfigBuilder::new().build();
+        let sync = PeerDenySyncConfig {
+            default_buckets: vec![
+                default_bucket(
+                    "objs",
+                    &[DenyElementKind::Object],
+                    ValidatorEligibility::default(),
+                    50,
+                ),
+                default_bucket(
+                    "kill-switches",
+                    &[DenyElementKind::UserTransactionDisabled],
+                    ValidatorEligibility::default(),
+                    90,
+                ),
+            ],
+            ..Default::default()
+        };
+
+        let proposal = TransactionDenyRules {
+            object_deny_list: [ObjectID::from_single_byte(1)].into_iter().collect(),
+            user_transaction_disabled: true,
+            ..Default::default()
+        };
+        let votes: BTreeMap<_, _> = names[..3].iter().map(|n| (*n, proposal.clone())).collect();
+        let eval = evaluate_deny_configs(local.rules(), &sync, &vote_refs(&votes), &stakes);
+
+        assert!(
+            eval.effective_rules
+                .object_deny_list
+                .contains(&ObjectID::from_single_byte(1))
+        );
+        assert!(!eval.effective_rules.user_transaction_disabled);
+        assert_eq!(eval.defaults.len(), 2);
+        assert_eq!(
+            eval.defaults[0].applied_elements,
+            vec![DenyElement::Object(ObjectID::from_single_byte(1))],
+        );
+        assert!(eval.defaults[1].applied_elements.is_empty());
+    }
+
+    #[test]
+    fn evaluate_default_unconfigured_kind_never_applies() {
+        // The lone default bucket covers `Object` only. `UserTransactionDisabled` is
+        // claimed by no bucket, so even unanimous votes leave it inactive.
+        let names: Vec<_> = (1..=4).map(fake_name).collect();
+        let stakes = equal_stakes(&names);
+        let local = TransactionDenyConfigBuilder::new().build();
+        let sync = PeerDenySyncConfig {
+            default_buckets: vec![default_bucket(
+                "objs",
+                &[DenyElementKind::Object],
+                ValidatorEligibility::default(),
+                50,
+            )],
+            ..Default::default()
+        };
+
+        let proposal = TransactionDenyRules {
+            user_transaction_disabled: true,
+            ..Default::default()
+        };
+        let votes: BTreeMap<_, _> = names.iter().map(|n| (*n, proposal.clone())).collect();
+        let eval = evaluate_deny_configs(local.rules(), &sync, &vote_refs(&votes), &stakes);
+
+        assert!(!eval.effective_rules.user_transaction_disabled);
+        assert!(eval.defaults[0].applied_elements.is_empty());
+    }
+
+    #[test]
+    fn evaluate_default_bucket_eligibility_is_per_bucket() {
+        // Two buckets covering disjoint kinds with disjoint eligibility sets.
+        // names[0..2] are eligible for `objs`; names[2..4] for `kill-switches`.
+        // A voter eligible for one bucket but not the other contributes only to the
+        // bucket that lists them.
+        let names: Vec<_> = (1..=4).map(fake_name).collect();
+        let stakes = equal_stakes(&names);
+        let local = TransactionDenyConfigBuilder::new().build();
+        let objs_allowlist = ValidatorEligibility::Allowlist(names[..2].iter().copied().collect());
+        let kill_allowlist = ValidatorEligibility::Allowlist(names[2..].iter().copied().collect());
+        let sync = PeerDenySyncConfig {
+            default_buckets: vec![
+                default_bucket("objs", &[DenyElementKind::Object], objs_allowlist, 50),
+                default_bucket(
+                    "kill-switches",
+                    &[DenyElementKind::UserTransactionDisabled],
+                    kill_allowlist,
+                    50,
+                ),
+            ],
+            ..Default::default()
+        };
+
+        // Every validator proposes both an object and `UserTransactionDisabled`.
+        let proposal = TransactionDenyRules {
+            object_deny_list: [ObjectID::from_single_byte(1)].into_iter().collect(),
+            user_transaction_disabled: true,
+            ..Default::default()
+        };
+        let votes: BTreeMap<_, _> = names.iter().map(|n| (*n, proposal.clone())).collect();
+        let eval = evaluate_deny_configs(local.rules(), &sync, &vote_refs(&votes), &stakes);
+
+        // Bucket A: only names[0..2] (5000 stake = 100% of eligible) vote for the
+        // object — activates.
+        assert_eq!(eval.defaults[0].eligible_stake, 5000);
+        assert_eq!(
+            eval.defaults[0].applied_elements,
+            vec![DenyElement::Object(ObjectID::from_single_byte(1))],
+        );
+        // Bucket B: only names[2..4] (5000 stake = 100% of eligible) vote for the
+        // kill switch — activates.
+        assert_eq!(eval.defaults[1].eligible_stake, 5000);
+        assert_eq!(
+            eval.defaults[1].applied_elements,
+            vec![DenyElement::UserTransactionDisabled],
+        );
+        assert!(
+            eval.effective_rules
+                .object_deny_list
+                .contains(&ObjectID::from_single_byte(1))
+        );
+        assert!(eval.effective_rules.user_transaction_disabled);
     }
 
     #[test]
@@ -1168,10 +1371,12 @@ mod tests {
         let (committee, names) = test_committee(4);
         let local = TransactionDenyConfigBuilder::new().build();
         let sync = PeerDenySyncConfig {
-            default_threshold: Some(SharedDenyRuleThreshold {
-                eligibility: ValidatorEligibility::default(),
-                stake_threshold_percent: 10,
-            }),
+            default_buckets: vec![default_bucket(
+                "objs",
+                &[DenyElementKind::Object],
+                ValidatorEligibility::default(),
+                10,
+            )],
             ..Default::default()
         };
         let (manager, _dir) = manager_with(names[0], local, sync, committee);

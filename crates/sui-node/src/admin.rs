@@ -770,13 +770,19 @@ async fn transaction_deny_config_dump(State(state): State<Arc<AppState>>) -> (St
         })
         .collect();
 
-    let default_dump = evaluation.default.as_ref().map(|d| {
-        json!({
-            "stake_threshold_percent": d.stake_threshold_percent,
-            "eligible_stake": d.eligible_stake,
-            "applied_elements": d.applied_elements,
+    let defaults_dump: Vec<serde_json::Value> = evaluation
+        .defaults
+        .iter()
+        .map(|d| {
+            json!({
+                "name": d.name,
+                "element_kinds": d.element_kinds,
+                "stake_threshold_percent": d.stake_threshold_percent,
+                "eligible_stake": d.eligible_stake,
+                "applied_elements": d.applied_elements,
+            })
         })
-    });
+        .collect();
 
     let body = json!({
         "local": {
@@ -790,7 +796,7 @@ async fn transaction_deny_config_dump(State(state): State<Arc<AppState>>) -> (St
         },
         "voting": {
             "prelisted": prelisted_dump,
-            "default": default_dump,
+            "defaults": defaults_dump,
         },
     });
 

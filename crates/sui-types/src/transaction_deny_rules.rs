@@ -69,8 +69,8 @@ pub struct TransactionDenyRules {
 
 impl TransactionDenyRules {
     /// Maximum total entry count across all set fields permitted in a single
-    /// peer-broadcast deny rules message. Bounds wire and DB cost.
-    pub const MAX_SHARE_ENTRIES: usize = 10_000;
+    /// peer-broadcast deny rules message.
+    pub const MAX_SHARE_ENTRIES: usize = 5_000;
 
     /// Maximum length, in bytes, of any single zkLogin provider string accepted from
     /// a peer recommendation. Real provider names are short (e.g. "Google", "Apple").
@@ -101,12 +101,12 @@ impl TransactionDenyRules {
     /// `self`. A peer's proposal "votes for" a pre-listed config only when it is a
     /// superset of that config's rules.
     pub fn is_superset_of(&self, other: &Self) -> bool {
-        other.object_deny_list.is_subset(&self.object_deny_list)
-            && other.package_deny_list.is_subset(&self.package_deny_list)
-            && other.address_deny_list.is_subset(&self.address_deny_list)
-            && other
+        self.object_deny_list.is_superset(&other.object_deny_list)
+            && self.package_deny_list.is_superset(&other.package_deny_list)
+            && self.address_deny_list.is_superset(&other.address_deny_list)
+            && self
                 .zklogin_disabled_providers
-                .is_subset(&self.zklogin_disabled_providers)
+                .is_superset(&other.zklogin_disabled_providers)
             && (self.package_publish_disabled || !other.package_publish_disabled)
             && (self.package_upgrade_disabled || !other.package_upgrade_disabled)
             && (self.shared_object_disabled || !other.shared_object_disabled)
@@ -245,6 +245,42 @@ pub enum DenyElement {
     ZkLoginSigDisabled,
 }
 
+impl DenyElement {
+    pub fn kind(&self) -> DenyElementKind {
+        match self {
+            DenyElement::Object(_) => DenyElementKind::Object,
+            DenyElement::Package(_) => DenyElementKind::Package,
+            DenyElement::Address(_) => DenyElementKind::Address,
+            DenyElement::ZkLoginProvider(_) => DenyElementKind::ZkLoginProvider,
+            DenyElement::PackagePublishDisabled => DenyElementKind::PackagePublishDisabled,
+            DenyElement::PackageUpgradeDisabled => DenyElementKind::PackageUpgradeDisabled,
+            DenyElement::SharedObjectDisabled => DenyElementKind::SharedObjectDisabled,
+            DenyElement::UserTransactionDisabled => DenyElementKind::UserTransactionDisabled,
+            DenyElement::GaslessDisabled => DenyElementKind::GaslessDisabled,
+            DenyElement::ReceivingObjectsDisabled => DenyElementKind::ReceivingObjectsDisabled,
+            DenyElement::ZkLoginSigDisabled => DenyElementKind::ZkLoginSigDisabled,
+        }
+    }
+}
+
+/// A `DenyElement` stripped of its payload — the category that the per-kind default
+/// buckets in `PeerDenySyncConfig` partition over.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DenyElementKind {
+    Object,
+    Package,
+    Address,
+    ZkLoginProvider,
+    PackagePublishDisabled,
+    PackageUpgradeDisabled,
+    SharedObjectDisabled,
+    UserTransactionDisabled,
+    GaslessDisabled,
+    ReceivingObjectsDisabled,
+    ZkLoginSigDisabled,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -313,6 +349,44 @@ mod tests {
             .insert(ObjectID::from_single_byte(1));
         other_bool.user_transaction_disabled = true;
         assert!(!larger.is_superset_of(&other_bool));
+    }
+
+    #[test]
+    fn deny_element_kind_matches_variant() {
+        let mut rules = TransactionDenyRules::default();
+        rules.object_deny_list.insert(ObjectID::from_single_byte(1));
+        rules
+            .package_deny_list
+            .insert(ObjectID::from_single_byte(2));
+        rules.address_deny_list.insert(dbg_addr(3));
+        rules
+            .zklogin_disabled_providers
+            .insert("Google".to_string());
+        rules.package_publish_disabled = true;
+        rules.package_upgrade_disabled = true;
+        rules.shared_object_disabled = true;
+        rules.user_transaction_disabled = true;
+        rules.gasless_disabled = true;
+        rules.receiving_objects_disabled = true;
+        rules.zklogin_sig_disabled = true;
+
+        let expected_kinds = [
+            DenyElementKind::Object,
+            DenyElementKind::Package,
+            DenyElementKind::Address,
+            DenyElementKind::ZkLoginProvider,
+            DenyElementKind::PackagePublishDisabled,
+            DenyElementKind::PackageUpgradeDisabled,
+            DenyElementKind::SharedObjectDisabled,
+            DenyElementKind::UserTransactionDisabled,
+            DenyElementKind::GaslessDisabled,
+            DenyElementKind::ReceivingObjectsDisabled,
+            DenyElementKind::ZkLoginSigDisabled,
+        ];
+
+        let actual_kinds: BTreeSet<DenyElementKind> = rules.elements().map(|e| e.kind()).collect();
+        let expected: BTreeSet<DenyElementKind> = expected_kinds.iter().copied().collect();
+        assert_eq!(actual_kinds, expected);
     }
 
     #[test]

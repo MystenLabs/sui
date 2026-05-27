@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress};
-pub use sui_types::transaction_deny_rules::TransactionDenyRules;
+pub use sui_types::transaction_deny_rules::{DenyElementKind, TransactionDenyRules};
 
 use crate::dynamic_transaction_signing_checks::{
     DynamicCheckRunnerContext, DynamicCheckRunnerError,
@@ -13,8 +13,8 @@ use crate::dynamic_transaction_signing_checks::{
 
 /// Configuration for activating recommended `TransactionDenyConfig` rules shared by
 /// peers via consensus. The operator pre-defines named rulesets, each gated on a
-/// stake threshold among an eligible set of validators; a "default" bucket governs any
-/// rule elements that weren't pre-listed.
+/// stake threshold among an eligible set of validators; per-kind "default" buckets
+/// govern individual rule elements peers propose outside of any pre-listed ruleset.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct PeerDenySyncConfig {
@@ -23,10 +23,11 @@ pub struct PeerDenySyncConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rulesets: Vec<SharedDenyRuleset>,
 
-    /// Governs rule elements proposed by peers that aren't part of any pre-listed
-    /// ruleset. Each proposed element is threshold-gated individually.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_threshold: Option<SharedDenyRuleThreshold>,
+    /// Per-kind default buckets. Each bucket covers a disjoint subset of
+    /// `DenyElementKind` and threshold-gates each proposed element of those kinds
+    /// individually.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub default_buckets: Vec<DefaultDenyBucket>,
 
     #[serde(default)]
     pub broadcast_on_startup: bool,
@@ -53,8 +54,23 @@ pub struct SharedDenyRuleset {
 #[serde(rename_all = "kebab-case")]
 pub struct SharedDenyRuleThreshold {
     pub eligibility: ValidatorEligibility,
-    /// Whole-number percent (0..=100) of eligible stake that must vote to activate.
+    /// Whole-number percent (1..=100) of eligible stake that must vote to activate.
     pub stake_threshold_percent: u16,
+}
+
+/// A per-kind default bucket. Each bucket covers a disjoint subset of
+/// `DenyElementKind`; a proposed element of one of `element_kinds` activates when
+/// eligible voting stake reaches `threshold`.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct DefaultDenyBucket {
+    /// Operator-chosen identifier used in metrics and the admin dump.
+    pub name: String,
+    /// Element kinds routed to this bucket. Must be non-empty and disjoint from the
+    /// kinds in every other bucket.
+    pub element_kinds: BTreeSet<DenyElementKind>,
+    #[serde(flatten)]
+    pub threshold: SharedDenyRuleThreshold,
 }
 
 /// Which validators' proposals count toward a deny-rule activation's stake threshold.
@@ -99,20 +115,46 @@ impl PeerDenySyncConfig {
             }
             ruleset.threshold.validate(&ruleset.name)?;
         }
-        if let Some(default) = &self.default_threshold {
-            default.validate("default_threshold")?;
+        let mut seen_kinds = BTreeSet::new();
+        for bucket in &self.default_buckets {
+            if bucket.name.is_empty() {
+                return Err("default_buckets entry has an empty name".to_string());
+            }
+            if !names.insert(bucket.name.as_str()) {
+                return Err(format!(
+                    "default_buckets name collides with another ruleset or bucket: {}",
+                    bucket.name,
+                ));
+            }
+            if bucket.element_kinds.is_empty() {
+                return Err(format!(
+                    "default_buckets entry {} has empty element_kinds",
+                    bucket.name,
+                ));
+            }
+            for kind in &bucket.element_kinds {
+                if !seen_kinds.insert(*kind) {
+                    return Err(format!(
+                        "default_buckets entry {} claims element kind {:?} already \
+                        claimed by another bucket",
+                        bucket.name, kind,
+                    ));
+                }
+            }
+            bucket.threshold.validate(&bucket.name)?;
         }
         Ok(())
     }
 }
 
 impl SharedDenyRuleThreshold {
-    /// Validate this threshold's percent is within 0..=100. `label` is included in the
-    /// error message to identify which threshold failed.
+    /// Validate this threshold's percent is within 1..=100. `label` is included in the
+    /// error message to identify which threshold failed. 0% is rejected because it
+    /// would degenerate to "always active" — almost certainly not the operator's intent.
     pub fn validate(&self, label: &str) -> Result<(), String> {
-        if self.stake_threshold_percent > 100 {
+        if self.stake_threshold_percent == 0 || self.stake_threshold_percent > 100 {
             return Err(format!(
-                "{label}: stake_threshold_percent must be 0..=100, got {}",
+                "{label}: stake_threshold_percent must be 1..=100, got {}",
                 self.stake_threshold_percent,
             ));
         }
@@ -440,8 +482,9 @@ mod tests {
     }
 
     /// A populated `PeerDenySyncConfig` round-trips through YAML — pins down the
-    /// `#[serde(flatten)]` on the ruleset threshold and the `ValidatorEligibility` enum
-    /// representation, the two serde-fragile parts of the schema.
+    /// `#[serde(flatten)]` on the ruleset/bucket threshold and the
+    /// `ValidatorEligibility` enum representation, the two serde-fragile parts of the
+    /// schema.
     #[test]
     fn peer_deny_sync_config_yaml_round_trip() {
         let rules = TransactionDenyRules {
@@ -458,10 +501,32 @@ mod tests {
                     stake_threshold_percent: 67,
                 },
             }],
-            default_threshold: Some(SharedDenyRuleThreshold {
-                eligibility: ValidatorEligibility::Allowlist(BTreeSet::new()),
-                stake_threshold_percent: 50,
-            }),
+            default_buckets: vec![
+                DefaultDenyBucket {
+                    name: "deny-list-entries".to_string(),
+                    element_kinds: [
+                        DenyElementKind::Object,
+                        DenyElementKind::Package,
+                        DenyElementKind::Address,
+                    ]
+                    .into_iter()
+                    .collect(),
+                    threshold: SharedDenyRuleThreshold {
+                        eligibility: ValidatorEligibility::Allowlist(BTreeSet::new()),
+                        stake_threshold_percent: 50,
+                    },
+                },
+                DefaultDenyBucket {
+                    name: "kill-switches".to_string(),
+                    element_kinds: [DenyElementKind::SharedObjectDisabled]
+                        .into_iter()
+                        .collect(),
+                    threshold: SharedDenyRuleThreshold {
+                        eligibility: ValidatorEligibility::Denylist(BTreeSet::new()),
+                        stake_threshold_percent: 90,
+                    },
+                },
+            ],
             broadcast_on_startup: true,
             broadcast_on_epoch_change: false,
         };
@@ -485,59 +550,130 @@ mod tests {
                 stake_threshold_percent: percent,
             },
         };
-        let config = |rulesets, default_threshold| PeerDenySyncConfig {
+        let bucket = |name: &str, kinds: &[DenyElementKind], percent: u16| DefaultDenyBucket {
+            name: name.to_string(),
+            element_kinds: kinds.iter().copied().collect(),
+            threshold: SharedDenyRuleThreshold {
+                eligibility: ValidatorEligibility::default(),
+                stake_threshold_percent: percent,
+            },
+        };
+        let config = |rulesets, default_buckets| PeerDenySyncConfig {
             rulesets,
-            default_threshold,
+            default_buckets,
             ..Default::default()
         };
 
         // A well-formed config validates.
         assert!(
-            config(vec![ruleset("a", nonempty(), 50)], None)
+            config(vec![ruleset("a", nonempty(), 50)], vec![])
                 .validate()
                 .is_ok()
         );
-        // Empty name.
+        // A config with two default buckets on disjoint kinds validates.
         assert!(
-            config(vec![ruleset("", nonempty(), 50)], None)
+            config(
+                vec![],
+                vec![
+                    bucket("objs", &[DenyElementKind::Object], 50),
+                    bucket("kill", &[DenyElementKind::UserTransactionDisabled], 90),
+                ],
+            )
+            .validate()
+            .is_ok()
+        );
+        // Empty ruleset name.
+        assert!(
+            config(vec![ruleset("", nonempty(), 50)], vec![])
                 .validate()
                 .is_err()
         );
-        // Duplicate names.
+        // Duplicate ruleset names.
         assert!(
             config(
                 vec![
                     ruleset("dup", nonempty(), 50),
                     ruleset("dup", nonempty(), 50)
                 ],
-                None,
+                vec![],
             )
             .validate()
             .is_err()
         );
-        // Empty rules.
+        // Empty ruleset rules.
         assert!(
             config(
                 vec![ruleset("a", TransactionDenyRules::default(), 50)],
-                None
+                vec![],
             )
             .validate()
             .is_err()
         );
         // Threshold above 100 on a pre-listed ruleset.
         assert!(
-            config(vec![ruleset("a", nonempty(), 101)], None)
+            config(vec![ruleset("a", nonempty(), 101)], vec![])
                 .validate()
                 .is_err()
         );
-        // Threshold above 100 on the default bucket.
+        // Threshold above 100 on a default bucket.
+        assert!(
+            config(vec![], vec![bucket("b", &[DenyElementKind::Object], 101)],)
+                .validate()
+                .is_err()
+        );
+        // 0% threshold rejected on a pre-listed ruleset (would be "always active").
+        assert!(
+            config(vec![ruleset("a", nonempty(), 0)], vec![])
+                .validate()
+                .is_err()
+        );
+        // 0% threshold rejected on a default bucket.
+        assert!(
+            config(vec![], vec![bucket("b", &[DenyElementKind::Object], 0)])
+                .validate()
+                .is_err()
+        );
+        // Empty bucket name.
+        assert!(
+            config(vec![], vec![bucket("", &[DenyElementKind::Object], 50)])
+                .validate()
+                .is_err()
+        );
+        // Duplicate bucket names.
         assert!(
             config(
                 vec![],
-                Some(SharedDenyRuleThreshold {
-                    eligibility: ValidatorEligibility::default(),
-                    stake_threshold_percent: 101,
-                }),
+                vec![
+                    bucket("dup", &[DenyElementKind::Object], 50),
+                    bucket("dup", &[DenyElementKind::Address], 50),
+                ],
+            )
+            .validate()
+            .is_err()
+        );
+        // Bucket name colliding with a ruleset name.
+        assert!(
+            config(
+                vec![ruleset("shared", nonempty(), 50)],
+                vec![bucket("shared", &[DenyElementKind::Object], 50)],
+            )
+            .validate()
+            .is_err()
+        );
+        // Empty element_kinds.
+        assert!(
+            config(vec![], vec![bucket("b", &[], 50)])
+                .validate()
+                .is_err()
+        );
+        // A DenyElementKind claimed by two buckets.
+        assert!(
+            config(
+                vec![],
+                vec![
+                    bucket("a", &[DenyElementKind::Object], 50),
+                    bucket("b", &[DenyElementKind::Object], 50),
+                ],
             )
             .validate()
             .is_err()
