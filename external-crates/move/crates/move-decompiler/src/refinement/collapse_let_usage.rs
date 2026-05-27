@@ -19,75 +19,31 @@
 //! variable). Here `e` can be any expression — `f(...)`, a struct unpack, a literal, etc.
 //! The decompiler emits many `let regN = expr; ...next...` shapes that this collapses.
 
-use crate::{ast::Exp, refinement::liveness::NameCounts};
+use crate::{
+    ast::Exp,
+    refinement::{Refine, liveness::NameCounts},
+};
 
 pub fn refine(exp: &mut Exp) -> bool {
     let counts = NameCounts::analyze(exp);
-    walk(exp, &counts)
+    CollapseLetUsage { counts: &counts }.refine(exp)
+}
+
+struct CollapseLetUsage<'a> {
+    counts: &'a NameCounts,
+}
+
+impl Refine for CollapseLetUsage<'_> {
+    fn refine_custom(&mut self, exp: &mut Exp) -> bool {
+        let Exp::Seq(items) = exp else {
+            return false;
+        };
+        collapse_in_seq(items, self.counts)
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
-// Tree walk
-
-fn walk(exp: &mut Exp, counts: &NameCounts) -> bool {
-    use Exp as E;
-    let mut changed = false;
-    if let E::Seq(items) = exp {
-        changed |= collapse_in_seq(items, counts);
-    }
-    match exp {
-        E::Variable(_)
-        | E::Declare(_)
-        | E::Value(_)
-        | E::Constant(_)
-        | E::Break(_)
-        | E::Continue(_)
-        | E::Unstructured(_) => {}
-        E::LetBind(_, e)
-        | E::Assign(_, e)
-        | E::Abort(e)
-        | E::Borrow(_, e)
-        | E::VecUnpack(_, e)
-        | E::Unpack(_, _, e)
-        | E::UnpackVariant(_, _, _, e)
-        | E::Block(_, e) => changed |= walk(e, counts),
-        E::Loop(_, b) => changed |= walk(b, counts),
-        E::While(_, c, b) => {
-            changed |= walk(c, counts);
-            changed |= walk(b, counts);
-        }
-        E::IfElse(c, t, alt) => {
-            changed |= walk(c, counts);
-            changed |= walk(t, counts);
-            if let Some(a) = alt.as_mut().as_mut() {
-                changed |= walk(a, counts);
-            }
-        }
-        E::Seq(items) | E::Return(items) | E::Call(_, items) => {
-            for it in items {
-                changed |= walk(it, counts);
-            }
-        }
-        E::Switch(s, _, arms) => {
-            changed |= walk(s, counts);
-            for (_, b) in arms {
-                changed |= walk(b, counts);
-            }
-        }
-        E::Match(s, _, arms) => {
-            changed |= walk(s, counts);
-            for (_, _, b) in arms {
-                changed |= walk(b, counts);
-            }
-        }
-        E::Primitive { args, .. } | E::Data { args, .. } => {
-            for a in args {
-                changed |= walk(a, counts);
-            }
-        }
-    }
-    changed
-}
+// Per-Seq collapse loop
 
 fn collapse_in_seq(items: &mut Vec<Exp>, counts: &NameCounts) -> bool {
     let mut changed = false;
