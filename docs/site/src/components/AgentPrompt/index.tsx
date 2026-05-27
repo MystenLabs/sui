@@ -43,8 +43,11 @@ export default function AgentPrompt({ prompt }: { prompt: string }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const { pathname } = useLocation();
-  const pageName = pathname.replace(/\//g, "+").replace(/^\+/, "");
+  const [pageName, setPageName] = useState("");
+
+  useEffect(() => {
+    setPageName(window.location.pathname.replace(/\//g, "+").replace(/^\+/, ""));
+  }, []);
 
   useEffect(() => {
     if (!open) return;
