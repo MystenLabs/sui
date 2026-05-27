@@ -89,7 +89,7 @@ impl QueryContext {
     /// `BitmapScanBudget` internally and reports the resulting
     /// `BitmapScanMetrics` via the `on_metrics` callback. The budget caps
     /// evaluated buckets, not backend reads — see
-    /// `eval_bitmap_query_stream` for the (≤ leaf_count) slop at
+    /// `eval_bitmap_query_stream` for the (≤ unique_leaf_count) slop at
     /// exhaustion.
     pub(crate) fn scan_budget(&self, spec: BitmapIndexSpec) -> u64 {
         match spec.table_name {
