@@ -3,6 +3,7 @@
 
 use crate::ast::Exp;
 
+mod bool_if_simplify;
 mod collect_uses;
 mod flatten_seq;
 mod fuse_let;
@@ -46,6 +47,7 @@ const REFINEMENTS: &[Refinement] = &[
     remove_trailing_return::refine,
     simplify_borrow_deref::refine,
     simplify_if::refine,
+    bool_if_simplify::refine,
     recover_asserts::refine,
     strip_loop_labels::refine,
     swap_continue_break::refine,
