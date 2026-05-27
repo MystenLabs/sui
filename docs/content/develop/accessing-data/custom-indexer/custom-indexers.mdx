@@ -26,13 +26,13 @@ At a high level, the indexing framework is a streaming pipeline that continuousl
 
 Checkpoints on Sui are batches of transactions that represent consistent blockchain state snapshots. Each checkpoint contains complete transaction details, events, object changes, and execution results with guaranteed ordering. See [Life of a Transaction](/develop/transactions/transaction-lifecycle) for more information on checkpoints.
 
-![Overview](../images/overview.png)
+![Overview](../images/context_custom-indexer-overview_v1.png)
 
 ### Architecture overview
 
 The following diagram details the custom indexer architecture.
 
-![Custom indexer architecture](../images/architecture.png)
+![Custom indexer architecture](../images/architecture_custom-indexer_v1.png)
 
 Your indexer runs as one executable program with multiple coordinated background tasks (threads). The ingestion layer polls for new checkpoints while your processing pipelines transform and store data, all within the same process.
 
