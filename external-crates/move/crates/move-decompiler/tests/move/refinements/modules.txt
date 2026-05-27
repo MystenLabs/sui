@@ -1,5 +1,6 @@
 bool_if_simplify
 collapse_let_usage
 inline_immutable_alias
+lift_terminating_arm
 negate_comparison
 simplify_borrow_deref
