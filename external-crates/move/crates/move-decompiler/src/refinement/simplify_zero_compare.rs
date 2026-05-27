@@ -35,17 +35,17 @@ impl Refine for SimplifyZeroCompare {
         let Exp::Primitive { op, args } = exp else {
             return false;
         };
-        if args.len() != 2 {
-            return false;
-        }
-        let Some(swapped_op) = swap_op(op) else {
+        let Some(swapped) = swap_op(op) else {
             return false;
         };
-        if !is_literal_like(&args[0]) || is_literal_like(&args[1]) {
+        let [lhs, rhs] = args.as_slice() else {
+            return false;
+        };
+        if !is_literal_like(lhs) || is_literal_like(rhs) {
             return false;
         }
         args.swap(0, 1);
-        *op = swapped_op;
+        *op = swapped;
         true
     }
 }
