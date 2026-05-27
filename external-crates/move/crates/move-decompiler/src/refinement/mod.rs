@@ -4,6 +4,7 @@
 use crate::ast::Exp;
 
 mod bool_if_simplify;
+mod collapse_let_usage;
 mod collect_uses;
 mod flatten_seq;
 mod fuse_let;
@@ -56,6 +57,7 @@ const REFINEMENTS: &[Refinement] = &[
     swap_continue_break_else::refine,
     swap_continue_fallthrough::refine,
     inline_immutable_alias::refine,
+    collapse_let_usage::refine,
 ];
 
 // -------------------------------------------------------------------------------------------------
