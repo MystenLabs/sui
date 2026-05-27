@@ -156,8 +156,7 @@ pub struct Context<'env, 'outer> {
     use_funs: Vec<UseFunsScope<'env, 'outer>>,
     pub current_function: Option<FunctionName>,
     pub in_macro_function: bool,
-    /// True only while speculatively typing an IDE macro body whose diagnostics do not reach the
-    /// compilation environment.
+    /// True only while speculatively typing an IDE macro body with diagnostics thrown away.
     pub ide_typing_macro_body: bool,
     max_variable_color: RefCell<u16>,
     pub return_type: Option<Type>,
@@ -178,6 +177,16 @@ pub struct Context<'env, 'outer> {
     /// it at the end.
     pub ide_info: IDEInfo,
 }
+
+/// True for regular compiler errors, or while speculatively typing an IDE macro body with
+/// diagnostics thrown away.
+macro_rules! has_errors_or_ide_typing_macro_body {
+    ($context:expr) => {
+        $context.env().has_errors() || $context.ide_typing_macro_body
+    };
+}
+
+pub(crate) use has_errors_or_ide_typing_macro_body;
 
 pub struct ResolvedFunctionType {
     pub declared: Loc,
@@ -762,12 +771,6 @@ impl<'env, 'outer> Context<'env, 'outer> {
     pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
         self.env()
             .check_feature(&self.reporter, package, feature, loc)
-    }
-
-    /// Returns true for regular compiler errors, or while typing an IDE macro body,
-    /// where diagnostics emitted during typing are not recorded in `CompilationEnv`.
-    pub fn has_errors_or_ide_typing_macro_body(&self) -> bool {
-        self.env().has_errors() || self.ide_typing_macro_body
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {

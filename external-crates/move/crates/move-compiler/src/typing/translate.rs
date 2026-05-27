@@ -530,26 +530,14 @@ fn function_signature(context: &mut Context, macro_: Option<Loc>, sig: &N::Funct
 /// (already in scope from function_signature) to type the body, generating IDE annotations
 /// (DotAutocompleteInfo, etc.). Diagnostics from this best-effort pass are discarded.
 /// Speculatively typed macro function body is added to the current context's IDEInfo.
-fn ide_macro_body(context: &mut Context, function_loc: Loc, sp!(_, nb_): N::FunctionBody) {
-    let N::FunctionBody_::Defined(es) = nb_ else {
-        return;
-    };
-
-    let reporter = context.reporter.clone_for_ide_macro_body_typing();
+fn ide_macro_body(context: &mut Context, function_loc: Loc, n_body: N::FunctionBody) {
+    let reporter = context.outer.env.ide_diagnostic_reporter();
     let old_reporter = std::mem::replace(&mut context.reporter, reporter);
     let old_ide_typing_macro_body = context.ide_typing_macro_body;
     context.ide_typing_macro_body = true;
 
-    let seq = sequence(context, es);
-    let ety = sequence_type(&seq);
-    let ret_ty = context.return_type.clone().unwrap();
-    let (_, seq_items) = &seq;
-    let sloc = seq_items.back().unwrap().loc;
-    subtype(context, sloc, || "Invalid return expression", ety, &ret_ty);
-    let mut b_ = T::FunctionBody_::Defined(seq);
-    core::solve_constraints(context);
-    expand::function_body_(context, &mut b_);
-    if let T::FunctionBody_::Defined(seq) = b_ {
+    let body = function_body(context, n_body);
+    if let T::FunctionBody_::Defined(seq) = body.value {
         context.ide_info.add_macro_function_body(function_loc, seq);
     }
     finalize_ide_info(context);
@@ -1772,7 +1760,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             );
             match ty_call_opt {
                 None => {
-                    assert!(context.has_errors_or_ide_typing_macro_body());
+                    assert!(core::has_errors_or_ide_typing_macro_body!(context));
                     (context.error_type(eloc), TE::UnresolvedError)
                 }
                 Some(ty_call) => ty_call,
@@ -1804,7 +1792,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             );
             match ty_call_opt {
                 None => {
-                    assert!(context.has_errors_or_ide_typing_macro_body());
+                    assert!(core::has_errors_or_ide_typing_macro_body!(context));
                     (context.error_type(eloc), TE::UnresolvedError)
                 }
                 Some(ty_call) => ty_call,
@@ -1836,7 +1824,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 (ret_ty, TE::UnresolvedError)
             } else {
                 assert!(
-                    context.has_errors_or_ide_typing_macro_body(),
+                    core::has_errors_or_ide_typing_macro_body!(context),
                     "ICE unbound var call. Should be expanded"
                 );
                 (context.error_type(eloc), TE::UnresolvedError)
@@ -2177,7 +2165,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             (rhs, e_)
         }
         NE::UnresolvedError => {
-            assert!(context.has_errors_or_ide_typing_macro_body());
+            assert!(core::has_errors_or_ide_typing_macro_body!(context));
             (context.error_type(eloc), TE::UnresolvedError)
         }
 
@@ -3008,7 +2996,7 @@ fn lvalue(
             TL::Ignore
         }
         NL::Error => {
-            assert!(context.has_errors_or_ide_typing_macro_body());
+            assert!(core::has_errors_or_ide_typing_macro_body!(context));
             TL::Ignore
         }
         NL::Var {
@@ -3864,12 +3852,12 @@ fn borrow_exp_dotted(
                 base_type: index_base_type,
             } => {
                 let Some(index_methods) = syntax_methods else {
-                    assert!(context.has_errors_or_ide_typing_macro_body());
+                    assert!(core::has_errors_or_ide_typing_macro_body!(context));
                     exp = make_error_exp(context, loc);
                     break;
                 };
                 if matches!(index_base_type.value.inner(), TI::UnresolvedError) {
-                    assert!(context.has_errors_or_ide_typing_macro_body());
+                    assert!(core::has_errors_or_ide_typing_macro_body!(context));
                     exp = make_error_exp(context, loc);
                     break;
                 }
@@ -4199,7 +4187,7 @@ fn type_to_type_name_(
                     )
                 }
                 TI::UnresolvedError => {
-                    assert!(context.has_errors_or_ide_typing_macro_body());
+                    assert!(core::has_errors_or_ide_typing_macro_body!(context));
                     return None;
                 }
                 TI::Ref(_, _) | TI::Var(_) => {
@@ -4843,7 +4831,7 @@ fn expand_macro(
 
     let valid = context.add_macro_expansion(m, f, call_loc);
     if !valid {
-        assert!(context.has_errors_or_ide_typing_macro_body());
+        assert!(core::has_errors_or_ide_typing_macro_body!(context));
         return (context.error_type(call_loc), TE::UnresolvedError);
     }
     let res = match macro_expand::call(context, call_loc, m, f, type_args.clone(), args, return_ty)
