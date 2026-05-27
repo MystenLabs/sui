@@ -18,19 +18,10 @@ function CopyCommand({ command }) {
       <code className={styles.installCmd}>{command}</code>
       <button
         type="button"
-        className={styles.copyBtn}
+        className={`${styles.copyBtn} plausible-event-name=skills+copy+install`}
         onClick={() => {
           if (typeof navigator !== "undefined" && navigator.clipboard) {
             navigator.clipboard.writeText(command);
-          }
-          // Track copies in Plausible as a custom event. The copied command
-          // is attached as a custom property so individual install commands
-          // can be told apart if more copy buttons are added later.
-          if (typeof window !== "undefined") {
-            window.__plausible_track__?.(
-              "Skills: copy install command",
-              { props: { command } },
-            );
           }
           setCopied(true);
           setTimeout(() => setCopied(false), 1500);
