@@ -2423,8 +2423,9 @@ impl AuthorityState {
         let input_object_kinds = transaction.input_objects()?;
         let receiving_object_refs = transaction.receiving_objects();
 
-        // Inject mock gas coin before validity_check so that the non-empty gas
-        // payment check passes for dry-run transactions submitted without gas.
+        // Inject mock gas coin before pre_object_load_checks so that funds
+        // withdrawal processing sees non-empty payment and doesn't incorrectly
+        // create an address balance withdrawal for gas.
         // Skip mock gas for gasless transactions — they don't use gas coins.
         let is_gasless = protocol_config.enable_gasless() && transaction.is_gasless_transaction();
         let mock_gas_object = if allow_mock_gas_coin && transaction.gas().is_empty() && !is_gasless
@@ -2444,8 +2445,7 @@ impl AuthorityState {
             None
         };
 
-        // Full validity check including gas budget and price. Mock gas is already
-        // injected above so the non-empty payment check passes.
+        // Full validity check including gas budget and price.
         transaction.validity_check(&epoch_store.tx_validity_check_context())?;
 
         let declared_withdrawals = self.pre_object_load_checks(
