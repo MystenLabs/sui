@@ -19,8 +19,8 @@ use crate::{
     editions::Flavor,
     hlir::{
         ast::{
-            BaseType_, Command, Command_, Exp, LValue, LValue_, Label, ModuleCall, SingleType,
-            SingleType_, Type, Type_, UnannotatedExp_, Var,
+            Command, Command_, Exp, LValue, LValue_, Label, ModuleCall, SingleType, SingleType_,
+            Type, Type_, UnannotatedExp_, Var,
         },
         translate::{DisplayVar, display_var},
     },
@@ -40,12 +40,21 @@ pub struct UnusedReturnValueAI {
 /// Function unique index derived from the block label + command index within the block
 pub type CommandIndex = (Label, usize);
 
+/// Information about a tracked pure call
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CallSite {
+    /// The location
+    loc: Loc,
+    /// In Sui mode, was an &mut TxContext present but excluded
+    tx_context_exempted: bool,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Value {
     /// Pure-call result not yet bound to a named local.
-    Fresh(Loc),
-    /// Bound to one or more named locals; `id -> originating call loc`. Joins union the maps.
-    Bound(BTreeMap<CommandIndex, Loc>),
+    Fresh(CallSite),
+    /// Bound to one or more temporary locals; `index -> originating call loc`
+    Bound(BTreeMap<CommandIndex, CallSite>),
     #[default]
     Other,
 }
@@ -126,8 +135,8 @@ impl SimpleAbsInt for UnusedReturnValueAI {
         let mut sites = BTreeMap::new();
         for v in values {
             match v {
-                Value::Fresh(call_loc) => {
-                    sites.insert(context.current_command, call_loc);
+                Value::Fresh(call_site) => {
+                    sites.insert(context.current_command, call_site);
                 }
                 Value::Bound(v_sites) => {
                     sites.extend(v_sites);
@@ -135,8 +144,8 @@ impl SimpleAbsInt for UnusedReturnValueAI {
                 Value::Other => (),
             }
         }
-        for loc in sites.into_values() {
-            context.add_diag(unused_return_value_warning(loc));
+        for call_site in sites.into_values() {
+            context.add_diag(unused_return_value_warning(call_site));
         }
         false
     }
@@ -171,14 +180,22 @@ impl SimpleAbsInt for UnusedReturnValueAI {
         f: &ModuleCall,
         _args: Vec<Value>,
     ) -> Option<Vec<Value>> {
-        let is_pure = call_is_pure(self.is_sui, f);
-        // Non-drop slots are forced to be used by the type system, no need to track them.
+        let purity = call_purity(self.is_sui, f);
         let mk_value = |st: &SingleType| {
-            if is_pure && st.value.has_ability_(Ability_::Drop) {
-                Value::Fresh(*loc)
-            } else {
-                Value::Other
-            }
+            let tx_context_exempted = match purity {
+                Purity::Mutable => return Value::Other,
+                // Non-drop slots are forced to be used by the type system, no need to track them.
+                Purity::Pure { .. } if !st.value.has_ability_(Ability_::Drop) => {
+                    return Value::Other;
+                }
+                Purity::Pure {
+                    tx_context_exempted,
+                } => *&tx_context_exempted,
+            };
+            Value::Fresh(CallSite {
+                loc: *loc,
+                tx_context_exempted,
+            })
         };
         Some(match &return_ty.value {
             Type_::Unit => vec![],
@@ -204,8 +221,8 @@ impl SimpleAbsInt for UnusedReturnValueAI {
             // compiler generated temporaries.
             // The compiler already generates warnings for unused locals.
             _ if matches!(display_var, DisplayVar::Orig(_)) => Value::Other,
-            Value::Fresh(call_loc) => {
-                Value::Bound(BTreeMap::from([(context.current_command, *call_loc)]))
+            Value::Fresh(call_site) => {
+                Value::Bound(BTreeMap::from([(context.current_command, *call_site)]))
             }
             Value::Bound(_) | Value::Other => value.clone(),
         };
@@ -258,37 +275,56 @@ impl SimpleExecutionContext for ExecutionContext {
     }
 }
 
-/// No `&mut` arg (Sui: ignoring `(&mut) TxContext`).
-fn call_is_pure(is_sui: bool, f: &ModuleCall) -> bool {
-    !f.arguments
-        .iter()
-        .any(|arg| is_mutating_ref_arg(is_sui, &arg.ty))
+/// Whether a call should be treated as "pure" for the purposes of this lint.
+enum Purity {
+    /// No `&mut` arguments
+    Pure {
+        /// In Sui flavor, was there an excluded `&mut TxContext`
+        tx_context_exempted: bool,
+    },
+    /// At least one `&mut` argument
+    Mutable,
 }
 
-fn is_mutating_ref_arg(is_sui: bool, ty: &Type) -> bool {
-    let Type_::Single(sp!(_, st_)) = &ty.value else {
-        return false;
-    };
-    let SingleType_::Ref(true, bt) = st_ else {
-        return false;
-    };
-    if is_sui
-        && let BaseType_::Apply(_, sp!(_, tn), _) = &bt.value
-        && tn.is(
-            &SUI_ADDR_VALUE,
-            TX_CONTEXT_MODULE_NAME,
-            TX_CONTEXT_TYPE_NAME,
-        )
-    {
-        return false;
+fn call_purity(is_sui: bool, f: &ModuleCall) -> Purity {
+    let mut tx_context_exempted = false;
+    for arg in &f.arguments {
+        let Type_::Single(sp!(_, SingleType_::Ref(true, bt))) = &arg.ty.value else {
+            continue;
+        };
+        let is_tx_context = is_sui
+            && bt
+                .value
+                .is_apply(
+                    &SUI_ADDR_VALUE,
+                    TX_CONTEXT_MODULE_NAME,
+                    TX_CONTEXT_TYPE_NAME,
+                )
+                .is_some();
+        if !is_tx_context {
+            return Purity::Mutable;
+        }
+        tx_context_exempted = true;
     }
-    true
+    Purity::Pure {
+        tx_context_exempted,
+    }
 }
 
-fn unused_return_value_warning(call_loc: Loc) -> Diagnostic {
+fn unused_return_value_warning(call_site: CallSite) -> Diagnostic {
+    let CallSite {
+        loc,
+        tx_context_exempted,
+    } = call_site;
     let msg = "Unused return value. This function takes no '&mut' arguments, \
                so its result is the only observable effect of the call";
-    let mut d = diag!(StyleCodes::UnusedReturnValue.diag_info(), (call_loc, msg));
+    let mut d = diag!(StyleCodes::UnusedReturnValue.diag_info(), (loc, msg));
+    if tx_context_exempted {
+        d.add_note(
+            "This function takes a '&mut TxContext' argument, but 'TxContext' is not counted \
+             as a mutable reference input for this lint.",
+        );
+    }
     d.add_note("Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.");
     d
 }
