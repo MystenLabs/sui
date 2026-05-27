@@ -2,13 +2,8 @@
 source: crates/move-decompiler/tests/tests.rs
 ---
 module simplify_borrow_deref {
-    public fun deref_in_guard () {
-        let l1 = if (l0) {
-            1u64
-        } else {
-            0u64
-        };
-        return l1
+    public fun deref_in_arith () {
+        return l0 + l1
     }
 
     public fun deref_local () {
