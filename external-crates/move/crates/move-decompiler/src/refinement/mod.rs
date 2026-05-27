@@ -17,6 +17,7 @@ mod reconstruct_match;
 mod recover_asserts;
 mod remove_trailing_continue;
 mod remove_trailing_return;
+mod simplify_borrow_deref;
 mod simplify_if;
 mod strip_loop_labels;
 mod swap_continue_break;
@@ -43,6 +44,7 @@ const REFINEMENTS: &[Refinement] = &[
     // fire on arms whose true Move-level shape doesn't actually terminate.
     remove_trailing_continue::refine,
     remove_trailing_return::refine,
+    simplify_borrow_deref::refine,
     simplify_if::refine,
     recover_asserts::refine,
     strip_loop_labels::refine,

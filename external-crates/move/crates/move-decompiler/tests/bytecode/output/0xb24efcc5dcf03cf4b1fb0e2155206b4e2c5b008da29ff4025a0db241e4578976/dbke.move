@@ -188,7 +188,7 @@ fun sp(l0: &vector<u64>, l1: &vector<u64>, l2: u64, l3: u64, l4: bool): u64 {
     if (l3 % l2 != 0u64) {
         return 0u64
     };
-    let l5 = if (*(&l4)) {
+    let l5 = if (l4) {
         if (l1.len() == 0u64) {
             return l3
         };
@@ -237,7 +237,7 @@ fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64,
         return (0u64, ct::e_insufficient_quantity())
     };
     let l16 = l9;
-    let l15 = if (*(&l16)) {
+    let l15 = if (l16) {
         let l25 = l2as u128 * constants::float_scaling_u128() / l7as u128as u64;
         let l21 = l25 % l5 + l5;
         if (l25 < l21) {
@@ -254,9 +254,9 @@ fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64,
         l20 - l20 % l5
     };
     let l26 = l15;
-    let l14 = if (*(&l11)) {
+    let l14 = if (l11) {
         let (reg_89, reg_90) = pool::get_order_deep_required(l0, l26, l7);
-        let l13 = if (*(&l10)) {
+        let l13 = if (l10) {
             reg_90
         } else {
             reg_89
