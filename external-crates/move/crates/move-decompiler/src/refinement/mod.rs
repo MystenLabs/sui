@@ -6,6 +6,7 @@ use crate::ast::Exp;
 mod bool_if_simplify;
 mod collapse_let_usage;
 mod collect_uses;
+mod dedupe_freeze;
 mod flatten_seq;
 mod fuse_let;
 mod hoist_arm_assignments;
@@ -51,6 +52,7 @@ const REFINEMENTS: &[Refinement] = &[
     remove_trailing_continue::refine,
     remove_trailing_return::refine,
     simplify_borrow_deref::refine,
+    dedupe_freeze::refine,
     simplify_zero_compare::refine,
     negate_comparison::refine,
     simplify_if::refine,
