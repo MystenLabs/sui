@@ -347,14 +347,17 @@ mod tests {
             "sui.rpc.v2",
             &[("LedgerService", &["GetCheckpoint", "GetTransaction"])],
         );
-        let alpha = fds("sui.rpc.alpha", &[("EventService", &["Subscribe"])]);
+        let v2alpha = fds(
+            "sui.rpc.v2alpha",
+            &[("ProofService", &["GetCheckpointObjectProof"])],
+        );
 
-        let paths = grpc_method_paths_from_file_descriptor_sets(&[&v2, &alpha]).unwrap();
+        let paths = grpc_method_paths_from_file_descriptor_sets(&[&v2, &v2alpha]).unwrap();
 
         assert_eq!(paths.len(), 3);
         assert!(paths.contains("/sui.rpc.v2.LedgerService/GetCheckpoint"));
         assert!(paths.contains("/sui.rpc.v2.LedgerService/GetTransaction"));
-        assert!(paths.contains("/sui.rpc.alpha.EventService/Subscribe"));
+        assert!(paths.contains("/sui.rpc.v2alpha.ProofService/GetCheckpointObjectProof"));
     }
 
     #[test]

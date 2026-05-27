@@ -16136,6 +16136,7 @@ dependencies = [
  "base64 0.21.7",
  "bcs",
  "bin-version",
+ "bytes",
  "clap",
  "fastcrypto",
  "fastcrypto-zkp",
@@ -16599,7 +16600,6 @@ dependencies = [
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
- "protox",
  "rand 0.8.5",
  "roaring",
  "serde",
@@ -16623,12 +16623,10 @@ dependencies = [
  "tonic 0.14.6",
  "tonic-health",
  "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
  "tonic-web",
  "tower 0.5.3",
  "tracing",
- "walkdir",
 ]
 
 [[package]]

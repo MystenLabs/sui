@@ -13,7 +13,6 @@
 //   />
 
 import React, { useEffect, useRef, useState } from "react";
-import { useLocation } from "@docusaurus/router";
 import styles from "./styles.module.css";
 
 interface Agent {

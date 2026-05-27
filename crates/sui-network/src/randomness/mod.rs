@@ -157,7 +157,7 @@ impl Handle {
 
     // For testing.
     pub fn new_stub() -> Self {
-        let (sender, mut receiver) = mpsc::channel(1);
+        let (sender, mut receiver) = mpsc::channel(100);
         // Keep receiver open until all senders are closed.
         tokio::spawn(async move {
             loop {

@@ -29,7 +29,6 @@ use sui_core::admission_queue::{
     AdmissionQueueContext, AdmissionQueueManager, AdmissionQueueMetrics,
 };
 use sui_core::authority::ExecutionEnv;
-use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTablesOptions;
 use sui_core::authority::backpressure::BackpressureManager;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
@@ -38,6 +37,7 @@ use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
+use sui_core::randomness_round_receiver::{RandomnessRoundReceiver, RandomnessRoundReceiverHandle};
 use sui_network::endpoint_manager::{AddressSource, EndpointId};
 use sui_network::validator::server::SUI_TLS_SERVER_NAME;
 use sui_types::full_checkpoint_content::Checkpoint;
@@ -282,6 +282,9 @@ pub struct SuiNode {
     _state_snapshot_uploader_handle: Option<broadcast::Sender<()>>,
     // Channel to allow signaling upstream to shutdown sui-node
     shutdown_channel_tx: broadcast::Sender<Option<RunWithRange>>,
+
+    /// Handle shared with RandomnessManager and the consensus layer.
+    randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
 
     /// AuthorityAggregator of the network, created at start and beginning of each epoch.
     /// Use ArcSwap so that we could mutate it without taking mut reference.
@@ -684,7 +687,6 @@ impl SuiNode {
                     &checkpoint_store,
                     &epoch_store,
                     &cache_traits.backing_package_store,
-                    pruner_watermarks.checkpoint_id.clone(),
                     config.rpc().cloned().unwrap_or_default(),
                 )
                 .await,
@@ -809,7 +811,9 @@ impl SuiNode {
         }
 
         // Start the loop that receives new randomness and generates transactions for it.
-        RandomnessRoundReceiver::spawn(state.clone(), randomness_rx);
+        // The returned is long-lived (node lifetime).
+        let randomness_receiver_handle =
+            RandomnessRoundReceiver::spawn(state.clone(), randomness_rx);
 
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
@@ -880,6 +884,7 @@ impl SuiNode {
                 sui_node_metrics.clone(),
                 checkpoint_metrics.clone(),
                 node_role,
+                randomness_receiver_handle.clone(),
             )
             .await?;
 
@@ -940,6 +945,7 @@ impl SuiNode {
 
             _state_snapshot_uploader_handle: state_snapshot_handle,
             shutdown_channel_tx: shutdown_channel,
+            randomness_receiver_handle,
 
             auth_agg,
             subscription_service_checkpoint_sender,
@@ -1279,6 +1285,7 @@ impl SuiNode {
         sui_node_metrics: Arc<SuiNodeMetrics>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         node_role: NodeRole,
+        randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
     ) -> Result<ValidatorComponents> {
         let mut config_clone = config.clone();
         let consensus_config = config_clone
@@ -1359,6 +1366,7 @@ impl SuiNode {
             epoch_store,
             state_sync_handle,
             randomness_handle,
+            randomness_receiver_handle,
             consensus_manager,
             consensus_store_pruner,
             global_state_hasher,
@@ -1382,6 +1390,7 @@ impl SuiNode {
         epoch_store: Arc<AuthorityPerEpochStore>,
         state_sync_handle: state_sync::Handle,
         randomness_handle: randomness::Handle,
+        randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
         consensus_manager: Arc<ConsensusManager>,
         consensus_store_pruner: ConsensusStorePruner,
         state_hasher: Weak<GlobalStateHasher>,
@@ -1406,6 +1415,10 @@ impl SuiNode {
             node_role,
         );
 
+        // Clear the VSS public key from the previous epoch so any randomness round
+        // signatures buffer in the channel until the new DKG completes.
+        randomness_receiver_handle.clear_public_key();
+
         if node_role.runs_consensus() && epoch_store.randomness_state_enabled() {
             let authority_key_pair = if node_role.is_validator() {
                 Some(config.protocol_key_pair())
@@ -1417,6 +1430,7 @@ impl SuiNode {
                 Box::new(consensus_adapter.clone()),
                 randomness_handle,
                 authority_key_pair,
+                randomness_receiver_handle.clone(),
             )
             .await;
             if let Some(randomness_manager) = randomness_manager {
@@ -1472,6 +1486,7 @@ impl SuiNode {
                         epoch_store,
                         consensus_handler_initializer,
                         sui_tx_validator,
+                        Some(randomness_receiver_handle),
                     )
                     .await;
             }
@@ -1921,6 +1936,7 @@ impl SuiNode {
                             new_epoch_store.clone(),
                             self.state_sync_handle.clone(),
                             self.randomness_handle.clone(),
+                            self.randomness_receiver_handle.clone(),
                             consensus_manager,
                             consensus_store_pruner,
                             weak_hasher,
@@ -1971,6 +1987,7 @@ impl SuiNode {
                         self.metrics.clone(),
                         self.checkpoint_metrics.clone(),
                         new_role,
+                        self.randomness_receiver_handle.clone(),
                     )
                     .await?;
 
