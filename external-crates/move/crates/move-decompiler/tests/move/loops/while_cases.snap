@@ -17,25 +17,21 @@ module while_cases {
             } else {
                 l1 == 7u64
             };
-            if (l0) {
-                l1 = l1 + 1u64;
-                continue;
-            } else {
+            if (!(l0)) {
                 break;
             }
+            l1 = l1 + 1u64;
         }
     }
 
     public fun while_test_3 () {
         let l0 = 0u64;
         while(l0 < 10u64) {
-            if (l0 % 2u64 == 0u64) {
-                l0 = l0 + 1u64;
-                continue;
+            l0 = if (l0 % 2u64 == 0u64) {
+                l0 + 1u64
             } else {
-                l0 = l0 + 2u64;
-                continue;
-            }
+                l0 + 2u64
+            };
         }
     }
 
@@ -47,17 +43,14 @@ module while_cases {
             } else {
                 l1 == 7u64
             };
-            if (l0) {
-                if (l1 % 2u64 == 0u64) {
-                    l1 = l1 + 1u64;
-                    continue;
-                } else {
-                    l1 = l1 + 2u64;
-                    continue;
-                }
-            } else {
+            if (!(l0)) {
                 break;
             }
+            l1 = if (l1 % 2u64 == 0u64) {
+                l1 + 1u64
+            } else {
+                l1 + 2u64
+            };
         }
     }
 
@@ -82,12 +75,10 @@ module while_cases {
             } else {
                 l1 == 7u64
             };
-            if (l0) {
-                l1 = l1 + 1u64;
-                continue;
-            } else {
+            if (!(l0)) {
                 break;
             }
+            l1 = l1 + 1u64;
         }
     }
 

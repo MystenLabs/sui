@@ -17,10 +17,12 @@ use crate::{
     },
     context::Context,
     dag_state::DagState,
+    leader_schedule_v3::NextCommitLeaderSchedule,
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction::TransactionConsumer,
     transaction_vote_tracker::TransactionVoteTracker,
+    universal_committer::UniversalCommitter,
 };
 
 const MAX_COMMIT_VOTES_PER_BLOCK: usize = 100;
@@ -53,6 +55,10 @@ pub(crate) trait Proposer: Send + Sync {
     /// Sets propagation scores on the ancestor state manager (validators only)
     fn set_propagation_scores(&mut self, scores: crate::leader_scoring::ReputationScores);
 
+    /// Sets the next v3 commit leader schedule used to wait before proposing.
+    #[allow(dead_code)]
+    fn set_next_commit_leader_schedule(&mut self, schedule: NextCommitLeaderSchedule);
+
     /// Notifies transaction consumer about committed own blocks (validators only)
     fn notify_own_blocks_committed(&self, block_refs: Vec<BlockRef>, gc_round: Round);
 
@@ -73,7 +79,7 @@ pub(crate) struct ValidatorProposer {
     ancestor_state_manager: AncestorStateManager,
     round_tracker: Arc<RwLock<RoundTracker>>,
     dag_state: Arc<RwLock<DagState>>,
-    committer: Arc<crate::universal_committer::UniversalCommitter>,
+    leader_waiter: ProposalLeaderWaiter,
 }
 
 impl ValidatorProposer {
@@ -86,7 +92,7 @@ impl ValidatorProposer {
         last_known_proposed_round: Option<Round>,
         ancestor_state_manager: AncestorStateManager,
         round_tracker: Arc<RwLock<RoundTracker>>,
-        committer: Arc<crate::universal_committer::UniversalCommitter>,
+        leader_waiter: ProposalLeaderWaiter,
     ) -> Self {
         let last_included_ancestors = vec![None; context.committee.size()];
         Self {
@@ -100,7 +106,7 @@ impl ValidatorProposer {
             ancestor_state_manager,
             round_tracker,
             dag_state,
-            committer,
+            leader_waiter,
         }
     }
 
@@ -117,31 +123,6 @@ impl ValidatorProposer {
             .get_last_proposed_block()
             .expect("A block should have been returned")
             .timestamp_ms()
-    }
-
-    fn leaders(&self, round: Round) -> Vec<Slot> {
-        self.committer
-            .get_leaders(round)
-            .into_iter()
-            .map(|authority_index| Slot::new(round, authority_index))
-            .collect()
-    }
-
-    fn first_leader(&self, round: Round) -> consensus_config::AuthorityIndex {
-        self.leaders(round).first().unwrap().authority
-    }
-
-    fn leaders_exist(&self, round: Round) -> bool {
-        let dag_state = self.dag_state.read();
-        for leader in self.leaders(round) {
-            // Search for all the leaders. If at least one is not found, then return false.
-            // A linear search should be fine here as the set of elements is not expected to be small enough and more sophisticated
-            // data structures might not give us much here.
-            if !dag_state.contains_cached_block_at_slot(leader) {
-                return false;
-            }
-        }
-        true
     }
 
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
@@ -403,12 +384,19 @@ impl Proposer for ValidatorProposer {
 
         // There must be a quorum of blocks from the previous round.
         let quorum_round = clock_round.saturating_sub(1);
+        let leader_slots = self.leader_waiter.leader_slots_to_wait_for(quorum_round);
 
         // Create a new block either because we want to "forcefully" propose a block due to a leader timeout,
         // or because we are actually ready to produce the block (leader exists and min delay has passed).
         if !force {
-            if !self.leaders_exist(quorum_round) {
-                return None;
+            {
+                let dag_state = self.dag_state.read();
+                if !leader_slots
+                    .iter()
+                    .all(|slot| dag_state.contains_cached_block_at_slot(*slot))
+                {
+                    return None;
+                }
             }
 
             if Duration::from_millis(
@@ -462,27 +450,36 @@ impl Proposer for ValidatorProposer {
             self.last_included_ancestors[ancestor.author()] = Some(ancestor.reference());
         }
 
-        let leader_authority = &self
-            .context
-            .committee
-            .authority(self.first_leader(quorum_round))
-            .hostname;
-        self.context
-            .metrics
-            .node_metrics
-            .block_proposal_leader_wait_ms
-            .with_label_values(&[leader_authority])
-            .inc_by(
-                Instant::now()
-                    .saturating_duration_since(self.dag_state.read().threshold_clock_quorum_ts())
-                    .as_millis() as u64,
-            );
-        self.context
-            .metrics
-            .node_metrics
-            .block_proposal_leader_wait_count
-            .with_label_values(&[leader_authority])
-            .inc();
+        // TODO(v3): support these metrics under v3 multi leader logic:
+        // - Leader slots are empty when the quorum round is no greater than last committed leader round,
+        //   because of async process or recovery.
+        // - Record accepted time for each block, to decide the last leader and the amount of time waiting for it.
+        if !self.context.protocol_config.enable_v3() {
+            let leader_slot = leader_slots.first().unwrap();
+            let leader_authority = &self
+                .context
+                .committee
+                .authority(leader_slot.authority)
+                .hostname;
+            self.context
+                .metrics
+                .node_metrics
+                .block_proposal_leader_wait_ms
+                .with_label_values(&[leader_authority])
+                .inc_by(
+                    Instant::now()
+                        .saturating_duration_since(
+                            self.dag_state.read().threshold_clock_quorum_ts(),
+                        )
+                        .as_millis() as u64,
+                );
+            self.context
+                .metrics
+                .node_metrics
+                .block_proposal_leader_wait_count
+                .with_label_values(&[leader_authority])
+                .inc();
+        }
 
         self.context
             .metrics
@@ -551,8 +548,8 @@ impl Proposer for ValidatorProposer {
                 now,
                 ancestors.iter().map(|b| b.reference()).collect(),
                 transactions,
-                commit_votes,
                 transaction_votes,
+                commit_votes,
                 vec![],
             ))
         } else {
@@ -714,6 +711,10 @@ impl Proposer for ValidatorProposer {
         self.ancestor_state_manager.set_propagation_scores(scores);
     }
 
+    fn set_next_commit_leader_schedule(&mut self, schedule: NextCommitLeaderSchedule) {
+        self.leader_waiter.update_v3_schedule(schedule);
+    }
+
     fn notify_own_blocks_committed(&self, block_refs: Vec<BlockRef>, gc_round: Round) {
         self.transaction_consumer
             .notify_own_blocks_status(block_refs, gc_round);
@@ -722,5 +723,86 @@ impl Proposer for ValidatorProposer {
     #[cfg(test)]
     fn round_tracker_for_tests(&self) -> Arc<RwLock<RoundTracker>> {
         self.round_tracker.clone()
+    }
+}
+
+/// Determines the identity and set of leaders to wait for from leader schedule,
+/// when proposing a block.
+pub(crate) enum ProposalLeaderWaiter {
+    V2(Arc<UniversalCommitter>),
+    V3(NextCommitLeaderSchedule),
+}
+
+impl ProposalLeaderWaiter {
+    fn leader_slots_to_wait_for(&self, round: Round) -> Vec<Slot> {
+        match self {
+            Self::V2(committer) => committer
+                .get_leaders(round)
+                .into_iter()
+                .map(|authority_index| Slot::new(round, authority_index))
+                .collect(),
+            Self::V3(schedule) => {
+                if round < schedule.min_next_leader_round {
+                    return vec![];
+                }
+                schedule
+                    .allowed_leaders
+                    .iter()
+                    .map(|leader| Slot::new(round, *leader))
+                    .collect()
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    fn update_v3_schedule(&mut self, schedule: NextCommitLeaderSchedule) {
+        if let Self::V3(current) = self {
+            *current = schedule;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use consensus_config::AuthorityIndex;
+
+    use super::*;
+
+    #[test]
+    fn proposal_leader_waiter_v3_uses_and_updates_schedule() {
+        let mut waiter = ProposalLeaderWaiter::V3(NextCommitLeaderSchedule {
+            next_commit_index: 1,
+            min_next_leader_round: 4,
+            allowed_leaders: vec![
+                AuthorityIndex::new_for_test(0),
+                AuthorityIndex::new_for_test(2),
+            ],
+        });
+
+        assert!(waiter.leader_slots_to_wait_for(3).is_empty());
+        assert_eq!(
+            waiter.leader_slots_to_wait_for(4),
+            vec![
+                Slot::new(4, AuthorityIndex::new_for_test(0)),
+                Slot::new(4, AuthorityIndex::new_for_test(2)),
+            ]
+        );
+
+        waiter.update_v3_schedule(NextCommitLeaderSchedule {
+            next_commit_index: 2,
+            min_next_leader_round: 4,
+            allowed_leaders: vec![
+                AuthorityIndex::new_for_test(1),
+                AuthorityIndex::new_for_test(3),
+            ],
+        });
+
+        assert_eq!(
+            waiter.leader_slots_to_wait_for(4),
+            vec![
+                Slot::new(4, AuthorityIndex::new_for_test(1)),
+                Slot::new(4, AuthorityIndex::new_for_test(3)),
+            ]
+        );
     }
 }

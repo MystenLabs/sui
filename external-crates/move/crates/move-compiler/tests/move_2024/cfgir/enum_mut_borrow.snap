@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E07006]: ambiguous usage of variable
+error[E07006]: ambiguous variable usage
    ┌─ tests/move_2024/cfgir/enum_mut_borrow.move:33:9
    │
 17 │     x = &y;

@@ -34,6 +34,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::TransactionItem;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionLiteral;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionPredicate;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionTerm;
+use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::event_literal;
 use sui_rpc::proto::sui::rpc::v2alpha::event_predicate;
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as KvLedgerServiceClient;
@@ -58,11 +59,19 @@ use tonic::transport::Channel;
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
 const DEFAULT_CHECKPOINT_RANGE_END: u64 = 3_000_000;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WmFrame {
+    Item,
+    Standalone,
+}
+
 struct TransactionsResult {
     transactions: Vec<TransactionItem>,
     end: bool,
     end_cursor: Option<prost::bytes::Bytes>,
     end_reason: Option<QueryEndReason>,
+    ordering: Ordering,
+    frames: Vec<(WmFrame, Watermark)>,
 }
 
 struct EventsResult {
@@ -70,6 +79,8 @@ struct EventsResult {
     end: bool,
     end_cursor: Option<prost::bytes::Bytes>,
     end_reason: Option<QueryEndReason>,
+    ordering: Ordering,
+    frames: Vec<(WmFrame, Watermark)>,
 }
 
 struct CheckpointsResult {
@@ -77,6 +88,21 @@ struct CheckpointsResult {
     end: bool,
     end_cursor: Option<prost::bytes::Bytes>,
     end_reason: Option<QueryEndReason>,
+    ordering: Ordering,
+    frames: Vec<(WmFrame, Watermark)>,
+}
+
+fn request_ordering(options: Option<&QueryOptions>) -> Ordering {
+    options
+        .and_then(|o| Ordering::try_from(o.ordering).ok())
+        .unwrap_or(Ordering::Ascending)
+}
+
+fn standalone_watermark_count<T>(frames: &[(WmFrame, T)]) -> usize {
+    frames
+        .iter()
+        .filter(|(k, _)| matches!(k, WmFrame::Standalone))
+        .count()
 }
 
 fn query_options(limit_items: u32) -> QueryOptions {
@@ -144,7 +170,7 @@ fn first_transaction_cursor(result: &TransactionsResult, message: &str) -> prost
     result
         .transactions
         .first()
-        .and_then(|item| item.cursor.clone())
+        .and_then(|item| item.watermark.as_ref().and_then(|w| w.cursor.clone()))
         .expect(message)
 }
 
@@ -152,7 +178,7 @@ fn last_transaction_cursor(result: &TransactionsResult, message: &str) -> prost:
     result
         .transactions
         .last()
-        .and_then(|item| item.cursor.clone())
+        .and_then(|item| item.watermark.as_ref().and_then(|w| w.cursor.clone()))
         .expect(message)
 }
 
@@ -164,7 +190,7 @@ fn first_event_cursor(result: &EventsResult, message: &str) -> prost::bytes::Byt
     result
         .events
         .first()
-        .and_then(|item| item.cursor.clone())
+        .and_then(|item| item.watermark.as_ref().and_then(|w| w.cursor.clone()))
         .expect(message)
 }
 
@@ -172,7 +198,7 @@ fn last_event_cursor(result: &EventsResult, message: &str) -> prost::bytes::Byte
     result
         .events
         .last()
-        .and_then(|item| item.cursor.clone())
+        .and_then(|item| item.watermark.as_ref().and_then(|w| w.cursor.clone()))
         .expect(message)
 }
 
@@ -184,7 +210,7 @@ fn first_checkpoint_cursor(result: &CheckpointsResult, message: &str) -> prost::
     result
         .checkpoints
         .first()
-        .and_then(|item| item.cursor.clone())
+        .and_then(|item| item.watermark.as_ref().and_then(|w| w.cursor.clone()))
         .expect(message)
 }
 
@@ -192,7 +218,7 @@ fn last_checkpoint_cursor(result: &CheckpointsResult, message: &str) -> prost::b
     result
         .checkpoints
         .last()
-        .and_then(|item| item.cursor.clone())
+        .and_then(|item| item.watermark.as_ref().and_then(|w| w.cursor.clone()))
         .expect(message)
 }
 
@@ -205,22 +231,70 @@ fn assert_item_limit_end(end: bool, reason: Option<QueryEndReason>) {
     assert_eq!(reason, Some(QueryEndReason::ItemLimit));
 }
 
-fn assert_transaction_cursors(result: &TransactionsResult) {
-    for item in &result.transactions {
-        assert!(item.cursor.is_some(), "transaction item should have cursor");
+/// Walks every Watermark frame (item-embedded + standalone) in delivery order
+/// and asserts the per-frame wire contract:
+///   - `cursor` is always populated.
+///   - Direction-matching field is set: `checkpoint_hi` on ascending,
+///     `checkpoint_lo` on descending; the other direction's field is `None`.
+///   - Where the direction-matching field is set, the sequence of values is
+///     monotonic (non-decreasing ascending, non-increasing descending). It
+///     may be `None` early in a scan that has not yet crossed a checkpoint
+///     boundary; those frames are skipped for the monotonicity check.
+fn assert_watermark_contract(frames: &[(WmFrame, Watermark)], ordering: Ordering) {
+    let mut last_bound: Option<u64> = None;
+    for (kind, wm) in frames {
+        assert!(
+            wm.cursor.is_some(),
+            "{kind:?} watermark must carry a cursor"
+        );
+        match ordering {
+            Ordering::Ascending => {
+                assert!(
+                    wm.checkpoint_lo.is_none(),
+                    "ascending {kind:?} watermark must not set checkpoint_lo"
+                );
+                if let Some(hi) = wm.checkpoint_hi {
+                    if let Some(prev) = last_bound {
+                        assert!(
+                            hi >= prev,
+                            "ascending checkpoint_hi must be non-decreasing \
+                             (prev {prev}, got {hi} on {kind:?})"
+                        );
+                    }
+                    last_bound = Some(hi);
+                }
+            }
+            Ordering::Descending => {
+                assert!(
+                    wm.checkpoint_hi.is_none(),
+                    "descending {kind:?} watermark must not set checkpoint_hi"
+                );
+                if let Some(lo) = wm.checkpoint_lo {
+                    if let Some(prev) = last_bound {
+                        assert!(
+                            lo <= prev,
+                            "descending checkpoint_lo must be non-increasing \
+                             (prev {prev}, got {lo} on {kind:?})"
+                        );
+                    }
+                    last_bound = Some(lo);
+                }
+            }
+            other => panic!("unexpected ordering: {other:?}"),
+        }
     }
+}
+
+fn assert_transaction_cursors(result: &TransactionsResult) {
+    assert_watermark_contract(&result.frames, result.ordering);
 }
 
 fn assert_event_cursors(result: &EventsResult) {
-    for item in &result.events {
-        assert!(item.cursor.is_some(), "event item should have cursor");
-    }
+    assert_watermark_contract(&result.frames, result.ordering);
 }
 
 fn assert_checkpoint_cursors(result: &CheckpointsResult) {
-    for item in &result.checkpoints {
-        assert!(item.cursor.is_some(), "checkpoint item should have cursor");
-    }
+    assert_watermark_contract(&result.frames, result.ordering);
 }
 
 fn checkpoint_sequence(response: &CheckpointItem) -> u64 {
@@ -235,12 +309,14 @@ async fn list_transactions_result(
     client: &mut KvLedgerServiceClient<Channel>,
     request: ListTransactionsRequest,
 ) -> TransactionsResult {
+    let ordering = request_ordering(request.options.as_ref());
     let mut stream = client
         .list_transactions(request)
         .await
         .unwrap()
         .into_inner();
     let mut transactions = Vec::new();
+    let mut frames = Vec::new();
     let mut end = false;
     let mut end_cursor = None;
     let mut end_reason = None;
@@ -248,16 +324,26 @@ async fn list_transactions_result(
         match response.response.expect("list_transactions response frame") {
             list_transactions_response::Response::Item(item) => {
                 assert!(!end, "item frame after end");
+                let wm = item
+                    .watermark
+                    .clone()
+                    .expect("transaction item must carry a watermark");
+                if let Some(c) = wm.cursor.clone() {
+                    end_cursor = Some(c);
+                }
+                frames.push((WmFrame::Item, wm));
                 transactions.push(item);
+            }
+            list_transactions_response::Response::Watermark(w) => {
+                assert!(!end, "watermark frame after end");
+                if let Some(c) = w.cursor.clone() {
+                    end_cursor = Some(c);
+                }
+                frames.push((WmFrame::Standalone, w));
             }
             list_transactions_response::Response::End(end_frame) => {
                 assert!(!end, "duplicate end frame");
                 end = true;
-                end_cursor = end_frame.cursor.clone();
-                assert!(
-                    end_cursor.is_some(),
-                    "list_transactions end frame should include cursor"
-                );
                 end_reason = Some(
                     QueryEndReason::try_from(end_frame.reason)
                         .expect("valid list_transactions end reason"),
@@ -271,6 +357,8 @@ async fn list_transactions_result(
         end,
         end_cursor,
         end_reason,
+        ordering,
+        frames,
     }
 }
 
@@ -278,8 +366,10 @@ async fn list_events_result(
     client: &mut KvLedgerServiceClient<Channel>,
     request: ListEventsRequest,
 ) -> EventsResult {
+    let ordering = request_ordering(request.options.as_ref());
     let mut stream = client.list_events(request).await.unwrap().into_inner();
     let mut events = Vec::new();
+    let mut frames = Vec::new();
     let mut end = false;
     let mut end_cursor = None;
     let mut end_reason = None;
@@ -287,16 +377,26 @@ async fn list_events_result(
         match response.response.expect("list_events response frame") {
             list_events_response::Response::Item(item) => {
                 assert!(!end, "item frame after end");
+                let wm = item
+                    .watermark
+                    .clone()
+                    .expect("event item must carry a watermark");
+                if let Some(c) = wm.cursor.clone() {
+                    end_cursor = Some(c);
+                }
+                frames.push((WmFrame::Item, wm));
                 events.push(item);
+            }
+            list_events_response::Response::Watermark(w) => {
+                assert!(!end, "watermark frame after end");
+                if let Some(c) = w.cursor.clone() {
+                    end_cursor = Some(c);
+                }
+                frames.push((WmFrame::Standalone, w));
             }
             list_events_response::Response::End(end_frame) => {
                 assert!(!end, "duplicate end frame");
                 end = true;
-                end_cursor = end_frame.cursor.clone();
-                assert!(
-                    end_cursor.is_some(),
-                    "list_events end frame should include cursor"
-                );
                 end_reason = Some(
                     QueryEndReason::try_from(end_frame.reason)
                         .expect("valid list_events end reason"),
@@ -310,6 +410,8 @@ async fn list_events_result(
         end,
         end_cursor,
         end_reason,
+        ordering,
+        frames,
     }
 }
 
@@ -317,8 +419,10 @@ async fn list_checkpoints_result(
     client: &mut KvLedgerServiceClient<Channel>,
     request: ListCheckpointsRequest,
 ) -> CheckpointsResult {
+    let ordering = request_ordering(request.options.as_ref());
     let mut stream = client.list_checkpoints(request).await.unwrap().into_inner();
     let mut checkpoints = Vec::new();
+    let mut frames = Vec::new();
     let mut end = false;
     let mut end_cursor = None;
     let mut end_reason = None;
@@ -326,16 +430,26 @@ async fn list_checkpoints_result(
         match response.response.expect("list_checkpoints response frame") {
             list_checkpoints_response::Response::Item(item) => {
                 assert!(!end, "item frame after end");
+                let wm = item
+                    .watermark
+                    .clone()
+                    .expect("checkpoint item must carry a watermark");
+                if let Some(c) = wm.cursor.clone() {
+                    end_cursor = Some(c);
+                }
+                frames.push((WmFrame::Item, wm));
                 checkpoints.push(item);
+            }
+            list_checkpoints_response::Response::Watermark(w) => {
+                assert!(!end, "watermark frame after end");
+                if let Some(c) = w.cursor.clone() {
+                    end_cursor = Some(c);
+                }
+                frames.push((WmFrame::Standalone, w));
             }
             list_checkpoints_response::Response::End(end_frame) => {
                 assert!(!end, "duplicate end frame");
                 end = true;
-                end_cursor = end_frame.cursor.clone();
-                assert!(
-                    end_cursor.is_some(),
-                    "list_checkpoints end frame should include cursor"
-                );
                 end_reason = Some(
                     QueryEndReason::try_from(end_frame.reason)
                         .expect("valid list_checkpoints end reason"),
@@ -349,6 +463,8 @@ async fn list_checkpoints_result(
         end,
         end_cursor,
         end_reason,
+        ordering,
+        frames,
     }
 }
 
@@ -1366,8 +1482,14 @@ async fn test_list_events_query_options() {
     assert_event_cursors(&response2);
 
     // Events on response2 should be different from response1.
-    let response1_cursor = &response1.events[0].cursor;
-    let response2_cursor = &response2.events[0].cursor;
+    let response1_cursor = response1.events[0]
+        .watermark
+        .as_ref()
+        .and_then(|w| w.cursor.as_ref());
+    let response2_cursor = response2.events[0]
+        .watermark
+        .as_ref()
+        .and_then(|w| w.cursor.as_ref());
     assert_ne!(
         response1_cursor, response2_cursor,
         "responses should have different cursors"
@@ -2295,7 +2417,7 @@ async fn test_list_events_query_options_multi_event_tx() {
         .iter()
         .chain(r2.events.iter())
         .chain(r3.events.iter())
-        .map(|e| e.cursor.clone())
+        .map(|e| e.watermark.as_ref().and_then(|w| w.cursor.clone()))
         .collect();
     let total = all_cursors.len();
     all_cursors.sort();
@@ -3271,3 +3393,304 @@ async fn test_list_checkpoints_with_objects_read_mask() {
         "expected at least one tx.digest populated"
     );
 }
+
+// --- Watermark contract tests ---
+
+/// Build a sparse layout: `noise_before` checkpoints of `noise_sender` transfers,
+/// one checkpoint of `match_sender`, then `noise_after` more `noise_sender`
+/// checkpoints. Returns the matched-sender's checkpoint sequence number.
+async fn build_sparse_layout(
+    cluster: &mut FullCluster,
+    noise_sender: SuiAddress,
+    noise_kp: &AccountKeyPair,
+    mut noise_gas: ObjectRef,
+    match_sender: SuiAddress,
+    match_kp: &AccountKeyPair,
+    match_gas: ObjectRef,
+    noise_before: usize,
+    noise_after: usize,
+) -> u64 {
+    for _ in 0..noise_before {
+        noise_gas = transfer_in_own_checkpoint(cluster, noise_sender, noise_kp, noise_gas).await;
+    }
+    transfer_in_own_checkpoint(cluster, match_sender, match_kp, match_gas).await;
+    let match_cp = cluster
+        .latest_checkpoint()
+        .await
+        .unwrap()
+        .expect("match checkpoint should exist");
+    for _ in 0..noise_after {
+        noise_gas = transfer_in_own_checkpoint(cluster, noise_sender, noise_kp, noise_gas).await;
+    }
+    match_cp
+}
+
+#[tokio::test]
+async fn test_list_transactions_sparse_filter_emits_watermarks() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (sender_a, kp_a, gas_a) = cluster.funded_account(40 * DEFAULT_GAS_BUDGET).unwrap();
+    let (sender_b, kp_b, gas_b) = cluster.funded_account(2 * DEFAULT_GAS_BUDGET).unwrap();
+
+    // 20 noise checkpoints, 1 match, 20 more noise — `noise_after > 0`
+    // guarantees the scan reaches EOF on a non-matching frontier, so the
+    // coalescer flushes a trailing standalone Watermark.
+    let match_cp = build_sparse_layout(
+        &mut cluster,
+        sender_a,
+        &kp_a,
+        gas_a,
+        sender_b,
+        &kp_b,
+        gas_b,
+        20,
+        20,
+    )
+    .await;
+
+    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest", "checkpoint"]));
+    req.filter = Some(tx_sender(sender_b));
+    req.options = Some(query_options(100));
+
+    let resp = list_transactions_result(&mut client, req).await;
+    assert_transaction_cursors(&resp);
+
+    assert_eq!(
+        resp.transactions.len(),
+        1,
+        "exactly one sender_b transaction should match"
+    );
+    let only_cp = resp.transactions[0]
+        .transaction
+        .as_ref()
+        .and_then(|tx| tx.checkpoint)
+        .expect("checkpoint populated");
+    assert_eq!(
+        only_cp, match_cp,
+        "matched tx is in the expected checkpoint"
+    );
+
+    assert!(
+        standalone_watermark_count(&resp.frames) >= 1,
+        "sparse scan must emit at least one standalone Watermark frame"
+    );
+    assert_eq!(
+        resp.end_reason,
+        Some(QueryEndReason::LedgerTip),
+        "scan should reach the ledger tip"
+    );
+
+    // The last cursor (item-embedded or standalone) round-trips to an empty
+    // ledger-tip response — proves the trailing standalone WM is a real
+    // resumption point, not a wire decoration.
+    let last_cursor = resp.end_cursor.clone().expect("trailing cursor present");
+    let mut next_req = ListTransactionsRequest::default();
+    next_req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    next_req.filter = Some(tx_sender(sender_b));
+    next_req.options = Some(query_options_after(100, last_cursor));
+    let next_resp = list_transactions_result(&mut client, next_req).await;
+    assert!(
+        next_resp.transactions.is_empty(),
+        "resuming past the trailing cursor must not replay items"
+    );
+    // CursorBound (resume cursor at/past tip) or LedgerTip (range strictly
+    // exceeds tip) are both legitimate empty-resume terminations.
+    let reason = next_resp.end_reason.expect("resume response must end");
+    assert!(
+        matches!(
+            reason,
+            QueryEndReason::CursorBound | QueryEndReason::LedgerTip
+        ),
+        "unexpected resume end_reason: {reason:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_list_events_sparse_filter_emits_watermarks() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (sender_a, kp_a, mut gas_a) = cluster.funded_account(50 * DEFAULT_GAS_BUDGET).unwrap();
+    let (sender_b, kp_b, gas_b) = cluster.funded_account(5 * DEFAULT_GAS_BUDGET).unwrap();
+
+    // sender_b publishes the event package and emits one event in its own
+    // checkpoint. sender_a fills the surrounding checkpoints with self-transfers
+    // (which emit no Move events) so the event-filter scan crosses a long gap.
+    for _ in 0..20 {
+        gas_a = transfer_in_own_checkpoint(&mut cluster, sender_a, &kp_a, gas_a).await;
+    }
+    let (pkg_id, gas_b) = publish_package(
+        &mut cluster,
+        sender_b,
+        &kp_b,
+        gas_b,
+        emit_test_event_pkg_path(),
+    )
+    .await;
+    let (_, _) = call_move(
+        &mut cluster,
+        sender_b,
+        &kp_b,
+        gas_b,
+        pkg_id,
+        "emit_test_event",
+        "emit_test_event",
+    )
+    .await;
+    cluster.create_checkpoint().await;
+    for _ in 0..20 {
+        gas_a = transfer_in_own_checkpoint(&mut cluster, sender_a, &kp_a, gas_a).await;
+    }
+    let _ = gas_a;
+
+    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    let mut req = ListEventsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.filter = Some(ev_sender(sender_b));
+    req.options = Some(query_options(100));
+
+    let resp = list_events_result(&mut client, req).await;
+    assert_event_cursors(&resp);
+
+    assert_eq!(
+        resp.events.len(),
+        1,
+        "exactly one sender_b event should match"
+    );
+    assert!(
+        standalone_watermark_count(&resp.frames) >= 1,
+        "sparse event scan must emit at least one standalone Watermark frame"
+    );
+    assert_eq!(resp.end_reason, Some(QueryEndReason::LedgerTip));
+
+    let last_cursor = resp.end_cursor.clone().expect("trailing cursor present");
+    let mut next_req = ListEventsRequest::default();
+    next_req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    next_req.filter = Some(ev_sender(sender_b));
+    next_req.options = Some(query_options_after(100, last_cursor));
+    let next_resp = list_events_result(&mut client, next_req).await;
+    assert!(
+        next_resp.events.is_empty(),
+        "resuming past the trailing cursor must not replay events"
+    );
+    let reason = next_resp.end_reason.expect("resume response must end");
+    assert!(
+        matches!(
+            reason,
+            QueryEndReason::CursorBound | QueryEndReason::LedgerTip
+        ),
+        "unexpected resume end_reason: {reason:?}"
+    );
+}
+
+/// Every standalone Watermark cursor returned in `frames` must be a valid
+/// resume point: a follow-up query with `after = <that cursor>` must not
+/// replay any of the original `seen_digests` that came at or before that
+/// cursor in the original delivery order.
+#[tokio::test]
+async fn test_list_transactions_resume_from_standalone_watermark() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (sender_a, kp_a, gas_a) = cluster.funded_account(40 * DEFAULT_GAS_BUDGET).unwrap();
+    let (sender_b, kp_b, gas_b) = cluster.funded_account(2 * DEFAULT_GAS_BUDGET).unwrap();
+
+    let _match_cp = build_sparse_layout(
+        &mut cluster,
+        sender_a,
+        &kp_a,
+        gas_a,
+        sender_b,
+        &kp_b,
+        gas_b,
+        20,
+        20,
+    )
+    .await;
+
+    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.filter = Some(tx_sender(sender_b));
+    req.options = Some(query_options(100));
+    let resp = list_transactions_result(&mut client, req).await;
+    assert_transaction_cursors(&resp);
+
+    let original_digests: Vec<String> = resp
+        .transactions
+        .iter()
+        .filter_map(|t| t.transaction.as_ref().and_then(|tx| tx.digest.clone()))
+        .collect();
+    assert_eq!(original_digests.len(), 1, "sanity: one match expected");
+
+    // Walk every standalone WM in delivery order. After each one, the items
+    // delivered AT OR BEFORE it in the original response must NOT reappear in
+    // a follow-up resume; the items AFTER it must.
+    let mut delivered_before: Vec<String> = Vec::new();
+    let mut item_idx = 0;
+    let mut standalone_seen = 0;
+    for (kind, wm) in &resp.frames {
+        match kind {
+            WmFrame::Item => {
+                if let Some(d) = resp.transactions[item_idx]
+                    .transaction
+                    .as_ref()
+                    .and_then(|tx| tx.digest.clone())
+                {
+                    delivered_before.push(d);
+                }
+                item_idx += 1;
+            }
+            WmFrame::Standalone => {
+                standalone_seen += 1;
+                let cursor = wm.cursor.clone().expect("standalone WM carries cursor");
+                let mut resume_req = ListTransactionsRequest::default();
+                resume_req.read_mask = Some(FieldMask::from_paths(["digest"]));
+                resume_req.filter = Some(tx_sender(sender_b));
+                resume_req.options = Some(query_options_after(100, cursor));
+                let resume_resp = list_transactions_result(&mut client, resume_req).await;
+                let resume_digests: Vec<String> = resume_resp
+                    .transactions
+                    .iter()
+                    .filter_map(|t| t.transaction.as_ref().and_then(|tx| tx.digest.clone()))
+                    .collect();
+                for replayed in &delivered_before {
+                    assert!(
+                        !resume_digests.contains(replayed),
+                        "resume past standalone WM #{standalone_seen} replayed already-delivered \
+                         digest {replayed}"
+                    );
+                }
+                let unseen: Vec<&String> = original_digests
+                    .iter()
+                    .filter(|d| !delivered_before.contains(*d))
+                    .collect();
+                for expected in &unseen {
+                    assert!(
+                        resume_digests.contains(expected),
+                        "resume past standalone WM #{standalone_seen} dropped expected digest \
+                         {expected} (unseen={unseen:?}, got={resume_digests:?})"
+                    );
+                }
+            }
+        }
+    }
+    assert!(
+        standalone_seen >= 1,
+        "expected at least one standalone WM to validate as a resume point"
+    );
+}
+
+// NOTE: ScanLimit end-reason resumption is intentionally NOT covered e2e.
+// `BUCKET_SIZE = 65_536` (transaction_bitmap_index) means any feasible test
+// dataset fits in a single bitmap bucket, so a real bucket-budget exhaustion
+// cannot be provoked without either mocking BigTable or making BUCKET_SIZE
+// configurable — both are out of scope. The ScanLimit cursor contract is
+// unit-tested in `sui-inverted-index` (budget validation) and handler-level
+// tests in `sui-kv-rpc`.

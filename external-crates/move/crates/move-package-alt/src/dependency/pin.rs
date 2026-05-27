@@ -16,7 +16,7 @@ use crate::{
     schema::{
         Environment, EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
         LockfileDependencyInfo, LockfileGitDepInfo, ManifestGitDependency, ModeName,
-        OnChainDepInfo, PackageName, RenderToml, RootDepInfo,
+        OnChainAddress, PackageName, PublishedID, RenderToml, RootDepInfo,
     },
 };
 
@@ -48,12 +48,20 @@ pub struct PinnedDependency {
 pub(crate) enum Pinned {
     Local(PinnedLocalDependency),
     Git(PinnedGitDependency),
-    OnChain(OnChainDepInfo),
+    /// An on-chain dependency, identified by the address it is published at.
+    ///
+    /// Invariants:
+    /// - On-chain packages never have local transitive dependencies, since their manifests
+    ///   are system-generated.
+    OnChain {
+        address: PublishedID,
+    },
+    /// The root package. Invariant: if a `PinnedDependency` has `dep_info` `Root`, then its
+    /// `containing_file` is either a manifest or a lockfile in the root package's directory.
     Root(PackagePath),
 }
 
-/// Invariant: if a PinnedDependency has `dep_info` `Root`, then its `containing_file` is either a
-/// manifest or a lockfile in the directory containing the root package
+/// A git dependency pinned to a specific commit SHA.
 #[derive(Clone, Debug)]
 pub struct PinnedGitDependency {
     pub(crate) inner: GitTree,
@@ -92,9 +100,11 @@ impl PinnedDependency {
         // pinning - fix git shas and normalize local deps
         for dep in deps.into_iter() {
             let transformed = match dep.dep_info {
-                Resolved::Local(ref loc) => loc.clone().pin(parent, env.id())?,
+                Resolved::Local(ref loc) => loc.clone().pin(parent)?,
                 Resolved::Git(ref git) => git.pin().await?,
-                Resolved::OnChain(_) => todo!(),
+                Resolved::OnChain(ref addr) => Pinned::OnChain {
+                    address: addr.on_chain.clone(),
+                },
             };
 
             result.push(PinnedDependency {
@@ -191,6 +201,7 @@ impl PinnedDependency {
     }
 
     /// Return the absolute path to the directory that this dependency would be fetched into.
+    /// `chain_id` is used to determine the cache location for on-chain dependencies.
     pub fn unfetched_path(&self, chain_id: &EnvironmentID) -> PathBuf {
         self.dep_info.unfetched_path(chain_id)
     }
@@ -203,25 +214,30 @@ impl Pinned {
     }
 
     /// Return the absolute path to the directory that this package would be fetched into, without
-    /// actually fetching it. `_chain_id` is unused for now but will be needed for on-chain deps.
-    pub(crate) fn unfetched_path(&self, _chain_id: &EnvironmentID) -> PathBuf {
+    /// actually fetching it. `chain_id` is used to determine the cache location for on-chain
+    /// dependencies.
+    pub(crate) fn unfetched_path(&self, chain_id: &EnvironmentID) -> PathBuf {
         match &self {
             Pinned::Git(dep) => dep.inner.path_to_tree(),
             Pinned::Local(dep) => dep.absolute_path_to_package.clone(),
-            Pinned::OnChain(_dep) => todo!(),
             Pinned::Root(path) => path.path().to_path_buf(),
+            Pinned::OnChain { address } => {
+                PathBuf::from(move_command_line_common::env::MOVE_HOME.as_str())
+                    .join("on-chain")
+                    .join(chain_id)
+                    .join(address.to_string())
+            }
         }
     }
 
-    /// Create a [Pinned] from a lockfile dependency info entry.
+    /// Create a [Pinned] from a lockfile dependency source.
     ///
-    /// `containing_file` is the lockfile that the dependency comes from, used to resolve relative
-    /// paths.
+    /// `containing_file` is the lockfile path, used to resolve relative local dependency paths.
     pub(crate) fn from_lockfile(
         containing_file: FileHandle,
-        pin: &LockfileDependencyInfo,
+        source: &LockfileDependencyInfo,
     ) -> PackageResult<Self> {
-        match &pin {
+        match source {
             LockfileDependencyInfo::Local(loc) => Ok(Pinned::Local(PinnedLocalDependency {
                 absolute_path_to_package: containing_file
                     .path()
@@ -232,7 +248,9 @@ impl Pinned {
                     .clean(),
                 relative_path_from_root_package: loc.local.to_path_buf().clean(),
             })),
-            LockfileDependencyInfo::OnChain(chain) => Ok(Pinned::OnChain(chain.clone())),
+            LockfileDependencyInfo::OnChain(on_chain) => Ok(Pinned::OnChain {
+                address: on_chain.on_chain.clone(),
+            }),
             LockfileDependencyInfo::Git(git) => Ok(Pinned::Git(git.clone().try_into()?)),
             LockfileDependencyInfo::Root(_) => Ok(Pinned::Root(PackagePath::new(
                 containing_file
@@ -256,7 +274,9 @@ impl Pinned {
                 let rev = fmt_truncated(git.inner.sha(), 6, 2);
                 format!(r#"git = "{repo}", path = "{path}", rev = "{rev}""#)
             }
-            Pinned::OnChain(_on_chain) => "on-chain = true".to_string(),
+            Pinned::OnChain { address } => {
+                format!("on-chain = \"{address}\"")
+            }
             Pinned::Root(_) => "local = \".\"".to_string(),
         }
     }
@@ -297,27 +317,38 @@ impl TryFrom<LockfileGitDepInfo> for PinnedGitDependency {
 
 impl LocalDepInfo {
     /// Takes a local dependency and its `parent`, and transforms local dependencies based on their
-    /// parent. `chain_id` is passed through to [Pinned::unfetched_path].
+    /// parent.
     ///
     /// 1. If the parent is a git dependency, we convert local transitive deps to git.
     /// 2. If the parent is a local dependency, we normalize the path based on the parents.
-    fn pin(self, parent: &Pinned, chain_id: &EnvironmentID) -> PackageResult<Pinned> {
+    /// 3. The parent cannot be an on-chain dependency, because on-chain packages have
+    ///    system-generated manifests that never contain local deps.
+    fn pin(self, parent: &Pinned) -> PackageResult<Pinned> {
         let info: Pinned = match &parent {
             Pinned::Git(parent_git) => Pinned::Git(PinnedGitDependency {
                 inner: parent_git.inner.relative_tree(self.local)?,
             }),
             Pinned::Local(parent_local) => Pinned::Local(PinnedLocalDependency {
-                absolute_path_to_package: parent.unfetched_path(chain_id).join(&self.local).clean(),
+                absolute_path_to_package: parent_local
+                    .absolute_path_to_package
+                    .join(&self.local)
+                    .clean(),
                 relative_path_from_root_package: parent_local
                     .relative_path_from_root_package
                     .join(&self.local)
                     .clean(),
             }),
-            Pinned::Root(_) => Pinned::Local(PinnedLocalDependency {
-                absolute_path_to_package: parent.unfetched_path(chain_id).join(&self.local).clean(),
+            Pinned::Root(root) => Pinned::Local(PinnedLocalDependency {
+                absolute_path_to_package: root.path().join(&self.local).clean(),
                 relative_path_from_root_package: self.local.clean(),
             }),
-            Pinned::OnChain(_) => todo!(),
+            Pinned::OnChain { address } => {
+                unreachable!(
+                    "on-chain package {address} has a local dependency `{}`, but on-chain \
+                     packages have system-generated manifests that should never contain local deps",
+                    self.local.display()
+                )
+            }
         };
 
         Ok(info)
@@ -341,15 +372,19 @@ impl From<Pinned> for LockfileDependencyInfo {
                 rev: git.inner.sha().clone(),
                 path: git.inner.path_in_repo().to_path_buf(),
             }),
-            Pinned::OnChain(on_chain) => Self::OnChain(on_chain),
+            Pinned::OnChain { address } => Self::OnChain(OnChainAddress { on_chain: address }),
             Pinned::Root(_) => Self::Root(RootDepInfo { root: true }),
         }
     }
 }
 
 impl Pinned {
-    /// Convert to an [EphemeralDependencyInfo]. For ephemeral dependencies, local dependencies
-    /// (including the root) are stored as absolute paths.
+    /// Convert to an [EphemeralDependencyInfo] for use as a key in ephemeral publication files.
+    /// The path is canonicalized so that ephemeral pubfiles can be reused across packages in
+    /// a single filesystem.
+    ///
+    /// Requires that the package source has already been fetched to disk (so the path can be
+    /// canonicalized).
     pub(crate) fn to_ephemeral(&self, chain_id: &EnvironmentID) -> EphemeralDependencyInfo {
         let local = self
             .unfetched_path(chain_id)
@@ -379,7 +414,6 @@ mod tests {
     use super::*;
 
     const RANDOM_SHA: &str = "1111111111111111111111111111111111111111"; // 40 characters
-    const TEST_CHAIN_ID: &str = "test-chain";
 
     // Local pinning ///////////////////////////////////////////////////////////////////////////////
 
@@ -391,10 +425,7 @@ mod tests {
         assert!(parent.is_root());
 
         let dep = new_local("../child");
-        let pinned = dep
-            .pin(&parent, &TEST_CHAIN_ID.to_string())
-            .unwrap_as_local()
-            .clone();
+        let pinned = dep.pin(&parent).unwrap_as_local().clone();
 
         assert_eq!(
             pinned.absolute_path_to_package.as_os_str(),
@@ -415,10 +446,7 @@ mod tests {
         let parent = new_pinned_local_from("/root", "parent");
 
         let dep = new_local("child");
-        let pinned = dep
-            .pin(&parent, &TEST_CHAIN_ID.to_string())
-            .unwrap_as_local()
-            .clone();
+        let pinned = dep.pin(&parent).unwrap_as_local().clone();
 
         assert_eq!(
             pinned.absolute_path_to_package.as_os_str(),
@@ -438,7 +466,7 @@ mod tests {
         let parent = new_pinned_git_from("repo.git", RANDOM_SHA, "parent");
         let dep = new_local("child");
 
-        let pinned = dep.pin(&parent, &TEST_CHAIN_ID.to_string()).unwrap_as_git();
+        let pinned = dep.pin(&parent).unwrap_as_git();
         let parent_git = parent.unwrap_as_git();
 
         assert_eq!(
@@ -468,7 +496,7 @@ mod tests {
         let parent = new_pinned_git_from("repo.git", RANDOM_SHA, "packages/foo");
         let dep = new_local("../bar");
 
-        let pinned = dep.pin(&parent, &TEST_CHAIN_ID.to_string()).unwrap_as_git();
+        let pinned = dep.pin(&parent).unwrap_as_git();
         let parent_git = parent.unwrap_as_git();
 
         assert_eq!(pinned.inner.repo_url(), parent_git.inner.repo_url());
@@ -485,7 +513,7 @@ mod tests {
         let dep = new_local("../../d");
 
         assert_snapshot!(
-            dep.pin(&parent, &TEST_CHAIN_ID.to_string()).unwrap_err().to_string(),
+            dep.pin(&parent).unwrap_err().to_string(),
             @"relative path `../d` is not contained in the repository"
         );
     }

@@ -515,9 +515,17 @@ impl SuiNode {
         let enable_write_stall = config
             .enable_db_write_stall
             .unwrap_or(node_role.runs_consensus());
+        // The tidehunter objects compactor retains only the latest version per
+        // ObjectID and is mutually exclusive with the object pruner. Enable it
+        // for validators (which always disable the pruner), and also for any
+        // node configured with `num_epochs_to_retain = 0` — that aggressive
+        // setting is what the compactor replaces. The pruner is force-disabled
+        // in `AuthorityStorePruner::new` whenever this is true.
+        let enable_objects_compactor = node_role.is_validator()
+            || config.authority_store_pruning_config.num_epochs_to_retain == 0;
         let perpetual_tables_options = AuthorityPerpetualTablesOptions {
             enable_write_stall,
-            is_validator: node_role.is_validator(),
+            enable_objects_compactor,
         };
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_store_path(),
@@ -724,7 +732,12 @@ impl SuiNode {
         }
 
         // Send initial peer addresses to the p2p network.
-        update_peer_addresses(&config, &endpoint_manager, epoch_store.epoch_start_state());
+        update_peer_addresses(
+            &config,
+            &endpoint_manager,
+            epoch_store.epoch_start_state(),
+            None,
+        );
 
         info!("start snapshot upload");
         // Start uploading state snapshot to remote store
@@ -797,18 +810,6 @@ impl SuiNode {
 
         // Start the loop that receives new randomness and generates transactions for it.
         RandomnessRoundReceiver::spawn(state.clone(), randomness_rx);
-
-        if config
-            .expensive_safety_check_config
-            .enable_secondary_index_checks()
-            && let Some(indexes) = state.indexes.clone()
-        {
-            sui_core::verify_indexes::verify_indexes(
-                state.get_global_state_hash_store().as_ref(),
-                indexes,
-            )
-            .expect("secondary indexes are inconsistent");
-        }
 
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
@@ -1406,11 +1407,16 @@ impl SuiNode {
         );
 
         if node_role.runs_consensus() && epoch_store.randomness_state_enabled() {
+            let authority_key_pair = if node_role.is_validator() {
+                Some(config.protocol_key_pair())
+            } else {
+                None
+            };
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
                 Box::new(consensus_adapter.clone()),
                 randomness_handle,
-                config.protocol_key_pair(),
+                authority_key_pair,
             )
             .await;
             if let Some(randomness_manager) = randomness_manager {
@@ -1652,6 +1658,13 @@ impl SuiNode {
         self.state.clone()
     }
 
+    #[cfg(any(test, msim))]
+    pub fn connection_monitor_handle_for_testing(
+        &self,
+    ) -> &mysten_network::anemo_connection_monitor::ConnectionMonitorHandle {
+        &self._connection_monitor_handle
+    }
+
     pub fn node_role(&self) -> NodeRole {
         self.state.load_epoch_store_one_call_per_task().node_role()
     }
@@ -1841,7 +1854,12 @@ impl SuiNode {
 
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
 
-            update_peer_addresses(&self.config, &self.endpoint_manager, &new_epoch_start_state);
+            update_peer_addresses(
+                &self.config,
+                &self.endpoint_manager,
+                &new_epoch_start_state,
+                Some(cur_epoch_store.epoch_start_state()),
+            );
 
             let mut validator_components_lock_guard = self.validator_components.lock().await;
 
@@ -2378,22 +2396,42 @@ impl SpawnOnce {
     }
 }
 
-/// Updates trusted peer addresses in the p2p network.
+/// Updates trusted peer addresses in the p2p network (for nodes configured as validators).
+/// When `prev_epoch_start_state` is provided, validators that are no longer in the committee
+/// have their Chain addresses cleared.
 fn update_peer_addresses(
     config: &NodeConfig,
     endpoint_manager: &EndpointManager,
     epoch_start_state: &EpochStartSystemState,
+    prev_epoch_start_state: Option<&EpochStartSystemState>,
 ) {
-    for (peer_id, address) in
-        epoch_start_state.get_validator_as_p2p_peers(config.protocol_public_key())
-    {
-        endpoint_manager
-            .update_endpoint(
-                EndpointId::P2p(peer_id),
-                AddressSource::Chain,
-                vec![address],
-            )
-            .expect("Updating peer addresses should not fail");
+    if config.consensus_config().is_none() {
+        return;
+    }
+    let new_peers: HashSet<PeerId> = epoch_start_state
+        .get_validator_as_p2p_peers(config.protocol_public_key())
+        .into_iter()
+        .map(|(peer_id, address)| {
+            endpoint_manager
+                .update_endpoint(
+                    EndpointId::P2p(peer_id),
+                    AddressSource::Chain,
+                    vec![address],
+                )
+                .expect("Updating peer addresses should not fail");
+            peer_id
+        })
+        .collect();
+
+    // Clear Chain addresses for validators that left the committee.
+    if let Some(prev) = prev_epoch_start_state {
+        for (peer_id, _) in prev.get_validator_as_p2p_peers(config.protocol_public_key()) {
+            if !new_peers.contains(&peer_id) {
+                endpoint_manager
+                    .update_endpoint(EndpointId::P2p(peer_id), AddressSource::Chain, vec![])
+                    .expect("Clearing peer addresses should not fail");
+            }
+        }
     }
 }
 
@@ -2543,6 +2581,7 @@ async fn build_http_servers(
         rpc_service.with_server_version(server_version);
 
         if let Some(config) = config.rpc.clone() {
+            config.validate()?;
             rpc_service.with_config(config);
         }
 

@@ -56,7 +56,6 @@
 //! the recovery target, the next live message is itself a gap, and detection
 //! fires again.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -74,15 +73,11 @@ use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction as ProtoExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsResponse;
-use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
 use sui_sdk_types::ValidatorAggregatedSignature;
-use sui_types::base_types::ObjectID;
-use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::crypto::ToFromBytes;
 use sui_types::effects::TransactionEffects;
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSummary;
@@ -106,6 +101,18 @@ use super::SubscriptionReadiness;
 use super::gap_recovery::recover_gap;
 use super::processed_checkpoint::ProcessedCheckpoint;
 use super::processed_checkpoint::ProcessedTransaction;
+
+#[cfg(feature = "staging")]
+mod staging {
+    pub(super) use std::collections::BTreeMap;
+
+    pub(super) use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
+    pub(super) use sui_types::base_types::ObjectID;
+    pub(super) use sui_types::base_types::SequenceNumber;
+}
+
+#[cfg(feature = "staging")]
+use staging::*;
 
 // TODO: Make these configurable via SubscriptionConfig.
 const MAX_GRPC_MESSAGE_SIZE_BYTES: usize = 128 * 1024 * 1024;
@@ -399,11 +406,13 @@ pub(super) fn process_checkpoint(
     let timestamp_ms = summary.timestamp_ms;
     let cp_sequence_number = sequence_number;
     let tx_lo = summary.network_total_transactions - checkpoint.transactions.len() as u64;
+    #[cfg(feature = "staging")]
     let checkpoint_objects = deserialize_checkpoint_objects(&checkpoint)?;
 
     // Seed the checkpoint-wide execution-objects map with every existing object version
     // carried by the proto. Tombstones for deleted/wrapped outputs are added below from each
     // transaction's effects because the proto doesn't carry deleted-object payloads.
+    #[cfg(feature = "staging")]
     let mut execution_objects: BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>> =
         checkpoint_objects
             .iter()
@@ -412,6 +421,7 @@ pub(super) fn process_checkpoint(
 
     let mut transactions = Vec::with_capacity(checkpoint.transactions.len());
     for (i, proto) in checkpoint.transactions.iter().enumerate() {
+        #[cfg(feature = "staging")]
         add_tombstones(&mut execution_objects, proto)?;
         transactions.push(process_transaction(
             proto,
@@ -421,14 +431,14 @@ pub(super) fn process_checkpoint(
         )?);
     }
 
-    Ok(ProcessedCheckpoint::new(
-        sequence_number,
+    Ok(ProcessedCheckpoint {
         summary,
         contents,
         signature,
         transactions,
-        Arc::new(execution_objects),
-    ))
+        #[cfg(feature = "staging")]
+        execution_objects: Arc::new(execution_objects),
+    })
 }
 
 fn process_transaction(
@@ -481,8 +491,6 @@ fn process_transaction(
         })
         .collect::<anyhow::Result<_>>()?;
 
-    let digest = *effects.transaction_digest();
-
     let contents = NativeTransactionContents::ExecutedTransaction(
         sui_indexer_alt_reader::kv_loader::ExecutedTransactionData {
             effects: Box::new(effects),
@@ -499,8 +507,7 @@ fn process_transaction(
 
     Ok(ProcessedTransaction {
         tx_sequence_number,
-        digest,
-        contents,
+        contents: Arc::new(contents),
     })
 }
 
@@ -528,6 +535,7 @@ fn extract_packages(checkpoint: &ProtoCheckpoint) -> Vec<Arc<Package>> {
 }
 
 /// Deserialize all objects from the checkpoint-level ObjectSet.
+#[cfg(feature = "staging")]
 fn deserialize_checkpoint_objects(
     checkpoint: &ProtoCheckpoint,
 ) -> anyhow::Result<BTreeMap<(ObjectID, SequenceNumber), NativeObject>> {
@@ -550,6 +558,7 @@ fn deserialize_checkpoint_objects(
 /// carry payloads for deleted/wrapped objects, so tombstones must come from effects; without
 /// them, `execution_output_object_latest` would return the pre-deletion version of an object
 /// that no longer exists at end-of-checkpoint.
+#[cfg(feature = "staging")]
 fn add_tombstones(
     map: &mut BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>,
     proto_tx: &ProtoExecutedTransaction,

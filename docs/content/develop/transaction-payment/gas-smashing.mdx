@@ -4,6 +4,10 @@ description: Sui optimizes coin management by combining multiple coins into a si
 keywords: [ gas smashing, smash gas, combine coins, combine coins into one object, create ptb for coins, create coin ptb, group coins together, group coins into ptb, create ptb with multiple coins, coin management, multiple coin management ]
 ---
 
+<AgentPrompt
+  prompt={"Review this app's gas coin handling. Add safe coin selection/splitting/merging guidance and avoid concurrent reuse of mutable owned objects."}
+/>
+
 :::info 
 
 If you are using the address balances feature, then you do not need to use gas smashing. Address balance gas payment removes the need to select or merge gas coins entirely.

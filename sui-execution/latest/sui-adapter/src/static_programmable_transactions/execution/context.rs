@@ -15,7 +15,7 @@ use crate::{
             values::{Local, Locals, Value},
         },
         linkage::resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
-        loading::ast::{Datatype, ObjectMutability},
+        loading::ast::Datatype,
         typing::ast::{self as T, Type},
     },
 };
@@ -83,7 +83,7 @@ use sui_types::{
         MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
         normalize_deserialized_modules,
     },
-    object::{MoveObject, Object, Owner},
+    object::{MoveObject, Object, ObjectPermissions, Owner},
     storage::{BackingPackageStore, DenyListResult, PackageObject, get_package_objects},
 };
 use sui_verifier::INIT_FN_NAME;
@@ -185,7 +185,7 @@ pub struct CtxValue(Value);
 pub struct InputObjectMetadata {
     pub newly_created: bool,
     pub id: ObjectID,
-    pub mutability: ObjectMutability,
+    pub refined_permissions: ObjectPermissions,
     pub owner: Owner,
     pub version: SequenceNumber,
     pub type_: Type,
@@ -382,7 +382,7 @@ where
                         let metadata = InputObjectMetadata {
                             newly_created: true,
                             id,
-                            mutability: ObjectMutability::Mutable,
+                            refined_permissions: ObjectPermissions::ALL,
                             owner: Owner::AddressOwner(sui_address),
                             version: SequenceNumber::new(),
                             type_: ty,
@@ -395,7 +395,7 @@ where
                         env,
                         &mut input_object_map,
                         gas_coin_id,
-                        ObjectMutability::Mutable,
+                        ObjectPermissions::ALL,
                         ty,
                     )?,
                 };
@@ -520,17 +520,13 @@ where
             let InputObjectMetadata {
                 newly_created,
                 id,
-                mutability,
+                refined_permissions,
                 owner,
                 version,
                 type_,
             } = metadata;
-            match mutability {
-                ObjectMutability::Immutable => continue,
-                // It is illegal to mutate NonExclusiveWrites, but they are passed as &mut T,
-                // so we need to treat them as mutable here. After execution, we check if they
-                // have been mutated, and abort the tx if they have.
-                ObjectMutability::NonExclusiveWrite | ObjectMutability::Mutable => (),
+            if !refined_permissions.can_use_mutably() {
+                continue;
             }
 
             if newly_created {
@@ -596,6 +592,7 @@ where
                 .all(|id| !created_object_ids.contains(id)),
             "Loaded input objects should not be in the created objects set"
         );
+        // TODO generalize post transaction checks using permissions
 
         assert_invariant!(
             remaining_events.is_empty(),
@@ -1577,9 +1574,15 @@ fn load_object_arg<Mode: ExecutionMode>(
     input: T::ObjectInput,
 ) -> Result<(T::InputIndex, InputObjectMetadata, Value), Mode::Error> {
     let id = input.arg.id();
-    let mutability = input.arg.mutability();
-    let (metadata, value) =
-        load_object_arg_impl(meter, env, input_object_map, id, mutability, input.ty)?;
+    let refined_permissions = input.arg.refined_permissions;
+    let (metadata, value) = load_object_arg_impl(
+        meter,
+        env,
+        input_object_map,
+        id,
+        refined_permissions,
+        input.ty,
+    )?;
     Ok((input.original_input_index, metadata, value))
 }
 
@@ -1588,7 +1591,7 @@ fn load_object_arg_impl<Mode: ExecutionMode>(
     env: &Env<Mode>,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     id: ObjectID,
-    mutability: ObjectMutability,
+    refined_permissions: ObjectPermissions,
     ty: T::Type,
 ) -> Result<(InputObjectMetadata, Value), Mode::Error> {
     let obj = env.read_object(&id)?;
@@ -1597,7 +1600,7 @@ fn load_object_arg_impl<Mode: ExecutionMode>(
     let object_metadata = InputObjectMetadata {
         newly_created: false,
         id,
-        mutability,
+        refined_permissions,
         owner: owner.clone(),
         version,
         type_: ty.clone(),

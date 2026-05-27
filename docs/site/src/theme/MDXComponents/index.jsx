@@ -16,6 +16,7 @@ import ImportContent from "@site/src/shared/components/ImportContent";
 import ProtocolConfig from "@site/src/components/ProtocolConfig";
 import BetaTag from "@site/src/components/BetaTag";
 import EffortBox from "@site/src/components/EffortBox";
+import AgentPrompt from "@site/src/components/AgentPrompt";
 import Term from "@site/src/shared/components/Glossary/Term";
 
 export default {
@@ -33,5 +34,6 @@ export default {
   ProtocolConfig,
   BetaTag,
   EffortBox,
+  AgentPrompt,
   Term
 };

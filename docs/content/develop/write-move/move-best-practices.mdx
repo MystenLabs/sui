@@ -15,9 +15,10 @@ While these conventions are recommendations rather than strict rules, they repre
 A Sui package consists of:
 - `sources` directory containing the Move code to be uploaded to the blockchain.
 - `Move.toml` manifest file that declares dependencies and other information about the package.
-- `Move.lock` file that the Sui Move toolchain automatically generates to lock the versions of the dependencies and track the different published and upgraded versions of the package that exist on the different networks.
+- `Move.lock` file that the Sui Move toolchain automatically generates to lock the versions of the dependencies.
+- `Published.toml` file that tracks the published addresses and upgrade capabilities for each environment (Mainnet, Testnet).
 
-For this reason, the `Move.lock` file should always be part of the package (don't add it to the `.gitignore` file). Use the [automated address management](/develop/manage-packages/automated-address-management) instead of the old `published-at` field in the manifest file.
+Both `Move.lock` and `Published.toml` should be committed to source control. See [Move Package Management](/develop/manage-packages/move-package-management) for full details.
 
 Optionally, you can add a `tests` directory to contain the tests for the package and an `examples` directory to provide use cases for the package. Neither directory is uploaded onchain when you publish the package.
 
@@ -33,9 +34,10 @@ examples/
     using_my_module.move
 Move.lock
 Move.toml
+Published.toml
 ```
 
-In your package manifest, the package name should be in PascalCase: `name = "MyPackage"`. Ideally, the named address representing the package should be the same as the package name, but in snake_case: `my_package = 0x0`.
+In your package manifest, the package name should match the name used in your Move source code: `name = "my_package"`.
 
 ### Modules
 

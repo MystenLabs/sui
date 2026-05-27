@@ -36,7 +36,10 @@ const ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE: &str = "EFFECTS_BLOCK_CACHE_MB";
 pub struct AuthorityPerpetualTablesOptions {
     /// Whether to enable write stalling on all column families.
     pub enable_write_stall: bool,
-    pub is_validator: bool,
+    /// On tidehunter, attach the per-keyspace objects compactor that retains
+    /// only the latest version per ObjectID. Mutually exclusive with the
+    /// object pruner — see `AuthorityStorePruner::new`.
+    pub enable_objects_compactor: bool,
 }
 
 impl AuthorityPerpetualTablesOptions {
@@ -234,9 +237,9 @@ impl AuthorityPerpetualTables {
             KeyIndexing::key_reduction(obj_ref_size, 16..(obj_ref_size - 16));
 
         let mut objects_config = KeySpaceConfig::new()
-            .with_max_dirty_keys(4 * default_max_dirty_keys())
+            .with_max_dirty_keys(16 * default_max_dirty_keys())
             .with_value_cache_size(value_cache_size);
-        if matches!(db_options_override, Some(options) if options.is_validator) {
+        if matches!(db_options_override, Some(options) if options.enable_objects_compactor) {
             objects_config = objects_config.with_compactor(Box::new(objects_compactor));
         }
 

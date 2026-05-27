@@ -78,37 +78,23 @@ As data is persisted to disk, the user needs to provide a directory where the ne
 
 ### **Startup object seeding**
 
-At startup, the user has the choice to seed addresses or objects, to make the forked network “aware” of them.
+At startup, the user has the choice to seed addresses or objects, recording enough metadata for the forked network to initialize its owned-object index when needed.
 
-`--address` adds an address for seeding (works in the consistent range), loads that address's objects and adds them to the seed.
-`--object` add the object by ID directly to the seed.
+`--address` adds an address for seeding (works in the consistent range), resolves that address's owned object refs, and records them in the seed manifest.
+`--object` adds an object by ID to the seed manifest if it is address-owned at the fork checkpoint.
 
 
-Note that seeding can also be done from a file:
-
-```json
-{
-    "network": "testnet",
-    "checkpoint": 12345678,
-    "addresses": [
-        "0x1234567890abcdef1234567890abcdef12345678",
-        "0xabcdef1234567890abcdef1234567890abcdef12"
-    ],
-    "objects": [
-        "0xabcdef1234567890abcdef1234567890abcdef12"
-    ]
-}
-```
-
-If the user provides both `--address` and `--object`, the tool will combine the objects resolved from both sources and use that as the initial seed for the forked network.
-The initial seed will be dumped to a file `generated_{network}_{checkpoint}.json` for future reference. This file can be used to restart the same forked network with the same seed, which is useful for debugging or CI purposes.
+If the user provides both `--address` and `--object`, the tool combines the object refs resolved from both sources and persists them to `seed_manifest.json`.
+The seed manifest is reused on restart if needed, and is the source for lazy owned-object index initialization.
 
 ```json
 {
     "network": "testnet",
     "checkpoint": 12345678,
-    "objects": [
-        "0xabcdef1234567890abcdef1234567890abcdef12"
+    "entries": [
+        {
+            "object_ref": ["0xabcdef1234567890abcdef1234567890abcdef12", 42, "..."],
+        }
     ]
 }
 ```

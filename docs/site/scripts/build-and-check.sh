@@ -14,6 +14,7 @@ fi
 
 # Pre-build generation steps
 echo "Running pre-build generation..."
+node scripts/validate-gasless-tokens.mjs || { echo "❌ validate-gasless-tokens failed"; exit 1; }
 node scripts/generate-import-context.js || { echo "❌ generate-import-context failed"; exit 1; }
 node scripts/generate-resolved-pages.js || { echo "❌ generate-resolved-pages failed"; exit 1; }
 node scripts/grpc-download.js || { echo "❌ grpc-download failed"; exit 1; }

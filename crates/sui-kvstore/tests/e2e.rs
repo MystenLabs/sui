@@ -22,6 +22,7 @@ use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_inverted_index::Watermarked;
 use sui_inverted_index::eval_bitmap_query_stream;
 use sui_keys::keystore::AccountKeystore;
 use sui_kvstore::ALL_PIPELINE_NAMES;
@@ -142,7 +143,22 @@ fn bitmap_query_stream(
     direction: ScanDirection,
 ) -> impl futures::Stream<Item = Result<u64>> + Send + 'static {
     let source = BigTableBitmapSource::new(client.clone(), spec);
-    eval_bitmap_query_stream(source, query, range, spec.bucket_size, direction)
+    let stream = eval_bitmap_query_stream(
+        source,
+        query,
+        range,
+        spec.bucket_size,
+        direction,
+        u64::MAX,
+        |_| {},
+    );
+    use futures::TryStreamExt;
+    stream.try_filter_map(|m| async move {
+        Ok(match m {
+            Watermarked::Item(v) => Some(v),
+            Watermarked::Watermark(_) => None,
+        })
+    })
 }
 
 impl TestHarness {

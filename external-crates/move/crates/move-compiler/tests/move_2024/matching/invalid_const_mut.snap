@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_2024/matching/invalid_const_mut.move:9:26
   │
 9 │             Box { value: mut ZERO } => ZERO,
@@ -34,7 +34,7 @@ error[E02001]: duplicate declaration, item, or annotation
 14 │     public fun test(b: &Box): u64 {
    │                ^^^^ Duplicate module member 'test'. Top level names in a namespace must be unique
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
    ┌─ tests/move_2024/matching/invalid_const_mut.move:16:26
    │
 16 │             Box { value: mut ZERO } => ZERO,
@@ -51,7 +51,7 @@ error[E02001]: duplicate declaration, item, or annotation
 21 │     public fun test(b: &mut Box): u64 {
    │                ^^^^ Duplicate module member 'test'. Top level names in a namespace must be unique
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
    ┌─ tests/move_2024/matching/invalid_const_mut.move:23:26
    │
 23 │             Box { value: mut ZERO } => ZERO,

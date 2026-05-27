@@ -446,5 +446,9 @@ fn substitute_root_address(
 
 /// The on-chain addresses for a source package's dependencies
 fn dependency_addresses(package: &CompiledPackage) -> impl Iterator<Item = AccountAddress> + '_ {
-    package.dependency_ids.published.values().map(|id| **id)
+    package
+        .dependency_ids
+        .published
+        .values()
+        .map(|dep| AccountAddress::from(dep.published_at))
 }

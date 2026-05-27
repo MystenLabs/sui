@@ -171,7 +171,7 @@ fn execute_command<Mode: ExecutionMode>(
         command,
         result_type,
         drop_values,
-        consumed_shared_objects: _,
+        incurs_post_execution_checks: _,
     } = c;
     assert_invariant!(
         context.gas_charger.move_gas_status().stack_height_current() == 0,

@@ -38,9 +38,9 @@ module action {
     }
 
     public fun speed () {
+        let l1;
         let l3 = l0;
         let l2 = l3;
-        let l1;
         match(l2: Action) {
             Action::Stop => {
                 abort 0u64;
@@ -54,6 +54,7 @@ module action {
                 l1 =         *reg_16 : &u64;
             },
         }
+        return l1
     }
 
 }

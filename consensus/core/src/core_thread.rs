@@ -140,7 +140,9 @@ impl CoreThread {
                     let _scope = monitored_scope("CoreThread::loop::set_last_known_proposed_round");
                     let round = *self.rx_last_known_proposed_round.borrow();
                     self.core.set_last_known_proposed_round(round);
-                    self.core.new_block(round + 1, true)?;
+                    // `round` arg is meant to avoid proposing below already proposed round.
+                    // Passing Round::MAX to select the threshold clock round for proposing.
+                    self.core.new_block(Round::MAX, true)?;
                 }
                 _ = self.rx_propagation_delay.changed() => {
                     let _scope = monitored_scope("CoreThread::loop::set_propagation_delay");
@@ -372,11 +374,15 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
     use parking_lot::RwLock;
+    use tokio::time::timeout;
 
     use super::*;
     use crate::{
         CommitConsumerArgs,
+        block::{BlockAPI, TestBlock, genesis_blocks},
         block_manager::BlockManager,
         block_verifier::NoopBlockVerifier,
         commit_observer::CommitObserver,
@@ -385,7 +391,7 @@ mod test {
         dag_state::DagState,
         leader_schedule::LeaderSchedule,
         round_tracker::RoundTracker,
-        storage::mem_store::MemStore,
+        storage::{Store, WriteBatch, mem_store::MemStore},
         transaction::{TransactionClient, TransactionConsumer},
         transaction_vote_tracker::TransactionVoteTracker,
     };
@@ -451,5 +457,114 @@ mod test {
         // Try to send some commands
         assert!(dispatcher_1.add_blocks(vec![]).await.is_err());
         assert!(dispatcher_2.add_blocks(vec![]).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_last_known_sync_wakes_threshold_clock_round() {
+        telemetry_subscribers::init_for_testing();
+        let (context, mut key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+
+        let mut last_round_blocks = genesis_blocks(&context);
+        let mut all_blocks = last_round_blocks.clone();
+        for round in 1..=2 {
+            let mut this_round_blocks = Vec::new();
+            for (index, _authority) in context.committee.authorities() {
+                let block = VerifiedBlock::new_for_test(
+                    TestBlock::new(round, index.value() as u32)
+                        .set_ancestors(last_round_blocks.iter().map(|b| b.reference()).collect())
+                        .build(),
+                );
+                this_round_blocks.push(block);
+            }
+            all_blocks.extend(this_round_blocks.clone());
+            last_round_blocks = this_round_blocks;
+        }
+        store
+            .write(WriteBatch::default().blocks(all_blocks))
+            .expect("Storage error");
+
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        assert_eq!(
+            dag_state.read().get_last_proposed_block().unwrap().round(),
+            2
+        );
+        assert_eq!(dag_state.read().threshold_clock_round(), 3);
+
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let transaction_vote_tracker = TransactionVoteTracker::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+        );
+        transaction_vote_tracker.recover_blocks_after_round(dag_state.read().gc_round());
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        let mut block_receiver = signal_receivers.block_broadcast_receiver();
+        let (commit_consumer, _commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            commit_consumer,
+            dag_state.clone(),
+            transaction_vote_tracker.clone(),
+        )
+        .await;
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
+            context.clone(),
+            dag_state.clone(),
+        ));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let core = Core::new_validator(
+            context.clone(),
+            leader_schedule,
+            transaction_consumer,
+            transaction_vote_tracker,
+            block_manager,
+            commit_observer,
+            signals,
+            key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
+            true,
+            round_tracker,
+        );
+
+        let (core_dispatcher, handle) =
+            ChannelCoreThreadDispatcher::start(context, &dag_state, core);
+
+        let recovered_block = timeout(Duration::from_secs(5), block_receiver.recv())
+            .await
+            .expect("timed out waiting for recovered block")
+            .expect("block broadcast closed");
+        assert_eq!(recovered_block.block.round(), 2);
+
+        assert!(
+            timeout(Duration::from_millis(100), block_receiver.recv())
+                .await
+                .is_err(),
+            "round 3 must not be proposed before last-known sync completes"
+        );
+
+        core_dispatcher
+            .set_last_known_proposed_round(1)
+            .expect("core thread should be running");
+
+        let proposed_block = timeout(Duration::from_secs(5), async {
+            loop {
+                let block = block_receiver.recv().await.expect("block broadcast closed");
+                if block.block.round() == 3 {
+                    return block;
+                }
+            }
+        })
+        .await
+        .expect("timed out waiting for threshold-clock proposal");
+        assert_eq!(
+            proposed_block.block.author(),
+            core_dispatcher.context.own_index
+        );
+
+        handle.stop().await;
     }
 }

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_2024/naming/lambda_shadows_function.move:4:22
   │
 4 │     macro fun do<$T>(f: || -> $T): $T {

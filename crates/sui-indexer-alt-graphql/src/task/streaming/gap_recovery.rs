@@ -325,7 +325,7 @@ mod tests {
     fn drain_broadcast(receiver: &mut broadcast::Receiver<Arc<ProcessedCheckpoint>>) -> Vec<u64> {
         let mut received = Vec::new();
         while let Ok(cp) = receiver.try_recv() {
-            received.push(cp.sequence_number);
+            received.push(cp.summary.sequence_number);
         }
         received
     }

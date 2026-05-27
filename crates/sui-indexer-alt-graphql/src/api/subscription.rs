@@ -11,7 +11,6 @@ use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::event::Event;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::transaction::Transaction;
-use crate::api::types::transaction::TransactionContents;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::config::Limits;
 use crate::error::RpcError;
@@ -46,7 +45,7 @@ impl Subscription {
                             processed.clone(),
                         );
                         yield Ok(Checkpoint {
-                            sequence_number: processed.sequence_number,
+                            sequence_number: processed.summary.sequence_number,
                             scope,
                             streamed_data: Some(processed),
                         });
@@ -94,13 +93,7 @@ impl Subscription {
                             if !filter.matches(&tx.contents) {
                                 continue;
                             }
-                            yield Ok(Transaction {
-                                digest: tx.digest,
-                                contents: TransactionContents {
-                                    scope: scope.with_active_transaction_digest(tx.digest),
-                                    contents: Some(Arc::new(tx.contents.clone())),
-                                },
-                            });
+                            yield Transaction::with_contents(scope.clone(), tx.contents.clone());
                         }
                     }
                     Err(e) => {
@@ -141,15 +134,22 @@ impl Subscription {
                             processed.clone(),
                         );
                         for tx in &processed.transactions {
+                            let digest = tx
+                                .contents
+                                .digest()
+                                .expect("ExecutedTransaction digest is infallible");
                             let events = tx.contents.events().unwrap_or_default();
                             for (idx, native) in events.into_iter().enumerate() {
                                 if !filter.matches(&native) {
                                     continue;
                                 }
                                 yield Ok(Event {
-                                    scope: scope.with_active_transaction_digest(tx.digest),
+                                    scope: scope.with_active_transaction_contents(
+                                        digest,
+                                        tx.contents.clone(),
+                                    ),
                                     native,
-                                    transaction_digest: tx.digest,
+                                    transaction_digest: digest,
                                     sequence_number: idx as u64,
                                     timestamp_ms,
                                 });

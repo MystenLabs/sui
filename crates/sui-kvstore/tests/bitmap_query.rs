@@ -16,6 +16,7 @@ use bytes::Bytes;
 use futures::TryStreamExt;
 use roaring::RoaringBitmap;
 use sui_inverted_index::IndexDimension;
+use sui_inverted_index::Watermarked;
 use sui_inverted_index::encode_dimension_key;
 use sui_inverted_index::eval_bitmap_query_stream;
 use sui_kvstore::BigTableBitmapSource;
@@ -58,7 +59,22 @@ fn bitmap_query_stream(
     direction: ScanDirection,
 ) -> impl futures::Stream<Item = Result<u64>> + Send + 'static {
     let source = BigTableBitmapSource::new(client.clone(), spec);
-    eval_bitmap_query_stream(source, query, range, spec.bucket_size, direction)
+    let stream = eval_bitmap_query_stream(
+        source,
+        query,
+        range,
+        spec.bucket_size,
+        direction,
+        u64::MAX,
+        |_| {},
+    );
+    use futures::TryStreamExt;
+    stream.try_filter_map(|m| async move {
+        Ok(match m {
+            Watermarked::Item(v) => Some(v),
+            Watermarked::Watermark(_) => None,
+        })
+    })
 }
 
 /// Write a bitmap index entry directly. Serializes a RoaringBitmap containing
@@ -100,7 +116,7 @@ async fn write_tx_seq_digest(
 ) -> Result<()> {
     let entry = tables::make_entry(
         tables::tx_seq_digest::encode_key(tx_seq),
-        tables::tx_seq_digest::encode(digest, 0, checkpoint_number),
+        tables::tx_seq_digest::encode(digest, 0, 0, checkpoint_number),
         None,
     );
     client
@@ -117,6 +133,7 @@ fn tx_seq_digest_data(
         tx_sequence_number,
         digest,
         event_count: 0,
+        tx_offset: 0,
         checkpoint_number,
     }
 }

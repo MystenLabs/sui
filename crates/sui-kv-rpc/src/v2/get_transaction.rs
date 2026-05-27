@@ -26,7 +26,7 @@ use super::render_json;
 use crate::PackageResolver;
 
 pub const MAX_BATCH_REQUESTS: usize = 200;
-pub const READ_MASK_DEFAULT: &str = "digest";
+pub const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::TRANSACTION;
 
 pub(crate) fn validate_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTree, RpcError> {
     let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));

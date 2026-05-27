@@ -72,17 +72,19 @@ fn arms_mut(exp: &mut Exp) -> Vec<&mut Exp> {
     }
 }
 
-/// `Assign([X], _)` directly, or the trailing entry of a `Seq` that is — returns `X`.
+/// `Assign([X], _)` directly, or the trailing entry of a `Seq` that is — returns `X`. Peeks
+/// through any `Block` wrappers that lowering left around the arm body and its tail.
 fn trailing_assign_target(exp: &Exp) -> Option<&str> {
     match exp {
         Exp::Assign(names, _) if names.len() == 1 => Some(&names[0]),
         Exp::Seq(items) => items.last().and_then(trailing_assign_target),
+        Exp::Block(_, body) => trailing_assign_target(body),
         _ => None,
     }
 }
 
-/// Replace the trailing `Assign([_], rhs)` (possibly nested in a `Seq`) with just `rhs`, in
-/// place, so the arm now evaluates to what the assignment's RHS was.
+/// Replace the trailing `Assign([_], rhs)` (possibly nested in a `Seq` or `Block`) with just
+/// `rhs`, in place, so the arm now evaluates to what the assignment's RHS was.
 fn strip_trailing_assign(exp: &mut Exp) {
     match exp {
         Exp::Assign(_, _) => exp.map_mut(|e| match e {
@@ -94,6 +96,7 @@ fn strip_trailing_assign(exp: &mut Exp) {
                 strip_trailing_assign(last);
             }
         }
+        Exp::Block(_, body) => strip_trailing_assign(body),
         _ => {}
     }
 }

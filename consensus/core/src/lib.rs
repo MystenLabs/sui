@@ -22,6 +22,7 @@ mod core_thread;
 mod dag_state;
 mod error;
 mod leader_schedule;
+mod leader_schedule_v3;
 mod leader_scoring;
 mod leader_timeout;
 mod linearizer;

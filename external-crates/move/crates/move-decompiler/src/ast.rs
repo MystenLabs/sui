@@ -1,8 +1,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::normalized::{Constant, ModuleId};
+use move_binary_format::{
+    file_format::{AbilitySet, DatatypeTyParameter, Visibility},
+    normalized::{self, Constant, ModuleId},
+};
 
+use indexmap::IndexMap;
 use move_core_types::{account_address::AccountAddress, runtime_value::MoveValue as Value};
 use move_model_2::{model::Model, source_kind::SourceKind};
 use move_stackless_bytecode_2::ast::{DataOp, PrimitiveOp};
@@ -28,6 +32,11 @@ pub struct Package {
 #[derive(Debug, Clone)]
 pub struct Module {
     pub name: Symbol,
+    /// Structs in declaration order. We use `IndexMap` rather than `BTreeMap` because users
+    /// expect source-position ordering for types, and bytecode preserves the original order in
+    /// its index map. Functions still use `BTreeMap` (alphabetical) to match prior behavior.
+    pub structs: IndexMap<Symbol, Struct>,
+    pub enums: IndexMap<Symbol, Enum>,
     pub functions: BTreeMap<Symbol, Function>,
     /// `use 0xADDR::name;` declarations. Populated by the `collect_uses` refinement after a
     /// scan of every function body; arms of every `ModuleRef::Aliased(name)` in the bodies
@@ -43,8 +52,111 @@ pub struct Module {
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: Symbol,
+    pub visibility: Visibility,
+    pub is_entry: bool,
+    /// Per type-parameter abilities (in declaration order). Type parameters are referred to in
+    /// types as `Type::TypeParameter(index)` and rendered as `T{index}`.
+    pub type_parameters: Vec<AbilitySet>,
+    /// Parameter types, in declaration order. Parameter names are not preserved in bytecode;
+    /// the pretty printer generates `l0..l{N-1}` matching `term_reconstruction::local_name`.
+    pub parameters: Vec<Type>,
+    /// Return types. Empty for `(): ()`, single element for one return, multiple for a tuple.
+    pub returns: Vec<Type>,
     pub code: Exp,
-    // TODO add function args?
+    /// Basic-block ids that the structurer received as input but never emitted into the
+    /// structured output. Non-empty means the renderer prepends a
+    /// `// Did not structure and emit blocks N, K, ...` notice so the reader knows part of
+    /// the bytecode is missing from this function's source view.
+    pub unstructured_blocks: Vec<u64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Struct {
+    pub name: Symbol,
+    pub abilities: AbilitySet,
+    pub type_parameters: Vec<DatatypeTyParameter>,
+    /// Fields in declaration order. Positional vs. named is a source-level distinction not
+    /// preserved in bytecode; we always render as `{ name: ty, ... }`.
+    pub fields: Vec<(Symbol, Type)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Enum {
+    pub name: Symbol,
+    pub abilities: AbilitySet,
+    pub type_parameters: Vec<DatatypeTyParameter>,
+    pub variants: Vec<Variant>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Variant {
+    pub name: Symbol,
+    pub fields: Vec<(Symbol, Type)>,
+}
+
+/// Type expressions appearing in parameter, return, and field positions. Mirrors
+/// `move_binary_format::normalized::Type<Symbol>` (no source-only `Tuple`/`Fun`/`Any` variants,
+/// because everything we model comes off compiled bytecode), with one key difference:
+/// `Datatype` carries our `TypeRef` instead of a bare `ModuleId<Symbol>`. That makes types
+/// participate in the same alias-rewriting pass (`collect_uses`) that handles call sites and
+/// `Unpack`/`Switch`/`Match` heads — without it, a struct or function signature would render
+/// fully qualified even when the body referenced the same type via an alias.
+#[derive(Debug, Clone)]
+pub enum Type {
+    Bool,
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    U256,
+    Address,
+    Signer,
+    Vector(Box<Type>),
+    Reference(/* is_mut */ bool, Box<Type>),
+    /// A reference to a declared type parameter by index. The containing `Struct`/`Enum`/
+    /// `Function` owns the parameter list (with abilities/constraints); this is only the
+    /// reference site, rendered as `T{index}`.
+    TypeParameter(u16),
+    Datatype(Box<Datatype>),
+}
+
+#[derive(Debug, Clone)]
+pub struct Datatype {
+    pub type_ref: TypeRef,
+    pub type_arguments: Vec<Type>,
+}
+
+impl Type {
+    /// Convert from the normalized bytecode type. The `Datatype` arm builds a
+    /// `TypeRef::Qualified(ModuleRef::Qualified(mid), name)` — `collect_uses` later collapses
+    /// these to aliased form where appropriate.
+    pub fn from_normalized(t: &normalized::Type<Symbol>) -> Self {
+        match t {
+            normalized::Type::Bool => Type::Bool,
+            normalized::Type::U8 => Type::U8,
+            normalized::Type::U16 => Type::U16,
+            normalized::Type::U32 => Type::U32,
+            normalized::Type::U64 => Type::U64,
+            normalized::Type::U128 => Type::U128,
+            normalized::Type::U256 => Type::U256,
+            normalized::Type::Address => Type::Address,
+            normalized::Type::Signer => Type::Signer,
+            normalized::Type::Vector(inner) => Type::Vector(Box::new(Type::from_normalized(inner))),
+            normalized::Type::Reference(is_mut, inner) => {
+                Type::Reference(*is_mut, Box::new(Type::from_normalized(inner)))
+            }
+            normalized::Type::TypeParameter(idx) => Type::TypeParameter(*idx),
+            normalized::Type::Datatype(dt) => Type::Datatype(Box::new(Datatype {
+                type_ref: TypeRef::Qualified(ModuleRef::Qualified(dt.module), dt.name),
+                type_arguments: dt
+                    .type_arguments
+                    .iter()
+                    .map(Type::from_normalized)
+                    .collect(),
+            })),
+        }
+    }
 }
 
 /// A reference to a module from inside an expression. Lowering emits `Qualified(mid)` everywhere;
@@ -54,6 +166,16 @@ pub struct Function {
 pub enum ModuleRef {
     Qualified(ModuleId<Symbol>),
     Aliased(Symbol),
+    /// No module prefix — for macros and other unqualified builtins. The `Symbol` in the
+    /// containing `Call` is rendered alone, e.g. `assert!`. `Display` emits an empty string;
+    /// the Call printers detect this variant and skip the `::` separator.
+    Builtin,
+}
+
+impl ModuleRef {
+    pub fn is_builtin(&self) -> bool {
+        matches!(self, ModuleRef::Builtin)
+    }
 }
 
 impl std::fmt::Display for ModuleRef {
@@ -61,6 +183,7 @@ impl std::fmt::Display for ModuleRef {
         match self {
             ModuleRef::Qualified(mid) => write!(f, "{mid}"),
             ModuleRef::Aliased(name) => write!(f, "{name}"),
+            ModuleRef::Builtin => Ok(()),
         }
     }
 }
@@ -155,6 +278,11 @@ pub enum Exp {
     // ideally not needed, but useful to avoid failing on an entire module
     // just because we can't handle one thing
     Unstructured(Vec<UnstructuredNode>),
+    /// A `D::Structured::Block(code)` after lowering. The `u64` matches the label carried by
+    /// any `Unstructured(Goto)` that targets this block, so a surviving goto can be traced
+    /// to its destination by scanning for the matching `Block` in the rendered output. The
+    /// body is the lowered block contents (typically a `Seq`).
+    Block(u64, Box<Exp>),
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -196,6 +324,7 @@ impl Exp {
                 }
                 UnstructuredNode::Goto(_) => false,
             }),
+            Exp::Block(_, body) => body.contains_break(),
         }
     }
 
@@ -235,6 +364,7 @@ impl Exp {
                 }
                 UnstructuredNode::Goto(_) => false,
             }),
+            Exp::Block(_, body) => body.contains_continue(),
         }
     }
 
@@ -335,6 +465,7 @@ impl Exp {
                 }
             }
             Exp::Value(_) | Exp::Constant(_) | Exp::Break(_) | Exp::Continue(_) => {}
+            Exp::Block(_, body) => body.collect_referenced_names(out),
         }
     }
 }
@@ -471,6 +602,7 @@ impl std::fmt::Display for Exp {
                     | Exp::UnpackVariant(_, _, _, _)
                     | Exp::VecUnpack(_, _)
                     | Exp::Unstructured(_)
+                    | Exp::Block(_, _)
             )
         }
 
@@ -589,8 +721,15 @@ impl std::fmt::Display for Exp {
                 }
                 Exp::Call((module_name, fun_name), exps) => {
                     indent(f, level)?;
-                    write!(f, "{module_name}::{fun_name}(")?;
-                    for exp in exps {
+                    if module_name.is_builtin() {
+                        write!(f, "{fun_name}(")?;
+                    } else {
+                        write!(f, "{module_name}::{fun_name}(")?;
+                    }
+                    for (i, exp) in exps.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
                         fmt_exp(f, exp, level)?;
                     }
                     writeln!(f, ")")
@@ -676,6 +815,10 @@ impl std::fmt::Display for Exp {
                     indent(f, level)?;
                     writeln!(f, "}}")
                 }
+                // Block is a marker; recur into the body. The pretty printer emits the
+                // `/* block N */` comment; the Debug `Display` path is for tests and stays
+                // transparent.
+                Exp::Block(_, body) => fmt_exp(f, body, level),
             }
         }
 

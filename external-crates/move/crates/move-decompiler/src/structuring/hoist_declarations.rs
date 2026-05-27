@@ -189,6 +189,14 @@ fn summarize_exp(e: &Exp) -> Summary {
                 subs: vec![],
             }
         }
+        Exp::Block(_, body) => {
+            let s = summarize_exp(body);
+            let entries = s.entries.clone();
+            Summary {
+                entries,
+                subs: vec![s],
+            }
+        }
     }
 }
 
@@ -359,6 +367,10 @@ fn exp(e: Exp, summary: Summary, already_bound: &HashSet<String>) -> Exp {
         Exp::VecUnpack(names, value) => {
             let value_sum = expect_one(subs);
             Exp::VecUnpack(names, Box::new(exp(*value, value_sum, already_bound)))
+        }
+        Exp::Block(id, body) => {
+            let body_sum = expect_one(subs);
+            Exp::Block(id, Box::new(exp(*body, body_sum, already_bound)))
         }
         e @ (Exp::Value(_)
         | Exp::Constant(_)

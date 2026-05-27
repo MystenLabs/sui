@@ -1275,7 +1275,13 @@ async fn start(
             config,
         });
 
-        start_faucet(app_state).await?;
+        rpc_services = rpc_services.merge(
+            start_faucet(app_state)
+                .await
+                .context("Failed to start faucet")?,
+        );
+
+        info!("Faucet started at {faucet_address}");
     }
 
     // Run health check loop until Ctrl+C or failure

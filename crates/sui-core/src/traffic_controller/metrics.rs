@@ -8,14 +8,13 @@ use prometheus::{
 
 #[derive(Clone)]
 pub struct TrafficControllerMetrics {
-    pub tallies: IntCounter,
+    pub tallies: IntCounterVec,
     pub connection_ip_blocklist_len: IntGauge,
     pub proxy_ip_blocklist_len: IntGauge,
-    pub requests_blocked_at_protocol: IntCounter,
+    pub requests_blocked_at_protocol: IntCounterVec,
     pub blocks_delegated_to_firewall: IntCounter,
     pub firewall_delegation_request_fail: IntCounter,
     pub tally_channel_overflow: IntCounter,
-    pub num_dry_run_blocked_requests: IntCounter,
     pub tally_handled: IntCounter,
     pub error_tally_handled: IntCounter,
     pub tally_error_types: IntCounterVec,
@@ -34,8 +33,13 @@ pub struct TrafficControllerMetrics {
 impl TrafficControllerMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            tallies: register_int_counter_with_registry!("tallies", "Number of tallies", registry)
-                .unwrap(),
+            tallies: register_int_counter_vec_with_registry!(
+                "tallies",
+                "Number of tallies by RPC method",
+                &["method"],
+                registry
+            )
+            .unwrap(),
             connection_ip_blocklist_len: register_int_gauge_with_registry!(
                 "connection_ip_blocklist_len",
                 // make the below a multiline string
@@ -54,9 +58,10 @@ impl TrafficControllerMetrics {
                 registry
             )
             .unwrap(),
-            requests_blocked_at_protocol: register_int_counter_with_registry!(
+            requests_blocked_at_protocol: register_int_counter_vec_with_registry!(
                 "requests_blocked_at_protocol",
-                "Number of requests blocked by this node at the protocol level",
+                "Number of requests blocked by this node at the protocol level (ip is hashed to bucket_0..bucket_99 to limit cardinality)",
+                &["dry_run", "ip"],
                 registry
             )
             .unwrap(),
@@ -75,12 +80,6 @@ impl TrafficControllerMetrics {
             tally_channel_overflow: register_int_counter_with_registry!(
                 "tally_channel_overflow",
                 "Traffic controller tally channel overflow count",
-                registry
-            )
-            .unwrap(),
-            num_dry_run_blocked_requests: register_int_counter_with_registry!(
-                "traffic_control_num_dry_run_blocked_requests",
-                "Number of requests blocked in traffic controller dry run mode",
                 registry
             )
             .unwrap(),

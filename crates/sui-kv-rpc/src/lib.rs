@@ -35,19 +35,25 @@ use tonic::transport::ServerTlsConfig;
 use tracing::error;
 
 mod bigtable_client;
-mod filter;
+mod config;
 mod object_cache;
 mod operation;
 mod package_store;
 mod pipeline;
-mod query_options;
 mod v2;
 mod v2alpha;
 
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_server::LedgerServiceServer as KvLedgerServiceServer;
 
-pub use bigtable_client::ConcurrencyConfig;
 use bigtable_client::Metrics as BigTableLimiterMetrics;
+pub use config::KvRpcConfig;
+pub use config::LedgerHistoryConfig;
+pub use config::LedgerHistoryMethodConfig;
+pub use config::PipelineStage;
+pub use config::ResolvedLedgerHistoryMethodConfig;
+pub use config::ResolvedStageConfig;
+pub use config::StageConfig;
+pub use config::StagesConfig;
 use package_store::BigTablePackageStore;
 
 pub const DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 6] = [
@@ -68,6 +74,7 @@ pub(crate) struct KvRpcMetrics {
     bigtable_limiter: Arc<BigTableLimiterMetrics>,
     response_render_latency_ms: HistogramVec,
     stream_item_yield_wait_ms: HistogramVec,
+    bitmap_buckets_evaluated: HistogramVec,
 }
 
 impl KvRpcMetrics {
@@ -90,6 +97,16 @@ impl KvRpcMetrics {
                 registry,
             )
             .unwrap(),
+            bitmap_buckets_evaluated: register_histogram_vec_with_registry!(
+                "kv_rpc_bitmap_buckets_evaluated",
+                "Buckets evaluated against the per-request bitmap scan budget. Caps at the configured budget; actual backend bucket reads may exceed it by up to max_bitmap_filter_literals (one extra fetched-and-discarded bucket per leaf stream at exhaustion). Tail near the per-request cap means clients are hitting SCAN_LIMIT and paging.",
+                &["method"],
+                // Exponential 1..2048: many requests evaluate few buckets
+                // (small or empty scans), a tail saturates at the default 1k cap.
+                prometheus::exponential_buckets(1.0, 2.0, 12).unwrap(),
+                registry,
+            )
+            .unwrap(),
         })
     }
 
@@ -104,6 +121,12 @@ impl KvRpcMetrics {
             .with_label_values(&[method])
             .observe(elapsed.as_secs_f64() * 1000.0);
     }
+
+    fn observe_bitmap_buckets_evaluated(&self, method: &'static str, buckets: u64) {
+        self.bitmap_buckets_evaluated
+            .with_label_values(&[method])
+            .observe(buckets as f64);
+    }
 }
 
 #[derive(Clone)]
@@ -116,7 +139,7 @@ pub struct KvRpcServer {
     cache: Arc<RwLock<Option<GetServiceInfoResponse>>>,
     package_resolver: PackageResolver,
     metrics: Arc<KvRpcMetrics>,
-    concurrency: ConcurrencyConfig,
+    pub(crate) ledger_history: LedgerHistoryConfig,
 }
 
 /// Optional configuration for the gRPC server (TLS, metrics, reflection).
@@ -140,9 +163,9 @@ impl KvRpcServer {
         credentials_path: Option<String>,
         pool_config: PoolConfig,
         service_info_watermark_pipelines: Vec<&'static str>,
-        concurrency: ConcurrencyConfig,
+        ledger_history: LedgerHistoryConfig,
     ) -> anyhow::Result<Self> {
-        concurrency.validate()?;
+        ledger_history.validate()?;
         let mut client = BigTableClient::new_remote_with_credentials(
             instance_id,
             project_id,
@@ -171,7 +194,7 @@ impl KvRpcServer {
             checkpoint_bucket,
             service_info_watermark_pipelines,
             metrics,
-            concurrency,
+            ledger_history,
         )
     }
 
@@ -193,7 +216,7 @@ impl KvRpcServer {
             checkpoint_bucket,
             default_service_info_watermark_pipelines(false),
             metrics,
-            ConcurrencyConfig::default(),
+            LedgerHistoryConfig::default(),
         )
     }
 
@@ -204,13 +227,13 @@ impl KvRpcServer {
         checkpoint_bucket: Option<String>,
         service_info_watermark_pipelines: Vec<&'static str>,
         metrics: Arc<KvRpcMetrics>,
-        concurrency: ConcurrencyConfig,
+        ledger_history: LedgerHistoryConfig,
     ) -> anyhow::Result<Self> {
         ensure!(
             !service_info_watermark_pipelines.is_empty(),
             "at least one service info watermark pipeline must be configured"
         );
-        concurrency.validate()?;
+        ledger_history.validate()?;
 
         let cache = Arc::new(RwLock::new(None));
 
@@ -228,7 +251,7 @@ impl KvRpcServer {
             cache,
             package_resolver,
             metrics,
-            concurrency,
+            ledger_history,
         };
 
         let server_clone = server.clone();

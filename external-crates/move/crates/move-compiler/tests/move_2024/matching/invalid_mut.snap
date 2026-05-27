@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
    ┌─ tests/move_2024/matching/invalid_mut.move:10:13
    │
 10 │             mut Maybe::Nothing => (),
@@ -21,7 +21,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
    ┌─ tests/move_2024/matching/invalid_mut.move:11:17
    │
 11 │             mut x<u64> => (),

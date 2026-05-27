@@ -30,6 +30,9 @@ fn elide_tail(exp: &mut Exp) -> bool {
             }
             changed
         }
+        // Transparently descend through Block — the block ID rides along but doesn't gate
+        // tail-return elision.
+        Exp::Block(_, body) => elide_tail(body),
         _ => false,
     }
 }

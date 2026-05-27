@@ -36,7 +36,7 @@ pub(super) type Resolved = ResolverDependencyInfo;
 pub type ResolverResult<T> = Result<T, ResolverError>;
 
 /// A [ResolvedDependency] is like a [CombinedDependency] except that it no longer has
-/// externally resolved or system dependencies.
+/// externally resolved or system dependencies, and all on-chain dependencies have addresses.
 #[derive(Debug)]
 pub(super) struct ResolvedDependency {
     pub(super) context: DependencyContext,
@@ -128,7 +128,11 @@ impl ResolvedDependency {
                 dep_info: match dep.dep_info {
                     Combined::Local(loc) => Resolved::Local(loc),
                     Combined::Git(git) => Resolved::Git(git),
-                    Combined::OnChain(onchain) => Resolved::OnChain(onchain),
+                    Combined::OnChainPlaceholder(_) => unreachable!(
+                        "on-chain placeholders (on-chain = true) without addresses \
+                         are rejected during combining"
+                    ),
+                    Combined::OnChain(addr) => Resolved::OnChain(addr),
                     Combined::External(_) => {
                         ext.expect("resolve_single outputs same keys as input")
                     }

@@ -3,7 +3,10 @@
 
 use std::collections::BTreeSet;
 
-use crate::{ast::Exp, refinement::Refine};
+use crate::{
+    ast::Exp,
+    refinement::{Refine, utils::peek},
+};
 
 pub fn refine(exp: &mut Exp) -> bool {
     FuseLet.refine(exp)
@@ -73,12 +76,9 @@ fn fuse_seq(items: &mut Vec<Exp>) -> bool {
         }
 
         // Apply fusions in reverse so positional indices remain valid as we mutate in place.
+        // The `Assign` may sit inside a `Block` wrapper; preserve the wrapper.
         for &j in fusion_positions.iter().rev() {
-            let item = std::mem::replace(&mut items[j], Exp::Seq(vec![]));
-            let Exp::Assign(targets, rhs) = item else {
-                unreachable!("fusion_positions only records Assign indices");
-            };
-            items[j] = Exp::LetBind(targets, rhs);
+            rewrite_assign_to_letbind(&mut items[j]);
         }
 
         // Drop the fused names from the Declare; remove the Declare if nothing remains.
@@ -112,7 +112,8 @@ fn classify_item(
     fusion_positions: &mut Vec<usize>,
     j: usize,
 ) {
-    if let Exp::Assign(targets, rhs) = item {
+    // Peek through `Block` wrappers — the `Assign` we're hunting may sit inside one.
+    if let Exp::Assign(targets, rhs) = peek(item) {
         let rhs_refs = rhs.referenced_names();
         let all_targets_pending = targets.iter().all(|t| pending.contains(t));
         let rhs_safe = !rhs_refs.iter().any(|n| pending.contains(n));
@@ -138,5 +139,20 @@ fn classify_item(
     // Any other item: collect every name it touches and block them.
     for n in &item.referenced_names() {
         pending.remove(n);
+    }
+}
+
+/// Rewrite an `Assign` to a `LetBind` in place, preserving any surrounding `Block` wrapper
+/// (so the block ID stays attached for goto cross-referencing).
+fn rewrite_assign_to_letbind(item: &mut Exp) {
+    match item {
+        Exp::Assign(_, _) => {
+            let Exp::Assign(targets, rhs) = std::mem::replace(item, Exp::Seq(vec![])) else {
+                unreachable!()
+            };
+            *item = Exp::LetBind(targets, rhs);
+        }
+        Exp::Block(_, body) => rewrite_assign_to_letbind(body),
+        _ => unreachable!("fusion_positions only records Assign indices (possibly Block-wrapped)"),
     }
 }

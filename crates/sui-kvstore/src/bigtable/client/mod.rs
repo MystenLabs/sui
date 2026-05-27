@@ -10,6 +10,8 @@ use std::future::Future;
 use std::ops::Range;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -18,8 +20,10 @@ use anyhow::Result;
 use anyhow::bail;
 use async_trait::async_trait;
 use bytes::Bytes;
+use futures::StreamExt;
 use gcp_auth::TokenProvider;
 use prometheus::Registry;
+use sui_inverted_index::ScanDirection;
 use sui_types::base_types::EpochId;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
@@ -126,6 +130,32 @@ pub struct BigTableClient {
     metrics: Option<Arc<KvMetrics>>,
     app_profile_id: Option<String>,
 }
+
+struct AbortOnDrop<T> {
+    handle: tokio::task::JoinHandle<T>,
+}
+
+impl<T> AbortOnDrop<T> {
+    fn new(handle: tokio::task::JoinHandle<T>) -> Self {
+        Self { handle }
+    }
+}
+
+impl<T> Future for AbortOnDrop<T> {
+    type Output = std::result::Result<T, tokio::task::JoinError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        Pin::new(&mut self.get_mut().handle).poll(cx)
+    }
+}
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
+}
+
+impl<T> Unpin for AbortOnDrop<T> {}
 
 impl BigTableClient {
     pub async fn new_local(host: String, instance_id: String) -> Result<Self> {
@@ -352,6 +382,45 @@ impl BigTableClient {
             checkpoints.push(tables::checkpoints::decode(&row)?);
         }
         Ok(checkpoints)
+    }
+
+    /// Stream checkpoints over a dense sequence-number range in scan order.
+    pub async fn scan_checkpoints_stream(
+        &mut self,
+        checkpoint_range: Range<CheckpointSequenceNumber>,
+        direction: ScanDirection,
+        rows_limit: usize,
+        filter: Option<RowFilter>,
+    ) -> Result<
+        futures::stream::BoxStream<'static, Result<(CheckpointSequenceNumber, CheckpointData)>>,
+    > {
+        if checkpoint_range.is_empty() || rows_limit == 0 {
+            return Ok(futures::stream::empty().boxed());
+        }
+
+        let rows_limit = i64::try_from(rows_limit).context("checkpoint scan limit exceeds i64")?;
+        let start_key = tables::checkpoints::encode_key(checkpoint_range.start);
+        let end_key = tables::checkpoints::encode_key(checkpoint_range.end - 1);
+        let rows = self
+            .range_scan_stream(
+                tables::checkpoints::NAME,
+                Some(Bytes::from(start_key)),
+                Some(Bytes::from(end_key)),
+                rows_limit,
+                !direction.is_ascending(),
+                filter,
+            )
+            .await?;
+
+        Ok(validate_dense_scan(
+            rows,
+            checkpoint_range,
+            direction,
+            rows_limit,
+            decode_checkpoint_scan_row,
+            "checkpoint",
+        )
+        .boxed())
     }
 
     /// Fetch a checkpoint by digest with an optional column filter.
@@ -635,7 +704,6 @@ impl BigTableClient {
         request: ReadRowsRequest,
         table_name: &str,
     ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
-        use futures::StreamExt;
         let stream = self.read_rows_stream(request, table_name).await?;
         futures::pin_mut!(stream);
         let mut result = vec![];
@@ -870,7 +938,6 @@ impl BigTableClient {
         keys: Vec<Vec<u8>>,
         filter: Option<RowFilter>,
     ) -> Result<futures::stream::BoxStream<'static, Result<(Bytes, Vec<(Bytes, Bytes)>)>>> {
-        use futures::StreamExt;
         let request = self.build_multi_get_request(table_name, keys, filter);
         let stream = self.read_rows_stream(request, table_name).await?;
         Ok(stream.boxed())
@@ -1019,13 +1086,14 @@ impl BigTableClient {
         let mut by_seq: HashMap<u64, TxSeqDigestData> = HashMap::with_capacity(rows.len());
         for (row_key, cells) in &rows {
             let tx_seq = tx_seq_digest::decode_key(row_key.as_ref())?;
-            let (digest, event_count, checkpoint_number) = tx_seq_digest::decode(cells)?;
+            let (digest, event_count, tx_offset, checkpoint_number) = tx_seq_digest::decode(cells)?;
             by_seq.insert(
                 tx_seq,
                 TxSeqDigestData {
                     tx_sequence_number: tx_seq,
                     digest,
                     event_count,
+                    tx_offset,
                     checkpoint_number,
                 },
             );
@@ -1055,20 +1123,81 @@ impl BigTableClient {
             .await?;
 
         Ok(async_stream::try_stream! {
-            use futures::StreamExt;
             futures::pin_mut!(rows);
             while let Some(row) = rows.next().await {
                 let (row_key, cells) = row?;
                 let tx_sequence_number = tx_seq_digest::decode_key(row_key.as_ref())?;
-                let (digest, event_count, checkpoint_number) = tx_seq_digest::decode(&cells)?;
+                let (digest, event_count, tx_offset, checkpoint_number) = tx_seq_digest::decode(&cells)?;
                 yield TxSeqDigestData {
                     tx_sequence_number,
                     digest,
                     event_count,
+                    tx_offset,
                     checkpoint_number,
                 };
             }
         })
+    }
+
+    /// Stream `tx_seq_digest` rows over a dense tx_sequence_number range in scan order.
+    pub async fn scan_tx_seq_digests_stream(
+        &mut self,
+        tx_sequence_range: Range<u64>,
+        direction: ScanDirection,
+        rows_limit: usize,
+    ) -> Result<futures::stream::BoxStream<'static, Result<TxSeqDigestData>>> {
+        if tx_sequence_range.is_empty() || rows_limit == 0 {
+            return Ok(futures::stream::empty().boxed());
+        }
+
+        let descending = !direction.is_ascending();
+        let tx_sequence_range =
+            tx_seq_digest::clamp_range_to_limit(tx_sequence_range, descending, rows_limit);
+        let bucket_ranges = tx_seq_digest::split_range_by_bucket(tx_sequence_range, descending);
+        let client = self.clone();
+
+        Ok(async_stream::try_stream! {
+            let mut bucket_ranges = bucket_ranges.into_iter();
+            let Some(first_bucket_range) = bucket_ranges.next() else {
+                return;
+            };
+
+            let mut current = Some(spawn_tx_seq_digest_bucket_scan(
+                client.clone(),
+                first_bucket_range,
+                direction,
+                descending,
+            ));
+            let mut next = bucket_ranges.next().map(|bucket_range| {
+                spawn_tx_seq_digest_bucket_scan(
+                    client.clone(),
+                    bucket_range,
+                    direction,
+                    descending,
+                )
+            });
+
+            while let Some(current_task) = current.take() {
+                let dense_rows = current_task
+                    .await
+                    .context("tx_seq_digest bucket scan task failed")??;
+                futures::pin_mut!(dense_rows);
+                while let Some(row) = dense_rows.next().await {
+                    yield row?;
+                }
+
+                current = next.take();
+                next = bucket_ranges.next().map(|bucket_range| {
+                    spawn_tx_seq_digest_bucket_scan(
+                        client.clone(),
+                        bucket_range,
+                        direction,
+                        descending,
+                    )
+                });
+            }
+        }
+        .boxed())
     }
 
     /// Resolve tx_sequence_numbers to their containing checkpoint numbers.
@@ -1120,7 +1249,6 @@ impl BigTableClient {
             .await?;
 
         Ok(async_stream::try_stream! {
-            use futures::StreamExt;
             futures::pin_mut!(rows);
             while let Some(row) = rows.next().await {
                 let (key, cells) = row?;
@@ -1145,7 +1273,6 @@ impl BigTableClient {
             .await?;
 
         Ok(async_stream::try_stream! {
-            use futures::StreamExt;
             futures::pin_mut!(rows);
             while let Some(row) = rows.next().await {
                 let (_key, cells) = row?;
@@ -1234,6 +1361,151 @@ impl BigTableClient {
             })
             .collect())
     }
+}
+
+type TxSeqDigestScanStream = futures::stream::BoxStream<'static, Result<TxSeqDigestData>>;
+type TxSeqDigestScanTask = AbortOnDrop<Result<TxSeqDigestScanStream>>;
+
+fn spawn_tx_seq_digest_bucket_scan(
+    mut client: BigTableClient,
+    bucket_range: Range<u64>,
+    direction: ScanDirection,
+    descending: bool,
+) -> TxSeqDigestScanTask {
+    AbortOnDrop::new(tokio::spawn(async move {
+        open_tx_seq_digest_bucket_scan(&mut client, bucket_range, direction, descending).await
+    }))
+}
+
+async fn open_tx_seq_digest_bucket_scan(
+    client: &mut BigTableClient,
+    bucket_range: Range<u64>,
+    direction: ScanDirection,
+    descending: bool,
+) -> Result<TxSeqDigestScanStream> {
+    let rows_limit = i64::try_from(bucket_range.end - bucket_range.start)
+        .context("tx_seq_digest bucket scan limit exceeds i64")?;
+    let start_key = tx_seq_digest::encode_key(bucket_range.start);
+    let end_key = tx_seq_digest::encode_key(bucket_range.end - 1);
+    let rows = client
+        .range_scan_stream(
+            tx_seq_digest::NAME,
+            Some(Bytes::from(start_key)),
+            Some(Bytes::from(end_key)),
+            rows_limit,
+            descending,
+            None,
+        )
+        .await?;
+    Ok(validate_dense_scan(
+        rows,
+        bucket_range,
+        direction,
+        rows_limit,
+        decode_tx_seq_digest_scan_row,
+        "tx_seq_digest",
+    ))
+}
+
+fn validate_dense_scan<S, T, F>(
+    rows: S,
+    range: Range<u64>,
+    direction: ScanDirection,
+    rows_limit: i64,
+    decode: F,
+    name: &'static str,
+) -> futures::stream::BoxStream<'static, Result<T>>
+where
+    S: futures::Stream<Item = Result<(Bytes, Vec<(Bytes, Bytes)>)>> + Send + 'static,
+    T: Send + 'static,
+    F: Fn(Bytes, Vec<(Bytes, Bytes)>) -> Result<(u64, T)> + Send + 'static,
+{
+    async_stream::try_stream! {
+        let mut expected = next_expected_in_range(None, &range, direction);
+        let mut rows_seen = 0i64;
+        futures::pin_mut!(rows);
+        while let Some(row) = rows.next().await {
+            let (key, cells) = row?;
+            let (sequence, item) = decode(key, cells)?;
+            let expected_sequence = match expected {
+                Some(expected_sequence) => expected_sequence,
+                None => {
+                    Err(anyhow::anyhow!(
+                        "{name} scan returned row {sequence} after range was exhausted"
+                    ))?;
+                    unreachable!();
+                }
+            };
+            if sequence != expected_sequence {
+                Err(anyhow::anyhow!(
+                    "{name} scan expected dense row {expected_sequence}, got {sequence}"
+                ))?;
+            }
+            rows_seen += 1;
+            expected = next_expected_in_range(Some(sequence), &range, direction);
+            yield item;
+        }
+
+        if rows_seen < rows_limit
+            && let Some(expected_sequence) = expected
+        {
+            Err(anyhow::anyhow!("{name} scan ended before dense row {expected_sequence}"))?;
+        }
+    }
+    .boxed()
+}
+
+fn next_expected_in_range(
+    previous: Option<u64>,
+    range: &Range<u64>,
+    direction: ScanDirection,
+) -> Option<u64> {
+    match (previous, direction) {
+        (None, ScanDirection::Ascending) => Some(range.start),
+        (None, ScanDirection::Descending) => range.end.checked_sub(1),
+        (Some(previous), ScanDirection::Ascending) => {
+            let next = previous.checked_add(1)?;
+            (next < range.end).then_some(next)
+        }
+        (Some(previous), ScanDirection::Descending) => {
+            if previous > range.start {
+                Some(previous - 1)
+            } else {
+                None
+            }
+        }
+    }
+}
+
+fn decode_checkpoint_scan_row(
+    row_key: Bytes,
+    cells: Vec<(Bytes, Bytes)>,
+) -> Result<(u64, (CheckpointSequenceNumber, CheckpointData))> {
+    let bytes: [u8; 8] = row_key
+        .as_ref()
+        .try_into()
+        .context("invalid checkpoint row key length")?;
+    let sequence_number = u64::from_be_bytes(bytes);
+    let checkpoint = tables::checkpoints::decode(&cells)?;
+    Ok((sequence_number, (sequence_number, checkpoint)))
+}
+
+fn decode_tx_seq_digest_scan_row(
+    row_key: Bytes,
+    cells: Vec<(Bytes, Bytes)>,
+) -> Result<(u64, TxSeqDigestData)> {
+    let tx_sequence_number = tx_seq_digest::decode_key(row_key.as_ref())?;
+    let (digest, event_count, tx_offset, checkpoint_number) = tx_seq_digest::decode(&cells)?;
+    Ok((
+        tx_sequence_number,
+        TxSeqDigestData {
+            tx_sequence_number,
+            digest,
+            event_count,
+            tx_offset,
+            checkpoint_number,
+        },
+    ))
 }
 
 fn report_bt_stats_inner(
@@ -1711,5 +1983,91 @@ fn column_exists_filter(column: &str) -> RowFilter {
                 },
             ],
         })),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use futures::TryStreamExt;
+    use futures::stream;
+
+    use super::*;
+
+    fn row(sequence: u64) -> Result<(Bytes, Vec<(Bytes, Bytes)>)> {
+        Ok((Bytes::from(sequence.to_be_bytes().to_vec()), Vec::new()))
+    }
+
+    fn decode_sequence_only(key: Bytes, _cells: Vec<(Bytes, Bytes)>) -> Result<(u64, u64)> {
+        let bytes: [u8; 8] = key.as_ref().try_into().context("invalid key")?;
+        let sequence = u64::from_be_bytes(bytes);
+        Ok((sequence, sequence))
+    }
+
+    #[tokio::test]
+    async fn dense_scan_validator_accepts_ascending_rows() {
+        let rows = stream::iter([row(3), row(4), row(5)]);
+        let got = validate_dense_scan(
+            rows,
+            3..6,
+            ScanDirection::Ascending,
+            10,
+            decode_sequence_only,
+            "test",
+        )
+        .try_collect::<Vec<_>>()
+        .await
+        .expect("dense scan");
+        assert_eq!(got, vec![3, 4, 5]);
+    }
+
+    #[tokio::test]
+    async fn dense_scan_validator_accepts_descending_rows() {
+        let rows = stream::iter([row(5), row(4), row(3)]);
+        let got = validate_dense_scan(
+            rows,
+            3..6,
+            ScanDirection::Descending,
+            10,
+            decode_sequence_only,
+            "test",
+        )
+        .try_collect::<Vec<_>>()
+        .await
+        .expect("dense scan");
+        assert_eq!(got, vec![5, 4, 3]);
+    }
+
+    #[tokio::test]
+    async fn dense_scan_validator_rejects_gaps_before_limit() {
+        let rows = stream::iter([row(3), row(5)]);
+        let err = validate_dense_scan(
+            rows,
+            3..6,
+            ScanDirection::Ascending,
+            10,
+            decode_sequence_only,
+            "test",
+        )
+        .try_collect::<Vec<_>>()
+        .await
+        .expect_err("gap should fail");
+        assert!(err.to_string().contains("expected dense row 4"));
+    }
+
+    #[tokio::test]
+    async fn dense_scan_validator_allows_limit_truncated_tail() {
+        let rows = stream::iter([row(3), row(4)]);
+        let got = validate_dense_scan(
+            rows,
+            3..10,
+            ScanDirection::Ascending,
+            2,
+            decode_sequence_only,
+            "test",
+        )
+        .try_collect::<Vec<_>>()
+        .await
+        .expect("rows_limit can stop before range end");
+        assert_eq!(got, vec![3, 4]);
     }
 }

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E07005]: invalid transfer of references
+error[E07005]: invalid reference transfer
    ┌─ tests/move_check/borrows/call_mutual_borrows_invalid.move:15:9
    │
 14 │         let f = freeze(s1);
@@ -13,7 +13,7 @@ error[E07005]: invalid transfer of references
 15 │         mut_imm(s1, f);
    │         ^^^^^^^^^^^^^^ Invalid usage of reference as function argument. Cannot transfer a mutable reference that is being borrowed
 
-error[E07005]: invalid transfer of references
+error[E07005]: invalid reference transfer
    ┌─ tests/move_check/borrows/call_mutual_borrows_invalid.move:17:9
    │
 16 │         let f = &s1.f;
@@ -21,7 +21,7 @@ error[E07005]: invalid transfer of references
 17 │         mut_imm(s1, f);
    │         ^^^^^^^^^^^^^^ Invalid usage of reference as function argument. Cannot transfer a mutable reference that is being borrowed
 
-error[E07005]: invalid transfer of references
+error[E07005]: invalid reference transfer
    ┌─ tests/move_check/borrows/call_mutual_borrows_invalid.move:19:9
    │
 18 │         let f = &s1.f;
@@ -29,7 +29,7 @@ error[E07005]: invalid transfer of references
 19 │         mut_imm(&mut s1.f, f);
    │         ^^^^^^^^^^^^^^^^^^^^^ Invalid usage of reference as function argument. Cannot transfer a mutable reference that is being borrowed
 
-error[E07005]: invalid transfer of references
+error[E07005]: invalid reference transfer
    ┌─ tests/move_check/borrows/call_mutual_borrows_invalid.move:21:9
    │
 20 │         let f = id(&s1.f);
@@ -37,7 +37,7 @@ error[E07005]: invalid transfer of references
 21 │         id_mut(&mut s1.f); f;
    │         ^^^^^^^^^^^^^^^^^ Invalid usage of reference as function argument. Cannot transfer a mutable reference that is being borrowed
 
-error[E07005]: invalid transfer of references
+error[E07005]: invalid reference transfer
    ┌─ tests/move_check/borrows/call_mutual_borrows_invalid.move:23:9
    │
 23 │         mut_mut(s1, s1);
@@ -46,7 +46,7 @@ error[E07005]: invalid transfer of references
    │         │       It is still being mutably borrowed by this reference
    │         Invalid usage of reference as function argument. Cannot transfer a mutable reference that is being borrowed
 
-error[E07005]: invalid transfer of references
+error[E07005]: invalid reference transfer
    ┌─ tests/move_check/borrows/call_mutual_borrows_invalid.move:25:9
    │
 24 │         let f = &mut s1.f;
@@ -54,7 +54,7 @@ error[E07005]: invalid transfer of references
 25 │         mut_mut(s1, f);
    │         ^^^^^^^^^^^^^^ Invalid usage of reference as function argument. Cannot transfer a mutable reference that is being borrowed
 
-error[E07005]: invalid transfer of references
+error[E07005]: invalid reference transfer
    ┌─ tests/move_check/borrows/call_mutual_borrows_invalid.move:26:9
    │
 26 │         mut_mut(&mut s1.f, s1);
@@ -63,7 +63,7 @@ error[E07005]: invalid transfer of references
    │         │       Field 'f' is still being mutably borrowed by this reference
    │         Invalid usage of reference as function argument. Cannot transfer a mutable reference that is being borrowed
 
-error[E07005]: invalid transfer of references
+error[E07005]: invalid reference transfer
    ┌─ tests/move_check/borrows/call_mutual_borrows_invalid.move:28:9
    │
 27 │         let s = id_mut(s1);
@@ -71,7 +71,7 @@ error[E07005]: invalid transfer of references
 28 │         id_mut(s1);
    │         ^^^^^^^^^^ Invalid usage of reference as function argument. Cannot transfer a mutable reference that is being borrowed
 
-error[E07005]: invalid transfer of references
+error[E07005]: invalid reference transfer
    ┌─ tests/move_check/borrows/call_mutual_borrows_invalid.move:31:9
    │
 30 │         let f = id_mut(&mut s1.f);
@@ -79,7 +79,7 @@ error[E07005]: invalid transfer of references
 31 │         mut_mut(s1, f);
    │         ^^^^^^^^^^^^^^ Invalid usage of reference as function argument. Cannot transfer a mutable reference that is being borrowed
 
-error[E07005]: invalid transfer of references
+error[E07005]: invalid reference transfer
    ┌─ tests/move_check/borrows/call_mutual_borrows_invalid.move:32:9
    │
 32 │         mut_mut(id_mut(&mut s1.f), s1);

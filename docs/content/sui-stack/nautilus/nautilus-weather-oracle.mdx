@@ -182,16 +182,12 @@ $ touch example/move/Move.toml
 
 Insert the following content into the new Move.toml file:
 
-```toml 
+```toml
 [package]
 name = "app"
-edition = "2024"
 
 [dependencies]
 enclave = { git = "https://github.com/MystenLabs/nautilus.git", subdir = "move/enclave", rev = "main" }
-
-[addresses]
-app = "0x0"
 ```
 
 ##### Step 4: Configure the weather API key

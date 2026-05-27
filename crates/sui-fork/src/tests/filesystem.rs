@@ -8,6 +8,7 @@
 
 use std::ffi::OsString;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 
 use sui_types::base_types::ObjectID;
@@ -127,6 +128,55 @@ fn object_dir(store: &FilesystemStore, object_id: &ObjectID) -> std::path::PathB
     store.objects_dir().join(object_id.to_string())
 }
 
+fn object_latest_path(store: &FilesystemStore, object_id: &ObjectID) -> std::path::PathBuf {
+    object_dir(store, object_id).join(LATEST_FILE)
+}
+
+fn assert_no_old_removal_marker_files(dir: &Path) {
+    assert!(!dir.join("removed").exists());
+    assert!(!dir.join("deleted").exists());
+    assert!(!dir.join("wrapped").exists());
+}
+
+#[test]
+fn test_parse_object_latest_metadata_accepts_version_first_formats() {
+    let path = Path::new("latest");
+
+    assert_eq!(
+        parse_object_latest_metadata("5", path).unwrap(),
+        ObjectLatestMetadata {
+            version: 5,
+            state: ObjectLatestState::Live,
+        },
+    );
+    assert_eq!(
+        parse_object_latest_metadata("5,deleted", path).unwrap(),
+        ObjectLatestMetadata {
+            version: 5,
+            state: ObjectLatestState::Deleted,
+        },
+    );
+    assert_eq!(
+        parse_object_latest_metadata("5,wrapped\n", path).unwrap(),
+        ObjectLatestMetadata {
+            version: 5,
+            state: ObjectLatestState::Wrapped,
+        },
+    );
+}
+
+#[test]
+fn test_parse_object_latest_metadata_rejects_invalid_formats() {
+    let path = Path::new("latest");
+
+    for content in ["", ",deleted", "5,missing", "5,", "5,deleted,extra"] {
+        assert!(
+            parse_object_latest_metadata(content, path).is_err(),
+            "{content:?} should be rejected",
+        );
+    }
+}
+
 #[test]
 fn test_write_and_read_latest_object() {
     let (_dir, store) = test_store();
@@ -134,6 +184,10 @@ fn test_write_and_read_latest_object() {
     let obj = make_object(id, 5);
 
     store.write_object(&obj).unwrap();
+    assert_eq!(
+        fs::read_to_string(object_latest_path(&store, &id)).unwrap(),
+        "5"
+    );
     let loaded = store.get_latest_object(&id).unwrap();
     assert_eq!(loaded.clone().unwrap(), obj);
     assert_eq!(loaded.unwrap().version(), SequenceNumber::from_u64(5));
@@ -187,99 +241,162 @@ fn test_latest_tracks_highest_written_version() {
 }
 
 #[test]
-fn test_deleted_marker_blocks_latest_but_preserves_exact_versions() {
+fn test_deleted_latest_blocks_latest_but_preserves_exact_versions() {
     let (_dir, store) = test_store();
     let id = ObjectID::random();
     let obj = make_object(id, 5);
 
     store.write_object(&obj).unwrap();
-    let object_ref = obj.compute_object_reference();
-    store.mark_object_deleted(&object_ref).unwrap();
+    store.mark_object_as_deleted(id, obj.version()).unwrap();
 
-    assert!(store.is_object_deleted(&id).unwrap());
+    assert_eq!(
+        store.object_latest_state(&id).unwrap(),
+        Some(ObjectLatestState::Deleted)
+    );
     assert!(store.get_latest_object(&id).unwrap().is_none());
     let dir = object_dir(&store, &id);
     assert_eq!(
-        fs::read_to_string(dir.join(REMOVED_FILE)).unwrap(),
-        format!("deleted {} {}\n", object_ref.1.value(), object_ref.2),
+        fs::read_to_string(dir.join(LATEST_FILE)).unwrap(),
+        "5,deleted"
     );
-    assert!(!dir.join("deleted").exists());
-    assert!(!dir.join("wrapped").exists());
+    assert_no_old_removal_marker_files(&dir);
 
     let exact = store.get_object_at_version(&id, 5).unwrap();
     assert_eq!(exact.unwrap(), obj);
 
-    store.clear_object_deleted(&id).unwrap();
-    let latest = store.get_latest_object(&id).unwrap();
-    assert_eq!(latest.unwrap(), obj);
+    let written_again = make_object(id, 7);
+    store.write_live_object(&written_again).unwrap();
+    assert_eq!(
+        fs::read_to_string(dir.join(LATEST_FILE)).unwrap(),
+        "5,deleted"
+    );
+    assert!(store.get_latest_object(&id).unwrap().is_none());
+    assert_eq!(
+        store.get_object_at_version(&id, 7).unwrap().unwrap(),
+        written_again
+    );
 }
 
 #[test]
-fn test_wrapped_marker_blocks_latest_preserves_exact_and_clears_on_write() {
+fn test_wrapped_latest_blocks_latest_preserves_exact_and_clears_on_live_write() {
     let (_dir, store) = test_store();
     let id = ObjectID::random();
     let owner = SuiAddress::random_for_testing_only();
     let obj = make_object_with_owner(id, 5, Owner::AddressOwner(owner));
 
     store.write_object(&obj).unwrap();
-    let object_ref = obj.compute_object_reference();
-    store.mark_object_wrapped(&object_ref).unwrap();
+    store.mark_object_as_wrapped(id, obj.version()).unwrap();
 
-    assert!(store.is_object_wrapped(&id).unwrap());
+    assert_eq!(
+        store.object_latest_state(&id).unwrap(),
+        Some(ObjectLatestState::Wrapped)
+    );
     assert!(store.get_latest_object(&id).unwrap().is_none());
     let dir = object_dir(&store, &id);
     assert_eq!(
-        fs::read_to_string(dir.join(REMOVED_FILE)).unwrap(),
-        format!("wrapped {} {}\n", object_ref.1.value(), object_ref.2),
+        fs::read_to_string(dir.join(LATEST_FILE)).unwrap(),
+        "5,wrapped"
     );
-    assert!(!dir.join("deleted").exists());
-    assert!(!dir.join("wrapped").exists());
+    assert_no_old_removal_marker_files(&dir);
 
     let exact = store.get_object_at_version(&id, 5).unwrap();
     assert_eq!(exact.unwrap(), obj);
 
     let unwrapped = make_object_with_owner(id, 7, Owner::AddressOwner(owner));
-    store.write_object(&unwrapped).unwrap();
-    store.clear_object_wrapped(&id).unwrap();
+    store.write_live_object(&unwrapped).unwrap();
 
-    assert!(!store.is_object_wrapped(&id).unwrap());
+    assert_eq!(
+        store.object_latest_state(&id).unwrap(),
+        Some(ObjectLatestState::Live)
+    );
+    assert_eq!(fs::read_to_string(dir.join(LATEST_FILE)).unwrap(), "7");
     let latest = store.get_latest_object(&id).unwrap();
     assert_eq!(latest.unwrap(), unwrapped);
 }
 
 #[test]
-fn test_clear_wrapped_preserves_deleted_marker() {
+fn test_remote_object_write_preserves_removed_latest_state() {
     let (_dir, store) = test_store();
-    let id = ObjectID::random();
-    let obj = make_object(id, 5);
 
-    store.write_object(&obj).unwrap();
-    store
-        .mark_object_deleted(&obj.compute_object_reference())
-        .unwrap();
-    store.clear_object_wrapped(&id).unwrap();
+    for (state, version, cached_version, expected_latest) in [
+        (ObjectLatestState::Wrapped, 5, 7, "5,wrapped"),
+        (ObjectLatestState::Deleted, 3, 8, "3,deleted"),
+    ] {
+        let id = ObjectID::random();
+        let object = make_object(id, version);
+        let cached_later = make_object(id, cached_version);
 
-    assert!(store.is_object_deleted(&id).unwrap());
-    assert!(!store.is_object_wrapped(&id).unwrap());
-    assert!(store.get_latest_object(&id).unwrap().is_none());
+        store.write_object(&object).unwrap();
+        match state {
+            ObjectLatestState::Deleted => {
+                store.mark_object_as_deleted(id, object.version()).unwrap()
+            }
+            ObjectLatestState::Wrapped => {
+                store.mark_object_as_wrapped(id, object.version()).unwrap()
+            }
+            ObjectLatestState::Live => unreachable!("test only covers removed latest states"),
+        }
+        store.write_object(&cached_later).unwrap();
+
+        let dir = object_dir(&store, &id);
+        assert_eq!(
+            fs::read_to_string(dir.join(LATEST_FILE)).unwrap(),
+            expected_latest
+        );
+        assert!(store.get_latest_object(&id).unwrap().is_none());
+        assert_eq!(
+            store
+                .get_object_at_version(&id, cached_version)
+                .unwrap()
+                .unwrap(),
+            cached_later
+        );
+    }
 }
 
 #[test]
-fn test_deleted_marker_overwrites_wrapped_marker() {
+fn test_direct_deleted_latest_does_not_overwrite_wrapped_latest() {
     let (_dir, store) = test_store();
     let id = ObjectID::random();
     let obj = make_object(id, 5);
-    let object_ref = obj.compute_object_reference();
 
     store.write_object(&obj).unwrap();
-    store.mark_object_wrapped(&object_ref).unwrap();
-    store.mark_object_deleted(&object_ref).unwrap();
+    store.mark_object_as_wrapped(id, obj.version()).unwrap();
+    let err = store.mark_object_as_deleted(id, obj.version()).unwrap_err();
 
-    assert!(store.is_object_deleted(&id).unwrap());
-    assert!(!store.is_object_wrapped(&id).unwrap());
+    assert!(
+        err.to_string().contains("cannot delete wrapped object"),
+        "{err:?}",
+    );
     assert_eq!(
-        fs::read_to_string(object_dir(&store, &id).join(REMOVED_FILE)).unwrap(),
-        format!("deleted {} {}\n", object_ref.1.value(), object_ref.2),
+        store.object_latest_state(&id).unwrap(),
+        Some(ObjectLatestState::Wrapped)
+    );
+    assert_eq!(
+        fs::read_to_string(object_latest_path(&store, &id)).unwrap(),
+        "5,wrapped",
+    );
+}
+
+#[test]
+fn test_unwrapped_then_deleted_latest_overwrites_wrapped_latest() {
+    let (_dir, store) = test_store();
+    let id = ObjectID::random();
+    let obj = make_object(id, 5);
+
+    store.write_object(&obj).unwrap();
+    store.mark_object_as_wrapped(id, obj.version()).unwrap();
+    store
+        .mark_object_as_unwrapped_then_deleted(id, SequenceNumber::from_u64(7))
+        .unwrap();
+
+    assert_eq!(
+        store.object_latest_state(&id).unwrap(),
+        Some(ObjectLatestState::Deleted)
+    );
+    assert_eq!(
+        fs::read_to_string(object_latest_path(&store, &id)).unwrap(),
+        "7,deleted",
     );
 }
 
@@ -301,10 +418,25 @@ fn test_owned_object_index_upserts_removes_and_stays_sorted() {
     assert!(
         entries
             .windows(2)
-            .all(|window| window[0].object_id < window[1].object_id)
+            .all(|window| window[0].object_ref.0 < window[1].object_ref.0)
     );
     assert!(entries.iter().all(|entry| entry.owner == owner));
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry.object_type == sui_types::gas_coin::GasCoin::type_())
+    );
     assert!(entries.iter().all(|entry| entry.balance == Some(1_000_000)));
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.object_ref == first.compute_object_reference())
+    );
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.object_ref == second.compute_object_reference())
+    );
 
     let transferred = make_object_with_owner(first_id, 2, Owner::AddressOwner(next_owner));
     store
@@ -314,17 +446,25 @@ fn test_owned_object_index_upserts_removes_and_stays_sorted() {
         .get_owned_object_entries()
         .unwrap()
         .into_iter()
-        .find(|entry| entry.object_id == first_id)
+        .find(|entry| entry.object_ref.0 == first_id)
         .unwrap();
     assert_eq!(first_entry.owner, next_owner);
-    assert_eq!(first_entry.version, SequenceNumber::from_u64(2));
+    assert_eq!(
+        first_entry.object_ref,
+        transferred.compute_object_reference()
+    );
+    assert_eq!(
+        first_entry.object_type,
+        sui_types::gas_coin::GasCoin::type_()
+    );
+    assert_eq!(first_entry.balance, Some(1_000_000));
 
     store
         .apply_owned_object_index_updates(&[second_id], std::iter::empty::<&Object>())
         .unwrap();
     let entries = store.get_owned_object_entries().unwrap();
     assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0].object_id, first_id);
+    assert_eq!(entries[0].object_ref.0, first_id);
 }
 
 #[test]
@@ -336,12 +476,7 @@ fn test_seed_manifest_round_trips_and_is_immutable() {
         network: "testnet".to_owned(),
         checkpoint: 42,
         entries: vec![SeedEntry {
-            object_id: object.id(),
-            version: object.version(),
-            digest: object.digest(),
-            owner,
-            object_type: object.struct_tag().unwrap(),
-            balance: object.as_coin_maybe().map(|coin| coin.value()),
+            object_ref: object.compute_object_reference(),
         }],
     };
 
@@ -379,6 +514,16 @@ fn test_get_highest_checkpoint_errors_when_latest_file_missing() {
     fs::create_dir_all(store.checkpoints_dir()).unwrap();
     let err = store.get_highest_checkpoint_sequence_number().unwrap_err();
     assert!(err.to_string().contains("Latest file not found"));
+}
+
+#[test]
+fn test_checkpoint_latest_rejects_object_latest_state_suffix() {
+    let (_dir, store) = test_store();
+    fs::create_dir_all(store.checkpoints_dir()).unwrap();
+    fs::write(store.checkpoints_dir().join(LATEST_FILE), "5,deleted").unwrap();
+
+    let err = store.get_highest_checkpoint_sequence_number().unwrap_err();
+    assert!(err.to_string().contains("Failed to parse latest file"));
 }
 
 #[test]

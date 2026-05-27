@@ -363,7 +363,7 @@ pub fn transaction<Mode: ExecutionMode>(
             // computed later
             drop_values: vec![],
             // computed later
-            consumed_shared_objects: vec![],
+            incurs_post_execution_checks: false,
         };
         context.push_result(c)?
     }
@@ -373,7 +373,7 @@ pub fn transaction<Mode: ExecutionMode>(
     // mark unused results to be dropped
     unused_results::transaction(&mut ast)?;
     // track shared object IDs
-    consumed_shared_objects::transaction(&mut ast)?;
+    post_execution_checks::transaction(env.protocol_config, &mut ast)?;
     Ok(ast)
 }
 
@@ -1044,7 +1044,7 @@ fn convert_withdrawal_to_coin<Mode: ExecutionMode>(
         command: conversion_command__,
         result_type: vec![env.coin_type(inner_ty.clone())?],
         drop_values: vec![],
-        consumed_shared_objects: vec![],
+        incurs_post_execution_checks: false,
     };
     let conversion_idx = checked_as!(context.commands.len(), u16)?;
     context.push_result(conversion_command_)?;
@@ -1272,29 +1272,29 @@ mod unused_results {
 }
 
 //**************************************************************************************************
-// consumed shared object IDs
+// Post-execution checked objects
 //**************************************************************************************************
 
-mod consumed_shared_objects {
+mod post_execution_checks {
 
-    use crate::{
-        sp, static_programmable_transactions::loading::ast as L,
-        static_programmable_transactions::typing::ast as T,
-    };
+    use crate::{sp, static_programmable_transactions::typing::ast as T};
+    use sui_protocol_config::ProtocolConfig;
     use sui_types::{
-        base_types::ObjectID,
         error::{ExecutionError, SafeIndex},
+        object::ObjectPermissions,
     };
 
-    // Shared object (non-party) IDs contained in each location
+    // Taint context for inputs and results that require/incur post-execution checks
     struct Context {
-        // (legacy) shared object IDs that are used as inputs
-        inputs: Vec<Option<ObjectID>>,
-        results: Vec<Vec<Option<Vec<ObjectID>>>>,
+        // Does the input object require a post-execution check?
+        inputs: Vec<bool>,
+        // True if the command incurs post-execution checks
+        results: Vec<bool>,
+        propagate_through_mut_borrow: bool,
     }
 
     impl Context {
-        pub fn new(ast: &T::Transaction) -> Self {
+        pub fn new(protocol_config: &ProtocolConfig, ast: &T::Transaction) -> Self {
             let T::Transaction {
                 gas_payment: _,
                 bytes: _,
@@ -1306,132 +1306,126 @@ mod consumed_shared_objects {
                 original_command_len: _,
                 commands: _,
             } = ast;
+            // Find inputs with post execution checks
             let inputs = objects
                 .iter()
-                .map(|o| match &o.arg {
-                    L::ObjectArg::SharedObject {
-                        id,
-                        kind: L::SharedObjectKind::Legacy,
-                        ..
-                    } => Some(*id),
-                    L::ObjectArg::ImmObject(_)
-                    | L::ObjectArg::OwnedObject(_)
-                    | L::ObjectArg::SharedObject {
-                        kind: L::SharedObjectKind::Party,
-                        ..
-                    } => None,
+                .map(|o| {
+                    o.arg.refined_permissions.can_use_mutably()
+                        && o.arg.refined_permissions != ObjectPermissions::ALL
                 })
                 .collect::<Vec<_>>();
             Self {
                 inputs,
                 results: vec![],
+                propagate_through_mut_borrow: protocol_config.granular_post_execution_checks(),
             }
         }
     }
 
-    /// Finds what shared objects are taken by-value by each command and must be either
-    /// deleted or re-shared.
-    /// MakeMoveVec is the only command that can take shared objects by-value and propagate them
-    /// for another command.
-    pub fn transaction(ast: &mut T::Transaction) -> Result<(), ExecutionError> {
-        let mut context = Context::new(ast);
+    /// Find what commands will consume an object and incur a post execution check
+    /// MakeMoveVec is the only command that can take objects by-value and propagate them
+    /// for another command without directly incurring a check, as such we taint track for
+    /// MakeMoveVec
+    pub fn transaction(
+        protocol_config: &ProtocolConfig,
+        ast: &mut T::Transaction,
+    ) -> Result<(), ExecutionError> {
+        let mut context = Context::new(protocol_config, ast);
 
-        // For each command, find what shared objects are taken by-value and mark them as being
-        // consumed
+        // For each command, find what objects are taken by-value and will incur a post-execution
+        // check
         for c in &mut ast.commands {
-            debug_assert!(c.value.consumed_shared_objects.is_empty());
+            debug_assert!(!c.value.incurs_post_execution_checks);
             command(&mut context, c)?;
-            debug_assert!(context.results.last().unwrap().len() == c.value.result_type.len());
         }
         Ok(())
     }
 
     fn command(context: &mut Context, sp!(_, c): &mut T::Command) -> Result<(), ExecutionError> {
-        let mut acc = vec![];
-        match &c.command {
-            T::Command__::MoveCall(mc) => arguments(context, &mut acc, &mc.arguments)?,
-            T::Command__::TransferObjects(objects, recipient) => {
-                argument(context, &mut acc, recipient)?;
-                arguments(context, &mut acc, objects)?;
-            }
-            T::Command__::SplitCoins(_, coin, amounts) => {
-                arguments(context, &mut acc, amounts)?;
-                argument(context, &mut acc, coin)?;
-            }
-            T::Command__::MergeCoins(_, target, coins) => {
-                arguments(context, &mut acc, coins)?;
-                argument(context, &mut acc, target)?;
-            }
-            T::Command__::MakeMoveVec(_, elements) => arguments(context, &mut acc, elements)?,
-            T::Command__::Publish(_, _, _) => (),
-            T::Command__::Upgrade(_, _, _, x, _) => argument(context, &mut acc, x)?,
-        }
-        let (consumed, result) = match &c.command {
-            // make move vec does not "consume" any by-value shared objects, and can propagate
+        let arg_requires_post_execution_checks = arguments(context, c.command.arguments())?;
+        let (incurs_checks, tainted_result) = match &c.command {
+            // make move vec does not directly "consume" any objects, and can propagate
             // them to a later command
             T::Command__::MakeMoveVec(_, _) => {
                 assert_invariant!(
                     c.result_type.len() == 1,
                     "MakeMoveVec must return a single value"
                 );
-                (vec![], vec![Some(acc)])
+                (false, arg_requires_post_execution_checks)
             }
-            // these commands do not propagate shared objects, and consume any in the acc
+            // these commands do not propagate objects, and directly incur checks
             T::Command__::MoveCall(_)
             | T::Command__::TransferObjects(_, _)
             | T::Command__::SplitCoins(_, _, _)
             | T::Command__::MergeCoins(_, _, _)
             | T::Command__::Publish(_, _, _)
-            | T::Command__::Upgrade(_, _, _, _, _) => (acc, vec![None; c.result_type.len()]),
+            | T::Command__::Upgrade(_, _, _, _, _) => (arg_requires_post_execution_checks, false),
         };
-        c.consumed_shared_objects = consumed;
-        context.results.push(result);
+        c.incurs_post_execution_checks |= incurs_checks;
+        context.results.push(tainted_result);
         Ok(())
     }
 
-    fn arguments(
+    fn arguments<'a>(
         context: &mut Context,
-        acc: &mut Vec<ObjectID>,
-        args: &[T::Argument],
-    ) -> Result<(), ExecutionError> {
+        args: impl IntoIterator<Item = &'a T::Argument>,
+    ) -> Result<bool, ExecutionError> {
         for arg in args {
-            argument(context, acc, arg)?
+            if argument(context, arg)? {
+                return Ok(true);
+            }
         }
-        Ok(())
+        Ok(false)
     }
 
     fn argument(
         context: &mut Context,
-        acc: &mut Vec<ObjectID>,
         sp!(_, (arg_, _)): &T::Argument,
-    ) -> Result<(), ExecutionError> {
-        let T::Argument__::Use(T::Usage::Move(loc)) = arg_ else {
-            // only Move usage can take shared objects by-value since they cannot be copied
-            return Ok(());
-        };
-        match loc {
-            // no shared objects in these locations
+    ) -> Result<bool, ExecutionError> {
+        Ok(match arg_.location() {
+            // no shared/party objects in these locations
             T::Location::TxContext
             | T::Location::GasCoin
             | T::Location::WithdrawalInput(_)
             | T::Location::PureInput(_)
-            | T::Location::ReceivingInput(_) => (),
-            T::Location::ObjectInput(i) => {
-                if let Some(id) = *context.inputs.safe_get(*i as usize)? {
-                    acc.push(id);
+            | T::Location::ReceivingInput(_) => false,
+            T::Location::ObjectInput(i) => match arg_ {
+                T::Argument__::Use(T::Usage::Move(_)) => {
+                    let arg_requires_post_execution_checks = context.inputs.safe_get(i as usize)?;
+                    *arg_requires_post_execution_checks
                 }
-            }
+                T::Argument__::Use(T::Usage::Copy { .. })
+                | T::Argument__::Borrow(_, _)
+                | T::Argument__::Read(_)
+                | T::Argument__::Freeze(_) => {
+                    // not using the object by-value
+                    false
+                }
+            },
 
-            T::Location::Result(i, j) => {
-                if let Some(ids) = context
-                    .results
-                    .safe_get(*i as usize)?
-                    .safe_get(*j as usize)?
-                {
-                    acc.extend(ids.iter().copied());
+            T::Location::Result(i, _) => {
+                match arg_ {
+                    T::Argument__::Use(T::Usage::Move(_)) => {
+                        let tainted = context.results.safe_get(i as usize)?;
+                        *tainted
+                    }
+                    T::Argument__::Borrow(/* mut */ true, _) => {
+                        if context.propagate_through_mut_borrow {
+                            let tainted = context.results.safe_get(i as usize)?;
+                            *tainted
+                        } else {
+                            false
+                        }
+                    }
+                    T::Argument__::Use(T::Usage::Copy { .. })
+                    | T::Argument__::Borrow(false, _)
+                    | T::Argument__::Read(_)
+                    | T::Argument__::Freeze(_) => {
+                        // not using the object by-value
+                        false
+                    }
                 }
             }
-        };
-        Ok(())
+        })
     }
 }

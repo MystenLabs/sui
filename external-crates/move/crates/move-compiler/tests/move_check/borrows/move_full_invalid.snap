@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E07003]: invalid operation, could create dangling a reference
+error[E07003]: invalid operation, could create a dangling reference
    ┌─ tests/move_check/borrows/move_full_invalid.move:13:9
    │
 12 │         let f = &x;
@@ -13,7 +13,7 @@ error[E07003]: invalid operation, could create dangling a reference
 13 │         move x;
    │         ^^^^^^ Invalid move of variable 'x'
 
-error[E07003]: invalid operation, could create dangling a reference
+error[E07003]: invalid operation, could create a dangling reference
    ┌─ tests/move_check/borrows/move_full_invalid.move:18:9
    │
 17 │         let f = &mut x;
@@ -21,7 +21,7 @@ error[E07003]: invalid operation, could create dangling a reference
 18 │         move x;
    │         ^^^^^^ Invalid move of variable 'x'
 
-error[E07003]: invalid operation, could create dangling a reference
+error[E07003]: invalid operation, could create a dangling reference
    ┌─ tests/move_check/borrows/move_full_invalid.move:23:9
    │
 22 │         let f = id(&x);
@@ -29,7 +29,7 @@ error[E07003]: invalid operation, could create dangling a reference
 23 │         move x;
    │         ^^^^^^ Invalid move of variable 'x'
 
-error[E07003]: invalid operation, could create dangling a reference
+error[E07003]: invalid operation, could create a dangling reference
    ┌─ tests/move_check/borrows/move_full_invalid.move:28:9
    │
 27 │         let f = id_mut(&mut x);

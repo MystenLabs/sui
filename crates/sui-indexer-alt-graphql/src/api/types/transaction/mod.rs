@@ -221,8 +221,24 @@ impl Transaction {
     pub(crate) fn with_digest(scope: Scope, digest: TransactionDigest) -> Self {
         Self {
             digest,
-            contents: TransactionContents::empty(scope),
+            contents: TransactionContents::empty(scope.with_active_transaction_digest(digest)),
         }
+    }
+
+    /// Construct a fully-inflated transaction with already-hydrated contents. The digest is
+    /// read from `contents`, which keeps it consistent with the contents anchored on the scope.
+    pub(crate) fn with_contents(
+        scope: Scope,
+        contents: Arc<NativeTransactionContents>,
+    ) -> Result<Self, RpcError> {
+        let digest = contents.digest()?;
+        Ok(Self {
+            digest,
+            contents: TransactionContents {
+                scope: scope.with_active_transaction_contents(digest, contents.clone()),
+                contents: Some(contents),
+            },
+        })
     }
 
     /// Paginate over pre-loaded transactions, applying in-memory filtering.
@@ -252,16 +268,7 @@ impl Transaction {
         page.paginate_results(
             filtered,
             |tx| JsonCursor::new(tx.tx_sequence_number),
-            |tx| {
-                let tx_scope = scope.with_active_transaction_digest(tx.digest);
-                Ok(Transaction {
-                    digest: tx.digest,
-                    contents: TransactionContents {
-                        scope: tx_scope,
-                        contents: Some(Arc::new(tx.contents.clone())),
-                    },
-                })
-            },
+            |tx| Transaction::with_contents(scope.clone(), tx.contents.clone()),
         )
     }
 
@@ -273,18 +280,15 @@ impl Transaction {
         scope: Scope,
         digest: Digest,
     ) -> Result<Option<Self>, RpcError> {
-        let contents = TransactionContents::empty(scope)
+        let fetched = TransactionContents::empty(scope.clone())
             .fetch(ctx, digest.into())
             .await?;
 
-        let Some(tx) = &contents.contents else {
+        let Some(contents) = fetched.contents else {
             return Ok(None);
         };
 
-        Ok(Some(Self {
-            digest: tx.digest()?,
-            contents,
-        }))
+        Ok(Some(Self::with_contents(scope, contents)?))
     }
 
     /// Cursor based pagination through transactions with filters applied.
@@ -361,12 +365,12 @@ impl TransactionContents {
             return Ok(self.clone());
         }
 
-        // Streaming fast path: if the scope is backed by a streamed checkpoint containing this
-        // transaction, hydrate from the in-memory payload instead of hitting the DB.
-        if let Some(tx) = self.scope.streamed_transaction_by_digest(digest) {
+        // Reuse contents anchored on the scope by a parent resolver (streaming and indexed
+        // alike both anchor with hydrated contents when they have them).
+        if let Some(contents) = self.scope.active_transaction_contents_for(digest) {
             return Ok(Self {
                 scope: self.scope.clone(),
-                contents: Some(Arc::new(tx.contents.clone())),
+                contents: Some(contents.clone()),
             });
         }
 

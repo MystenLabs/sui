@@ -17,7 +17,9 @@ pub mod client;
 mod config;
 mod error;
 pub mod grpc;
+pub mod ledger_history;
 mod metrics;
+pub mod read_mask_defaults;
 mod reader;
 mod response;
 mod service;
@@ -154,6 +156,7 @@ impl RpcService {
             crate::proto::google::protobuf::FILE_DESCRIPTOR_SET,
             crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
             sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
+            sui_rpc::proto::sui::rpc::v2alpha::FILE_DESCRIPTOR_SET,
             tonic_health::pb::FILE_DESCRIPTOR_SET,
         ]
         .into_iter()
@@ -170,6 +173,11 @@ impl RpcService {
         let router = {
             let ledger_service =
                 sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer::new(
+                    self.clone(),
+                )
+                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
+            let ledger_service_v2alpha =
+                sui_rpc::proto::sui::rpc::v2alpha::ledger_service_server::LedgerServiceServer::new(
                     self.clone(),
                 )
                 .send_compressed(tonic::codec::CompressionEncoding::Zstd);
@@ -224,6 +232,7 @@ impl RpcService {
                 service_name(&signature_verification_service),
                 service_name(&move_package_service),
                 service_name(&name_service),
+                service_name(&ledger_service_v2alpha),
                 service_name(&event_service_alpha),
                 service_name(&proof_service_alpha),
                 service_name(&reflection_v1),
@@ -242,6 +251,8 @@ impl RpcService {
                 .add_service(signature_verification_service)
                 .add_service(move_package_service)
                 .add_service(name_service)
+                // V2alpha
+                .add_service(ledger_service_v2alpha)
                 // alpha
                 .add_service(event_service_alpha)
                 .add_service(proof_service_alpha)

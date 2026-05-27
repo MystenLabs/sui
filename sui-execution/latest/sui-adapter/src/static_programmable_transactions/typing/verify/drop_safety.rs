@@ -195,7 +195,7 @@ mod refine {
                     command: return_command__,
                     result_type: vec![],
                     drop_values: vec![],
-                    consumed_shared_objects: vec![],
+                    incurs_post_execution_checks: false,
                 },
             );
             ast.commands.push(return_command);

@@ -38,6 +38,9 @@ Address.addressAt
 Address.asObject
   => {"obj_versions"}
 
+Address.asTransactionObject
+  => {}
+
 Address.balance
   => {"consistent"}
 

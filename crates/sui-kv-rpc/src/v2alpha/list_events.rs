@@ -28,25 +28,37 @@ use tracing::info;
 
 use crate::PackageResolver;
 use crate::bigtable_client::BigTableClient;
+use crate::config::PipelineStage;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
+use crate::pipeline::ResolvedWatermarked;
+use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
-use crate::query_options::CheckpointRange;
-use crate::query_options::QueryOptions;
-use crate::query_options::QueryType;
-use crate::query_options::ResolvedRange;
+use crate::pipeline::resolve_watermarks;
+use crate::pipeline::take_items;
 use crate::v2::render_json;
+use sui_inverted_index::BitmapScanLimitExceeded;
+use sui_inverted_index::error_contains;
+use sui_rpc_api::ledger_history::query_options::CheckpointRange;
+use sui_rpc_api::ledger_history::query_options::QueryOptions;
+use sui_rpc_api::ledger_history::query_options::QueryType;
+use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::watermark::advance_boundary_excluding_cp;
+use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
+use sui_rpc_api::ledger_history::watermark::boundary_watermark;
+use sui_rpc_api::ledger_history::watermark::item_watermark;
+use sui_rpc_api::ledger_history::watermark::reached_range_end;
+use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
+
 use sui_rpc::proto::sui::rpc::v2alpha::EventItem;
 use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListEventsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
+use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::list_events_response;
 
-const DEFAULT_LIMIT_ITEMS: u32 = 50;
-const MAX_LIMIT_ITEMS: u32 = 1000;
-const EVENT_READ_MASK_DEFAULT: &str = "event_type";
-const CHUNK_MAX: usize = 100;
+const EVENT_READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EVENT;
 
 pub(crate) type ListEventsStream = BoxStream<'static, Result<ListEventsResponse, RpcError>>;
 
@@ -59,6 +71,10 @@ pub(crate) async fn list_events(
     let client: BigTableClient = ctx.client().clone();
     let resolver: crate::PackageResolver = ctx.package_resolver().clone();
     let checkpoint_hi_exclusive = ctx.checkpoint_hi_exclusive();
+    let lh = ctx.ledger_history();
+    let endpoint = lh.list_events();
+    let tx_seq_digest_stage = lh.stage(PipelineStage::TxSeqDigest);
+    let transactions_stage = lh.stage(PipelineStage::Transactions);
 
     let checkpoint_range = CheckpointRange::from_request(
         request.start_checkpoint,
@@ -68,20 +84,22 @@ pub(crate) async fn list_events(
     let read_mask = Arc::new(validate_event_read_mask(request.read_mask)?);
     let options = QueryOptions::from_proto(
         request.options.as_ref(),
-        DEFAULT_LIMIT_ITEMS,
-        MAX_LIMIT_ITEMS,
+        endpoint.default_limit_items,
+        endpoint.max_limit_items,
         QueryType::Events,
         request.filter.as_ref(),
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
+    let direction = options.scan_direction();
     let wants_json = read_mask.contains(ProtoEvent::JSON_FIELD.name);
 
     let event_range = resolve_event_range(&client, checkpoint_range, &options)
         .instrument(debug_span!("resolve_event_range"))
         .await?;
     let end_reason = event_range.end_reason;
-    let end_cursor = event_range.end_cursor(&options);
+    let end_checkpoint = event_range.end_checkpoint;
+    let end_position = event_range.end_position;
     let event_range = event_range.range;
 
     if event_range.is_empty() {
@@ -94,18 +112,33 @@ pub(crate) async fn list_events(
             elapsed_ms = started.elapsed().as_millis(),
             "list_events: empty range"
         );
-        return Ok(
-            futures::stream::once(async move { Ok(end_response(end_reason, end_cursor)) }).boxed(),
-        );
+        // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
+        // range; still surface the terminal boundary so the client learns the
+        // final checkpoint is complete without waiting for the next item.
+        let terminal = reached_range_end(end_reason).then(|| {
+            watermark_response(terminal_boundary_watermark(
+                &options,
+                end_checkpoint,
+                end_position,
+            ))
+        });
+        return Ok(futures::stream::iter(
+            terminal
+                .into_iter()
+                .chain([end_response(end_reason)])
+                .map(Ok),
+        )
+        .boxed());
     }
 
+    let scan_budget = ctx.scan_budget(BitmapIndexSpec::event());
+
     // Stage A: stream of EventRefs. Filtered requests discover event_seq
-    // values through the event bitmap, bounded by `max_bitmap_filter_literals`.
-    // Unfiltered requests discover eventful transactions through point-lookups
-    // on tx_seq_digest with adaptive in-flight buffering based on the requested
-    // event item limit.
+    // values through the event bitmap (per-bucket and periodic-frontier
+    // watermarks). Unfiltered requests scan tx_seq_digest rows and expand
+    // each row's event_count into concrete EventRefs.
     let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
-    let event_ref_stream: BoxStream<'static, Result<EventRef, RpcError>> =
+    let event_ref_stream: BoxStream<'static, Result<Watermarked<EventRef>, anyhow::Error>> =
         if let Some(filter) = &request.filter {
             let query = ctx.event_filter_query(filter)?;
             client
@@ -114,49 +147,56 @@ pub(crate) async fn list_events(
                     event_range.clone(),
                     BitmapIndexSpec::event(),
                     options.scan_direction(),
+                    scan_budget,
+                    ctx.bitmap_scan_observer(),
                 )
-                .map_ok(|event_seq| {
-                    let (tx_seq, event_idx) = event_bitmap_index::decode_event_seq(event_seq);
-                    EventRef {
-                        event_seq,
-                        tx_seq,
-                        event_idx,
-                        tx_seq_digest: None,
-                    }
+                .map_ok(|m| {
+                    m.map_item(|event_seq| {
+                        let (tx_seq, event_idx) = event_bitmap_index::decode_event_seq(event_seq);
+                        EventRef {
+                            event_seq,
+                            tx_seq,
+                            event_idx,
+                            tx_seq_digest: None,
+                        }
+                    })
                 })
-                .map_err(RpcError::from)
                 .boxed()
         } else {
             unfiltered_event_refs(
                 client.clone(),
                 event_range.clone(),
-                limit_items,
                 options.clone(),
-                request_bigtable_concurrency,
+                endpoint.max_limit_items as usize,
             )
         };
-    let ref_stream = event_ref_stream.take(limit_items).boxed();
+    let ref_stream = take_items(event_ref_stream, limit_items);
 
     // Stage B (filtered path only): enrich refs with tx_seq_digest. The
     // unfiltered path already populates `tx_seq_digest` from point lookups,
     // so we skip this stage there.
-    let ref_with_digest_stream: BoxStream<'static, Result<EventRef, RpcError>> = if filtered {
-        pipelined_chunks(ref_stream, CHUNK_MAX, request_bigtable_concurrency, {
-            let client = client.clone();
-            move |refs| attach_tx_seq_digests(client.clone(), refs)
-        })
-    } else {
-        ref_stream
-    };
+    let ref_with_digest_stream: BoxStream<'static, Result<Watermarked<EventRef>, anyhow::Error>> =
+        if filtered {
+            pipelined_chunks(
+                ref_stream,
+                tx_seq_digest_stage.chunk_size,
+                tx_seq_digest_stage.concurrency,
+                {
+                    let client = client.clone();
+                    move |refs| attach_tx_seq_digests(client.clone(), refs)
+                },
+            )
+        } else {
+            ref_stream
+        };
 
     let columns: Arc<[&'static str]> = Arc::from([col::EVENTS, col::CHECKPOINT_NUMBER]);
 
-    // Stage C: EventRef (with digest) -> (EventRef, TransactionData). Each
-    // chunk is drained, with pairs ordered by input ref index.
+    // Stage C: Watermarked<EventRef> -> Watermarked<(EventRef, TransactionData)>.
     let tx_ref_stream = pipelined_chunks(
         ref_with_digest_stream,
-        CHUNK_MAX,
-        request_bigtable_concurrency,
+        transactions_stage.chunk_size,
+        transactions_stage.concurrency,
         {
             let client = client.clone();
             let columns = columns.clone();
@@ -165,7 +205,8 @@ pub(crate) async fn list_events(
     );
 
     // Stage D: render. `buffered` (ordered) lets per-event JSON rendering
-    // overlap while preserving input ref order in the output.
+    // overlap while preserving input ref order in the output. Frontier
+    // watermarks pass through unchanged.
     //
     // Package resolution uses the server-global `PackageResolver`, backed by
     // a cross-request LRU over the raw BigTable client. It is intentionally
@@ -178,44 +219,95 @@ pub(crate) async fn list_events(
     // TODO: add global single-flight dedupe around package cache misses so
     // concurrent requests for the same uncached package share one BigTable
     // fetch.
-    let render_options = options.clone();
     let event_stream = tx_ref_stream
         .map(move |item| {
             let resolver = resolver.clone();
             let read_mask = read_mask.clone();
-            let options = render_options.clone();
             async move {
-                let (event_ref, tx) = item?;
-                render_event(event_ref, tx, &read_mask, &resolver, wants_json, &options).await
+                match item? {
+                    Watermarked::Item((event_ref, tx)) => {
+                        let rendered =
+                            render_event(event_ref, tx, &read_mask, &resolver, wants_json).await?;
+                        Ok::<Watermarked<RenderedEvent>, anyhow::Error>(Watermarked::Item(rendered))
+                    }
+                    Watermarked::Watermark(p) => Ok(Watermarked::Watermark(p)),
+                }
             }
         })
         .buffered(request_bigtable_concurrency)
         .boxed();
 
+    let event_stream = resolve_watermarks(event_stream, client.event_wm_resolver(direction));
+
     Ok(async_stream::try_stream! {
         futures::pin_mut!(event_stream);
         let mut emitted = 0usize;
-        let mut last_cursor = None;
-        while let Some(event) = event_stream.try_next().await? {
-            if let Some(list_events_response::Response::Item(item)) = &event.response {
-                last_cursor = item.cursor.clone();
+        let mut checkpoint_boundary: Option<u64> = None;
+        let mut scan_limit_hit = false;
+        while let Some(item) = event_stream.next().await {
+            match item {
+                Ok(ResolvedWatermarked::Item(rendered)) => {
+                    checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, rendered.checkpoint_number, &options);
+                    let wm = item_watermark(
+                        &options,
+                        rendered.checkpoint_number,
+                        rendered.event_seq,
+                        checkpoint_boundary,
+                    );
+                    emitted += 1;
+                    yield event_item_response(rendered.item, wm);
+                }
+                Ok(ResolvedWatermarked::Watermark { position, cp }) => {
+                    checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
+                    let wm = boundary_watermark(&options, boundary_cursor_cp(cp, direction), position, checkpoint_boundary);
+                    yield watermark_response(wm);
+                }
+                Err(e) => {
+                    if error_contains::<BitmapScanLimitExceeded>(&e).is_some() {
+                        scan_limit_hit = true;
+                        break;
+                    } else {
+                        Err(RpcError::from(e))?;
+                    }
+                }
             }
-            emitted += 1;
-            yield event;
         }
-        let (reason, cursor) = query_end(emitted, limit_items, last_cursor, end_reason, end_cursor);
-        yield end_response(reason, cursor);
+        let reason = if scan_limit_hit {
+            QueryEndReason::ScanLimit
+        } else if emitted == limit_items {
+            QueryEndReason::ItemLimit
+        } else {
+            end_reason
+        };
+        if reached_range_end(reason) {
+            yield watermark_response(terminal_boundary_watermark(&options, end_checkpoint, end_position));
+        }
+        yield end_response(reason);
         info!(
             filtered,
             wants_json,
             limit_items,
             ?ordering,
             emitted,
+            ?reason,
             elapsed_ms = started.elapsed().as_millis(),
             "list_events: done"
         );
     }
     .boxed())
+}
+
+fn watermark_response(watermark: Watermark) -> ListEventsResponse {
+    let mut response = ListEventsResponse::default();
+    response.response = Some(list_events_response::Response::Watermark(watermark));
+    response
+}
+
+fn event_item_response(mut item: EventItem, watermark: Watermark) -> ListEventsResponse {
+    item.watermark = Some(watermark);
+    let mut response = ListEventsResponse::default();
+    response.response = Some(list_events_response::Response::Item(item));
+    response
 }
 
 /// Stage B: for filtered refs (no `tx_seq_digest`), dedupe tx_seqs in the
@@ -225,7 +317,7 @@ pub(crate) async fn list_events(
 async fn attach_tx_seq_digests(
     client: BigTableClient,
     refs: Vec<EventRef>,
-) -> Result<BoxStream<'static, Result<EventRef, RpcError>>, RpcError> {
+) -> Result<BoxStream<'static, Result<EventRef, anyhow::Error>>, anyhow::Error> {
     if refs.is_empty() {
         return Ok(futures::stream::empty().boxed());
     }
@@ -248,16 +340,13 @@ async fn attach_tx_seq_digests(
             InputOrderEmitter::new(input_indices);
         futures::pin_mut!(digest_stream);
         while let Some(row) = digest_stream.next().await {
-            let row = row.map_err(RpcError::from)?;
+            let row = row?;
             let idxs = indices_by_seq
                 .remove(&row.tx_sequence_number)
                 .ok_or_else(|| {
-                    RpcError::new(
-                        tonic::Code::Internal,
-                        format!(
-                            "list_events: unexpected transaction digest row {}",
-                            row.tx_sequence_number
-                        ),
+                    anyhow::anyhow!(
+                        "list_events: unexpected transaction digest row {}",
+                        row.tx_sequence_number
                     )
                 })?;
             for idx in idxs {
@@ -285,7 +374,7 @@ async fn fetch_txs_for_refs(
     client: BigTableClient,
     columns: Arc<[&'static str]>,
     refs: Vec<EventRef>,
-) -> Result<BoxStream<'static, Result<(EventRef, TransactionData), RpcError>>, RpcError> {
+) -> Result<BoxStream<'static, Result<(EventRef, TransactionData), anyhow::Error>>, anyhow::Error> {
     if refs.is_empty() {
         return Ok(futures::stream::empty().boxed());
     }
@@ -296,12 +385,9 @@ async fn fetch_txs_for_refs(
     let mut indices_by_digest: HashMap<TransactionDigest, Vec<usize>> = HashMap::new();
     for (i, p) in refs.iter().enumerate() {
         let row = p.tx_seq_digest.ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Internal,
-                format!(
-                    "list_events: selected event {} is missing transaction digest",
-                    p.event_seq
-                ),
+            anyhow::anyhow!(
+                "list_events: selected event {} is missing transaction digest",
+                p.event_seq
             )
         })?;
         if seen_digests.insert(row.digest) {
@@ -320,16 +406,13 @@ async fn fetch_txs_for_refs(
             InputOrderEmitter::new(input_indices);
         futures::pin_mut!(tx_stream);
         while let Some(row) = tx_stream.next().await {
-            let (digest, tx) = row.map_err(RpcError::from)?;
+            let (digest, tx) = row?;
             // All refs sharing this digest become ready at once. We clone
             // `tx` per ref so each event from the same tx has its own
             // `TransactionData`; downstream consumes by-value when reading
             // `tx.events.data[event_idx]`.
             let idxs = indices_by_digest.remove(&digest).ok_or_else(|| {
-                RpcError::new(
-                    tonic::Code::Internal,
-                    format!("list_events: unexpected transaction body row {digest}"),
-                )
+                anyhow::anyhow!("list_events: unexpected transaction body row {digest}")
             })?;
             for idx in idxs {
                 for v in emitter.push(
@@ -348,14 +431,23 @@ async fn fetch_txs_for_refs(
     .boxed())
 }
 
+/// Carries the rendered `EventItem` (without its `watermark` field — the
+/// main loop fills that in with the current checkpoint boundary) plus
+/// the cp and packed event_seq the main loop needs to update the
+/// watermark.
+struct RenderedEvent {
+    item: EventItem,
+    checkpoint_number: u64,
+    event_seq: u64,
+}
+
 async fn render_event(
     event_ref: EventRef,
     tx: TransactionData,
     read_mask: &FieldMaskTree,
     resolver: &PackageResolver,
     wants_json: bool,
-    options: &QueryOptions,
-) -> Result<ListEventsResponse, RpcError> {
+) -> Result<RenderedEvent, RpcError> {
     let tx_events = tx.events.as_ref().ok_or_else(|| {
         RpcError::new(
             tonic::Code::Internal,
@@ -386,42 +478,26 @@ async fn render_event(
     }
 
     let mut item = EventItem::default();
-    item.cursor = Some(options.cursor_for_item(tx.checkpoint_number, event_ref.event_seq));
     item.checkpoint = Some(tx.checkpoint_number);
     item.event_index = Some(event_ref.event_idx);
     item.transaction_digest = Some(tx.digest.to_string());
     item.event = Some(proto_event);
+    item.transaction_offset = event_ref.tx_seq_digest.map(|row| row.tx_offset as u64);
 
-    let mut response = ListEventsResponse::default();
-    response.response = Some(list_events_response::Response::Item(item));
-    Ok(response)
+    Ok(RenderedEvent {
+        item,
+        checkpoint_number: tx.checkpoint_number,
+        event_seq: event_ref.event_seq,
+    })
 }
 
-fn end_response(reason: QueryEndReason, cursor: prost::bytes::Bytes) -> ListEventsResponse {
+fn end_response(reason: QueryEndReason) -> ListEventsResponse {
     let mut end = QueryEnd::default();
-    end.cursor = Some(cursor);
     end.reason = reason as i32;
 
     let mut response = ListEventsResponse::default();
     response.response = Some(list_events_response::Response::End(end));
     response
-}
-
-fn query_end(
-    emitted: usize,
-    limit_items: usize,
-    last_cursor: Option<prost::bytes::Bytes>,
-    end_reason: QueryEndReason,
-    end_cursor: prost::bytes::Bytes,
-) -> (QueryEndReason, prost::bytes::Bytes) {
-    if emitted == limit_items {
-        (
-            QueryEndReason::ItemLimit,
-            last_cursor.expect("item-limit responses have a last cursor"),
-        )
-    } else {
-        (end_reason, end_cursor)
-    }
 }
 
 /// A reference to a single event from the bitmap scan or tx_seq_digest lookup,
@@ -436,107 +512,70 @@ struct EventRef {
     tx_seq_digest: Option<TxSeqDigestData>,
 }
 
-/// Point-lookup `tx_seq_digest` across the tx range covered by `event_range`,
+/// Range-scan `tx_seq_digest` across the tx range covered by `event_range`,
 /// using each row's `event_count` to enumerate real event_seqs per tx without
 /// touching the tx body.
 fn unfiltered_event_refs(
     client: BigTableClient,
     event_range: std::ops::Range<u64>,
-    target: usize,
     options: QueryOptions,
-    request_bigtable_concurrency: usize,
-) -> BoxStream<'static, Result<EventRef, RpcError>> {
-    let lower_bound = event_range.start;
-    let upper_bound = event_range.end;
-    let tx_seq_stream = tx_seq_stream_for_event_range(event_range, &options);
-    let discovery_concurrency_limit =
-        discovery_concurrency_limit(target, request_bigtable_concurrency);
-    pipelined_chunks(tx_seq_stream, CHUNK_MAX, discovery_concurrency_limit, {
-        move |seqs| {
-            fetch_event_refs_from_tx_seq_digests(
-                client.clone(),
-                lower_bound,
-                upper_bound,
-                options.clone(),
-                seqs,
-            )
+    source_limit: usize,
+) -> BoxStream<'static, Result<Watermarked<EventRef>, anyhow::Error>> {
+    async_stream::try_stream! {
+        let lower_bound = event_range.start;
+        let upper_bound = event_range.end;
+        let Some(tx_range) = tx_range_for_event_range(event_range) else {
+            return;
+        };
+        let (scan_range, scan_limited, frontier_tx) =
+            clamp_tx_scan_range(tx_range, source_limit, &options);
+        let rows = client
+            .scan_tx_seq_digests_stream(scan_range, options.scan_direction(), source_limit)
+            .await?;
+
+        futures::pin_mut!(rows);
+        while let Some(row) = rows.next().await {
+            for event_ref in expand_event_refs(row?, lower_bound, upper_bound, &options) {
+                yield Watermarked::Item(event_ref);
+            }
         }
-    })
-    .take(target)
+
+        if scan_limited {
+            yield Watermarked::Watermark(event_bitmap_index::event_seq_lo(frontier_tx));
+            Err(anyhow::Error::new(BitmapScanLimitExceeded))?;
+        }
+    }
     .boxed()
 }
 
-/// Pick a chunk concurrency limit for the unfiltered event-discovery pipeline.
-/// There is an average of ~1.3 events/txn over chain history, so assuming
-/// 1 per txn here is reasonable: roughly one chunk per `CHUNK_MAX` events
-/// requested, capped at the request's downstream BigTable budget.
-fn discovery_concurrency_limit(target: usize, request_bigtable_concurrency: usize) -> usize {
-    target
-        .div_ceil(CHUNK_MAX)
-        .clamp(1, request_bigtable_concurrency)
-}
-
-fn tx_seq_stream_for_event_range(
-    event_range: std::ops::Range<u64>,
-    options: &QueryOptions,
-) -> BoxStream<'static, Result<u64, RpcError>> {
-    let Some(last_event_seq) = event_range.end.checked_sub(1) else {
-        return futures::stream::empty().boxed();
-    };
+fn tx_range_for_event_range(event_range: std::ops::Range<u64>) -> Option<std::ops::Range<u64>> {
+    let last_event_seq = event_range.end.checked_sub(1)?;
     let start_tx = event_bitmap_index::decode_event_seq(event_range.start).0;
-    let Some(end_tx) = event_bitmap_index::decode_event_seq(last_event_seq)
+    let end_tx = event_bitmap_index::decode_event_seq(last_event_seq)
         .0
-        .checked_add(1)
-    else {
-        return futures::stream::empty().boxed();
-    };
-    if start_tx >= end_tx {
-        return futures::stream::empty().boxed();
-    }
-
-    if options.is_ascending() {
-        futures::stream::iter((start_tx..end_tx).map(Ok::<_, RpcError>)).boxed()
-    } else {
-        futures::stream::iter((start_tx..end_tx).rev().map(Ok::<_, RpcError>)).boxed()
-    }
+        .checked_add(1)?;
+    (start_tx < end_tx).then_some(start_tx..end_tx)
 }
 
-async fn fetch_event_refs_from_tx_seq_digests(
-    client: BigTableClient,
-    lower_bound: u64,
-    upper_bound: u64,
-    options: QueryOptions,
-    tx_seqs: Vec<u64>,
-) -> Result<BoxStream<'static, Result<EventRef, RpcError>>, RpcError> {
-    if tx_seqs.is_empty() {
-        return Ok(futures::stream::empty().boxed());
+fn clamp_tx_scan_range(
+    tx_range: std::ops::Range<u64>,
+    source_limit: usize,
+    options: &QueryOptions,
+) -> (std::ops::Range<u64>, bool, u64) {
+    let source_limit = source_limit as u64;
+    if options.is_ascending() {
+        let end = tx_range
+            .start
+            .saturating_add(source_limit)
+            .min(tx_range.end);
+        (tx_range.start..end, end < tx_range.end, end)
+    } else {
+        let start = tx_range
+            .end
+            .saturating_sub(source_limit)
+            .max(tx_range.start);
+        (start..tx_range.end, start > tx_range.start, start)
     }
-
-    let digest_stream = client.resolve_tx_digests_stream(tx_seqs.clone()).await?;
-
-    Ok(async_stream::try_stream! {
-        let mut emitter: InputOrderEmitter<u64, TxSeqDigestData> =
-            InputOrderEmitter::new(tx_seqs);
-        futures::pin_mut!(digest_stream);
-        while let Some(row) = digest_stream.next().await {
-            let row = row.map_err(RpcError::from)?;
-            for row in emitter.push(
-                row.tx_sequence_number,
-                row,
-                "list_events: transaction digest lookup during event discovery",
-            )? {
-                for event_ref in expand_event_refs(row, lower_bound, upper_bound, &options) {
-                    yield event_ref;
-                }
-            }
-        }
-        for row in emitter.finish("list_events: missing transaction digest during event discovery")? {
-            for event_ref in expand_event_refs(row, lower_bound, upper_bound, &options) {
-                yield event_ref;
-            }
-        }
-    }
-    .boxed())
 }
 
 fn expand_event_refs(
@@ -592,10 +631,12 @@ fn validate_event_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTre
 }
 
 /// Resolve the packed-event_seq scan window from the logical checkpoint bounds.
-/// The checkpoint window is first clamped to indexed history and the
-/// per-request scan width, then shifted into packed event space. Query cursors
-/// are applied in that packed space so they can resume from the middle of a
-/// transaction's events.
+/// The checkpoint window is first clamped to indexed history and any cursor
+/// bounds, then shifted into packed event space. Query cursors are applied
+/// in that packed space so they can resume from the middle of a transaction's
+/// events. Filtered scans are additionally bounded at runtime by the
+/// per-request bitmap bucket budget; that limit surfaces as SCAN_LIMIT, not
+/// as an up-front cp-range clamp.
 async fn resolve_event_range(
     client: &BigTableClient,
     checkpoint_range: CheckpointRange,
@@ -631,11 +672,10 @@ async fn checkpoint_to_tx_boundary(
 
 #[cfg(test)]
 mod tests {
-    use futures::TryStreamExt;
     use sui_types::digests::TransactionDigest;
 
     use super::*;
-    use crate::query_options::Ordering;
+    use sui_rpc_api::ledger_history::query_options::Ordering;
 
     fn options(ordering: Ordering) -> QueryOptions {
         let mut request = sui_rpc::proto::sui::rpc::v2alpha::QueryOptions::default();
@@ -659,6 +699,7 @@ mod tests {
             tx_sequence_number,
             digest: TransactionDigest::new([tx_sequence_number as u8; 32]),
             event_count,
+            tx_offset: 0,
             checkpoint_number: 7,
         }
     }
@@ -717,42 +758,31 @@ mod tests {
         assert_eq!(event_refs(&refs), vec![(10, 3), (10, 2), (10, 1)]);
     }
 
-    #[tokio::test]
-    async fn tx_seq_stream_for_event_range_respects_ordering() {
+    #[test]
+    fn tx_range_for_event_range_covers_partial_endpoint_transactions() {
         let range =
             event_bitmap_index::encode_event_seq(10, 2)..event_bitmap_index::event_seq_lo(13);
 
-        let asc = tx_seq_stream_for_event_range(range.clone(), &options(Ordering::Ascending))
-            .try_collect::<Vec<_>>()
-            .await
-            .expect("ascending stream");
-        assert_eq!(asc, vec![10, 11, 12]);
-
-        let desc = tx_seq_stream_for_event_range(range, &options(Ordering::Descending))
-            .try_collect::<Vec<_>>()
-            .await
-            .expect("descending stream");
-        assert_eq!(desc, vec![12, 11, 10]);
+        assert_eq!(tx_range_for_event_range(range), Some(10..13));
     }
 
     #[test]
-    fn discovery_concurrency_limit_scales_with_requested_limit() {
-        const REQUEST_CONCURRENCY: usize = 15;
-        assert_eq!(discovery_concurrency_limit(1, REQUEST_CONCURRENCY), 1);
+    fn clamp_tx_scan_range_limits_ascending_frontier() {
+        let options = options(Ordering::Ascending);
+        assert_eq!(clamp_tx_scan_range(10..20, 4, &options), (10..14, true, 14));
         assert_eq!(
-            discovery_concurrency_limit(CHUNK_MAX, REQUEST_CONCURRENCY),
-            1
+            clamp_tx_scan_range(10..14, 4, &options),
+            (10..14, false, 14)
         );
+    }
+
+    #[test]
+    fn clamp_tx_scan_range_limits_descending_frontier() {
+        let options = options(Ordering::Descending);
+        assert_eq!(clamp_tx_scan_range(10..20, 4, &options), (16..20, true, 16));
         assert_eq!(
-            discovery_concurrency_limit(CHUNK_MAX + 1, REQUEST_CONCURRENCY),
-            2
-        );
-        assert_eq!(
-            discovery_concurrency_limit(
-                CHUNK_MAX * (REQUEST_CONCURRENCY + 10),
-                REQUEST_CONCURRENCY
-            ),
-            REQUEST_CONCURRENCY
+            clamp_tx_scan_range(16..20, 4, &options),
+            (16..20, false, 16)
         );
     }
 }

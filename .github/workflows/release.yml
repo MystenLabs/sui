@@ -167,7 +167,20 @@ jobs:
         if: ${{ env.s3_existing_archive == '' }}
         shell: bash
         run: |
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --release --features tracing --bin sui && cargo build --profile=dev --bin sui --features tracing
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          # Build only the binaries we actually package (the release_binaries in
+          # binary-build-list.json — the same list the rename step below moves),
+          # not the whole workspace. `sui` is built separately, once, with the
+          # tracing feature: a plain `cargo build --release` compiled `sui` without
+          # tracing and the next step overwrote it, wasting a compile+link of `sui`
+          # on every platform.
+          sui_bins=""
+          for b in $(jq -r '.release_binaries[] | select(. != "sui")' "${{ env.BINARY_LIST_FILE }}"); do
+            sui_bins="$sui_bins --bin $(echo "$b" | tr -d $'\r')"
+          done
+          cargo build --release $sui_bins
+          cargo build --release --features tracing --bin sui
+          cargo build --profile=dev --bin sui --features tracing
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.s3_existing_archive == '' }}
@@ -233,31 +246,15 @@ jobs:
           client-payload: '{"new_tag": "${{ env.sui_tag }}"}'
 
   update-homebrew-formula:
-    name: Run brew bump-formula-pr for sui on testnet releases
+    name: Bump sui formula on Homebrew/homebrew-core
     needs: release-build
-    runs-on: ubuntu-latest
     # releasing sui cli on testnet releases because it lags `main` less than mainnet, but is more likely to be stable than devnet
-    if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref_name, 'testnet') }}
-    steps:
-      - name: Clean up tag name ${{ env.TAG_NAME }}
-        shell: bash
-        run: |
-          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
-          echo "versionless_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'// | sed s/'testnet\-v'//)" >> $GITHUB_ENV
-      - uses: mislav/bump-homebrew-formula-action@b3327118b2153c82da63fd9cbf58942146ee99f0 # pin@v3
-        with:
-          formula-name: sui
-          create-pullrequest: true
-          tag-name: "${{ env.sui_tag }}"
-          commit-message: |
-            {{formulaName}} ${{ env.versionless_tag }}
-
-            Created by https://github.com/mislav/bump-homebrew-formula-action
-
-            From release: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        env:
-          # https://github.com/settings/tokens/new?scopes=public_repo,workflow
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
+    if: ${{ contains( github.event.inputs.sui_tag, 'testnet') || contains( github.ref_name, 'testnet') }}
+    uses: ./.github/workflows/homebrew-bump.yml
+    with:
+      sui_tag: ${{ github.event.inputs.sui_tag || github.ref_name }}
+    secrets:
+      HOMEBREW_GH_FORMULA_BUMP: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
 
   # Tag all sui images with release tag, so that they can be easily found
   tag-docker-hub-images:

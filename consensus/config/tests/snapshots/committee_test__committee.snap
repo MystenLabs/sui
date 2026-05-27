@@ -3,9 +3,6 @@ source: consensus/config/tests/committee_test.rs
 expression: committee
 ---
 epoch: 100
-total_stake: 55
-quorum_threshold: 37
-validity_threshold: 19
 authorities:
   - stake: 1
     address: ""
@@ -67,3 +64,7 @@ authorities:
     authority_name: tC8uWyTrohwv5Gp+pEytkyFtTo7JKqgrOGlltChHjqGFN+t9jhIqo0P/opo5xly9DeFNmwlRMLmHdyvtTwRNvuYV06NgrXHnoLRoRcKC0XP93I10DHus5GdB1roOKoYf
     protocol_key: Edh6VmJUkuP4TiU3owC8Qlg13OytuOpAdfHTUyLCGN8=
     network_key: OKXew91B23hZ7ihzvjYptdWUWnQ8qTnvxzWxSIzR84c=
+total_stake: 55
+quorum_threshold: 37
+certification_threshold: 37
+validity_threshold: 19

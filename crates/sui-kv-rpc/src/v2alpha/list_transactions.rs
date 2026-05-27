@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use bytes::Bytes;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
@@ -22,36 +21,46 @@ use tracing::debug_span;
 use tracing::info;
 
 use crate::bigtable_client::BigTableClient;
+use crate::config::PipelineStage;
 use crate::object_cache::BigTableObjectFetcher;
 use crate::object_cache::ObjectCache;
 use crate::object_cache::ObjectMap;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
+use crate::pipeline::ResolvedWatermarked;
+use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
 use crate::pipeline::pipelined_keyed_batches;
-use crate::query_options::CheckpointRange;
-use crate::query_options::QueryOptions;
-use crate::query_options::QueryType;
-use crate::query_options::ResolvedRange;
+use crate::pipeline::resolve_watermarks;
+use crate::pipeline::take_items;
 use crate::v2::get_transaction::compute_object_keys;
 use crate::v2::get_transaction::needs_object_types;
 use crate::v2::get_transaction::transaction_columns;
 use crate::v2::get_transaction::transaction_to_response;
 use crate::v2::get_transaction::validate_read_mask;
+use sui_inverted_index::BitmapScanLimitExceeded;
+use sui_inverted_index::error_contains;
 use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionItem;
+use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
-
-const DEFAULT_LIMIT_ITEMS: u32 = 50;
-const MAX_LIMIT_ITEMS: u32 = 500;
-const CHUNK_MAX: usize = 100;
+use sui_rpc_api::ledger_history::query_options::CheckpointRange;
+use sui_rpc_api::ledger_history::query_options::QueryOptions;
+use sui_rpc_api::ledger_history::query_options::QueryType;
+use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::watermark::advance_boundary_excluding_cp;
+use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
+use sui_rpc_api::ledger_history::watermark::boundary_watermark;
+use sui_rpc_api::ledger_history::watermark::item_watermark;
+use sui_rpc_api::ledger_history::watermark::reached_range_end;
+use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
 
 pub(crate) type ListTransactionsStream =
     BoxStream<'static, Result<ListTransactionsResponse, RpcError>>;
-type TransactionWithObjectsStreamItem = (u64, TransactionData, ObjectMap);
+type TransactionWithObjectsStreamItem = (u64, u32, TransactionData, ObjectMap);
 
 pub(crate) async fn list_transactions(
     ctx: QueryContext,
@@ -62,6 +71,11 @@ pub(crate) async fn list_transactions(
     let client: BigTableClient = ctx.client().clone();
     let resolver: crate::PackageResolver = ctx.package_resolver().clone();
     let checkpoint_hi_exclusive = ctx.checkpoint_hi_exclusive();
+    let lh = ctx.ledger_history();
+    let endpoint = lh.list_transactions();
+    let tx_seq_digest_stage = lh.stage(PipelineStage::TxSeqDigest);
+    let transactions_stage = lh.stage(PipelineStage::Transactions);
+    let objects_stage = lh.stage(PipelineStage::Objects);
 
     let checkpoint_range = CheckpointRange::from_request(
         request.start_checkpoint,
@@ -71,19 +85,21 @@ pub(crate) async fn list_transactions(
     let read_mask = validate_read_mask(request.read_mask)?;
     let options = QueryOptions::from_proto(
         request.options.as_ref(),
-        DEFAULT_LIMIT_ITEMS,
-        MAX_LIMIT_ITEMS,
+        endpoint.default_limit_items,
+        endpoint.max_limit_items,
         QueryType::Transactions,
         request.filter.as_ref(),
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
+    let direction = options.scan_direction();
 
     let tx_range = resolve_tx_range(&client, checkpoint_range, &options)
         .instrument(debug_span!("resolve_tx_range"))
         .await?;
     let end_reason = tx_range.end_reason;
-    let end_cursor = tx_range.end_cursor(&options);
+    let end_checkpoint = tx_range.end_checkpoint;
+    let end_position = tx_range.end_position;
     let tx_range = tx_range.range;
 
     if tx_range.is_empty() {
@@ -94,59 +110,105 @@ pub(crate) async fn list_transactions(
             elapsed_ms = started.elapsed().as_millis(),
             "list_transactions: empty range"
         );
-        return Ok(
-            futures::stream::once(async move { Ok(end_response(end_reason, end_cursor)) }).boxed(),
-        );
+        // A caught-up tail (e.g. polling at the ledger tip) resolves to an empty
+        // range; still surface the terminal boundary so the client learns the
+        // final checkpoint is complete without waiting for the next item.
+        let terminal = reached_range_end(end_reason).then(|| {
+            watermark_response(terminal_boundary_watermark(
+                &options,
+                end_checkpoint,
+                end_position,
+            ))
+        });
+        return Ok(futures::stream::iter(
+            terminal
+                .into_iter()
+                .chain([end_response(end_reason)])
+                .map(Ok),
+        )
+        .boxed());
     }
 
-    // Stage 1: discover tx_seq values for the requested response.
-    let seq_stream: BoxStream<'static, Result<u64, RpcError>> =
+    // Stage 1: discover tx_seq_digest rows for the requested response.
+    // Filtered requests are sparse bitmap hits and still use chunked
+    // multi_get lookups. Unfiltered requests scan the dense tx_seq_digest
+    // keyspace directly, bounded by limit_items.
+    let digest_stream: BoxStream<'static, Result<Watermarked<TxSeqDigestData>, anyhow::Error>> =
         if let Some(filter) = &request.filter {
+            let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
             let query = ctx.transaction_filter_query(filter)?;
-            client
-                .eval_bitmap_query_stream(
-                    query,
-                    tx_range.clone(),
-                    BitmapIndexSpec::tx(),
-                    options.scan_direction(),
-                )
-                .map_err(RpcError::from)
-                .boxed()
+            let seq_stream = client.eval_bitmap_query_stream(
+                query,
+                tx_range.clone(),
+                BitmapIndexSpec::tx(),
+                options.scan_direction(),
+                scan_budget,
+                ctx.bitmap_scan_observer(),
+            );
+            let seq_stream = take_items(seq_stream, limit_items);
+            pipelined_chunks(
+                seq_stream,
+                tx_seq_digest_stage.chunk_size,
+                tx_seq_digest_stage.concurrency,
+                {
+                    let client = client.clone();
+                    move |seqs| fetch_tx_seq_digests(client.clone(), seqs)
+                },
+            )
         } else {
-            range_stream(tx_range.clone(), &options)
+            scan_tx_seq_digests(client.clone(), tx_range.clone(), limit_items, &options).await?
         };
-    let seq_stream = seq_stream.take(limit_items).boxed();
-
-    let request_bigtable_concurrency = ctx.request_bigtable_concurrency();
-
-    // Stage 2: tx_seq -> tx_seq_digest rows. The pipeline drains each
-    // chunk's BigTable stream before emitting rows to the next stage.
-    let digest_stream = pipelined_chunks(seq_stream, CHUNK_MAX, request_bigtable_concurrency, {
-        let client = client.clone();
-        move |seqs| fetch_tx_seq_digests(client.clone(), seqs)
-    });
 
     let render_transaction_contents = should_render_transaction_contents(&read_mask);
     if !render_transaction_contents {
+        let digest_stream = resolve_watermarks(digest_stream, client.tx_wm_resolver(direction));
         return Ok(async_stream::try_stream! {
             futures::pin_mut!(digest_stream);
             let mut emitted = 0usize;
-            let mut last_cursor = None;
-            while let Some(row) = digest_stream.try_next().await? {
-                let cursor = options.cursor_for_item(row.checkpoint_number, row.tx_sequence_number);
-                emitted += 1;
-                last_cursor = Some(cursor.clone());
-                let yield_started = Instant::now();
-                yield transaction_response_from_tx_seq_digest(row, &read_mask, cursor);
-                ctx.observe_stream_item_yield_wait(yield_started.elapsed());
+            let mut checkpoint_boundary: Option<u64> = None;
+            let mut scan_limit_hit = false;
+            while let Some(item) = digest_stream.next().await {
+                match item {
+                    Ok(ResolvedWatermarked::Item(row)) => {
+                        checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, row.checkpoint_number, &options);
+                        let wm = item_watermark(&options, row.checkpoint_number, row.tx_sequence_number, checkpoint_boundary);
+                        emitted += 1;
+                        let yield_started = Instant::now();
+                        yield transaction_response_from_tx_seq_digest(row, &read_mask, wm);
+                        ctx.observe_stream_item_yield_wait(yield_started.elapsed());
+                    }
+                    Ok(ResolvedWatermarked::Watermark { position, cp }) => {
+                        checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
+                        let wm = boundary_watermark(&options, boundary_cursor_cp(cp, direction), position, checkpoint_boundary);
+                        yield watermark_response(wm);
+                    }
+                    Err(e) => {
+                        if error_contains::<BitmapScanLimitExceeded>(&e).is_some() {
+                            scan_limit_hit = true;
+                            break;
+                        } else {
+                            Err(RpcError::from(e))?;
+                        }
+                    }
+                }
             }
-            let (reason, cursor) = query_end(emitted, limit_items, last_cursor, end_reason, end_cursor);
-            yield end_response(reason, cursor);
+            let reason = if scan_limit_hit {
+                QueryEndReason::ScanLimit
+            } else if emitted == limit_items {
+                QueryEndReason::ItemLimit
+            } else {
+                end_reason
+            };
+            if reached_range_end(reason) {
+                yield watermark_response(terminal_boundary_watermark(&options, end_checkpoint, end_position));
+            }
+            yield end_response(reason);
             info!(
                 filtered,
                 limit_items,
                 ?ordering,
                 emitted,
+                ?reason,
                 elapsed_ms = started.elapsed().as_millis(),
                 "list_transactions: done (digest only)"
             );
@@ -157,76 +219,117 @@ pub(crate) async fn list_transactions(
     let columns: Arc<[&'static str]> = transaction_columns(&read_mask).into();
     let needs_objects = needs_object_types(&read_mask);
 
-    // Stage 3: tx_seq_digest rows -> (tx_seq, TransactionData). Rows are
-    // ordered within each drained chunk.
-    let tx_stream = pipelined_chunks(digest_stream, CHUNK_MAX, request_bigtable_concurrency, {
-        let client = client.clone();
-        let columns = columns.clone();
-        move |rows| fetch_transactions(client.clone(), columns.clone(), rows)
-    });
+    // Stage 3: Watermarked<TxSeqDigestData> -> Watermarked<(tx_seq, TransactionData)>.
+    let tx_stream = pipelined_chunks(
+        digest_stream,
+        transactions_stage.chunk_size,
+        transactions_stage.concurrency,
+        {
+            let client = client.clone();
+            let columns = columns.clone();
+            move |rows| fetch_transactions(client.clone(), columns.clone(), rows)
+        },
+    );
 
-    // Stage 4: (tx_seq, TransactionData) -> (tx_seq, TransactionData, ObjectMap).
-    // Object refs are precomputed per tx, then `pipelined_keyed_batches`
-    // packs consecutive txs into batches whose deduped key union fits within
-    // CHUNK_MAX (see comment on the constant — it serves both as upstream
-    // chunk size and as the object-key request budget). Each packed batch
-    // is one BigTable multiget; first-row latency is bounded by one fetch.
+    // Stage 4: + ObjectMap. Object refs are precomputed per Item; Frontier
+    // watermarks pass through pipelined_keyed_batches unchanged.
     let txn_with_objects_stream: BoxStream<
         'static,
-        Result<TransactionWithObjectsStreamItem, RpcError>,
+        Result<Watermarked<TransactionWithObjectsStreamItem>, anyhow::Error>,
     > = if needs_objects {
         let object_cache = ObjectCache::new(Arc::new(BigTableObjectFetcher::new(client.clone())));
         let tx_with_keys = tx_stream
-            .map_ok(|(seq, tx)| {
-                let keys: Vec<ObjectKey> = compute_object_keys(&tx).into_iter().collect();
-                ((seq, tx), keys)
+            .map_ok(|m| {
+                m.map_item(|(seq, offset, tx)| {
+                    let keys: Vec<ObjectKey> = compute_object_keys(&tx).into_iter().collect();
+                    ((seq, offset, tx), keys)
+                })
             })
             .boxed();
 
         pipelined_keyed_batches(
             tx_with_keys,
-            CHUNK_MAX,
-            CHUNK_MAX,
-            request_bigtable_concurrency,
+            objects_stage.chunk_size,
+            objects_stage.chunk_size,
+            objects_stage.concurrency,
             move |keys| {
                 let object_cache = object_cache.clone();
-                async move { object_cache.get_many(keys).await }
+                async move {
+                    object_cache
+                        .get_many(keys)
+                        .await
+                        .map_err(anyhow::Error::new)
+                }
             },
         )
-        .map_ok(|((seq, tx), objects)| (seq, tx, objects))
+        .map_ok(|m| m.map_item(|((seq, offset, tx), objects)| (seq, offset, tx, objects)))
         .boxed()
     } else {
-        // No object lookup needed — emit each tx with an empty ObjectMap;
-        // preserves input order trivially via the upstream stream.
+        // No object lookup needed — emit each tx with an empty ObjectMap.
         tx_stream
-            .map_ok(|(seq, tx)| (seq, tx, Arc::new(HashMap::new()) as ObjectMap))
+            .map_ok(|m| {
+                m.map_item(|(seq, offset, tx)| {
+                    (seq, offset, tx, Arc::new(HashMap::new()) as ObjectMap)
+                })
+            })
             .boxed()
     };
+
+    let txn_with_objects_stream =
+        resolve_watermarks(txn_with_objects_stream, client.tx_wm_resolver(direction));
 
     Ok(async_stream::try_stream! {
         futures::pin_mut!(txn_with_objects_stream);
 
         let mut emitted = 0usize;
-        let mut last_cursor = None;
-        while let Some((tx_seq, tx_data, objects)) = txn_with_objects_stream.try_next().await? {
-            let cursor = options.cursor_for_item(tx_data.checkpoint_number, tx_seq);
-            let render_started = Instant::now();
-            let executed = transaction_to_response(tx_data, &read_mask, &objects, &resolver).await?;
-            ctx.observe_response_render(render_started.elapsed());
-            emitted += 1;
-            last_cursor = Some(cursor.clone());
-            let yield_started = Instant::now();
-            yield transaction_item_response(cursor, executed);
-            ctx.observe_stream_item_yield_wait(yield_started.elapsed());
+        let mut checkpoint_boundary: Option<u64> = None;
+        let mut scan_limit_hit = false;
+        while let Some(item) = txn_with_objects_stream.next().await {
+            match item {
+                Ok(ResolvedWatermarked::Item((tx_seq, tx_offset, tx_data, objects))) => {
+                    checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, tx_data.checkpoint_number, &options);
+                    let wm = item_watermark(&options, tx_data.checkpoint_number, tx_seq, checkpoint_boundary);
+                    let render_started = Instant::now();
+                    let executed = transaction_to_response(tx_data, &read_mask, &objects, &resolver).await?;
+                    ctx.observe_response_render(render_started.elapsed());
+                    emitted += 1;
+                    let yield_started = Instant::now();
+                    yield transaction_item_response(wm, executed, tx_offset);
+                    ctx.observe_stream_item_yield_wait(yield_started.elapsed());
+                }
+                Ok(ResolvedWatermarked::Watermark { position, cp }) => {
+                    checkpoint_boundary = advance_boundary_excluding_cp(checkpoint_boundary, cp, &options);
+                    let wm = boundary_watermark(&options, boundary_cursor_cp(cp, direction), position, checkpoint_boundary);
+                    yield watermark_response(wm);
+                }
+                Err(e) => {
+                    if error_contains::<BitmapScanLimitExceeded>(&e).is_some() {
+                        scan_limit_hit = true;
+                        break;
+                    } else {
+                        Err(RpcError::from(e))?;
+                    }
+                }
+            }
         }
-        let (reason, cursor) = query_end(emitted, limit_items, last_cursor, end_reason, end_cursor);
-        yield end_response(reason, cursor);
+        let reason = if scan_limit_hit {
+            QueryEndReason::ScanLimit
+        } else if emitted == limit_items {
+            QueryEndReason::ItemLimit
+        } else {
+            end_reason
+        };
+        if reached_range_end(reason) {
+            yield watermark_response(terminal_boundary_watermark(&options, end_checkpoint, end_position));
+        }
+        yield end_response(reason);
 
         info!(
             filtered,
             limit_items,
             ?ordering,
             emitted,
+            ?reason,
             elapsed_ms = started.elapsed().as_millis(),
             "list_transactions: done"
         );
@@ -234,10 +337,29 @@ pub(crate) async fn list_transactions(
     .boxed())
 }
 
+/// Wrap a constructed `Watermark` as a standalone wire frame.
+fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
+    let mut response = ListTransactionsResponse::default();
+    response.response = Some(list_transactions_response::Response::Watermark(watermark));
+    response
+}
+
+async fn scan_tx_seq_digests(
+    client: BigTableClient,
+    range: std::ops::Range<u64>,
+    limit: usize,
+    options: &QueryOptions,
+) -> Result<BoxStream<'static, Result<Watermarked<TxSeqDigestData>, anyhow::Error>>, RpcError> {
+    let rows = client
+        .scan_tx_seq_digests_stream(range, options.scan_direction(), limit)
+        .await?;
+    Ok(rows.map_ok(Watermarked::Item).boxed())
+}
+
 async fn fetch_tx_seq_digests(
     client: BigTableClient,
     seqs: Vec<u64>,
-) -> Result<BoxStream<'static, Result<TxSeqDigestData, RpcError>>, RpcError> {
+) -> Result<BoxStream<'static, Result<TxSeqDigestData, anyhow::Error>>, anyhow::Error> {
     if seqs.is_empty() {
         return Ok(futures::stream::empty().boxed());
     }
@@ -250,7 +372,7 @@ async fn fetch_tx_seq_digests(
             InputOrderEmitter::new(seqs);
         futures::pin_mut!(digest_stream);
         while let Some(row) = digest_stream.next().await {
-            let row = row.map_err(RpcError::from)?;
+            let row = row?;
             for v in emitter.push(
                 row.tx_sequence_number,
                 row,
@@ -270,36 +392,33 @@ async fn fetch_transactions(
     client: BigTableClient,
     columns: Arc<[&'static str]>,
     rows: Vec<TxSeqDigestData>,
-) -> Result<BoxStream<'static, Result<(u64, TransactionData), RpcError>>, RpcError> {
+) -> Result<BoxStream<'static, Result<(u64, u32, TransactionData), anyhow::Error>>, anyhow::Error> {
     if rows.is_empty() {
         return Ok(futures::stream::empty().boxed());
     }
     let column_filter = BigTableClient::column_filter(&columns);
     let digests: Vec<TransactionDigest> = rows.iter().map(|row| row.digest).collect();
-    // Map each digest back to its tx_sequence_number so the output can carry
-    // (seq, tx) pairs as the BigTable response arrives.
-    let seq_by_digest: HashMap<TransactionDigest, u64> = rows
+    // Map each digest back to its (tx_sequence_number, within-checkpoint offset)
+    // so the output can carry them alongside the tx body as it arrives.
+    let meta_by_digest: HashMap<TransactionDigest, (u64, u32)> = rows
         .iter()
-        .map(|row| (row.digest, row.tx_sequence_number))
+        .map(|row| (row.digest, (row.tx_sequence_number, row.tx_offset)))
         .collect();
     let tx_stream = client
         .get_transactions_stream(digests.clone(), Some(column_filter))
         .await?;
     Ok(async_stream::try_stream! {
-        let mut emitter: InputOrderEmitter<TransactionDigest, (u64, TransactionData)> =
+        let mut emitter: InputOrderEmitter<TransactionDigest, (u64, u32, TransactionData)> =
             InputOrderEmitter::new(digests);
         futures::pin_mut!(tx_stream);
         while let Some(row) = tx_stream.next().await {
-            let (digest, tx) = row.map_err(RpcError::from)?;
-            let seq = seq_by_digest.get(&digest).copied().ok_or_else(|| {
-                RpcError::new(
-                    tonic::Code::Internal,
-                    format!("list_transactions: unexpected transaction body row {digest}"),
-                )
+            let (digest, tx) = row?;
+            let (seq, offset) = meta_by_digest.get(&digest).copied().ok_or_else(|| {
+                anyhow::anyhow!("list_transactions: unexpected transaction body row {digest}")
             })?;
             for v in emitter.push(
                 digest,
-                (seq, tx),
+                (seq, offset, tx),
                 "list_transactions: transaction body lookup",
             )? {
                 yield v;
@@ -325,7 +444,7 @@ fn should_render_transaction_contents(read_mask: &FieldMaskTree) -> bool {
 fn transaction_response_from_tx_seq_digest(
     row: TxSeqDigestData,
     read_mask: &FieldMaskTree,
-    cursor: Bytes,
+    watermark: Watermark,
 ) -> ListTransactionsResponse {
     let mut transaction = ExecutedTransaction::default();
     if read_mask.contains(ExecutedTransaction::DIGEST_FIELD.name) {
@@ -335,12 +454,15 @@ fn transaction_response_from_tx_seq_digest(
         transaction.checkpoint = Some(row.checkpoint_number);
     }
 
-    transaction_item_response(cursor, transaction)
+    transaction_item_response(watermark, transaction, row.tx_offset)
 }
 
 /// Determine the tx_sequence_number scan window from the logical checkpoint
-/// bounds. The checkpoint window is already clamped to indexed history and the
-/// per-request scan width before this converts it into tx sequence space.
+/// bounds. The checkpoint window is already clamped to indexed history and
+/// any cursor bounds before this converts it into tx sequence space.
+/// Filtered scans are additionally bounded at runtime by the per-request
+/// bitmap bucket budget; that limit surfaces as SCAN_LIMIT, not as an
+/// up-front cp-range clamp.
 async fn resolve_tx_range(
     client: &BigTableClient,
     checkpoint_range: CheckpointRange,
@@ -389,54 +511,27 @@ async fn checkpoint_to_tx_boundary(
 }
 
 fn transaction_item_response(
-    cursor: Bytes,
+    watermark: Watermark,
     transaction: ExecutedTransaction,
+    tx_offset: u32,
 ) -> ListTransactionsResponse {
     let mut item = TransactionItem::default();
-    item.cursor = Some(cursor);
     item.transaction = Some(transaction);
+    item.watermark = Some(watermark);
+    item.transaction_offset = Some(tx_offset as u64);
 
     let mut response = ListTransactionsResponse::default();
     response.response = Some(list_transactions_response::Response::Item(item));
     response
 }
 
-fn end_response(reason: QueryEndReason, cursor: Bytes) -> ListTransactionsResponse {
+fn end_response(reason: QueryEndReason) -> ListTransactionsResponse {
     let mut end = QueryEnd::default();
-    end.cursor = Some(cursor);
     end.reason = reason as i32;
 
     let mut response = ListTransactionsResponse::default();
     response.response = Some(list_transactions_response::Response::End(end));
     response
-}
-
-fn query_end(
-    emitted: usize,
-    limit_items: usize,
-    last_cursor: Option<Bytes>,
-    end_reason: QueryEndReason,
-    end_cursor: Bytes,
-) -> (QueryEndReason, Bytes) {
-    if emitted == limit_items {
-        (
-            QueryEndReason::ItemLimit,
-            last_cursor.expect("item-limit responses have a last cursor"),
-        )
-    } else {
-        (end_reason, end_cursor)
-    }
-}
-
-fn range_stream(
-    range: std::ops::Range<u64>,
-    options: &QueryOptions,
-) -> BoxStream<'static, Result<u64, RpcError>> {
-    if options.is_ascending() {
-        futures::stream::iter(range.map(Ok::<_, RpcError>)).boxed()
-    } else {
-        futures::stream::iter(range.rev().map(Ok::<_, RpcError>)).boxed()
-    }
 }
 
 #[cfg(test)]
@@ -476,18 +571,38 @@ mod tests {
             tx_sequence_number: 42,
             digest: TransactionDigest::new([7; 32]),
             event_count: 3,
+            tx_offset: 5,
             checkpoint_number: 9,
         };
         let options = options();
+        let wm = || {
+            item_watermark(
+                &options,
+                row.checkpoint_number,
+                row.tx_sequence_number,
+                Some(8),
+            )
+        };
 
         let digest_only = unwrap_item(transaction_response_from_tx_seq_digest(
             row,
             &read_mask(&["digest"]),
-            options.cursor_for_item(row.checkpoint_number, row.tx_sequence_number),
+            wm(),
         ));
+        let digest_wm = digest_only.watermark.as_ref().expect("watermark");
         assert_eq!(
-            digest_only.cursor,
-            Some(options.cursor_for_item(row.checkpoint_number, 42))
+            digest_wm.cursor.as_ref(),
+            Some(&options.cursor_for_item(row.checkpoint_number, 42))
+        );
+        assert_eq!(digest_wm.checkpoint_hi, Some(8));
+        assert_eq!(
+            digest_wm.checkpoint_lo, None,
+            "ascending scan must not set checkpoint_lo"
+        );
+        assert_eq!(
+            digest_only.transaction_offset,
+            Some(row.tx_offset as u64),
+            "within-checkpoint offset should propagate to the item"
         );
         let transaction = digest_only.transaction.expect("executed transaction");
         assert_eq!(transaction.digest, Some(row.digest.to_string()));
@@ -496,7 +611,7 @@ mod tests {
         let checkpoint_only = unwrap_item(transaction_response_from_tx_seq_digest(
             row,
             &read_mask(&["checkpoint"]),
-            options.cursor_for_item(row.checkpoint_number, row.tx_sequence_number),
+            wm(),
         ));
         let transaction = checkpoint_only.transaction.expect("executed transaction");
         assert_eq!(transaction.digest, None);
@@ -505,7 +620,7 @@ mod tests {
         let both = unwrap_item(transaction_response_from_tx_seq_digest(
             row,
             &read_mask(&["digest", "checkpoint"]),
-            options.cursor_for_item(row.checkpoint_number, row.tx_sequence_number),
+            wm(),
         ));
         let transaction = both.transaction.expect("executed transaction");
         assert_eq!(transaction.digest, Some(row.digest.to_string()));

@@ -141,6 +141,10 @@ impl<'a> Resolver<'a> for ToObject {
             | Owner::ConsensusAddressOwner {
                 start_version: initial_shared_version,
                 ..
+            }
+            | Owner::Party {
+                start_version: initial_shared_version,
+                ..
             } => ObjectArg::SharedObject {
                 id: object_ref.0,
                 initial_shared_version,
@@ -1026,7 +1030,7 @@ impl<'a> PTBBuilder<'a> {
                         .dependency_ids
                         .published
                         .values()
-                        .cloned()
+                        .map(|dep| dep.published_at)
                         .collect::<Vec<_>>(),
                     compiled_modules,
                 );

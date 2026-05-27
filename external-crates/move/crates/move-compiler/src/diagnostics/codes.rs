@@ -178,7 +178,7 @@ codes!(
     Uncategorized: [
         DeprecatedWillBeRemoved: { msg: "DEPRECATED. will be removed", severity: Warning },
         DeprecatedSpecItem: { msg: "DEPRECATED. unexpected spec item", severity: NonblockingError },
-        UnableToMigrate: { msg: "unable to migrate", severity: NonblockingError },
+        UnableToMigrate: { msg: "migration failed", severity: NonblockingError },
     ],
     // syntax errors
     Syntax: [
@@ -216,7 +216,7 @@ codes!(
         InvalidFunction: { msg: "invalid 'fun' declaration", severity: NonblockingError },
         InvalidStruct: { msg: "invalid 'struct' declaration", severity: NonblockingError },
         InvalidSpec: { msg: "invalid 'spec' declaration", severity: NonblockingError },
-        InvalidName: { msg: "invalid name", severity: BlockingError },
+        InvalidName: { msg: "invalid declaration name", severity: BlockingError },
         InvalidFriendDeclaration:
             { msg: "invalid 'friend' declaration", severity: NonblockingError },
         InvalidAcquiresItem: { msg: "invalid 'acquires' item", severity: NonblockingError },
@@ -269,7 +269,7 @@ codes!(
         ExpectedSingleType: { msg: "expected a single type", severity: BlockingError },
         SubtypeError: { msg: "invalid subtype", severity: BlockingError },
         JoinError: { msg: "incompatible types", severity: BlockingError },
-        RecursiveType: { msg: "invalid type. recursive type found", severity: BlockingError },
+        RecursiveType: { msg: "recursive type not allowed", severity: BlockingError },
         ExpectedSpecificType: { msg: "expected specific type", severity: BlockingError },
         UninferredType: { msg: "cannot infer type", severity: BlockingError },
         ScriptSignature: { msg: "invalid script signature", severity: NonblockingError },
@@ -284,7 +284,7 @@ codes!(
         CyclicInstantiation:
             { msg: "cyclic type instantiation", severity: NonblockingError },
         MissingAcquires: { msg: "missing acquires annotation", severity: NonblockingError },
-        InvalidNum: { msg: "invalid number after type inference", severity: NonblockingError },
+        InvalidNum: { msg: "numeric literal out of range", severity: NonblockingError },
         NonInvocablePublicScript: {
             msg: "script function cannot be invoked with this signature \
                 (NOTE: this may become an error in the future)",
@@ -308,7 +308,7 @@ codes!(
         DeprecatedUsage: { msg: "deprecated usage", severity: Warning },
         InvalidString: { msg: "invalid string after type inference", severity: NonblockingError },
         MissingLiteralType:
-            { msg: "unable to determine principal type for literal", severity: Warning },
+            { msg: "unable to determine literal's type", severity: Warning },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
@@ -323,15 +323,15 @@ codes!(
     // errors for move rules. mostly cfgir/borrows
     ReferenceSafety: [
         RefTrans: { msg: "referential transparency violated", severity: BlockingError },
-        MutOwns: { msg: "mutable ownership violated", severity: NonblockingError },
+        MutOwns: { msg: "mutable borrow rule violated", severity: NonblockingError },
         Dangling: {
-            msg: "invalid operation, could create dangling a reference",
+            msg: "invalid operation, could create a dangling reference",
             severity: NonblockingError,
         },
         InvalidReturn:
             { msg: "invalid return of locally borrowed state", severity: NonblockingError },
-        InvalidTransfer: { msg: "invalid transfer of references", severity: NonblockingError },
-        AmbiguousVariableUsage: { msg: "ambiguous usage of variable", severity: NonblockingError },
+        InvalidTransfer: { msg: "invalid reference transfer", severity: NonblockingError },
+        AmbiguousVariableUsage: { msg: "ambiguous variable usage", severity: NonblockingError },
     ],
     CodeGeneration: [
         UnfoldableConstant: { msg: "cannot compute constant value", severity: NonblockingError },

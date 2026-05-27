@@ -23,7 +23,7 @@ use sui_types::execution::{
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::layout_resolver::LayoutResolver;
-use sui_types::object::Data;
+use sui_types::object::{Data, ObjectPermissions};
 use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::{
@@ -315,6 +315,15 @@ impl<'backing> TemporaryStore<'backing> {
         gas_charger: &mut GasCharger,
         epoch: EpochId,
     ) -> (InnerTemporaryStore, TransactionEffects) {
+        // Defense-in-depth: Owner::Party is not yet supported as an effect output. There are
+        // no constructions of `Owner::Party` yet so a hard assert should be safe.
+        for (id, obj) in &self.execution_results.written_objects {
+            assert!(
+                !matches!(obj.owner, Owner::Party { .. }),
+                "Party-owned objects are not yet supported (object {id})"
+            );
+        }
+
         self.update_object_version_and_prev_tx();
         // This must happens before merge_accumulator_events.
         let accumulator_running_max_withdraws = self.calculate_accumulator_running_max_withdraws();
@@ -786,6 +795,16 @@ impl TemporaryStore<'_> {
                         // us from catching this.
                         None
                     }
+                    Owner::Party { permissions, .. } => {
+                        let sender_permissions = permissions.permissions_for(sender);
+                        let sponsor_permissions = sponsor
+                            .as_ref()
+                            .map(|s| permissions.permissions_for(s))
+                            .unwrap_or(ObjectPermissions::NONE);
+                        (sender_permissions | sponsor_permissions)
+                            .can_use_mutably()
+                            .then_some(id)
+                    }
                     Owner::ObjectOwner(_parent) => {
                         unreachable!(
                             "Input objects must be address owned, shared, consensus, or immutable"
@@ -871,12 +890,13 @@ impl TemporaryStore<'_> {
                     }
                     // We mutated a shared object -- we checked if this object was in the
                     // authenticated set at the top of this loop and it wasn't so this is a failure.
-                    owner @ Owner::Shared { .. } => {
+                    owner @ Owner::Shared { .. } | owner @ Owner::Party { .. } => {
                         panic!(
                             "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
                              Potentially covering objects in: {authenticated_for_mutation:#?}"
                         );
                     }
+
                     Owner::Immutable => {
                         assert!(
                             is_epoch_change,
@@ -1487,6 +1507,16 @@ fn was_object_mutated(object: &Object, original: &Object) -> bool {
         (Owner::AddressOwner(a), Owner::AddressOwner(b)) => a == b,
         (Owner::Immutable, Owner::Immutable) => true,
         (Owner::ObjectOwner(a), Owner::ObjectOwner(b)) => a == b,
+        (
+            Owner::Party {
+                permissions: a,
+                start_version: _,
+            },
+            Owner::Party {
+                permissions: b,
+                start_version: _,
+            },
+        ) => a == b,
 
         // Keep the left hand side of the match exhaustive to catch future
         // changes to Owner
@@ -1494,7 +1524,8 @@ fn was_object_mutated(object: &Object, original: &Object) -> bool {
         | (Owner::Immutable, _)
         | (Owner::ObjectOwner(_), _)
         | (Owner::Shared { .. }, _)
-        | (Owner::ConsensusAddressOwner { .. }, _) => false,
+        | (Owner::ConsensusAddressOwner { .. }, _)
+        | (Owner::Party { .. }, _) => false,
     };
 
     !data_equal || !owner_equal

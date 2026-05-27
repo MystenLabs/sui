@@ -1,7 +1,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ast::Exp, refinement::Refine};
+use crate::{
+    ast::Exp,
+    refinement::{
+        Refine,
+        utils::{peek, peek_mut},
+    },
+};
 
 use move_symbol_pool::Symbol;
 
@@ -67,12 +73,13 @@ impl Refine for ReconstructMatch {
 // Helpers
 
 /// True iff `body` starts (directly, or as the first item of a `Seq`) with an `UnpackVariant`
-/// whose variant tag is `arm_variant`.
+/// whose variant tag is `arm_variant`. Looks through `Block` wrappers at both the body and
+/// the first-Seq-element positions, since translation wraps every lowered block.
 fn has_leading_unpack(body: &Exp, arm_variant: Symbol) -> bool {
-    match body {
+    match peek(body) {
         Exp::UnpackVariant(_, (_, v), _, _) => *v == arm_variant,
         Exp::Seq(items) => matches!(
-            items.first(),
+            items.first().map(peek),
             Some(Exp::UnpackVariant(_, (_, v), _, _)) if *v == arm_variant
         ),
         _ => false,
@@ -81,19 +88,25 @@ fn has_leading_unpack(body: &Exp, arm_variant: Symbol) -> bool {
 
 /// If `body` starts with an `UnpackVariant` of `arm_variant`, remove it and return its field
 /// bindings. The body either becomes the empty `Seq` (when the unpack *was* the whole body)
-/// or loses just its leading statement (when the unpack sat at the head of a `Seq`).
+/// or loses just its leading statement (when the unpack sat at the head of a `Seq`). Peeks
+/// through `Block` wrappers around both the body and the first Seq item.
 fn take_leading_unpack(body: &mut Exp, arm_variant: Symbol) -> Option<Vec<(Symbol, String)>> {
-    match body {
+    let inner = peek_mut(body);
+    match inner {
         Exp::UnpackVariant(_, (_, v), _, _) if *v == arm_variant => {
-            let Exp::UnpackVariant(_, _, fields, _) = std::mem::replace(body, Exp::Seq(vec![]))
+            let Exp::UnpackVariant(_, _, fields, _) = std::mem::replace(inner, Exp::Seq(vec![]))
             else {
                 unreachable!()
             };
             Some(fields)
         }
-        Exp::Seq(items) if matches!(items.first(), Some(Exp::UnpackVariant(_, (_, v), _, _)) if *v == arm_variant) =>
+        Exp::Seq(items) if matches!(items.first().map(peek), Some(Exp::UnpackVariant(_, (_, v), _, _)) if *v == arm_variant) =>
         {
-            let Exp::UnpackVariant(_, _, fields, _) = items.remove(0) else {
+            // The unpack itself may be wrapped in `Block` (every lowered basic block is).
+            // Strip the wrapper before destructuring.
+            let raw = items.remove(0);
+            let Exp::UnpackVariant(_, _, fields, _) = crate::refinement::utils::unwrap_block(raw)
+            else {
                 unreachable!()
             };
             Some(fields)

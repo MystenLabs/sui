@@ -32,7 +32,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use bytes::Bytes;
-use futures::Stream;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use prometheus::HistogramVec;
@@ -43,6 +42,7 @@ use sui_inverted_index::ScanDirection;
 use sui_inverted_index::eval_bitmap_query_stream;
 use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BitmapIndexSpec;
+use sui_kvstore::CheckpointData;
 use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
@@ -53,42 +53,6 @@ use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
-
-/// Read-side concurrency budgets for v2alpha list APIs.
-#[derive(Clone, Copy, Debug)]
-pub struct ConcurrencyConfig {
-    /// Per-request semaphore capacity gating downstream BigTable reads on
-    /// `BigTableClient`.
-    pub request_bigtable_concurrency: usize,
-    /// Maximum bitmap scan fanout accepted in one filter request. Each
-    /// literal can become one bitmap dimension stream; bitmap scans do not
-    /// consume downstream request permits.
-    pub max_bitmap_filter_literals: usize,
-}
-
-impl Default for ConcurrencyConfig {
-    fn default() -> Self {
-        Self {
-            request_bigtable_concurrency: 10,
-            max_bitmap_filter_literals: 10,
-        }
-    }
-}
-
-impl ConcurrencyConfig {
-    /// Reject configurations that cannot make forward progress.
-    pub fn validate(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(
-            self.request_bigtable_concurrency > 0,
-            "request_bigtable_concurrency must be greater than zero",
-        );
-        anyhow::ensure!(
-            self.max_bitmap_filter_literals > 0,
-            "max_bitmap_filter_literals must be greater than zero",
-        );
-        Ok(())
-    }
-}
 
 /// Stage label values for the `permit_wait_ms` metric. `&'static str` so they
 /// satisfy `with_label_values` zero-allocation.
@@ -277,6 +241,35 @@ impl BigTableClient {
         Ok(gate_stream(permit, inner.boxed()))
     }
 
+    pub(crate) async fn scan_tx_seq_digests_stream(
+        &self,
+        range: Range<u64>,
+        direction: ScanDirection,
+        rows_limit: usize,
+    ) -> Result<BoxStream<'static, Result<TxSeqDigestData, anyhow::Error>>, RpcError> {
+        self.inner
+            .clone()
+            .scan_tx_seq_digests_stream(range, direction, rows_limit)
+            .await
+            .map(|stream| stream.boxed())
+            .map_err(RpcError::from)
+    }
+
+    pub(crate) async fn scan_checkpoints_stream(
+        &self,
+        range: Range<u64>,
+        direction: ScanDirection,
+        rows_limit: usize,
+        filter: Option<RowFilter>,
+    ) -> Result<BoxStream<'static, Result<(u64, CheckpointData), anyhow::Error>>, RpcError> {
+        self.inner
+            .clone()
+            .scan_checkpoints_stream(range, direction, rows_limit, filter)
+            .await
+            .map(|stream| stream.boxed())
+            .map_err(RpcError::from)
+    }
+
     pub(crate) async fn checkpoint_to_tx_range(
         &self,
         checkpoint_range: Range<u64>,
@@ -304,15 +297,28 @@ impl BigTableClient {
     /// Eval a `BitmapQuery`. Bitmap scans stay outside the downstream request
     /// semaphore; their concurrency is bounded by `max_bitmap_filter_literals`
     /// during filter validation.
-    pub(crate) fn eval_bitmap_query_stream(
+    pub(crate) fn eval_bitmap_query_stream<F>(
         &self,
         query: BitmapQuery,
         range: Range<u64>,
         spec: BitmapIndexSpec,
         direction: ScanDirection,
-    ) -> impl Stream<Item = Result<u64, anyhow::Error>> + Send + 'static {
+        budget: u64,
+        on_metrics: F,
+    ) -> BoxStream<'static, Result<sui_inverted_index::Watermarked<u64>, anyhow::Error>>
+    where
+        F: FnOnce(sui_inverted_index::BitmapScanMetrics) + Send + 'static,
+    {
         let source = BigTableBitmapSource::new(self.inner.clone(), spec);
-        eval_bitmap_query_stream(source, query, range, spec.bucket_size, direction)
+        eval_bitmap_query_stream(
+            source,
+            query,
+            range,
+            spec.bucket_size,
+            direction,
+            budget,
+            on_metrics,
+        )
     }
 
     async fn acquire(&self, stage: &'static str) -> Result<LimitedPermit, RpcError> {
@@ -320,7 +326,92 @@ impl BigTableClient {
             .await
             .map_err(|_| RpcError::new(tonic::Code::Internal, "request concurrency limiter closed"))
     }
+
+    /// Resolve a bitmap-evaluator watermark to its containing cp via one
+    /// `resolve_tx_checkpoints` row read.
+    ///
+    /// `position` is the watermark in its source domain (tx_seq for the
+    /// tx bitmap, event_seq for the event bitmap). `decode` translates
+    /// the in-domain lookup position into a tx_seq for the BigTable
+    /// lookup — identity for tx-bitmap callers, [`decode_event_seq`] for
+    /// event-bitmap callers.
+    ///
+    /// Asc: lookup the cp containing `position - 1` (the last
+    /// fully-scanned position; the cp it falls in may still produce items
+    /// at positions `≥ position`). Desc: lookup the cp containing
+    /// `position` itself (symmetric).
+    ///
+    /// Returns `Ok(None)` (caller drops the watermark) when the boundary
+    /// tx has no cp: ascending `position == 0` (no preceding tx), or a
+    /// frontier sitting just outside indexed history (e.g. a descending
+    /// scan starting at the ledger tip). A watermark is a best-effort
+    /// progress hint, so an unresolvable one is dropped rather than
+    /// failing the query — divergence that affects returned items still
+    /// surfaces loudly at the item-fetch path.
+    pub(crate) async fn resolve_wm_cp(
+        &self,
+        direction: ScanDirection,
+        position: u64,
+        decode: impl FnOnce(u64) -> u64,
+    ) -> Result<Option<u64>, RpcError> {
+        let lookup_position = if direction.is_ascending() {
+            match position.checked_sub(1) {
+                Some(p) => p,
+                None => return Ok(None),
+            }
+        } else {
+            position
+        };
+        let lookup_tx_seq = decode(lookup_position);
+        let pairs = self.resolve_tx_checkpoints(&[lookup_tx_seq]).await?;
+        Ok(pairs.into_iter().next().map(|(_, cp)| cp))
+    }
+
+    /// Build a resolver closure for tx-bitmap watermarks (identity
+    /// decode). Hand directly to [`crate::pipeline::resolve_watermarks`].
+    pub(crate) fn tx_wm_resolver(
+        &self,
+        direction: ScanDirection,
+    ) -> impl Fn(u64) -> WmResolverFut + Send + 'static {
+        let client = self.clone();
+        move |position| {
+            let client = client.clone();
+            Box::pin(async move {
+                client
+                    .resolve_wm_cp(direction, position, |x| x)
+                    .await
+                    .map_err(anyhow::Error::new)
+            })
+        }
+    }
+
+    /// Build a resolver closure for event-bitmap watermarks. The
+    /// bitmap-domain position is a packed event_seq; decode to its
+    /// tx_seq for the BigTable lookup. Hand directly to
+    /// [`crate::pipeline::resolve_watermarks`].
+    pub(crate) fn event_wm_resolver(
+        &self,
+        direction: ScanDirection,
+    ) -> impl Fn(u64) -> WmResolverFut + Send + 'static {
+        let client = self.clone();
+        move |position| {
+            let client = client.clone();
+            Box::pin(async move {
+                client
+                    .resolve_wm_cp(direction, position, |evt| {
+                        sui_kvstore::tables::event_bitmap_index::decode_event_seq(evt).0
+                    })
+                    .await
+                    .map_err(anyhow::Error::new)
+            })
+        }
+    }
 }
+
+/// Future returned by resolver closures from
+/// [`BigTableClient::tx_wm_resolver`] and [`BigTableClient::event_wm_resolver`].
+pub(crate) type WmResolverFut =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<Option<u64>, anyhow::Error>> + Send>>;
 
 struct LimitedPermit {
     _permit: OwnedSemaphorePermit,

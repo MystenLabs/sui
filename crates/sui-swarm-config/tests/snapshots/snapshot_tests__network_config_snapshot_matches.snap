@@ -154,7 +154,7 @@ validator_configs:
       max-transaction-manager-per-object-queue-length: 2000
       admission-queue-capacity-fraction: 0.5
       admission-queue-bypass-fraction: 0.9
-      admission-queue-enabled: false
+      admission-queue-enabled: true
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
@@ -333,7 +333,7 @@ validator_configs:
       max-transaction-manager-per-object-queue-length: 2000
       admission-queue-capacity-fraction: 0.5
       admission-queue-bypass-fraction: 0.9
-      admission-queue-enabled: false
+      admission-queue-enabled: true
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
@@ -512,7 +512,7 @@ validator_configs:
       max-transaction-manager-per-object-queue-length: 2000
       admission-queue-capacity-fraction: 0.5
       admission-queue-bypass-fraction: 0.9
-      admission-queue-enabled: false
+      admission-queue-enabled: true
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
@@ -691,7 +691,7 @@ validator_configs:
       max-transaction-manager-per-object-queue-length: 2000
       admission-queue-capacity-fraction: 0.5
       admission-queue-bypass-fraction: 0.9
-      admission-queue-enabled: false
+      admission-queue-enabled: true
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
@@ -870,7 +870,7 @@ validator_configs:
       max-transaction-manager-per-object-queue-length: 2000
       admission-queue-capacity-fraction: 0.5
       admission-queue-bypass-fraction: 0.9
-      admission-queue-enabled: false
+      admission-queue-enabled: true
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
@@ -1049,7 +1049,7 @@ validator_configs:
       max-transaction-manager-per-object-queue-length: 2000
       admission-queue-capacity-fraction: 0.5
       admission-queue-bypass-fraction: 0.9
-      admission-queue-enabled: false
+      admission-queue-enabled: true
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
@@ -1228,7 +1228,7 @@ validator_configs:
       max-transaction-manager-per-object-queue-length: 2000
       admission-queue-capacity-fraction: 0.5
       admission-queue-bypass-fraction: 0.9
-      admission-queue-enabled: false
+      admission-queue-enabled: true
       admission-queue-failover-timeout:
         secs: 30
         nanos: 0
