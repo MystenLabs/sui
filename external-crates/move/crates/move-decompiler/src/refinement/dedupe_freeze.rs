@@ -34,26 +34,23 @@ impl Refine for DedupeFreeze {
         else {
             return false;
         };
-        if args.len() != 1 {
-            return false;
-        }
-        match &args[0] {
-            // `freeze(freeze(e))` -> `freeze(e)`: drop the outer, keep the inner.
-            Exp::Data {
+        let strip = match args.as_slice() {
+            // `freeze(freeze(e))` → `freeze(e)`: drop the outer, keep the inner `Data`.
+            [Exp::Data {
                 op: DataOp::FreezeRef,
                 args: inner,
-            } if inner.len() == 1 => {
-                let inner = args.pop().unwrap();
-                *exp = inner;
-                true
-            }
-            // `freeze(&e)` -> `&e`: the immutable borrow already produces `&T`.
-            Exp::Borrow(false, _) => {
-                let inner = args.pop().unwrap();
-                *exp = inner;
-                true
-            }
+            }] if inner.len() == 1 => true,
+            // `freeze(&e)` → `&e`: the immutable borrow already produces `&T`.
+            [Exp::Borrow(false, _)] => true,
             _ => false,
+        };
+        if !strip {
+            return false;
         }
+        let Some(inner) = args.pop() else {
+            unreachable!()
+        };
+        *exp = inner;
+        true
     }
 }
