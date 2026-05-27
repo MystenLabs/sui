@@ -1342,6 +1342,7 @@ impl AuthorityPerEpochStore {
         mut randomness_manager: RandomnessManager,
     ) -> SuiResult<()> {
         let reporter = randomness_manager.reporter();
+
         let result = randomness_manager.start_dkg().await;
         if self
             .randomness_manager
@@ -1352,10 +1353,19 @@ impl AuthorityPerEpochStore {
                 "BUG: `set_randomness_manager` called more than once; this should never happen"
             );
         }
-        if self.randomness_reporter.set(reporter).is_err() {
-            debug_fatal!(
-                "BUG: `set_randomness_manager` called more than once; this should never happen"
-            );
+        match reporter {
+            Some(reporter) => {
+                if self.randomness_reporter.set(reporter).is_err() {
+                    debug_fatal!(
+                        "BUG: `set_randomness_manager` called more than once; this should never happen"
+                    );
+                }
+            }
+            None => {
+                if self.node_role.is_validator() {
+                    debug_fatal!("expected a RandomnessReporter for a validator");
+                }
+            }
         }
         result
     }

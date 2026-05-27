@@ -71,7 +71,7 @@ impl NodeRole {
     /// Whether this node should process consensus commit output (execute
     /// transactions, create checkpoints, etc.). Observers stream blocks but
     /// rely on state-sync for execution, so they skip commit processing.
-    pub fn should_process_consensus_commits(&self) -> bool {
+    pub fn process_consensus_commits(&self) -> bool {
         matches!(self, Self::Validator)
     }
 
@@ -103,7 +103,7 @@ mod tests {
         assert!(role.runs_consensus());
         assert!(!role.should_enable_index_processing());
         assert!(!role.should_run_rpc_servers());
-        assert!(role.should_process_consensus_commits());
+        assert!(role.process_consensus_commits());
     }
 
     #[test]
@@ -112,7 +112,7 @@ mod tests {
         assert!(role.runs_consensus());
         assert!(role.should_enable_index_processing());
         assert!(role.should_run_rpc_servers());
-        assert!(!role.should_process_consensus_commits());
+        assert!(!role.process_consensus_commits());
     }
 
     #[test]
@@ -121,6 +121,6 @@ mod tests {
         assert!(!role.runs_consensus());
         assert!(role.should_enable_index_processing());
         assert!(role.should_run_rpc_servers());
-        assert!(!role.should_process_consensus_commits());
+        assert!(!role.process_consensus_commits());
     }
 }

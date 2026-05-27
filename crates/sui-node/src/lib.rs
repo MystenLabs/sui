@@ -1407,11 +1407,16 @@ impl SuiNode {
         );
 
         if node_role.runs_consensus() && epoch_store.randomness_state_enabled() {
+            let authority_key_pair = if node_role.is_validator() {
+                Some(config.protocol_key_pair())
+            } else {
+                None
+            };
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
                 Box::new(consensus_adapter.clone()),
                 randomness_handle,
-                config.protocol_key_pair(),
+                authority_key_pair,
             )
             .await;
             if let Some(randomness_manager) = randomness_manager {
