@@ -13,6 +13,7 @@
 //   />
 
 import React, { useEffect, useRef, useState } from "react";
+import { useLocation } from "@docusaurus/router";
 import styles from "./styles.module.css";
 
 interface Agent {
@@ -43,6 +44,8 @@ export default function AgentPrompt({ prompt }: { prompt: string }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const { pathname } = useLocation();
+  const pageName = pathname.replace(/\//g, "+").replace(/^\+/, "");
 
   useEffect(() => {
     if (!open) return;
@@ -84,7 +87,7 @@ export default function AgentPrompt({ prompt }: { prompt: string }) {
       <div className={styles.actions}>
         <button
           type="button"
-          className={`${styles.copyBtn} plausible-event-name=copy+agent+prompt`}
+          className={`${styles.copyBtn} plausible-event-name=copy+agent+prompt plausible-event-page=${pageName}`}
           onClick={copyPrompt}
         >
           {copied ? "Copied" : "Copy prompt"}
@@ -109,7 +112,7 @@ export default function AgentPrompt({ prompt }: { prompt: string }) {
                   key={agent.id}
                   type="button"
                   role="menuitem"
-                  className={`${styles.item} plausible-event-name=open+agent+prompt+${agent.id}`}
+                  className={`${styles.item} plausible-event-name=open+agent+prompt plausible-event-agent=${agent.id} plausible-event-page=${pageName}`}
                   onClick={() => openAgent(agent)}
                 >
                   {agent.label}
