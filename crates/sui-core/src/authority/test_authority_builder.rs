@@ -435,7 +435,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 Arc::downgrade(&epoch_store),
                 consensus_client,
                 randomness::Handle::new_stub(),
-                config.protocol_key_pair(),
+                Some(config.protocol_key_pair()),
             )
             .await;
             if let Some(randomness_manager) = randomness_manager {

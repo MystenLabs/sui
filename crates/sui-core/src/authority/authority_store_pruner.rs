@@ -439,6 +439,7 @@ impl AuthorityStorePruner {
                 checkpoint_store,
                 num_epochs_to_retain,
                 pruner_watermarks,
+                false,
             )?;
         }
         Ok(())
@@ -665,6 +666,7 @@ impl AuthorityStorePruner {
         checkpoint_store: &Arc<CheckpointStore>,
         num_epochs_to_retain: u64,
         pruning_watermark: &Arc<PrunerWatermarks>,
+        objects_compactor_active: bool,
     ) -> anyhow::Result<bool> {
         use std::sync::atomic::Ordering;
         let objects_pruning_checkpoint_id = perpetual_db
@@ -687,7 +689,13 @@ impl AuthorityStorePruner {
         let checkpoint_id =
             checkpoint_store.get_epoch_last_checkpoint_seq_number(target_epoch_id)?;
 
-        let new_watermark = min(target_epoch_id + 1, objects_pruning_epoch_id);
+        // The objects compactor handles object retention continuously without advancing
+        // `highest_pruned_checkpoint`, so capping on it would freeze the watermark at 0.
+        let new_watermark = if objects_compactor_active {
+            target_epoch_id + 1
+        } else {
+            min(target_epoch_id + 1, objects_pruning_epoch_id)
+        };
         if current_watermark == new_watermark {
             return Ok(false);
         }
@@ -696,7 +704,11 @@ impl AuthorityStorePruner {
             .epoch_id
             .store(new_watermark, Ordering::Relaxed);
         if let Some(checkpoint_id) = checkpoint_id {
-            let watermark = min(checkpoint_id, objects_pruning_checkpoint_id);
+            let watermark = if objects_compactor_active {
+                checkpoint_id
+            } else {
+                min(checkpoint_id, objects_pruning_checkpoint_id)
+            };
             info!("relocation: setting checkpoint watermark to {}", watermark);
             pruning_watermark
                 .checkpoint_id
@@ -711,12 +723,14 @@ impl AuthorityStorePruner {
         checkpoint_store: &Arc<CheckpointStore>,
         num_epochs_to_retain: u64,
         pruning_watermark: Arc<PrunerWatermarks>,
+        objects_compactor_active: bool,
     ) -> anyhow::Result<()> {
         let watermark_updated = Self::update_pruning_watermarks(
             perpetual_db,
             checkpoint_store,
             num_epochs_to_retain,
             &pruning_watermark,
+            objects_compactor_active,
         )?;
         if !watermark_updated {
             info!("skip relocation. Watermark hasn't changed");
@@ -859,7 +873,7 @@ impl AuthorityStorePruner {
                                 }
                             },
                             _ = checkpoints_prune_interval.tick() => {
-                                if let Err(err) = Self::prune_th(&perpetual_db, &checkpoint_store, num_epochs_to_retain, pruner_watermarks.clone()) {
+                                if let Err(err) = Self::prune_th(&perpetual_db, &checkpoint_store, num_epochs_to_retain, pruner_watermarks.clone(), !prune_objects) {
                                     error!("Failed to prune checkpoints: {:?}", err);
                                 }
                             },

@@ -174,8 +174,8 @@ impl ExecutionScheduler {
         scheduler_type: FundsWithdrawSchedulerType,
         address_funds_scheduler_metrics: &Arc<AddressFundsSchedulerMetrics>,
     ) -> Option<FundsWithdrawScheduler> {
-        let withdraw_scheduler_enabled =
-            epoch_store.is_validator() && epoch_store.accumulators_enabled();
+        let withdraw_scheduler_enabled = epoch_store.node_role().process_consensus_commits()
+            && epoch_store.accumulators_enabled();
         if !withdraw_scheduler_enabled {
             return None;
         }

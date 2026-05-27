@@ -68,7 +68,8 @@ export async function onRouteDidUpdate({ location }: { location: Location }) {
     }
   }
 
-  // Resolve a working track function, supporting both APIs
+  // Resolve a working track function, supporting both APIs, and expose it
+  // globally so components like AgentPrompt can fire custom events.
   const track: any =
     (window as any).__plausible_instance__?.track || (mod as any).track;
 
@@ -80,6 +81,8 @@ export async function onRouteDidUpdate({ location }: { location: Location }) {
     );
     return;
   }
+
+  (window as any).__plausible_track__ = track;
 
   // Pageview on each SPA route change
   track("pageview", {
