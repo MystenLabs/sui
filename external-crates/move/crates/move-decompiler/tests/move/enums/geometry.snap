@@ -21,8 +21,7 @@ module geometry {
 
     public fun get_square_side () {
         let l2 = l0;
-        let l1 = l2;
-        match(l1: Shape) {
+        match(l2: Shape) {
             Shape::Square { side: reg_7 } => {
                 let Shape::Square { side: reg_9 } = &l2;
                 return                 *reg_9 : &u64
@@ -35,8 +34,7 @@ module geometry {
 
     public fun get_triangle_size () {
         let l3 = l0;
-        let l2 = l3;
-        match(l2: Shape) {
+        match(l3: Shape) {
             Shape::Square => {
                 abort Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] };
             },

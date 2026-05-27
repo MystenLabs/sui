@@ -1,16 +1,33 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Inline let-bindings whose RHS is a single variable, when both names are used at most once.
+//! Inline let-bindings whose RHS is an immutable variable.
 //!
 //! For a binding `let X = Y;` we fire when:
-//!   - `Y` is read exactly once in the function body (the binding's own RHS) and never written;
-//!   - `X` is read at most once on any execution path, never re-assigned, and not declared
-//!     elsewhere.
+//!   - `Y` is never written in the function body — its value is stable for the entire
+//!     function, regardless of how many places read it;
+//!   - `X` has exactly one defining `LetBind` (this one), is never re-assigned, and is not
+//!     declared or pattern-bound elsewhere;
+//!   - if `X` has more than one syntactic read, no path reads it twice (so the substitution
+//!     doesn't change the *number* of reads on any path — relevant for non-`copy` types
+//!     where re-reading would be a use-after-move). When `X` has a single syntactic read,
+//!     the per-path check is moot.
 //!
-//! In that case the binding is dropped and the single use of `X` is rewritten to `Y` directly.
-//! Multiple non-conflicting bindings can be processed in one pass; chains like
+//! In that case the binding is dropped and uses of `X` are rewritten to `Y`. Multiple
+//! non-conflicting bindings are processed in one pass; chains like
 //! `let l20 = l3; let l3 = l5;` are resolved via transitive closure before substitution.
+//!
+//! This is the generalization of "single-use" inlining to "single-source" (immutable RHS):
+//! the cetus argument-staging idiom
+//!
+//! ```text
+//! let l40 = l13; let l39 = l12; let l38 = l11;
+//! is_stable(freeze(l0), l38, l39, l40)
+//! ```
+//!
+//! collapses to `is_stable(freeze(l0), l11, l12, l13)` because each staging local's RHS is
+//! a never-written parameter alias, even though `l11`/`l12`/`l13` are themselves used in
+//! other call sites.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -117,8 +134,9 @@ fn is_eligible(x: &str, y: &str, root: &Exp, liveness: &Liveness) -> bool {
     }
     let counts = liveness.counts();
 
-    // Source `y`: exactly one read (this binding's RHS), never written.
-    if counts.reads(y) != 1 || counts.assigns(y) != 0 {
+    // Source `y`: never written. We don't constrain `reads(y)` — `y` can be used at many
+    // sites; the substitution stays sound because `y`'s value never changes.
+    if counts.assigns(y) != 0 {
         return false;
     }
 
@@ -133,9 +151,10 @@ fn is_eligible(x: &str, y: &str, root: &Exp, liveness: &Liveness) -> bool {
 
     // `x` must have at least one read (otherwise it's dead code, not our concern). When there
     // are multiple syntactic reads we additionally require that at most one runs on any given
-    // path — equivalently, `x` is dead immediately after each read. A single syntactic read
-    // inside a loop is still fine: the substituted RHS is a variable that we already know is
-    // never re-assigned, so re-reading it across loop iterations is value-preserving.
+    // path — substituting wouldn't change `y`'s observed value, but it would change the
+    // *number* of reads on a path, which matters when the type lacks `copy`. A single
+    // syntactic read inside a loop is still fine: only one Variable node, so the per-path
+    // count is trivially at most one.
     if counts.reads(x) == 0 {
         return false;
     }
