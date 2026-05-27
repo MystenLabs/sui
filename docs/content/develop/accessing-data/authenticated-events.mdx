@@ -6,6 +6,12 @@ keywords: [authenticated events, light client, event verification, MMR, Merkle M
 
 Authenticated Events provide a cryptographically verifiable stream of Move events from Sui smart contracts. Unlike regular events, authenticated events can be verified by a light client without trusting any intermediary, making them suitable for applications requiring trustless event consumption.
 
+:::caution Experimental
+
+The reference client implementation lives in [`MystenLabs/sui` → `crates/sui-light-client`](https://github.com/MystenLabs/sui/tree/main/crates/sui-light-client) (module `sui_light_client::authenticated_events`). The APIs and client implementation are **experimental**: once they stabilize, the client will move to [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) and early adopters will be expected to migrate at that time.
+
+:::
+
 ## Why Authenticated Events?
 
 Regular Sui events are indexed and queryable, but verifying them requires trusting the RPC provider. Authenticated events solve this by:
@@ -14,7 +20,7 @@ Regular Sui events are indexed and queryable, but verifying them requires trusti
 2. **Checkpoint Verification**: The commitment is tied to Sui checkpoints, which are signed by the validator committee
 3. **Light Client Verification**: Clients verify the chain from genesis committee → checkpoint signatures → event inclusion proofs
 
-This enables cryptographic verification of event completeness and correctness, with no full node required, and is lightweight enough to run in a browser or on mobile.
+This enables cryptographic verification of event completeness and correctness without trusting the RPC provider, and is lightweight enough to run in a browser or on mobile.
 
 ## Quick Start
 
@@ -54,19 +60,43 @@ Existing indexers, explorers, and tools that consume regular events will continu
 
 ### Consuming Events (Rust Reference Client)
 
+Add the client as a git dependency in `Cargo.toml`:
+
+```toml
+[dependencies]
+sui-light-client = { git = "https://github.com/MystenLabs/sui", branch = "main" }
+sui-types = { git = "https://github.com/MystenLabs/sui", branch = "main" }
+futures = "0.3"
+tokio = { version = "1", features = ["full"] }
+```
+
+Connect to testnet using the bundled trust anchor and the gRPC archive:
+
 ```rust
-use sui_light_client::authenticated_events::AuthenticatedEventsClient;
+use sui_light_client::authenticated_events::{
+    AuthenticatedEventsClient, ClientConfig, bundled,
+};
 use sui_types::base_types::SuiAddress;
 use futures::StreamExt;
 use std::sync::Arc;
 
-// Initialize with genesis committee (establishes trust root)
+const TESTNET_RPC_URL: &str = "https://fullnode.testnet.sui.io:443";
+const TESTNET_ARCHIVE_URL: &str = "https://archive.testnet.sui.io:443";
+
+// `bundled::testnet_start_committee()` is a trust anchor shipped with the
+// crate (committee for the first testnet epoch where authenticated events
+// were enabled). The client trust-ratchets forward from there.
 let client = Arc::new(
-    AuthenticatedEventsClient::new(rpc_url, genesis_committee)
-        .await?
+    AuthenticatedEventsClient::new_with_config(
+        TESTNET_RPC_URL,
+        Some(TESTNET_ARCHIVE_URL),
+        bundled::testnet_start_committee(),
+        ClientConfig::default(),
+    )
+    .await?,
 );
 
-// Stream events from your package
+// Stream events from your package.
 let stream_id = SuiAddress::from(package_id);
 let mut stream = client.clone().stream_events(stream_id).await?;
 
@@ -204,17 +234,17 @@ The inclusion proof verifies that the EventStreamHead was written at the specifi
 ### Client Configuration
 
 ```rust
-let config = ClientConfig::new(
-    page_size,                    // Events per RPC call (max 1000)
-    poll_interval,                // How often to poll for new events
-    max_pagination_iterations,    // Max pages before forcing checkpoint boundary
-    rpc_timeout,                  // RPC call timeout
-)?;
+let config = ClientConfig::default()
+    .with_page_size(page_size)                       // Events per RPC call (max 1000)
+    .with_poll_interval(poll_interval)               // How often to poll for new events
+    .with_max_pagination_iterations(max_iters)       // Max pages before forcing checkpoint boundary
+    .with_rpc_timeout(rpc_timeout);                  // RPC call timeout
 
 let client = AuthenticatedEventsClient::new_with_config(
     rpc_url,
-    genesis_committee,
-    config
+    Some(archive_url),  // or None; e.g. "https://archive.testnet.sui.io:443"
+    starting_committee,
+    config,
 ).await?;
 ```
 
