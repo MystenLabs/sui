@@ -26,7 +26,10 @@
 
 use crate::{
     ast::Exp,
-    refinement::{Refine, utils::negate},
+    refinement::{
+        Refine,
+        utils::{always_terminates, negate},
+    },
 };
 
 pub fn refine(exp: &mut Exp) -> bool {
@@ -87,20 +90,6 @@ fn analyze(item: &Exp) -> Option<Which> {
         (true, false) => Some(Which::Then),
         (false, true) => Some(Which::Else),
         _ => None,
-    }
-}
-
-/// Same predicate as `simplify_if::always_terminates` — duplicated here to avoid widening
-/// that module's exports for a single caller. Keep the two in sync.
-fn always_terminates(exp: &Exp) -> bool {
-    match exp {
-        Exp::Abort(_) | Exp::Return(_) | Exp::Break(_) | Exp::Continue(_) => true,
-        Exp::Seq(items) => items.last().is_some_and(always_terminates),
-        Exp::IfElse(_, t, alt) => {
-            always_terminates(t.as_ref()) && alt.as_ref().as_ref().is_some_and(always_terminates)
-        }
-        Exp::Block(_, body) => always_terminates(body),
-        _ => false,
     }
 }
 
