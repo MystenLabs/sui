@@ -36,10 +36,10 @@ use sui_types::base_types::SuiAddress;
 use sui_types::coin::Coin;
 use sui_types::committee::EpochId;
 use sui_types::digests::TransactionDigest;
-use sui_types::full_checkpoint_content::CheckpointData;
-use sui_types::full_checkpoint_content::CheckpointTransaction;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::full_checkpoint_content::ExecutedTransaction;
 use sui_types::full_checkpoint_content::ObjectSet;
-use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Data;
 use sui_types::object::Object;
@@ -51,6 +51,7 @@ use sui_types::storage::LedgerBitmapBucket;
 use sui_types::storage::LedgerBitmapBucketIterator;
 use sui_types::storage::LedgerTxSeqDigest;
 use sui_types::storage::LedgerTxSeqDigestIterator;
+use sui_types::storage::ObjectKey;
 use sui_types::storage::TransactionInfo;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -1005,15 +1006,15 @@ impl IndexStoreTables {
         let start_time = Instant::now();
 
         checkpoint_range.into_par_iter().try_for_each(|seq| {
-            let Some(checkpoint_data) =
-                sparse_checkpoint_data_for_epoch_backfill(authority_store, checkpoint_store, seq)?
+            let Some(checkpoint) =
+                sparse_checkpoint_for_epoch_backfill(authority_store, checkpoint_store, seq)?
             else {
                 return Ok(());
             };
 
             let mut batch = self.epochs.batch();
 
-            self.index_epoch(&checkpoint_data, &mut batch)?;
+            self.index_epoch(&checkpoint, &mut batch)?;
 
             batch
                 .write_opt(bulk_ingestion_write_options())
@@ -1043,20 +1044,18 @@ impl IndexStoreTables {
 
         checkpoint_range.clone().into_par_iter().try_for_each(
             |seq| -> Result<(), StorageError> {
-                let cp_data = full_checkpoint_data_for_backfill(
-                    authority_store,
-                    checkpoint_store,
-                    seq,
-                )?
-                .ok_or_else(|| {
-                    // Missing retained data would leave a permanent hole.
-                    StorageError::missing(format!(
-                        "ledger history backfill: checkpoint {seq} is missing from local storage \
-                         but falls inside the retained backfill range {checkpoint_range:?}"
-                    ))
-                })?;
+                let checkpoint =
+                    full_checkpoint_for_backfill(authority_store, checkpoint_store, seq)?
+                        .ok_or_else(|| {
+                            // Missing retained data would leave a permanent hole.
+                            StorageError::missing(format!(
+                                "ledger history backfill: checkpoint {seq} is missing from local \
+                                 storage but falls inside the retained backfill range \
+                                 {checkpoint_range:?}"
+                            ))
+                        })?;
                 let mut batch = self.meta.batch();
-                self.write_ledger_history_rows_for_checkpoint(&cp_data, &mut batch)?;
+                self.write_ledger_history_rows_for_checkpoint(&checkpoint, &mut batch)?;
                 batch
                     .write_opt(bulk_ingestion_write_options())
                     .map_err(StorageError::from)
@@ -1133,12 +1132,11 @@ impl IndexStoreTables {
     /// Index a Checkpoint
     fn index_checkpoint(
         &self,
-        checkpoint: &CheckpointData,
-        _resolver: &mut dyn LayoutResolver,
+        checkpoint: &Checkpoint,
         ledger_history_enabled: bool,
     ) -> Result<typed_store::rocks::DBBatch, StorageError> {
         debug!(
-            checkpoint = checkpoint.checkpoint_summary.sequence_number,
+            checkpoint = checkpoint.summary.sequence_number,
             "indexing checkpoint"
         );
 
@@ -1155,14 +1153,11 @@ impl IndexStoreTables {
 
         batch.insert_batch(
             &self.watermark,
-            [(
-                Watermark::Indexed,
-                checkpoint.checkpoint_summary.sequence_number,
-            )],
+            [(Watermark::Indexed, checkpoint.summary.sequence_number)],
         )?;
 
         debug!(
-            checkpoint = checkpoint.checkpoint_summary.sequence_number,
+            checkpoint = checkpoint.summary.sequence_number,
             "finished indexing checkpoint"
         );
 
@@ -1171,7 +1166,7 @@ impl IndexStoreTables {
 
     fn index_epoch(
         &self,
-        checkpoint: &CheckpointData,
+        checkpoint: &Checkpoint,
         batch: &mut typed_store::rocks::DBBatch,
     ) -> Result<(), StorageError> {
         let Some(epoch_info) = checkpoint.epoch_info()? else {
@@ -1229,14 +1224,17 @@ impl IndexStoreTables {
 
     fn index_transactions(
         &self,
-        checkpoint: &CheckpointData,
+        checkpoint: &Checkpoint,
         batch: &mut typed_store::rocks::DBBatch,
     ) -> Result<(), StorageError> {
+        let object_set = &checkpoint.object_set;
         for tx in &checkpoint.transactions {
+            let input_objects: Vec<Object> = tx.input_objects(object_set).cloned().collect();
+            let output_objects: Vec<Object> = tx.output_objects(object_set).cloned().collect();
             let balance_changes = sui_types::balance_change::derive_detailed_balance_changes(
                 &tx.effects,
-                &tx.input_objects,
-                &tx.output_objects,
+                &input_objects,
+                &output_objects,
             )
             .into_iter()
             .filter_map(|change| {
@@ -1267,14 +1265,11 @@ impl IndexStoreTables {
     /// `Watermark::Indexed` is the source of truth for coverage.
     fn write_ledger_history_rows_for_checkpoint(
         &self,
-        checkpoint: &CheckpointData,
+        checkpoint: &Checkpoint,
         batch: &mut typed_store::rocks::DBBatch,
     ) -> Result<(), StorageError> {
-        let cp_seq = checkpoint.checkpoint_summary.sequence_number;
-        let net_total = checkpoint
-            .checkpoint_summary
-            .data()
-            .network_total_transactions;
+        let cp_seq = checkpoint.summary.sequence_number;
+        let net_total = checkpoint.summary.data().network_total_transactions;
         let tx_count = checkpoint.transactions.len() as u64;
         // `network_total_transactions` is cumulative *including* this cp.
         // checked_sub: if the cp's network_total_transactions is somehow
@@ -1286,15 +1281,7 @@ impl IndexStoreTables {
             ))
         })?;
 
-        // Build one ObjectSet covering all txs in the cp so the dimension
-        // extractor's object_set.get(ObjectKey) lookups work without per-tx
-        // allocation. Costs O(input_objects + output_objects) clones.
-        let mut object_set = ObjectSet::default();
-        for tx in &checkpoint.transactions {
-            for obj in tx.input_objects.iter().chain(tx.output_objects.iter()) {
-                object_set.insert(obj.clone());
-            }
-        }
+        let object_set = &checkpoint.object_set;
 
         // Group tx-space bitmap bits across the whole checkpoint so repeated
         // dimensions in the same tx bucket produce one Rocks merge operand.
@@ -1303,8 +1290,8 @@ impl IndexStoreTables {
         for (i, tx) in checkpoint.transactions.iter().enumerate() {
             let tx_seq = tx_lo + i as u64;
 
-            let tx_data = tx.transaction.transaction_data();
-            let digest = *tx.transaction.digest();
+            let tx_data = &tx.transaction;
+            let digest = *tx.effects.transaction_digest();
             let event_count = tx.events.as_ref().map(|e| e.data.len() as u32).unwrap_or(0);
 
             // tx_seq_digest: one direct row per tx, no merge needed.
@@ -1331,7 +1318,7 @@ impl IndexStoreTables {
                 tx_data,
                 &tx.effects,
                 tx.events.as_ref(),
-                &object_set,
+                object_set,
                 |dim, value| {
                     tx_dim_keys.insert(encode_dimension_key(dim, value));
                 },
@@ -1399,15 +1386,16 @@ impl IndexStoreTables {
 
     fn index_objects(
         &self,
-        checkpoint: &CheckpointData,
+        checkpoint: &Checkpoint,
         batch: &mut typed_store::rocks::DBBatch,
     ) -> Result<(), StorageError> {
         let mut coin_index: HashMap<CoinIndexKey, CoinIndexInfo> = HashMap::new();
         let mut package_version_index: Vec<(PackageVersionKey, PackageVersionInfo)> = vec![];
+        let object_set = &checkpoint.object_set;
 
         for tx in &checkpoint.transactions {
             // determine changes from removed objects
-            for removed_object in tx.removed_objects_pre_version() {
+            for removed_object in tx_removed_objects_pre_version(tx, object_set) {
                 match removed_object.owner() {
                     Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
                         let owner_key = OwnerIndexKey::from_object(removed_object);
@@ -1430,7 +1418,7 @@ impl IndexStoreTables {
             }
 
             // determine changes from changed objects
-            for (object, old_object) in tx.changed_objects() {
+            for (object, old_object) in tx_changed_objects(tx, object_set) {
                 if let Some(old_object) = old_object {
                     match old_object.owner() {
                         Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
@@ -1484,7 +1472,10 @@ impl IndexStoreTables {
             // coin indexing relies on the fact that CoinMetadata and TreasuryCap are created in
             // the same transaction so we don't need to worry about overriding any older value
             // that may exist in the database (because there necessarily cannot be).
-            for (key, value) in tx.created_objects().flat_map(try_create_coin_index_info) {
+            for (key, value) in tx
+                .created_objects(object_set)
+                .flat_map(try_create_coin_index_info)
+            {
                 use std::collections::hash_map::Entry;
 
                 match coin_index.entry(key) {
@@ -2034,13 +2025,13 @@ impl RpcIndexStore {
     /// called.
     #[tracing::instrument(
         skip_all,
-        fields(checkpoint = checkpoint.checkpoint_summary.sequence_number)
+        fields(checkpoint = checkpoint.summary.sequence_number)
     )]
-    pub fn index_checkpoint(&self, checkpoint: &CheckpointData, resolver: &mut dyn LayoutResolver) {
-        let sequence_number = checkpoint.checkpoint_summary.sequence_number;
+    pub fn index_checkpoint(&self, checkpoint: &Checkpoint) {
+        let sequence_number = checkpoint.summary.sequence_number;
         let batch = self
             .tables
-            .index_checkpoint(checkpoint, resolver, self.ledger_history_enabled)
+            .index_checkpoint(checkpoint, self.ledger_history_enabled)
             .expect("db error");
 
         self.pending_updates
@@ -2275,6 +2266,46 @@ impl RpcIndexStore {
     }
 }
 
+/// Objects that existed before this transaction but no longer exist after
+/// (deleted or wrapped). Mirrors `CheckpointTransaction::removed_objects_pre_version`
+/// for `ExecutedTransaction`, which stores its objects in a shared `ObjectSet`
+/// keyed by `(id, version)` rather than in dense per-tx vectors.
+fn tx_removed_objects_pre_version<'a>(
+    tx: &'a ExecutedTransaction,
+    object_set: &'a ObjectSet,
+) -> impl Iterator<Item = &'a Object> + 'a {
+    tx.effects
+        .object_changes()
+        .into_iter()
+        .filter_map(
+            move |change| match (change.input_version, change.output_version) {
+                (Some(input_version), None) => object_set.get(&ObjectKey(change.id, input_version)),
+                _ => None,
+            },
+        )
+}
+
+/// Pairs of `(output_object, optional_input_object)` for every changed object
+/// (mutated, created, or unwrapped). Mirrors `CheckpointTransaction::changed_objects`
+/// for `ExecutedTransaction`.
+fn tx_changed_objects<'a>(
+    tx: &'a ExecutedTransaction,
+    object_set: &'a ObjectSet,
+) -> impl Iterator<Item = (&'a Object, Option<&'a Object>)> + 'a {
+    tx.effects
+        .object_changes()
+        .into_iter()
+        .filter_map(move |change| {
+            let output = change
+                .output_version
+                .and_then(|v| object_set.get(&ObjectKey(change.id, v)))?;
+            let input = change
+                .input_version
+                .and_then(|v| object_set.get(&ObjectKey(change.id, v)));
+            Some((output, input))
+        })
+}
+
 fn should_index_dynamic_field(object: &Object) -> bool {
     // Skip any objects that aren't of type `Field<Name, Value>`
     //
@@ -2473,17 +2504,17 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
 
 // TODO figure out a way to dedup this logic. Today we'd need to do quite a bit of refactoring to
 // make it possible.
-/// Load full `CheckpointData` for `checkpoint` from local storage. Sibling
-/// of [`sparse_checkpoint_data_for_epoch_backfill`] that returns data for
+/// Load a full `Checkpoint` for `checkpoint` from local storage. Sibling
+/// of [`sparse_checkpoint_for_epoch_backfill`] that returns data for
 /// every cp (not just genesis / EoE) and always loads transaction events.
 ///
 /// Returns `Ok(None)` if the cp's summary or contents are not present
 /// locally (e.g. pruned out of the underlying store).
-fn full_checkpoint_data_for_backfill(
+fn full_checkpoint_for_backfill(
     authority_store: &AuthorityStore,
     checkpoint_store: &CheckpointStore,
     checkpoint: u64,
-) -> Result<Option<CheckpointData>, StorageError> {
+) -> Result<Option<Checkpoint>, StorageError> {
     let Some(summary) = checkpoint_store.get_checkpoint_by_sequence_number(checkpoint)? else {
         return Ok(None);
     };
@@ -2491,63 +2522,24 @@ fn full_checkpoint_data_for_backfill(
         return Ok(None);
     };
 
-    let transaction_digests = contents
-        .iter()
-        .map(|execution_digests| execution_digests.transaction)
-        .collect::<Vec<_>>();
-    let transactions = authority_store
-        .multi_get_transaction_blocks(&transaction_digests)?
-        .into_iter()
-        .map(|maybe_transaction| {
-            maybe_transaction.ok_or_else(|| StorageError::custom("missing transaction"))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let effects = authority_store
-        .multi_get_executed_effects(&transaction_digests)?
-        .into_iter()
-        .map(|maybe_effects| maybe_effects.ok_or_else(|| StorageError::custom("missing effects")))
-        .collect::<Result<Vec<_>, _>>()?;
-
     // Always load events: event-space dimensions need them, and tx-space
     // dimensions include EmitModule / EventType / EventStreamHead which are
     // sourced from events too.
-    let events = authority_store
-        .multi_get_events(&transaction_digests)
-        .map_err(|e| StorageError::custom(e.to_string()))?;
+    let (transactions, object_set) = load_executed_transactions(authority_store, &contents, true)?;
 
-    let mut full_transactions = Vec::with_capacity(transactions.len());
-    for ((tx, fx), ev) in transactions
-        .into_iter()
-        .zip_debug_eq(effects)
-        .zip_debug_eq(events)
-    {
-        let input_objects =
-            sui_types::storage::get_transaction_input_objects(authority_store, &fx)?;
-        let output_objects =
-            sui_types::storage::get_transaction_output_objects(authority_store, &fx)?;
-
-        full_transactions.push(CheckpointTransaction {
-            transaction: tx.into(),
-            effects: fx,
-            events: ev,
-            input_objects,
-            output_objects,
-        });
-    }
-
-    Ok(Some(CheckpointData {
-        checkpoint_summary: summary.into(),
-        checkpoint_contents: contents,
-        transactions: full_transactions,
+    Ok(Some(Checkpoint {
+        summary: summary.into(),
+        contents,
+        transactions,
+        object_set,
     }))
 }
 
-fn sparse_checkpoint_data_for_epoch_backfill(
+fn sparse_checkpoint_for_epoch_backfill(
     authority_store: &AuthorityStore,
     checkpoint_store: &CheckpointStore,
     checkpoint: u64,
-) -> Result<Option<CheckpointData>, StorageError> {
+) -> Result<Option<Checkpoint>, StorageError> {
     let summary = checkpoint_store
         .get_checkpoint_by_sequence_number(checkpoint)?
         .ok_or_else(|| StorageError::missing(format!("missing checkpoint {checkpoint}")))?;
@@ -2561,6 +2553,26 @@ fn sparse_checkpoint_data_for_epoch_backfill(
         .get_checkpoint_contents(&summary.content_digest)?
         .ok_or_else(|| StorageError::missing(format!("missing checkpoint {checkpoint}")))?;
 
+    let (transactions, object_set) = load_executed_transactions(authority_store, &contents, false)?;
+
+    Ok(Some(Checkpoint {
+        summary: summary.into(),
+        contents,
+        transactions,
+        object_set,
+    }))
+}
+
+/// Load `ExecutedTransaction`s for every digest in `contents`, alongside an
+/// `ObjectSet` populated with their input and output objects. `Checkpoint`
+/// stores objects in a shared keyed set rather than the per-tx vectors used
+/// by the old `CheckpointTransaction`, so this is the equivalent shape for
+/// the backfill loaders to return.
+fn load_executed_transactions(
+    authority_store: &AuthorityStore,
+    contents: &sui_types::messages_checkpoint::CheckpointContents,
+    load_events: bool,
+) -> Result<(Vec<ExecutedTransaction>, ObjectSet), StorageError> {
     let transaction_digests = contents
         .iter()
         .map(|execution_digests| execution_digests.transaction)
@@ -2579,31 +2591,48 @@ fn sparse_checkpoint_data_for_epoch_backfill(
         .map(|maybe_effects| maybe_effects.ok_or_else(|| StorageError::custom("missing effects")))
         .collect::<Result<Vec<_>, _>>()?;
 
+    let events = if load_events {
+        authority_store
+            .multi_get_events(&transaction_digests)
+            .map_err(|e| StorageError::custom(e.to_string()))?
+    } else {
+        vec![None; transaction_digests.len()]
+    };
+
     let mut full_transactions = Vec::with_capacity(transactions.len());
-    for (tx, fx) in transactions.into_iter().zip_debug_eq(effects) {
+    let mut object_set = ObjectSet::default();
+    for ((tx, fx), ev) in transactions
+        .into_iter()
+        .zip_debug_eq(effects)
+        .zip_debug_eq(events)
+    {
         let input_objects =
             sui_types::storage::get_transaction_input_objects(authority_store, &fx)?;
         let output_objects =
             sui_types::storage::get_transaction_output_objects(authority_store, &fx)?;
 
-        let full_transaction = CheckpointTransaction {
-            transaction: tx.into(),
-            effects: fx,
-            events: None,
-            input_objects,
-            output_objects,
-        };
+        for obj in input_objects.into_iter().chain(output_objects.into_iter()) {
+            object_set.insert(obj);
+        }
 
-        full_transactions.push(full_transaction);
+        let sender_signed = sui_types::transaction::Transaction::from(tx)
+            .into_data()
+            .into_inner();
+        full_transactions.push(ExecutedTransaction {
+            transaction: sender_signed.intent_message.value,
+            signatures: sender_signed.tx_signatures,
+            effects: fx,
+            events: ev,
+            // The backfill index paths (`index_epoch` and
+            // `write_ledger_history_rows_for_checkpoint`) only read objects
+            // through `effects.object_changes()`, which never reaches
+            // unchanged loaded runtime objects. Leaving this empty avoids a
+            // pointless lookup per checkpoint.
+            unchanged_loaded_runtime_objects: Vec::new(),
+        });
     }
 
-    let checkpoint_data = CheckpointData {
-        checkpoint_summary: summary.into(),
-        checkpoint_contents: contents,
-        transactions: full_transactions,
-    };
-
-    Ok(Some(checkpoint_data))
+    Ok((full_transactions, object_set))
 }
 
 fn get_balance_and_type_if_coin(object: &Object) -> Result<Option<(StructTag, u64)>, StorageError> {
@@ -2962,20 +2991,20 @@ mod tests {
     #[test]
     fn backfill_missing_cp_in_retained_range_is_error() {
         // Mirror the backfill closure: take the
-        // `Result<Option<CheckpointData>>` from the loader, and require
-        // `Some(cp_data)` for every cp in the retained range.
+        // `Result<Option<Checkpoint>>` from the loader, and require
+        // `Some(checkpoint)` for every cp in the retained range.
         let checkpoint_range = 5u64..=10u64;
         let seq = 7u64;
-        let loaded: Result<Option<CheckpointData>, StorageError> = Ok(None);
+        let loaded: Result<Option<Checkpoint>, StorageError> = Ok(None);
 
         let result: Result<(), StorageError> = (|| {
-            let cp_data = loaded?.ok_or_else(|| {
+            let checkpoint = loaded?.ok_or_else(|| {
                 StorageError::missing(format!(
                     "ledger history backfill: checkpoint {seq} is missing from local storage \
                      but falls inside the retained backfill range {checkpoint_range:?}"
                 ))
             })?;
-            let _ = cp_data;
+            let _ = checkpoint;
             Ok(())
         })();
 
@@ -3236,7 +3265,6 @@ mod tests {
     /// Forward `index_checkpoint` writes ledger history rows only when enabled.
     #[tokio::test]
     async fn index_checkpoint_gates_on_ledger_history_enabled() {
-        use sui_types::layout_resolver::LayoutResolver;
         use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
         let temp_dir = tempfile::tempdir().unwrap();
@@ -3250,28 +3278,10 @@ mod tests {
             .start_transaction(1)
             .finish_transaction()
             .build_checkpoint();
-        let checkpoint_data: CheckpointData = checkpoint.into();
-
-        struct PanicResolver;
-        impl LayoutResolver for PanicResolver {
-            fn get_annotated_layout(
-                &mut self,
-                _struct_tag: &move_core_types::language_storage::StructTag,
-            ) -> Result<
-                move_core_types::annotated_value::MoveDatatypeLayout,
-                sui_types::error::SuiError,
-            > {
-                panic!("layout resolver should not be invoked by ledger history indexing");
-            }
-        }
 
         // Disabled: no ledger history writes.
         let batch = tables
-            .index_checkpoint(
-                &checkpoint_data,
-                &mut PanicResolver,
-                /*ledger_history_enabled=*/ false,
-            )
+            .index_checkpoint(&checkpoint, /*ledger_history_enabled=*/ false)
             .expect("index_checkpoint failed");
         batch.write().expect("batch write failed");
         assert_eq!(tables.tx_seq_digest.safe_iter().count(), 0);
@@ -3283,13 +3293,8 @@ mod tests {
             .start_transaction(1)
             .finish_transaction()
             .build_checkpoint();
-        let checkpoint_data2: CheckpointData = checkpoint2.into();
         let batch = tables
-            .index_checkpoint(
-                &checkpoint_data2,
-                &mut PanicResolver,
-                /*ledger_history_enabled=*/ true,
-            )
+            .index_checkpoint(&checkpoint2, /*ledger_history_enabled=*/ true)
             .expect("index_checkpoint failed");
         batch.write().expect("batch write failed");
         assert!(
@@ -3303,7 +3308,6 @@ mod tests {
     /// every checkpoint boundary.
     #[tokio::test]
     async fn index_checkpoint_records_within_checkpoint_tx_offset() {
-        use sui_types::layout_resolver::LayoutResolver;
         use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
         let temp_dir = tempfile::tempdir().unwrap();
@@ -3311,22 +3315,9 @@ mod tests {
         let tables =
             IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
 
-        struct PanicResolver;
-        impl LayoutResolver for PanicResolver {
-            fn get_annotated_layout(
-                &mut self,
-                _struct_tag: &move_core_types::language_storage::StructTag,
-            ) -> Result<
-                move_core_types::annotated_value::MoveDatatypeLayout,
-                sui_types::error::SuiError,
-            > {
-                panic!("layout resolver should not be invoked by ledger history indexing");
-            }
-        }
-
         // Checkpoint 1: three txs over a non-zero tx-seq base (100), so the
         // global tx_seqs are 100,101,102 — distinct from the offsets 0,1,2.
-        let checkpoint1: CheckpointData = TestCheckpointBuilder::new(1)
+        let checkpoint1 = TestCheckpointBuilder::new(1)
             .with_network_total_transactions(100)
             .start_transaction(0)
             .finish_transaction()
@@ -3334,26 +3325,24 @@ mod tests {
             .finish_transaction()
             .start_transaction(2)
             .finish_transaction()
-            .build_checkpoint()
-            .into();
+            .build_checkpoint();
         tables
-            .index_checkpoint(&checkpoint1, &mut PanicResolver, true)
+            .index_checkpoint(&checkpoint1, true)
             .expect("index_checkpoint failed")
             .write()
             .expect("batch write failed");
 
         // Checkpoint 2: two more txs; global tx_seqs continue at 103,104 but the
         // offsets restart at 0.
-        let checkpoint2: CheckpointData = TestCheckpointBuilder::new(2)
+        let checkpoint2 = TestCheckpointBuilder::new(2)
             .with_network_total_transactions(103)
             .start_transaction(0)
             .finish_transaction()
             .start_transaction(1)
             .finish_transaction()
-            .build_checkpoint()
-            .into();
+            .build_checkpoint();
         tables
-            .index_checkpoint(&checkpoint2, &mut PanicResolver, true)
+            .index_checkpoint(&checkpoint2, true)
             .expect("index_checkpoint failed")
             .write()
             .expect("batch write failed");
