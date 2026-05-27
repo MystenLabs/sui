@@ -14,6 +14,6 @@ public fun deref_local_mut(mut x: u64): u64 {
 }
 
 #[allow(unused)]
-public fun deref_in_guard(b: bool): u64 {
-    if (*(&b)) { 1 } else { 0 }
+public fun deref_in_arith(x: u64, y: u64): u64 {
+    *(&x) + *(&y)
 }
