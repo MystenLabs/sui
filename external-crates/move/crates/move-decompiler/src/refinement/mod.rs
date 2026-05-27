@@ -13,6 +13,7 @@ mod hoist_dual_continue;
 mod hoist_tail_continue;
 mod inline_immutable_alias;
 mod introduce_while;
+mod lift_terminating_arm;
 mod liveness;
 mod loop_to_seq;
 mod negate_comparison;
@@ -37,6 +38,7 @@ const REFINEMENTS: &[Refinement] = &[
     flatten_seq::refine,
     fuse_let::refine,
     hoist_arm_assignments::refine,
+    lift_terminating_arm::refine,
     hoist_dual_continue::refine,
     hoist_tail_continue::refine,
     introduce_while::refine,
