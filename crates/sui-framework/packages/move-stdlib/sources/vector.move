@@ -308,6 +308,15 @@ public macro fun fold<$T, $Acc>($v: vector<$T>, $init: $Acc, $f: |$Acc, $T| -> $
     acc
 }
 
+/// Reduce the vector `v` to a single value by applying the function `f` to a reference to each
+/// element. Like `fold`, but the vector is not consumed.
+public macro fun fold_ref<$T, $Acc>($v: &vector<$T>, $init: $Acc, $f: |$Acc, &$T| -> $Acc): $Acc {
+    let v = $v;
+    let mut acc = $init;
+    v.do_ref!(|e| acc = $f(acc, e));
+    acc
+}
+
 /// Concatenate the vectors of `v` into a single vector, keeping the order of the elements.
 public fun flatten<T>(v: vector<vector<T>>): vector<T> {
     let mut r = vector[];

@@ -767,6 +767,16 @@ fun fold_macro() {
 }
 
 #[test]
+fun fold_ref_macro() {
+    let e = vector<u8>[];
+    assert!(e.fold_ref!(0, |acc, e| acc + *e) == 0);
+
+    let r = vector[0, 1, 2, 3u64];
+    assert!(r.fold_ref!(10, |acc, e| acc + *e) == 16);
+    assert_eq!(r, vector[0, 1, 2, 3]); // the vector is not consumed
+}
+
+#[test]
 fun test_flatten() {
     assert!(vector<vector<u8>>[].flatten().is_empty());
     assert!(vector<vector<u8>>[vector[], vector[]].flatten().is_empty());

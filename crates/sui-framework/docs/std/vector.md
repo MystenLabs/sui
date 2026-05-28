@@ -40,6 +40,7 @@ vectors are growable. This module has many native functions.
 -  [Macro function `find_indices`](#std_vector_find_indices)
 -  [Macro function `count`](#std_vector_count)
 -  [Macro function `fold`](#std_vector_fold)
+-  [Macro function `fold_ref`](#std_vector_fold_ref)
 -  [Function `flatten`](#std_vector_flatten)
 -  [Macro function `chunks_map`](#std_vector_chunks_map)
 -  [Macro function `any`](#std_vector_any)
@@ -1001,6 +1002,35 @@ Similar to <code>fold_left</code> in Rust and <code>reduce</code> in Python and 
     <b>let</b> v = $v;
     <b>let</b> <b>mut</b> acc = $init;
     v.<a href="../std/vector.md#std_vector_do">do</a>!(|e| acc = $f(acc, e));
+    acc
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_fold_ref"></a>
+
+## Macro function `fold_ref`
+
+Reduce the vector <code>v</code> to a single value by applying the function <code>f</code> to a reference to each
+element. Like <code><a href="../std/vector.md#std_vector_fold">fold</a></code>, but the vector is not consumed.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_fold_ref">fold_ref</a>&lt;$T, $Acc&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $init: $Acc, $f: |$Acc, &$T| -&gt; $Acc): $Acc
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_fold_ref">fold_ref</a>&lt;$T, $Acc&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $init: $Acc, $f: |$Acc, &$T| -&gt; $Acc): $Acc {
+    <b>let</b> v = $v;
+    <b>let</b> <b>mut</b> acc = $init;
+    v.<a href="../std/vector.md#std_vector_do_ref">do_ref</a>!(|e| acc = $f(acc, e));
     acc
 }
 </code></pre>
