@@ -14,7 +14,7 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
-    error::{ExecutionError, ExecutionErrorContext, ExecutionErrorMetadata, SuiError, SuiResult},
+    error::{ExecutionError, ExecutionErrorMetadata, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
@@ -163,18 +163,13 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(protocol_config, transaction_digest, error);
         }
-        let result = result.map_err(ExecutionErrorContext::from);
-        let execution_error_metadata = result
-            .as_ref()
-            .err()
-            .and_then(ExecutionErrorContext::metadata_with_source);
         (
             inner_temp_store,
             gas_status,
             effects,
             timings,
-            result.map_err(ExecutionError::from),
-            execution_error_metadata,
+            result,
+            None,
         )
     }
 

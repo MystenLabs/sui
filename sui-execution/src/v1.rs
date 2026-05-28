@@ -15,7 +15,7 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
-    error::{ExecutionError, ExecutionErrorContext, ExecutionErrorMetadata, SuiError, SuiResult},
+    error::{ExecutionError, ExecutionErrorMetadata, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
     execution_status::ExecutionFailure,
     gas::SuiGasStatus,
@@ -229,18 +229,13 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        let result = result.map_err(ExecutionErrorContext::from);
-        let execution_error_metadata = result
-            .as_ref()
-            .err()
-            .and_then(ExecutionErrorContext::metadata_with_source);
         (
             inner_temp_store,
             gas_status,
             effects,
             vec![],
-            result.map_err(ExecutionError::from),
-            execution_error_metadata,
+            result,
+            None,
         )
     }
 
