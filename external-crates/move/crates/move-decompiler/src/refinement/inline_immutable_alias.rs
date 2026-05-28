@@ -134,17 +134,44 @@ fn is_eligible(x: &str, y: &str, root: &Exp, liveness: &Liveness) -> bool {
     }
     let counts = liveness.counts();
 
-    // Source `y`: never written. We don't constrain `reads(y)` — `y` can be used at many
-    // sites; the substitution stays sound because `y`'s value never changes.
-    if counts.assigns(y) != 0 {
+    // Soundness rests on a slot-invariance argument.
+    //
+    // For `let X = Y;`, the substitution `X → Y` (drop the binding, rewrite each
+    // `Variable(X)` use site to `Variable(Y)`) preserves semantics iff *slot* `Y`'s
+    // value is invariant from the LetBind to every X-use. Reason:
+    //
+    //   - Slot `X` is set once by the LetBind to `V₀ := value of slot Y at binding time`.
+    //     The X-side guards below ensure slot `X` is never reassigned, so reads of
+    //     `Variable(X)` always return `V₀`.
+    //   - Reads of `Variable(Y)` return slot `Y`'s *current* value.
+    //   - Substituting `X → Y` preserves the read result iff slot `Y`'s current value
+    //     equals `V₀` at every X-use site.
+    //
+    // The two ways a slot can be mutated:
+    //   1. `Assign([Y], _)`            — direct reassignment.
+    //   2. `WriteRef` through a `&mut`-handle to the slot, which requires
+    //      `Borrow(true, Variable(Y))` somewhere upstream (even via a chain of aliased
+    //      handles, the chain must start with that `Borrow`).
+    //
+    // `assigns(Y) == 0 && mut_borrows(Y) == 0` rules both out globally. The check is
+    // type-agnostic: for `&mut T`-typed `Y`, pointee mutations (`*Y = e`, `f(Y)` where
+    // `f` writes through) operate on the heap rather than slot `Y`, so they're invisible
+    // to the alias relationship `X ↔ Y` we're preserving — both sides observe the same
+    // pointee at the same time. The dangerous shapes — `&mut Y` upstream of an X-use —
+    // are exactly what `mut_borrows` counts.
+    if counts.assigns(y) != 0 || counts.mut_borrows(y) != 0 {
         return false;
     }
 
-    // Destination `x`: declared once via this binding, never written or re-introduced.
+    // Destination `x`: declared once via this binding, never written, never re-introduced,
+    // never mut-borrowed. The mut-borrow guard on `x` is the symmetric requirement: if
+    // some site takes `&mut x`, our substitution would need the writes-through-the-borrow
+    // to land on `y` too, which the rewrite doesn't replicate.
     if counts.assigns(x) != 0
         || counts.letbinds(x) != 1
         || counts.declares(x) != 0
         || counts.unpacks(x) != 0
+        || counts.mut_borrows(x) != 0
     {
         return false;
     }

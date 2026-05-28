@@ -36,6 +36,13 @@ pub struct NameCounts {
     letbinds: BTreeMap<String, usize>,
     declares: BTreeMap<String, usize>,
     unpacks: BTreeMap<String, usize>,
+    /// How many times the slot was mut-borrowed — `Borrow(true, Variable(n))`. A mut borrow
+    /// hands out a `&mut` reference *to the slot itself*, through which a downstream
+    /// `WriteRef` (or a callee receiving the reference) can reassign the slot's value.
+    /// It is, for slot-mutation purposes, equivalent to an `Assign`, but invisible to
+    /// `assigns`. Callers reasoning about whether a slot's value is invariant want
+    /// `assigns(n) == 0 && mut_borrows(n) == 0`.
+    mut_borrows: BTreeMap<String, usize>,
 }
 
 impl NameCounts {
@@ -59,6 +66,9 @@ impl NameCounts {
     }
     pub fn unpacks(&self, n: &str) -> usize {
         *self.unpacks.get(n).unwrap_or(&0)
+    }
+    pub fn mut_borrows(&self, n: &str) -> usize {
+        *self.mut_borrows.get(n).unwrap_or(&0)
     }
 
     fn bump(map: &mut BTreeMap<String, usize>, n: &str) {
@@ -130,7 +140,13 @@ impl NameCounts {
                 self.visit(c);
                 self.visit(b);
             }
-            E::Abort(e) | E::Borrow(_, e) | E::Block(_, e) => self.visit(e),
+            E::Borrow(is_mut, inner) => {
+                if *is_mut && let Exp::Variable(n) = inner.as_ref() {
+                    Self::bump(&mut self.mut_borrows, n);
+                }
+                self.visit(inner);
+            }
+            E::Abort(e) | E::Block(_, e) => self.visit(e),
             E::Primitive { args, .. } | E::Data { args, .. } => {
                 for a in args {
                     self.visit(a);

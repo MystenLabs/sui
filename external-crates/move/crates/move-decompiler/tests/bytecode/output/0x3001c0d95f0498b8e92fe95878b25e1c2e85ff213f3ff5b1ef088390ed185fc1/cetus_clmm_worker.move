@@ -245,7 +245,8 @@ public entry fun add_collateral_single<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T
     };
     let l50 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l1), freeze(l4), l11, l12, l13);
     let l36 = &l0.position_operator_cap;
-    vault::after_add_collateral(l36, l1, l44, l8, cetus_clmm_worker::health(freeze(l0), freeze(l4), l5), l50, cetus_clmm_worker::is_reserve_consistent());
+    let l34 = l44;
+    vault::after_add_collateral(l36, l1, l34, l8, cetus_clmm_worker::health(freeze(l0), freeze(l4), l5), l50, cetus_clmm_worker::is_reserve_consistent());
     let l52 = *(table::borrow(&l0.shares, l5));
     assert!(cetus_clmm_worker::share_to_balance(freeze(l0), l52) > l45, C36)
 }
@@ -271,7 +272,8 @@ public entry fun add_collateral_single_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T
     };
     let l50 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l1), freeze(l4), l11, l12, l13);
     let l37 = &l0.position_operator_cap;
-    vault::after_add_collateral(l37, l1, l44, l8, cetus_clmm_worker::health_reverse(freeze(l0), freeze(l4), l5), l50, cetus_clmm_worker::is_reserve_consistent());
+    let l35 = l44;
+    vault::after_add_collateral(l37, l1, l35, l8, cetus_clmm_worker::health_reverse(freeze(l0), freeze(l4), l5), l50, cetus_clmm_worker::is_reserve_consistent());
     let l52 = *(table::borrow(&l0.shares, l5));
     assert!(cetus_clmm_worker::share_to_balance(freeze(l0), l52) > l45, C36)
 }
