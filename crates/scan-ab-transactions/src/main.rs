@@ -48,7 +48,9 @@ use schema::scan_ab_transaction_matches;
 const DEFAULT_DATABASE_URL: &str =
     "postgres://postgres:postgrespw@localhost:5432/scan_ab_transactions";
 const DEFAULT_FIRST_CHECKPOINT: u64 = 278_142_335;
-const INGEST_CONCURRENCY: usize = 200;
+const INGEST_CONCURRENCY_INITIAL: usize = 50;
+const INGEST_CONCURRENCY_MIN: usize = 1;
+const INGEST_CONCURRENCY_MAX: usize = 1_000;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
@@ -93,8 +95,11 @@ async fn main() -> anyhow::Result<()> {
         .with_args(args.cluster_args)
         .with_migrations(&MIGRATIONS)
         .with_ingestion_config(IngestionConfig {
-            ingest_concurrency: IngestConcurrencyConfig::Fixed {
-                value: INGEST_CONCURRENCY,
+            ingest_concurrency: IngestConcurrencyConfig::Adaptive {
+                initial: INGEST_CONCURRENCY_INITIAL,
+                min: INGEST_CONCURRENCY_MIN,
+                max: INGEST_CONCURRENCY_MAX,
+                dead_band: None,
             },
             ..Default::default()
         })
