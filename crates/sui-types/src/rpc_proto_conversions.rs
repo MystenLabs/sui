@@ -1398,37 +1398,6 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
 }
 
 //
-// ExecutionErrorMetadata
-//
-
-pub use sui_rpc::proto::sui::rpc::v2::ExecutionErrorMetadata;
-
-impl From<crate::execution_status::ExecutionErrorMetadata> for ExecutionErrorMetadata {
-    fn from(metadata: crate::error::ExecutionErrorMetadata) -> Self {
-        let mut message = Self::default();
-        message.message = metadata.message;
-        message
-    }
-}
-
-impl From<&crate::execution_status::ExecutionErrorMetadata> for ExecutionErrorMetadata {
-    fn from(metadata: &crate::error::ExecutionErrorMetadata) -> Self {
-        let mut message = Self::default();
-        message.message = metadata.message.clone();
-        message
-    }
-}
-
-impl From<&ExecutionErrorMetadata> for crate::execution_status::ExecutionErrorMetadata {
-    fn from(metadata: &ExecutionErrorMetadata) -> Self {
-        Self {
-            message: metadata.message.clone(),
-        }
-    }
-}
-
-
-//
 // CommandArgumentError
 //
 
@@ -1564,6 +1533,36 @@ impl From<crate::execution_status::MoveLocation> for MoveLocation {
         message.instruction = Some(value.instruction.into());
         message.function_name = value.function_name.map(|name| name.to_string());
         message
+    }
+}
+
+//
+// ExecutionErrorMetadata
+//
+
+pub use sui_rpc::proto::sui::rpc::v2::ExecutionErrorMetadata;
+
+impl From<crate::execution_status::ExecutionErrorMetadata> for ExecutionErrorMetadata {
+    fn from(metadata: crate::error::ExecutionErrorMetadata) -> Self {
+        let mut message = Self::default();
+        message.message = metadata.message;
+        message
+    }
+}
+
+impl From<&crate::execution_status::ExecutionErrorMetadata> for ExecutionErrorMetadata {
+    fn from(metadata: &crate::error::ExecutionErrorMetadata) -> Self {
+        let mut message = Self::default();
+        message.message = metadata.message.clone();
+        message
+    }
+}
+
+impl From<&ExecutionErrorMetadata> for crate::execution_status::ExecutionErrorMetadata {
+    fn from(metadata: &ExecutionErrorMetadata) -> Self {
+        Self {
+            message: metadata.message.clone(),
+        }
     }
 }
 
