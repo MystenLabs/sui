@@ -34,23 +34,27 @@ impl Refine for DedupeFreeze {
         else {
             return false;
         };
-        let strip = match args.as_slice() {
-            // `freeze(freeze(e))` → `freeze(e)`: drop the outer, keep the inner `Data`.
-            [Exp::Data {
-                op: DataOp::FreezeRef,
-                args: inner,
-            }] if inner.len() == 1 => true,
-            // `freeze(&e)` → `&e`: the immutable borrow already produces `&T`.
-            [Exp::Borrow(false, _)] => true,
-            _ => false,
-        };
-        if !strip {
+        let [inner] = args.as_slice() else {
             return false;
-        }
-        let Some(inner) = args.pop() else {
-            unreachable!()
         };
-        *exp = inner;
-        true
+        match inner {
+            // `freeze(freeze(e))` → `freeze(e)`. After the inner the value is already `&T`,
+            // so the outer is a no-op. Drop the outer, keep the inner `Data { FreezeRef }`.
+            Exp::Data {
+                op: DataOp::FreezeRef,
+                ..
+            } => {
+                *exp = args.pop().expect("checked above");
+                true
+            }
+            // `freeze(&e)` → `&e`. The immutable borrow already produces `&T`, so the
+            // outer freeze is a no-op. We do *not* match `Borrow(true, _)` — freezing a
+            // `&mut T` is a real downgrade we must keep.
+            Exp::Borrow(false, _) => {
+                *exp = args.pop().expect("checked above");
+                true
+            }
+            _ => false,
+        }
     }
 }
