@@ -177,7 +177,7 @@ mod checked {
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
-        gas_data: GasData,
+        mut gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
@@ -227,6 +227,22 @@ mod checked {
         };
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
+
+        // On an early `InsufficientFundsForWithdraw` abort we drop every address-balance
+        // payment except the smash target (index 0). This is the single place we apply that
+        // filter: by mutating `gas_data.payment` here, `payment_kind` and
+        // `compute_input_reservations` below see an already-pruned list and need no special
+        // handling. Coin entries (real `ObjectRef`s) are always kept.
+        if matches!(
+            execution_params,
+            Err(ExecutionErrorKind::InsufficientFundsForWithdraw)
+        ) && gas_data.payment.len() > 1
+            && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
+        {
+            gas_data
+                .payment
+                .retain(|entry| ParsedDigest::try_from(entry.2).is_err());
+        }
 
         let mut gas_charger = GasCharger::new(
             transaction_digest,
