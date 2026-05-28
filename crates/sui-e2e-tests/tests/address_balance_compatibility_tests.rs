@@ -1601,3 +1601,145 @@ async fn test_fake_coin_reservation_dev_inspect_safe_when_flag_disabled() {
         Err(e) => panic!("unexpected join error: {e:?}"),
     }
 }
+
+/// Bug demonstration: AB-as-smash-target on IFFW, where the smashed coin carries
+/// a NON-ZERO `storage_rebate`.
+///
+/// Gas = [coin_reservation, real_coin]: the reservation is at index 0, so the AB
+/// is the smash target and the per-payment prune (which only strips AB entries
+/// when the smash target is a real coin) does not apply. Smashing deletes the
+/// real coin and deposits its balance into the AB. After TX1 drains the AB, TX2
+/// fails with `InsufficientFundsForWithdraw`, so `charge_gas` early-returns
+/// `GasCostSummary::default()` — but only AFTER `collect_storage_and_rebate` has
+/// already tallied the deleted coin's `storage_rebate` into the gas status.
+///
+/// When that coin's rebate is non-zero, `check_sui_conserved`'s `storage_cost == 0`
+/// branch requires `total_input_rebate == total_output_rebate + storage_rebate +
+/// non_refundable`, which becomes `(>0) == 0` and trips the SUI conservation
+/// invariant.
+///
+/// The existing AB-target IFFW coverage uses pristine genesis coins, whose
+/// `storage_rebate` is 0 (`Object::new_from_genesis`), so it never exercises this
+/// path. Here we first use the coin as gas in a warm-up transaction so it acquires
+/// a non-zero rebate.
+///
+/// Expected (correct) behavior, asserted below — TX2 fails cleanly with
+/// `InsufficientFundsForWithdraw`, the coin is deleted into the AB, and settlement
+/// completes. On current `main` this does not hold.
+#[sim_test]
+async fn test_gas_smash_ab_target_iffw_with_rebate_coin() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+
+    let initial_ab = 20_000_000u64;
+    test_env.fund_one_address_balance(sender, initial_ab).await;
+
+    let all_gas = test_env.get_gas_for_sender(sender);
+    assert!(all_gas.len() >= 2, "need >=2 gas coins");
+    let tx1_gas_id = all_gas[0].0;
+    let victim_id = all_gas[1].0;
+
+    // Give `victim` a non-zero storage_rebate by using it as gas in a prior,
+    // successful transaction. (Genesis coins start at storage_rebate == 0, which
+    // would otherwise mask the bug.)
+    let dummy = SuiAddress::random_for_testing_only();
+    let warm_up = test_env
+        .tx_builder_with_gas(sender, all_gas[1])
+        .transfer_sui(Some(1), dummy)
+        .build();
+    test_env.exec_tx_directly(warm_up).await.unwrap();
+
+    // Re-fetch refs after the warm-up mutated `victim`.
+    let all_gas = test_env.get_gas_for_sender(sender);
+    let victim = *all_gas
+        .iter()
+        .find(|r| r.0 == victim_id)
+        .expect("victim coin still owned");
+    let tx1_gas = *all_gas
+        .iter()
+        .find(|r| r.0 == tx1_gas_id)
+        .expect("tx1 gas coin still owned");
+    let victim_balance = test_env.get_coin_balance(victim_id).await;
+
+    // TX1: drain the AB to 0 (gas from a real coin).
+    let tx1 = test_env
+        .tx_builder_with_gas(sender, tx1_gas)
+        .transfer_sui_to_address_balance(
+            FundSource::address_fund_with_reservation(initial_ab),
+            vec![(initial_ab, dummy)],
+        )
+        .build();
+
+    // TX2: gas = [coin_reservation, victim]. Reservation first => AB is the smash
+    // target; the rebate-bearing `victim` is smashed into it. Reservation =
+    // initial_ab/2 passes per-tx signing validation but exceeds the post-TX1
+    // balance of 0 => IFFW.
+    let reservation = initial_ab / 2;
+    let fake_coin = test_env.encode_coin_reservation(sender, 0, reservation);
+    let tx2 = test_env
+        .tx_builder_with_gas_objects(sender, vec![fake_coin, victim])
+        .build();
+
+    let tx1_digest = tx1.digest();
+    let tx2_digest = tx2.digest();
+
+    let mut effects = test_env
+        .cluster
+        .sign_and_execute_txns_in_soft_bundle(&[tx1, tx2])
+        .await
+        .unwrap();
+
+    let tx2_effects = effects.pop().unwrap().1;
+    let tx1_effects = effects.pop().unwrap().1;
+
+    assert!(
+        tx1_effects.status().is_ok(),
+        "TX1 should succeed: {:?}",
+        tx1_effects.status()
+    );
+
+    // Expected: a clean IFFW failure. On current main the dropped-rebate
+    // conservation bug makes this assertion fail (status is an invariant
+    // violation, not IFFW — or the node panics during the conservation check).
+    let status_str = format!("{:?}", tx2_effects.status());
+    assert!(
+        status_str.contains("InsufficientFundsForWithdraw"),
+        "TX2 should fail with InsufficientFundsForWithdraw, got: {status_str}"
+    );
+
+    // The rebate-bearing coin is smashed (deleted) into the AB.
+    let deleted_ids: std::collections::HashSet<_> = tx2_effects
+        .deleted()
+        .into_iter()
+        .map(|(id, _, _)| id)
+        .collect();
+    assert!(
+        deleted_ids.contains(&victim_id),
+        "victim coin should be deleted, deleted={deleted_ids:?}"
+    );
+
+    test_env
+        .cluster
+        .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
+        .await;
+
+    // AB should hold exactly the deposited coin balance (no withdrawal, no gas).
+    let final_ab = test_env.get_sui_balance_ab(sender);
+    assert_eq!(
+        final_ab, victim_balance,
+        "AB should hold the smashed coin balance; got {final_ab}"
+    );
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
