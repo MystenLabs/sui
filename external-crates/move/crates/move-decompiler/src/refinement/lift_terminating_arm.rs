@@ -43,40 +43,55 @@ impl Refine for LiftTerminatingArm {
         let Exp::Seq(items) = exp else {
             return false;
         };
-
-        let mut i = 0;
-        while i < items.len() {
-            if let Some(plan) = analyze(&items[i]) {
-                let (cond, terminator, surviving, target) = take(&mut items[i]);
-                let if_exp = match plan {
-                    Which::Then => Exp::IfElse(cond, Box::new(terminator), Box::new(None)),
+        for i in 0..items.len() {
+            if let Some(lift) = take_eligible(&mut items[i]) {
+                let Lift {
+                    cond,
+                    terminator,
+                    surviving,
+                    target,
+                    which,
+                } = lift;
+                let guard_cond = match which {
+                    Which::Then => cond,
+                    // Else-terminates: negate so the lifted guard reads as an early-exit on
+                    // the original `false` branch.
                     Which::Else => {
                         let mut negated = *cond;
                         negate(&mut negated);
-                        Exp::IfElse(Box::new(negated), Box::new(terminator), Box::new(None))
+                        Box::new(negated)
                     }
                 };
-                let let_exp = Exp::LetBind(target, Box::new(surviving));
-                items[i] = if_exp;
-                items.insert(i + 1, let_exp);
+                items[i] = Exp::IfElse(guard_cond, Box::new(terminator), Box::new(None));
+                items.insert(i + 1, Exp::LetBind(target, Box::new(surviving)));
                 return true;
             }
-            i += 1;
         }
         false
     }
 }
 
 // ------------------------------------------------------------------------------------------------
-// Analysis
+// Eligibility + ownership transfer
 
 enum Which {
     Then,
     Else,
 }
 
-fn analyze(item: &Exp) -> Option<Which> {
-    let Exp::LetBind(targets, rhs) = item else {
+struct Lift {
+    cond: Box<Exp>,
+    terminator: Exp,
+    surviving: Exp,
+    target: Vec<String>,
+    which: Which,
+}
+
+/// Check `item`'s shape on the immutable side; if eligible, consume the `LetBind` and
+/// return its pieces. Otherwise leave `item` untouched and return `None`.
+fn take_eligible(item: &mut Exp) -> Option<Lift> {
+    // Shape check (immutable).
+    let Exp::LetBind(targets, rhs) = &*item else {
         return None;
     };
     if targets.len() != 1 {
@@ -86,32 +101,31 @@ fn analyze(item: &Exp) -> Option<Which> {
         return None;
     };
     let alt = alt.as_ref().as_ref()?;
-    match (always_terminates(conseq), always_terminates(alt)) {
-        (true, false) => Some(Which::Then),
-        (false, true) => Some(Which::Else),
-        _ => None,
-    }
-}
+    let which = match (always_terminates(conseq), always_terminates(alt)) {
+        (true, false) => Which::Then,
+        (false, true) => Which::Else,
+        _ => return None,
+    };
 
-/// Consume `item` (asserted to be `LetBind([X], IfElse(t, conseq, Some(alt)))`) and return
-/// `(t, terminating_arm, surviving_arm, target_names)`. The caller's `Which` selects which
-/// arm is the terminator.
-fn take(item: &mut Exp) -> (Box<Exp>, Exp, Exp, Vec<String>) {
-    let Exp::LetBind(targets, rhs) = std::mem::replace(item, Exp::Seq(vec![])) else {
-        unreachable!("analyze accepted this item")
+    // Commit: tear the `LetBind(_, IfElse(cond, conseq, Some(alt)))` shape apart. Every
+    // `expect` below restates an invariant the immutable check above established.
+    let Exp::LetBind(target, rhs) = std::mem::replace(item, Exp::Seq(vec![])) else {
+        unreachable!("shape checked above")
     };
     let Exp::IfElse(cond, conseq, alt) = *rhs else {
-        unreachable!("analyze accepted this item")
+        unreachable!("shape checked above")
     };
-    let alt = match *alt {
-        Some(a) => a,
-        None => unreachable!("analyze accepted this item"),
+    let alt = (*alt).expect("shape checked above");
+
+    let (terminator, surviving) = match which {
+        Which::Then => (*conseq, alt),
+        Which::Else => (alt, *conseq),
     };
-    // Caller decides which arm is the terminator; we hand back both, then it picks.
-    let (terminator, surviving) = if always_terminates(&conseq) {
-        (*conseq, alt)
-    } else {
-        (alt, *conseq)
-    };
-    (cond, terminator, surviving, targets)
+    Some(Lift {
+        cond,
+        terminator,
+        surviving,
+        target,
+        which,
+    })
 }
