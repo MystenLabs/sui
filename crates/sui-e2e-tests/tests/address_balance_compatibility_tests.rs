@@ -1686,174 +1686,20 @@ async fn test_gas_smash_no_underflow_on_iffw_tiny_real_coins() {
     test_env.cluster.trigger_reconfiguration().await;
 }
 
-/// Regression test: same shape as test_gas_smash_no_ab_underflow_on_iffw, but the
-/// two real coins each hold only 1 MIST. Total real-coin gas after smashing is 2
-/// MIST — far below the gas budget. With AB entries dropped on IFFW the gas
-/// charger falls back to charging the real coins, and `deduct_gas` asserts
-/// balance >= charge. If gas charging is not also skipped for this case the
-/// node panics during settlement.
-#[sim_test]
-async fn test_gas_smash_no_underflow_on_iffw_tiny_real_coins() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
-
-    let mut test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_coin_reservation_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
-
-    let sender = test_env.get_sender(0);
-
-    // AB must be large enough that the per-tx signing validation accepts
-    // TX2's reservation (≤ AB) and total gas balance (real coins + reservation)
-    // covers the default gas budget (≈ 5_000_000_000 MIST).
-    let initial_ab = 10_000_000_000u64;
-    test_env.fund_one_address_balance(sender, initial_ab).await;
-
-    let all_gas = test_env.get_gas_for_sender(sender);
-    assert!(all_gas.len() >= 3, "need ≥3 gas coins");
-
-    // Pre-step: split two 1-MIST coins off a normal gas coin and transfer them
-    // back to sender. These tiny coins will be TX2's real-coin gas payments.
-    let splitter_gas = all_gas[0];
-    let mut split_builder = ProgrammableTransactionBuilder::new();
-    let one_a = split_builder.pure(1u64).unwrap();
-    let one_b = split_builder.pure(1u64).unwrap();
-    let split_result =
-        split_builder.command(Command::SplitCoins(Argument::GasCoin, vec![one_a, one_b]));
-    let Argument::Result(split_idx) = split_result else {
-        panic!("SplitCoins should return Argument::Result");
-    };
-    let recipient_arg = split_builder.pure(sender).unwrap();
-    split_builder.command(Command::TransferObjects(
-        vec![
-            Argument::NestedResult(split_idx, 0),
-            Argument::NestedResult(split_idx, 1),
-        ],
-        recipient_arg,
-    ));
-    let split_pt = split_builder.finish();
-    let split_tx = TransactionData::new_programmable(
-        sender,
-        vec![splitter_gas],
-        split_pt,
-        test_env.rgp * 5_000_000,
-        test_env.rgp,
-    );
-    let (_, split_effects) = test_env.exec_tx_directly(split_tx).await.unwrap();
-    assert!(
-        split_effects.status().is_ok(),
-        "tiny-coin split failed: {:?}",
-        split_effects.status()
-    );
-    let tiny_coins: Vec<_> = split_effects
-        .created()
-        .into_iter()
-        .filter(
-            |(_, owner)| matches!(owner, sui_types::object::Owner::AddressOwner(a) if *a == sender),
-        )
-        .map(|(obj_ref, _)| obj_ref)
-        .collect();
-    assert_eq!(
-        tiny_coins.len(),
-        2,
-        "expected exactly two created tiny coins"
-    );
-    let tiny_coin_a = tiny_coins[0];
-    let tiny_coin_b = tiny_coins[1];
-    assert_eq!(test_env.get_coin_balance(tiny_coin_a.0).await, 1);
-    assert_eq!(test_env.get_coin_balance(tiny_coin_b.0).await, 1);
-
-    // Refresh gas list; splitter_gas was mutated and tiny coins are now also in
-    // the wallet's gas-object list. Pick a separate coin to pay for TX1.
-    let all_gas = test_env.get_gas_for_sender(sender);
-    let gas_for_tx1 = *all_gas
-        .iter()
-        .find(|g| g.0 != splitter_gas.0 && g.0 != tiny_coin_a.0 && g.0 != tiny_coin_b.0)
-        .expect("need a non-tiny coin to pay TX1's gas");
-
-    // TX1: drain the AB to 0 (gas comes from a real coin, so the full
-    // initial_ab transfers out).
-    let dummy = SuiAddress::random_for_testing_only();
-    let tx1 = test_env
-        .tx_builder_with_gas(sender, gas_for_tx1)
-        .transfer_sui_to_address_balance(
-            FundSource::address_fund_with_reservation(initial_ab),
-            vec![(initial_ab, dummy)],
-        )
-        .build();
-
-    // TX2: gas_data.payment = [tiny_coin_a (1 MIST), tiny_coin_b (1 MIST),
-    // coin_reservation]. After TX1 drains the AB the reservation withdraw
-    // fails with IFFW.  reservation = initial_ab / 2 passes the per-tx signing
-    // check (≤ initial_ab) and reservation + 2 MIST > default budget.
-    let reservation = initial_ab / 2;
-    let fake_coin = test_env.encode_coin_reservation(sender, 0, reservation);
-    let tx2 = test_env
-        .tx_builder_with_gas_objects(sender, vec![tiny_coin_a, tiny_coin_b, fake_coin])
-        .build();
-
-    let tx1_digest = tx1.digest();
-    let tx2_digest = tx2.digest();
-
-    let mut effects = test_env
-        .cluster
-        .sign_and_execute_txns_in_soft_bundle(&[tx1, tx2])
-        .await
-        .unwrap();
-
-    let tx2_effects = effects.pop().unwrap().1;
-    let tx1_effects = effects.pop().unwrap().1;
-
-    assert!(
-        tx1_effects.status().is_ok(),
-        "TX1 should succeed: {:?}",
-        tx1_effects.status()
-    );
-    let status_str = format!("{:?}", tx2_effects.status());
-    assert!(
-        status_str.contains("InsufficientFundsForWithdraw"),
-        "TX2 should fail with InsufficientFundsForWithdraw, got: {status_str}"
-    );
-
-    // Settlement must complete. Without an additional fix, gas charging tries
-    // to deduct gas from a 2-MIST coin and panics in deduct_gas's
-    // `balance >= charge` assertion, crashing the node.
-    test_env
-        .cluster
-        .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
-        .await;
-
-    let final_ab = test_env.get_sui_balance_ab(sender);
-    assert_eq!(final_ab, 0, "AB should stay 0; got {final_ab}");
-
-    test_env.cluster.trigger_reconfiguration().await;
-}
-
 /// Regression test: AB-as-smash-target on IFFW with non-genesis coins.
 ///
 /// TX2 has gas_data.payment = [coin_reservation, real_coin_a, real_coin_b].
-/// Because the first entry is the reservation, the AB is the smash target and
-/// the per-payment fix in execution_engine does NOT strip AB entries (smashing
-/// proceeds normally). After TX1 drains the AB, TX2 still fails with IFFW
-/// during execution.
+/// The coin_reservation is first, so the AB is the smash target.
+/// After TX1 drains the AB, TX2 fails with IFFW.
 ///
 /// `real_coin_a` and `real_coin_b` are split off a genesis gas coin so they
-/// carry a non-zero `storage_rebate`. With genesis coins (rebate = 0) the
-/// AB-IFFW early-return appears to "just work"; with non-genesis coins the
-/// deleted-coin rebates must be accounted for somewhere in the gas summary,
-/// or the conservation check fails and the recovery path takes over.
+/// carry a non-zero `storage_rebate`, which exercises the conservation check
+/// more thoroughly.
 ///
-/// Expected outcome:
-///   - TX1 succeeds, AB drained to 0.
-///   - TX2 fails with InsufficientFundsForWithdraw.
-///   - Real coins are deleted; their balances land in the AB via the deposit
-///     event from smashing.
-///   - Settlement completes (no underflow / no panic).
+/// With the skip-all fix, smashing is entirely skipped for IFFW transactions
+/// that involve any AB payment. The real coins are NOT deleted; they retain
+/// their original balances. The AB stays at 0 and settlement completes without
+/// any panic.
 #[sim_test]
 async fn test_gas_smash_ab_target_iffw() {
     if has_mainnet_protocol_config_override() {
@@ -1984,41 +1830,32 @@ async fn test_gas_smash_ab_target_iffw() {
         .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
         .await;
 
-    // The real coins should both be deleted by gas smashing.
-    let deleted_ids: std::collections::HashSet<_> = tx2_effects
-        .deleted()
-        .into_iter()
-        .map(|(id, _, _)| id)
-        .collect();
+    // Smashing is skipped entirely for IFFW: no coins are deleted.
     assert!(
-        deleted_ids.contains(&real_coin_a.0),
-        "real_coin_a should be deleted, deleted={deleted_ids:?}"
-    );
-    assert!(
-        deleted_ids.contains(&real_coin_b.0),
-        "real_coin_b should be deleted, deleted={deleted_ids:?}"
+        tx2_effects.deleted().is_empty(),
+        "no coins should be deleted when smashing is skipped: {:?}",
+        tx2_effects.deleted()
     );
 
-    // The deleted coins' storage_rebate must be accounted for in the gas summary
-    // (sender_rebate + non_refundable == total input rebate), otherwise the
-    // simple-conservation check would have failed and triggered the recovery
-    // panic.
+    // Gas summary is zero: no computation or storage charges.
     let cost = tx2_effects.gas_cost_summary();
-    assert_eq!(cost.storage_cost, 0, "no writes, so no storage cost");
-    assert!(
-        cost.storage_rebate + cost.non_refundable_storage_fee > 0,
-        "input coin rebates must appear in the gas summary; got {cost:?}",
+    assert_eq!(cost.gas_used(), 0, "IFFW should charge 0 gas; got {cost:?}");
+
+    // Both real coins retain their original balances.
+    assert_eq!(
+        test_env.get_coin_balance(real_coin_a.0).await,
+        real_coin_a_balance,
+        "real_coin_a balance must be unchanged"
+    );
+    assert_eq!(
+        test_env.get_coin_balance(real_coin_b.0).await,
+        real_coin_b_balance,
+        "real_coin_b balance must be unchanged"
     );
 
-    // Final AB = smash deposit (a + b) + any refund from sender_rebate exceeding
-    // the capped computation cost. Refund can be 0 if computation_cost ≥
-    // sender_rebate; either way the AB never goes below the deposit.
+    // AB stays at 0 — no deposit from smashing since smashing was skipped.
     let final_ab = test_env.get_sui_balance_ab(sender);
-    assert!(
-        final_ab >= real_coin_a_balance + real_coin_b_balance,
-        "AB should hold at least the smashed real-coin balances; got {final_ab}, expected ≥ {}",
-        real_coin_a_balance + real_coin_b_balance,
-    );
+    assert_eq!(final_ab, 0, "AB should stay 0; got {final_ab}");
 
     test_env.cluster.trigger_reconfiguration().await;
 }
