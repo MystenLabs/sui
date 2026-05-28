@@ -661,39 +661,37 @@ impl SuiNode {
             checkpoint_store.clone(),
         );
 
-        let index_store =
-            if node_role.should_enable_index_processing() && config.enable_index_processing {
-                info!("creating jsonrpc index store");
-                Some(Arc::new(IndexStore::new(
-                    config.db_path().join("indexes"),
-                    &prometheus_registry,
-                    epoch_store
-                        .protocol_config()
-                        .max_move_identifier_len_as_option(),
-                    config.remove_deprecated_tables,
-                )))
-            } else {
-                None
-            };
-
-        let rpc_index = if node_role.should_enable_index_processing()
-            && config.rpc().is_some_and(|rpc| rpc.enable_indexing())
-        {
-            info!("creating rpc index store");
-            Some(Arc::new(
-                RpcIndexStore::new(
-                    &config.db_path(),
-                    &store,
-                    &checkpoint_store,
-                    &epoch_store,
-                    &cache_traits.backing_package_store,
-                    config.rpc().cloned().unwrap_or_default(),
-                )
-                .await,
-            ))
+        let index_store = if node_role.is_fullnode() && config.enable_index_processing {
+            info!("creating jsonrpc index store");
+            Some(Arc::new(IndexStore::new(
+                config.db_path().join("indexes"),
+                &prometheus_registry,
+                epoch_store
+                    .protocol_config()
+                    .max_move_identifier_len_as_option(),
+                config.remove_deprecated_tables,
+            )))
         } else {
             None
         };
+
+        let rpc_index =
+            if node_role.is_fullnode() && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
+                info!("creating rpc index store");
+                Some(Arc::new(
+                    RpcIndexStore::new(
+                        &config.db_path(),
+                        &store,
+                        &checkpoint_store,
+                        &epoch_store,
+                        &cache_traits.backing_package_store,
+                        config.rpc().cloned().unwrap_or_default(),
+                    )
+                    .await,
+                ))
+            } else {
+                None
+            };
 
         let chain_identifier = epoch_store.get_chain_identifier();
 
@@ -2507,7 +2505,7 @@ async fn build_http_servers(
     node_role: NodeRole,
 ) -> Result<(HttpServers, Option<tokio::sync::mpsc::Sender<Checkpoint>>)> {
     // Validators do not expose these APIs
-    if !node_role.should_run_rpc_servers() {
+    if !node_role.is_fullnode() {
         return Ok((HttpServers::default(), None));
     }
 
