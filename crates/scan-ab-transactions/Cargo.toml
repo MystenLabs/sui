@@ -1,0 +1,19 @@
+[package]
+name = "scan-ab-transactions"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+clap.workspace = true
+diesel.workspace = true
+diesel-async.workspace = true
+diesel_migrations.workspace = true
+sui-indexer-alt-framework = { workspace = true, features = ["cluster"] }
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true

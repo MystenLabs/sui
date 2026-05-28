@@ -12620,6 +12620,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "scan-ab-transactions"
+version = "1.74.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "clap",
+ "diesel",
+ "diesel-async",
+ "diesel_migrations",
+ "sui-indexer-alt-framework",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
