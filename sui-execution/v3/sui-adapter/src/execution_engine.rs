@@ -356,11 +356,11 @@ mod checked {
                     let mut execution_result: ResultWithTimings<
                         Mode::ExecutionResults,
                         ExecutionError,
-                    > = match execution_params {
-                        ExecutionOrEarlyError::Err(early_execution_error) => {
+                    > = match execution_params.into_early_error() {
+                        Some(early_execution_error) => {
                             Err((ExecutionError::new(early_execution_error, None), vec![]))
                         }
-                        ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
+                        None => execution_loop::<Mode>(
                             store,
                             temporary_store,
                             transaction_kind,

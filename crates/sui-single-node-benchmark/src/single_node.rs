@@ -215,7 +215,7 @@ impl SingleValidator {
                 self.epoch_store.protocol_config(),
                 self.get_validator().metrics.execution_metrics.clone(),
                 false,
-                ExecutionOrEarlyError::Ok(()),
+                ExecutionOrEarlyError::ok(None),
                 &self.epoch_store.epoch(),
                 0,
                 input_objects,
