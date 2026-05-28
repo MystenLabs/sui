@@ -25,18 +25,20 @@ use roaring::RoaringBitmap;
 
 use super::BitmapBucketIteratorSource;
 use super::BitmapQuery;
-use super::BucketItem;
+use super::DedupedQuery;
 use super::LeafHead;
 use super::MultiError;
 use super::ScanDirection;
-use super::TermSpec;
 use super::Watermarked;
 use super::WatermarkedBucket;
 use super::bound_in_direction;
 use super::bucket_edges;
+use super::build_term_specs;
+use super::count_on_floor_refs;
 use super::eval_term_at_bucket;
 use super::frontier_advanced;
-use super::split_term_literals;
+use super::recompute_unreferenced;
+use super::take_snapshot_bitmap;
 
 /// Evaluate a DNF `BitmapQuery` as an ordered iterator of marked bucket bitmaps.
 /// Output emits `Watermarked::Item((bucket_id, bitmap))` interleaved with
@@ -51,36 +53,22 @@ pub fn eval_bitmap_query_bucket_iter<'a, S>(
 where
     S: BitmapBucketIteratorSource<'a>,
 {
-    // One peekable leaf per literal; terms reference them by index. Each leaf
-    // iterator borrows the backend's `'a` store, not `source`, so the thin
-    // `source` handle is dropped once the leaves are built.
-    let mut leaves: Vec<IterPeekable<S::Iter>> = Vec::new();
-    let mut terms: Vec<TermSpec> = Vec::new();
-    for term in query.terms {
-        let (includes, excludes) = split_term_literals(term);
-        let mut include_idx = Vec::with_capacity(includes.len());
-        for key in includes {
-            include_idx.push(leaves.len());
-            leaves.push(
-                source
-                    .scan_bucket_iter(key, range.clone(), direction)
-                    .peekable(),
-            );
-        }
-        let mut exclude_idx = Vec::with_capacity(excludes.len());
-        for key in excludes {
-            exclude_idx.push(leaves.len());
-            leaves.push(
-                source
-                    .scan_bucket_iter(key, range.clone(), direction)
-                    .peekable(),
-            );
-        }
-        terms.push(TermSpec {
-            includes: include_idx,
-            excludes: exclude_idx,
-            dead: false,
-        });
+    // One peekable leaf per *unique* dimension key — terms reference them by
+    // index. Identical keys across literals share a single backend scan; see
+    // [`build_term_specs`]. Each leaf iterator borrows the backend's `'a`
+    // store, not `source`, so the thin `source` handle is dropped once the
+    // leaves are built.
+    let DedupedQuery {
+        keys: unique_keys,
+        mut terms,
+    } = build_term_specs(query.terms);
+    let mut leaves: Vec<IterPeekable<S::Iter>> = Vec::with_capacity(unique_keys.len());
+    for key in unique_keys {
+        leaves.push(
+            source
+                .scan_bucket_iter(key, range.clone(), direction)
+                .peekable(),
+        );
     }
 
     let leaf_count = leaves.len();
@@ -94,8 +82,9 @@ where
     } else {
         range.end
     };
-    // `gone[i]`: leaf retired (its term died or it is a spent exclude).
-    let mut gone = vec![false; leaf_count];
+    // `unreferenced[i]`: leaf is retired — either no satisfiable term still
+    // points at it, or its bucket stream is at EOF (a spent exclude).
+    let mut unreferenced = vec![false; leaf_count];
     // `front[i]`: clamped position each leaf has provably scanned to. Bounds the
     // resume cursor when a leaf errors before it can advance.
     let mut front = vec![request_floor; leaf_count];
@@ -116,7 +105,7 @@ where
             // position it has now scanned to.
             let mut class: Vec<Option<LeafHead>> = (0..leaf_count).map(|_| None).collect();
             for i in 0..leaf_count {
-                if gone[i] {
+                if unreferenced[i] {
                     continue;
                 }
                 match leaves[i].peek() {
@@ -135,38 +124,29 @@ where
                 }
             }
 
-            // An include at EOF kills its term (the intersection is permanently
-            // empty); drop all of that term's leaves so they stop being polled.
+            // An include at EOF makes its term unsatisfiable (the intersection
+            // is permanently empty). With dedup, an EOF'd leaf may be an
+            // include for several terms; all of them become unsatisfiable.
             for term in terms.iter_mut() {
-                if !term.dead
+                if !term.unsatisfiable
                     && term
                         .includes
                         .iter()
                         .any(|&i| matches!(class[i], Some(LeafHead::Eof)))
                 {
-                    term.dead = true;
+                    term.unsatisfiable = true;
                 }
             }
-            for term in &terms {
-                if term.dead {
-                    for &i in term.includes.iter().chain(term.excludes.iter()) {
-                        gone[i] = true;
-                    }
-                } else {
-                    // A spent exclude just stops contributing subtractions.
-                    for &i in &term.excludes {
-                        if matches!(class[i], Some(LeafHead::Eof)) {
-                            gone[i] = true;
-                        }
-                    }
-                }
-            }
+            // Recompute leaf liveness from current term state. A leaf may be
+            // shared across terms (include for one, exclude for another), so it
+            // can only be retired when no satisfiable term still references it.
+            recompute_unreferenced(&terms, &class, &mut unreferenced);
 
             // Consume any budget-error frame so the error surfaces (after the
             // floor watermark below).
             let mut errors: Vec<anyhow::Error> = Vec::new();
             for i in 0..leaf_count {
-                if !gone[i] && matches!(class[i], Some(LeafHead::Error)) {
+                if !unreferenced[i] && matches!(class[i], Some(LeafHead::Error)) {
                     match leaves[i].next() {
                         Some(Err(e)) => errors.push(e),
                         _ => unreachable!("peek classified Error"),
@@ -174,7 +154,7 @@ where
                 }
             }
 
-            let active: Vec<usize> = (0..leaf_count).filter(|&i| !gone[i]).collect();
+            let active: Vec<usize> = (0..leaf_count).filter(|&i| !unreferenced[i]).collect();
             if active.is_empty() {
                 // Every term retired naturally: cap the scan at the range
                 // terminus so the client learns it covered the whole range.
@@ -219,27 +199,46 @@ where
                 .expect("active leaves carry buckets when there is no error");
             let (_pre, post) = bucket_edges(floor_bucket, bucket_size, &range, direction);
 
+            // Snapshot the bitmaps of leaves sitting on `floor_bucket` —
+            // each unique leaf consumed exactly once — then distribute to
+            // every referencing term. See [`build_term_specs`] for why
+            // dedup matters: a leaf shared across terms can only be
+            // pulled once before its iterator moves on.
+            let mut snapshot: Vec<Option<RoaringBitmap>> = (0..leaf_count).map(|_| None).collect();
+            let mut on_floor = vec![false; leaf_count];
+            for i in 0..leaf_count {
+                if !unreferenced[i]
+                    && matches!(class[i], Some(LeafHead::Bucket(b)) if b == floor_bucket)
+                {
+                    on_floor[i] = true;
+                    front[i] = post;
+                    snapshot[i] = match leaves[i].next() {
+                        Some(Ok((_, bitmap))) => Some(bitmap),
+                        _ => None,
+                    };
+                }
+            }
+            let mut remaining_refs = count_on_floor_refs(&terms, &on_floor);
+
             let mut result: Option<RoaringBitmap> = None;
             for term in &terms {
-                if term.dead {
+                if term.unsatisfiable {
                     continue;
                 }
-                let includes = take_term_side(
-                    &term.includes,
-                    floor_bucket,
-                    post,
-                    &class,
-                    &mut front,
-                    &mut leaves,
-                );
-                let excludes = take_term_side(
-                    &term.excludes,
-                    floor_bucket,
-                    post,
-                    &class,
-                    &mut front,
-                    &mut leaves,
-                );
+                let includes: Vec<Option<RoaringBitmap>> = term
+                    .includes
+                    .iter()
+                    .map(|&i| {
+                        take_snapshot_bitmap(&mut snapshot, &mut remaining_refs, &on_floor, i)
+                    })
+                    .collect();
+                let excludes: Vec<Option<RoaringBitmap>> = term
+                    .excludes
+                    .iter()
+                    .map(|&i| {
+                        take_snapshot_bitmap(&mut snapshot, &mut remaining_refs, &on_floor, i)
+                    })
+                    .collect();
                 if let Some(bitmap) = eval_term_at_bucket(includes, excludes) {
                     result = Some(match result {
                         None => bitmap,
@@ -257,36 +256,6 @@ where
             }
         }
     })
-}
-
-/// Gather one term side's bitmaps at `floor_bucket`, consuming the leaves that
-/// sit there (and advancing their `front` to the bucket's trailing edge) and
-/// recording `None` for leaves that sit on a later bucket.
-fn take_term_side<I>(
-    indices: &[usize],
-    floor_bucket: u64,
-    post: u64,
-    class: &[Option<LeafHead>],
-    front: &mut [u64],
-    leaves: &mut [IterPeekable<I>],
-) -> Vec<Option<RoaringBitmap>>
-where
-    I: Iterator<Item = BucketItem>,
-{
-    indices
-        .iter()
-        .map(|&i| {
-            if matches!(class[i], Some(LeafHead::Bucket(b)) if b == floor_bucket) {
-                front[i] = post;
-                match leaves[i].next() {
-                    Some(Ok((_, bitmap))) => Some(bitmap),
-                    _ => None,
-                }
-            } else {
-                None
-            }
-        })
-        .collect()
 }
 
 #[cfg(test)]
@@ -346,6 +315,44 @@ mod tests {
         let out = items_only(&collect_marked(out));
 
         assert_eq!(out, vec![(0, vec![2]), (1, vec![5])]);
+    }
+
+    /// Two terms share the same include `a`. The iter evaluator must collapse
+    /// them to a single backend scan and distribute its per-bucket bitmap to
+    /// both terms. Mirrors the stream-side
+    /// `shared_include_across_terms_scans_dimension_once` test so the dedup
+    /// invariant is exercised on both evaluators.
+    #[test]
+    fn shared_include_across_terms_scans_dimension_once() {
+        use crate::bitmap_query::test_utils::CountingBucketSource;
+
+        let source = CountingBucketSource::new(BTreeMap::from([
+            (test_key(b"a"), vec![(0, vec![1, 2, 3])]),
+            (test_key(b"b"), vec![(0, vec![1])]),
+            (test_key(b"c"), vec![(0, vec![2])]),
+        ]));
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), include(b"b")]).unwrap(),
+            BitmapTerm::new(vec![include(b"a"), include(b"c")]).unwrap(),
+        ])
+        .unwrap();
+
+        let out = items_only(&collect_marked(
+            eval_bitmap_query_bucket_iter(
+                source.clone(),
+                query,
+                0..200_000,
+                BUCKET_SIZE,
+                ScanDirection::Ascending,
+            )
+            .collect(),
+        ));
+
+        // Bucket 0: term1 = a∩b = {1}; term2 = a∩c = {2}; union = {1, 2}.
+        assert_eq!(out, vec![(0, vec![1, 2])]);
+        assert_eq!(source.scan_count(&test_key(b"a")), 1);
+        assert_eq!(source.scan_count(&test_key(b"b")), 1);
+        assert_eq!(source.scan_count(&test_key(b"c")), 1);
     }
 
     /// The iterator evaluator must produce the exact same `Watermarked` sequence
