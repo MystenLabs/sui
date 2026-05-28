@@ -672,7 +672,7 @@ impl SuiNode {
         );
 
         let index_store =
-            if node_role.should_enable_index_processing() && config.enable_index_processing {
+            if node_role.is_fullnode() && config.enable_index_processing {
                 info!("creating jsonrpc index store");
                 Some(Arc::new(IndexStore::new(
                     config.db_path().join("indexes"),
@@ -692,7 +692,7 @@ impl SuiNode {
         // mutually exclusive index backends; selecting the experimental
         // store skips building the old index and serves the index read
         // paths from the embedded store instead.
-        let (rpc_index, mut embedded_rpc_store) = if node_role.should_enable_index_processing()
+        let (rpc_index, mut embedded_rpc_store) = if node_role.is_fullnode()
             && config.rpc().is_some_and(|rpc| rpc.enable_indexing())
         {
             if config
@@ -2659,7 +2659,7 @@ async fn build_http_servers(
     Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
 )> {
     // Validators do not expose these APIs
-    if !node_role.should_run_rpc_servers() {
+    if !node_role.is_fullnode() {
         return Ok((HttpServers::default(), None));
     }
 

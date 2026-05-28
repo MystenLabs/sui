@@ -62,31 +62,6 @@ impl NodeRole {
             Self::Validator | Self::FullNode(FullNodeSyncMode::ConsensusObserver)
         )
     }
-
-    // --- Temporary feature flags ---
-    // The flags below are temporary and may not match the eventual conditions to enable each feature.
-    // They will be removed and the callsites will resolve to one of the three conditions above
-    // once observer mode is fully implemented.
-
-    /// Whether this node should create index stores for JSON-RPC and REST API.
-    pub fn should_enable_index_processing(&self) -> bool {
-        matches!(self, Self::FullNode(_))
-    }
-
-    /// Whether this node should process consensus commit output (execute
-    /// transactions, create checkpoints, etc.). Observers stream blocks but
-    /// rely on state-sync for execution, so they skip commit processing.
-    pub fn process_consensus_commits(&self) -> bool {
-        matches!(
-            self,
-            Self::Validator | Self::FullNode(FullNodeSyncMode::ConsensusObserver)
-        )
-    }
-
-    /// Whether this node should expose HTTP/RPC servers (JSON-RPC, REST).
-    pub fn should_run_rpc_servers(&self) -> bool {
-        matches!(self, Self::FullNode(_))
-    }
 }
 
 impl std::fmt::Display for NodeRole {
@@ -109,26 +84,20 @@ mod tests {
     fn test_validator_role() {
         let role = NodeRole::Validator;
         assert!(role.runs_consensus());
-        assert!(!role.should_enable_index_processing());
-        assert!(!role.should_run_rpc_servers());
-        assert!(role.process_consensus_commits());
+        assert!(role.is_validator());
     }
 
     #[test]
     fn test_consensus_observer_role() {
         let role = NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver);
         assert!(role.runs_consensus());
-        assert!(role.should_enable_index_processing());
-        assert!(role.should_run_rpc_servers());
-        assert!(!role.process_consensus_commits());
+        assert!(role.is_fullnode());
     }
 
     #[test]
     fn test_fullnode_state_sync_role() {
         let role = NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly);
         assert!(!role.runs_consensus());
-        assert!(role.should_enable_index_processing());
-        assert!(role.should_run_rpc_servers());
-        assert!(!role.process_consensus_commits());
+        assert!(role.is_fullnode());
     }
 }

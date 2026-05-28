@@ -49,7 +49,6 @@ use sui_types::{
         ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
         ExecutionTimeObservation,
     },
-    node_role::NodeRole,
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
         InputObjectKind, SenderSignedData, TransactionDataAPI, TransactionKey, VerifiedTransaction,
@@ -3015,7 +3014,6 @@ impl MysticetiConsensusHandler {
         mut consensus_handler: ConsensusHandler<CheckpointService>,
         mut commit_receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
         commit_consumer_monitor: Arc<CommitConsumerMonitor>,
-        node_role: NodeRole,
     ) -> Self {
         debug!(
             last_processed_commit_at_startup,
@@ -3026,12 +3024,7 @@ impl MysticetiConsensusHandler {
             // TODO: pause when execution is overloaded, so consensus can detect the backpressure.
             while let Some(consensus_commit) = commit_receiver.recv().await {
                 let commit_index = consensus_commit.commit_ref.index;
-                if !node_role.process_consensus_commits() {
-                    debug!(
-                        commit_index,
-                        "Observer skipping consensus commit processing"
-                    );
-                } else if commit_index <= last_processed_commit_at_startup {
+                if commit_index <= last_processed_commit_at_startup {
                     consensus_handler.handle_prior_consensus_commit(consensus_commit);
                 } else {
                     consensus_handler
