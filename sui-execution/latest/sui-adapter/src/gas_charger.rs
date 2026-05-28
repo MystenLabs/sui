@@ -72,6 +72,11 @@ pub mod checked {
         /// The original payment methods to be smashed into the `smash_target`. It does not include
         /// the `smash_target` itself. Keyed by location to guarantee uniqueness.
         smashed_payments: IndexMap<PaymentLocation, PaymentMethod>,
+        /// True when address-balance entries were present in the original payment list but were
+        /// filtered out because the transaction has an early InsufficientFundsForWithdraw error.
+        /// Preserved so that `has_address_balance_payment` can still return the correct answer
+        /// after the filter has been applied.
+        had_ab_payments_filtered: bool,
     }
 
     /// Public wrapper that describes how gas will be paid before smashing occurs.
@@ -139,6 +144,10 @@ pub mod checked {
                     // When the transaction is doomed due to insufficient funds, filter out
                     // address balance payments from secondary payments to avoid underflowing
                     // the AB during smashing.
+                    let had_ab_payments_filtered = is_early_error
+                        && payment_methods
+                            .values()
+                            .any(|p| matches!(p, PaymentMethod::AddressBalance(_, _)));
                     let payment_methods = if is_early_error {
                         payment_methods
                             .into_iter()
@@ -157,6 +166,7 @@ pub mod checked {
                         gas_charge_location: smash_target.location(),
                         smash_target,
                         smashed_payments: payment_methods,
+                        had_ab_payments_filtered,
                     };
                     metadata.smash_gas(&tx_digest, temporary_store);
                     PaymentMetadata::Smash(metadata)
@@ -229,9 +239,12 @@ pub mod checked {
         pub(crate) fn has_address_balance_payment(&self) -> bool {
             match &self.payment {
                 PaymentMetadata::Unmetered | PaymentMetadata::Gasless => false,
-                PaymentMetadata::Smash(metadata) => metadata
-                    .payment_methods()
-                    .any(|payment| matches!(payment, PaymentMethod::AddressBalance(_, _))),
+                PaymentMetadata::Smash(metadata) => {
+                    metadata.had_ab_payments_filtered
+                        || metadata
+                            .payment_methods()
+                            .any(|payment| matches!(payment, PaymentMethod::AddressBalance(_, _)))
+                }
             }
         }
 
@@ -404,9 +417,8 @@ pub mod checked {
                 }
             }
 
-            // compute and collect storage charges
+            // Increment versions for all input objects that were touched.
             temporary_store.ensure_active_inputs_mutated();
-            temporary_store.collect_storage_and_rebate(self);
 
             if matches!(&self.payment, PaymentMetadata::Unmetered) {
                 return GasCostSummary::default();
@@ -417,6 +429,10 @@ pub mod checked {
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
             }
 
+            // Early return for InsufficientFundsForWithdraw must happen BEFORE
+            // collect_storage_and_rebate.  If we collected first, the gas coin's
+            // storage_rebate would be stamped with a new value but never paid for in the
+            // gas summary, causing a SUI conservation violation.
             if execution_result
                 .as_ref()
                 .err()
@@ -428,10 +444,13 @@ pub mod checked {
                 })
                 .unwrap_or(false)
                 && self.has_address_balance_payment() {
-                    // If we don't have enough balance to withdraw, don't charge for gas
+                    // If we don't have enough balance to withdraw, don't charge for gas.
                     // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
                     return GasCostSummary::default();
             }
+
+            // compute and collect storage charges
+            temporary_store.collect_storage_and_rebate(self);
 
             self.compute_storage_and_rebate(temporary_store, execution_result);
 
