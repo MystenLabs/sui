@@ -35,15 +35,18 @@ impl Refine for SimplifyZeroCompare {
         let Exp::Primitive { op, args } = exp else {
             return false;
         };
-        let Some(swapped) = swap_op(op) else {
-            return false;
-        };
         let [lhs, rhs] = args.as_slice() else {
             return false;
         };
+        // We only flip when the LHS is a literal and the RHS is not. RHS-also-literal
+        // (`0 == 1`) is no improvement and would oscillate; LHS-not-literal is already
+        // canonical.
         if !is_literal_like(lhs) || is_literal_like(rhs) {
             return false;
         }
+        let Some(swapped) = swap_op(op) else {
+            return false;
+        };
         args.swap(0, 1);
         *op = swapped;
         true
