@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 125;
+const MAX_PROTOCOL_VERSION: u64 = 126;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -352,6 +352,8 @@ const MAINNET_USDB: &str =
 //              transfer per stable.
 // Version 125: Enable granular_post_execution_checks.
 //              Enable timestamp_based_epoch_close on testnet.
+// Version 126: Enable prune_address_balance_gas_payment_on_iffw (gates the gas-underflow fix
+//              shipped to mainnet out-of-band in #26816).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1119,6 +1121,14 @@ struct FeatureFlags {
     // Enables more granular post-execution checks.
     #[serde(skip_serializing_if = "is_false")]
     granular_post_execution_checks: bool,
+
+    // If true, when a transaction aborts early with `InsufficientFundsForWithdraw` and its gas
+    // payment mixes real coins with address-balance entries, the address-balance entries are
+    // pruned from the gas payment before smashing. This avoids underflowing the address balance
+    // at settlement (the balance was already drained to 0). When false, the unpruned payment is
+    // smashed, which can underflow the address balance and abort the settlement transaction.
+    #[serde(skip_serializing_if = "is_false")]
+    prune_address_balance_gas_payment_on_iffw: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2856,6 +2866,10 @@ impl ProtocolConfig {
 
     pub fn granular_post_execution_checks(&self) -> bool {
         self.feature_flags.granular_post_execution_checks
+    }
+
+    pub fn prune_address_balance_gas_payment_on_iffw(&self) -> bool {
+        self.feature_flags.prune_address_balance_gas_payment_on_iffw
     }
 }
 
@@ -4979,6 +4993,9 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.timestamp_based_epoch_close = true;
                     }
+                }
+                126 => {
+                    cfg.feature_flags.prune_address_balance_gas_payment_on_iffw = true;
                 }
                 // Use this template when making changes:
                 //

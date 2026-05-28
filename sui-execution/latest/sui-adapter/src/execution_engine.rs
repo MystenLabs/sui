@@ -233,10 +233,12 @@ mod checked {
         // filter: by mutating `gas_data.payment` here, `payment_kind` and
         // `compute_input_reservations` below see an already-pruned list and need no special
         // handling. Coin entries (real `ObjectRef`s) are always kept.
-        if matches!(
-            execution_params,
-            Err(ExecutionErrorKind::InsufficientFundsForWithdraw)
-        ) && gas_data.payment.len() > 1
+        if protocol_config.prune_address_balance_gas_payment_on_iffw()
+            && matches!(
+                execution_params,
+                Err(ExecutionErrorKind::InsufficientFundsForWithdraw)
+            )
+            && gas_data.payment.len() > 1
             && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
         {
             gas_data
