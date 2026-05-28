@@ -58,3 +58,60 @@ impl Refine for DedupeFreeze {
         }
     }
 }
+
+// No `.move` test exercises this: Move source has no syntactic `freeze`, and the structurer
+// only emits single, load-bearing `FreezeRef`s (the `&mut T -> &T` at call args), never the
+// nested / freeze-of-`&` shapes this pass targets. These unit tests build the AST directly so
+// the refinement still has positive coverage.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn var(n: &str) -> Exp {
+        Exp::Variable(n.to_string())
+    }
+
+    fn freeze(e: Exp) -> Exp {
+        Exp::Data {
+            op: DataOp::FreezeRef,
+            args: vec![e],
+        }
+    }
+
+    #[test]
+    fn collapses_nested_freeze() {
+        // freeze(freeze(x)) -> freeze(x)
+        let mut e = freeze(freeze(var("x")));
+        assert!(refine(&mut e));
+        let Exp::Data {
+            op: DataOp::FreezeRef,
+            args,
+        } = &e
+        else {
+            panic!("expected a single freeze, got {e:?}");
+        };
+        assert!(matches!(args.as_slice(), [Exp::Variable(n)] if n == "x"));
+    }
+
+    #[test]
+    fn collapses_freeze_of_immutable_borrow() {
+        // freeze(&x) -> &x
+        let mut e = freeze(Exp::Borrow(false, Box::new(var("x"))));
+        assert!(refine(&mut e));
+        assert!(matches!(&e, Exp::Borrow(false, _)));
+    }
+
+    #[test]
+    fn keeps_freeze_of_mut_borrow() {
+        // freeze(&mut x) is a real downgrade — leave it alone.
+        let mut e = freeze(Exp::Borrow(true, Box::new(var("x"))));
+        assert!(!refine(&mut e));
+        assert!(matches!(
+            &e,
+            Exp::Data {
+                op: DataOp::FreezeRef,
+                ..
+            }
+        ));
+    }
+}
