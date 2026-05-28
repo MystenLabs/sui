@@ -136,7 +136,6 @@ mod checked {
         transaction_kind: &TransactionKind,
         gas_data: &GasData,
         transaction_signer: SuiAddress,
-        is_early_insufficient_funds_error: bool,
     ) -> BTreeMap<(SuiAddress, TypeTag), u64> {
         use sui_types::balance::Balance;
         use sui_types::gas_coin::GAS;
@@ -162,14 +161,7 @@ mod checked {
                 .or_insert(0) += gas_data.budget;
         }
 
-        for (i, entry) in gas_data.payment.iter().enumerate() {
-            // Mirror the filter in `GasCharger::new`: on an early
-            // InsufficientFundsForWithdraw abort we drop all address-balance payments
-            // except the smash target (index 0), so the corresponding reservation
-            // must be dropped here too.
-            if is_early_insufficient_funds_error && i != 0 {
-                continue;
-            }
+        for entry in &gas_data.payment {
             if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
                 *reservations
                     .entry((gas_data.owner, sui_balance_type.clone()))
@@ -185,7 +177,7 @@ mod checked {
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
-        gas_data: GasData,
+        mut gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
@@ -236,16 +228,25 @@ mod checked {
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
 
-        let is_early_insufficient_funds_error = matches!(
+        // On an early `InsufficientFundsForWithdraw` abort we drop every address-balance
+        // payment except the smash target (index 0). This is the single place we apply that
+        // filter: by mutating `gas_data.payment` here, `payment_kind` and
+        // `compute_input_reservations` below see an already-pruned list and need no special
+        // handling. Coin entries (real `ObjectRef`s) are always kept.
+        if matches!(
             execution_params,
             Err(ExecutionErrorKind::InsufficientFundsForWithdraw)
-        );
+        ) && gas_data.payment.len() > 1
+        {
+            gas_data
+                .payment
+                .retain(|entry| ParsedDigest::try_from(entry.2).is_err());
+        }
 
         let mut gas_charger = GasCharger::new(
             transaction_digest,
             payment_kind(&gas_data, &transaction_kind, protocol_config),
             gas_status,
-            is_early_insufficient_funds_error,
             &mut temporary_store,
             protocol_config,
         );
@@ -267,12 +268,8 @@ mod checked {
             && is_gasless_transaction(&gas_data, &transaction_kind);
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
 
-        let input_reservations = compute_input_reservations(
-            &transaction_kind,
-            &gas_data,
-            transaction_signer,
-            is_early_insufficient_funds_error,
-        );
+        let input_reservations =
+            compute_input_reservations(&transaction_kind, &gas_data, transaction_signer);
 
         let (gas_cost_summary, execution_result, timings) = execute_transaction::<Mode>(
             store,

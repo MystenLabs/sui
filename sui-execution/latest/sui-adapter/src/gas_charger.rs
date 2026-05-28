@@ -125,7 +125,6 @@ pub mod checked {
             tx_digest: TransactionDigest,
             payment_kind: PaymentKind,
             gas_status: SuiGasStatus,
-            is_early_insufficient_funds_error: bool,
             temporary_store: &mut TemporaryStore<'_>,
             protocol_config: &ProtocolConfig,
         ) -> Self {
@@ -135,21 +134,6 @@ pub mod checked {
                 PaymentKind_::Gasless => PaymentMetadata::Gasless,
                 PaymentKind_::Smash(mut payment_methods) => {
                     let (_, smash_target) = payment_methods.shift_remove_index(0).unwrap();
-
-                    let payment_methods = if is_early_insufficient_funds_error {
-                        // filter out all address balance payments, so that we do not smash
-                        // address balance payments into the smash target. necessary because
-                        // we may have aborted due to insufficient funds.
-                        payment_methods
-                            .into_iter()
-                            .filter_map(|(index, payment)| match &payment {
-                                PaymentMethod::AddressBalance(_, _) => None,
-                                PaymentMethod::Coin(_) => Some((index, payment)),
-                            })
-                            .collect()
-                    } else {
-                        payment_methods
-                    };
 
                     let mut metadata = SmashMetadata {
                         // dummy value set below in smash_gas
