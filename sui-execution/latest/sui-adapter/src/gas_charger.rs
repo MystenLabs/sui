@@ -399,6 +399,28 @@ pub mod checked {
             debug_assert!(self.gas_status.storage_rebate() == 0);
             debug_assert!(self.gas_status.storage_gas_units() == 0);
 
+            // Fast path for InsufficientFundsForWithdraw: the transaction was doomed before
+            // execution started and smashing was already skipped in GasCharger::new.  We do
+            // nothing here except ensure active inputs are version-bumped (required by Sui's
+            // object model to prevent replay), then return a zero gas summary.  This leaves
+            // every object exactly as it was — no value changes, no storage_rebate changes,
+            // no accumulator events — which makes SUI conservation trivially true.
+            if execution_result
+                .as_ref()
+                .err()
+                .map(|err| {
+                    matches!(
+                        err.kind(),
+                        sui_types::execution_status::ExecutionErrorKind::InsufficientFundsForWithdraw
+                    )
+                })
+                .unwrap_or(false)
+                && self.has_address_balance_payment()
+            {
+                temporary_store.ensure_active_inputs_mutated();
+                return GasCostSummary::default();
+            }
+
             if !matches!(&self.payment, PaymentMetadata::Unmetered) {
                 // bucketize computation cost
                 let is_move_abort = execution_result
@@ -425,32 +447,7 @@ pub mod checked {
             }
 
             temporary_store.ensure_active_inputs_mutated();
-
-            // Determine ahead of time whether the IFFW zero-gas path will fire.  We check this
-            // before collect_storage_and_rebate because:
-            //   - Unmetered transactions (advance epoch, system txs) MUST run
-            //     collect_storage_and_rebate so that newly-created system objects receive proper
-            //     storage_rebate values and the SUI conservation check passes.
-            //   - IFFW transactions MUST NOT run collect_storage_and_rebate: smashing was skipped
-            //     entirely, so the gas coin retains its original storage_rebate; stamping a new
-            //     rebate and then returning a zero gas summary would leave that delta unaccounted
-            //     for and violate conservation.
-            let is_iffw_zero_gas = execution_result
-                .as_ref()
-                .err()
-                .map(|err| {
-                    matches!(
-                        err.kind(),
-                        sui_types::execution_status::ExecutionErrorKind::InsufficientFundsForWithdraw
-                    )
-                })
-                .unwrap_or(false)
-                && self.has_address_balance_payment();
-
-            // compute and collect storage charges — skipped only for the IFFW zero-gas path
-            if !is_iffw_zero_gas {
-                temporary_store.collect_storage_and_rebate(self);
-            }
+            temporary_store.collect_storage_and_rebate(self);
 
             if matches!(&self.payment, PaymentMetadata::Unmetered) {
                 return GasCostSummary::default();
@@ -459,12 +456,6 @@ pub mod checked {
             if let Some(PaymentLocation::Coin(_)) = gas_payment_location {
                 #[skip_checked_arithmetic]
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
-            }
-
-            if is_iffw_zero_gas {
-                // If we don't have enough balance to withdraw, don't charge for gas.
-                // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
-                return GasCostSummary::default();
             }
 
             self.compute_storage_and_rebate(temporary_store, execution_result);
