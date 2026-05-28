@@ -11,7 +11,66 @@ use crate::{
     execution_status::ExecutionErrorKind, transaction::CheckedInputObjects,
 };
 
-pub type ExecutionOrEarlyError = Result<(), ExecutionErrorKind>;
+/// Execution inputs computed before running a transaction: whether to fail it early (and with
+/// which error), plus deterministic context needed during gas charging.
+///
+/// This is an execution *input* only and is never serialized into `TransactionEffects`. Unlike
+/// `ExecutionErrorKind` / `ExecutionFailureStatus`, adding fields here does not change effects or
+/// their digests — which is why the assigned accumulator version is carried here rather than
+/// embedded in the error kind.
+#[derive(Debug, Clone)]
+pub struct ExecutionOrEarlyError {
+    early_error: Option<ExecutionErrorKind>,
+    /// Accumulator root version assigned to this transaction, used to gate the mainnet
+    /// address-balance gas-smash incident fix (see `should_filter_address_balance_gas_smash` in
+    /// the execution engine). It is populated **only for mainnet committed execution**: on every
+    /// other chain — and on non-committed paths such as dev-inspect, simulation, genesis, and the
+    /// offline replay tools — it is `None`, so the accumulator-version gate is inert there and the
+    /// fix is governed solely by the `prune_address_balance_gas_payment_on_iffw` protocol flag.
+    accumulator_version: Option<SequenceNumber>,
+}
+
+impl ExecutionOrEarlyError {
+    /// Execute the transaction normally (no predetermined early error).
+    pub fn ok(accumulator_version: Option<SequenceNumber>) -> Self {
+        Self {
+            early_error: None,
+            accumulator_version,
+        }
+    }
+
+    /// Skip execution and fail the transaction with `error`.
+    pub fn failed(error: ExecutionErrorKind, accumulator_version: Option<SequenceNumber>) -> Self {
+        Self {
+            early_error: Some(error),
+            accumulator_version,
+        }
+    }
+
+    pub fn is_ok(&self) -> bool {
+        self.early_error.is_none()
+    }
+
+    pub fn is_err(&self) -> bool {
+        self.early_error.is_some()
+    }
+
+    /// The predetermined early error, if any.
+    pub fn early_error(&self) -> Option<&ExecutionErrorKind> {
+        self.early_error.as_ref()
+    }
+
+    /// Consume self, returning the predetermined early error, if any.
+    pub fn into_early_error(self) -> Option<ExecutionErrorKind> {
+        self.early_error
+    }
+
+    /// Accumulator root version assigned to this transaction, if any. Populated only for mainnet
+    /// committed execution; see the field documentation.
+    pub fn accumulator_version(&self) -> Option<SequenceNumber> {
+        self.accumulator_version
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FundsWithdrawStatus {
