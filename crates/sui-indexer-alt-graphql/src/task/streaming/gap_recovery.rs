@@ -80,12 +80,10 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
 
         wait_for_pipelines_catching_up_at(chunk_hi_inclusive, &mut watermarks_rx).await?;
 
-        let chunk = fetch_chunk(fetcher, &mask, cursor..=chunk_hi_inclusive).await?;
-
-        for proto in chunk {
-            let processed = process_checkpoint(proto)?;
+        let processed = fetch_and_process(fetcher, &mask, cursor..=chunk_hi_inclusive).await?;
+        for cp in processed {
             // Ignore send errors: no active subscribers is a normal state during recovery.
-            let _ = sender.send(Arc::new(processed));
+            let _ = sender.send(cp);
         }
 
         cursor = chunk_hi_inclusive + 1;
@@ -131,6 +129,20 @@ async fn fetch_chunk<F: CheckpointFetcher>(
     try_join_all(futures).await
 }
 
+/// Fetch every checkpoint in `range` from kv-rpc in parallel and parse each into a
+/// `ProcessedCheckpoint`, returning them in input order.
+pub(super) async fn fetch_and_process<F: CheckpointFetcher>(
+    fetcher: &F,
+    mask: &FieldMask,
+    range: RangeInclusive<u64>,
+) -> anyhow::Result<Vec<Arc<ProcessedCheckpoint>>> {
+    fetch_chunk(fetcher, mask, range)
+        .await?
+        .into_iter()
+        .map(|p| process_checkpoint(p).map(Arc::new))
+        .collect()
+}
+
 /// Fetch one checkpoint via `GetCheckpoint`, retrying every error as transient with exponential
 /// backoff and no overall deadline.
 ///
@@ -143,7 +155,7 @@ async fn fetch_chunk<F: CheckpointFetcher>(
 /// retention bump, etc.).
 ///
 /// TODO: Emit metrics so ops can alert on stuck recovery.
-async fn fetch_one_with_retry<F: CheckpointFetcher>(
+pub(super) async fn fetch_one_with_retry<F: CheckpointFetcher>(
     fetcher: &F,
     mask: &FieldMask,
     seq: u64,

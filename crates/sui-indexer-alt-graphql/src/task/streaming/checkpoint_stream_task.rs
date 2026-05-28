@@ -57,10 +57,14 @@
 //! fires again.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use anyhow::Context as _;
+use async_stream::stream;
 use backoff::ExponentialBackoff;
+use futures::Stream;
 use futures::StreamExt;
 use move_core_types::account_address::AccountAddress;
 use sui_futures::service::Service;
@@ -94,10 +98,12 @@ use tracing::info;
 use tracing::warn;
 
 use crate::config::SubscriptionConfig;
+use crate::error::RpcError;
 use crate::task::watermark::Watermarks;
 
 use super::StreamingPackageStore;
 use super::SubscriptionReadiness;
+use super::checkpoint_resume::scan_checkpoints;
 use super::gap_recovery::recover_gap;
 use super::processed_checkpoint::ProcessedCheckpoint;
 use super::processed_checkpoint::ProcessedTransaction;
@@ -163,12 +169,128 @@ pub(super) fn checkpoint_field_mask() -> FieldMask {
     ])
 }
 
+/// Handle on the checkpoint broadcast that subscription resolvers consume from. Registered in
+/// the GraphQL context as a nominal type so its members do not clash with other context entries
+/// that may be added later.
+pub(crate) struct SubscriptionBroadcast {
+    broadcaster: CheckpointBroadcaster,
+    network_tip: Arc<AtomicU64>,
+}
+
+impl SubscriptionBroadcast {
+    /// Direct access to the broadcast receiver template. Subscribers should call
+    /// `.resubscribe()` to get their own receiver.
+    pub(crate) fn broadcaster(&self) -> &CheckpointBroadcaster {
+        &self.broadcaster
+    }
+
+    /// Subscribe to broadcasted checkpoints, optionally resuming from `resume_from + 1`.
+    ///
+    /// When `resume_from` is `Some`, a Phase 1 catch-up scan via LedgerService bridges the gap
+    /// until the remaining distance to the live tip is small enough for the broadcast channel
+    /// to bridge, then Phase 2 hands off to the live broadcast. When `resume_from` is `None`,
+    /// only the live broadcast is consumed.
+    ///
+    /// Broadcast `Lagged` returns an error so the load balancer can redistribute the slow
+    /// subscriber. The scan-to-live transition is bounded by `MAX_GAP_RESCANS` re-scans.
+    pub(crate) fn subscribe(
+        &self,
+        resume_from: Option<u64>,
+        fetcher: LedgerGrpcReader,
+        config: &SubscriptionConfig,
+    ) -> impl Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>> + 'static {
+        // Bounded re-entries into Phase 1 to bridge the scan-to-live transition gap (when
+        // `network_tip` advances between scan end and Phase 2's first broadcast item). Two
+        // leaves headroom since scan throughput dominates live rate. `Lagged` is not retried.
+        const MAX_GAP_RESCANS: u32 = 2;
+
+        let mut receiver = self.broadcaster.resubscribe();
+        let network_tip = self.network_tip.clone();
+        let fetcher = Arc::new(fetcher);
+        let config = config.clone();
+
+        stream! {
+            let mut last_yielded: Option<u64> = resume_from;
+            let mut gap_rescans = 0u32;
+
+            'recovery: loop {
+                // Phase 1: scan via LedgerService to cover the gap to the live tip.
+                if let Some(start_after) = last_yielded {
+                    for await item in scan_checkpoints(
+                        fetcher.clone(),
+                        network_tip.clone(),
+                        start_after,
+                        &config,
+                    ) {
+                        let processed = item?;
+                        last_yielded = Some(processed.summary.sequence_number);
+                        yield Ok(processed);
+                    }
+                }
+
+                // Phase 2: Transition to live.
+                loop {
+                    match receiver.recv().await {
+                        Ok(processed) => match last_yielded {
+                            // Receiver still has buffered items older than our scan position.
+                            Some(ly) if processed.summary.sequence_number <= ly => continue,
+                            // Live advanced past where the scan ended: re-scan to bridge the gap.
+                            Some(ly) if processed.summary.sequence_number > ly + 1 => {
+                                gap_rescans += 1;
+                                if gap_rescans >= MAX_GAP_RESCANS {
+                                    yield Err(anyhow::anyhow!(
+                                        "Failed to catch up to the live tip after \
+                                         {MAX_GAP_RESCANS} re-scans; please reconnect.",
+                                    )
+                                    .into());
+                                    return;
+                                }
+                                continue 'recovery;
+                            }
+                            _ => {
+                                gap_rescans = 0;
+                                last_yielded = Some(processed.summary.sequence_number);
+                                yield Ok(processed);
+                            }
+                        },
+                        Err(e) => {
+                            yield Err(broadcast_error(e));
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Convert a broadcast `RecvError` into an `RpcError` to be yielded to the subscriber.
+pub(crate) fn broadcast_error(e: broadcast::error::RecvError) -> RpcError {
+    match e {
+        broadcast::error::RecvError::Lagged(missed_count) => {
+            warn!(missed_count, "Subscription lagged, disconnecting");
+            anyhow::anyhow!(
+                "Subscription too slow: missed {missed_count} checkpoints. \
+                 Please reconnect and use the query API to backfill \
+                 from your last seen sequenceNumber."
+            )
+            .into()
+        }
+        broadcast::error::RecvError::Closed => {
+            warn!("Checkpoint broadcast channel closed");
+            anyhow::anyhow!("Checkpoint stream has been shut down. Please reconnect.").into()
+        }
+    }
+}
+
 /// Background service that connects to a fullnode's gRPC SubscribeCheckpoints endpoint,
 /// processes incoming checkpoints, and broadcasts them to subscription resolvers.
 pub(crate) struct CheckpointStreamTask {
     uri: Uri,
     sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
     broadcaster: CheckpointBroadcaster,
+    /// Sequence number of the most recent checkpoint this task has broadcast.
+    network_tip: Arc<AtomicU64>,
     streaming_packages: Arc<StreamingPackageStore>,
     package_eviction_tx: UnboundedSender<(u64, Vec<AccountAddress>)>,
     readiness: Arc<SubscriptionReadiness>,
@@ -197,6 +319,7 @@ impl CheckpointStreamTask {
             uri,
             sender,
             broadcaster,
+            network_tip: Arc::new(AtomicU64::new(0)),
             streaming_packages,
             package_eviction_tx,
             readiness,
@@ -206,8 +329,11 @@ impl CheckpointStreamTask {
         }
     }
 
-    pub(crate) fn broadcaster(&self) -> CheckpointBroadcaster {
-        self.broadcaster.resubscribe()
+    pub(crate) fn subscription_broadcast(&self) -> SubscriptionBroadcast {
+        SubscriptionBroadcast {
+            broadcaster: self.broadcaster.resubscribe(),
+            network_tip: self.network_tip.clone(),
+        }
     }
 
     /// Connect to the fullnode's gRPC SubscribeCheckpoints endpoint.
@@ -331,6 +457,8 @@ impl CheckpointStreamTask {
             let _ = self.package_eviction_tx.send((seq, ids));
         }
         let processed = process_checkpoint(checkpoint)?;
+        self.network_tip
+            .store(processed.summary.sequence_number, Ordering::Relaxed);
         // Ignore send errors: no active subscribers is a normal state.
         let _ = self.sender.send(Arc::new(processed));
         Ok(())

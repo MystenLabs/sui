@@ -397,7 +397,7 @@ pub async fn start_rpc(
                 streaming_packages.clone(),
                 package_eviction_tx,
                 readiness.clone(),
-                ledger_grpc,
+                ledger_grpc.clone(),
                 watermark_task.watermarks_rx(),
             );
             let eviction_task = task::streaming::PackageEvictionTask::new(
@@ -406,7 +406,13 @@ pub async fn start_rpc(
                 watermark_task.watermarks(),
                 Duration::from_millis(config.subscription.package_eviction_interval_ms),
             );
-            Some((stream_task, eviction_task, streaming_packages, readiness))
+            Some((
+                stream_task,
+                eviction_task,
+                streaming_packages,
+                readiness,
+                ledger_grpc,
+            ))
         }
         None => None,
     };
@@ -452,21 +458,22 @@ pub async fn start_rpc(
     // Spawn the streaming tasks and wait for subscriptions to be ready before
     // binding the listener, so the schema is only advertised once `kv_packages`
     // has caught up to the first streamed checkpoint.
-    let streaming_handles = if let Some((
-        stream_task,
-        eviction_task,
-        streaming_packages,
-        readiness,
-    )) = streaming_setup
-    {
-        rpc = rpc.data(stream_task.broadcaster()).data(streaming_packages);
-        let s_stream = stream_task.run();
-        let s_eviction = eviction_task.run();
-        readiness.wait_for_ready().await?;
-        Some((s_stream, s_eviction))
-    } else {
-        None
-    };
+    let streaming_handles =
+        if let Some((stream_task, eviction_task, streaming_packages, readiness, ledger_grpc)) =
+            streaming_setup
+        {
+            rpc = rpc
+                .data(stream_task.subscription_broadcast())
+                .data(ledger_grpc)
+                .data(streaming_packages)
+                .data(config.subscription);
+            let s_stream = stream_task.run();
+            let s_eviction = eviction_task.run();
+            readiness.wait_for_ready().await?;
+            Some((s_stream, s_eviction))
+        } else {
+            None
+        };
 
     let s_rpc = rpc.run().await?;
 

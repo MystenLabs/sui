@@ -39,6 +39,7 @@
 //!     PackageCache (shared, LRU + system-package invalidation) → DB
 //! ```
 
+mod checkpoint_resume;
 mod checkpoint_stream_task;
 mod gap_recovery;
 mod package_eviction_task;
@@ -50,9 +51,11 @@ use std::sync::Arc;
 
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 
-#[cfg(feature = "staging")]
-pub(crate) use checkpoint_stream_task::CheckpointBroadcaster;
 pub(crate) use checkpoint_stream_task::CheckpointStreamTask;
+#[cfg(feature = "staging")]
+pub(crate) use checkpoint_stream_task::SubscriptionBroadcast;
+#[cfg(feature = "staging")]
+pub(crate) use checkpoint_stream_task::broadcast_error;
 pub(crate) use package_eviction_task::PackageEvictionTask;
 pub(crate) use processed_checkpoint::ProcessedCheckpoint;
 pub(crate) use processed_checkpoint::ProcessedTransaction;
