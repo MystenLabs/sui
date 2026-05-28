@@ -342,7 +342,7 @@ impl TrafficController {
 
     /// Handle check with dry-run mode considered
     pub async fn check(&self, client: &Option<IpAddr>, proxied_client: &Option<IpAddr>) -> bool {
-        let policy_config = { self.policy_config.read().await.clone() };
+        let dry_run = self.policy_config.read().await.dry_run;
 
         let allowed = match &self.acl {
             Acl::Allowlist(allowlist) => client.is_none() || allowlist.contains(&client.unwrap()),
@@ -352,7 +352,7 @@ impl TrafficController {
             }
         };
 
-        match (allowed, policy_config.dry_run) {
+        match (allowed, dry_run) {
             // request allowed
             (true, _) => true,
             // request blocked while in dry-run mode
