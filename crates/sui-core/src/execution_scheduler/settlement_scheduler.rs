@@ -294,6 +294,7 @@ impl SettlementScheduler {
             epoch,
             checkpoint_seq,
             batch_info.checkpoint_height,
+            tx_index_offset,
             ccp_digest,
             &sorted_effects,
         );
@@ -448,19 +449,28 @@ impl SettlementScheduler {
 // failing with an underflow, so the failing arithmetic can be reproduced
 // offline from the dump.
 //
+// Settlement runs per consensus commit chunk, not per checkpoint, so a
+// single checkpoint can contain multiple settlements (each with a
+// distinct `checkpoint_height`). The env var matches on checkpoint
+// sequence number to capture every settlement that rolls up into a
+// failing checkpoint, and `checkpoint_height` is included in the file
+// name to disambiguate them.
+//
 // `SUI_DUMP_SETTLEMENT_CHECKPOINT`: comma-separated list of checkpoint
 // sequence numbers to dump, or "all".
 // `SUI_DUMP_SETTLEMENT_DIR`: output directory, default `/tmp`.
 //
-// Output file: `<dir>/sui-settlement-dump-<seq>.jsonl`. The file is opened
-// with `create_new`, so once the dump exists subsequent retries of the
-// same settlement (expected when mainnet is wedged) skip silently — the
-// dump is single-shot per validator restart, per checkpoint.
+// Output file: `<dir>/sui-settlement-dump-<seq>-<height>.jsonl`. The file
+// is opened with `create_new`, so once the dump exists subsequent
+// retries of the same settlement (expected when mainnet is wedged) skip
+// silently — the dump is single-shot per validator restart, per
+// settlement.
 fn maybe_dump_settlement_inputs(
     cache: &dyn TransactionCacheRead,
     epoch: u64,
     checkpoint_seq: u64,
     checkpoint_height: u64,
+    tx_index_offset: u64,
     ccp_digest: Option<TransactionDigest>,
     sorted_effects: &[TransactionEffects],
 ) {
@@ -477,12 +487,18 @@ fn maybe_dump_settlement_inputs(
     }
 
     let dir = std::env::var("SUI_DUMP_SETTLEMENT_DIR").unwrap_or_else(|_| "/tmp".to_string());
-    let path = format!("{}/sui-settlement-dump-{}.jsonl", dir, checkpoint_seq);
+    let path = format!(
+        "{}/sui-settlement-dump-{}-{}.jsonl",
+        dir, checkpoint_seq, checkpoint_height
+    );
 
     let mut file = match OpenOptions::new().write(true).create_new(true).open(&path) {
         Ok(f) => f,
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            debug!(path, checkpoint_seq, "settlement dump already exists, skipping");
+            debug!(
+                path,
+                checkpoint_seq, checkpoint_height, "settlement dump already exists, skipping"
+            );
             return;
         }
         Err(e) => {
@@ -503,6 +519,7 @@ fn maybe_dump_settlement_inputs(
         "epoch": epoch,
         "checkpoint_seq": checkpoint_seq,
         "checkpoint_height": checkpoint_height,
+        "tx_index_offset": tx_index_offset,
         "consensus_commit_prologue_digest": ccp_digest.map(|d| d.to_string()),
         "num_txns": digests.len(),
     });
@@ -541,6 +558,7 @@ fn maybe_dump_settlement_inputs(
     info!(
         path,
         checkpoint_seq,
+        checkpoint_height,
         num_txns = digests.len(),
         "wrote settlement input dump"
     );
