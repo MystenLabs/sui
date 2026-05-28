@@ -1415,15 +1415,15 @@ async fn test_mix_coin_reservations_real_coins_and_shared_object() {
 /// transaction fails with InsufficientFundsForWithdraw.
 ///
 /// TX1 drains the AB to 0.  TX2 has gas_data.payment =
-/// [real_coin_a, real_coin_b, coin_reservation]: two real coins and a coin
-/// reservation.  After TX1 depletes the AB, the fund-checker fires IFFW for TX2.
+/// [real_coin_a, real_coin_b, coin_reservation] and an extra owned-object input
+/// (a coin transferred in the PTB).  After TX1 depletes the AB, IFFW fires for TX2.
 ///
-/// With the fix, smashing is skipped entirely for IFFW transactions that have any
-/// address-balance payment.  This means:
+/// With the fix, smashing is skipped entirely for IFFW.  This verifies:
 ///   - No AB AccumulatorEvent is emitted (no underflow at settlement).
-///   - The two real coins are not merged: real_coin_b is not deleted and both coins
-///     keep their original balances (0 gas charged).
-///   - SUI conservation holds because no coin is mutated or deleted.
+///   - The two gas coins are not merged; both keep their original balances (0 gas).
+///   - The extra PTB input gets its version bumped but is NOT storage-charged —
+///     collect_storage_and_rebate is skipped, so its storage_rebate is unchanged.
+///     SUI conservation must still hold.
 #[sim_test]
 async fn test_gas_smash_no_ab_underflow_on_iffw() {
     if has_mainnet_protocol_config_override() {
@@ -1446,7 +1446,7 @@ async fn test_gas_smash_no_ab_underflow_on_iffw() {
 
     // Refresh gas list after funding (funding consumes one coin).
     let mut all_gas = test_env.get_gas_for_sender(sender);
-    assert!(all_gas.len() >= 3, "need ≥3 gas coins");
+    assert!(all_gas.len() >= 4, "need ≥4 gas coins");
 
     // TX1: withdraw all AB (pays gas from a real coin so the full initial_ab is freed).
     let gas_for_tx1 = all_gas.remove(0);
@@ -1459,19 +1459,21 @@ async fn test_gas_smash_no_ab_underflow_on_iffw() {
         )
         .build();
 
-    // TX2: gas_data.payment = [real_coin_a, real_coin_b, coin_reservation].
-    // Using two real coins deliberately exercises the case where smashing would normally
-    // delete real_coin_b — the fix must leave it intact.
-    // Reservation = initial_ab / 2 passes per-tx signing validation (≤ initial_ab) but
-    // exceeds the post-TX1 balance of 0, triggering IFFW.
+    // TX2: gas_data.payment = [real_coin_a, real_coin_b, coin_reservation] plus an
+    // extra owned-object input (input_coin) that the PTB transfers to sender.
+    // input_coin gets its version bumped by ensure_active_inputs_mutated but
+    // collect_storage_and_rebate is skipped — its storage_rebate must stay unchanged.
     let real_coin_a = all_gas.remove(0);
     let real_coin_b = all_gas.remove(0);
+    let input_coin = all_gas.remove(0);
     let real_coin_a_balance = test_env.get_coin_balance(real_coin_a.0).await;
     let real_coin_b_balance = test_env.get_coin_balance(real_coin_b.0).await;
+    let input_coin_balance = test_env.get_coin_balance(input_coin.0).await;
     let reservation = initial_ab / 2;
     let fake_coin = test_env.encode_coin_reservation(sender, 0, reservation);
     let tx2 = test_env
         .tx_builder_with_gas_objects(sender, vec![real_coin_a, real_coin_b, fake_coin])
+        .transfer(FullObjectRef::from_fastpath_ref(input_coin), sender)
         .build();
 
     let tx1_digest = tx1.digest();
@@ -1524,6 +1526,13 @@ async fn test_gas_smash_no_ab_underflow_on_iffw() {
         test_env.get_coin_balance(real_coin_b.0).await,
         real_coin_b_balance,
         "real_coin_b balance must be unchanged"
+    );
+    // input_coin had its version bumped (it's an owned PTB input) but collect_storage_and_rebate
+    // was skipped, so its storage_rebate was not updated.  Conservation must still hold.
+    assert_eq!(
+        test_env.get_coin_balance(input_coin.0).await,
+        input_coin_balance,
+        "input_coin balance must be unchanged (version bumped, not storage-charged)"
     );
 
     test_env.cluster.trigger_reconfiguration().await;
