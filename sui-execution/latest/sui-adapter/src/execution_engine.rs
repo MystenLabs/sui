@@ -136,6 +136,7 @@ mod checked {
         transaction_kind: &TransactionKind,
         gas_data: &GasData,
         transaction_signer: SuiAddress,
+        is_early_insufficient_funds_error: bool,
     ) -> BTreeMap<(SuiAddress, TypeTag), u64> {
         use sui_types::balance::Balance;
         use sui_types::gas_coin::GAS;
@@ -161,7 +162,14 @@ mod checked {
                 .or_insert(0) += gas_data.budget;
         }
 
-        for entry in &gas_data.payment {
+        for (i, entry) in gas_data.payment.iter().enumerate() {
+            // Mirror the filter in `GasCharger::new`: on an early
+            // InsufficientFundsForWithdraw abort we drop all address-balance payments
+            // except the smash target (index 0), so the corresponding reservation
+            // must be dropped here too.
+            if is_early_insufficient_funds_error && i != 0 {
+                continue;
+            }
             if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
                 *reservations
                     .entry((gas_data.owner, sui_balance_type.clone()))
@@ -228,14 +236,16 @@ mod checked {
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
 
+        let is_early_insufficient_funds_error = matches!(
+            execution_params,
+            Err(ExecutionErrorKind::InsufficientFundsForWithdraw)
+        );
+
         let mut gas_charger = GasCharger::new(
             transaction_digest,
             payment_kind(&gas_data, &transaction_kind, protocol_config),
             gas_status,
-            matches!(
-                execution_params,
-                Err(ExecutionErrorKind::InsufficientFundsForWithdraw)
-            ),
+            is_early_insufficient_funds_error,
             &mut temporary_store,
             protocol_config,
         );
@@ -257,8 +267,12 @@ mod checked {
             && is_gasless_transaction(&gas_data, &transaction_kind);
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
 
-        let input_reservations =
-            compute_input_reservations(&transaction_kind, &gas_data, transaction_signer);
+        let input_reservations = compute_input_reservations(
+            &transaction_kind,
+            &gas_data,
+            transaction_signer,
+            is_early_insufficient_funds_error,
+        );
 
         let (gas_cost_summary, execution_result, timings) = execute_transaction::<Mode>(
             store,
