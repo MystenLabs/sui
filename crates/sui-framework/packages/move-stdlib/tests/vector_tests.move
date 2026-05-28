@@ -105,6 +105,21 @@ fun append_respects_order_nonempty_rhs_lhs() {
     }
 }
 
+#[test]
+fun append_ref_copies_and_preserves_order() {
+    // empty `other` leaves `lhs` unchanged
+    let mut v1 = vector[1, 2, 3u64];
+    v1.append_ref(&vector[]);
+    assert_eq!(v1, vector[1, 2, 3]);
+
+    // elements of `other` are appended in order
+    let mut v1 = vector[1, 2u64];
+    let v2 = vector[3, 4, 5u64];
+    v1.append_ref(&v2);
+    assert_eq!(v1, vector[1, 2, 3, 4, 5]);
+    assert_eq!(v2, vector[3, 4, 5]); // `other` is borrowed, not consumed
+}
+
 #[test, expected_failure(vector_error, minor_status = 1, location = Self)]
 fun borrow_out_of_range() {
     let mut v = vector[];
@@ -662,6 +677,25 @@ fun test_do_macro() {
 }
 
 #[test]
+fun test_enumerate_map_macro() {
+    // empty vector produces an empty vector; `f` is never called
+    assert_eq!(vector<u8>[].enumerate_map!(|_, _| 0u8), vector<u8>[]);
+    assert_eq!(vector<u8>[].enumerate_map_ref!(|_, _| 0u8), vector<u8>[]);
+
+    // enumerate_map consumes the vector; index and element are paired, in order, from 0
+    let v = vector<u64>[10, 20, 30, 40];
+    assert_eq!(v.enumerate_map!(|i, e| i + e), vector<u64>[10, 21, 32, 43]);
+
+    // enumerate_map_ref borrows the vector and leaves it unmodified
+    let v = vector<u64>[10, 20, 30, 40];
+    assert_eq!(v.enumerate_map_ref!(|i, e| i + *e), vector<u64>[10, 21, 32, 43]);
+    assert_eq!(v, vector<u64>[10, 20, 30, 40]); // original is not modified
+
+    // index alone
+    assert_eq!(vector<u64>[5, 6, 7].enumerate_map_ref!(|i, _| i), vector<u64>[0, 1, 2]);
+}
+
+#[test]
 fun test_map_macro() {
     let e = vector<u8>[];
     assert_eq!(e.map!(|e| e + 1), vector[]);
@@ -740,6 +774,35 @@ fun test_flatten() {
     assert!(vector[vector[1], vector[]].flatten() == vector[1u64]);
     assert!(vector[vector[1], vector[2u64]].flatten() == vector[1, 2]);
     assert!(vector[vector[1u64], vector[2, 3]].flatten() == vector[1, 2, 3]);
+}
+
+#[test]
+fun test_chunks_map_macro() {
+    // empty vector: `f` is never called, result is empty
+    assert_eq!(vector<u8>[].chunks_map!(3, |c| c.length()), vector<u64>[]);
+
+    // chunks are produced in order; the last one may be shorter
+    assert_eq!(
+        vector[1, 2, 3, 4, 5u64].chunks_map!(2, |c| c),
+        vector[vector[1, 2], vector[3, 4], vector[5]],
+    );
+
+    // chunk size of 1
+    assert_eq!(
+        vector[1, 2, 3u64].chunks_map!(1, |c| c),
+        vector[vector[1], vector[2], vector[3]],
+    );
+
+    // chunk larger than the vector yields a single chunk
+    assert_eq!(vector[1, 2, 3u64].chunks_map!(10, |c| c), vector[vector[1, 2, 3]]);
+
+    // `f` maps each chunk to a value, e.g. its length
+    assert_eq!(vector[1, 2, 3, 4, 5u64].chunks_map!(2, |c| c.length()), vector[2, 2, 1]);
+}
+
+#[test, expected_failure]
+fun test_chunks_map_zero_size() {
+    vector[1u64].chunks_map!(0, |c| c);
 }
 
 #[test]

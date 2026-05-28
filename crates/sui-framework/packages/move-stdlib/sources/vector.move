@@ -77,6 +77,11 @@ public fun append<Element>(lhs: &mut vector<Element>, other: vector<Element>) {
     other.do!(|e| lhs.push_back(e));
 }
 
+/// Pushes copies of all of the elements of the `other` vector into the `lhs` vector.
+public fun append_ref<Element: copy>(lhs: &mut vector<Element>, other: &vector<Element>) {
+    other.do_ref!(|e| lhs.push_back(*e));
+}
+
 /// Return `true` if the vector `v` has no elements and `false` otherwise.
 public fun is_empty<Element>(v: &vector<Element>): bool {
     v.length() == 0
@@ -225,6 +230,28 @@ public macro fun map_ref<$T, $U>($v: &vector<$T>, $f: |&$T| -> $U): vector<$U> {
     r
 }
 
+/// Like `map`, but `f` also receives the index of each element.
+public macro fun enumerate_map<$T, $U>($v: vector<$T>, $f: |u64, $T| -> $U): vector<$U> {
+    let v = $v;
+    let mut i = 0;
+    v.map!(|e| {
+        let u = $f(i, e);
+        i = i + 1;
+        u
+    })
+}
+
+/// Like `map_ref`, but `f` also receives the index of each element.
+public macro fun enumerate_map_ref<$T, $U>($v: &vector<$T>, $f: |u64, &$T| -> $U): vector<$U> {
+    let v = $v;
+    let mut i = 0;
+    v.map_ref!(|e| {
+        let u = $f(i, e);
+        i = i + 1;
+        u
+    })
+}
+
 /// Filter the vector `v` by applying the function `f` to each element.
 /// Return a new vector containing only the elements for which `f` returns `true`.
 public macro fun filter<$T: drop>($v: vector<$T>, $f: |&$T| -> bool): vector<$T> {
@@ -285,6 +312,24 @@ public macro fun fold<$T, $Acc>($v: vector<$T>, $init: $Acc, $f: |$Acc, $T| -> $
 public fun flatten<T>(v: vector<vector<T>>): vector<T> {
     let mut r = vector[];
     v.do!(|u| r.append(u));
+    r
+}
+
+/// Split `v` into sub-vectors of length `n`, apply `f` to each, and collect the results.
+/// The last chunk is shorter if `v.length()` is not a multiple of `n`.
+/// Aborts if `n` is zero.
+public macro fun chunks_map<$T, $U>($v: vector<$T>, $n: u64, $f: |vector<$T>| -> $U): vector<$U> {
+    let mut v = $v;
+    let n = $n;
+    assert!(n > 0);
+    v.reverse();
+    let mut r = vector[];
+    while (!v.is_empty()) {
+        let mut chunk = vector[];
+        n.do!(|_| if (!v.is_empty()) chunk.push_back(v.pop_back()));
+        r.push_back($f(chunk));
+    };
+    v.destroy_empty();
     r
 }
 

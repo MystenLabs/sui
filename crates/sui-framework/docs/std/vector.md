@@ -16,6 +16,7 @@ vectors are growable. This module has many native functions.
 -  [Function `swap`](#std_vector_swap)
 -  [Function `reverse`](#std_vector_reverse)
 -  [Function `append`](#std_vector_append)
+-  [Function `append_ref`](#std_vector_append_ref)
 -  [Function `is_empty`](#std_vector_is_empty)
 -  [Function `contains`](#std_vector_contains)
 -  [Function `index_of`](#std_vector_index_of)
@@ -31,6 +32,8 @@ vectors are growable. This module has many native functions.
 -  [Macro function `do_mut`](#std_vector_do_mut)
 -  [Macro function `map`](#std_vector_map)
 -  [Macro function `map_ref`](#std_vector_map_ref)
+-  [Macro function `enumerate_map`](#std_vector_enumerate_map)
+-  [Macro function `enumerate_map_ref`](#std_vector_enumerate_map_ref)
 -  [Macro function `filter`](#std_vector_filter)
 -  [Macro function `partition`](#std_vector_partition)
 -  [Macro function `find_index`](#std_vector_find_index)
@@ -38,6 +41,7 @@ vectors are growable. This module has many native functions.
 -  [Macro function `count`](#std_vector_count)
 -  [Macro function `fold`](#std_vector_fold)
 -  [Function `flatten`](#std_vector_flatten)
+-  [Macro function `chunks_map`](#std_vector_chunks_map)
 -  [Macro function `any`](#std_vector_any)
 -  [Macro function `all`](#std_vector_all)
 -  [Macro function `zip_do`](#std_vector_zip_do)
@@ -291,6 +295,31 @@ Pushes all of the elements of the <code>other</code> vector into the <code>lhs</
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_append">append</a>&lt;Element&gt;(lhs: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, other: <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;) {
     other.<a href="../std/vector.md#std_vector_do">do</a>!(|e| lhs.<a href="../std/vector.md#std_vector_push_back">push_back</a>(e));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_append_ref"></a>
+
+## Function `append_ref`
+
+Pushes copies of all of the elements of the <code>other</code> vector into the <code>lhs</code> vector.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_append_ref">append_ref</a>&lt;Element: <b>copy</b>&gt;(lhs: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, other: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_append_ref">append_ref</a>&lt;Element: <b>copy</b>&gt;(lhs: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, other: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;) {
+    other.<a href="../std/vector.md#std_vector_do_ref">do_ref</a>!(|e| lhs.<a href="../std/vector.md#std_vector_push_back">push_back</a>(*e));
 }
 </code></pre>
 
@@ -742,6 +771,68 @@ Preserves the order of elements in the vector, first is called first.
 
 </details>
 
+<a name="std_vector_enumerate_map"></a>
+
+## Macro function `enumerate_map`
+
+Like <code><a href="../std/vector.md#std_vector_map">map</a></code>, but <code>f</code> also receives the index of each element.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_enumerate_map">enumerate_map</a>&lt;$T, $U&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |<a href="../std/u64.md#std_u64">u64</a>, $T| -&gt; $U): <a href="../std/vector.md#std_vector">vector</a>&lt;$U&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_enumerate_map">enumerate_map</a>&lt;$T, $U&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |<a href="../std/u64.md#std_u64">u64</a>, $T| -&gt; $U): <a href="../std/vector.md#std_vector">vector</a>&lt;$U&gt; {
+    <b>let</b> v = $v;
+    <b>let</b> <b>mut</b> i = 0;
+    v.<a href="../std/vector.md#std_vector_map">map</a>!(|e| {
+        <b>let</b> u = $f(i, e);
+        i = i + 1;
+        u
+    })
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_enumerate_map_ref"></a>
+
+## Macro function `enumerate_map_ref`
+
+Like <code><a href="../std/vector.md#std_vector_map_ref">map_ref</a></code>, but <code>f</code> also receives the index of each element.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_enumerate_map_ref">enumerate_map_ref</a>&lt;$T, $U&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |<a href="../std/u64.md#std_u64">u64</a>, &$T| -&gt; $U): <a href="../std/vector.md#std_vector">vector</a>&lt;$U&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_enumerate_map_ref">enumerate_map_ref</a>&lt;$T, $U&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |<a href="../std/u64.md#std_u64">u64</a>, &$T| -&gt; $U): <a href="../std/vector.md#std_vector">vector</a>&lt;$U&gt; {
+    <b>let</b> v = $v;
+    <b>let</b> <b>mut</b> i = 0;
+    v.<a href="../std/vector.md#std_vector_map_ref">map_ref</a>!(|e| {
+        <b>let</b> u = $f(i, e);
+        i = i + 1;
+        u
+    })
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="std_vector_filter"></a>
 
 ## Macro function `filter`
@@ -937,6 +1028,44 @@ Concatenate the vectors of <code>v</code> into a single vector, keeping the orde
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_flatten">flatten</a>&lt;T&gt;(v: <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/vector.md#std_vector">vector</a>&lt;T&gt;&gt;): <a href="../std/vector.md#std_vector">vector</a>&lt;T&gt; {
     <b>let</b> <b>mut</b> r = <a href="../std/vector.md#std_vector">vector</a>[];
     v.<a href="../std/vector.md#std_vector_do">do</a>!(|u| r.<a href="../std/vector.md#std_vector_append">append</a>(u));
+    r
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_chunks_map"></a>
+
+## Macro function `chunks_map`
+
+Split <code>v</code> into sub-vectors of length <code>n</code>, apply <code>f</code> to each, and collect the results.
+The last chunk is shorter if <code>v.<a href="../std/vector.md#std_vector_length">length</a>()</code> is not a multiple of <code>n</code>.
+Aborts if <code>n</code> is zero.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_chunks_map">chunks_map</a>&lt;$T, $U&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $n: <a href="../std/u64.md#std_u64">u64</a>, $f: |<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;| -&gt; $U): <a href="../std/vector.md#std_vector">vector</a>&lt;$U&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_chunks_map">chunks_map</a>&lt;$T, $U&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $n: <a href="../std/u64.md#std_u64">u64</a>, $f: |<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;| -&gt; $U): <a href="../std/vector.md#std_vector">vector</a>&lt;$U&gt; {
+    <b>let</b> <b>mut</b> v = $v;
+    <b>let</b> n = $n;
+    <b>assert</b>!(n &gt; 0);
+    v.<a href="../std/vector.md#std_vector_reverse">reverse</a>();
+    <b>let</b> <b>mut</b> r = <a href="../std/vector.md#std_vector">vector</a>[];
+    <b>while</b> (!v.<a href="../std/vector.md#std_vector_is_empty">is_empty</a>()) {
+        <b>let</b> <b>mut</b> chunk = <a href="../std/vector.md#std_vector">vector</a>[];
+        n.<a href="../std/vector.md#std_vector_do">do</a>!(|_| <b>if</b> (!v.<a href="../std/vector.md#std_vector_is_empty">is_empty</a>()) chunk.<a href="../std/vector.md#std_vector_push_back">push_back</a>(v.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>()));
+        r.<a href="../std/vector.md#std_vector_push_back">push_back</a>($f(chunk));
+    };
+    v.<a href="../std/vector.md#std_vector_destroy_empty">destroy_empty</a>();
     r
 }
 </code></pre>
