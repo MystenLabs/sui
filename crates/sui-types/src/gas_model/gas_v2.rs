@@ -254,6 +254,18 @@ mod checked {
             }
         }
 
+        /// Lower the `gas_budget` if `new_budget` is smaller. Never raises it. Used after gas
+        /// smashing when a filter has dropped some payment sources (e.g. an address-balance
+        /// reservation that can't be honored on an `InsufficientFundsForWithdraw` abort): the
+        /// budget the user signed for assumed those sources contribute, so we cap it at what the
+        /// remaining payment can actually pay to keep `bucketize_computation` and the storage
+        /// charge path from producing a `net_change` larger than the smash_target coin can cover.
+        pub(crate) fn reduce_gas_budget(&mut self, new_budget: u64) {
+            if new_budget < self.gas_budget {
+                self.gas_budget = new_budget;
+            }
+        }
+
         pub(crate) fn new_with_budget(
             gas_budget: u64,
             gas_price: u64,

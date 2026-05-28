@@ -124,7 +124,7 @@ pub mod checked {
         pub fn new(
             tx_digest: TransactionDigest,
             payment_kind: PaymentKind,
-            gas_status: SuiGasStatus,
+            mut gas_status: SuiGasStatus,
             temporary_store: &mut TemporaryStore<'_>,
             protocol_config: &ProtocolConfig,
         ) -> Self {
@@ -145,6 +145,18 @@ pub mod checked {
                     PaymentMetadata::Smash(metadata)
                 }
             };
+            // Cap the gas budget at the actually-smashable amount. Normally signing-time
+            // `check_gas_balance` guarantees `total_smashed >= gas_budget`, but on an early
+            // `InsufficientFundsForWithdraw` the caller may have dropped address-balance
+            // payments from `gas_data.payment` first; in that case the smash_target coin(s)
+            // alone might not cover the signed budget, and `bucketize_computation` /
+            // `deduct_gas` would otherwise compute a charge larger than the coin can pay,
+            // panicking in `deduct_gas`'s `balance - charge` step.
+            if let PaymentMetadata::Smash(metadata) = &payment
+                && metadata.total_smashed < gas_status.gas_budget()
+            {
+                gas_status.reduce_gas_budget(metadata.total_smashed);
+            }
             Self {
                 tx_digest,
                 gas_model_version,

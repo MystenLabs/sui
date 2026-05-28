@@ -34,12 +34,15 @@ use sui_protocol_config::{
     Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
     ProtocolVersion,
 };
-use sui_types::effects::TransactionEffects;
+use sui_types::accumulator_root::AccumulatorValue;
+use sui_types::balance::Balance;
+use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
 use sui_types::execution::SharedInput;
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
-use sui_types::gas_coin::GasCoin;
+use sui_types::gas_coin::{GAS, GasCoin};
 use sui_types::messages_consensus::{
     AuthorityCapabilitiesV2, ConsensusDeterminedVersionAssignments,
 };
@@ -58,7 +61,7 @@ use sui_types::{
     crypto::{AccountKeyPair, AuthorityKeyPair},
     crypto::{Signature, get_key_pair},
     object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION, Owner},
-    transaction::PlainTransactionWithClaims,
+    transaction::{PlainTransactionWithClaims, TransactionDataAPI},
 };
 use sui_types::{SUI_CLOCK_OBJECT_SHARED_VERSION, digests::Digest};
 use sui_types::{dynamic_field::DynamicFieldType, messages_consensus::ConsensusTransaction};
@@ -6520,6 +6523,104 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
     } else {
         panic!("Expected execution status to be Failure");
     }
+}
+
+#[tokio::test]
+async fn test_insufficient_balance_for_withdraw_does_not_emit_gas_smash_events() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = Object::with_owner_for_testing(sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+
+    let state = TestAuthorityBuilder::new()
+        .with_starting_objects(&[gas_object])
+        .build()
+        .await;
+    let epoch_store = state.load_epoch_store_one_call_per_task();
+    let chain_identifier = epoch_store.get_chain_identifier();
+    let sui_accumulator_id =
+        AccumulatorValue::get_field_id(sender, &Balance::type_tag(GAS::type_tag())).unwrap();
+    let gas_reservation_ref =
+        ParsedObjectRefWithdrawal::new(*sui_accumulator_id.inner(), epoch_store.epoch(), 500)
+            .encode(OBJECT_START_VERSION, chain_identifier);
+
+    let mut tx_data = TestTransactionBuilder::new(sender, gas_object_ref, 1000)
+        .transfer_sui(None, sender)
+        .build();
+    tx_data.gas_data_mut().payment.push(gas_reservation_ref);
+
+    let certificate = VerifiedExecutableTransaction::new_for_testing(tx_data, &sender_key);
+    let mut execution_env = ExecutionEnv::new();
+    execution_env.funds_withdraw_status = FundsWithdrawStatus::Insufficient;
+
+    let (effects, execution_error) = state
+        .try_execute_immediately(&certificate, execution_env, &epoch_store)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        execution_error.unwrap().kind(),
+        &ExecutionErrorKind::InsufficientFundsForWithdraw
+    );
+    assert!(effects.status().is_err());
+    assert!(
+        effects.accumulator_events().is_empty(),
+        "insufficient withdraw failed effects must not contain gas-smash accumulator events"
+    );
+}
+
+/// Regression test: with a gas payment of [tiny real coin, large AB reservation] and an
+/// `InsufficientFundsForWithdraw` early error, the AB-filter in `execute_transaction_to_effects`
+/// drops the AB entry from `gas_data.payment`. The remaining coin alone is smaller than the
+/// signed `gas_budget`, so without clamping `gas_status.gas_budget` to the post-filter smashed
+/// total, `bucketize_computation` produces a `computation_cost` exceeding the coin's balance and
+/// `deduct_gas`'s `assert!(balance >= charge)` (gas.rs:282) fires, panicking the validator.
+#[tokio::test]
+async fn test_insufficient_balance_for_withdraw_with_small_coin_does_not_panic() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let small_coin_value = 100u64;
+    let gas_object = Object::new_gas_with_balance_and_owner_for_testing(small_coin_value, sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+
+    let state = TestAuthorityBuilder::new()
+        .with_starting_objects(&[gas_object])
+        .build()
+        .await;
+    let epoch_store = state.load_epoch_store_one_call_per_task();
+    let chain_identifier = epoch_store.get_chain_identifier();
+    let sui_accumulator_id =
+        AccumulatorValue::get_field_id(sender, &Balance::type_tag(GAS::type_tag())).unwrap();
+    // Large enough reservation that the signed budget can exceed the real coin's value.
+    let large_reservation = 10_000_000u64;
+    let gas_reservation_ref = ParsedObjectRefWithdrawal::new(
+        *sui_accumulator_id.inner(),
+        epoch_store.epoch(),
+        large_reservation,
+    )
+    .encode(OBJECT_START_VERSION, chain_identifier);
+
+    // Budget exceeds the real coin's value but is covered by coin + reservation.
+    let gas_price = 1000u64;
+    let gas_budget = 2_000_000u64;
+    let mut tx_data = TestTransactionBuilder::new(sender, gas_object_ref, gas_price)
+        .with_gas_budget(gas_budget)
+        .transfer_sui(None, sender)
+        .build();
+    tx_data.gas_data_mut().payment.push(gas_reservation_ref);
+
+    let certificate = VerifiedExecutableTransaction::new_for_testing(tx_data, &sender_key);
+    let mut execution_env = ExecutionEnv::new();
+    execution_env.funds_withdraw_status = FundsWithdrawStatus::Insufficient;
+
+    let (effects, execution_error) = state
+        .try_execute_immediately(&certificate, execution_env, &epoch_store)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        execution_error.unwrap().kind(),
+        &ExecutionErrorKind::InsufficientFundsForWithdraw,
+    );
+    assert!(effects.status().is_err());
 }
 
 #[tokio::test]

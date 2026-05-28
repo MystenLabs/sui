@@ -128,6 +128,12 @@ pub mod checked {
                 Self::V2(status) => status.gas_price(),
             }
         }
+
+        pub fn reduce_gas_budget(&mut self, new_budget: u64) {
+            match self {
+                Self::V2(status) => status.reduce_gas_budget(new_budget),
+            }
+        }
     }
 
     /// Summary of the charges in a transaction.
