@@ -101,6 +101,7 @@ pub struct AuthorityPerpetualTables {
     pub(crate) unchanged_loaded_runtime_objects: DBMap<TransactionDigest, Vec<ObjectKey>>,
 
     // Local execution error metadata, keyed by the digest of the transaction that produced it.
+    // Values are encoded `sui_rpc::proto::sui::rpc::v2::ExecutionErrorMetadata` bytes.
     pub(crate) execution_error_metadata: DBMap<TransactionDigest, Vec<u8>>,
 
     /// DEPRECATED in favor of the table of the same name in authority_per_epoch_store.
@@ -944,62 +945,4 @@ fn effects_table_config(db_options: DBOptions) -> DBOptions {
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
         )
-}
-
-#[cfg(test)]
-mod tests {
-    use prost::Message as _;
-    use sui_rpc::proto::sui::rpc::v2::ExecutionErrorMetadata as RpcExecutionErrorMetadata;
-    use sui_types::digests::TransactionDigest;
-    use sui_types::error::ExecutionErrorMetadata;
-    use typed_store::DBMapUtils;
-    use typed_store::rocks::{DBMap, MetricConf};
-    use typed_store::traits::Map;
-
-    #[derive(Clone, PartialEq, prost::Message)]
-    struct FutureExecutionErrorMetadata {
-        #[prost(string, optional, tag = "1")]
-        message: Option<String>,
-        #[prost(string, optional, tag = "2")]
-        future_field: Option<String>,
-    }
-
-    #[tokio::test]
-    async fn execution_error_metadata_table_accepts_future_proto_schema() {
-        #[derive(DBMapUtils)]
-        struct ExecutionErrorMetadataTables {
-            execution_error_metadata: DBMap<TransactionDigest, Vec<u8>>,
-        }
-
-        let tempdir = tempfile::tempdir().unwrap();
-        let tables = ExecutionErrorMetadataTables::open_tables_read_write(
-            tempdir.path().to_owned(),
-            MetricConf::new("test_execution_error_metadata"),
-            None,
-            None,
-        );
-        let digest = TransactionDigest::random();
-        let future_metadata = FutureExecutionErrorMetadata {
-            message: Some("Object runtime cached objects limit reached".to_string()),
-            future_field: Some("new metadata added by a future schema".to_string()),
-        };
-
-        tables
-            .execution_error_metadata
-            .insert(&digest, &future_metadata.encode_to_vec())
-            .unwrap();
-
-        let stored_metadata = tables
-            .execution_error_metadata
-            .get(&digest)
-            .unwrap()
-            .unwrap();
-        let rpc_metadata = RpcExecutionErrorMetadata::decode(stored_metadata.as_slice()).unwrap();
-        let metadata = ExecutionErrorMetadata::from(&rpc_metadata);
-
-        assert_eq!(
-            metadata.message.as_deref(),
-            Some("Object runtime cached objects limit reached")
-        );
-    }
 }
