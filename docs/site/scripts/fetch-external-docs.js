@@ -19,9 +19,10 @@ const path = require("path");
 const { execSync } = require("child_process");
 
 const SITE_ROOT = path.resolve(__dirname, "../");
+const REPO_ROOT = path.resolve(SITE_ROOT, "../../");
 const CONTENT_ROOT = path.resolve(SITE_ROOT, "../content");
 const CONFIG_PATH = path.join(SITE_ROOT, "external-docs.json");
-const CACHE_DIR = path.join(SITE_ROOT, ".cache-external-docs");
+const CACHE_DIR = path.join(REPO_ROOT, ".cache-external-docs");
 const FRESHNESS_MINUTES = 10;
 
 const args = process.argv.slice(2);
