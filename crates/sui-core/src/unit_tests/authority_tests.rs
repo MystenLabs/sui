@@ -6523,6 +6523,69 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
 }
 
 #[tokio::test]
+async fn test_insufficient_balance_for_withdraw_mixed_gas_reservation_does_not_charge_coin_only() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::new_move(
+        sui_types::object::MoveObject::new_gas_coin(OBJECT_START_VERSION, gas_object_id, 1),
+        Owner::AddressOwner(sender),
+        TransactionDigest::genesis_marker(),
+    );
+    let gas_object_ref = gas_object.compute_object_reference();
+
+    let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    protocol_config.enable_address_balance_gas_payments_for_testing();
+    protocol_config.enable_coin_reservation_for_testing();
+
+    let state = TestAuthorityBuilder::new()
+        .with_protocol_config(protocol_config)
+        .with_starting_objects(&[gas_object])
+        .build()
+        .await;
+    let epoch_store = state.load_epoch_store_one_call_per_task();
+    let rgp = epoch_store.reference_gas_price();
+
+    let gas_budget = 1_000_000;
+    let sui_accumulator_id = *sui_types::accumulator_root::AccumulatorValue::get_field_id(
+        sender,
+        &sui_types::balance::Balance::type_tag(sui_types::gas_coin::GAS::type_tag()),
+    )
+    .unwrap()
+    .inner();
+    let reservation_ref = sui_types::coin_reservation::ParsedObjectRefWithdrawal::new(
+        sui_accumulator_id,
+        epoch_store.epoch(),
+        gas_budget,
+    )
+    .encode(SequenceNumber::new(), epoch_store.get_chain_identifier());
+
+    let tx_data = TransactionData::new_programmable(
+        sender,
+        vec![gas_object_ref, reservation_ref],
+        ProgrammableTransactionBuilder::new().finish(),
+        gas_budget,
+        rgp,
+    );
+    let certificate = VerifiedExecutableTransaction::new_for_testing(tx_data, &sender_key);
+
+    let mut execution_env = ExecutionEnv::new();
+    execution_env.funds_withdraw_status = FundsWithdrawStatus::Insufficient;
+
+    let (effects, execution_error) = state
+        .try_execute_immediately(&certificate, execution_env, &epoch_store)
+        .await
+        .unwrap();
+
+    assert!(execution_error.is_some());
+    assert_eq!(
+        execution_error.unwrap().kind(),
+        &ExecutionErrorKind::InsufficientFundsForWithdraw
+    );
+    assert!(effects.status().is_err());
+    assert!(effects.accumulator_events().is_empty());
+}
+
+#[tokio::test]
 async fn test_should_wait_for_dependency_object() {
     let (sender, _keypair): (_, AccountKeyPair) = get_key_pair();
     let authority_state = TestAuthorityBuilder::new().build().await;
