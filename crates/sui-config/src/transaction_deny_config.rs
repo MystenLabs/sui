@@ -58,6 +58,19 @@ pub struct TransactionDenyConfig {
     #[serde(default)]
     gasless_disabled: bool,
 
+    /// Whether transactions that use address balances in any way are disabled.
+    /// Matches transactions that pay gas from an address balance, contain any
+    /// `FundsWithdrawal` input, or contain any coin reservation object ref.
+    #[serde(default)]
+    address_balance_disabled: bool,
+
+    /// Whether transactions with a non-target coin reservation in gas payment
+    /// are disabled. Matches transactions with any coin reservation at a
+    /// non-zero position in `gas_data.payment` (position 0 is the only target
+    /// slot; reservations elsewhere are the smash-into-Coin pattern).
+    #[serde(default)]
+    non_target_coin_reservation_disabled: bool,
+
     /// In-memory maps for faster lookup of various lists.
     #[serde(skip)]
     object_deny_set: OnceCell<HashSet<ObjectID>>,
@@ -130,6 +143,14 @@ impl TransactionDenyConfig {
         self.gasless_disabled
     }
 
+    pub fn address_balance_disabled(&self) -> bool {
+        self.address_balance_disabled
+    }
+
+    pub fn non_target_coin_reservation_disabled(&self) -> bool {
+        self.non_target_coin_reservation_disabled
+    }
+
     pub fn receiving_objects_disabled(&self) -> bool {
         self.receiving_objects_disabled
     }
@@ -168,6 +189,16 @@ impl TransactionDenyConfigBuilder {
 
     pub fn disable_gasless(mut self) -> Self {
         self.config.gasless_disabled = true;
+        self
+    }
+
+    pub fn disable_address_balance(mut self) -> Self {
+        self.config.address_balance_disabled = true;
+        self
+    }
+
+    pub fn disable_non_target_coin_reservation(mut self) -> Self {
+        self.config.non_target_coin_reservation_disabled = true;
         self
     }
 

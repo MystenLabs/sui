@@ -8,6 +8,7 @@ use sui_config::{
 };
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
+    coin_reservation::ParsedDigest,
     error::{SuiError, SuiErrorKind, SuiResult, UserInputError},
     signature::GenericSignature,
     storage::BackingPackageStore,
@@ -137,6 +138,25 @@ fn check_disabled_features(
     deny_if_true!(
         filter_config.gasless_disabled() && tx_data.is_gasless_transaction(),
         "Gasless transactions are temporarily disabled"
+    );
+
+    deny_if_true!(
+        filter_config.address_balance_disabled()
+            && (tx_data.is_gas_paid_from_address_balance()
+                || tx_data.kind().get_funds_withdrawals().next().is_some()
+                || tx_data.kind().has_coin_reservations()),
+        "Transactions using address balances are temporarily disabled"
+    );
+
+    deny_if_true!(
+        filter_config.non_target_coin_reservation_disabled()
+            && tx_data
+                .gas_data()
+                .payment
+                .iter()
+                .skip(1)
+                .any(|obj_ref| ParsedDigest::is_coin_reservation_digest(&obj_ref.2)),
+        "Transactions with a non-target coin reservation in gas payment are temporarily disabled"
     );
 
     tx_signatures.iter().try_for_each(|s| {

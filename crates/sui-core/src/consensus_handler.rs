@@ -3,9 +3,11 @@
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
+    env,
     hash::Hash,
     num::NonZeroUsize,
-    sync::{Arc, Mutex},
+    str::FromStr,
+    sync::{Arc, Mutex, OnceLock},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -99,6 +101,111 @@ use crate::{
 struct FilteredConsensusOutput {
     transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
     owned_object_locks: HashMap<ObjectRef, TransactionDigest>,
+}
+
+/// Hardcoded (epoch, commit_round) pairs for which all user transactions
+/// should be dropped. Merged with `SUI_SKIP_CONSENSUS_COMMIT_ROUNDS`. Epoch
+/// is required because consensus rounds restart at 0 each epoch.
+const HARDCODED_SKIPPED_CONSENSUS_COMMIT_ROUNDS: &[(u64, u64)] = &[];
+
+/// Emergency override: union of `HARDCODED_SKIPPED_CONSENSUS_COMMIT_ROUNDS` and
+/// pairs listed in `SUI_SKIP_CONSENSUS_COMMIT_ROUNDS`, formatted as
+/// `epoch:round,epoch:round,...`. Matching commits have all user transactions
+/// dropped post-consensus.
+fn skipped_consensus_commit_rounds() -> &'static HashSet<(u64, u64)> {
+    static CACHE: OnceLock<HashSet<(u64, u64)>> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        let mut rounds: HashSet<(u64, u64)> =
+            HARDCODED_SKIPPED_CONSENSUS_COMMIT_ROUNDS.iter().copied().collect();
+        if let Ok(val) = env::var("SUI_SKIP_CONSENSUS_COMMIT_ROUNDS") {
+            for s in val.split(',') {
+                let s = s.trim();
+                if s.is_empty() {
+                    continue;
+                }
+                let Some((epoch_s, round_s)) = s.split_once(':') else {
+                    error!(
+                        "SUI_SKIP_CONSENSUS_COMMIT_ROUNDS: ignoring entry {s:?}: expected \"epoch:round\""
+                    );
+                    continue;
+                };
+                match (epoch_s.trim().parse::<u64>(), round_s.trim().parse::<u64>()) {
+                    (Ok(epoch), Ok(round)) => {
+                        rounds.insert((epoch, round));
+                    }
+                    (epoch_res, round_res) => {
+                        error!(
+                            "SUI_SKIP_CONSENSUS_COMMIT_ROUNDS: ignoring entry {s:?}: epoch={epoch_res:?} round={round_res:?}"
+                        );
+                    }
+                }
+            }
+        }
+        if !rounds.is_empty() {
+            warn!(
+                "Skipped consensus commit rounds active: user transactions in (epoch, round) pairs {rounds:?} will be dropped (hardcoded: {:?}, env: {:?})",
+                HARDCODED_SKIPPED_CONSENSUS_COMMIT_ROUNDS,
+                env::var("SUI_SKIP_CONSENSUS_COMMIT_ROUNDS").ok(),
+            );
+        }
+        rounds
+    })
+}
+
+/// Hardcoded base58-encoded user transaction digests to drop post-consensus.
+/// Merged with the contents of `SUI_SKIP_TRANSACTION_DIGESTS`. Same emergency
+/// use case as `HARDCODED_SKIPPED_CONSENSUS_COMMIT_ROUNDS` but targets a single
+/// offending transaction instead of an entire commit.
+const HARDCODED_SKIPPED_TRANSACTION_DIGESTS: &[&str] =
+    &["BYdCnpYDmhsPBQmf7eWs62R48zZq3EZR6hvSazVf6KfR"];
+
+/// Emergency override: union of `HARDCODED_SKIPPED_TRANSACTION_DIGESTS` and
+/// digests listed in `SUI_SKIP_TRANSACTION_DIGESTS` (comma-separated base58).
+/// Matching user transactions are dropped post-consensus. Validators must
+/// coordinate the same value across the quorum or they will fork.
+fn skipped_transaction_digests() -> &'static HashSet<TransactionDigest> {
+    static CACHE: OnceLock<HashSet<TransactionDigest>> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        let mut digests: HashSet<TransactionDigest> = HashSet::new();
+        for s in HARDCODED_SKIPPED_TRANSACTION_DIGESTS {
+            match TransactionDigest::from_str(s) {
+                Ok(d) => {
+                    digests.insert(d);
+                }
+                Err(e) => {
+                    error!(
+                        "HARDCODED_SKIPPED_TRANSACTION_DIGESTS: ignoring unparsable entry {s:?}: {e}"
+                    );
+                }
+            }
+        }
+        if let Ok(val) = env::var("SUI_SKIP_TRANSACTION_DIGESTS") {
+            for s in val.split(',') {
+                let s = s.trim();
+                if s.is_empty() {
+                    continue;
+                }
+                match TransactionDigest::from_str(s) {
+                    Ok(d) => {
+                        digests.insert(d);
+                    }
+                    Err(e) => {
+                        error!(
+                            "SUI_SKIP_TRANSACTION_DIGESTS: ignoring unparsable entry {s:?}: {e}"
+                        );
+                    }
+                }
+            }
+        }
+        if !digests.is_empty() {
+            warn!(
+                "Skipped transaction digests active: user transactions with digests {digests:?} will be dropped (hardcoded: {:?}, env: {:?})",
+                HARDCODED_SKIPPED_TRANSACTION_DIGESTS,
+                env::var("SUI_SKIP_TRANSACTION_DIGESTS").ok(),
+            );
+        }
+        digests
+    })
 }
 
 pub struct ConsensusHandlerInitializer {
@@ -2684,6 +2791,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let epoch = self.epoch_store.epoch();
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
+        let skip_user_txns_in_this_commit =
+            skipped_consensus_commit_rounds().contains(&(epoch, commit_info.round));
+        if skip_user_txns_in_this_commit {
+            warn!(
+                epoch,
+                commit_round = commit_info.round,
+                "skipped_consensus_commit_rounds matched: dropping all user transactions in this commit"
+            );
+        }
         for (block, parsed_transactions) in consensus_commit.transactions() {
             let author = block.author.value();
             // TODO: consider only messages within 1~3 rounds of the leader?
@@ -2701,6 +2817,37 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     block,
                     index: tx_index as TransactionIndex,
                 };
+
+                let skip_by_digest = parsed
+                    .transaction
+                    .kind
+                    .as_user_transaction()
+                    .map(|tx| skipped_transaction_digests().contains(tx.digest()))
+                    .unwrap_or(false);
+
+                if skip_user_txns_in_this_commit || skip_by_digest {
+                    info!(
+                        commit_round = commit_info.round,
+                        block = %block,
+                        tx_index,
+                        rejected = parsed.rejected,
+                        kind = classify(&parsed.transaction),
+                        "consensus commit transaction dump: {:?}",
+                        parsed.transaction,
+                    );
+                    if parsed.transaction.is_user_transaction() {
+                        warn!(
+                            commit_round = commit_info.round,
+                            block = %block,
+                            tx_index,
+                            skip_by_digest,
+                            "dropping user transaction due to skipped_consensus_commit_rounds or skipped_transaction_digests"
+                        );
+                        self.epoch_store
+                            .set_consensus_tx_status(position, ConsensusTxStatus::Dropped);
+                        continue;
+                    }
+                }
 
                 // Transaction has appeared in consensus output, we can increment the submission count
                 // for this tx for DoS protection.
