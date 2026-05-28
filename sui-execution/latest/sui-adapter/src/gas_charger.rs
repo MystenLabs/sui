@@ -405,6 +405,21 @@ pub mod checked {
             // object model to prevent replay), then return a zero gas summary.  This leaves
             // every object exactly as it was — no value changes, no storage_rebate changes,
             // no accumulator events — which makes SUI conservation trivially true.
+            //
+            // Why it is safe to skip collect_storage_and_rebate:
+            // collect_storage_and_rebate stamps a new storage_rebate onto every object in
+            // written_objects based on its current size and the network storage price.  If we
+            // then return a zero GasCostSummary the per-transaction SUI conservation check
+            // (check_sui_conserved_expensive) would observe a mismatch: the output objects
+            // carry a different storage_rebate than the input objects, but the gas summary
+            // accounts for none of it.  That discrepancy would trigger the conservation
+            // invariant violation and panic the node.
+            //
+            // We avoid this entirely because smashing was also skipped: no coins were merged,
+            // no coins were deleted, and ensure_active_inputs_mutated writes every gas object
+            // back with its *original* storage_rebate unchanged.  The output storage_rebate
+            // equals the input storage_rebate for every object, so the conservation check sees
+            // a zero net delta — consistent with the zero gas summary.
             if execution_result
                 .as_ref()
                 .err()
