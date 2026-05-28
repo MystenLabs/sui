@@ -177,6 +177,7 @@ impl ConsensusHandlerInitializer {
         let settlement_scheduler = SettlementScheduler::new(
             self.state.execution_scheduler().as_ref().clone(),
             self.state.get_transaction_cache_reader().clone(),
+            self.state.get_account_funds_read().clone(),
             self.state.metrics.clone(),
         );
         ConsensusHandler::new(
@@ -3669,6 +3670,7 @@ mod tests {
         let settlement_scheduler = SettlementScheduler::new(
             state.execution_scheduler().as_ref().clone(),
             state.get_transaction_cache_reader().clone(),
+            state.get_account_funds_read().clone(),
             state.metrics.clone(),
         );
         let mut consensus_handler = ConsensusHandler::new(
@@ -3934,6 +3936,7 @@ mod tests {
         let settlement_scheduler = SettlementScheduler::new(
             state.execution_scheduler().as_ref().clone(),
             state.get_transaction_cache_reader().clone(),
+            state.get_account_funds_read().clone(),
             state.metrics.clone(),
         );
         let mut handler = ConsensusHandler::new(
@@ -4060,6 +4063,7 @@ mod tests {
         let settlement_scheduler = SettlementScheduler::new(
             state.execution_scheduler().as_ref().clone(),
             state.get_transaction_cache_reader().clone(),
+            state.get_account_funds_read().clone(),
             state.metrics.clone(),
         );
         let mut handler = ConsensusHandler::new(

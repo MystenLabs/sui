@@ -3,7 +3,7 @@
 
 use crate::authority::AuthorityMetrics;
 use crate::{
-    accumulators::{self, AccumulatorSettlementTxBuilder},
+    accumulators::{self, AccumulatorSettlementTxBuilder, funds_read::AccountFundsRead},
     authority::{
         ExecutionEnv,
         authority_per_epoch_store::AuthorityPerEpochStore,
@@ -16,11 +16,14 @@ use crate::{
     execution_scheduler::funds_withdraw_scheduler::FundsSettlement,
 };
 use futures::stream::{FuturesUnordered, StreamExt};
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::{monitored_mpsc, spawn_monitored_task};
 use parking_lot::Mutex;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    accumulator_root::AccumulatorObjId,
     base_types::TransactionDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
     executable_transaction::VerifiedExecutableTransaction,
@@ -63,6 +66,7 @@ impl SettlementQueueSender {
 pub(crate) struct SettlementScheduler {
     execution_scheduler: ExecutionScheduler,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
+    account_funds_read: Arc<dyn AccountFundsRead>,
     settlement_queue_sender: Arc<Mutex<Option<SettlementQueueSender>>>,
     metrics: Arc<AuthorityMetrics>,
 }
@@ -71,11 +75,13 @@ impl SettlementScheduler {
     pub(crate) fn new(
         execution_scheduler: ExecutionScheduler,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
+        account_funds_read: Arc<dyn AccountFundsRead>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         Self {
             execution_scheduler,
             transaction_cache_read,
+            account_funds_read,
             settlement_queue_sender: Arc::new(Mutex::new(None)),
             metrics,
         }
@@ -377,6 +383,10 @@ impl SettlementScheduler {
 
         let mut next_accumulator_version = None;
         for fx in all_settlement_effects.iter() {
+            if fx.status().is_err() {
+                self.log_underflowing_accounts(fx, &funds_changes);
+                self.dump_batch_transactions(&sorted_effects);
+            }
             assert!(
                 fx.status().is_ok(),
                 "settlement transaction cannot fail (digest: {:?}) {:#?}",
@@ -408,6 +418,63 @@ impl SettlementScheduler {
         debug!(?settlement_key, "early settlement: completed");
 
         settlement_tx_count
+    }
+
+    /// Settlement transactions are constructed to never fail, so a failure trips the assert above
+    /// and is node-fatal. The common cause is an accumulator account being withdrawn below zero.
+    /// Because a Move abort clears the effects (the failed tx's mutated set is empty), we can't
+    /// recover the offending account from `fx`; instead we re-check every account in this
+    /// checkpoint's `funds_changes` against its current balance, and log any whose projected
+    /// balance (`current balance + net funds change`) is negative.
+    fn log_underflowing_accounts(
+        &self,
+        fx: &TransactionEffects,
+        funds_changes: &BTreeMap<AccumulatorObjId, i128>,
+    ) {
+        error!(
+            digest = ?fx.transaction_digest(),
+            status = ?fx.status(),
+            "settlement transaction failed; checking for underflowing accumulator accounts"
+        );
+        for (account_id, funds_change) in funds_changes {
+            let (balance, root_version) = self
+                .account_funds_read
+                .get_latest_account_amount(account_id);
+            let projected = balance as i128 + funds_change;
+            if projected < 0 {
+                error!(
+                    ?account_id,
+                    balance,
+                    ?root_version,
+                    funds_change,
+                    shortfall = -projected,
+                    "accumulator account would underflow during settlement"
+                );
+            }
+        }
+    }
+
+    /// Dumps every input transaction in the settlement batch together with its accumulator
+    /// events. Called only on the (node-fatal) settlement-failure path to capture the
+    /// deposits/withdraws that fed into the failed settlement. `accumulator_events()`
+    /// recomputes from the effects' object changes, so it is unaffected by the builder having
+    /// already drained the cached events.
+    fn dump_batch_transactions(&self, sorted_effects: &[TransactionEffects]) {
+        let digests: Vec<_> = sorted_effects
+            .iter()
+            .map(|fx| *fx.transaction_digest())
+            .collect();
+        let txns = self
+            .transaction_cache_read
+            .multi_get_transaction_blocks(&digests);
+        for (fx, tx) in sorted_effects.iter().zip_debug_eq(txns) {
+            error!(
+                digest = ?fx.transaction_digest(),
+                accumulator_events = ?fx.accumulator_events(),
+                transaction = ?tx,
+                "settlement input transaction"
+            );
+        }
     }
 
     fn extract_consensus_commit_prologue_digest(
