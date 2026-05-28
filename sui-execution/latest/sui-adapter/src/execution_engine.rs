@@ -232,7 +232,10 @@ mod checked {
             transaction_digest,
             payment_kind(&gas_data, &transaction_kind, protocol_config),
             gas_status,
-            execution_params.is_err(),
+            matches!(
+                execution_params,
+                Err(ExecutionErrorKind::InsufficientFundsForWithdraw)
+            ),
             &mut temporary_store,
             protocol_config,
         );

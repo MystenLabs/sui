@@ -226,6 +226,15 @@ pub mod checked {
             }
         }
 
+        pub(crate) fn has_address_balance_payment(&self) -> bool {
+            match &self.payment {
+                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => false,
+                PaymentMetadata::Smash(metadata) => metadata
+                    .payment_methods()
+                    .any(|payment| matches!(payment, PaymentMethod::AddressBalance(_, _))),
+            }
+        }
+
         pub fn gas_budget(&self) -> u64 {
             self.gas_status.gas_budget()
         }
@@ -418,7 +427,7 @@ pub mod checked {
                     )
                 })
                 .unwrap_or(false)
-                && matches!(gas_payment_location, Some(PaymentLocation::AddressBalance(_))) {
+                && self.has_address_balance_payment() {
                     // If we don't have enough balance to withdraw, don't charge for gas
                     // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
                     return GasCostSummary::default();
