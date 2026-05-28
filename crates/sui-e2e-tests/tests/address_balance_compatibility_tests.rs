@@ -1614,6 +1614,127 @@ async fn test_gas_smash_no_underflow_on_iffw_tiny_real_coins() {
     test_env.cluster.trigger_reconfiguration().await;
 }
 
+/// Regression test: AB-as-smash-target on IFFW.
+///
+/// TX2 has gas_data.payment = [coin_reservation, real_coin_a, real_coin_b].
+/// Because the first entry is the reservation, the AB is the smash target and
+/// the per-payment fix in execution_engine does NOT strip AB entries (smashing
+/// proceeds normally). After TX1 drains the AB, TX2 still fails with IFFW
+/// during execution.
+///
+/// During smashing the real coins are deleted and a single positive
+/// AccumulatorEvent of `total_smashed - reservation` (= sum of real coin
+/// balances) is emitted against the AB. There is no withdrawal event for the
+/// reservation itself — that would only happen in `charge_gas`, and the
+/// existing AB-IFFW early-return skips it.
+///
+/// Expected outcome:
+///   - TX1 succeeds, AB drained to 0.
+///   - TX2 fails with InsufficientFundsForWithdraw and is not charged.
+///   - Real coins are deleted; their balances land in the AB via the deposit
+///     event (so final AB = sum of real coin balances).
+///   - Settlement completes (no underflow / no panic).
+#[sim_test]
+async fn test_gas_smash_ab_target_iffw() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+
+    let initial_ab = 20_000_000u64;
+    test_env.fund_one_address_balance(sender, initial_ab).await;
+
+    let mut all_gas = test_env.get_gas_for_sender(sender);
+    assert!(all_gas.len() >= 3, "need ≥3 gas coins");
+
+    // TX1: drain the AB to 0 (gas comes from a real coin).
+    let gas_for_tx1 = all_gas.remove(0);
+    let dummy = SuiAddress::random_for_testing_only();
+    let tx1 = test_env
+        .tx_builder_with_gas(sender, gas_for_tx1)
+        .transfer_sui_to_address_balance(
+            FundSource::address_fund_with_reservation(initial_ab),
+            vec![(initial_ab, dummy)],
+        )
+        .build();
+
+    // TX2: gas_data.payment = [coin_reservation, real_coin_a, real_coin_b].
+    // Reservation first → AB is the smash target; real coins are smashed into it.
+    let real_coin_a = all_gas.remove(0);
+    let real_coin_b = all_gas.remove(0);
+    let real_coin_a_balance = test_env.get_coin_balance(real_coin_a.0).await;
+    let real_coin_b_balance = test_env.get_coin_balance(real_coin_b.0).await;
+    let reservation = initial_ab / 2;
+    let fake_coin = test_env.encode_coin_reservation(sender, 0, reservation);
+    let tx2 = test_env
+        .tx_builder_with_gas_objects(sender, vec![fake_coin, real_coin_a, real_coin_b])
+        .build();
+
+    let tx1_digest = tx1.digest();
+    let tx2_digest = tx2.digest();
+
+    let mut effects = test_env
+        .cluster
+        .sign_and_execute_txns_in_soft_bundle(&[tx1, tx2])
+        .await
+        .unwrap();
+
+    let tx2_effects = effects.pop().unwrap().1;
+    let tx1_effects = effects.pop().unwrap().1;
+
+    assert!(
+        tx1_effects.status().is_ok(),
+        "TX1 should succeed: {:?}",
+        tx1_effects.status()
+    );
+    let status_str = format!("{:?}", tx2_effects.status());
+    assert!(
+        status_str.contains("InsufficientFundsForWithdraw"),
+        "TX2 should fail with InsufficientFundsForWithdraw, got: {status_str}"
+    );
+
+    test_env
+        .cluster
+        .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
+        .await;
+
+    // The real coins should both be deleted by gas smashing.
+    let deleted_ids: std::collections::HashSet<_> = tx2_effects
+        .deleted()
+        .into_iter()
+        .map(|(id, _, _)| id)
+        .collect();
+    assert!(
+        deleted_ids.contains(&real_coin_a.0),
+        "real_coin_a should be deleted, deleted={deleted_ids:?}"
+    );
+    assert!(
+        deleted_ids.contains(&real_coin_b.0),
+        "real_coin_b should be deleted, deleted={deleted_ids:?}"
+    );
+
+    // Final AB receives the deposit event for (total_smashed - reservation), which
+    // equals the sum of the real coin balances. No actual reservation withdrawal
+    // happens because charge_gas early-returns on AB-IFFW.
+    let final_ab = test_env.get_sui_balance_ab(sender);
+    assert_eq!(
+        final_ab,
+        real_coin_a_balance + real_coin_b_balance,
+        "AB should hold the smashed real-coin balances; got {final_ab}",
+    );
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
 fn build_fake_coin_reservation_pt(
     chain_id: sui_types::digests::ChainIdentifier,
 ) -> TransactionKind {
