@@ -391,7 +391,7 @@ pub mod checked {
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
             }
 
-            if execution_result
+            let is_iffw = execution_result
                 .as_ref()
                 .err()
                 .map(|err| {
@@ -400,14 +400,40 @@ pub mod checked {
                         sui_types::execution_status::ExecutionErrorKind::InsufficientFundsForWithdraw
                     )
                 })
-                .unwrap_or(false)
-                && matches!(gas_payment_location, Some(PaymentLocation::AddressBalance(_))) {
-                    // If we don't have enough balance to withdraw, don't charge for gas
-                    // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
-                    return GasCostSummary::default();
+                .unwrap_or(false);
+
+            if is_iffw
+                && matches!(
+                    gas_payment_location,
+                    Some(PaymentLocation::AddressBalance(_))
+                )
+            {
+                // If we don't have enough balance to withdraw, don't charge for gas
+                // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
+                return GasCostSummary::default();
             }
 
-            self.compute_storage_and_rebate(temporary_store, execution_result);
+            if is_iffw && matches!(gas_payment_location, Some(PaymentLocation::Coin(_))) {
+                // IFFW with a coin payment means the AB entries of the gas payment list were
+                // pruned (see execution_engine), and the remaining real-coin balance may be
+                // far below the declared budget. Execution didn't run, so there are no
+                // writes to charge for; still claim the rebate from the input gas coins,
+                // and cap `computation_cost` so the final deduction can't exceed what the
+                // smashed coin actually holds.
+                self.reset(temporary_store);
+                temporary_store.ensure_active_inputs_mutated();
+                temporary_store.collect_rebate(self);
+
+                let available = self
+                    .gas_payment_amount()
+                    .expect("IFFW path requires a smashed gas payment")
+                    .amount;
+                let sender_rebate = self.gas_status.summary().storage_rebate;
+                let max_compute = available.saturating_add(sender_rebate);
+                self.gas_status.cap_computation_cost(max_compute);
+            } else {
+                self.compute_storage_and_rebate(temporary_store, execution_result);
+            }
 
             let gas_payment_location = if refresh_gas_payment_location(self.gas_model_version) {
                 self.gas_payment_location()

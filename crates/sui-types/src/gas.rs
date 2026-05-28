@@ -53,6 +53,10 @@ pub mod checked {
         ) -> u64;
         fn charge_storage_and_rebate(&mut self) -> Result<(), ExecutionError>;
         fn adjust_computation_on_out_of_gas(&mut self);
+        /// Lower `computation_cost` to at most `max`. Used by the IFFW-with-coin-payment
+        /// fallback in `GasCharger::charge_gas` to keep the final deduction within the
+        /// smashed real-coin balance.
+        fn cap_computation_cost(&mut self, max: u64);
         fn gas_usage_report(&self) -> GasUsageReport;
     }
 

@@ -592,6 +592,12 @@ mod checked {
             self.computation_cost = self.gas_budget;
         }
 
+        fn cap_computation_cost(&mut self, max: u64) {
+            if self.computation_cost > max {
+                self.computation_cost = max;
+            }
+        }
+
         fn gas_usage_report(&self) -> GasUsageReport {
             GasUsageReport {
                 cost_summary: self.summary(),
