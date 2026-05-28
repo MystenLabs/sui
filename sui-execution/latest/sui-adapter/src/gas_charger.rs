@@ -141,35 +141,42 @@ pub mod checked {
                 PaymentKind_::Smash(mut payment_methods) => {
                     let (_, smash_target) = payment_methods.shift_remove_index(0).unwrap();
 
-                    // When the transaction is doomed due to insufficient funds, filter out
-                    // address balance payments from secondary payments to avoid underflowing
-                    // the AB during smashing.
-                    let had_ab_payments_filtered = is_early_error
-                        && payment_methods
-                            .values()
-                            .any(|p| matches!(p, PaymentMethod::AddressBalance(_, _)));
-                    let payment_methods = if is_early_error {
-                        payment_methods
-                            .into_iter()
-                            .filter_map(|(index, payment)| match &payment {
-                                PaymentMethod::AddressBalance(_, _) => None,
-                                PaymentMethod::Coin(_) => Some((index, payment)),
-                            })
-                            .collect()
+                    // When the transaction is doomed due to InsufficientFundsForWithdraw, skip
+                    // smashing entirely.  Any AddressBalance entries in the payment list cannot
+                    // be debited (the AB is empty), and merging real coins at this point would
+                    // delete them before we have a chance to charge gas — breaking SUI
+                    // conservation when we later return a zero gas summary.  By skipping
+                    // smashing we leave all gas coins untouched; `had_ab_payments_filtered`
+                    // records that AB entries were present so the IFFW zero-gas early return
+                    // still fires correctly.
+                    let had_ab_payments = is_early_error
+                        && (matches!(smash_target, PaymentMethod::AddressBalance(_, _))
+                            || payment_methods
+                                .values()
+                                .any(|p| matches!(p, PaymentMethod::AddressBalance(_, _))));
+                    if had_ab_payments {
+                        let metadata = SmashMetadata {
+                            total_smashed: 0,
+                            gas_charge_location: smash_target.location(),
+                            smash_target,
+                            smashed_payments: IndexMap::new(),
+                            had_ab_payments_filtered: true,
+                        };
+                        // Intentionally skip metadata.smash_gas: no coins are merged and no
+                        // AccumulatorEvents are emitted.
+                        PaymentMetadata::Smash(metadata)
                     } else {
-                        payment_methods
-                    };
-
-                    let mut metadata = SmashMetadata {
-                        // dummy value set below in smash_gas
-                        total_smashed: 0,
-                        gas_charge_location: smash_target.location(),
-                        smash_target,
-                        smashed_payments: payment_methods,
-                        had_ab_payments_filtered,
-                    };
-                    metadata.smash_gas(&tx_digest, temporary_store);
-                    PaymentMetadata::Smash(metadata)
+                        let mut metadata = SmashMetadata {
+                            // dummy value set below in smash_gas
+                            total_smashed: 0,
+                            gas_charge_location: smash_target.location(),
+                            smash_target,
+                            smashed_payments: payment_methods,
+                            had_ab_payments_filtered: false,
+                        };
+                        metadata.smash_gas(&tx_digest, temporary_store);
+                        PaymentMetadata::Smash(metadata)
+                    }
                 }
             };
             Self {
@@ -417,8 +424,9 @@ pub mod checked {
                 }
             }
 
-            // Increment versions for all input objects that were touched.
+            // compute and collect storage charges
             temporary_store.ensure_active_inputs_mutated();
+            temporary_store.collect_storage_and_rebate(self);
 
             if matches!(&self.payment, PaymentMetadata::Unmetered) {
                 return GasCostSummary::default();
@@ -429,10 +437,6 @@ pub mod checked {
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
             }
 
-            // Early return for InsufficientFundsForWithdraw must happen BEFORE
-            // collect_storage_and_rebate.  If we collected first, the gas coin's
-            // storage_rebate would be stamped with a new value but never paid for in the
-            // gas summary, causing a SUI conservation violation.
             if execution_result
                 .as_ref()
                 .err()
@@ -445,12 +449,11 @@ pub mod checked {
                 .unwrap_or(false)
                 && self.has_address_balance_payment() {
                     // If we don't have enough balance to withdraw, don't charge for gas.
+                    // Smashing was skipped at construction time so no coins were merged and the
+                    // gas summary is trivially zero.
                     // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
                     return GasCostSummary::default();
             }
-
-            // compute and collect storage charges
-            temporary_store.collect_storage_and_rebate(self);
 
             self.compute_storage_and_rebate(temporary_store, execution_result);
 
