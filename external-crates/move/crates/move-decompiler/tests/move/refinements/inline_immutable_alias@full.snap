@@ -5,7 +5,22 @@ source: crates/move-decompiler/tests/tests.rs
 
 module refinements::inline_immutable_alias;
 
+// -- uses -- 
+
+use 0x0::inline_immutable_alias;
+
 // -- functions -- 
+
+fun add_one(l0: &mut u64) {
+    *l0 = *l0 + 1u64
+}
+
+public fun mut_borrow_blocks_inline(): u64 {
+    let l0 = 0u64;
+    let l1 = l0;
+    inline_immutable_alias::add_one(&mut l0);
+    return l1
+}
 
 public fun stage(l0: u64, l1: u64): u64 {
     return l0 + l1 + l0 + l1
