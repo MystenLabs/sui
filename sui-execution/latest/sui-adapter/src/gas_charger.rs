@@ -134,7 +134,6 @@ pub mod checked {
                 PaymentKind_::Gasless => PaymentMetadata::Gasless,
                 PaymentKind_::Smash(mut payment_methods) => {
                     let (_, smash_target) = payment_methods.shift_remove_index(0).unwrap();
-
                     let mut metadata = SmashMetadata {
                         // dummy value set below in smash_gas
                         total_smashed: 0,
@@ -207,15 +206,6 @@ pub mod checked {
             match &self.payment {
                 PaymentMetadata::Unmetered | PaymentMetadata::Gasless => None,
                 PaymentMetadata::Smash(metadata) => Some(metadata.gas_charge_location),
-            }
-        }
-
-        pub(crate) fn has_address_balance_payment(&self) -> bool {
-            match &self.payment {
-                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => false,
-                PaymentMetadata::Smash(metadata) => metadata
-                    .payment_methods()
-                    .any(|payment| matches!(payment, PaymentMethod::AddressBalance(_, _))),
             }
         }
 
@@ -411,7 +401,7 @@ pub mod checked {
                     )
                 })
                 .unwrap_or(false)
-                && self.has_address_balance_payment() {
+                && matches!(gas_payment_location, Some(PaymentLocation::AddressBalance(_))) {
                     // If we don't have enough balance to withdraw, don't charge for gas
                     // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
                     return GasCostSummary::default();
