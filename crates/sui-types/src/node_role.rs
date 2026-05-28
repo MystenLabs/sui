@@ -77,7 +77,10 @@ impl NodeRole {
     /// transactions, create checkpoints, etc.). Observers stream blocks but
     /// rely on state-sync for execution, so they skip commit processing.
     pub fn process_consensus_commits(&self) -> bool {
-        matches!(self, Self::Validator)
+        matches!(
+            self,
+            Self::Validator | Self::FullNode(FullNodeSyncMode::ConsensusObserver)
+        )
     }
 
     /// Whether this node should expose HTTP/RPC servers (JSON-RPC, REST).
