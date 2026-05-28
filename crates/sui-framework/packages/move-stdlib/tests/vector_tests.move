@@ -788,10 +788,7 @@ fun test_chunks_map_macro() {
     );
 
     // chunk size of 1
-    assert_eq!(
-        vector[1, 2, 3u64].chunks_map!(1, |c| c),
-        vector[vector[1], vector[2], vector[3]],
-    );
+    assert_eq!(vector[1, 2, 3u64].chunks_map!(1, |c| c), vector[vector[1], vector[2], vector[3]]);
 
     // chunk larger than the vector yields a single chunk
     assert_eq!(vector[1, 2, 3u64].chunks_map!(10, |c| c), vector[vector[1, 2, 3]]);
