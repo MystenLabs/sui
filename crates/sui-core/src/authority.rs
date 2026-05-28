@@ -2390,7 +2390,7 @@ impl AuthorityState {
         let execution_error_source = execution_result
             .as_ref()
             .err()
-            .and_then(|e| std::error::Error::source(e).map(|e| e.to_string()));
+            .and_then(|e| e.source().as_ref().map(|e| e.to_string()));
 
         let response = DryRunTransactionBlockResponse {
             suggested_gas_price,
