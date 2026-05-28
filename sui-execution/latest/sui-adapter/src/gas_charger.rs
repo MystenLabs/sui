@@ -209,6 +209,13 @@ pub mod checked {
             }
         }
 
+        fn has_address_balance_payment(&self) -> bool {
+            match &self.payment {
+                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => false,
+                PaymentMetadata::Smash(metadata) => metadata.has_address_balance_payment(),
+            }
+        }
+
         pub fn gas_budget(&self) -> u64 {
             self.gas_status.gas_budget()
         }
@@ -333,6 +340,11 @@ pub mod checked {
             self.smash_gas(temporary_store);
         }
 
+        fn reset_without_gas_smashing(&mut self, temporary_store: &mut TemporaryStore<'_>) {
+            temporary_store.drop_writes();
+            self.gas_status.reset_storage_cost_and_rebate();
+        }
+
         /// Entry point for gas charging.
         /// 1. Compute tx storage gas costs and tx storage rebates, update storage_rebate field of
         /// mutated objects
@@ -352,6 +364,30 @@ pub mod checked {
             // but have not yet set the storage rebate or storage gas units
             debug_assert!(self.gas_status.storage_rebate() == 0);
             debug_assert!(self.gas_status.storage_gas_units() == 0);
+
+            let insufficient_funds_for_withdraw = execution_result
+                .as_ref()
+                .err()
+                .map(|err| {
+                    matches!(
+                        err.kind(),
+                        sui_types::execution_status::ExecutionErrorKind::InsufficientFundsForWithdraw
+                    )
+                })
+                .unwrap_or(false);
+            let cannot_charge_address_balance_gas =
+                insufficient_funds_for_withdraw && self.has_address_balance_payment();
+
+            if cannot_charge_address_balance_gas {
+                // If we don't have enough balance to withdraw, don't charge address-balance gas.
+                // Replaying gas smashing here would emit Split events without a scheduler
+                // reservation, and those failed-effect events are later consumed by settlement.
+                // Skip storage/rebate collection too, so the zero gas summary remains conserved.
+                // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws.
+                self.reset_without_gas_smashing(temporary_store);
+                temporary_store.ensure_active_inputs_mutated();
+                return GasCostSummary::default();
+            }
 
             if !matches!(&self.payment, PaymentMetadata::Unmetered) {
                 // bucketize computation cost
@@ -389,22 +425,6 @@ pub mod checked {
             if let Some(PaymentLocation::Coin(_)) = gas_payment_location {
                 #[skip_checked_arithmetic]
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
-            }
-
-            if execution_result
-                .as_ref()
-                .err()
-                .map(|err| {
-                    matches!(
-                        err.kind(),
-                        sui_types::execution_status::ExecutionErrorKind::InsufficientFundsForWithdraw
-                    )
-                })
-                .unwrap_or(false)
-                && matches!(gas_payment_location, Some(PaymentLocation::AddressBalance(_))) {
-                    // If we don't have enough balance to withdraw, don't charge for gas
-                    // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
-                    return GasCostSummary::default();
             }
 
             self.compute_storage_and_rebate(temporary_store, execution_result);
@@ -544,6 +564,11 @@ pub mod checked {
         /// Iterates over all payment methods: the smash target followed by the smashed payments.
         fn payment_methods(&self) -> impl Iterator<Item = &'_ PaymentMethod> {
             std::iter::once(&self.smash_target).chain(self.smashed_payments.values())
+        }
+
+        fn has_address_balance_payment(&self) -> bool {
+            self.payment_methods()
+                .any(|payment| matches!(payment, PaymentMethod::AddressBalance(_, _)))
         }
 
         fn smash_gas(
