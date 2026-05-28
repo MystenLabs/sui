@@ -792,8 +792,8 @@ impl LocalExec {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
-        let (inner_store, gas_status, effects, _timings, result) = executor
-            .execute_transaction_to_effects_and_execution_error(
+        let (inner_store, gas_status, effects, _timings, result, _execution_error_metadata) =
+            executor.execute_transaction_to_effects_and_execution_error(
                 &self,
                 protocol_config,
                 metrics.clone(),
@@ -988,7 +988,7 @@ impl LocalExec {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
-        let (_, _, effects, _timings, exec_res) = executor
+        let (_, _, effects, _timings, exec_res, _execution_error_metadata) = executor
             .execute_transaction_to_effects_and_execution_error(
                 &store,
                 &protocol_config,

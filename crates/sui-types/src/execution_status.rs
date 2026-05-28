@@ -3,7 +3,9 @@
 
 use crate::ObjectID;
 use crate::base_types::SuiAddress;
-use crate::error::{BoxError, ExecutionError, ExecutionErrorMetadata, ExecutionErrorTrait};
+pub(crate) use crate::error::{
+    BoxError, ExecutionError, ExecutionErrorMetadata, ExecutionErrorTrait,
+};
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
 use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Serialize};

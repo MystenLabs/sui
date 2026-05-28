@@ -76,7 +76,7 @@ use sui_types::base_types::{
 use sui_types::bridge::{Bridge, get_bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
+use sui_types::error::{ExecutionErrorMetadata, SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -233,6 +233,10 @@ struct UncommittedData {
 
     unchanged_loaded_runtime_objects: DashMap<TransactionDigest, Vec<ObjectKey>>,
 
+    /// Error metadata originating from `ExecutionErrorContext`, retained with transaction
+    /// data until pruning. Includes source errors and VM-level details when available.
+    execution_error_metadata: DashMap<TransactionDigest, ExecutionErrorMetadata>,
+
     executed_effects_digests: DashMap<TransactionDigest, TransactionEffectsDigest>,
 
     // Transaction outputs that have not yet been written to the DB. Items are removed from this
@@ -253,6 +257,7 @@ impl UncommittedData {
             pending_transaction_writes: DashMap::with_shard_amount(2048),
             transaction_events: DashMap::with_shard_amount(2048),
             unchanged_loaded_runtime_objects: DashMap::with_shard_amount(2048),
+            execution_error_metadata: DashMap::with_shard_amount(2048),
             total_transaction_inserts: AtomicU64::new(0),
             total_transaction_commits: AtomicU64::new(0),
         }
@@ -266,6 +271,7 @@ impl UncommittedData {
         self.pending_transaction_writes.clear();
         self.transaction_events.clear();
         self.unchanged_loaded_runtime_objects.clear();
+        self.execution_error_metadata.clear();
         self.total_transaction_inserts
             .store(0, std::sync::atomic::Ordering::Relaxed);
         self.total_transaction_commits
@@ -282,6 +288,7 @@ impl UncommittedData {
                     && self.executed_effects_digests.is_empty()
                     && self.transaction_events.is_empty()
                     && self.unchanged_loaded_runtime_objects.is_empty()
+                    && self.execution_error_metadata.is_empty()
                     && self
                         .total_transaction_inserts
                         .load(std::sync::atomic::Ordering::Relaxed)
@@ -913,6 +920,7 @@ impl WritebackCache {
             wrapped,
             events,
             unchanged_loaded_runtime_objects,
+            execution_error_metadata,
             ..
         } = &*tx_outputs;
 
@@ -987,6 +995,15 @@ impl WritebackCache {
         self.dirty
             .unchanged_loaded_runtime_objects
             .insert(tx_digest, unchanged_loaded_runtime_objects.clone());
+
+        if let Some(metadata) = execution_error_metadata
+            && !metadata.is_empty()
+        {
+            self.metrics.record_cache_write("execution_error_metadata");
+            self.dirty
+                .execution_error_metadata
+                .insert(tx_digest, metadata.clone());
+        }
 
         self.metrics.record_cache_write("executed_effects_digests");
         self.dirty
@@ -1189,6 +1206,8 @@ impl WritebackCache {
             .unchanged_loaded_runtime_objects
             .remove(&tx_digest)
             .expect("unchanged_loaded_runtime_objects must exist");
+
+        self.dirty.execution_error_metadata.remove(&tx_digest);
 
         self.dirty
             .executed_effects_digests
@@ -2305,6 +2324,21 @@ impl TransactionCacheRead for WritebackCache {
             .or_else(|| {
                 self.store
                     .get_unchanged_loaded_runtime_objects(digest)
+                    .expect("db error")
+            })
+    }
+
+    fn get_execution_error_metadata(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<ExecutionErrorMetadata> {
+        self.dirty
+            .execution_error_metadata
+            .get(digest)
+            .map(|b| b.clone())
+            .or_else(|| {
+                self.store
+                    .get_execution_error_metadata(digest)
                     .expect("db error")
             })
     }

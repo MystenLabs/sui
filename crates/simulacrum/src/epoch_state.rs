@@ -150,26 +150,26 @@ impl EpochState {
 
         let transaction_data = transaction.data().transaction_data();
         let (kind, signer, gas_data) = transaction_data.execution_parts();
-        let (inner_temp_store, gas_status, effects, _timings, result) = self
-            .executor
-            .execute_transaction_to_effects_and_execution_error(
-                store.backing_store(),
-                &self.protocol_config,
-                self.execution_metrics.clone(),
-                false, // enable_expensive_checks
-                // TODO: Integrate with early execution error
-                ExecutionOrEarlyError::Ok(()),
-                &self.epoch_start_state.epoch(),
-                self.epoch_start_state.epoch_start_timestamp_ms(),
-                checked_input_objects,
-                gas_data,
-                gas_status,
-                kind,
-                None, // compat_args
-                signer,
-                tx_digest,
-                &mut None,
-            );
+        let (inner_temp_store, gas_status, effects, _timings, result, _execution_error_metadata) =
+            self.executor
+                .execute_transaction_to_effects_and_execution_error(
+                    store.backing_store(),
+                    &self.protocol_config,
+                    self.execution_metrics.clone(),
+                    false, // enable_expensive_checks
+                    // TODO: Integrate with early execution error
+                    ExecutionOrEarlyError::Ok(()),
+                    &self.epoch_start_state.epoch(),
+                    self.epoch_start_state.epoch_start_timestamp_ms(),
+                    checked_input_objects,
+                    gas_data,
+                    gas_status,
+                    kind,
+                    None, // compat_args
+                    signer,
+                    tx_digest,
+                    &mut None,
+                );
         Ok((inner_temp_store, gas_status, effects, result))
     }
 }

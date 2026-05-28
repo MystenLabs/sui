@@ -136,7 +136,7 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
+use sui_types::error::{ExecutionError, ExecutionErrorMetadata, SuiErrorKind, UserInputError};
 use sui_types::event::EventID;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionErrorKind;
@@ -1902,16 +1902,27 @@ impl AuthorityState {
         rewritten_inputs: Option<Vec<bool>>,
         signer: SuiAddress,
         tx_digest: TransactionDigest,
+        is_fullnode: bool,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
         TransactionEffects,
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
+        Option<ExecutionErrorMetadata>,
     ) {
-        let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
-            // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
-            .execute_transaction_to_effects_and_execution_error(
+        // Fullnodes retain source errors and VM metadata as sidecar data for richer user-facing
+        // error reporting. Validators use the lean execution path and intentionally return no
+        // sidecar metadata so effects stay independent of non-consensus data.
+        if is_fullnode {
+            let (
+                inner_temp_store,
+                gas_status,
+                effects,
+                timings,
+                execution_error,
+                execution_error_metadata,
+            ) = executor.execute_transaction_to_effects_and_execution_error(
                 store,
                 protocol_config,
                 self.metrics.execution_metrics.clone(),
@@ -1929,13 +1940,43 @@ impl AuthorityState {
                 &mut None,
             );
 
-        (
-            inner_temp_store,
-            gas_status,
-            effects,
-            timings,
-            execution_error,
-        )
+            (
+                inner_temp_store,
+                gas_status,
+                effects,
+                timings,
+                execution_error,
+                execution_error_metadata,
+            )
+        } else {
+            let (inner_temp_store, gas_status, effects, timings, execution_failure) = executor
+                .execute_transaction_to_effects(
+                    store,
+                    protocol_config,
+                    self.metrics.execution_metrics.clone(),
+                    enable_expensive_checks,
+                    execution_params,
+                    epoch_id,
+                    epoch_timestamp_ms,
+                    input_objects,
+                    gas_data,
+                    gas_status,
+                    kind,
+                    rewritten_inputs,
+                    signer,
+                    tx_digest,
+                    &mut None,
+                );
+
+            (
+                inner_temp_store,
+                gas_status,
+                effects,
+                timings,
+                execution_failure.map_err(ExecutionError::from),
+                None,
+            )
+        }
     }
 
     /// execute_certificate validates the transaction input, and executes the certificate,
@@ -2022,30 +2063,39 @@ impl AuthorityState {
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
         #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
-            .execute_transaction_to_effects(
-                &**epoch_store.executor(),
-                &tracking_store,
-                protocol_config,
-                // TODO: would be nice to pass the whole NodeConfig here, but it creates a
-                // cyclic dependency w/ sui-adapter
-                self.config
-                    .expensive_safety_check_config
-                    .enable_deep_per_tx_sui_conservation_check(),
-                execution_params,
-                &epoch_store.epoch_start_config().epoch_data().epoch_id(),
-                epoch_store
-                    .epoch_start_config()
-                    .epoch_data()
-                    .epoch_start_timestamp(),
-                input_objects,
-                gas_data,
-                gas_status,
-                kind,
-                rewritten_inputs,
-                signer,
-                tx_digest,
-            );
+        let (
+            inner_temp_store,
+            _,
+            mut effects,
+            timings,
+            execution_error_opt,
+            execution_error_metadata,
+        ) = self.execute_transaction_to_effects(
+            &**epoch_store.executor(),
+            &tracking_store,
+            protocol_config,
+            // TODO: would be nice to pass the whole NodeConfig here, but it creates a
+            // cyclic dependency w/ sui-adapter
+            self.config
+                .expensive_safety_check_config
+                .enable_deep_per_tx_sui_conservation_check(),
+            execution_params,
+            &epoch_store.epoch_start_config().epoch_data().epoch_id(),
+            epoch_store
+                .epoch_start_config()
+                .epoch_data()
+                .epoch_start_timestamp(),
+            input_objects,
+            gas_data,
+            gas_status,
+            kind,
+            rewritten_inputs,
+            signer,
+            tx_digest,
+            self.is_fullnode(epoch_store),
+        );
+
+        let execution_error_opt = execution_error_opt.err();
 
         let object_funds_checker = self.object_funds_checker.load();
         if let Some(object_funds_checker) = object_funds_checker.as_ref()
@@ -2171,6 +2221,7 @@ impl AuthorityState {
             effects,
             inner_temp_store,
             unchanged_loaded_runtime_objects,
+            execution_error_metadata,
         );
 
         let elapsed = prepare_certificate_start_time.elapsed().as_micros() as f64;
@@ -2184,7 +2235,7 @@ impl AuthorityState {
             );
         }
 
-        ExecutionOutput::Success((transaction_outputs, timings, execution_error_opt.err()))
+        ExecutionOutput::Success((transaction_outputs, timings, execution_error_opt))
     }
 
     pub fn prepare_certificate_for_benchmark(

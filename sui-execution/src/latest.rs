@@ -14,7 +14,10 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
-    error::{ExecutionError, ExecutionErrorTrait, SuiError, SuiResult},
+    error::{
+        ExecutionError, ExecutionErrorMetadata, ExecutionErrorTrait,
+        SuiError, SuiResult,
+    },
     execution::{ExecutionResult, TypeLayoutStore},
     execution_status::ExecutionFailure,
     gas::SuiGasStatus,
@@ -24,6 +27,7 @@ use sui_types::{
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
 
+use crate::error_context::ExecutionErrorContext;
 use move_bytecode_verifier_meter::Meter;
 use move_vm_runtime_latest::runtime::MoveRuntime;
 use mysten_common::debug_fatal;
@@ -135,9 +139,10 @@ impl executor::Executor for Executor {
         TransactionEffects,
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
+        Option<ExecutionErrorMetadata>,
     ) {
         let (store_out, gas_status_out, effects, timings, result) =
-            execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
+            execute_transaction_to_effects::<execution_mode::Normal<ExecutionErrorContext>>(
                 store,
                 input_objects,
                 gas,
@@ -158,7 +163,18 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (store_out, gas_status_out, effects, timings, result)
+        let execution_error_metadata = result
+            .as_ref()
+            .err()
+            .and_then(ExecutionErrorContext::metadata_with_source);
+        (
+            store_out,
+            gas_status_out,
+            effects,
+            timings,
+            result.map_err(ExecutionError::from),
+            execution_error_metadata,
+        )
     }
 
     fn dev_inspect_transaction(

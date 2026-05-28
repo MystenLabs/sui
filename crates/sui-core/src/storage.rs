@@ -19,7 +19,7 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::{SuiErrorKind, SuiResult};
+use sui_types::error::{ExecutionErrorMetadata, SuiErrorKind, SuiResult};
 use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
@@ -270,6 +270,15 @@ impl ReadStore for RocksDbStore {
         self.cache_traits
             .transaction_cache_reader
             .get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn get_execution_error_metadata(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<ExecutionErrorMetadata> {
+        self.cache_traits
+            .transaction_cache_reader
+            .get_execution_error_metadata(digest)
     }
 
     fn get_transaction_checkpoint(
@@ -532,6 +541,13 @@ impl ReadStore for RestReadStore {
         digest: &TransactionDigest,
     ) -> Option<Vec<ObjectKey>> {
         self.rocks.get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn get_execution_error_metadata(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<ExecutionErrorMetadata> {
+        self.rocks.get_execution_error_metadata(digest)
     }
 
     fn get_transaction_checkpoint(

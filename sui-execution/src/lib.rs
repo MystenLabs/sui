@@ -22,6 +22,7 @@ mod v3;
 
 #[cfg(test)]
 mod tests;
+mod error_context;
 
 pub fn executor(
     protocol_config: &ProtocolConfig,

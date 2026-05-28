@@ -302,6 +302,8 @@ impl AuthorityStorePruner {
             &perpetual_db.unchanged_loaded_runtime_objects,
             transactions.iter(),
         )?;
+        perpetual_batch
+            .delete_batch(&perpetual_db.execution_error_metadata, transactions.iter())?;
         perpetual_batch.delete_batch(&perpetual_db.effects, effect_digests)?;
 
         let mut checkpoints_batch = checkpoint_db.tables.certified_checkpoints.batch();
