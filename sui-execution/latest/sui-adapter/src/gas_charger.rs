@@ -424,9 +424,7 @@ pub mod checked {
                 }
             }
 
-            // compute and collect storage charges
             temporary_store.ensure_active_inputs_mutated();
-            temporary_store.collect_storage_and_rebate(self);
 
             if matches!(&self.payment, PaymentMetadata::Unmetered) {
                 return GasCostSummary::default();
@@ -437,6 +435,12 @@ pub mod checked {
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
             }
 
+            // This early return must come BEFORE collect_storage_and_rebate.  Smashing was
+            // skipped entirely for IFFW transactions (no coins merged, no events emitted), so
+            // the gas coin retains its original value and storage_rebate.  If we called
+            // collect_storage_and_rebate first it would stamp a new storage_rebate on the
+            // (unmodified) gas coin; then returning a zero gas summary would leave that rebate
+            // unaccounted for, violating SUI conservation.
             if execution_result
                 .as_ref()
                 .err()
@@ -447,13 +451,15 @@ pub mod checked {
                     )
                 })
                 .unwrap_or(false)
-                && self.has_address_balance_payment() {
-                    // If we don't have enough balance to withdraw, don't charge for gas.
-                    // Smashing was skipped at construction time so no coins were merged and the
-                    // gas summary is trivially zero.
-                    // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
-                    return GasCostSummary::default();
+                && self.has_address_balance_payment()
+            {
+                // If we don't have enough balance to withdraw, don't charge for gas.
+                // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
+                return GasCostSummary::default();
             }
+
+            // compute and collect storage charges
+            temporary_store.collect_storage_and_rebate(self);
 
             self.compute_storage_and_rebate(temporary_store, execution_result);
 

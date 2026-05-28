@@ -915,6 +915,49 @@ async fn test_gas_smash_from_fake_coin() {
     test_env.cluster.trigger_reconfiguration().await;
 }
 
+/// Regression test: smashing two real gas coins must conserve SUI and produce the
+/// correct final balance. One coin is deleted (smashed into the other) so this
+/// exercises the deleted-input path of collect_storage_and_rebate, which is now
+/// placed after the IFFW early-return check.
+#[sim_test]
+async fn test_gas_smash_two_real_coins() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    let mut test_env = TestEnvBuilder::new().build().await;
+
+    let (sender, mut all_gas) = test_env.get_sender_and_all_gas(0);
+    assert!(all_gas.len() >= 2, "need ≥2 gas coins");
+
+    let coin1 = all_gas.remove(0);
+    let coin2 = all_gas.remove(0);
+    let coin1_balance = test_env.get_coin_balance(coin1.0).await;
+    let coin2_balance = test_env.get_coin_balance(coin2.0).await;
+
+    let tx = test_env
+        .tx_builder_with_gas_objects(sender, vec![coin1, coin2])
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(
+        effects.status().is_ok(),
+        "Transaction failed: {:?}",
+        effects.status()
+    );
+
+    let gas_used = effects.gas_cost_summary().gas_used();
+
+    // coin2 is deleted (smashed into coin1)
+    assert_eq!(effects.deleted().len(), 1);
+    assert_eq!(effects.deleted()[0].0, coin2.0);
+
+    // coin1 holds the combined balance minus gas
+    let final_balance = test_env.get_coin_balance(coin1.0).await;
+    assert_eq!(final_balance, coin1_balance + coin2_balance - gas_used);
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
 #[sim_test]
 async fn test_gas_coin_not_owned_by_gas_owner() {
     if has_mainnet_protocol_config_override() {
