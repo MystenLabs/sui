@@ -15,7 +15,7 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::{
-        ExecutionError, ExecutionErrorContext, ExecutionErrorMetadata, ExecutionErrorTrait,
+        ExecutionError, ExecutionErrorMetadata, ExecutionErrorTrait,
         SuiError, SuiResult,
     },
     execution::{ExecutionResult, TypeLayoutStore},
@@ -27,6 +27,7 @@ use sui_types::{
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
 
+use crate::error_context::ExecutionErrorContext;
 use move_bytecode_verifier_meter::Meter;
 use move_vm_runtime_latest::runtime::MoveRuntime;
 use mysten_common::debug_fatal;
