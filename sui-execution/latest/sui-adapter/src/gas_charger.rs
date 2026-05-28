@@ -72,6 +72,10 @@ pub mod checked {
         /// The original payment methods to be smashed into the `smash_target`. It does not include
         /// the `smash_target` itself. Keyed by location to guarantee uniqueness.
         smashed_payments: IndexMap<PaymentLocation, PaymentMethod>,
+        /// Whether the original payment list contained any address-balance payment. This can be
+        /// true even when the address-balance entries were filtered before constructing the
+        /// charger for an early insufficient-withdraw abort.
+        has_address_balance_payment: bool,
     }
 
     /// Public wrapper that describes how gas will be paid before smashing occurs.
@@ -134,12 +138,18 @@ pub mod checked {
                 PaymentKind_::Gasless => PaymentMetadata::Gasless,
                 PaymentKind_::Smash(mut payment_methods) => {
                     let (_, smash_target) = payment_methods.shift_remove_index(0).unwrap();
+                    let has_address_balance_payment =
+                        matches!(&smash_target, PaymentMethod::AddressBalance(_, _))
+                            || payment_methods.values().any(|method| {
+                                matches!(method, PaymentMethod::AddressBalance(_, _))
+                            });
                     let mut metadata = SmashMetadata {
                         // dummy value set below in smash_gas
                         total_smashed: 0,
                         gas_charge_location: smash_target.location(),
                         smash_target,
                         smashed_payments: payment_methods,
+                        has_address_balance_payment,
                     };
                     metadata.smash_gas(&tx_digest, temporary_store);
                     PaymentMetadata::Smash(metadata)
@@ -206,6 +216,52 @@ pub mod checked {
             match &self.payment {
                 PaymentMetadata::Unmetered | PaymentMetadata::Gasless => None,
                 PaymentMetadata::Smash(metadata) => Some(metadata.gas_charge_location),
+            }
+        }
+
+        pub(crate) fn record_address_balance_payment(&mut self) {
+            if let PaymentMetadata::Smash(metadata) = &mut self.payment {
+                metadata.has_address_balance_payment = true;
+            }
+        }
+
+        fn has_address_balance_payment(&self) -> bool {
+            match &self.payment {
+                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => false,
+                PaymentMetadata::Smash(metadata) => metadata.has_address_balance_payment,
+            }
+        }
+
+        fn charge_capped_computation_only(
+            &mut self,
+            temporary_store: &mut TemporaryStore<'_>,
+            gas_payment_location: Option<PaymentLocation>,
+        ) -> GasCostSummary {
+            let Some(gas_payment_amount) = self.gas_payment_amount() else {
+                return GasCostSummary::default();
+            };
+            let computation_cost = self
+                .gas_status
+                .summary()
+                .computation_cost
+                .min(gas_payment_amount.amount);
+            if computation_cost == 0 {
+                return GasCostSummary::default();
+            }
+
+            if let Some(PaymentLocation::Coin(gas_object_id)) = gas_payment_location {
+                let mut gas_object = temporary_store.read_object(&gas_object_id).unwrap().clone();
+                deduct_gas(
+                    &mut gas_object,
+                    i64::try_from(computation_cost).expect("Gas cost exceeds i64::MAX"),
+                );
+                temporary_store.mutate_new_or_input_object(gas_object);
+                GasCostSummary {
+                    computation_cost,
+                    ..GasCostSummary::default()
+                }
+            } else {
+                GasCostSummary::default()
             }
         }
 
@@ -378,20 +434,13 @@ pub mod checked {
                 }
             }
 
-            // compute and collect storage charges
-            temporary_store.ensure_active_inputs_mutated();
-            temporary_store.collect_storage_and_rebate(self);
-
-            if matches!(&self.payment, PaymentMetadata::Unmetered) {
-                return GasCostSummary::default();
-            }
             let gas_payment_location = self.gas_payment_location();
             if let Some(PaymentLocation::Coin(_)) = gas_payment_location {
                 #[skip_checked_arithmetic]
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
             }
 
-            if execution_result
+            let insufficient_funds_for_withdraw = execution_result
                 .as_ref()
                 .err()
                 .map(|err| {
@@ -400,11 +449,21 @@ pub mod checked {
                         sui_types::execution_status::ExecutionErrorKind::InsufficientFundsForWithdraw
                     )
                 })
-                .unwrap_or(false)
-                && matches!(gas_payment_location, Some(PaymentLocation::AddressBalance(_))) {
-                    // If we don't have enough balance to withdraw, don't charge for gas
-                    // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
-                    return GasCostSummary::default();
+                .unwrap_or(false);
+            if insufficient_funds_for_withdraw && self.has_address_balance_payment() {
+                // This is an early abort before user execution, so there are no user storage
+                // changes to charge or rebate. Charge only computation, and cap it to the
+                // actually available gas payment after unavailable address-balance reservations
+                // have been filtered.
+                return self.charge_capped_computation_only(temporary_store, gas_payment_location);
+            }
+
+            // compute and collect storage charges
+            temporary_store.ensure_active_inputs_mutated();
+            temporary_store.collect_storage_and_rebate(self);
+
+            if matches!(&self.payment, PaymentMetadata::Unmetered) {
+                return GasCostSummary::default();
             }
 
             self.compute_storage_and_rebate(temporary_store, execution_result);

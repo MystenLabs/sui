@@ -228,6 +228,11 @@ mod checked {
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
 
+        let had_address_balance_payment = gas_data
+            .payment
+            .iter()
+            .any(|entry| ParsedDigest::try_from(entry.2).is_ok());
+
         // On an early `InsufficientFundsForWithdraw` abort we drop every address-balance
         // payment except the smash target (index 0). This is the single place we apply that
         // filter: by mutating `gas_data.payment` here, `payment_kind` and
@@ -251,6 +256,9 @@ mod checked {
             &mut temporary_store,
             protocol_config,
         );
+        if had_address_balance_payment {
+            gas_charger.record_address_balance_payment();
+        }
 
         let tx_ctx = TxContext::new_from_components(
             &transaction_signer,
