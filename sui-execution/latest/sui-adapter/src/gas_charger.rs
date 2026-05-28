@@ -402,32 +402,30 @@ pub mod checked {
                 })
                 .unwrap_or(false);
 
-            if is_iffw
-                && matches!(
-                    gas_payment_location,
-                    Some(PaymentLocation::AddressBalance(_))
-                )
-            {
-                // If we don't have enough balance to withdraw, don't charge for gas
-                // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
-                return GasCostSummary::default();
-            }
-
-            if is_iffw && matches!(gas_payment_location, Some(PaymentLocation::Coin(_))) {
-                // IFFW with a coin payment means the AB entries of the gas payment list were
-                // pruned (see execution_engine), and the remaining real-coin balance may be
-                // far below the declared budget. Execution didn't run, so there are no
-                // writes to charge for; still claim the rebate from the input gas coins,
-                // and cap `computation_cost` so the final deduction can't exceed what the
-                // smashed coin actually holds.
+            if is_iffw {
+                // Execution didn't run, so there are no writes to charge for storage.
+                // We still must claim the rebate from any deleted gas coins so the
+                // simple-conservation check (input_rebate == output_rebate +
+                // summary.storage_rebate + summary.non_refundable) holds.
+                //
+                // Cap `computation_cost` so the final deduction never exceeds what
+                // the payment location can actually cover:
+                //   - For a coin payment: the smashed coin's balance.
+                //   - For an AB payment: 0 — the AB couldn't satisfy the reservation
+                //     in the first place; we cannot withdraw any more from it.
                 self.reset(temporary_store);
                 temporary_store.ensure_active_inputs_mutated();
                 temporary_store.collect_rebate(self);
 
-                let available = self
-                    .gas_payment_amount()
-                    .expect("IFFW path requires a smashed gas payment")
-                    .amount;
+                let available = match gas_payment_location {
+                    Some(PaymentLocation::Coin(_)) => {
+                        self.gas_payment_amount()
+                            .expect("IFFW path requires a smashed gas payment")
+                            .amount
+                    }
+                    Some(PaymentLocation::AddressBalance(_)) => 0,
+                    None => 0,
+                };
                 let sender_rebate = self.gas_status.summary().storage_rebate;
                 let max_compute = available.saturating_add(sender_rebate);
                 self.gas_status.cap_computation_cost(max_compute);
