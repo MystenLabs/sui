@@ -148,6 +148,20 @@ fun vector_contains() {
     assert!(!vec.contains(&3));
 }
 
+#[test]
+fun test_all_unique() {
+    assert!(vector<u64>[].all_unique()); // empty
+    assert!(vector[1u64].all_unique()); // singleton
+    assert!(vector[1, 2, 3u64].all_unique()); // all distinct
+
+    assert!(!vector[1, 1u64].all_unique()); // adjacent duplicate
+    assert!(!vector[1, 2, 1u64].all_unique()); // non-adjacent duplicate
+
+    // works for any comparable element type
+    assert!(vector[@0x1, @0x2].all_unique());
+    assert!(!vector[true, false, true].all_unique());
+}
+
 #[test, allow(deprecated_usage)]
 fun destroy_empty() {
     vector<u64>[].destroy_empty();

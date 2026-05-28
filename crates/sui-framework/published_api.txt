@@ -5083,6 +5083,9 @@ contains
 index_of
 	public fun
 	0x1::vector
+all_unique
+	public fun
+	0x1::vector
 remove
 	public fun
 	0x1::vector
