@@ -88,6 +88,98 @@ mod checked {
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
 
+    /// Accumulator root version at which the address-balance gas-smash fix begins to apply.
+    ///
+    /// A transaction cancelled with `InsufficientFundsForWithdraw` must not withdraw from an
+    /// address balance while smashing gas (doing so causes a later settlement underflow). The fix
+    /// in `GasCharger::new` suppresses that withdrawal, but applying it unconditionally would
+    /// change the effects of transactions that were already certified with the old behavior and
+    /// fork replay. We therefore gate it on the transaction's assigned accumulator root version:
+    /// transactions reading a version below this keep the original behavior (so certified history
+    /// replays bit-for-bit), and the fix applies at/above it.
+    ///
+    /// This is a compiled constant (not a protocol-config flag) on purpose: it must take effect
+    /// mid-epoch during incident recovery, when the network cannot reconfigure. Set it to the
+    /// accumulator root version of the first checkpoint re-executed during recovery. Keep it a
+    /// `const` so it is trivial to adjust.
+    const ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION: SequenceNumber =
+        SequenceNumber::from_u64(692949576);
+
+    /// Whether to suppress the address-balance leg of gas smashing for this transaction.
+    ///
+    /// True only for transactions cancelled with `InsufficientFundsForWithdraw` whose assigned
+    /// accumulator version is at or above [`ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION`].
+    /// Gating on the version keeps already-certified transactions (below the activation version)
+    /// replaying with the original behavior; see that constant's documentation.
+    fn should_filter_address_balance_gas_smash(execution_params: &ExecutionOrEarlyError) -> bool {
+        matches!(
+            execution_params.early_error(),
+            Some(ExecutionErrorKind::InsufficientFundsForWithdraw)
+        ) && execution_params
+            .accumulator_version()
+            .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION)
+    }
+
+    #[cfg(test)]
+    mod address_balance_smash_gate_tests {
+        use super::{
+            ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION,
+            should_filter_address_balance_gas_smash,
+        };
+        use sui_types::base_types::SequenceNumber;
+        use sui_types::execution_params::ExecutionOrEarlyError;
+        use sui_types::execution_status::ExecutionErrorKind;
+
+        fn version(n: u64) -> Option<SequenceNumber> {
+            Some(SequenceNumber::from_u64(n))
+        }
+
+        #[test]
+        fn applies_at_or_above_activation_version() {
+            let activation = ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION.value();
+            for v in [activation, activation + 1] {
+                assert!(should_filter_address_balance_gas_smash(
+                    &ExecutionOrEarlyError::failed(
+                        ExecutionErrorKind::InsufficientFundsForWithdraw,
+                        version(v),
+                    )
+                ));
+            }
+        }
+
+        #[test]
+        fn preserves_old_behavior_below_activation_version() {
+            let below = ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION.value() - 1;
+            assert!(!should_filter_address_balance_gas_smash(
+                &ExecutionOrEarlyError::failed(
+                    ExecutionErrorKind::InsufficientFundsForWithdraw,
+                    version(below),
+                )
+            ));
+        }
+
+        #[test]
+        fn only_applies_to_insufficient_funds_cancellations() {
+            let above = version(ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION.value() + 1);
+
+            // Successful execution is never affected.
+            assert!(!should_filter_address_balance_gas_smash(
+                &ExecutionOrEarlyError::ok(above)
+            ));
+            // A different early-error reason is never affected.
+            assert!(!should_filter_address_balance_gas_smash(
+                &ExecutionOrEarlyError::failed(ExecutionErrorKind::CertificateDenied, above)
+            ));
+            // Insufficient funds but no assigned accumulator version: leave unchanged.
+            assert!(!should_filter_address_balance_gas_smash(
+                &ExecutionOrEarlyError::failed(
+                    ExecutionErrorKind::InsufficientFundsForWithdraw,
+                    None,
+                )
+            ));
+        }
+    }
+
     fn payment_kind(
         gas_data: &GasData,
         transaction_kind: &TransactionKind,
@@ -233,10 +325,13 @@ mod checked {
         // filter: by mutating `gas_data.payment` here, `payment_kind` and
         // `compute_input_reservations` below see an already-pruned list and need no special
         // handling. Coin entries (real `ObjectRef`s) are always kept.
-        if matches!(
-            execution_params,
-            Err(ExecutionErrorKind::InsufficientFundsForWithdraw)
-        ) && gas_data.payment.len() > 1
+        //
+        // Gated on the transaction's assigned accumulator version (see
+        // `should_filter_address_balance_gas_smash`) so that already-certified transactions —
+        // reading a version below the activation version — replay bit-for-bit with the original
+        // behavior; the prune applies only at/above it.
+        if should_filter_address_balance_gas_smash(&execution_params)
+            && gas_data.payment.len() > 1
             && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
         {
             gas_data
@@ -516,12 +611,12 @@ mod checked {
                     let mut execution_result: ResultWithTimings<
                         Mode::ExecutionResults,
                         Mode::Error,
-                    > = match execution_params {
-                        ExecutionOrEarlyError::Err(early_execution_error) => Err((
+                    > = match execution_params.into_early_error() {
+                        Some(early_execution_error) => Err((
                             ExecutionError::new(early_execution_error, None).into(),
                             vec![],
                         )),
-                        ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
+                        None => execution_loop::<Mode>(
                             store,
                             temporary_store,
                             transaction_kind,

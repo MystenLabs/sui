@@ -925,7 +925,7 @@ fn create_genesis_transaction(
                 protocol_config,
                 metrics,
                 expensive_checks,
-                ExecutionOrEarlyError::Ok(()),
+                ExecutionOrEarlyError::ok(None),
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
                 input_objects,
