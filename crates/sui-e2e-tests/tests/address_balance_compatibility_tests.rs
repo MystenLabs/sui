@@ -1368,6 +1368,100 @@ async fn test_mix_coin_reservations_real_coins_and_shared_object() {
     test_env.cluster.trigger_reconfiguration().await;
 }
 
+/// Regression test: gas smashing must not underflow the address balance when a
+/// transaction fails with InsufficientFundsForWithdraw.
+///
+/// TX1 drains the AB to 0.  TX2 has gas_data.payment = [real_coin, coin_reservation];
+/// the coin_reservation creates an AddressBalance entry in smashed_payments.  After
+/// TX1 depletes the AB, the fund-checker fires IFFW for TX2.  Without the fix,
+/// smash_gas emits a negative AB AccumulatorEvent anyway, underflowing the AB at
+/// settlement time and causing a node panic.
+#[sim_test]
+async fn test_gas_smash_no_ab_underflow_on_iffw() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+
+    // Fund the AB with a known amount; both per-tx reservations must be ≤ this for
+    // the bundle to pass signing-time validation.
+    let initial_ab = 20_000_000u64;
+    test_env.fund_one_address_balance(sender, initial_ab).await;
+
+    // Refresh gas list after funding (funding consumes one coin).
+    let mut all_gas = test_env.get_gas_for_sender(sender);
+    assert!(all_gas.len() >= 2, "need ≥2 gas coins");
+
+    // TX1: withdraw all AB (pays gas from a real coin so the full initial_ab is freed).
+    let gas_for_tx1 = all_gas.remove(0);
+    let dummy = SuiAddress::random_for_testing_only();
+    let tx1 = test_env
+        .tx_builder_with_gas(sender, gas_for_tx1)
+        .transfer_sui_to_address_balance(
+            FundSource::address_fund_with_reservation(initial_ab),
+            vec![(initial_ab, dummy)],
+        )
+        .build();
+
+    // TX2: gas_data.payment = [real_coin, coin_reservation].
+    // Reservation = initial_ab / 2 so it passes per-tx signing validation (≤ initial_ab)
+    // but exceeds the post-TX1 AB balance of 0, triggering IFFW.
+    let gas_for_tx2 = all_gas.remove(0);
+    let reservation = initial_ab / 2;
+    let fake_coin = test_env.encode_coin_reservation(sender, 0, reservation);
+    let tx2 = test_env
+        .tx_builder_with_gas_objects(sender, vec![gas_for_tx2, fake_coin])
+        .build();
+
+    let tx1_digest = tx1.digest();
+    let tx2_digest = tx2.digest();
+
+    let mut effects = test_env
+        .cluster
+        .sign_and_execute_txns_in_soft_bundle(&[tx1, tx2])
+        .await
+        .unwrap();
+
+    let tx2_effects = effects.pop().unwrap().1;
+    let tx1_effects = effects.pop().unwrap().1;
+
+    assert!(
+        tx1_effects.status().is_ok(),
+        "TX1 should succeed: {:?}",
+        tx1_effects.status()
+    );
+    let status_str = format!("{:?}", tx2_effects.status());
+    assert!(
+        status_str.contains("InsufficientFundsForWithdraw"),
+        "TX2 should fail with InsufficientFundsForWithdraw, got: {status_str}"
+    );
+
+    // Wait for settlement.  Without the fix the settlement transaction aborts trying
+    // to split `reservation` from a 0-balance AB, crashing the node.
+    test_env
+        .cluster
+        .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
+        .await;
+
+    // TX2's failed smash must not have emitted a withdrawal event: the AB stays at 0.
+    let final_ab = test_env.get_sui_balance_ab(sender);
+    assert_eq!(
+        final_ab, 0,
+        "AB should stay 0; bug would underflow it to {final_ab}"
+    );
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
 fn build_fake_coin_reservation_pt(
     chain_id: sui_types::digests::ChainIdentifier,
 ) -> TransactionKind {
