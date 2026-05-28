@@ -20,7 +20,6 @@ vectors are growable. This module has many native functions.
 -  [Function `is_empty`](#std_vector_is_empty)
 -  [Function `contains`](#std_vector_contains)
 -  [Function `index_of`](#std_vector_index_of)
--  [Function `all_unique`](#std_vector_all_unique)
 -  [Function `remove`](#std_vector_remove)
 -  [Function `insert`](#std_vector_insert)
 -  [Function `swap_remove`](#std_vector_swap_remove)
@@ -411,42 +410,6 @@ Otherwise, returns <code>(<b>false</b>, 0)</code>.
         i = i + 1;
     };
     (<b>false</b>, 0)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="std_vector_all_unique"></a>
-
-## Function `all_unique`
-
-Return <code><b>true</b></code> if all elements in the vector <code>v</code> are distinct, and <code><b>false</b></code> if any value
-occurs more than once. This is <code>O(n^2)</code> in the length of <code>v</code>.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_all_unique">all_unique</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;): <a href="../std/bool.md#std_bool">bool</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_all_unique">all_unique</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;): <a href="../std/bool.md#std_bool">bool</a> {
-    <b>let</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; len) {
-        <b>let</b> <b>mut</b> j = i + 1;
-        <b>while</b> (j &lt; len) {
-            <b>if</b> (&v[i] == &v[j]) <b>return</b> <b>false</b>;
-            j = j + 1;
-        };
-        i = i + 1;
-    };
-    <b>true</b>
 }
 </code></pre>
 

@@ -111,22 +111,6 @@ public fun index_of<Element>(v: &vector<Element>, e: &Element): (bool, u64) {
     (false, 0)
 }
 
-/// Return `true` if all elements in the vector `v` are distinct, and `false` if any value
-/// occurs more than once. This is `O(n^2)` in the length of `v`.
-public fun all_unique<Element>(v: &vector<Element>): bool {
-    let len = v.length();
-    let mut i = 0;
-    while (i < len) {
-        let mut j = i + 1;
-        while (j < len) {
-            if (&v[i] == &v[j]) return false;
-            j = j + 1;
-        };
-        i = i + 1;
-    };
-    true
-}
-
 /// Remove the `i`th element of the vector `v`, shifting all subsequent elements.
 /// This is O(n) and preserves ordering of elements in the vector.
 /// Aborts if `i` is out of bounds.
