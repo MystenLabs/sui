@@ -1686,6 +1686,154 @@ async fn test_gas_smash_no_underflow_on_iffw_tiny_real_coins() {
     test_env.cluster.trigger_reconfiguration().await;
 }
 
+/// Regression test: same shape as test_gas_smash_no_ab_underflow_on_iffw, but the
+/// two real coins each hold only 1 MIST. Total real-coin gas after smashing is 2
+/// MIST — far below the gas budget. With AB entries dropped on IFFW the gas
+/// charger falls back to charging the real coins, and `deduct_gas` asserts
+/// balance >= charge. If gas charging is not also skipped for this case the
+/// node panics during settlement.
+#[sim_test]
+async fn test_gas_smash_no_underflow_on_iffw_tiny_real_coins() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+
+    // AB must be large enough that the per-tx signing validation accepts
+    // TX2's reservation (≤ AB) and total gas balance (real coins + reservation)
+    // covers the default gas budget (≈ 5_000_000_000 MIST).
+    let initial_ab = 10_000_000_000u64;
+    test_env.fund_one_address_balance(sender, initial_ab).await;
+
+    let all_gas = test_env.get_gas_for_sender(sender);
+    assert!(all_gas.len() >= 3, "need ≥3 gas coins");
+
+    // Pre-step: split two 1-MIST coins off a normal gas coin and transfer them
+    // back to sender. These tiny coins will be TX2's real-coin gas payments.
+    let splitter_gas = all_gas[0];
+    let mut split_builder = ProgrammableTransactionBuilder::new();
+    let one_a = split_builder.pure(1u64).unwrap();
+    let one_b = split_builder.pure(1u64).unwrap();
+    let split_result =
+        split_builder.command(Command::SplitCoins(Argument::GasCoin, vec![one_a, one_b]));
+    let Argument::Result(split_idx) = split_result else {
+        panic!("SplitCoins should return Argument::Result");
+    };
+    let recipient_arg = split_builder.pure(sender).unwrap();
+    split_builder.command(Command::TransferObjects(
+        vec![
+            Argument::NestedResult(split_idx, 0),
+            Argument::NestedResult(split_idx, 1),
+        ],
+        recipient_arg,
+    ));
+    let split_pt = split_builder.finish();
+    let split_tx = TransactionData::new_programmable(
+        sender,
+        vec![splitter_gas],
+        split_pt,
+        test_env.rgp * 5_000_000,
+        test_env.rgp,
+    );
+    let (_, split_effects) = test_env.exec_tx_directly(split_tx).await.unwrap();
+    assert!(
+        split_effects.status().is_ok(),
+        "tiny-coin split failed: {:?}",
+        split_effects.status()
+    );
+    let tiny_coins: Vec<_> = split_effects
+        .created()
+        .into_iter()
+        .filter(
+            |(_, owner)| matches!(owner, sui_types::object::Owner::AddressOwner(a) if *a == sender),
+        )
+        .map(|(obj_ref, _)| obj_ref)
+        .collect();
+    assert_eq!(
+        tiny_coins.len(),
+        2,
+        "expected exactly two created tiny coins"
+    );
+    let tiny_coin_a = tiny_coins[0];
+    let tiny_coin_b = tiny_coins[1];
+    assert_eq!(test_env.get_coin_balance(tiny_coin_a.0).await, 1);
+    assert_eq!(test_env.get_coin_balance(tiny_coin_b.0).await, 1);
+
+    // Refresh gas list; splitter_gas was mutated and tiny coins are now also in
+    // the wallet's gas-object list. Pick a separate coin to pay for TX1.
+    let all_gas = test_env.get_gas_for_sender(sender);
+    let gas_for_tx1 = *all_gas
+        .iter()
+        .find(|g| g.0 != splitter_gas.0 && g.0 != tiny_coin_a.0 && g.0 != tiny_coin_b.0)
+        .expect("need a non-tiny coin to pay TX1's gas");
+
+    // TX1: drain the AB to 0 (gas comes from a real coin, so the full
+    // initial_ab transfers out).
+    let dummy = SuiAddress::random_for_testing_only();
+    let tx1 = test_env
+        .tx_builder_with_gas(sender, gas_for_tx1)
+        .transfer_sui_to_address_balance(
+            FundSource::address_fund_with_reservation(initial_ab),
+            vec![(initial_ab, dummy)],
+        )
+        .build();
+
+    // TX2: gas_data.payment = [tiny_coin_a (1 MIST), tiny_coin_b (1 MIST),
+    // coin_reservation]. After TX1 drains the AB the reservation withdraw
+    // fails with IFFW.  reservation = initial_ab / 2 passes the per-tx signing
+    // check (≤ initial_ab) and reservation + 2 MIST > default budget.
+    let reservation = initial_ab / 2;
+    let fake_coin = test_env.encode_coin_reservation(sender, 0, reservation);
+    let tx2 = test_env
+        .tx_builder_with_gas_objects(sender, vec![tiny_coin_a, tiny_coin_b, fake_coin])
+        .build();
+
+    let tx1_digest = tx1.digest();
+    let tx2_digest = tx2.digest();
+
+    let mut effects = test_env
+        .cluster
+        .sign_and_execute_txns_in_soft_bundle(&[tx1, tx2])
+        .await
+        .unwrap();
+
+    let tx2_effects = effects.pop().unwrap().1;
+    let tx1_effects = effects.pop().unwrap().1;
+
+    assert!(
+        tx1_effects.status().is_ok(),
+        "TX1 should succeed: {:?}",
+        tx1_effects.status()
+    );
+    let status_str = format!("{:?}", tx2_effects.status());
+    assert!(
+        status_str.contains("InsufficientFundsForWithdraw"),
+        "TX2 should fail with InsufficientFundsForWithdraw, got: {status_str}"
+    );
+
+    // Settlement must complete. Without an additional fix, gas charging tries
+    // to deduct gas from a 2-MIST coin and panics in deduct_gas's
+    // `balance >= charge` assertion, crashing the node.
+    test_env
+        .cluster
+        .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
+        .await;
+
+    let final_ab = test_env.get_sui_balance_ab(sender);
+    assert_eq!(final_ab, 0, "AB should stay 0; got {final_ab}");
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
 fn build_fake_coin_reservation_pt(
     chain_id: sui_types::digests::ChainIdentifier,
 ) -> TransactionKind {
