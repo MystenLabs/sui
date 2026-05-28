@@ -15,9 +15,12 @@ use crate::{
     execution_scheduler::execution_scheduler_impl::{BarrierDependencyBuilder, ExecutionScheduler},
     execution_scheduler::funds_withdraw_scheduler::FundsSettlement,
 };
+use fastcrypto::encoding::{Base64, Encoding};
 use futures::stream::{FuturesUnordered, StreamExt};
 use mysten_metrics::{monitored_mpsc, spawn_monitored_task};
 use parking_lot::Mutex;
+use std::fs::OpenOptions;
+use std::io::Write as _;
 use std::sync::Arc;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
@@ -26,7 +29,7 @@ use sui_types::{
     executable_transaction::VerifiedExecutableTransaction,
     transaction::{TransactionDataAPI, TransactionKey, VerifiedTransaction},
 };
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 #[derive(Clone)]
 pub struct SettlementBatchInfo {
@@ -286,6 +289,15 @@ impl SettlementScheduler {
 
         let checkpoint_seq = batch_info.checkpoint_seq;
 
+        maybe_dump_settlement_inputs(
+            self.transaction_cache_read.as_ref(),
+            epoch,
+            checkpoint_seq,
+            batch_info.checkpoint_height,
+            ccp_digest,
+            &sorted_effects,
+        );
+
         let builder = AccumulatorSettlementTxBuilder::new(
             Some(self.transaction_cache_read.as_ref()),
             &sorted_effects,
@@ -427,4 +439,109 @@ impl SettlementScheduler {
                 *d
             })
     }
+}
+
+// Diagnostic dump of every transaction, effects, and events object that
+// feeds a settlement, written to disk as base64-encoded BCS. Gated on
+// `SUI_DUMP_SETTLEMENT_CHECKPOINT` so it's a no-op in normal operation.
+// Used to capture the validator-local input set for a settlement that is
+// failing with an underflow, so the failing arithmetic can be reproduced
+// offline from the dump.
+//
+// `SUI_DUMP_SETTLEMENT_CHECKPOINT`: comma-separated list of checkpoint
+// sequence numbers to dump, or "all".
+// `SUI_DUMP_SETTLEMENT_DIR`: output directory, default `/tmp`.
+//
+// Output file: `<dir>/sui-settlement-dump-<seq>.jsonl`. The file is opened
+// with `create_new`, so once the dump exists subsequent retries of the
+// same settlement (expected when mainnet is wedged) skip silently — the
+// dump is single-shot per validator restart, per checkpoint.
+fn maybe_dump_settlement_inputs(
+    cache: &dyn TransactionCacheRead,
+    epoch: u64,
+    checkpoint_seq: u64,
+    checkpoint_height: u64,
+    ccp_digest: Option<TransactionDigest>,
+    sorted_effects: &[TransactionEffects],
+) {
+    let Ok(target) = std::env::var("SUI_DUMP_SETTLEMENT_CHECKPOINT") else {
+        return;
+    };
+    let matches = target.trim() == "all"
+        || target
+            .split(',')
+            .filter_map(|s| s.trim().parse::<u64>().ok())
+            .any(|seq| seq == checkpoint_seq);
+    if !matches {
+        return;
+    }
+
+    let dir = std::env::var("SUI_DUMP_SETTLEMENT_DIR").unwrap_or_else(|_| "/tmp".to_string());
+    let path = format!("{}/sui-settlement-dump-{}.jsonl", dir, checkpoint_seq);
+
+    let mut file = match OpenOptions::new().write(true).create_new(true).open(&path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            debug!(path, checkpoint_seq, "settlement dump already exists, skipping");
+            return;
+        }
+        Err(e) => {
+            error!(?e, path, "failed to open settlement dump file");
+            return;
+        }
+    };
+
+    let digests: Vec<_> = sorted_effects
+        .iter()
+        .map(|e| *e.transaction_digest())
+        .collect();
+    let txns = cache.multi_get_transaction_blocks(&digests);
+    let events = cache.multi_get_events(&digests);
+
+    let header = serde_json::json!({
+        "kind": "header",
+        "epoch": epoch,
+        "checkpoint_seq": checkpoint_seq,
+        "checkpoint_height": checkpoint_height,
+        "consensus_commit_prologue_digest": ccp_digest.map(|d| d.to_string()),
+        "num_txns": digests.len(),
+    });
+    if let Err(e) = writeln!(file, "{header}") {
+        error!(?e, path, "failed writing settlement dump header");
+        return;
+    }
+
+    for (i, fx) in sorted_effects.iter().enumerate() {
+        let tx_b64 = txns[i]
+            .as_ref()
+            .and_then(|t| bcs::to_bytes(t.inner()).ok())
+            .as_deref()
+            .map(Base64::encode);
+        let fx_b64 = bcs::to_bytes(fx).ok().as_deref().map(Base64::encode);
+        let events_b64 = events[i]
+            .as_ref()
+            .and_then(|ev| bcs::to_bytes(ev).ok())
+            .as_deref()
+            .map(Base64::encode);
+
+        let entry = serde_json::json!({
+            "kind": "txn",
+            "index": i,
+            "digest": digests[i].to_string(),
+            "tx_b64": tx_b64,
+            "effects_b64": fx_b64,
+            "events_b64": events_b64,
+        });
+        if let Err(e) = writeln!(file, "{entry}") {
+            error!(?e, path, index = i, "failed writing settlement dump entry");
+            return;
+        }
+    }
+
+    info!(
+        path,
+        checkpoint_seq,
+        num_txns = digests.len(),
+        "wrote settlement input dump"
+    );
 }
