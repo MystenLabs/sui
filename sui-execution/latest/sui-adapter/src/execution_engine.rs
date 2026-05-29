@@ -96,9 +96,9 @@ mod checked {
     /// execution); everywhere else the short-circuit applies unconditionally (see
     /// `should_short_circuit_insufficient_funds`).
     ///
-    /// Value is the mainnet accumulator root version immediately before the failed settlement.
+    /// Value is the mainnet accumulator root version where the new binary was activated on the network.
     const ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION: SequenceNumber =
-        SequenceNumber::from_u64(693531086);
+        SequenceNumber::from_u64(693531074);
 
     fn has_insufficient_funds_for_withdraw(execution_params: &ExecutionOrEarlyError) -> bool {
         execution_params.early_errors().is_some_and(|errors| {
