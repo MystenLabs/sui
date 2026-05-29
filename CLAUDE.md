@@ -40,6 +40,7 @@ SUI_SKIP_SIMTESTS=1 cargo nextest run
 - When compiling or running tests in this repository, set timeout limits to at least 10 minutes due to the large codebase size
 - For faster iteration, use -p to select only the most relevant packages for testing. Use multiple `-p` flags if necessary, e.g. `cargo nextest run -p sui-types -p sui-core`
 - Use `cargo nextest run --lib` to run only library tests and skip integration tests for faster feedback
+- Use a scoped `cargo insta test` for the relevant package when snapshots are affected. Inspect the generated snapshot diffs. If they match the intended changes, update them with `cargo insta accept`. Do not accept unrelated snapshot changes.
 - Consult crate-specific CLAUDE.md files for instructions on which tests to run, when changing files in those crates
 
 ### Linting and Formatting
