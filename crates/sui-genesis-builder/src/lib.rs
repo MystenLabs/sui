@@ -386,12 +386,20 @@ impl Builder {
         assert_eq!(system_state.epoch, 0);
         assert_eq!(system_state.protocol_version, protocol_version);
         assert_eq!(system_state.storage_fund.non_refundable_balance.value(), 0);
+        // The storage fund must hold exactly the sum of every genesis object's storage rebate (a
+        // zero conservation imbalance). This is 0 unless `genesis_objects_have_storage_rebate` is
+        // set, in which case genesis seeds the fund to match the rebates stamped onto genesis coins.
+        let total_object_storage_rebates: u64 = unsigned_genesis
+            .objects()
+            .iter()
+            .map(|o| o.storage_rebate)
+            .sum();
         assert_eq!(
             system_state
                 .storage_fund
                 .total_object_storage_rebates
                 .value(),
-            0
+            total_object_storage_rebates,
         );
 
         assert_eq!(system_state.parameters.epoch_duration_ms, epoch_duration_ms);

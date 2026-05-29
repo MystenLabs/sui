@@ -3972,7 +3972,11 @@ async fn gas_coin_send_funds_storage_out_of_gas_charges_sender_not_receiver() {
     );
 
     let value = builder.pure(42u64).unwrap();
-    let large_data = vec![0u8; 200];
+    // Size the stored object so its storage cost dominates the gas budget by a wide margin. Genesis
+    // gas coins now carry a storage rebate that is refunded when the gas coin is mutated; a small
+    // object whose storage barely exceeded the budget would no longer trigger InsufficientGas once
+    // that rebate is netted out. A large object keeps the abort robust regardless of the rebate.
+    let large_data = vec![0u8; 2000];
     let data_arg = builder.pure(large_data).unwrap();
     builder.programmable_move_call(
         gas_package_id,

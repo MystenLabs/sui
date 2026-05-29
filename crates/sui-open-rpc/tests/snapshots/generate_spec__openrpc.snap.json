@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "126",
+              "maxSupportedProtocolVersion": "127",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1388,6 +1388,7 @@
                 "gasless_transaction_drop_safety": false,
                 "gasless_verify_remaining_balance": false,
                 "generate_df_type_layouts": false,
+                "genesis_objects_have_storage_rebate": false,
                 "granular_post_execution_checks": false,
                 "hardened_otw_check": false,
                 "ignore_execution_time_observations_after_certs_closed": false,
@@ -2263,6 +2264,7 @@
                 "gasless_transaction_drop_safety": false,
                 "gasless_verify_remaining_balance": false,
                 "generate_df_type_layouts": false,
+                "genesis_objects_have_storage_rebate": false,
                 "granular_post_execution_checks": false,
                 "groth16_prepare_verifying_key_bls12381_cost_base": "52",
                 "groth16_prepare_verifying_key_bn254_cost_base": "52",

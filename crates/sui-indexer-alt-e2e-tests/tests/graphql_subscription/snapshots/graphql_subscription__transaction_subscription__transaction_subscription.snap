@@ -26,7 +26,7 @@ expression: item
               }
             },
             {
-              "amount": "-2977000",
+              "amount": "-1998880",
               "coinType": {
                 "repr": "[pkg]::sui::SUI"
               },

@@ -670,6 +670,15 @@ mod checked {
         // to the 0x5 object so that it's not lost.
         temporary_store.conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
 
+        // Genesis runs unmetered, so `collect_storage_and_rebate` (above, in `charge_gas`) just set
+        // every created object's storage rebate to 0. When enabled, stamp genesis gas coins with a
+        // realistic storage rebate and seed the storage fund to match, so genesis coins behave like
+        // coins written by ordinary transactions. Done here (after gas charging, and genesis is
+        // exempt from the conservation checks below) so the rebates aren't immediately overwritten.
+        if is_genesis_tx && protocol_config.genesis_objects_have_storage_rebate() {
+            temporary_store.seed_genesis_storage_rebates();
+        }
+
         if let Err(e) = run_conservation_checks::<Mode>(
             temporary_store,
             gas_charger,
