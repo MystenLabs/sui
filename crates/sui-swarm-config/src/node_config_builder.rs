@@ -11,7 +11,8 @@ use sui_config::node::{
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
     CheckpointExecutorConfig, DBCheckpointConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
     ExecutionCacheConfig, ExecutionTimeObserverConfig, ExpensiveSafetyCheckConfig,
-    FundsWithdrawSchedulerType, Genesis, KeyPairWithPath, StateSnapshotConfig,
+    ForceEpochCloseConfig, FundsWithdrawSchedulerType, Genesis, KeyPairWithPath,
+    StateSnapshotConfig,
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
 };
 use sui_config::node::{RunWithRange, TransactionDriverConfig, default_zklogin_oauth_providers};
@@ -48,6 +49,7 @@ pub struct ValidatorConfigBuilder {
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
     chain_override: Option<Chain>,
     state_sync_config: Option<StateSyncConfig>,
+    force_epoch_close: Option<ForceEpochCloseConfig>,
 }
 
 impl ValidatorConfigBuilder {
@@ -132,6 +134,11 @@ impl ValidatorConfigBuilder {
         config: ExecutionTimeObserverConfig,
     ) -> Self {
         self.execution_time_observer_config = Some(config);
+        self
+    }
+
+    pub fn with_force_epoch_close(mut self, config: ForceEpochCloseConfig) -> Self {
+        self.force_epoch_close = Some(config);
         self
     }
 
@@ -267,7 +274,7 @@ impl ValidatorConfigBuilder {
             fork_recovery: None,
             transaction_driver_config: Some(TransactionDriverConfig::default()),
             congestion_log: None,
-            force_epoch_close: None,
+            force_epoch_close: self.force_epoch_close.clone(),
         }
     }
 

@@ -13,6 +13,7 @@ use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_config::node::AuthorityOverloadConfig;
 #[cfg(msim)]
 use sui_config::node::ExecutionTimeObserverConfig;
+use sui_config::node::ForceEpochCloseConfig;
 use sui_config::node::FundsWithdrawSchedulerType;
 use sui_protocol_config::Chain;
 use sui_types::base_types::{AuthorityName, SuiAddress};
@@ -109,6 +110,7 @@ pub struct ConfigBuilder<R = OsRng> {
     global_state_hash_v2_enabled_config: Option<GlobalStateHashV2EnabledConfig>,
     funds_withdraw_scheduler_type_config: Option<FundsWithdrawSchedulerTypeConfig>,
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
+    force_epoch_close: Option<ForceEpochCloseConfig>,
     #[cfg(msim)]
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
 }
@@ -153,6 +155,7 @@ impl ConfigBuilder {
             global_state_hash_v2_enabled_config: None,
             funds_withdraw_scheduler_type_config,
             state_sync_config: None,
+            force_epoch_close: None,
             #[cfg(msim)]
             execution_time_observer_config: None,
         }
@@ -333,6 +336,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_force_epoch_close(mut self, c: ForceEpochCloseConfig) -> Self {
+        self.force_epoch_close = Some(c);
+        self
+    }
+
     pub fn with_authority_overload_config(mut self, c: AuthorityOverloadConfig) -> Self {
         self.authority_overload_config = Some(c);
         self
@@ -373,6 +381,7 @@ impl<R> ConfigBuilder<R> {
             global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
             funds_withdraw_scheduler_type_config: self.funds_withdraw_scheduler_type_config,
             state_sync_config: self.state_sync_config,
+            force_epoch_close: self.force_epoch_close,
             #[cfg(msim)]
             execution_time_observer_config: self.execution_time_observer_config,
         }
@@ -560,6 +569,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     builder = builder.with_execution_time_observer_config(
                         execution_time_observer_config.clone(),
                     );
+                }
+
+                if let Some(force_epoch_close) = &self.force_epoch_close {
+                    builder = builder.with_force_epoch_close(force_epoch_close.clone());
                 }
 
                 if let Some(spvc) = &self.supported_protocol_versions_config {

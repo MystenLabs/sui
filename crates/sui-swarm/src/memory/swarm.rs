@@ -17,7 +17,9 @@ use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 #[cfg(msim)]
 use sui_config::node::ExecutionTimeObserverConfig;
-use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
+use sui_config::node::{
+    AuthorityOverloadConfig, DBCheckpointConfig, ForceEpochCloseConfig, RunWithRange,
+};
 use sui_config::{ExecutionCacheConfig, NodeConfig};
 use sui_macros::nondeterministic;
 use sui_node::SuiNodeHandle;
@@ -64,6 +66,7 @@ pub struct SwarmBuilder<R = OsRng> {
     funds_withdraw_scheduler_type_config: Option<FundsWithdrawSchedulerTypeConfig>,
     disable_fullnode_pruning: bool,
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
+    force_epoch_close: Option<ForceEpochCloseConfig>,
     #[cfg(msim)]
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
 }
@@ -98,6 +101,7 @@ impl SwarmBuilder {
             funds_withdraw_scheduler_type_config: None,
             disable_fullnode_pruning: false,
             state_sync_config: None,
+            force_epoch_close: None,
             #[cfg(msim)]
             execution_time_observer_config: None,
         }
@@ -134,6 +138,7 @@ impl<R> SwarmBuilder<R> {
             funds_withdraw_scheduler_type_config: self.funds_withdraw_scheduler_type_config,
             disable_fullnode_pruning: self.disable_fullnode_pruning,
             state_sync_config: self.state_sync_config,
+            force_epoch_close: self.force_epoch_close,
             #[cfg(msim)]
             execution_time_observer_config: self.execution_time_observer_config,
         }
@@ -311,6 +316,12 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_force_epoch_close(mut self, config: ForceEpochCloseConfig) -> Self {
+        assert!(self.network_config.is_none());
+        self.force_epoch_close = Some(config);
+        self
+    }
+
     pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
         self.data_ingestion_dir = Some(path);
         self
@@ -418,6 +429,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
             if let Some(state_sync_config) = self.state_sync_config.clone() {
                 final_builder = final_builder.with_state_sync_config(state_sync_config);
+            }
+
+            if let Some(force_epoch_close) = self.force_epoch_close.clone() {
+                final_builder = final_builder.with_force_epoch_close(force_epoch_close);
             }
 
             #[cfg(msim)]

@@ -1152,6 +1152,8 @@ pub struct TestClusterBuilder {
 
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
 
+    force_epoch_close: Option<sui_config::node::ForceEpochCloseConfig>,
+
     #[cfg(msim)]
     inject_synthetic_execution_time: bool,
 }
@@ -1196,6 +1198,7 @@ impl TestClusterBuilder {
             rpc_config: None,
             execution_time_observer_config: None,
             state_sync_config: None,
+            force_epoch_close: None,
             #[cfg(msim)]
             inject_synthetic_execution_time: false,
         }
@@ -1211,6 +1214,14 @@ impl TestClusterBuilder {
         config: sui_config::node::ExecutionTimeObserverConfig,
     ) -> Self {
         self.execution_time_observer_config = Some(config);
+        self
+    }
+
+    pub fn with_force_epoch_close(
+        mut self,
+        config: sui_config::node::ForceEpochCloseConfig,
+    ) -> Self {
+        self.force_epoch_close = Some(config);
         self
     }
 
@@ -1572,6 +1583,10 @@ impl TestClusterBuilder {
 
         if let Some(state_sync_config) = self.state_sync_config.clone() {
             builder = builder.with_state_sync_config(state_sync_config);
+        }
+
+        if let Some(force_epoch_close) = self.force_epoch_close.clone() {
+            builder = builder.with_force_epoch_close(force_epoch_close);
         }
 
         if self.disable_fullnode_pruning {
