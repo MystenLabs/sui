@@ -352,7 +352,7 @@ const MAINNET_USDB: &str =
 //              transfer per stable.
 // Version 125: Enable granular_post_execution_checks.
 //              Enable timestamp_based_epoch_close on testnet.
-// Version 126: Enable prune_address_balance_gas_payment_on_iffw (gates the gas-underflow fix
+// Version 126: Enable early_exit_on_iffw (gates the gas-underflow fix
 //              shipped to mainnet out-of-band in #26816).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -1122,11 +1122,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     granular_post_execution_checks: bool,
 
-    // If true, prune address-balance entries from the gas payment before smashing on an
-    // `InsufficientFundsForWithdraw` abort. Avoids underflowing the (already-drained) address
-    // balance at settlement, which otherwise aborts the settlement transaction.
+    // If true, exit early for IFWW transactions.
     #[serde(skip_serializing_if = "is_false")]
-    prune_address_balance_gas_payment_on_iffw: bool,
+    early_exit_on_iffw: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2866,8 +2864,8 @@ impl ProtocolConfig {
         self.feature_flags.granular_post_execution_checks
     }
 
-    pub fn prune_address_balance_gas_payment_on_iffw(&self) -> bool {
-        self.feature_flags.prune_address_balance_gas_payment_on_iffw
+    pub fn early_exit_on_iffw(&self) -> bool {
+        self.feature_flags.early_exit_on_iffw
     }
 }
 
@@ -4993,7 +4991,7 @@ impl ProtocolConfig {
                     }
                 }
                 126 => {
-                    cfg.feature_flags.prune_address_balance_gas_payment_on_iffw = true;
+                    cfg.feature_flags.early_exit_on_iffw = true;
                 }
                 // Use this template when making changes:
                 //

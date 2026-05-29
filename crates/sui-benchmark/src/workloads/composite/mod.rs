@@ -75,12 +75,13 @@ fn authenticated_events_disabled(protocol_config: Option<&ProtocolConfig>) -> bo
 
 macro_rules! update_gas {
     ($gas:expr, $effects:expr) => {{
-        let (new_gas_ref, _) = $effects.gas_object();
-        if new_gas_ref.0 == ObjectID::ZERO {
-            info!("No gas object, skipping update");
+        // Look up the tracked gas coin by ObjectID rather than reading whatever
+        // `gas_object()` reports — IFFW short-circuits leave `gas_object() == None`
+        // but the input coin is still version-bumped in `mutated()`.
+        let Some(new_gas_ref) = $effects.updated_gas($gas.0) else {
+            info!("No gas object in effects, skipping update");
             return;
-        }
-        assert_eq!($gas.0, new_gas_ref.0, "ObjectIDs must match");
+        };
         info!(
             "Updating gas object from {:?} to {:?} for tx {:?}",
             $gas,
