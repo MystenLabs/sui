@@ -351,6 +351,30 @@ function rewriteRepoRelativeLinks(content, repo, branch) {
   return result;
 }
 
+// --- ImportContent conversion ---
+
+function convertSourceReferences(content, config) {
+  // Convert "From [filename](../../path/to/file):" followed by a code block
+  // into <ImportContent source="path" mode="code" org="Org" repo="Repo" />
+  //
+  // This only fires when the relative path points into the source repo
+  // (starts with ../../) and is followed by a fenced code block.
+
+  const repo = config.repo || "";
+  const [org, repoName] = repo.split("/");
+  if (!org || !repoName) return content;
+
+  // Match: "From [label](../../some/path):" or "From [label](../../some/path)" on its own line
+  // followed by a blank line and a fenced code block
+  return content.replace(
+    /^From \[[^\]]+\]\((?:\.\.\/)+([^)]+)\):?\s*\n\n```\w+\n[\s\S]*?```/gm,
+    (match, relPath) => {
+      const cleanPath = relPath.replace(/^(\.\.\/)+/, "");
+      return `<ImportContent source="${cleanPath}" mode="code" org="${org}" repo="${repoName}" />`;
+    },
+  );
+}
+
 // --- Main pipeline ---
 
 function transformFile(content, slug, config, fileMap) {
@@ -368,6 +392,9 @@ function transformFile(content, slug, config, fileMap) {
   if (transforms.includes("admonitions")) {
     result = convertAdmonitions(result);
   }
+
+  // Convert "From [file](path):" + code block → <ImportContent> (before link rewriting)
+  result = convertSourceReferences(result, config);
 
   if (transforms.includes("links")) {
     result = rewriteLinks(result, fileMap, config.linkPrefix);
