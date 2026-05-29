@@ -70,6 +70,7 @@ use std::{
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_execution::Executor;
+use sui_protocol_config::Chain;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::crypto::RandomnessRound;
@@ -1999,9 +2000,17 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
+        // Mainnet-only: feed the accumulator (settlement) version so the address-balance gas-smash
+        // short-circuit activates at its rollout version and replays bit-for-bit. Other chains pass
+        // `None`, where the short-circuit applies unconditionally.
+        let accumulator_version = if self.chain_identifier.chain() == Chain::Mainnet {
+            execution_env.assigned_versions.accumulator_version
+        } else {
+            None
+        };
         let execution_params = match early_execution_error {
-            None => ExecutionOrEarlyError::Ok(()),
-            Some(errors) => ExecutionOrEarlyError::Err(errors),
+            None => ExecutionOrEarlyError::ok(accumulator_version),
+            Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),
         };
 
         // Skip on early error: the tx will fail anyway and rewriting may fail if the accumulator
@@ -2504,9 +2513,11 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &FundsWithdrawStatus::MaybeSufficient,
         );
+        // Dev-inspect/simulation path (not committed): no assigned accumulator version here, so the
+        // IFFW short-circuit applies unconditionally (`None`), matching non-mainnet execution.
         let execution_params = match early_execution_error {
-            None => ExecutionOrEarlyError::Ok(()),
-            Some(errors) => ExecutionOrEarlyError::Err(errors),
+            None => ExecutionOrEarlyError::ok(None),
+            Some(errors) => ExecutionOrEarlyError::failed(errors, None),
         };
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
@@ -2562,9 +2573,10 @@ impl AuthorityState {
                     protocol_config,
                     self.metrics.execution_metrics.clone(),
                     false,
-                    ExecutionOrEarlyError::Err(NonEmpty::new(
-                        ExecutionErrorKind::InsufficientFundsForWithdraw,
-                    )),
+                    ExecutionOrEarlyError::failed(
+                        NonEmpty::new(ExecutionErrorKind::InsufficientFundsForWithdraw),
+                        None,
+                    ),
                     &epoch_id,
                     epoch_timestamp_ms,
                     cloned_input_objects,

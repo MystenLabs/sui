@@ -88,6 +88,52 @@ mod checked {
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
 
+    /// Mainnet settlement version at/above which an `InsufficientFundsForWithdraw` transaction
+    /// short-circuits execution entirely (zero-gas effects, mutable-input version bumps only),
+    /// superseding the address-balance gas-payment pruning hotfix. A compiled constant, not a
+    /// protocol flag, because it must take effect mid-epoch during recovery when the network cannot
+    /// reconfigure. Only consulted when an accumulator version is assigned (mainnet committed
+    /// execution); everywhere else the short-circuit applies unconditionally (see
+    /// `should_short_circuit_insufficient_funds`).
+    ///
+    /// Value is the mainnet accumulator root version immediately before the failed settlement.
+    const ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION: SequenceNumber =
+        SequenceNumber::from_u64(693531086);
+
+    fn has_insufficient_funds_for_withdraw(execution_params: &ExecutionOrEarlyError) -> bool {
+        execution_params.early_errors().is_some_and(|errors| {
+            errors
+                .iter()
+                .any(|e| matches!(e, ExecutionErrorKind::InsufficientFundsForWithdraw))
+        })
+    }
+
+    /// Whether the *head* early error is `InsufficientFundsForWithdraw`. Used to gate the first
+    /// address-balance gas-payment pruning hotfix: the head error is the one surfaced as the
+    /// failure status, so keying off it (rather than any occurrence) keeps the pruning bit-for-bit
+    /// with the original single-error hotfix.
+    fn head_error_is_insufficient_funds_for_withdraw(
+        execution_params: &ExecutionOrEarlyError,
+    ) -> bool {
+        execution_params.early_errors().is_some_and(|errors| {
+            matches!(
+                errors.head,
+                ExecutionErrorKind::InsufficientFundsForWithdraw
+            )
+        })
+    }
+
+    /// Whether to short-circuit an IFFW transaction. When an accumulator version is assigned
+    /// (mainnet committed execution) it gates on the settlement-version rollout point; otherwise
+    /// (every other chain and non-committed paths, where no accumulator version is assigned) the
+    /// short-circuit applies unconditionally.
+    fn should_short_circuit_insufficient_funds(execution_params: &ExecutionOrEarlyError) -> bool {
+        has_insufficient_funds_for_withdraw(execution_params)
+            && execution_params
+                .accumulator_version()
+                .is_none_or(|v| v >= ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION)
+    }
+
     fn payment_kind(
         gas_data: &GasData,
         transaction_kind: &TransactionKind,
@@ -217,17 +263,13 @@ mod checked {
             *epoch_id,
         );
 
-        let has_iffw_err = |params: &ExecutionOrEarlyError| match params {
-            Err(errors) => errors
-                .iter()
-                .any(|e| matches!(e, ExecutionErrorKind::InsufficientFundsForWithdraw)),
-            Ok(()) => false,
-        };
-
         // Short-circuit on InsufficientFundsForWithdraw: the transaction is guaranteed to fail
         // and has nothing to execute, so skip the executor pipeline. Bump versions of mutable
-        // inputs (so locks advance) and emit effects with a zero gas cost summary.
-        if has_iffw_err(&execution_params) {
+        // inputs (so locks advance) and emit effects with a zero gas cost summary. On mainnet
+        // committed execution this is gated on the settlement-version rollout point (below it we
+        // fall through to the address-balance gas-payment pruning hotfix instead); everywhere else
+        // it applies unconditionally.
+        if should_short_circuit_insufficient_funds(&execution_params) {
             temporary_store.ensure_active_inputs_mutated();
             transaction_dependencies.remove(&TransactionDigest::genesis_marker());
 
@@ -276,8 +318,10 @@ mod checked {
         // payment except the smash target (index 0). This is the single place we apply that
         // filter: by mutating `gas_data.payment` here, `payment_kind` and
         // `compute_input_reservations` below see an already-pruned list and need no special
-        // handling. Coin entries (real `ObjectRef`s) are always kept.
-        if has_iffw_err(&execution_params)
+        // handling. Coin entries (real `ObjectRef`s) are always kept. Unconditional (not
+        // settlement-version gated): the gas-underflow hotfix already rolled out on all chains.
+        // Keys off the head error only, to stay bit-for-bit with the first single-error hotfix.
+        if head_error_is_insufficient_funds_for_withdraw(&execution_params)
             && gas_data.payment.len() > 1
             && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
         {
@@ -558,12 +602,12 @@ mod checked {
                     let mut execution_result: ResultWithTimings<
                         Mode::ExecutionResults,
                         Mode::Error,
-                    > = match execution_params {
-                        ExecutionOrEarlyError::Err(early_execution_errors) => Err((
+                    > = match execution_params.into_early_errors() {
+                        Some(early_execution_errors) => Err((
                             ExecutionError::from_kind(early_execution_errors.head).into(),
                             vec![],
                         )),
-                        ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
+                        None => execution_loop::<Mode>(
                             store,
                             temporary_store,
                             transaction_kind,
@@ -1783,5 +1827,80 @@ mod checked {
             )
             .expect("Unable to generate address_alias_state_create transaction!");
         builder
+    }
+
+    #[cfg(test)]
+    mod address_balance_smash_short_circuit_tests {
+        use super::{
+            ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION,
+            should_short_circuit_insufficient_funds,
+        };
+        use nonempty::NonEmpty;
+        use sui_types::base_types::SequenceNumber;
+        use sui_types::execution_params::ExecutionOrEarlyError;
+        use sui_types::execution_status::ExecutionErrorKind;
+
+        fn iffw(accumulator_version: Option<SequenceNumber>) -> ExecutionOrEarlyError {
+            ExecutionOrEarlyError::failed(
+                NonEmpty::new(ExecutionErrorKind::InsufficientFundsForWithdraw),
+                accumulator_version,
+            )
+        }
+
+        fn version(n: u64) -> Option<SequenceNumber> {
+            Some(SequenceNumber::from_u64(n))
+        }
+
+        #[test]
+        fn short_circuits_at_or_above_activation_version() {
+            let activation = ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION.value();
+            assert!(should_short_circuit_insufficient_funds(&iffw(version(
+                activation
+            ))));
+            if let Some(next) = activation.checked_add(1) {
+                assert!(should_short_circuit_insufficient_funds(&iffw(version(
+                    next
+                ))));
+            }
+        }
+
+        #[test]
+        fn preserves_hotfix_behavior_below_activation_version() {
+            let below = ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION.value() - 1;
+            assert!(!should_short_circuit_insufficient_funds(&iffw(version(
+                below
+            ))));
+        }
+
+        #[test]
+        fn short_circuits_without_accumulator_version() {
+            // Every non-mainnet / non-committed path passes `None`: short-circuit unconditionally.
+            assert!(should_short_circuit_insufficient_funds(&iffw(None)));
+        }
+
+        #[test]
+        fn requires_insufficient_funds_error() {
+            // Only IFFW transactions short-circuit, regardless of accumulator version.
+            assert!(!should_short_circuit_insufficient_funds(
+                &ExecutionOrEarlyError::ok(version(
+                    ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION.value()
+                ))
+            ));
+            assert!(!should_short_circuit_insufficient_funds(
+                &ExecutionOrEarlyError::ok(None)
+            ));
+            assert!(!should_short_circuit_insufficient_funds(
+                &ExecutionOrEarlyError::failed(
+                    NonEmpty::new(ExecutionErrorKind::CertificateDenied),
+                    version(ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION.value()),
+                )
+            ));
+            assert!(!should_short_circuit_insufficient_funds(
+                &ExecutionOrEarlyError::failed(
+                    NonEmpty::new(ExecutionErrorKind::CertificateDenied),
+                    None,
+                )
+            ));
+        }
     }
 }

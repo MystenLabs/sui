@@ -12,7 +12,56 @@ use crate::{
     execution_status::ExecutionErrorKind, transaction::CheckedInputObjects,
 };
 
-pub type ExecutionOrEarlyError = Result<(), NonEmpty<ExecutionErrorKind>>;
+/// Execution inputs computed before running a transaction: whether to fail it early (and with
+/// which errors), plus context for gas charging. An execution input only - never serialized into
+/// `TransactionEffects`, so adding fields here does not change effects or their digests.
+#[derive(Debug, Clone)]
+pub struct ExecutionOrEarlyError {
+    early_errors: Option<NonEmpty<ExecutionErrorKind>>,
+    /// Accumulator (settlement) root version assigned to this transaction. Gates the mainnet
+    /// address-balance gas-smash short-circuit. Populated only for mainnet committed execution;
+    /// `None` elsewhere, leaving that gate inert.
+    accumulator_version: Option<SequenceNumber>,
+}
+
+impl ExecutionOrEarlyError {
+    /// Execute the transaction normally (no predetermined early error).
+    pub fn ok(accumulator_version: Option<SequenceNumber>) -> Self {
+        Self {
+            early_errors: None,
+            accumulator_version,
+        }
+    }
+
+    /// Skip execution and fail the transaction with `errors`.
+    pub fn failed(
+        errors: NonEmpty<ExecutionErrorKind>,
+        accumulator_version: Option<SequenceNumber>,
+    ) -> Self {
+        Self {
+            early_errors: Some(errors),
+            accumulator_version,
+        }
+    }
+
+    pub fn is_ok(&self) -> bool {
+        self.early_errors.is_none()
+    }
+
+    /// The predetermined early errors, if any.
+    pub fn early_errors(&self) -> Option<&NonEmpty<ExecutionErrorKind>> {
+        self.early_errors.as_ref()
+    }
+
+    /// Consume self, returning the predetermined early errors, if any.
+    pub fn into_early_errors(self) -> Option<NonEmpty<ExecutionErrorKind>> {
+        self.early_errors
+    }
+
+    pub fn accumulator_version(&self) -> Option<SequenceNumber> {
+        self.accumulator_version
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FundsWithdrawStatus {

@@ -259,11 +259,11 @@ mod checked {
         // we must still ensure an effect is committed and all objects versions incremented
         let result = gas_charger.charge_input_objects(temporary_store);
         let mut result = result.and_then(|()| {
-            let mut execution_result = match execution_params {
-                ExecutionOrEarlyError::Err(early_execution_errors) => {
+            let mut execution_result = match execution_params.into_early_errors() {
+                Some(early_execution_errors) => {
                     Err(ExecutionError::new(early_execution_errors.head, None))
                 }
-                ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
+                None => execution_loop::<Mode>(
                     temporary_store,
                     transaction_kind,
                     tx_ctx,
