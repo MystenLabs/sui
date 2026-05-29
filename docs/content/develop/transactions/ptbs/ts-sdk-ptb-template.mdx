@@ -1,0 +1,172 @@
+---
+title: TypeScript SDK PTB Template
+sidebar_label: PTB Template
+description: A minimal starter template for building a programmable transaction block with the Sui TypeScript SDK, with separate backend keypair and frontend wallet examples.
+keywords: [ typescript sdk, ptb, programmable transaction block, transaction, sui dapp kit ]
+---
+
+A [Programmable Transaction Block](/develop/transactions/ptbs/prog-txn-blocks) (PTB) groups several onchain actions into a single transaction that succeeds or fails as a unit. This page gives you a minimal template to start from, and points you to the full guide. The Sui TypeScript SDK documentation already covers transaction building in depth, so use this page to get moving, then follow the links for the complete reference.
+
+:::tip Starter template
+
+This page is a starting point, not the full guide. For complete coverage of transaction building, including inputs, commands, results, and execution, see [Sui Programmable Transaction Basics](https://sdk.mystenlabs.com/typescript/transaction-building/basics) in the TypeScript SDK documentation.
+
+:::
+
+## Set up your project
+
+The Sui TypeScript SDK is published as an ESM only package, so a few project settings keep your imports working. Set `"type": "module"` in your `package.json`, and set `module` and `moduleResolution` in your `tsconfig.json` to a value that supports ESM, such as `NodeNext`. Avoid `commonjs`.
+
+When `tsconfig.json` uses `"module": "commonjs"`, VS Code and other editors auto-import from an internal build path instead of the package entry point. That path is not a supported entry point and can break at runtime. Compare the two:
+
+```ts
+// Wrong: auto-imported from an internal build path
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/dist/cjs/client';
+
+// Correct: import from the package entry point
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+```
+
+:::caution
+
+If an import path includes `dist/cjs`, your editor generated it from a `commonjs` configuration. Fix the path, and set `module` to `NodeNext` in your `tsconfig.json` so future imports resolve correctly.
+
+:::
+
+For a backend script that runs on Node.js, this minimal `tsconfig.json` produces correct imports:
+
+```json title='tsconfig.json'
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  }
+}
+```
+
+For a frontend app, scaffold a new project with the Sui dApp Kit starter. It sets up a working `tsconfig.json` and project structure for you:
+
+```bash
+$ npm create @mysten/dapp
+```
+
+## Build the transaction
+
+Build the PTB once in a reusable function, then execute it from either a backend script or a frontend wallet. This pattern keeps transaction construction separate from execution, which matters for wallet compatibility because the construction step must stay synchronous when a wallet popup is involved.
+
+First, install the core SDK package:
+
+```bash
+$ npm install @mysten/sui
+```
+
+The following function builds a transaction that sends 0.1 SUI to a recipient. Place it in a shared file that both your backend and frontend can import:
+
+```ts title='buildTransfer.ts'
+import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
+import { MIST_PER_SUI } from '@mysten/sui/utils';
+
+// Build a transaction that sends 0.1 SUI to a recipient.
+export function buildTransfer(recipient: string) {
+  const tx = new Transaction();
+  tx.transferObjects(
+    [coinWithBalance({ balance: BigInt(0.1 * Number(MIST_PER_SUI)) })],
+    recipient,
+  );
+  return tx;
+}
+```
+
+The `coinWithBalance` intent selects coins for the requested amount when the transaction resolves, so you do not need to pick coins yourself. The `transferObjects` command sends the resulting coin to the recipient address.
+
+## Execute from a backend script
+
+A backend script signs with a key pair that you control. Load the secret key from an environment variable, never from a hardcoded string. The following script imports the shared function, signs the transaction, executes it, and checks the result:
+
+```ts title='send.ts'
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { buildTransfer } from './buildTransfer';
+
+const client = new SuiGrpcClient({
+  network: 'devnet',
+  baseUrl: 'https://fullnode.devnet.sui.io:443',
+});
+
+// Load the secret key from the environment, never hardcode it.
+const keypair = Ed25519Keypair.fromSecretKey(process.env.SUI_SECRET_KEY!);
+
+const tx = buildTransfer('0xRecipientAddress');
+
+const result = await keypair.signAndExecuteTransaction({
+  transaction: tx,
+  client,
+  include: { effects: true },
+});
+
+if (result.$kind === 'FailedTransaction') {
+  throw new Error(`Transaction failed: ${result.FailedTransaction.status.error?.message}`);
+}
+
+console.log('Transaction digest:', result.Transaction.digest);
+```
+
+Always check the `$kind` field on the result. A transaction can be submitted and still fail onchain, so treat a `FailedTransaction` result as an error rather than assuming success.
+
+## Execute from a frontend wallet
+
+A frontend app does not hold the user's key. The user's wallet signs the transaction through Sui dApp Kit, so your code only builds the transaction and hands it to the wallet.
+
+Install Sui dApp Kit alongside the core SDK:
+
+```bash
+$ npm install @mysten/dapp-kit
+```
+
+The following component imports the same `buildTransfer` function and prompts the connected wallet to sign and execute the transaction. This example assumes a `SuiClientProvider` and `WalletProvider` already wrap your app:
+
+```tsx title='SendButton.tsx'
+import { ConnectButton, useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { buildTransfer } from './buildTransfer';
+
+export function SendButton() {
+  const currentAccount = useCurrentAccount();
+  const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+
+  return (
+    <div>
+      <ConnectButton />
+      {currentAccount && (
+        <button
+          onClick={() => {
+            signAndExecuteTransaction(
+              {
+                transaction: buildTransfer(currentAccount.address),
+                chain: 'sui:devnet',
+              },
+              {
+                onSuccess: (result) => console.log('Transaction digest:', result.digest),
+                onError: (error) => console.error(error),
+              },
+            );
+          }}
+        >
+          Send
+        </button>
+      )}
+    </div>
+  );
+}
+```
+
+The wallet sets the sender and signs the transaction, then returns the result to your `onSuccess` callback. You never touch the user's key.
+
+:::danger
+
+Never include a secret key or recovery phrase in frontend code. Anything you ship to the browser is public, so a key in frontend code is exposed to everyone who loads the page. In a frontend app, the user's wallet signs the transaction, which means your code never handles their key. Keep secret keys in backend scripts only, and load them from environment variables or a secret manager.
+
+:::

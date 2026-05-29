@@ -1,7 +1,7 @@
 ---
 title: Gas Smashing
 description: Sui optimizes coin management by combining multiple coins into a single object to pay for gas fees.
-keywords: [ gas smashing, smash gas, combine coins, combine coins into one object, create ptb for coins, create coin ptb, group coins together, group coins into ptb, create ptb with multiple coins, coin management, multiple coin management ]
+keywords: [ gas smashing, smash gas, combine coins, combine coins into one object, create ptb for coins, create coin ptb, group coins together, group coins into ptb, create ptb with multiple coins, coin management, multiple coin management, address balance gas payment, compatibility coin reservation ]
 ---
 
 <AgentPrompt
@@ -21,6 +21,16 @@ Gas smashing happens automatically in a transaction if you provide multiple coin
 This design makes gas smashing a practical way to both manage coins and pay gas in the same transaction, as you can combine many small coins while simultaneously executing unrelated operations in one PTB.
 
 You can smash at most 256 coins in a single PTB. Transactions with more than 256 gas coins fail.
+
+## Gas smashing and address balance gas payment
+
+Gas smashing applies only to real `Coin<SUI>` objects that you supply as gas payment. When you provide multiple `Coin<SUI>` objects, the network merges them into a single coin and deducts the gas fee from that coin.
+
+Address balance gas payment is different. When you pay gas from an address balance, you do not select or provide any coin objects. The network resolves the gas fee as a withdrawal from your reserved address balance funds, so there is no gas coin selection or merge workflow, and gas smashing is not needed.
+
+The compatibility layer can present compatibility coin reservations to older clients. A compatibility coin reservation is a synthetic object reference that reserves address balance funds, not a persisted `Coin<SUI>` object. Gas smashing does not merge these reservations, because the network resolves an address balance reservation as a withdrawal instead of smashing it into a coin.
+
+To pay gas from an address balance, see [Paying for gas from address balances](/onchain-finance/asset-custody/address-balances/using-address-balances#paying-for-gas-from-address-balances). For details on the compatibility layer, see [Compatibility coin reservations for legacy clients](/onchain-finance/asset-custody/address-balances/migrate-address-balances#compatibility-coin-reservations-for-legacy-clients).
 
 ## Rebates
 

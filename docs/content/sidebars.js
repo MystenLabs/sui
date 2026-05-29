@@ -92,6 +92,7 @@ export default {
             'develop/publish-upgrade-packages/upgrade',
             'develop/publish-upgrade-packages/custom-policies',
             'develop/publish-upgrade-packages/versioning',
+            'develop/publish-upgrade-packages/deploy-github-actions',
         ]
       },
       {
@@ -127,6 +128,7 @@ export default {
             'develop/transactions/ptbs/prog-txn-blocks',
             'develop/transactions/ptbs/building-ptb',
             'develop/transactions/ptbs/inputs-and-results',
+            'develop/transactions/ptbs/ts-sdk-ptb-template',
           ],
         },
         {
@@ -141,6 +143,7 @@ export default {
             'develop/transactions/transaction-auth/address-aliases',
           ],
         },
+        'develop/transactions/soft-bundles',
       ],
     },
     {
