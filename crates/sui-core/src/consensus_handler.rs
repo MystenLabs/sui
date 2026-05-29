@@ -2289,6 +2289,20 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .with_label_values(&["random"])
             .inc_by(deferred_randomness_txs.len() as u64);
 
+        {
+            let txns: Vec<_> = self
+                .epoch_store
+                .load_deferred_transactions_for_randomness_v2(&mut state.output)
+                .expect("db error")
+                .into_iter()
+                .flat_map(|(key, txns)| info!("deferred randomness txns at '{:?}' {:?}", key, txns))
+                .map(|(key, tx)| {
+                    previously_deferred_tx_digests.insert(*tx.tx().digest(), key);
+                    tx
+                })
+                .collect();
+        }
+
         (
             deferred_txs,
             deferred_randomness_txs,
