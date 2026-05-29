@@ -156,6 +156,28 @@ impl ExecutionEffects {
         }
     }
 
+    /// Find the post-execution `ObjectRef` of a specific tracked object — typically the
+    /// gas coin a workload is chaining transactions off. Prefer this over `gas_object()`
+    /// in code paths that may see the IFFW short-circuit: those transactions return
+    /// `effects.gas_object() == None` (the executor never builds gas-charge metadata),
+    /// but the input gas coin is still version-bumped via `ensure_active_inputs_mutated`
+    /// and shows up in `mutated()`.
+    pub fn updated_gas(&self, prev_id: ObjectID) -> Option<ObjectRef> {
+        if let Some((obj_ref, _)) = match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                effects.data().gas_object()
+            }
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.gas_object(),
+        } && obj_ref.0 == prev_id
+        {
+            return Some(obj_ref);
+        }
+        self.mutated()
+            .into_iter()
+            .find(|(obj_ref, _)| obj_ref.0 == prev_id)
+            .map(|(obj_ref, _)| obj_ref)
+    }
+
     pub fn sender(&self) -> SuiAddress {
         match self.gas_object().1 {
             Owner::AddressOwner(a) => a,
