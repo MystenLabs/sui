@@ -1118,5 +1118,29 @@ mod tests {
         for randomness_manager in &randomness_managers {
             assert_eq!(DkgStatus::Failed, randomness_manager.dkg_status());
         }
+
+        // Verify the failure is durably loaded on restart: a RandomnessManager reconstructed
+        // from the same epoch store must report DKG as failed (not pending), exercising the
+        // `dkg_output_v2` failure-load path in `try_new`.
+        for (i, validator) in network_config.validator_configs.iter().enumerate() {
+            let consensus_adapter = Arc::new(ConsensusAdapter::new(
+                Arc::new(MockConsensusClient::new()),
+                CheckpointStore::new_for_tests(),
+                epoch_stores[i].name,
+                100_000,
+                100_000,
+                ConsensusAdapterMetrics::new_test(),
+                Arc::new(tokio::sync::Notify::new()),
+            ));
+            let recovered_randomness_manager = RandomnessManager::try_new(
+                Arc::downgrade(&epoch_stores[i]),
+                Box::new(consensus_adapter),
+                sui_network::randomness::Handle::new_stub(),
+                validator.protocol_key_pair(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(DkgStatus::Failed, recovered_randomness_manager.dkg_status());
+        }
     }
 }

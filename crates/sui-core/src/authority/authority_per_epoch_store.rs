@@ -863,6 +863,10 @@ impl AuthorityEpochTables {
                 ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
             (
+                "dkg_output_v2".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
+            ),
+            (
                 "randomness_next_round".to_string(),
                 ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
