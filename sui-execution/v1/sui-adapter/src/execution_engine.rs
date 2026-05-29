@@ -260,8 +260,8 @@ mod checked {
         let result = gas_charger.charge_input_objects(temporary_store);
         let mut result = result.and_then(|()| {
             let mut execution_result = match execution_params {
-                ExecutionOrEarlyError::Err(early_execution_error) => {
-                    Err(ExecutionError::new(early_execution_error, None))
+                ExecutionOrEarlyError::Err(early_execution_errors) => {
+                    Err(ExecutionError::new(early_execution_errors.head, None))
                 }
                 ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
                     temporary_store,

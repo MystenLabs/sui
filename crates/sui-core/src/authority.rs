@@ -37,6 +37,7 @@ use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, fatal};
+use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use prometheus::{
     Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
@@ -1999,8 +2000,8 @@ impl AuthorityState {
             &execution_env.funds_withdraw_status,
         );
         let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
+            Some(errors) => ExecutionOrEarlyError::Err(errors),
         };
 
         // Skip on early error: the tx will fail anyway and rewriting may fail if the accumulator
@@ -2504,8 +2505,8 @@ impl AuthorityState {
             &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
+            Some(errors) => ExecutionOrEarlyError::Err(errors),
         };
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
@@ -2561,7 +2562,9 @@ impl AuthorityState {
                     protocol_config,
                     self.metrics.execution_metrics.clone(),
                     false,
-                    ExecutionOrEarlyError::Err(ExecutionErrorKind::InsufficientFundsForWithdraw),
+                    ExecutionOrEarlyError::Err(NonEmpty::new(
+                        ExecutionErrorKind::InsufficientFundsForWithdraw,
+                    )),
                     &epoch_id,
                     epoch_timestamp_ms,
                     cloned_input_objects,

@@ -357,9 +357,10 @@ mod checked {
                         Mode::ExecutionResults,
                         ExecutionError,
                     > = match execution_params {
-                        ExecutionOrEarlyError::Err(early_execution_error) => {
-                            Err((ExecutionError::new(early_execution_error, None), vec![]))
-                        }
+                        ExecutionOrEarlyError::Err(early_execution_errors) => Err((
+                            ExecutionError::new(early_execution_errors.head, None),
+                            vec![],
+                        )),
                         ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
                             store,
                             temporary_store,
