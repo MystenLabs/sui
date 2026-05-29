@@ -258,6 +258,14 @@ pub struct NodeConfig {
     /// When set, enables per-commit binary logs of congestion tracker state.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub congestion_log: Option<CongestionLogConfig>,
+
+    /// Emergency operator lever to force the current epoch to close at a specific
+    /// consensus commit, even if the epoch is otherwise blocked on deferred transactions.
+    /// All validators must set the same value (deployed via config + coordinated restart);
+    /// the consensus commit index is identical across validators, so the close is
+    /// deterministic without any in-consensus vote. See `ForceEpochCloseConfig`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub force_epoch_close: Option<ForceEpochCloseConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -337,6 +345,24 @@ pub struct ForkRecoveryConfig {
     /// Behavior when a fork is detected after recovery attempts
     #[serde(default)]
     pub fork_crash_behavior: ForkCrashBehavior,
+}
+
+/// Forces the current epoch to close at a deterministic consensus commit, regardless of
+/// any transactions deferred (e.g. due to shared-object congestion) that would normally
+/// block the end-of-epoch checkpoint.
+///
+/// The override is qualified by `epoch` because consensus restarts each epoch and the
+/// commit index resets, so a commit index alone is ambiguous. A validator only acts on
+/// this config while it is in `epoch`. Before reaching `commit_index` the validator keeps
+/// blocking the end-of-epoch checkpoint; at the first commit whose index is
+/// `>= commit_index` it transitions straight to closing the epoch.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ForceEpochCloseConfig {
+    /// The epoch this override applies to. Ignored in any other epoch.
+    pub epoch: EpochId,
+    /// Close the epoch at the first consensus commit whose index is `>= commit_index`.
+    pub commit_index: u64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

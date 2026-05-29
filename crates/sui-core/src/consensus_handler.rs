@@ -25,7 +25,7 @@ use mysten_metrics::{
 use nonempty::NonEmpty;
 use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
-use sui_config::node::CongestionLogConfig;
+use sui_config::node::{CongestionLogConfig, ForceEpochCloseConfig};
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
 use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::{
@@ -191,6 +191,7 @@ impl ConsensusHandlerInitializer {
             self.state.traffic_controller.clone(),
             self.congestion_logger.clone(),
             self.consensus_gasless_counter.clone(),
+            self.state.config.force_epoch_close.clone(),
         )
     }
 }
@@ -821,6 +822,11 @@ pub struct ConsensusHandler<C> {
     consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
 
     checkpoint_queue: Mutex<CheckpointQueue>,
+
+    /// Emergency operator override: if set and matching the current epoch, forces the
+    /// epoch to close at the configured consensus commit regardless of deferred
+    /// transactions (and keeps blocking until that commit is reached).
+    force_epoch_close: Option<ForceEpochCloseConfig>,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -839,6 +845,7 @@ impl<C> ConsensusHandler<C> {
         traffic_controller: Option<Arc<TrafficController>>,
         congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
         consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
+        force_epoch_close: Option<ForceEpochCloseConfig>,
     ) -> Self {
         assert!(
             matches!(
@@ -914,6 +921,7 @@ impl<C> ConsensusHandler<C> {
                 min_checkpoint_interval_ms,
                 execution_scheduler_sender,
             )),
+            force_epoch_close,
         }
     }
 
@@ -975,6 +983,7 @@ impl<C> ConsensusHandler<C> {
                 min_checkpoint_interval_ms,
                 execution_scheduler_sender,
             )),
+            force_epoch_close: None,
         }
     }
 }
@@ -1420,12 +1429,32 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
         let collected_eop_quorum =
             self.process_end_of_publish_transactions(state, end_of_publish_transactions);
-        if timestamp_triggered || collected_eop_quorum {
-            let (lock, final_round) = self.advance_eop_state_machine(state);
+        // The force-epoch-close override drives the state machine even if EndOfPublish
+        // quorum was never collected, so a stuck epoch can be closed unconditionally.
+        let force_close_now = self.force_epoch_close_triggered(commit_info);
+        if timestamp_triggered || collected_eop_quorum || force_close_now {
+            let (lock, final_round) = self.advance_eop_state_machine(state, commit_info);
             (lock.should_accept_tx(), Some(lock), final_round)
         } else {
             (true, None, false)
         }
+    }
+
+    /// Returns the configured force-epoch-close commit index if the override is set and
+    /// applies to the current epoch; otherwise `None`.
+    fn force_epoch_close_at_commit(&self) -> Option<u64> {
+        self.force_epoch_close
+            .as_ref()
+            .filter(|c| c.epoch == self.epoch_store.epoch())
+            .map(|c| c.commit_index)
+    }
+
+    /// True if the force-epoch-close override applies to the current epoch and this commit
+    /// is at or past the configured target commit index.
+    fn force_epoch_close_triggered(&self, commit_info: &ConsensusCommitInfo) -> bool {
+        let commit_index = u64::from(commit_info.consensus_commit_ref.index);
+        self.force_epoch_close_at_commit()
+            .is_some_and(|target| commit_index >= target)
     }
 
     fn record_end_of_epoch_execution_time_observations(
@@ -2564,6 +2593,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     fn advance_eop_state_machine(
         &self,
         state: &mut CommitHandlerState,
+        commit_info: &ConsensusCommitInfo,
     ) -> (
         RwLockWriteGuard<'_, ReconfigState>,
         bool, // true if final round
@@ -2576,7 +2606,30 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let commit_has_deferred_txns = state.output.has_deferred_transactions();
         let previous_commits_have_deferred_txns = !self.epoch_store.deferred_transactions_empty();
 
-        if !commit_has_deferred_txns && !previous_commits_have_deferred_txns {
+        if let Some(target_commit) = self.force_epoch_close_at_commit() {
+            // Emergency override: the epoch closes at exactly the configured commit,
+            // ignoring deferred transactions. Before that commit we keep blocking the
+            // end-of-epoch checkpoint even if the epoch is otherwise ready to close.
+            let commit_index = u64::from(commit_info.consensus_commit_ref.index);
+            if commit_index >= target_commit {
+                if !start_state_is_reject_all_tx {
+                    warn!(
+                        epoch = self.epoch_store.epoch(),
+                        commit_index,
+                        target_commit,
+                        deferred_txns =
+                            commit_has_deferred_txns || previous_commits_have_deferred_txns,
+                        "Force-closing epoch at configured commit, ignoring deferred transactions",
+                    );
+                }
+                reconfig_state.close_all_tx();
+            } else {
+                debug!(
+                    epoch = self.epoch_store.epoch(),
+                    commit_index, target_commit, "Blocking end of epoch until force-close commit",
+                );
+            }
+        } else if !commit_has_deferred_txns && !previous_commits_have_deferred_txns {
             if !start_state_is_reject_all_tx {
                 info!("Transitioning to RejectAllTx");
             }
@@ -3677,6 +3730,7 @@ mod tests {
             state.traffic_controller.clone(),
             None,
             state.consensus_gasless_counter.clone(),
+            None,
         );
 
         // AND create test user transactions alternating between owned and shared input.
@@ -3942,6 +3996,7 @@ mod tests {
             state.traffic_controller.clone(),
             None,
             state.consensus_gasless_counter.clone(),
+            None,
         );
 
         handler.handle_consensus_commit(commit).await;
@@ -4068,6 +4123,7 @@ mod tests {
             state.traffic_controller.clone(),
             None,
             state.consensus_gasless_counter.clone(),
+            None,
         );
 
         handler.handle_consensus_commit(commit).await;

@@ -267,6 +267,7 @@ impl ValidatorConfigBuilder {
             fork_recovery: None,
             transaction_driver_config: Some(TransactionDriverConfig::default()),
             congestion_log: None,
+            force_epoch_close: None,
         }
     }
 
@@ -618,6 +619,7 @@ impl FullnodeConfigBuilder {
                 .transaction_driver_config
                 .or(Some(TransactionDriverConfig::default())),
             congestion_log: None,
+            force_epoch_close: None,
         }
     }
 }
