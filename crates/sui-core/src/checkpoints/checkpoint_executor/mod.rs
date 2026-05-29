@@ -560,10 +560,6 @@ impl CheckpointExecutor {
                 .unwrap()
         };
 
-        pipeline_handle
-            .skip_to(PipelineStage::FinalizeTransactions)
-            .await;
-
         // Observer full nodes - that sync state via consensus as well - can verify checkpoints locally as they execute transactions
         // out of the consensus commit path. This will require some special handling here to match the behaviour when checkpoints
         // get executed out of the sync path:
@@ -571,6 +567,10 @@ impl CheckpointExecutor {
         // 2. Commit the index batches
         // 3. Update the congestion tracker
         if self.epoch_store.node_role().is_fullnode() {
+            pipeline_handle
+                .skip_to(PipelineStage::FinalizeTransactions)
+                .await;
+
             let (mut state, tx_data) =
                 self.load_checkpoint_transactions(checkpoint, Some(state_hasher));
 
@@ -606,6 +606,10 @@ impl CheckpointExecutor {
                 .iter()
                 .map(|digests| (digests.transaction, digests.effects))
                 .unzip();
+
+            pipeline_handle
+                .skip_to(PipelineStage::FinalizeTransactions)
+                .await;
 
             self.insert_finalized_transactions(&tx_digests, sequence_number);
 
