@@ -790,7 +790,7 @@ impl CheckpointExecutor {
             .expect("db error")
             .expect("checkpoint contents not found");
 
-        let make_state = |data| match state_hasher {
+        let checkpoint_state = |data| match state_hasher {
             Some(hasher) => CheckpointExecutionState::new_with_global_state_hasher(data, hasher),
             None => CheckpointExecutionState::new(data),
         };
@@ -836,7 +836,7 @@ impl CheckpointExecutor {
                 .multi_get_executed_effects_digests(&tx_digests);
 
             (
-                make_state(CheckpointExecutionData {
+                checkpoint_state(CheckpointExecutionData {
                     checkpoint,
                     checkpoint_contents,
                     tx_digests,
@@ -884,7 +884,7 @@ impl CheckpointExecutor {
                 .multi_get_executed_effects_digests(&tx_digests);
 
             (
-                make_state(CheckpointExecutionData {
+                checkpoint_state(CheckpointExecutionData {
                     checkpoint,
                     checkpoint_contents,
                     tx_digests,
