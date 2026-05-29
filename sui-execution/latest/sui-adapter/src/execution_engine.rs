@@ -217,6 +217,50 @@ mod checked {
             *epoch_id,
         );
 
+        let has_iffw_err = |params: &ExecutionOrEarlyError| match params {
+            Err(errors) => errors
+                .iter()
+                .any(|e| matches!(e, ExecutionErrorKind::InsufficientFundsForWithdraw)),
+            Ok(()) => false,
+        };
+
+        // Short-circuit on InsufficientFundsForWithdraw: the transaction is guaranteed to fail
+        // and has nothing to execute, so skip the executor pipeline. Bump versions of mutable
+        // inputs (so locks advance) and emit effects with a zero gas cost summary.
+        if has_iffw_err(&execution_params) {
+            temporary_store.ensure_active_inputs_mutated();
+            transaction_dependencies.remove(&TransactionDigest::genesis_marker());
+
+            let execution_error: Mode::Error =
+                ExecutionError::from_kind(ExecutionErrorKind::InsufficientFundsForWithdraw).into();
+            let status = ExecutionStatus::new_failure(execution_error.to_execution_failure());
+            let mut gas_meter = GasCharger::new(
+                transaction_digest,
+                PaymentKind::gasless(),
+                gas_status,
+                &mut temporary_store,
+                protocol_config,
+            );
+
+            let (inner, effects) = temporary_store.into_effects(
+                shared_object_refs,
+                &transaction_digest,
+                transaction_dependencies,
+                GasCostSummary::default(),
+                status,
+                &mut gas_meter,
+                *epoch_id,
+            );
+
+            return (
+                inner,
+                gas_meter.into_gas_status(),
+                effects,
+                vec![],
+                Err(execution_error),
+            );
+        }
+
         let sponsor = {
             let gas_owner = gas_data.owner;
             if gas_owner == transaction_signer {
@@ -233,10 +277,8 @@ mod checked {
         // filter: by mutating `gas_data.payment` here, `payment_kind` and
         // `compute_input_reservations` below see an already-pruned list and need no special
         // handling. Coin entries (real `ObjectRef`s) are always kept.
-        if matches!(
-            execution_params,
-            Err(ExecutionErrorKind::InsufficientFundsForWithdraw)
-        ) && gas_data.payment.len() > 1
+        if has_iffw_err(&execution_params)
+            && gas_data.payment.len() > 1
             && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
         {
             gas_data
@@ -517,8 +559,8 @@ mod checked {
                         Mode::ExecutionResults,
                         Mode::Error,
                     > = match execution_params {
-                        ExecutionOrEarlyError::Err(early_execution_error) => Err((
-                            ExecutionError::new(early_execution_error, None).into(),
+                        ExecutionOrEarlyError::Err(early_execution_errors) => Err((
+                            ExecutionError::from_kind(early_execution_errors.head).into(),
                             vec![],
                         )),
                         ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(

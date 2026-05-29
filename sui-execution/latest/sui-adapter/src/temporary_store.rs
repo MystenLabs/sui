@@ -1232,10 +1232,14 @@ impl TemporaryStore<'_> {
     }
 
     /// Defense-in-depth invariant on funds-accumulator events. Per `(address, type)`:
-    /// - If the pair is in `input_reservations`: net withdrawal ≤ budget.
-    /// - Else if PTB-emitted events touched it: runtime contribution must not push the net
-    ///   below Move's deposit (`actual ≥ min(0, ptb_change)`).
-    /// - Else: any event is unauthorized — fatal.
+    /// - If the pair is in `input_reservations`, net withdrawal <= budget.
+    /// - Else if the PTB emitted a Split at this key, we assume there must be an object withdrawal.
+    ///   As such, any net change is acceptable.
+    /// - Else if the PTB emitted only Merges at this key, we can assume there might not be an
+    ///   object withdrawal. In any case, the net balance at the end of the transaction should be
+    ///   non-negative, since there could be additional withdrawals from gas, but they should
+    ///   not exceed the deposits.
+    /// - Else, any event is unauthorized.
     ///
     /// Currently the only funds-accumulator type is `Balance<T>`, so the check is scoped to
     /// those events. As more accumulator shapes are added the filter and the integer
@@ -1252,34 +1256,20 @@ impl TemporaryStore<'_> {
     ///   violations surface loudly during rollout.
     pub fn check_address_balance_changes(
         &self,
-        protocol_config: &ProtocolConfig,
-        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
-    ) -> Result<(), ExecutionError> {
-        let result = self.check_address_balance_changes_impl(input_reservations);
-        if protocol_config.enforce_address_balance_change_invariant() {
-            result
-        } else {
-            if let Err(e) = result {
-                panic!("address-balance-change invariant violated pre-flag: {e}");
-            }
-            Ok(())
-        }
-    }
-
-    fn check_address_balance_changes_impl(
-        &self,
+        _protocol_config: &ProtocolConfig,
         input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
     ) -> Result<(), ExecutionError> {
         use sui_types::balance::Balance;
 
         let mut actual_changes: BTreeMap<(SuiAddress, TypeTag), i128> = BTreeMap::new();
-        let mut ptb_changes: BTreeMap<(SuiAddress, TypeTag), i128> = BTreeMap::new();
+        let mut has_ptb_withdrawals: BTreeSet<(SuiAddress, TypeTag)> = BTreeSet::new();
+        let mut has_ptb_deposits: BTreeSet<(SuiAddress, TypeTag)> = BTreeSet::new();
         for (idx, event) in self.execution_results.accumulator_events.iter().enumerate() {
             // Filter on the value shape first: only `Integer` carries the funds-flow we care
             // about. Other shapes (e.g. `EventDigest` for event-stream heads) belong to
             // non-Balance accumulators and are out of scope here. If we ever see an `Integer`
             // value at a non-`Balance<T>` type, the accounting invariants below don't apply
-            // — debug_fatal so that case is surfaced instead of silently accepted.
+            // -- debug_fatal so that case is surfaced instead of silently accepted.
             let amount = match event.write.value {
                 AccumulatorValue::Integer(amount) => amount as i128,
                 AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
@@ -1303,13 +1293,20 @@ impl TemporaryStore<'_> {
                 .any(|range| range.contains(&idx));
             let key = (event.write.address.address, event.write.address.ty.clone());
             let change = match event.write.operation {
-                AccumulatorOperation::Split => -amount,
-                AccumulatorOperation::Merge => amount,
+                AccumulatorOperation::Split => {
+                    if is_ptb_emitted {
+                        has_ptb_withdrawals.insert(key.clone());
+                    }
+                    -amount
+                }
+                AccumulatorOperation::Merge => {
+                    if is_ptb_emitted {
+                        has_ptb_deposits.insert(key.clone());
+                    }
+                    amount
+                }
             };
             *actual_changes.entry(key.clone()).or_insert(0) += change;
-            if is_ptb_emitted {
-                *ptb_changes.entry(key).or_insert(0) += change;
-            }
         }
 
         for (key, actual) in actual_changes {
@@ -1321,16 +1318,19 @@ impl TemporaryStore<'_> {
                     "Balance accumulator withdrawal exceeds reservation budget at address \
                     {address} for type {type_tag}: net Split {net_withdrawn}, budget {budget}"
                 );
-            } else if let Some(ptb_change) = ptb_changes.get(&key).copied() {
-                // Runtime-emitted withdrawals at this (address, type) are bounded by Move's
-                // net deposit at the same key: actual ≥ min(0, ptb_change). When Move
-                // deposited (ptb_change > 0), the runtime may withdraw down to 0; when Move
-                // withdrew (ptb_change < 0), the runtime may not withdraw further.
+            } else if has_ptb_withdrawals.contains(&key) {
+                // Move authorized the PTB Split against the on-chain balance, so any
+                // resulting net (including a net withdrawal beyond any PTB Merges here)
+                // is trusted.
+            } else if has_ptb_deposits.contains(&key) {
+                // PTB only deposited at this key. As such, the final net change must be
+                // non-negative, since there was no authorization for any withdrawal.
+                // We cannot compare this value to the sum of the PTB deposits due to intricacies
+                // with gas charging and storage rebate.
                 assert_invariant!(
-                    actual >= ptb_change.min(0),
-                    "PTB-emitted Balance accumulator events do not cover runtime withdrawals \
-                    at address {address} for type {type_tag}: PTB change {ptb_change}, net \
-                    change {actual}"
+                    actual >= 0,
+                    "PTB-emitted Balance accumulator deposits do not cover the runtime \
+                    withdrawal at address {address} for type {type_tag}: net change {actual}"
                 );
             } else {
                 invariant_violation!(
