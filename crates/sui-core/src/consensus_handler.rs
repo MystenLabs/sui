@@ -56,7 +56,7 @@ use sui_types::{
     },
 };
 use tokio::task::JoinSet;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::{
     authority::{
@@ -2279,6 +2279,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         } else {
             vec![]
         };
+
+        self.metrics
+            .consensus_handler_loaded_deferred_transactions
+            .with_label_values(&["normal"])
+            .inc_by(deferred_txs.len() as u64);
+        self.metrics
+            .consensus_handler_loaded_deferred_transactions
+            .with_label_values(&["random"])
+            .inc_by(deferred_randomness_txs.len() as u64);
 
         (
             deferred_txs,

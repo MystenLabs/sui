@@ -327,6 +327,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_transaction_sizes: HistogramVec,
     pub consensus_handler_deferred_transactions: IntCounter,
+    pub consensus_handler_loaded_deferred_transactions: IntCounterVec,
     pub consensus_handler_congested_transactions: IntCounter,
     pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
     pub consensus_handler_cancelled_transactions: IntCounter,
@@ -654,6 +655,12 @@ impl AuthorityMetrics {
             consensus_handler_deferred_transactions: register_int_counter_with_registry!(
                 "consensus_handler_deferred_transactions",
                 "Number of transactions deferred by consensus handler",
+                registry,
+            ).unwrap(),
+            consensus_handler_loaded_deferred_transactions: register_int_counter_vec_with_registry!(
+                "consensus_handler_loaded_deferred_transactions",
+                "Number of previously-deferred transactions loaded by consensus handler",
+                &["type"],
                 registry,
             ).unwrap(),
             consensus_handler_congested_transactions: register_int_counter_with_registry!(
