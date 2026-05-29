@@ -2260,7 +2260,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 tx
             })
             .collect();
-        trace!("loading deferred transactions: {:?}", deferred_txs);
+        info!("loading deferred transactions: {:?}", deferred_txs);
 
         let deferred_randomness_txs = if state.dkg_failed || state.randomness_round.is_some() {
             let txns: Vec<_> = self
@@ -2274,7 +2274,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     tx
                 })
                 .collect();
-            trace!("loading deferred randomness transactions: {:?}", txns);
+            info!("loading deferred randomness transactions: {:?}", txns);
             txns
         } else {
             vec![]
