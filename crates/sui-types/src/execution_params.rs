@@ -11,7 +11,58 @@ use crate::{
     execution_status::ExecutionErrorKind, transaction::CheckedInputObjects,
 };
 
-pub type ExecutionOrEarlyError = Result<(), ExecutionErrorKind>;
+/// Execution inputs computed before running a transaction: whether to fail it early (and with
+/// which error), plus context for gas charging. An execution input only — never serialized into
+/// `TransactionEffects`, so adding fields here does not change effects or their digests.
+#[derive(Debug, Clone)]
+pub struct ExecutionOrEarlyError {
+    early_error: Option<ExecutionErrorKind>,
+    /// Gates the mainnet address-balance gas-smash fix (see `should_filter_address_balance_gas_smash`).
+    /// Populated only for mainnet committed execution; `None` elsewhere, leaving that gate inert.
+    accumulator_version: Option<SequenceNumber>,
+}
+
+impl ExecutionOrEarlyError {
+    /// Execute the transaction normally (no predetermined early error).
+    pub fn ok(accumulator_version: Option<SequenceNumber>) -> Self {
+        Self {
+            early_error: None,
+            accumulator_version,
+        }
+    }
+
+    /// Skip execution and fail the transaction with `error`.
+    pub fn failed(error: ExecutionErrorKind, accumulator_version: Option<SequenceNumber>) -> Self {
+        Self {
+            early_error: Some(error),
+            accumulator_version,
+        }
+    }
+
+    pub fn is_ok(&self) -> bool {
+        self.early_error.is_none()
+    }
+
+    pub fn is_err(&self) -> bool {
+        self.early_error.is_some()
+    }
+
+    /// The predetermined early error, if any.
+    pub fn early_error(&self) -> Option<&ExecutionErrorKind> {
+        self.early_error.as_ref()
+    }
+
+    /// Consume self, returning the predetermined early error, if any.
+    pub fn into_early_error(self) -> Option<ExecutionErrorKind> {
+        self.early_error
+    }
+
+    /// Accumulator root version assigned to this transaction, if any. Populated only for mainnet
+    /// committed execution; see the field documentation.
+    pub fn accumulator_version(&self) -> Option<SequenceNumber> {
+        self.accumulator_version
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FundsWithdrawStatus {
