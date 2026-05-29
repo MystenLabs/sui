@@ -6,7 +6,7 @@ use sui_macros::*;
 use sui_simulator::has_mainnet_protocol_config_override;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
-    base_types::{FullObjectRef, ObjectID, SequenceNumber, SuiAddress},
+    base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     coin_reservation::ParsedObjectRefWithdrawal,
     digests::CheckpointDigest,
     effects::TransactionEffectsAPI,
@@ -16,7 +16,7 @@ use sui_types::{
         TransactionDataV1, TransactionExpiration, TransactionKind,
     },
 };
-use test_cluster::addr_balance_test_env::{TestEnvBuilder, get_sui_accumulator_object_id};
+use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder, get_sui_accumulator_object_id};
 
 #[sim_test]
 async fn test_coin_reservation_validation() {
@@ -1810,7 +1810,46 @@ async fn test_gas_smash_ab_target_iffw() {
 
     // Gas summary is zero: no computation or storage charges.
     let cost = tx2_effects.gas_cost_summary();
-    assert_eq!(cost.gas_used(), 0, "IFFW should charge 0 gas; got {cost:?}");
+    assert_eq!(
+        cost.computation_cost, 0,
+        "IFFW computation_cost should be 0; got {cost:?}"
+    );
+    assert_eq!(
+        cost.storage_cost, 0,
+        "IFFW storage_cost should be 0; got {cost:?}"
+    );
+    assert_eq!(
+        cost.storage_rebate, 0,
+        "IFFW storage_rebate should be 0; got {cost:?}"
+    );
+    assert_eq!(
+        cost.non_refundable_storage_fee, 0,
+        "IFFW non_refundable_storage_fee should be 0; got {cost:?}"
+    );
+
+    // Even though smashing is skipped, the gas coins are still inputs and must
+    // have their versions bumped so locks advance.
+    let mutated_ids: std::collections::BTreeMap<ObjectID, SequenceNumber> = tx2_effects
+        .mutated()
+        .into_iter()
+        .map(|(obj_ref, _owner)| (obj_ref.0, obj_ref.1))
+        .collect();
+    let mutated_real_a = mutated_ids
+        .get(&real_coin_a.0)
+        .expect("real_coin_a must appear in mutated() with a bumped version");
+    assert!(
+        *mutated_real_a > real_coin_a.1,
+        "real_coin_a version must advance: input={:?}, mutated={mutated_real_a:?}",
+        real_coin_a.1
+    );
+    let mutated_real_b = mutated_ids
+        .get(&real_coin_b.0)
+        .expect("real_coin_b must appear in mutated() with a bumped version");
+    assert!(
+        *mutated_real_b > real_coin_b.1,
+        "real_coin_b version must advance: input={:?}, mutated={mutated_real_b:?}",
+        real_coin_b.1
+    );
 
     // Both real coins retain their original balances.
     assert_eq!(
@@ -1829,6 +1868,256 @@ async fn test_gas_smash_ab_target_iffw() {
     assert_eq!(final_ab, 0, "AB should stay 0; got {final_ab}");
 
     test_env.cluster.trigger_reconfiguration().await;
+}
+
+/// Shared IFFW smash scenario. The caller supplies a closure that builds TX2's
+/// `gas_data.payment` vector and returns the subset of real coins that should
+/// appear in `mutated()` with bumped versions.
+///
+/// `total_reservation_amount` is the AB budget the closure may distribute across
+/// one or more coin reservations. Each individual reservation should be at least
+/// the default gas budget (5_000_000_000) so signing-time validation passes.
+async fn iffw_smash_scenario<F>(build_payment: F)
+where
+    F: FnOnce(&TestEnv, SuiAddress, u64, ObjectRef, ObjectRef) -> (Vec<ObjectRef>, Vec<ObjectRef>),
+{
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+
+    // Sized to support up to two reservations of 7.5B each (≥ default gas budget),
+    // and still leave `initial_ab / 2` headroom against the AB at signing time.
+    let initial_ab = 30_000_000_000u64;
+    test_env.fund_one_address_balance(sender, initial_ab).await;
+
+    let all_gas = test_env.get_gas_for_sender(sender);
+    assert!(all_gas.len() >= 2, "need ≥2 gas coins");
+
+    // Pre-step: split two coins off a genesis gas coin so they have non-zero
+    // `storage_rebate` (genesis-allocated coins have `storage_rebate = 0`).
+    let splitter_gas = all_gas[0];
+    let split_amount = 1_000_000_000u64;
+    let mut split_builder = ProgrammableTransactionBuilder::new();
+    let amt_a = split_builder.pure(split_amount).unwrap();
+    let amt_b = split_builder.pure(split_amount).unwrap();
+    let split_result =
+        split_builder.command(Command::SplitCoins(Argument::GasCoin, vec![amt_a, amt_b]));
+    let Argument::Result(split_idx) = split_result else {
+        panic!("SplitCoins should return Argument::Result");
+    };
+    let recipient_arg = split_builder.pure(sender).unwrap();
+    split_builder.command(Command::TransferObjects(
+        vec![
+            Argument::NestedResult(split_idx, 0),
+            Argument::NestedResult(split_idx, 1),
+        ],
+        recipient_arg,
+    ));
+    let split_pt = split_builder.finish();
+    let split_tx = TransactionData::new_programmable(
+        sender,
+        vec![splitter_gas],
+        split_pt,
+        test_env.rgp * 5_000_000,
+        test_env.rgp,
+    );
+    let (_, split_effects) = test_env.exec_tx_directly(split_tx).await.unwrap();
+    assert!(
+        split_effects.status().is_ok(),
+        "coin split failed: {:?}",
+        split_effects.status()
+    );
+    let split_coins: Vec<_> = split_effects
+        .created()
+        .into_iter()
+        .filter(
+            |(_, owner)| matches!(owner, sui_types::object::Owner::AddressOwner(a) if *a == sender),
+        )
+        .map(|(obj_ref, _)| obj_ref)
+        .collect();
+    assert_eq!(split_coins.len(), 2, "expected exactly two split coins");
+    let real_coin_a = split_coins[0];
+    let real_coin_b = split_coins[1];
+    let real_coin_a_balance = test_env.get_coin_balance(real_coin_a.0).await;
+    let real_coin_b_balance = test_env.get_coin_balance(real_coin_b.0).await;
+    assert_eq!(real_coin_a_balance, split_amount);
+    assert_eq!(real_coin_b_balance, split_amount);
+
+    // Re-fetch the wallet's gas list; the splitter coin's version changed.
+    let all_gas = test_env.get_gas_for_sender(sender);
+    let gas_for_tx1 = *all_gas
+        .iter()
+        .find(|g| g.0 != splitter_gas.0 && g.0 != real_coin_a.0 && g.0 != real_coin_b.0)
+        .expect("need a non-split coin to pay TX1's gas");
+
+    // TX1: drain the AB to 0 (gas comes from a real coin).
+    let dummy = SuiAddress::random_for_testing_only();
+    let tx1 = test_env
+        .tx_builder_with_gas(sender, gas_for_tx1)
+        .transfer_sui_to_address_balance(
+            FundSource::address_fund_with_reservation(initial_ab),
+            vec![(initial_ab, dummy)],
+        )
+        .build();
+
+    let total_reservation_amount = initial_ab / 2;
+    let (payment, real_coins_used) = build_payment(
+        &test_env,
+        sender,
+        total_reservation_amount,
+        real_coin_a,
+        real_coin_b,
+    );
+    let tx2 = test_env
+        .tx_builder_with_gas_objects(sender, payment)
+        .build();
+
+    let tx1_digest = tx1.digest();
+    let tx2_digest = tx2.digest();
+
+    let mut effects = test_env
+        .cluster
+        .sign_and_execute_txns_in_soft_bundle(&[tx1, tx2])
+        .await
+        .unwrap();
+
+    let tx2_effects = effects.pop().unwrap().1;
+    let tx1_effects = effects.pop().unwrap().1;
+
+    assert!(
+        tx1_effects.status().is_ok(),
+        "TX1 should succeed: {:?}",
+        tx1_effects.status()
+    );
+    let status_str = format!("{:?}", tx2_effects.status());
+    assert!(
+        status_str.contains("InsufficientFundsForWithdraw"),
+        "TX2 should fail with InsufficientFundsForWithdraw, got: {status_str}"
+    );
+
+    test_env
+        .cluster
+        .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
+        .await;
+
+    // Smashing is skipped entirely for IFFW: no coins are deleted.
+    assert!(
+        tx2_effects.deleted().is_empty(),
+        "no coins should be deleted when smashing is skipped: {:?}",
+        tx2_effects.deleted()
+    );
+
+    // Gas summary is zero across all fields.
+    let cost = tx2_effects.gas_cost_summary();
+    assert_eq!(
+        cost.computation_cost, 0,
+        "IFFW computation_cost should be 0; got {cost:?}"
+    );
+    assert_eq!(
+        cost.storage_cost, 0,
+        "IFFW storage_cost should be 0; got {cost:?}"
+    );
+    assert_eq!(
+        cost.storage_rebate, 0,
+        "IFFW storage_rebate should be 0; got {cost:?}"
+    );
+    assert_eq!(
+        cost.non_refundable_storage_fee, 0,
+        "IFFW non_refundable_storage_fee should be 0; got {cost:?}"
+    );
+
+    // Every real coin used as payment must appear in mutated() at a bumped version.
+    let mutated_ids: std::collections::BTreeMap<ObjectID, SequenceNumber> = tx2_effects
+        .mutated()
+        .into_iter()
+        .map(|(obj_ref, _owner)| (obj_ref.0, obj_ref.1))
+        .collect();
+    for real_coin in &real_coins_used {
+        let mutated_version = mutated_ids
+            .get(&real_coin.0)
+            .unwrap_or_else(|| panic!("real coin {:?} must appear in mutated()", real_coin.0));
+        assert!(
+            *mutated_version > real_coin.1,
+            "real coin {:?} version must advance: input={:?}, mutated={mutated_version:?}",
+            real_coin.0,
+            real_coin.1
+        );
+    }
+
+    // Real coin balances retained.
+    for real_coin in &real_coins_used {
+        let expected = if real_coin.0 == real_coin_a.0 {
+            real_coin_a_balance
+        } else if real_coin.0 == real_coin_b.0 {
+            real_coin_b_balance
+        } else {
+            panic!("unexpected real coin in payment: {:?}", real_coin.0);
+        };
+        assert_eq!(
+            test_env.get_coin_balance(real_coin.0).await,
+            expected,
+            "real coin {:?} balance must be unchanged",
+            real_coin.0
+        );
+    }
+
+    // AB stays at 0 — no deposit from smashing since smashing was skipped.
+    let final_ab = test_env.get_sui_balance_ab(sender);
+    assert_eq!(final_ab, 0, "AB should stay 0; got {final_ab}");
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+/// IFFW with the smash target as a real gas coin: payment = [real_coin_a, reservation].
+/// The reservation sits behind a real coin, so the real coin is the smash target.
+/// The trailing reservation still triggers IFFW once the AB is drained.
+#[sim_test]
+async fn test_gas_smash_coin_target_iffw() {
+    iffw_smash_scenario(|env, sender, reservation_amount, real_coin_a, _real_coin_b| {
+        let fake = env.encode_coin_reservation(sender, 0, reservation_amount);
+        (vec![real_coin_a, fake], vec![real_coin_a])
+    })
+    .await
+}
+
+/// IFFW with the smash target as a reservation and a single trailing real coin:
+/// payment = [reservation, real_coin_a]. AB is the target, the real coin is a
+/// non-target — minimal variant of `test_gas_smash_ab_target_iffw` (one real coin).
+#[sim_test]
+async fn test_gas_smash_coin_nontarget_iffw() {
+    iffw_smash_scenario(|env, sender, reservation_amount, real_coin_a, _real_coin_b| {
+        let fake = env.encode_coin_reservation(sender, 0, reservation_amount);
+        (vec![fake, real_coin_a], vec![real_coin_a])
+    })
+    .await
+}
+
+/// IFFW with reservations and real coins interleaved:
+/// payment = [reservation_a, real_coin_a, reservation_b, real_coin_b].
+/// Two reservations both draw from the drained AB; both real coins are non-targets
+/// at different positions in the payment vector and must still be mutated.
+#[sim_test]
+async fn test_gas_smash_interspersed_iffw() {
+    iffw_smash_scenario(|env, sender, reservation_amount, real_coin_a, real_coin_b| {
+        let half = reservation_amount / 2;
+        let fake_a = env.encode_coin_reservation(sender, 0, half);
+        let fake_b = env.encode_coin_reservation(sender, 0, half);
+        (
+            vec![fake_a, real_coin_a, fake_b, real_coin_b],
+            vec![real_coin_a, real_coin_b],
+        )
+    })
+    .await
 }
 
 fn build_fake_coin_reservation_pt(
