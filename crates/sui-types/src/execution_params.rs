@@ -40,6 +40,11 @@ pub fn get_early_execution_error(
         return Some(ExecutionErrorKind::CertificateDenied);
     }
 
+    if matches!(funds_withdraw_status, FundsWithdrawStatus::Insufficient) {
+        assert_reachable!("insufficient funds for withdraw");
+        return Some(ExecutionErrorKind::InsufficientFundsForWithdraw);
+    }
+
     if input_objects
         .inner()
         .contains_consensus_stream_ended_objects()
@@ -62,11 +67,6 @@ pub fn get_early_execution_error(
             }
             _ => panic!("invalid cancellation reason SequenceNumber: {reason}"),
         }
-    }
-
-    if matches!(funds_withdraw_status, FundsWithdrawStatus::Insufficient) {
-        assert_reachable!("insufficient funds for withdraw");
-        return Some(ExecutionErrorKind::InsufficientFundsForWithdraw);
     }
 
     None
