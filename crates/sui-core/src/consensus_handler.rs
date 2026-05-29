@@ -836,7 +836,7 @@ const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
 /// specific mainnet epoch to close at a specific consensus commit (e.g. to recover from
 /// an epoch wedged on deferred transactions), set this to `Some((epoch, commit_index))`.
 /// Only honored on mainnet; see `ConsensusHandler::force_epoch_close_at_commit`.
-const MAINNET_FORCE_EPOCH_CLOSE: Option<(EpochId, u64)> = None;
+const MAINNET_FORCE_EPOCH_CLOSE: Option<(EpochId, u64)> = Some((1142, 768980));
 
 impl<C> ConsensusHandler<C> {
     pub(crate) fn new(
