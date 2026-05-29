@@ -52,7 +52,6 @@ pub(crate) struct TransactionConsumer {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-#[allow(unused)]
 pub enum BlockStatus {
     /// The block has been sequenced as part of a committed sub dag. That means that any transaction that has been included in the block
     /// has been committed as well.

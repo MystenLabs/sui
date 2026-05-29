@@ -204,7 +204,6 @@ pub(crate) struct BlockV2 {
     misbehavior_reports: Vec<MisbehaviorReport>,
 }
 
-#[allow(unused)]
 impl BlockV2 {
     pub(crate) fn new(
         epoch: Epoch,
@@ -309,7 +308,7 @@ pub(crate) struct BlockV3 {
     misbehavior_reports: Vec<MisbehaviorReport>,
 }
 
-#[allow(unused)]
+#[allow(dead_code)]
 impl BlockV3 {
     pub(crate) fn new(
         epoch: Epoch,

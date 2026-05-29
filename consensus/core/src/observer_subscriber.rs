@@ -30,7 +30,6 @@ use crate::{
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
 /// taking care of retrying when subscription streams break. Blocks returned from peers are sent
 /// to the observer service for processing. The `ObserverSubscriber` can only subscribe to one peer at a time.
-#[allow(unused)]
 pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetworkService> {
     context: Arc<Context>,
     network_client: Arc<C>,
@@ -41,7 +40,6 @@ pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetwor
     randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
 }
 
-#[allow(unused)]
 impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, S> {
     pub(crate) fn new(
         context: Arc<Context>,
