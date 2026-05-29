@@ -12,8 +12,8 @@ use sui_config::node::{
     CheckpointExecutorConfig, DBCheckpointConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
     ExecutionCacheConfig, ExecutionTimeObserverConfig, ExpensiveSafetyCheckConfig,
     ForceEpochCloseConfig, FundsWithdrawSchedulerType, Genesis, KeyPairWithPath,
-    StateSnapshotConfig,
-    default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
+    StateSnapshotConfig, default_enable_index_processing,
+    default_end_of_epoch_broadcast_channel_capacity,
 };
 use sui_config::node::{RunWithRange, TransactionDriverConfig, default_zklogin_oauth_providers};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
