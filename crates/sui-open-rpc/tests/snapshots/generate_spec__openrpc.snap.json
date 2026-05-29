@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "125",
+              "maxSupportedProtocolVersion": "126",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1419,6 +1419,7 @@
                 "per_command_shared_object_transfer_rules": false,
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
                 "private_generics_verifier_v2": false,
+                "prune_address_balance_gas_payment_on_iffw": false,
                 "random_beacon": false,
                 "randomize_checkpoint_tx_limit_in_tests": false,
                 "receive_objects": false,
@@ -2369,6 +2370,7 @@
                 "per_command_shared_object_transfer_rules": false,
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
                 "private_generics_verifier_v2": false,
+                "prune_address_balance_gas_payment_on_iffw": false,
                 "random_beacon": false,
                 "randomize_checkpoint_tx_limit_in_tests": false,
                 "receive_objects": false,

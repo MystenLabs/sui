@@ -88,6 +88,41 @@ mod checked {
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
 
+    /// Mainnet recovery point: the fix replays for transactions at/above this accumulator root
+    /// version and keeps the old behavior below it. A compiled constant (not a protocol flag)
+    /// because it had to take effect mid-epoch during recovery, when the network can't reconfigure.
+    const ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION: SequenceNumber =
+        SequenceNumber::from_u64(692949576);
+
+    /// Mainnet-only backfill: true for an IFFW transaction at/above the recovery version.
+    /// `accumulator_version` is set only for mainnet committed execution, so this is inert on
+    /// every other chain and on non-committed paths.
+    fn mainnet_address_balance_smash_gate(execution_params: &ExecutionOrEarlyError) -> bool {
+        matches!(
+            execution_params.early_error(),
+            Some(ExecutionErrorKind::InsufficientFundsForWithdraw)
+        ) && execution_params
+            .accumulator_version()
+            .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION)
+    }
+
+    /// Whether to prune the address-balance leg of gas smashing for an IFFW transaction. The
+    /// `prune_address_balance_gas_payment_on_iffw` flag governs it on every chain from v126; the
+    /// mainnet-only accumulator backfill additionally replays the pre-flag incident hotfix.
+    fn should_filter_address_balance_gas_smash(
+        execution_params: &ExecutionOrEarlyError,
+        protocol_config: &ProtocolConfig,
+    ) -> bool {
+        if !matches!(
+            execution_params.early_error(),
+            Some(ExecutionErrorKind::InsufficientFundsForWithdraw)
+        ) {
+            return false;
+        }
+        protocol_config.prune_address_balance_gas_payment_on_iffw()
+            || mainnet_address_balance_smash_gate(execution_params)
+    }
+
     fn payment_kind(
         gas_data: &GasData,
         transaction_kind: &TransactionKind,
@@ -230,11 +265,9 @@ mod checked {
 
         // On an IFFW abort, drop the address-balance gas payments (keeping real coins) so the
         // pruned list flows into `payment_kind`/`compute_input_reservations` with no special
-        // handling.
-        if matches!(
-            execution_params,
-            Err(ExecutionErrorKind::InsufficientFundsForWithdraw)
-        ) && gas_data.payment.len() > 1
+        // handling. See `should_filter_address_balance_gas_smash` for when this applies.
+        if should_filter_address_balance_gas_smash(&execution_params, protocol_config)
+            && gas_data.payment.len() > 1
             && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
         {
             gas_data
@@ -480,11 +513,11 @@ mod checked {
                     let mut execution_result: ResultWithTimings<
                         Mode::ExecutionResults,
                         Mode::Error,
-                    > = match execution_params {
-                        ExecutionOrEarlyError::Err(early_execution_error) => {
+                    > = match execution_params.into_early_error() {
+                        Some(early_execution_error) => {
                             Err((Mode::Error::from_kind(early_execution_error), vec![]))
                         }
-                        ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
+                        None => execution_loop::<Mode>(
                             store,
                             temporary_store,
                             transaction_kind,
@@ -1697,5 +1730,62 @@ mod checked {
             )
             .expect("Unable to generate address_alias_state_create transaction!");
         builder
+    }
+
+    #[cfg(test)]
+    mod address_balance_smash_gate_tests {
+        use super::{
+            ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION, mainnet_address_balance_smash_gate,
+        };
+        use sui_types::base_types::SequenceNumber;
+        use sui_types::execution_params::ExecutionOrEarlyError;
+        use sui_types::execution_status::ExecutionErrorKind;
+
+        fn version(n: u64) -> Option<SequenceNumber> {
+            Some(SequenceNumber::from_u64(n))
+        }
+
+        #[test]
+        fn applies_at_or_above_activation_version() {
+            let activation = ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION.value();
+            for v in [activation, activation + 1] {
+                assert!(mainnet_address_balance_smash_gate(
+                    &ExecutionOrEarlyError::failed(
+                        ExecutionErrorKind::InsufficientFundsForWithdraw,
+                        version(v),
+                    )
+                ));
+            }
+        }
+
+        #[test]
+        fn preserves_old_behavior_below_activation_version() {
+            let below = ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION.value() - 1;
+            assert!(!mainnet_address_balance_smash_gate(
+                &ExecutionOrEarlyError::failed(
+                    ExecutionErrorKind::InsufficientFundsForWithdraw,
+                    version(below),
+                )
+            ));
+        }
+
+        #[test]
+        fn inert_without_accumulator_version() {
+            // No assigned accumulator version (every non-mainnet / non-committed path): the
+            // mainnet backfill must never fire, regardless of the early error.
+            let above = version(ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION.value() + 1);
+            assert!(!mainnet_address_balance_smash_gate(
+                &ExecutionOrEarlyError::ok(above)
+            ));
+            assert!(!mainnet_address_balance_smash_gate(
+                &ExecutionOrEarlyError::failed(ExecutionErrorKind::CertificateDenied, above)
+            ));
+            assert!(!mainnet_address_balance_smash_gate(
+                &ExecutionOrEarlyError::failed(
+                    ExecutionErrorKind::InsufficientFundsForWithdraw,
+                    None,
+                )
+            ));
+        }
     }
 }
