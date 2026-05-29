@@ -62,6 +62,7 @@ sui-simulator.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+async-graphql.workspace = true
 async-trait.workspace = true
 coset.workspace = true
 prost-types.workspace = true

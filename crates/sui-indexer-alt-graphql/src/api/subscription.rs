@@ -4,12 +4,19 @@
 use std::sync::Arc;
 
 use async_graphql::Context;
+use async_graphql::connection::CursorType;
+use async_graphql::connection::Edge;
+use async_graphql::connection::EmptyFields;
 use tokio::sync::broadcast;
 use tracing::warn;
 
+use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
+use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
+use crate::api::types::event::EventCursor;
 use crate::api::types::event::filter::EventFilter;
+use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::config::Limits;
@@ -29,7 +36,10 @@ impl Subscription {
     async fn checkpoints(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<impl futures::Stream<Item = Result<Checkpoint, RpcError>>, RpcError> {
+    ) -> Result<
+        impl futures::Stream<Item = Result<Edge<String, Checkpoint, EmptyFields>, RpcError>>,
+        RpcError,
+    > {
         let package_store = ctx.data::<Arc<StreamingPackageStore>>()?.clone();
         let limits: &Limits = ctx.data()?;
         let resolver_limits = limits.package_resolver();
@@ -39,16 +49,21 @@ impl Subscription {
             loop {
                 match receiver.recv().await {
                     Ok(processed) => {
+                        let sequence_number = processed.summary.sequence_number;
                         let scope = Scope::for_streamed_checkpoint(
                             package_store.clone(),
                             resolver_limits.clone(),
                             processed.clone(),
                         );
-                        yield Ok(Checkpoint {
-                            sequence_number: processed.summary.sequence_number,
-                            scope,
-                            streamed_data: Some(processed),
-                        });
+                        let cursor = CCheckpoint::new(sequence_number).encode_cursor();
+                        yield Ok(Edge::new(
+                            cursor,
+                            Checkpoint {
+                                sequence_number,
+                                scope,
+                                streamed_data: Some(processed),
+                            },
+                        ));
                     }
                     Err(e) => {
                         yield Err(broadcast_error(e));
@@ -70,7 +85,10 @@ impl Subscription {
         &self,
         ctx: &Context<'_>,
         filter: Option<TransactionFilter>,
-    ) -> Result<impl futures::Stream<Item = Result<Transaction, RpcError>>, RpcError> {
+    ) -> Result<
+        impl futures::Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>>,
+        RpcError,
+    > {
         let package_store = ctx.data::<Arc<StreamingPackageStore>>()?.clone();
         let limits: &Limits = ctx.data()?;
         let resolver_limits = limits.package_resolver();
@@ -93,7 +111,9 @@ impl Subscription {
                             if !filter.matches(&tx.contents) {
                                 continue;
                             }
-                            yield Transaction::with_contents(scope.clone(), tx.contents.clone());
+                            let cursor = CTransaction::new(tx.tx_sequence_number).encode_cursor();
+                            yield Transaction::with_contents(scope.clone(), tx.contents.clone())
+                                .map(|transaction| Edge::new(cursor, transaction));
                         }
                     }
                     Err(e) => {
@@ -116,7 +136,10 @@ impl Subscription {
         &self,
         ctx: &Context<'_>,
         filter: Option<EventFilter>,
-    ) -> Result<impl futures::Stream<Item = Result<Event, RpcError>>, RpcError> {
+    ) -> Result<
+        impl futures::Stream<Item = Result<Edge<String, Event, EmptyFields>, RpcError>>,
+        RpcError,
+    > {
         let package_store = ctx.data::<Arc<StreamingPackageStore>>()?.clone();
         let limits: &Limits = ctx.data()?;
         let resolver_limits = limits.package_resolver();
@@ -143,16 +166,24 @@ impl Subscription {
                                 if !filter.matches(&native) {
                                     continue;
                                 }
-                                yield Ok(Event {
-                                    scope: scope.with_active_transaction_contents(
-                                        digest,
-                                        tx.contents.clone(),
-                                    ),
-                                    native,
-                                    transaction_digest: digest,
-                                    sequence_number: idx as u64,
-                                    timestamp_ms,
-                                });
+                                let cursor = CEvent::new(EventCursor {
+                                    tx_sequence_number: tx.tx_sequence_number,
+                                    ev_sequence_number: idx as u64,
+                                })
+                                .encode_cursor();
+                                yield Ok(Edge::new(
+                                    cursor,
+                                    Event {
+                                        scope: scope.with_active_transaction_contents(
+                                            digest,
+                                            tx.contents.clone(),
+                                        ),
+                                        native,
+                                        transaction_digest: digest,
+                                        sequence_number: idx as u64,
+                                        timestamp_ms,
+                                    },
+                                ));
                             }
                         }
                     }
