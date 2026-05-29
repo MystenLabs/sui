@@ -14700,6 +14700,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "clap",
+ "consensus-config",
  "coset",
  "fastcrypto",
  "fastcrypto-zkp",
