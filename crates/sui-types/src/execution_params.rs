@@ -12,21 +12,13 @@ use crate::{
 };
 
 /// Execution inputs computed before running a transaction: whether to fail it early (and with
-/// which error), plus deterministic context needed during gas charging.
-///
-/// This is an execution *input* only and is never serialized into `TransactionEffects`. Unlike
-/// `ExecutionErrorKind` / `ExecutionFailureStatus`, adding fields here does not change effects or
-/// their digests — which is why the assigned accumulator version is carried here rather than
-/// embedded in the error kind.
+/// which error), plus context for gas charging. An execution input only — never serialized into
+/// `TransactionEffects`, so adding fields here does not change effects or their digests.
 #[derive(Debug, Clone)]
 pub struct ExecutionOrEarlyError {
     early_error: Option<ExecutionErrorKind>,
-    /// Accumulator root version assigned to this transaction, used to gate the mainnet
-    /// address-balance gas-smash incident fix (see `should_filter_address_balance_gas_smash` in
-    /// the execution engine). It is populated **only for mainnet committed execution**: on every
-    /// other chain — and on non-committed paths such as dev-inspect, simulation, genesis, and the
-    /// offline replay tools — it is `None`, so the accumulator-version gate is inert there and the
-    /// fix is governed solely by the `prune_address_balance_gas_payment_on_iffw` protocol flag.
+    /// Gates the mainnet address-balance gas-smash fix (see `should_filter_address_balance_gas_smash`).
+    /// Populated only for mainnet committed execution; `None` elsewhere, leaving that gate inert.
     accumulator_version: Option<SequenceNumber>,
 }
 

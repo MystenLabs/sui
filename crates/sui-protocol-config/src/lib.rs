@@ -1122,11 +1122,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     granular_post_execution_checks: bool,
 
-    // If true, when a transaction aborts early with `InsufficientFundsForWithdraw` and its gas
-    // payment mixes real coins with address-balance entries, the address-balance entries are
-    // pruned from the gas payment before smashing. This avoids underflowing the address balance
-    // at settlement (the balance was already drained to 0). When false, the unpruned payment is
-    // smashed, which can underflow the address balance and abort the settlement transaction.
+    // If true, prune address-balance entries from the gas payment before smashing on an
+    // `InsufficientFundsForWithdraw` abort. Avoids underflowing the (already-drained) address
+    // balance at settlement, which otherwise aborts the settlement transaction.
     #[serde(skip_serializing_if = "is_false")]
     prune_address_balance_gas_payment_on_iffw: bool,
 }

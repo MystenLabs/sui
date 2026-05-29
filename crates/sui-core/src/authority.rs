@@ -2000,11 +2000,8 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
-        // The accumulator-version gate for the address-balance gas-smash incident fix is a
-        // mainnet-only backfill: it reproduces the mid-epoch hotfix (which shipped before the
-        // `prune_address_balance_gas_payment_on_iffw` protocol flag existed) so mainnet replay is
-        // bit-for-bit correct. On every other chain the fix is governed solely by that flag, so we
-        // pass `None` and leave the accumulator gate inert.
+        // Mainnet-only: feed the accumulator version so the address-balance gas-smash incident
+        // hotfix replays bit-for-bit. Other chains pass `None` and rely on the protocol flag.
         let accumulator_version = if self.chain_identifier.chain() == Chain::Mainnet {
             execution_env.assigned_versions.accumulator_version
         } else {

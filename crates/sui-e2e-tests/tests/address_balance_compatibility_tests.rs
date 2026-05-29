@@ -1368,19 +1368,9 @@ async fn test_mix_coin_reservations_real_coins_and_shared_object() {
     test_env.cluster.trigger_reconfiguration().await;
 }
 
-/// Regression test: gas smashing must not underflow the address balance when a
-/// transaction fails with InsufficientFundsForWithdraw.
-///
-/// TX1 drains the AB to 0.  TX2 has gas_data.payment =
-/// [real_coin_a, real_coin_b, coin_reservation]: two real coins and a coin
-/// reservation.  After TX1 depletes the AB, the fund-checker fires IFFW for TX2.
-///
-/// With the fix, smashing is skipped entirely for IFFW transactions that have any
-/// address-balance payment.  This means:
-///   - No AB AccumulatorEvent is emitted (no underflow at settlement).
-///   - The two real coins are not merged: real_coin_b is not deleted and both coins
-///     keep their original balances (0 gas charged).
-///   - SUI conservation holds because no coin is mutated or deleted.
+/// Regression test: gas smashing must not underflow the address balance on IFFW. TX1 drains the
+/// AB to 0; TX2's gas payment mixes two real coins with a coin reservation and fires IFFW. With
+/// the fix, smashing is skipped (no underflow at settlement, no coins merged/deleted).
 #[sim_test]
 async fn test_gas_smash_no_ab_underflow_on_iffw() {
     if has_mainnet_protocol_config_override() {
