@@ -39,6 +39,7 @@ use tracing::log::log_enabled;
 use tracing::warn;
 use uuid::Uuid;
 
+use crate::config::LoggingConfig;
 use crate::error::code;
 use crate::error::error_codes;
 use crate::error::fill_error_code;
@@ -54,20 +55,13 @@ pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-req
 const CLIENT_SDK_TYPE_HEADER: HeaderName = HeaderName::from_static("client-sdk-type");
 
 /// Header identifying the SDK version that issued the request. The value is matched against
-/// `SDK_VERSION_ALLOWLIST` before being used as the `client_sdk_version` Prometheus label or
-/// recorded in request log lines; versions outside the allowlist appear as
-/// `CLIENT_LABEL_OTHER`.
+/// `LoggingConfig::sdk_version_allowlist` before being used as the `client_sdk_version`
+/// Prometheus label or recorded in request log lines; versions outside the allowlist appear
+/// as `CLIENT_LABEL_OTHER`.
 const CLIENT_SDK_VERSION_HEADER: HeaderName = HeaderName::from_static("client-sdk-version");
 
 /// SDKs we accept verbatim as the `client_sdk_type` Prometheus label.
 const SDK_TYPE_WHITELIST: &[&str] = &["rust", "typescript", "python"];
-
-/// Per-SDK list of versions we emit verbatim as the `client_sdk_version` Prometheus label.
-/// Versions outside this list map to `CLIENT_LABEL_OTHER`, which keeps label cardinality
-/// bounded by the size of this list rather than by the space of possible header values.
-/// Add an entry only when we explicitly want to track adoption or retention of a specific
-/// SDK version.
-const SDK_VERSION_ALLOWLIST: &[(&str, &[&str])] = &[];
 
 /// Sentinel label value substituted when a client SDK header is present but does not match an
 /// allowed value. Distinct from the empty string we use when the header is absent, so dashboards
@@ -131,7 +125,7 @@ impl Session {
 }
 
 impl ClientInfo {
-    pub(crate) fn from_headers(headers: &HeaderMap) -> Self {
+    pub(crate) fn from_headers(headers: &HeaderMap, config: &LoggingConfig) -> Self {
         let sdk_type = headers
             .get(&CLIENT_SDK_TYPE_HEADER)
             .and_then(|v| v.to_str().ok())
@@ -139,7 +133,7 @@ impl ClientInfo {
         let sdk_version = headers
             .get(&CLIENT_SDK_VERSION_HEADER)
             .and_then(|v| v.to_str().ok())
-            .map(|v| sanitize_sdk_version(sdk_type.as_deref().unwrap_or(""), v));
+            .map(|v| sanitize_sdk_version(sdk_type.as_deref().unwrap_or(""), v, config));
         Self {
             sdk_type,
             sdk_version,
@@ -354,13 +348,15 @@ fn sanitize_sdk_type(value: &str) -> String {
 }
 
 /// Sanitize a `client-sdk-version` header value before it is used as a Prometheus label.
-/// Returns the value verbatim if `(sdk_type, value)` is listed in `SDK_VERSION_ALLOWLIST`,
-/// otherwise `CLIENT_LABEL_OTHER`. Bounding label cardinality this way is what protects the
-/// metric against an adversarially-chosen version string.
-fn sanitize_sdk_version(sdk_type: &str, value: &str) -> String {
-    if SDK_VERSION_ALLOWLIST
-        .iter()
-        .any(|&(t, vs)| t == sdk_type && vs.contains(&value))
+/// Returns the value verbatim if `(sdk_type, value)` is listed in
+/// `LoggingConfig::sdk_version_allowlist`, otherwise `CLIENT_LABEL_OTHER`. Bounding label
+/// cardinality this way is what protects the metric against an adversarially-chosen version
+/// string.
+fn sanitize_sdk_version(sdk_type: &str, value: &str, config: &LoggingConfig) -> String {
+    if config
+        .sdk_version_allowlist
+        .get(sdk_type)
+        .is_some_and(|vs| vs.contains(value))
     {
         value.to_string()
     } else {
@@ -370,6 +366,9 @@ fn sanitize_sdk_version(sdk_type: &str, value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+    use std::collections::BTreeSet;
+
     use async_graphql::EmptyMutation;
     use async_graphql::EmptySubscription;
     use async_graphql::Object;
@@ -390,7 +389,7 @@ mod tests {
 
     #[test]
     fn client_info_missing_headers_yield_none() {
-        let info = ClientInfo::from_headers(&HeaderMap::new());
+        let info = ClientInfo::from_headers(&HeaderMap::new(), &LoggingConfig::default());
 
         assert!(info.sdk_type.is_none());
         assert!(info.sdk_version.is_none());
@@ -405,7 +404,7 @@ mod tests {
             HeaderValue::from_static("1.69.0"),
         );
 
-        let info = ClientInfo::from_headers(&headers);
+        let info = ClientInfo::from_headers(&headers, &LoggingConfig::default());
 
         assert_eq!(info.sdk_type.as_deref(), Some("rust"));
         assert_eq!(info.sdk_version.as_deref(), Some(CLIENT_LABEL_OTHER));
@@ -417,10 +416,43 @@ mod tests {
         headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("haskell"));
         headers.insert(CLIENT_SDK_VERSION_HEADER, HeaderValue::from_static("0.1.0"));
 
-        let info = ClientInfo::from_headers(&headers);
+        let info = ClientInfo::from_headers(&headers, &LoggingConfig::default());
 
         assert_eq!(info.sdk_type.as_deref(), Some(CLIENT_LABEL_OTHER));
         assert_eq!(info.sdk_version.as_deref(), Some(CLIENT_LABEL_OTHER));
+    }
+
+    #[test]
+    fn client_info_version_header_missing_yields_none() {
+        let mut headers = HeaderMap::new();
+        headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
+
+        let info = ClientInfo::from_headers(&headers, &LoggingConfig::default());
+
+        assert_eq!(info.sdk_type.as_deref(), Some("rust"));
+        assert!(info.sdk_version.is_none());
+    }
+
+    #[test]
+    fn client_info_allowlisted_version_kept_verbatim() {
+        let mut headers = HeaderMap::new();
+        headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
+        headers.insert(
+            CLIENT_SDK_VERSION_HEADER,
+            HeaderValue::from_static("1.69.0"),
+        );
+
+        let config = LoggingConfig {
+            sdk_version_allowlist: BTreeMap::from([(
+                "rust".to_string(),
+                BTreeSet::from(["1.69.0".to_string()]),
+            )]),
+        };
+
+        let info = ClientInfo::from_headers(&headers, &config);
+
+        assert_eq!(info.sdk_type.as_deref(), Some("rust"));
+        assert_eq!(info.sdk_version.as_deref(), Some("1.69.0"));
     }
 
     #[tokio::test]
