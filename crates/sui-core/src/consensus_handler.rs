@@ -27,12 +27,12 @@ use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
 use sui_config::node::{CongestionLogConfig, ForceEpochCloseConfig};
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
-use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
+use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::{
     SUI_RANDOMNESS_STATE_OBJECT_ID,
     authenticator_state::ActiveJwk,
     base_types::{
-        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, ObjectID, ObjectRef,
+        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, EpochId, ObjectID, ObjectRef,
         SequenceNumber, TransactionDigest,
     },
     crypto::RandomnessRound,
@@ -831,6 +831,13 @@ pub struct ConsensusHandler<C> {
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
 
+/// Binary-baked force-epoch-close target for mainnet emergency recovery, as
+/// `(epoch, commit_index)`. `None` in normal releases. When a release must force a
+/// specific mainnet epoch to close at a specific consensus commit (e.g. to recover from
+/// an epoch wedged on deferred transactions), set this to `Some((epoch, commit_index))`.
+/// Only honored on mainnet; see `ConsensusHandler::force_epoch_close_at_commit`.
+const MAINNET_FORCE_EPOCH_CLOSE: Option<(EpochId, u64)> = None;
+
 impl<C> ConsensusHandler<C> {
     pub(crate) fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
@@ -1440,13 +1447,35 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
     }
 
-    /// Returns the configured force-epoch-close commit index if the override is set and
-    /// applies to the current epoch; otherwise `None`.
+    /// Returns the force-epoch-close commit index in effect for the current epoch, or
+    /// `None` if the epoch should close normally.
+    ///
+    /// Two sources are consulted, in precedence order:
+    /// 1. The operator-set `NodeConfig::force_epoch_close` override (any chain). This is
+    ///    the general lever and takes precedence so an operator can always intervene.
+    /// 2. The `MAINNET_FORCE_EPOCH_CLOSE` value baked into the binary, honored only when
+    ///    running on mainnet. This lets a release force-close a known-bad mainnet epoch
+    ///    automatically, without every operator having to coordinate a config change.
+    ///
+    /// A source only applies while the node is in the epoch it names; consensus restarts
+    /// each epoch and the commit index resets, so a commit index is meaningless without
+    /// its epoch.
     fn force_epoch_close_at_commit(&self) -> Option<u64> {
-        self.force_epoch_close
-            .as_ref()
-            .filter(|c| c.epoch == self.epoch_store.epoch())
-            .map(|c| c.commit_index)
+        let epoch = self.epoch_store.epoch();
+
+        if let Some(c) = self.force_epoch_close.as_ref().filter(|c| c.epoch == epoch) {
+            return Some(c.commit_index);
+        }
+
+        // Hard-coded mainnet recovery value, baked into the binary.
+        match MAINNET_FORCE_EPOCH_CLOSE {
+            Some((target_epoch, commit_index))
+                if target_epoch == epoch && self.epoch_store.get_chain() == Chain::Mainnet =>
+            {
+                Some(commit_index)
+            }
+            _ => None,
+        }
     }
 
     /// True if the force-epoch-close override applies to the current epoch and this commit

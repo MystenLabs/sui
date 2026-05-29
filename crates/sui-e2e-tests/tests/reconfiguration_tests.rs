@@ -41,6 +41,31 @@ async fn basic_reconfig_end_to_end_test() {
 }
 
 #[sim_test]
+async fn test_force_epoch_close_at_commit() {
+    use sui_config::node::ForceEpochCloseConfig;
+
+    // Force epoch 0 to close at a specific consensus commit, with the epoch timer set
+    // far in the future so no other close path can fire. This verifies the operator
+    // override alone deterministically drives a clean epoch change, which is what lets
+    // it unstick an epoch blocked on deferred transactions. The override is qualified to
+    // epoch 0, so once epoch 1 starts the cluster proceeds normally.
+    let target_commit = 40;
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(1_000_000_000)
+        .with_force_epoch_close(ForceEpochCloseConfig {
+            epoch: 0,
+            commit_index: target_commit,
+        })
+        .build()
+        .await;
+
+    let system_state = test_cluster
+        .wait_for_epoch_with_timeout(Some(1), Duration::from_secs(120))
+        .await;
+    assert_eq!(system_state.epoch(), 1);
+}
+
+#[sim_test]
 async fn test_transaction_expiration() {
     let test_cluster = TestClusterBuilder::new().build().await;
     test_cluster.trigger_reconfiguration().await;
