@@ -133,7 +133,8 @@ impl RosettaServerCommand {
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
                 let mut client = GrpcClient::new(&full_node_url)
-                    .map_err(|e| anyhow::anyhow!("Failed to create gRPC client: {}", e))?;
+                    .map_err(|e| anyhow::anyhow!("Failed to create gRPC client: {}", e))?
+                    .with_max_decoding_message_size(128 * 1024 * 1024);
                 let chain_id = fetch_chain_id(&mut client).await?;
                 let rosetta = RosettaOnlineServer::new(env, client, chain_id);
                 rosetta.serve(addr).await;
