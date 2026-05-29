@@ -2295,11 +2295,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .load_deferred_transactions_for_randomness_v2(&mut state.output)
                 .expect("db error")
                 .into_iter()
-                .flat_map(|(key, txns)| info!("deferred randomness txns at '{:?}' {:?}", key, txns))
-                .map(|(key, tx)| {
-                    previously_deferred_tx_digests.insert(*tx.tx().digest(), key);
-                    tx
-                })
+                .map(|(key, txns)| info!("deferred randomness txns at '{:?}' {:?}", key, txns))
                 .collect();
         }
 
