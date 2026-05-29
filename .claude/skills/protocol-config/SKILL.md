@@ -1,3 +1,8 @@
+---
+name: protocol-config
+description: Safely modify or verify Sui protocol config changes, including version bumps, release-branch checks, guards, and snapshots.
+---
+
 # Modify Protocol Config
 
 Guides you through safely modifying the Sui protocol configuration, or verifies that existing changes were made correctly.

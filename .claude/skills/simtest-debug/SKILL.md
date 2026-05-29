@@ -1,3 +1,8 @@
+---
+name: simtest-debug
+description: Debug deterministic Sui simtest failures with structured experiments, logging-only changes, and NOTEBOOK.md observations.
+---
+
 # Debug a simtest failure
 
 Debugs a simtest failure using logging and the scientific method.
