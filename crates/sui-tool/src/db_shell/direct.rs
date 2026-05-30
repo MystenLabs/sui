@@ -111,8 +111,7 @@ impl DirectBackend {
                 name: digest.to_string(),
                 is_dir: false,
             });
-            if let Ok(Some(fx_digest)) = self.authority_tables.get_executed_effects_digest(digest)
-            {
+            if let Ok(Some(fx_digest)) = self.authority_tables.get_executed_effects_digest(digest) {
                 entries.push(DirEntry {
                     name: format!("{digest}.fx-{fx_digest}"),
                     is_dir: false,
@@ -127,10 +126,9 @@ impl DirectBackend {
         start: Option<CommitIndex>,
         limit: usize,
     ) -> anyhow::Result<Vec<DirEntry>> {
-        let cs = self
-            .consensus_store
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("consensus store not available; use --consensus-db-path"))?;
+        let cs = self.consensus_store.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("consensus store not available; use --consensus-db-path")
+        })?;
         let start_idx = start.unwrap_or(1);
         let commits = cs
             .scan_commits(CommitRange::new(start_idx..=CommitIndex::MAX))
@@ -221,10 +219,9 @@ impl DirectBackend {
     }
 
     fn commit_summary_json(&self, index: CommitIndex) -> anyhow::Result<serde_json::Value> {
-        let cs = self
-            .consensus_store
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("consensus store not available; use --consensus-db-path"))?;
+        let cs = self.consensus_store.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("consensus store not available; use --consensus-db-path")
+        })?;
         let commits = cs
             .scan_commits(CommitRange::new(index..=index))
             .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -361,10 +358,16 @@ impl Backend for DirectBackend {
             ]),
             VfsPath::CheckpointContentsRoot => self.list_contents_entries(None, limit),
             VfsPath::TransactionsRoot => self.list_transactions_from(None, limit),
-            VfsPath::ConsensusRoot => Ok(vec![DirEntry {
-                name: "commits".into(),
-                is_dir: true,
-            }]),
+            VfsPath::ConsensusRoot => Ok(vec![
+                DirEntry {
+                    name: "latest".into(),
+                    is_dir: false,
+                },
+                DirEntry {
+                    name: "commits".into(),
+                    is_dir: true,
+                },
+            ]),
             VfsPath::ConsensusCommitsRoot => self.list_consensus_commits(None, limit),
             VfsPath::ConsensusCommitDir(_) => Ok(vec![DirEntry {
                 name: "summary".into(),
@@ -467,10 +470,18 @@ impl Backend for DirectBackend {
                 let effects = self
                     .authority_tables
                     .get_effects_by_digest(fx_digest)?
-                    .with_context(|| {
-                        format!("effects {fx_digest} for tx {tx_digest} not found")
-                    })?;
+                    .with_context(|| format!("effects {fx_digest} for tx {tx_digest} not found"))?;
                 Ok(serde_json::to_value(&effects)?)
+            }
+            VfsPath::ConsensusLatest => {
+                let cs = self
+                    .consensus_store
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("--consensus-db-path not provided"))?;
+                let commit = cs
+                    .read_last_commit()?
+                    .ok_or_else(|| anyhow::anyhow!("no commits yet"))?;
+                Ok(serde_json::json!({ "index": commit.index() }))
             }
             VfsPath::ConsensusCommitSummary(index) => self.commit_summary_json(*index),
             _ => bail!("'{}' is not readable", path),
@@ -555,10 +566,18 @@ impl Backend for DirectBackend {
                 let effects = self
                     .authority_tables
                     .get_effects_by_digest(fx_digest)?
-                    .with_context(|| {
-                        format!("effects {fx_digest} for tx {tx_digest} not found")
-                    })?;
+                    .with_context(|| format!("effects {fx_digest} for tx {tx_digest} not found"))?;
                 Ok(format!("{effects:#?}"))
+            }
+            VfsPath::ConsensusLatest => {
+                let cs = self
+                    .consensus_store
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("--consensus-db-path not provided"))?;
+                let commit = cs
+                    .read_last_commit()?
+                    .ok_or_else(|| anyhow::anyhow!("no commits yet"))?;
+                Ok(commit.index().to_string())
             }
             VfsPath::ConsensusCommitSummary(index) => self.commit_summary_debug(*index),
             _ => bail!("'{}' is not readable", path),
@@ -633,12 +652,13 @@ impl Backend for DirectBackend {
                 let effects = self
                     .authority_tables
                     .get_effects_by_digest(fx_digest)?
-                    .with_context(|| {
-                        format!("effects {fx_digest} for tx {tx_digest} not found")
-                    })?;
+                    .with_context(|| format!("effects {fx_digest} for tx {tx_digest} not found"))?;
                 Ok(bcs::to_bytes(&effects)?)
             }
-            _ => bail!("'{}' is not readable or bcs not supported for this entry", path),
+            _ => bail!(
+                "'{}' is not readable or bcs not supported for this entry",
+                path
+            ),
         }
     }
 

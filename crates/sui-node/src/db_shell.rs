@@ -143,6 +143,7 @@ enum VfsPath {
     TransactionEntry(TransactionDigest),
     TransactionEffectsEntry(TransactionDigest, TransactionEffectsDigest),
     ConsensusRoot,
+    ConsensusLatest,
     ConsensusCommitsRoot,
     ConsensusCommitDir(u32),
     ConsensusCommitSummary(u32),
@@ -234,6 +235,7 @@ fn parse_path(s: &str) -> Result<VfsPath, ApiError> {
         ["transactions"] => VfsPath::TransactionsRoot,
         ["transactions", seg] => parse_transaction_seg(seg)?,
         ["consensus"] => VfsPath::ConsensusRoot,
+        ["consensus", "latest"] => VfsPath::ConsensusLatest,
         ["consensus", "commits"] => VfsPath::ConsensusCommitsRoot,
         ["consensus", "commits", i] => VfsPath::ConsensusCommitDir(
             i.parse()
@@ -416,10 +418,16 @@ fn list_children(
         ]),
         VfsPath::CheckpointContentsRoot => list_checkpoint_contents_from(cp_store, None, limit),
         VfsPath::TransactionsRoot => list_transactions_from(auth_store, None, limit),
-        VfsPath::ConsensusRoot => Ok(vec![DirEntry {
-            name: "commits".into(),
-            is_dir: true,
-        }]),
+        VfsPath::ConsensusRoot => Ok(vec![
+            DirEntry {
+                name: "latest".into(),
+                is_dir: false,
+            },
+            DirEntry {
+                name: "commits".into(),
+                is_dir: true,
+            },
+        ]),
         VfsPath::ConsensusCommitsRoot => list_consensus_commits_from(consensus_store, None, limit),
         VfsPath::ConsensusCommitDir(_) => Ok(vec![DirEntry {
             name: "summary".into(),
@@ -751,6 +759,20 @@ fn resolve_read(
                     not_found(format!("effects {fx_digest} for tx {tx_digest} not found"))
                 })?;
             render_value(&effects, format)
+        }
+        VfsPath::ConsensusLatest => {
+            let cs = consensus_store.ok_or_else(|| {
+                not_implemented("consensus store not available (node is not a validator)")
+            })?;
+            let commit = cs
+                .read_last_commit()
+                .map_err(|e| internal(e))?
+                .ok_or_else(|| not_found("no commits yet"))?;
+            let index = commit.index();
+            match format {
+                ReadFormat::Json => Ok(Json(serde_json::json!({ "index": index })).into_response()),
+                _ => Ok(index.to_string().into_response()),
+            }
         }
         VfsPath::ConsensusCommitSummary(index) => {
             render_consensus_commit_summary(consensus_store, *index, format)

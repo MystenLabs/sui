@@ -46,6 +46,8 @@ pub enum VfsPath {
     /// `/transactions/<txdigest>.fx-<fxdigest>`: the effects for the transaction.
     TransactionEffectsEntry(TransactionDigest, TransactionEffectsDigest),
     ConsensusRoot,
+    /// `/consensus/latest`: alias to the latest known commit index.
+    ConsensusLatest,
     ConsensusCommitsRoot,
     /// `/consensus/commits/<index>`: directory for a commit. Acts as a start cursor when used as ls arg.
     ConsensusCommitDir(CommitIndex),
@@ -114,13 +116,12 @@ impl VfsPath {
             VfsPath::CheckpointsByDigest(_) => Some(VfsPath::CheckpointsDigestRoot),
             VfsPath::CheckpointDigestSummary(d)
             | VfsPath::CheckpointDigestContents(d)
-            | VfsPath::CheckpointDigestContentsShort(d) => {
-                Some(VfsPath::CheckpointsByDigest(*d))
-            }
+            | VfsPath::CheckpointDigestContentsShort(d) => Some(VfsPath::CheckpointsByDigest(*d)),
             VfsPath::CheckpointContentsEntry(_) => Some(VfsPath::CheckpointContentsRoot),
             VfsPath::TransactionEntry(_) | VfsPath::TransactionEffectsEntry(_, _) => {
                 Some(VfsPath::TransactionsRoot)
             }
+            VfsPath::ConsensusLatest => Some(VfsPath::ConsensusRoot),
             VfsPath::ConsensusCommitsRoot => Some(VfsPath::ConsensusRoot),
             VfsPath::ConsensusCommitDir(_) => Some(VfsPath::ConsensusCommitsRoot),
             VfsPath::ConsensusCommitSummary(i) => Some(VfsPath::ConsensusCommitDir(*i)),
@@ -163,6 +164,7 @@ impl fmt::Display for VfsPath {
                 write!(f, "/transactions/{tx}.fx-{fx}")
             }
             VfsPath::ConsensusRoot => write!(f, "/consensus"),
+            VfsPath::ConsensusLatest => write!(f, "/consensus/latest"),
             VfsPath::ConsensusCommitsRoot => write!(f, "/consensus/commits"),
             VfsPath::ConsensusCommitDir(i) => write!(f, "/consensus/commits/{i}"),
             VfsPath::ConsensusCommitSummary(i) => write!(f, "/consensus/commits/{i}/summary"),
@@ -247,6 +249,7 @@ pub fn parse_path(s: &str) -> anyhow::Result<VfsPath> {
         ["transactions"] => VfsPath::TransactionsRoot,
         ["transactions", seg] => parse_transaction_seg(seg)?,
         ["consensus"] => VfsPath::ConsensusRoot,
+        ["consensus", "latest"] => VfsPath::ConsensusLatest,
         ["consensus", "commits"] => VfsPath::ConsensusCommitsRoot,
         ["consensus", "commits", i] => VfsPath::ConsensusCommitDir(
             i.parse()
