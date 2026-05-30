@@ -18,9 +18,14 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use base64::Engine;
+use consensus_core::{
+    BlockAPI as _, CommitAPI as _, CommitRange,
+    storage::{Store as ConsensusStore, rocksdb_store::RocksDBStore},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value as JsonValue;
 use std::sync::Arc;
+use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::{
     base_types::EpochId,
     digests::{
@@ -271,6 +276,7 @@ pub(crate) async fn handle_ls(
     let cp_store = state.node.clone_checkpoint_store();
     let committee_store = state.node.clone_committee_store();
     let auth_store = state.node.clone_authority_store();
+    let consensus_store = state.node.clone_consensus_store();
 
     let entries = match (&path, params.cursor) {
         (VfsPath::CheckpointsBySeq(seq), true) => {
@@ -288,7 +294,17 @@ pub(crate) async fn handle_ls(
         (VfsPath::TransactionEntry(d), true) => {
             list_transactions_from(&auth_store, Some(*d), limit)?
         }
-        _ => list_children(&path, &cp_store, &committee_store, &auth_store, limit)?,
+        (VfsPath::ConsensusCommitDir(idx), true) => {
+            list_consensus_commits_from(consensus_store.as_deref(), Some(*idx), limit)?
+        }
+        _ => list_children(
+            &path,
+            &cp_store,
+            &committee_store,
+            &auth_store,
+            consensus_store.as_deref(),
+            limit,
+        )?,
     };
 
     Ok(Json(entries))
@@ -299,6 +315,7 @@ fn list_children(
     cp_store: &sui_core::checkpoints::CheckpointStore,
     committee_store: &sui_core::epoch::committee_store::CommitteeStore,
     auth_store: &sui_core::authority::AuthorityStore,
+    consensus_store: Option<&RocksDBStore>,
     limit: usize,
 ) -> Result<Vec<DirEntry>, ApiError> {
     match path {
@@ -403,12 +420,11 @@ fn list_children(
             name: "commits".into(),
             is_dir: true,
         }]),
-        VfsPath::ConsensusCommitsRoot => {
-            Err(not_implemented("consensus listing not available in proxy mode"))
-        }
-        VfsPath::ConsensusCommitDir(index) => Err(not_implemented(format!(
-            "consensus commit {index} listing not available in proxy mode"
-        ))),
+        VfsPath::ConsensusCommitsRoot => list_consensus_commits_from(consensus_store, None, limit),
+        VfsPath::ConsensusCommitDir(index) => Ok(vec![DirEntry {
+            name: format!("{index}/summary"),
+            is_dir: false,
+        }]),
         _ => Err(bad_request(format!("path is not a directory"))),
     }
 }
@@ -514,6 +530,78 @@ fn list_transactions_from(
     Ok(entries)
 }
 
+fn list_consensus_commits_from(
+    consensus_store: Option<&RocksDBStore>,
+    start: Option<u32>,
+    limit: usize,
+) -> Result<Vec<DirEntry>, ApiError> {
+    let cs = consensus_store.ok_or_else(|| {
+        not_implemented("consensus store not available (node is not a validator)")
+    })?;
+    let start_idx = start.unwrap_or(0);
+    let end_idx = start_idx.saturating_add(limit as u32);
+    let commits = cs
+        .scan_commits(CommitRange::new(start_idx..=end_idx))
+        .map_err(|e| internal(e))?;
+    Ok(commits
+        .into_iter()
+        .map(|c| DirEntry {
+            name: c.index().to_string(),
+            is_dir: true,
+        })
+        .collect())
+}
+
+fn render_consensus_commit_summary(
+    consensus_store: Option<&RocksDBStore>,
+    index: u32,
+    format: ReadFormat,
+) -> Result<Response, ApiError> {
+    let cs = consensus_store.ok_or_else(|| {
+        not_implemented("consensus store not available (node is not a validator)")
+    })?;
+    let commits = cs
+        .scan_commits(CommitRange::new(index..=index))
+        .map_err(|e| internal(e))?;
+    let commit = commits
+        .into_iter()
+        .next()
+        .ok_or_else(|| not_found(format!("consensus commit {index} not found")))?;
+
+    let block_refs: Vec<_> = commit.blocks().to_vec();
+    let blocks = cs.read_blocks(&block_refs).map_err(|e| internal(e))?;
+
+    let mut tx_keys: Vec<String> = Vec::new();
+    for block_opt in blocks {
+        let block = match block_opt {
+            Some(b) => b,
+            None => continue,
+        };
+        for tx_bytes in block.transactions_data() {
+            if let Ok(tx) = bcs::from_bytes::<ConsensusTransaction>(tx_bytes) {
+                tx_keys.push(format!("{:?}", tx.key()));
+            }
+        }
+    }
+
+    match format {
+        ReadFormat::Json => {
+            let val = serde_json::json!({
+                "index": commit.index(),
+                "transactions": tx_keys,
+            });
+            Ok(Json(val).into_response())
+        }
+        ReadFormat::Debug | ReadFormat::Bcs | ReadFormat::RawBcs => {
+            let mut text = format!("commit {}\n", commit.index());
+            for key in &tx_keys {
+                text.push_str(&format!("  {key}\n"));
+            }
+            Ok(text.into_response())
+        }
+    }
+}
+
 // ─── read handler ─────────────────────────────────────────────────────────────
 
 pub(crate) async fn handle_read(
@@ -524,7 +612,15 @@ pub(crate) async fn handle_read(
     let cp_store = state.node.clone_checkpoint_store();
     let committee_store = state.node.clone_committee_store();
     let auth_store = state.node.clone_authority_store();
-    resolve_read(&path, &cp_store, &committee_store, &auth_store, params.format)
+    let consensus_store = state.node.clone_consensus_store();
+    resolve_read(
+        &path,
+        &cp_store,
+        &committee_store,
+        &auth_store,
+        consensus_store.as_deref(),
+        params.format,
+    )
 }
 
 fn resolve_read(
@@ -532,6 +628,7 @@ fn resolve_read(
     cp_store: &sui_core::checkpoints::CheckpointStore,
     committee_store: &sui_core::epoch::committee_store::CommitteeStore,
     auth_store: &sui_core::authority::AuthorityStore,
+    consensus_store: Option<&RocksDBStore>,
     format: ReadFormat,
 ) -> Result<Response, ApiError> {
     match path {
@@ -651,15 +748,13 @@ fn resolve_read(
                 .get_effects(fx_digest)
                 .map_err(|e| internal(e))?
                 .ok_or_else(|| {
-                    not_found(format!(
-                        "effects {fx_digest} for tx {tx_digest} not found"
-                    ))
+                    not_found(format!("effects {fx_digest} for tx {tx_digest} not found"))
                 })?;
             render_value(&effects, format)
         }
-        VfsPath::ConsensusCommitSummary(index) => Err(not_implemented(format!(
-            "consensus commit {index} not available in proxy mode"
-        ))),
+        VfsPath::ConsensusCommitSummary(index) => {
+            render_consensus_commit_summary(consensus_store, *index, format)
+        }
         VfsPath::Epoch(epoch) => Err(bad_request(format!("epoch {epoch} is a directory"))),
         _ => Err(bad_request("path is not a readable file")),
     }

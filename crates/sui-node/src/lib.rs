@@ -1702,6 +1702,17 @@ impl SuiNode {
         self.state.authority_store()
     }
 
+    pub fn clone_consensus_store(
+        &self,
+    ) -> Option<Arc<consensus_core::storage::rocksdb_store::RocksDBStore>> {
+        self.validator_components
+            .try_lock()
+            .ok()?
+            .as_ref()?
+            .consensus_manager
+            .consensus_store()
+    }
+
     /// Clone an AuthorityAggregator currently used in this node, if the node is a fullnode.
     /// After reconfig, Transaction Driver builds a new AuthorityAggregator. The caller
     /// of this function will mostly likely want to call this again
