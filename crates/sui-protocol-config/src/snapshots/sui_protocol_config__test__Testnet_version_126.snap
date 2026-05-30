@@ -167,7 +167,7 @@ feature_flags:
   timestamp_based_epoch_close: true
   limit_groth16_pvk_inputs: true
   granular_post_execution_checks: true
-  prune_address_balance_gas_payment_on_iffw: true
+  early_exit_on_iffw: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

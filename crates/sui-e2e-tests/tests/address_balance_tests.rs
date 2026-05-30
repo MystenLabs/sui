@@ -3031,7 +3031,21 @@ async fn address_balance_stress_test() {
                             } else {
                                 exec_failure_count.fetch_add(1, Ordering::Relaxed);
                             }
-                            current_gas = effects.gas_object().unwrap().0;
+                            // On the IFFW short-circuit `effects.gas_object()` is `None` (the
+                            // executor never builds gas-charge metadata), but the gas coin is
+                            // still mutated. Fall back to looking up the input gas coin in
+                            // `mutated()` so subsequent transactions can chain off its new ref.
+                            current_gas = effects
+                                .gas_object()
+                                .map(|(obj_ref, _)| obj_ref)
+                                .or_else(|| {
+                                    effects
+                                        .mutated()
+                                        .into_iter()
+                                        .find(|(obj_ref, _)| obj_ref.0 == current_gas.0)
+                                        .map(|(obj_ref, _)| obj_ref)
+                                })
+                                .expect("gas coin must be present in effects");
                         }
                         Err(err) => {
                             let err_str = err.to_string();

@@ -36,6 +36,7 @@ use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, fatal};
+use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use prometheus::{
     Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
@@ -2003,16 +2004,17 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
-        // Mainnet-only: feed the accumulator version so the address-balance gas-smash incident
-        // hotfix replays bit-for-bit. Other chains pass `None` and rely on the protocol flag.
+        // Mainnet-only: feed the accumulator (settlement) version so the address-balance gas-smash
+        // short-circuit activates at its rollout version and replays bit-for-bit. Other chains pass
+        // `None`, where the short-circuit applies unconditionally.
         let accumulator_version = if self.chain_identifier.chain() == Chain::Mainnet {
             execution_env.assigned_versions.accumulator_version
         } else {
             None
         };
         let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::failed(error, accumulator_version),
             None => ExecutionOrEarlyError::ok(accumulator_version),
+            Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),
         };
 
         // Skip on early error: the tx will fail anyway and rewriting may fail if the accumulator
@@ -2515,11 +2517,11 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &FundsWithdrawStatus::MaybeSufficient,
         );
-        // Simulation/dev-inspect path (not committed): the assigned accumulator version is not
-        // available here, so the mainnet gas-smash accumulator gate is left inactive (None).
+        // Dev-inspect/simulation path (not committed): no assigned accumulator version here, so the
+        // IFFW short-circuit applies unconditionally (`None`), matching non-mainnet execution.
         let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::failed(error, None),
             None => ExecutionOrEarlyError::ok(None),
+            Some(errors) => ExecutionOrEarlyError::failed(errors, None),
         };
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
@@ -2576,7 +2578,7 @@ impl AuthorityState {
                     self.metrics.execution_metrics.clone(),
                     false,
                     ExecutionOrEarlyError::failed(
-                        ExecutionErrorKind::InsufficientFundsForWithdraw,
+                        NonEmpty::new(ExecutionErrorKind::InsufficientFundsForWithdraw),
                         None,
                     ),
                     &epoch_id,
