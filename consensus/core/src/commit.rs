@@ -398,14 +398,10 @@ impl CommittedSubDag {
     }
 }
 
-// Sort the blocks of the sub-dag blocks by round number then authority index. Any
-// deterministic & stable algorithm works.
+// Sort the sub-dag blocks by `BlockRef` (round, author, digest). The digest tiebreaker
+// keeps the order total even when an authority equivocates within a round.
 pub(crate) fn sort_sub_dag_blocks(blocks: &mut [VerifiedBlock]) {
-    blocks.sort_by(|a, b| {
-        a.round()
-            .cmp(&b.round())
-            .then_with(|| a.author().cmp(&b.author()))
-    })
+    blocks.sort_by_key(|block| block.reference())
 }
 
 impl Display for CommittedSubDag {
@@ -772,6 +768,35 @@ mod tests {
             (num_authorities * wave_length) as usize + 1
         );
         assert_eq!(subdag.commit_ref, commit.reference());
+    }
+
+    #[tokio::test]
+    async fn test_sort_sub_dag_blocks_total_order_under_equivocation() {
+        // Two blocks with the same (round, author) but different content, i.e. an
+        // equivocating authority. They tie on (round, author) and differ only by digest.
+        let block_a =
+            VerifiedBlock::new_for_test(TestBlock::new(2, 1).set_timestamp_ms(10).build());
+        let block_b =
+            VerifiedBlock::new_for_test(TestBlock::new(2, 1).set_timestamp_ms(20).build());
+        assert_eq!(block_a.round(), block_b.round());
+        assert_eq!(block_a.author(), block_b.author());
+        assert_ne!(block_a.digest(), block_b.digest());
+
+        // The sorted order must not depend on the order blocks were collected in, so that
+        // every validator linearizes the sub-dag identically.
+        let mut forward = vec![block_a.clone(), block_b.clone()];
+        let mut reverse = vec![block_b.clone(), block_a.clone()];
+        sort_sub_dag_blocks(&mut forward);
+        sort_sub_dag_blocks(&mut reverse);
+
+        let forward_order: Vec<_> = forward.iter().map(|block| block.reference()).collect();
+        let reverse_order: Vec<_> = reverse.iter().map(|block| block.reference()).collect();
+        assert_eq!(forward_order, reverse_order);
+
+        // The order is exactly `BlockRef` (round, author, digest) order.
+        let mut expected = vec![block_a.reference(), block_b.reference()];
+        expected.sort();
+        assert_eq!(forward_order, expected);
     }
 
     #[tokio::test]
