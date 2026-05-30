@@ -158,6 +158,7 @@ use typed_store::rocks::default_db_options;
 use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 
 pub mod admin;
+pub mod db_shell;
 mod handle;
 pub mod metrics;
 
@@ -1691,6 +1692,10 @@ impl SuiNode {
 
     pub fn clone_committee_store(&self) -> Arc<CommitteeStore> {
         self.state.committee_store().clone()
+    }
+
+    pub fn clone_checkpoint_store(&self) -> Arc<CheckpointStore> {
+        self.checkpoint_store.clone()
     }
 
     /*
