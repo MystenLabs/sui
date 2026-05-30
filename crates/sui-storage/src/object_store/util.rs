@@ -38,6 +38,8 @@ use tracing::{error, warn};
 use url::Url;
 
 pub const MANIFEST_FILENAME: &str = "MANIFEST";
+const DEFAULT_ARCHIVAL_INGESTION_TIMEOUT_SECS: u64 = 5;
+const DEFAULT_ARCHIVAL_INGESTION_MAX_RETRIES: usize = 10;
 
 #[derive(Serialize, Deserialize)]
 
@@ -443,13 +445,30 @@ pub fn build_object_store(
     ingestion_url: &str,
     remote_store_options: Vec<(String, String)>,
 ) -> Arc<dyn ObjectStore> {
-    let timeout_secs = 5;
+    build_object_store_with_config(
+        ingestion_url,
+        remote_store_options,
+        DEFAULT_ARCHIVAL_INGESTION_TIMEOUT_SECS,
+        DEFAULT_ARCHIVAL_INGESTION_MAX_RETRIES,
+    )
+}
+
+pub fn build_object_store_with_config(
+    ingestion_url: &str,
+    remote_store_options: Vec<(String, String)>,
+    timeout_secs: u64,
+    max_retries: usize,
+) -> Arc<dyn ObjectStore> {
     let client_options = ClientOptions::new()
         .with_timeout(Duration::from_secs(timeout_secs))
         .with_allow_http(true);
     let retry_config = RetryConfig {
-        max_retries: 10,
-        retry_timeout: Duration::from_secs(timeout_secs + 1),
+        max_retries,
+        retry_timeout: Duration::from_secs(
+            timeout_secs
+                .saturating_add(1)
+                .saturating_mul(max_retries.saturating_add(1) as u64),
+        ),
         ..Default::default()
     };
     let url = ingestion_url
@@ -529,7 +548,23 @@ pub async fn end_of_epoch_data(
     url: &str,
     remote_store_options: Vec<(String, String)>,
 ) -> anyhow::Result<Vec<CheckpointSequenceNumber>> {
-    let store = build_object_store(url, remote_store_options);
+    end_of_epoch_data_with_config(
+        url,
+        remote_store_options,
+        DEFAULT_ARCHIVAL_INGESTION_TIMEOUT_SECS,
+        DEFAULT_ARCHIVAL_INGESTION_MAX_RETRIES,
+    )
+    .await
+}
+
+pub async fn end_of_epoch_data_with_config(
+    url: &str,
+    remote_store_options: Vec<(String, String)>,
+    timeout_secs: u64,
+    max_retries: usize,
+) -> anyhow::Result<Vec<CheckpointSequenceNumber>> {
+    let store =
+        build_object_store_with_config(url, remote_store_options, timeout_secs, max_retries);
     let response = store.get(&Path::from("epochs.json")).await?;
     let bytes = response.bytes().await?;
     Ok(serde_json::from_slice(&bytes)?)
