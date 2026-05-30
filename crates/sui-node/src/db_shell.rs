@@ -421,8 +421,8 @@ fn list_children(
             is_dir: true,
         }]),
         VfsPath::ConsensusCommitsRoot => list_consensus_commits_from(consensus_store, None, limit),
-        VfsPath::ConsensusCommitDir(index) => Ok(vec![DirEntry {
-            name: format!("{index}/summary"),
+        VfsPath::ConsensusCommitDir(_) => Ok(vec![DirEntry {
+            name: "summary".into(),
             is_dir: false,
         }]),
         _ => Err(bad_request(format!("path is not a directory"))),
