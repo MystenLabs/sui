@@ -23,7 +23,9 @@ use serde_json::value::Value as JsonValue;
 use std::sync::Arc;
 use sui_types::{
     base_types::EpochId,
-    digests::{CheckpointContentsDigest, CheckpointDigest},
+    digests::{
+        CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEffectsDigest,
+    },
     messages_checkpoint::CheckpointSequenceNumber,
 };
 
@@ -102,6 +104,10 @@ fn internal(msg: impl std::fmt::Display) -> ApiError {
     ApiError(StatusCode::INTERNAL_SERVER_ERROR, msg.to_string())
 }
 
+fn not_implemented(msg: impl std::fmt::Display) -> ApiError {
+    ApiError(StatusCode::NOT_IMPLEMENTED, msg.to_string())
+}
+
 // ─── path parsing ─────────────────────────────────────────────────────────────
 
 #[derive(Debug)]
@@ -120,12 +126,21 @@ enum VfsPath {
     CheckpointsBySeq(CheckpointSequenceNumber),
     CheckpointSeqSummary(CheckpointSequenceNumber),
     CheckpointSeqContents(CheckpointSequenceNumber),
+    CheckpointSeqContentsShort(CheckpointSequenceNumber),
     CheckpointsDigestRoot,
     CheckpointsByDigest(CheckpointDigest),
     CheckpointDigestSummary(CheckpointDigest),
     CheckpointDigestContents(CheckpointDigest),
+    CheckpointDigestContentsShort(CheckpointDigest),
     CheckpointContentsRoot,
     CheckpointContentsEntry(CheckpointContentsDigest),
+    TransactionsRoot,
+    TransactionEntry(TransactionDigest),
+    TransactionEffectsEntry(TransactionDigest, TransactionEffectsDigest),
+    ConsensusRoot,
+    ConsensusCommitsRoot,
+    ConsensusCommitDir(u32),
+    ConsensusCommitSummary(u32),
 }
 
 fn parse_path(s: &str) -> Result<VfsPath, ApiError> {
@@ -185,6 +200,10 @@ fn parse_path(s: &str) -> Result<VfsPath, ApiError> {
             s.parse()
                 .map_err(|_| bad_request(format!("invalid sequence: {s}")))?,
         ),
+        ["checkpoints", "seq", s, "contents-short"] => VfsPath::CheckpointSeqContentsShort(
+            s.parse()
+                .map_err(|_| bad_request(format!("invalid sequence: {s}")))?,
+        ),
         ["checkpoints", "digest"] => VfsPath::CheckpointsDigestRoot,
         ["checkpoints", "digest", d] => VfsPath::CheckpointsByDigest(
             d.parse()
@@ -198,14 +217,47 @@ fn parse_path(s: &str) -> Result<VfsPath, ApiError> {
             d.parse()
                 .map_err(|_| bad_request(format!("invalid digest: {d}")))?,
         ),
+        ["checkpoints", "digest", d, "contents-short"] => VfsPath::CheckpointDigestContentsShort(
+            d.parse()
+                .map_err(|_| bad_request(format!("invalid digest: {d}")))?,
+        ),
         ["checkpoint-contents"] => VfsPath::CheckpointContentsRoot,
         ["checkpoint-contents", d] => VfsPath::CheckpointContentsEntry(
             d.parse()
                 .map_err(|_| bad_request(format!("invalid contents digest: {d}")))?,
         ),
+        ["transactions"] => VfsPath::TransactionsRoot,
+        ["transactions", seg] => parse_transaction_seg(seg)?,
+        ["consensus"] => VfsPath::ConsensusRoot,
+        ["consensus", "commits"] => VfsPath::ConsensusCommitsRoot,
+        ["consensus", "commits", i] => VfsPath::ConsensusCommitDir(
+            i.parse()
+                .map_err(|_| bad_request(format!("invalid commit index: {i}")))?,
+        ),
+        ["consensus", "commits", i, "summary"] => VfsPath::ConsensusCommitSummary(
+            i.parse()
+                .map_err(|_| bad_request(format!("invalid commit index: {i}")))?,
+        ),
         _ => return Err(bad_request(format!("unknown path: {s}"))),
     };
     Ok(r)
+}
+
+fn parse_transaction_seg(seg: &str) -> Result<VfsPath, ApiError> {
+    if let Some((tx_str, fx_str)) = seg.split_once(".fx-") {
+        let tx: TransactionDigest = tx_str
+            .parse()
+            .map_err(|_| bad_request(format!("invalid transaction digest: {tx_str}")))?;
+        let fx: TransactionEffectsDigest = fx_str
+            .parse()
+            .map_err(|_| bad_request(format!("invalid effects digest: {fx_str}")))?;
+        Ok(VfsPath::TransactionEffectsEntry(tx, fx))
+    } else {
+        let tx: TransactionDigest = seg
+            .parse()
+            .map_err(|_| bad_request(format!("invalid transaction digest: {seg}")))?;
+        Ok(VfsPath::TransactionEntry(tx))
+    }
 }
 
 // ─── ls handler ───────────────────────────────────────────────────────────────
@@ -218,6 +270,7 @@ pub(crate) async fn handle_ls(
     let limit = params.limit.min(1000);
     let cp_store = state.node.clone_checkpoint_store();
     let committee_store = state.node.clone_committee_store();
+    let auth_store = state.node.clone_authority_store();
 
     let entries = match (&path, params.cursor) {
         (VfsPath::CheckpointsBySeq(seq), true) => {
@@ -232,7 +285,10 @@ pub(crate) async fn handle_ls(
         (VfsPath::CheckpointContentsEntry(d), true) => {
             list_checkpoint_contents_from(&cp_store, Some(*d), limit)?
         }
-        _ => list_children(&path, &cp_store, &committee_store, limit)?,
+        (VfsPath::TransactionEntry(d), true) => {
+            list_transactions_from(&auth_store, Some(*d), limit)?
+        }
+        _ => list_children(&path, &cp_store, &committee_store, &auth_store, limit)?,
     };
 
     Ok(Json(entries))
@@ -242,6 +298,7 @@ fn list_children(
     path: &VfsPath,
     cp_store: &sui_core::checkpoints::CheckpointStore,
     committee_store: &sui_core::epoch::committee_store::CommitteeStore,
+    auth_store: &sui_core::authority::AuthorityStore,
     limit: usize,
 ) -> Result<Vec<DirEntry>, ApiError> {
     match path {
@@ -256,6 +313,14 @@ fn list_children(
             },
             DirEntry {
                 name: "checkpoint-contents".into(),
+                is_dir: true,
+            },
+            DirEntry {
+                name: "transactions".into(),
+                is_dir: true,
+            },
+            DirEntry {
+                name: "consensus".into(),
                 is_dir: true,
             },
         ]),
@@ -312,6 +377,10 @@ fn list_children(
                 name: "contents".into(),
                 is_dir: false,
             },
+            DirEntry {
+                name: "contents-short".into(),
+                is_dir: false,
+            },
         ]),
         VfsPath::CheckpointsDigestRoot => list_checkpoint_digests_from(cp_store, None, limit),
         VfsPath::CheckpointsByDigest(_) => Ok(vec![
@@ -323,8 +392,23 @@ fn list_children(
                 name: "contents".into(),
                 is_dir: false,
             },
+            DirEntry {
+                name: "contents-short".into(),
+                is_dir: false,
+            },
         ]),
         VfsPath::CheckpointContentsRoot => list_checkpoint_contents_from(cp_store, None, limit),
+        VfsPath::TransactionsRoot => list_transactions_from(auth_store, None, limit),
+        VfsPath::ConsensusRoot => Ok(vec![DirEntry {
+            name: "commits".into(),
+            is_dir: true,
+        }]),
+        VfsPath::ConsensusCommitsRoot => {
+            Err(not_implemented("consensus listing not available in proxy mode"))
+        }
+        VfsPath::ConsensusCommitDir(index) => Err(not_implemented(format!(
+            "consensus commit {index} listing not available in proxy mode"
+        ))),
         _ => Err(bad_request(format!("path is not a directory"))),
     }
 }
@@ -406,6 +490,30 @@ fn list_epoch_checkpoints_from(
         .map_err(|e| internal(e))
 }
 
+fn list_transactions_from(
+    auth_store: &sui_core::authority::AuthorityStore,
+    start: Option<TransactionDigest>,
+    limit: usize,
+) -> Result<Vec<DirEntry>, ApiError> {
+    let tx_digests = auth_store
+        .list_transactions_from(start, limit)
+        .map_err(|e| internal(e))?;
+    let mut entries = Vec::with_capacity(tx_digests.len() * 2);
+    for digest in &tx_digests {
+        entries.push(DirEntry {
+            name: digest.to_string(),
+            is_dir: false,
+        });
+        if let Ok(Some(fx_digest)) = auth_store.get_executed_effects_digest_for_tx(digest) {
+            entries.push(DirEntry {
+                name: format!("{digest}.fx-{fx_digest}"),
+                is_dir: false,
+            });
+        }
+    }
+    Ok(entries)
+}
+
 // ─── read handler ─────────────────────────────────────────────────────────────
 
 pub(crate) async fn handle_read(
@@ -415,13 +523,15 @@ pub(crate) async fn handle_read(
     let path = parse_path(&params.path)?;
     let cp_store = state.node.clone_checkpoint_store();
     let committee_store = state.node.clone_committee_store();
-    resolve_read(&path, &cp_store, &committee_store, params.format)
+    let auth_store = state.node.clone_authority_store();
+    resolve_read(&path, &cp_store, &committee_store, &auth_store, params.format)
 }
 
 fn resolve_read(
     path: &VfsPath,
     cp_store: &sui_core::checkpoints::CheckpointStore,
     committee_store: &sui_core::epoch::committee_store::CommitteeStore,
+    auth_store: &sui_core::authority::AuthorityStore,
     format: ReadFormat,
 ) -> Result<Response, ApiError> {
     match path {
@@ -482,6 +592,17 @@ fn resolve_read(
                 .ok_or_else(|| not_found(format!("contents for checkpoint {seq} not found")))?;
             render_value(&contents, format)
         }
+        VfsPath::CheckpointSeqContentsShort(seq) => {
+            let cp = cp_store
+                .get_checkpoint_by_sequence_number(*seq)
+                .map_err(|e| internal(e))?
+                .ok_or_else(|| not_found(format!("checkpoint {seq} not found")))?;
+            let contents = cp_store
+                .get_checkpoint_contents(&cp.content_digest)
+                .map_err(|e| internal(e))?
+                .ok_or_else(|| not_found(format!("contents for checkpoint {seq} not found")))?;
+            render_contents_short(&contents, format)
+        }
         VfsPath::CheckpointDigestSummary(digest) => {
             let cp = cp_store
                 .get_checkpoint_by_digest(digest)
@@ -500,6 +621,17 @@ fn resolve_read(
                 .ok_or_else(|| not_found(format!("contents for checkpoint {digest} not found")))?;
             render_value(&contents, format)
         }
+        VfsPath::CheckpointDigestContentsShort(digest) => {
+            let cp = cp_store
+                .get_checkpoint_by_digest(digest)
+                .map_err(|e| internal(e))?
+                .ok_or_else(|| not_found(format!("checkpoint {digest} not found")))?;
+            let contents = cp_store
+                .get_checkpoint_contents(&cp.content_digest)
+                .map_err(|e| internal(e))?
+                .ok_or_else(|| not_found(format!("contents for checkpoint {digest} not found")))?;
+            render_contents_short(&contents, format)
+        }
         VfsPath::CheckpointContentsEntry(digest) => {
             let contents = cp_store
                 .get_checkpoint_contents(digest)
@@ -507,7 +639,59 @@ fn resolve_read(
                 .ok_or_else(|| not_found(format!("checkpoint contents {digest} not found")))?;
             render_value(&contents, format)
         }
+        VfsPath::TransactionEntry(digest) => {
+            let tx = auth_store
+                .get_transaction_block(digest)
+                .map_err(|e| internal(e))?
+                .ok_or_else(|| not_found(format!("transaction {digest} not found")))?;
+            render_value(tx.data(), format)
+        }
+        VfsPath::TransactionEffectsEntry(tx_digest, fx_digest) => {
+            let effects = auth_store
+                .get_effects(fx_digest)
+                .map_err(|e| internal(e))?
+                .ok_or_else(|| {
+                    not_found(format!(
+                        "effects {fx_digest} for tx {tx_digest} not found"
+                    ))
+                })?;
+            render_value(&effects, format)
+        }
+        VfsPath::ConsensusCommitSummary(index) => Err(not_implemented(format!(
+            "consensus commit {index} not available in proxy mode"
+        ))),
+        VfsPath::Epoch(epoch) => Err(bad_request(format!("epoch {epoch} is a directory"))),
         _ => Err(bad_request("path is not a readable file")),
+    }
+}
+
+fn render_contents_short(
+    contents: &sui_types::messages_checkpoint::CheckpointContents,
+    format: ReadFormat,
+) -> Result<Response, ApiError> {
+    match format {
+        ReadFormat::Json => {
+            let pairs: Vec<JsonValue> = contents
+                .iter()
+                .map(|ed| {
+                    serde_json::json!({
+                        "transaction": ed.transaction.to_string(),
+                        "effects": ed.effects.to_string(),
+                    })
+                })
+                .collect();
+            Ok(Json(JsonValue::Array(pairs)).into_response())
+        }
+        ReadFormat::Debug => {
+            let mut text = String::new();
+            for ed in contents.iter() {
+                text.push_str(&format!("{} {}\n", ed.transaction, ed.effects));
+            }
+            Ok(text.into_response())
+        }
+        ReadFormat::Bcs | ReadFormat::RawBcs => Err(bad_request(
+            "bcs not supported for contents-short; use 'contents' instead",
+        )),
     }
 }
 

@@ -1698,11 +1698,9 @@ impl SuiNode {
         self.checkpoint_store.clone()
     }
 
-    /*
     pub fn clone_authority_store(&self) -> Arc<AuthorityStore> {
-        self.state.db()
+        self.state.authority_store()
     }
-    */
 
     /// Clone an AuthorityAggregator currently used in this node, if the node is a fullnode.
     /// After reconfig, Transaction Driver builds a new AuthorityAggregator. The caller

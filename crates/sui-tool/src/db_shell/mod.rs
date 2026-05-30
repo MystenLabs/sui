@@ -20,10 +20,15 @@ pub mod vfs;
 
 use anyhow::{Context, bail};
 use clap::Parser;
+use consensus_core::storage::rocksdb_store::RocksDBStore;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_core::{
-    authority::authority_store_pruner::PrunerWatermarks, checkpoints::CheckpointStore,
+    authority::{
+        authority_store_pruner::PrunerWatermarks,
+        authority_store_tables::AuthorityPerpetualTables,
+    },
+    checkpoints::CheckpointStore,
     epoch::committee_store::CommitteeStore,
 };
 use sui_types::committee::Committee;
@@ -66,6 +71,11 @@ pub struct DbShellArgs {
     /// Initial working directory (default: /).
     #[arg(long, default_value = "/")]
     pub start_path: String,
+
+    /// Path to the consensus database directory (direct mode only).
+    /// Enables the /consensus namespace. Typically at <config_dir>/consensus_db/<key>.
+    #[arg(long)]
+    pub consensus_db_path: Option<PathBuf>,
 }
 
 pub fn run(args: DbShellArgs) -> anyhow::Result<()> {
@@ -92,9 +102,27 @@ pub fn run(args: DbShellArgs) -> anyhow::Result<()> {
                 None,
             ));
 
+            let authority_tables = Arc::new(AuthorityPerpetualTables::open(
+                &db_path.join("store"),
+                None,
+                None,
+            ));
+
+            let consensus_store = if let Some(path) = &args.consensus_db_path {
+                let path_str = path
+                    .to_str()
+                    .with_context(|| format!("invalid consensus DB path: {}", path.display()))?;
+                eprintln!("Opening consensus database at {path_str}");
+                Some(Arc::new(RocksDBStore::new(path_str)))
+            } else {
+                None
+            };
+
             Arc::new(DirectBackend {
                 checkpoint_store,
                 committee_store,
+                authority_tables,
+                consensus_store,
             })
         }
         (None, None) => {

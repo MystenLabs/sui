@@ -624,6 +624,34 @@ impl AuthorityPerpetualTables {
         Ok(Some(transaction))
     }
 
+    pub fn list_transactions_from(
+        &self,
+        start: Option<TransactionDigest>,
+        limit: usize,
+    ) -> Result<Vec<TransactionDigest>, typed_store::TypedStoreError> {
+        let iter = self.transactions.safe_iter_with_bounds(start, None);
+        let mut result = Vec::with_capacity(limit);
+        for item in iter.take(limit) {
+            let (digest, _) = item?;
+            result.push(digest);
+        }
+        Ok(result)
+    }
+
+    pub fn get_executed_effects_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<TransactionEffectsDigest>, typed_store::TypedStoreError> {
+        self.executed_effects.get(tx_digest)
+    }
+
+    pub fn get_effects_by_digest(
+        &self,
+        effects_digest: &TransactionEffectsDigest,
+    ) -> Result<Option<TransactionEffects>, typed_store::TypedStoreError> {
+        self.effects.get(effects_digest)
+    }
+
     /// Batch insert executed transaction digests for a given epoch.
     /// Used by formal snapshot restore to backfill transaction digests from the previous epoch.
     pub fn insert_executed_transaction_digests_batch(

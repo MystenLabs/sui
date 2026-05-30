@@ -5,12 +5,20 @@
 //! Used when sui-node is not running and the database files can be opened directly.
 
 use anyhow::{Context, bail};
+use consensus_core::{
+    BlockAPI, CommitAPI, CommitIndex, CommitRange,
+    storage::{Store as ConsensusStore, rocksdb_store::RocksDBStore},
+};
 use std::sync::Arc;
-use sui_core::{checkpoints::CheckpointStore, epoch::committee_store::CommitteeStore};
+use sui_core::{
+    authority::authority_store_tables::AuthorityPerpetualTables, checkpoints::CheckpointStore,
+    epoch::committee_store::CommitteeStore,
+};
 use sui_types::{
     base_types::EpochId,
-    digests::{CheckpointContentsDigest, CheckpointDigest},
+    digests::{CheckpointContentsDigest, CheckpointDigest, TransactionDigest},
     messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint},
+    messages_consensus::ConsensusTransaction,
 };
 
 use crate::db_shell::{
@@ -21,6 +29,8 @@ use crate::db_shell::{
 pub struct DirectBackend {
     pub checkpoint_store: Arc<CheckpointStore>,
     pub committee_store: Arc<CommitteeStore>,
+    pub authority_tables: Arc<AuthorityPerpetualTables>,
+    pub consensus_store: Option<Arc<RocksDBStore>>,
 }
 
 impl DirectBackend {
@@ -89,6 +99,52 @@ impl DirectBackend {
             .collect())
     }
 
+    fn list_transactions_from(
+        &self,
+        start: Option<TransactionDigest>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<DirEntry>> {
+        let tx_digests = self.authority_tables.list_transactions_from(start, limit)?;
+        let mut entries = Vec::with_capacity(tx_digests.len() * 2);
+        for digest in &tx_digests {
+            entries.push(DirEntry {
+                name: digest.to_string(),
+                is_dir: false,
+            });
+            if let Ok(Some(fx_digest)) = self.authority_tables.get_executed_effects_digest(digest)
+            {
+                entries.push(DirEntry {
+                    name: format!("{digest}.fx-{fx_digest}"),
+                    is_dir: false,
+                });
+            }
+        }
+        Ok(entries)
+    }
+
+    fn list_consensus_commits(
+        &self,
+        start: Option<CommitIndex>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<DirEntry>> {
+        let cs = self
+            .consensus_store
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("consensus store not available; use --consensus-db-path"))?;
+        let start_idx = start.unwrap_or(1);
+        let commits = cs
+            .scan_commits(CommitRange::new(start_idx..=CommitIndex::MAX))
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        Ok(commits
+            .into_iter()
+            .take(limit)
+            .map(|c| DirEntry {
+                name: c.index().to_string(),
+                is_dir: true,
+            })
+            .collect())
+    }
+
     fn get_checkpoint_by_seq(
         &self,
         seq: CheckpointSequenceNumber,
@@ -116,6 +172,30 @@ impl DirectBackend {
             .with_context(|| format!("contents for checkpoint {} not found", cp.sequence_number()))
     }
 
+    fn contents_short_text(&self, contents: &CheckpointContents) -> String {
+        let mut out = String::new();
+        for ed in contents.iter() {
+            out.push_str(&format!("{} {}\n", ed.transaction, ed.effects));
+        }
+        out
+    }
+
+    fn contents_short_json(
+        &self,
+        contents: &CheckpointContents,
+    ) -> anyhow::Result<serde_json::Value> {
+        let pairs: Vec<_> = contents
+            .iter()
+            .map(|ed| {
+                serde_json::json!({
+                    "transaction": ed.transaction.to_string(),
+                    "effects": ed.effects.to_string(),
+                })
+            })
+            .collect();
+        Ok(serde_json::Value::Array(pairs))
+    }
+
     fn summary_json(&self, cp: &VerifiedCheckpoint) -> anyhow::Result<serde_json::Value> {
         Ok(serde_json::to_value(cp.data())?)
     }
@@ -139,6 +219,48 @@ impl DirectBackend {
     fn contents_bcs(&self, contents: &CheckpointContents) -> anyhow::Result<Vec<u8>> {
         Ok(bcs::to_bytes(contents)?)
     }
+
+    fn commit_summary_json(&self, index: CommitIndex) -> anyhow::Result<serde_json::Value> {
+        let cs = self
+            .consensus_store
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("consensus store not available; use --consensus-db-path"))?;
+        let commits = cs
+            .scan_commits(CommitRange::new(index..=index))
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let commit = commits
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("commit {index} not found"))?;
+
+        let block_refs: Vec<_> = commit.blocks().to_vec();
+        let blocks = cs
+            .read_blocks(&block_refs)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+        let mut tx_keys = Vec::new();
+        for block in blocks.iter().flatten() {
+            for tx_bytes in block.transactions_data() {
+                if let Ok(tx) = bcs::from_bytes::<ConsensusTransaction>(tx_bytes) {
+                    tx_keys.push(format!("{:?}", tx.key()));
+                }
+            }
+        }
+
+        Ok(serde_json::json!({
+            "index": commit.index(),
+            "timestamp_ms": commit.timestamp_ms(),
+            "leader": commit.leader().to_string(),
+            "previous_digest": commit.previous_digest().to_string(),
+            "block_count": block_refs.len(),
+            "transactions": tx_keys,
+        }))
+    }
+
+    fn commit_summary_debug(&self, index: CommitIndex) -> anyhow::Result<String> {
+        let json = self.commit_summary_json(index)?;
+        Ok(format!("{json:#}"))
+    }
 }
 
 impl Backend for DirectBackend {
@@ -155,6 +277,14 @@ impl Backend for DirectBackend {
                 },
                 DirEntry {
                     name: "checkpoint-contents".into(),
+                    is_dir: true,
+                },
+                DirEntry {
+                    name: "transactions".into(),
+                    is_dir: true,
+                },
+                DirEntry {
+                    name: "consensus".into(),
                     is_dir: true,
                 },
             ]),
@@ -209,6 +339,10 @@ impl Backend for DirectBackend {
                     name: "contents".into(),
                     is_dir: false,
                 },
+                DirEntry {
+                    name: "contents-short".into(),
+                    is_dir: false,
+                },
             ]),
             VfsPath::CheckpointsDigestRoot => self.list_digest_dirs(None, limit),
             VfsPath::CheckpointsByDigest(_) => Ok(vec![
@@ -220,8 +354,22 @@ impl Backend for DirectBackend {
                     name: "contents".into(),
                     is_dir: false,
                 },
+                DirEntry {
+                    name: "contents-short".into(),
+                    is_dir: false,
+                },
             ]),
             VfsPath::CheckpointContentsRoot => self.list_contents_entries(None, limit),
+            VfsPath::TransactionsRoot => self.list_transactions_from(None, limit),
+            VfsPath::ConsensusRoot => Ok(vec![DirEntry {
+                name: "commits".into(),
+                is_dir: true,
+            }]),
+            VfsPath::ConsensusCommitsRoot => self.list_consensus_commits(None, limit),
+            VfsPath::ConsensusCommitDir(_) => Ok(vec![DirEntry {
+                name: "summary".into(),
+                is_dir: false,
+            }]),
             _ => bail!("'{}' is not a directory", path),
         }
     }
@@ -234,6 +382,8 @@ impl Backend for DirectBackend {
                 self.list_epoch_checkpoint_dirs(*epoch, Some(*seq), limit)
             }
             VfsPath::CheckpointContentsEntry(d) => self.list_contents_entries(Some(*d), limit),
+            VfsPath::TransactionEntry(d) => self.list_transactions_from(Some(*d), limit),
+            VfsPath::ConsensusCommitDir(i) => self.list_consensus_commits(Some(*i), limit),
             // For non-cursor paths, fall back to children listing.
             _ => self.ls_children(path, limit),
         }
@@ -280,6 +430,11 @@ impl Backend for DirectBackend {
                 let contents = self.get_checkpoint_contents(&cp)?;
                 self.contents_json(&contents)
             }
+            VfsPath::CheckpointSeqContentsShort(seq) => {
+                let cp = self.get_checkpoint_by_seq(*seq)?;
+                let contents = self.get_checkpoint_contents(&cp)?;
+                self.contents_short_json(&contents)
+            }
             VfsPath::CheckpointDigestSummary(digest) => {
                 let cp = self.get_checkpoint_by_digest(digest)?;
                 self.summary_json(&cp)
@@ -289,6 +444,11 @@ impl Backend for DirectBackend {
                 let contents = self.get_checkpoint_contents(&cp)?;
                 self.contents_json(&contents)
             }
+            VfsPath::CheckpointDigestContentsShort(digest) => {
+                let cp = self.get_checkpoint_by_digest(digest)?;
+                let contents = self.get_checkpoint_contents(&cp)?;
+                self.contents_short_json(&contents)
+            }
             VfsPath::CheckpointContentsEntry(digest) => {
                 let contents = self
                     .checkpoint_store
@@ -296,6 +456,23 @@ impl Backend for DirectBackend {
                     .with_context(|| format!("checkpoint contents {digest} not found"))?;
                 self.contents_json(&contents)
             }
+            VfsPath::TransactionEntry(digest) => {
+                let tx = self
+                    .authority_tables
+                    .get_transaction(digest)?
+                    .with_context(|| format!("transaction {digest} not found"))?;
+                Ok(serde_json::to_value(&tx)?)
+            }
+            VfsPath::TransactionEffectsEntry(tx_digest, fx_digest) => {
+                let effects = self
+                    .authority_tables
+                    .get_effects_by_digest(fx_digest)?
+                    .with_context(|| {
+                        format!("effects {fx_digest} for tx {tx_digest} not found")
+                    })?;
+                Ok(serde_json::to_value(&effects)?)
+            }
+            VfsPath::ConsensusCommitSummary(index) => self.commit_summary_json(*index),
             _ => bail!("'{}' is not readable", path),
         }
     }
@@ -341,6 +518,11 @@ impl Backend for DirectBackend {
                 let contents = self.get_checkpoint_contents(&cp)?;
                 Ok(self.contents_debug(&contents))
             }
+            VfsPath::CheckpointSeqContentsShort(seq) => {
+                let cp = self.get_checkpoint_by_seq(*seq)?;
+                let contents = self.get_checkpoint_contents(&cp)?;
+                Ok(self.contents_short_text(&contents))
+            }
             VfsPath::CheckpointDigestSummary(digest) => {
                 let cp = self.get_checkpoint_by_digest(digest)?;
                 Ok(self.summary_debug(&cp))
@@ -350,6 +532,11 @@ impl Backend for DirectBackend {
                 let contents = self.get_checkpoint_contents(&cp)?;
                 Ok(self.contents_debug(&contents))
             }
+            VfsPath::CheckpointDigestContentsShort(digest) => {
+                let cp = self.get_checkpoint_by_digest(digest)?;
+                let contents = self.get_checkpoint_contents(&cp)?;
+                Ok(self.contents_short_text(&contents))
+            }
             VfsPath::CheckpointContentsEntry(digest) => {
                 let contents = self
                     .checkpoint_store
@@ -357,6 +544,23 @@ impl Backend for DirectBackend {
                     .with_context(|| format!("checkpoint contents {digest} not found"))?;
                 Ok(self.contents_debug(&contents))
             }
+            VfsPath::TransactionEntry(digest) => {
+                let tx = self
+                    .authority_tables
+                    .get_transaction(digest)?
+                    .with_context(|| format!("transaction {digest} not found"))?;
+                Ok(format!("{tx:#?}"))
+            }
+            VfsPath::TransactionEffectsEntry(tx_digest, fx_digest) => {
+                let effects = self
+                    .authority_tables
+                    .get_effects_by_digest(fx_digest)?
+                    .with_context(|| {
+                        format!("effects {fx_digest} for tx {tx_digest} not found")
+                    })?;
+                Ok(format!("{effects:#?}"))
+            }
+            VfsPath::ConsensusCommitSummary(index) => self.commit_summary_debug(*index),
             _ => bail!("'{}' is not readable", path),
         }
     }
@@ -418,7 +622,23 @@ impl Backend for DirectBackend {
                     .with_context(|| format!("checkpoint contents {digest} not found"))?;
                 self.contents_bcs(&contents)
             }
-            _ => bail!("'{}' is not readable", path),
+            VfsPath::TransactionEntry(digest) => {
+                let tx = self
+                    .authority_tables
+                    .get_transaction(digest)?
+                    .with_context(|| format!("transaction {digest} not found"))?;
+                Ok(bcs::to_bytes(&tx)?)
+            }
+            VfsPath::TransactionEffectsEntry(tx_digest, fx_digest) => {
+                let effects = self
+                    .authority_tables
+                    .get_effects_by_digest(fx_digest)?
+                    .with_context(|| {
+                        format!("effects {fx_digest} for tx {tx_digest} not found")
+                    })?;
+                Ok(bcs::to_bytes(&effects)?)
+            }
+            _ => bail!("'{}' is not readable or bcs not supported for this entry", path),
         }
     }
 

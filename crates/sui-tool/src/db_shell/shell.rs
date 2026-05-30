@@ -254,17 +254,24 @@ Available commands:
 
 Virtual filesystem structure:
 
-  /epochs/<epoch>/first-checkpoint      First checkpoint of the epoch
-  /epochs/<epoch>/last-checkpoint       Last checkpoint of the epoch
-  /epochs/<epoch>/committee             Validator committee for the epoch
-  /epochs/<epoch>/checkpoints/<seq>     Individual checkpoint in the epoch
+  /epochs/<epoch>/first-checkpoint         First checkpoint of the epoch
+  /epochs/<epoch>/last-checkpoint          Last checkpoint of the epoch
+  /epochs/<epoch>/committee                Validator committee for the epoch
+  /epochs/<epoch>/checkpoints/<seq>        Individual checkpoint in the epoch
 
-  /checkpoints/seq/<seq>/summary        Checkpoint summary by sequence number
-  /checkpoints/seq/<seq>/contents       Checkpoint contents by sequence number
-  /checkpoints/digest/<digest>/summary  Checkpoint summary by digest
-  /checkpoints/digest/<digest>/contents Checkpoint contents by digest
+  /checkpoints/seq/<seq>/summary           Checkpoint summary by sequence number
+  /checkpoints/seq/<seq>/contents          Checkpoint contents by sequence number
+  /checkpoints/seq/<seq>/contents-short    tx/fx digest pairs, one per line
+  /checkpoints/digest/<digest>/summary     Checkpoint summary by digest
+  /checkpoints/digest/<digest>/contents    Checkpoint contents by digest
+  /checkpoints/digest/<digest>/contents-short  tx/fx digest pairs, one per line
 
-  /checkpoint-contents/<digest>         Raw checkpoint contents by contents digest
+  /checkpoint-contents/<digest>            Raw checkpoint contents by contents digest
+
+  /transactions/<txdigest>                 A transaction
+  /transactions/<txdigest>.fx-<fxdigest>   Its effects
+
+  /consensus/commits/<index>/summary       Consensus commit summary with transaction keys
 
 Listing behaviour:
 

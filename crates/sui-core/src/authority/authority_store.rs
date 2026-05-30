@@ -1177,6 +1177,21 @@ impl AuthorityStore {
             .map(|v| v.map(|v| v.into()))
     }
 
+    pub fn list_transactions_from(
+        &self,
+        start: Option<TransactionDigest>,
+        limit: usize,
+    ) -> Result<Vec<TransactionDigest>, TypedStoreError> {
+        self.perpetual_tables.list_transactions_from(start, limit)
+    }
+
+    pub fn get_executed_effects_digest_for_tx(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<TransactionEffectsDigest>, TypedStoreError> {
+        self.perpetual_tables.get_executed_effects_digest(tx_digest)
+    }
+
     /// This function reads the DB directly to get the system state object.
     /// If reconfiguration is happening at the same time, there is no guarantee whether we would be getting
     /// the old or the new system state object.

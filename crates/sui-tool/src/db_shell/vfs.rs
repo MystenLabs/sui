@@ -4,10 +4,13 @@
 //! Virtual filesystem path types for the db-shell.
 
 use anyhow::anyhow;
+use consensus_core::CommitIndex;
 use std::fmt;
 use sui_types::{
     base_types::EpochId,
-    digests::{CheckpointContentsDigest, CheckpointDigest},
+    digests::{
+        CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEffectsDigest,
+    },
     messages_checkpoint::CheckpointSequenceNumber,
 };
 
@@ -24,17 +27,29 @@ pub enum VfsPath {
     EpochCheckpointByDigest(EpochId, CheckpointDigest),
     CheckpointsRoot,
     CheckpointsSeqRoot,
-    /// `/checkpoints/seq/<seq>`: directory containing `summary` and `contents`.
+    /// `/checkpoints/seq/<seq>`: directory containing `summary`, `contents`, `contents-short`.
     /// When given as an explicit `ls` argument, acts as a start cursor.
     CheckpointsBySeq(CheckpointSequenceNumber),
     CheckpointSeqSummary(CheckpointSequenceNumber),
     CheckpointSeqContents(CheckpointSequenceNumber),
+    CheckpointSeqContentsShort(CheckpointSequenceNumber),
     CheckpointsDigestRoot,
     CheckpointsByDigest(CheckpointDigest),
     CheckpointDigestSummary(CheckpointDigest),
     CheckpointDigestContents(CheckpointDigest),
+    CheckpointDigestContentsShort(CheckpointDigest),
     CheckpointContentsRoot,
     CheckpointContentsEntry(CheckpointContentsDigest),
+    TransactionsRoot,
+    /// `/transactions/<txdigest>`: the transaction. Acts as a start cursor when used as ls arg.
+    TransactionEntry(TransactionDigest),
+    /// `/transactions/<txdigest>.fx-<fxdigest>`: the effects for the transaction.
+    TransactionEffectsEntry(TransactionDigest, TransactionEffectsDigest),
+    ConsensusRoot,
+    ConsensusCommitsRoot,
+    /// `/consensus/commits/<index>`: directory for a commit. Acts as a start cursor when used as ls arg.
+    ConsensusCommitDir(CommitIndex),
+    ConsensusCommitSummary(CommitIndex),
 }
 
 impl VfsPath {
@@ -51,6 +66,10 @@ impl VfsPath {
                 | VfsPath::CheckpointsDigestRoot
                 | VfsPath::CheckpointsByDigest(_)
                 | VfsPath::CheckpointContentsRoot
+                | VfsPath::TransactionsRoot
+                | VfsPath::ConsensusRoot
+                | VfsPath::ConsensusCommitsRoot
+                | VfsPath::ConsensusCommitDir(_)
         )
     }
 
@@ -63,6 +82,8 @@ impl VfsPath {
                 | VfsPath::CheckpointsByDigest(_)
                 | VfsPath::EpochCheckpointBySeq(_, _)
                 | VfsPath::CheckpointContentsEntry(_)
+                | VfsPath::TransactionEntry(_)
+                | VfsPath::ConsensusCommitDir(_)
         )
     }
 
@@ -70,9 +91,11 @@ impl VfsPath {
     pub fn parent(&self) -> Option<VfsPath> {
         match self {
             VfsPath::Root => None,
-            VfsPath::Epochs | VfsPath::CheckpointsRoot | VfsPath::CheckpointContentsRoot => {
-                Some(VfsPath::Root)
-            }
+            VfsPath::Epochs
+            | VfsPath::CheckpointsRoot
+            | VfsPath::CheckpointContentsRoot
+            | VfsPath::TransactionsRoot
+            | VfsPath::ConsensusRoot => Some(VfsPath::Root),
             VfsPath::Epoch(_) => Some(VfsPath::Epochs),
             VfsPath::EpochFirstCheckpoint(e)
             | VfsPath::EpochLastCheckpoint(e)
@@ -85,14 +108,22 @@ impl VfsPath {
                 Some(VfsPath::CheckpointsRoot)
             }
             VfsPath::CheckpointsBySeq(_) => Some(VfsPath::CheckpointsSeqRoot),
-            VfsPath::CheckpointSeqSummary(s) | VfsPath::CheckpointSeqContents(s) => {
-                Some(VfsPath::CheckpointsBySeq(*s))
-            }
+            VfsPath::CheckpointSeqSummary(s)
+            | VfsPath::CheckpointSeqContents(s)
+            | VfsPath::CheckpointSeqContentsShort(s) => Some(VfsPath::CheckpointsBySeq(*s)),
             VfsPath::CheckpointsByDigest(_) => Some(VfsPath::CheckpointsDigestRoot),
-            VfsPath::CheckpointDigestSummary(d) | VfsPath::CheckpointDigestContents(d) => {
+            VfsPath::CheckpointDigestSummary(d)
+            | VfsPath::CheckpointDigestContents(d)
+            | VfsPath::CheckpointDigestContentsShort(d) => {
                 Some(VfsPath::CheckpointsByDigest(*d))
             }
             VfsPath::CheckpointContentsEntry(_) => Some(VfsPath::CheckpointContentsRoot),
+            VfsPath::TransactionEntry(_) | VfsPath::TransactionEffectsEntry(_, _) => {
+                Some(VfsPath::TransactionsRoot)
+            }
+            VfsPath::ConsensusCommitsRoot => Some(VfsPath::ConsensusRoot),
+            VfsPath::ConsensusCommitDir(_) => Some(VfsPath::ConsensusCommitsRoot),
+            VfsPath::ConsensusCommitSummary(i) => Some(VfsPath::ConsensusCommitDir(*i)),
         }
     }
 }
@@ -114,12 +145,27 @@ impl fmt::Display for VfsPath {
             VfsPath::CheckpointsBySeq(s) => write!(f, "/checkpoints/seq/{s}"),
             VfsPath::CheckpointSeqSummary(s) => write!(f, "/checkpoints/seq/{s}/summary"),
             VfsPath::CheckpointSeqContents(s) => write!(f, "/checkpoints/seq/{s}/contents"),
+            VfsPath::CheckpointSeqContentsShort(s) => {
+                write!(f, "/checkpoints/seq/{s}/contents-short")
+            }
             VfsPath::CheckpointsDigestRoot => write!(f, "/checkpoints/digest"),
             VfsPath::CheckpointsByDigest(d) => write!(f, "/checkpoints/digest/{d}"),
             VfsPath::CheckpointDigestSummary(d) => write!(f, "/checkpoints/digest/{d}/summary"),
             VfsPath::CheckpointDigestContents(d) => write!(f, "/checkpoints/digest/{d}/contents"),
+            VfsPath::CheckpointDigestContentsShort(d) => {
+                write!(f, "/checkpoints/digest/{d}/contents-short")
+            }
             VfsPath::CheckpointContentsRoot => write!(f, "/checkpoint-contents"),
             VfsPath::CheckpointContentsEntry(d) => write!(f, "/checkpoint-contents/{d}"),
+            VfsPath::TransactionsRoot => write!(f, "/transactions"),
+            VfsPath::TransactionEntry(d) => write!(f, "/transactions/{d}"),
+            VfsPath::TransactionEffectsEntry(tx, fx) => {
+                write!(f, "/transactions/{tx}.fx-{fx}")
+            }
+            VfsPath::ConsensusRoot => write!(f, "/consensus"),
+            VfsPath::ConsensusCommitsRoot => write!(f, "/consensus/commits"),
+            VfsPath::ConsensusCommitDir(i) => write!(f, "/consensus/commits/{i}"),
+            VfsPath::ConsensusCommitSummary(i) => write!(f, "/consensus/commits/{i}/summary"),
         }
     }
 }
@@ -172,6 +218,10 @@ pub fn parse_path(s: &str) -> anyhow::Result<VfsPath> {
             s.parse()
                 .map_err(|_| anyhow!("invalid sequence number: '{s}'"))?,
         ),
+        ["checkpoints", "seq", s, "contents-short"] => VfsPath::CheckpointSeqContentsShort(
+            s.parse()
+                .map_err(|_| anyhow!("invalid sequence number: '{s}'"))?,
+        ),
         ["checkpoints", "digest"] => VfsPath::CheckpointsDigestRoot,
         ["checkpoints", "digest", d] => VfsPath::CheckpointsByDigest(
             d.parse()
@@ -185,14 +235,47 @@ pub fn parse_path(s: &str) -> anyhow::Result<VfsPath> {
             d.parse()
                 .map_err(|_| anyhow!("invalid checkpoint digest: '{d}'"))?,
         ),
+        ["checkpoints", "digest", d, "contents-short"] => VfsPath::CheckpointDigestContentsShort(
+            d.parse()
+                .map_err(|_| anyhow!("invalid checkpoint digest: '{d}'"))?,
+        ),
         ["checkpoint-contents"] => VfsPath::CheckpointContentsRoot,
         ["checkpoint-contents", d] => VfsPath::CheckpointContentsEntry(
             d.parse()
                 .map_err(|_| anyhow!("invalid contents digest: '{d}'"))?,
         ),
+        ["transactions"] => VfsPath::TransactionsRoot,
+        ["transactions", seg] => parse_transaction_seg(seg)?,
+        ["consensus"] => VfsPath::ConsensusRoot,
+        ["consensus", "commits"] => VfsPath::ConsensusCommitsRoot,
+        ["consensus", "commits", i] => VfsPath::ConsensusCommitDir(
+            i.parse()
+                .map_err(|_| anyhow!("invalid commit index: '{i}'"))?,
+        ),
+        ["consensus", "commits", i, "summary"] => VfsPath::ConsensusCommitSummary(
+            i.parse()
+                .map_err(|_| anyhow!("invalid commit index: '{i}'"))?,
+        ),
         _ => return Err(anyhow!("unknown path: '{s}'")),
     };
     Ok(v)
+}
+
+fn parse_transaction_seg(seg: &str) -> anyhow::Result<VfsPath> {
+    if let Some((tx_str, fx_str)) = seg.split_once(".fx-") {
+        let tx: TransactionDigest = tx_str
+            .parse()
+            .map_err(|_| anyhow!("invalid transaction digest: '{tx_str}'"))?;
+        let fx: TransactionEffectsDigest = fx_str
+            .parse()
+            .map_err(|_| anyhow!("invalid effects digest: '{fx_str}'"))?;
+        Ok(VfsPath::TransactionEffectsEntry(tx, fx))
+    } else {
+        let tx: TransactionDigest = seg
+            .parse()
+            .map_err(|_| anyhow!("invalid transaction digest: '{seg}'"))?;
+        Ok(VfsPath::TransactionEntry(tx))
+    }
 }
 
 /// Resolve a path string (absolute or relative) against a CWD.
