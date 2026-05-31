@@ -27,7 +27,7 @@ use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
 use sui_config::node::CongestionLogConfig;
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
-use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
+use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::{
     SUI_RANDOMNESS_STATE_OBJECT_ID,
     authenticator_state::ActiveJwk,
@@ -2448,7 +2448,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             randomness_dkg_confirmations,
         );
 
-        if randomness_dkg_updates || randomness_dkg_confirmation_updates {
+        // On mainnet from epoch 1143 onward, always advance the DKG state machine until
+        // it is resolved, regardless of whether new messages/confirmations were processed
+        // this commit.
+        let always_advance_dkg_to_resolution = self.epoch_store.get_chain() == Chain::Mainnet
+            && self.epoch_store.epoch() >= 1143
+            && randomness_manager.dkg_status() == DkgStatus::Pending;
+
+        if randomness_dkg_updates
+            || randomness_dkg_confirmation_updates
+            || always_advance_dkg_to_resolution
+        {
             randomness_manager
                 .advance_dkg(&mut state.output, commit_info.round)
                 .await
