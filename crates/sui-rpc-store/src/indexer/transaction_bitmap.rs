@@ -89,10 +89,7 @@ impl Processor for TransactionBitmap {
             );
 
             for dim_key in dim_keys.drain() {
-                groups
-                    .entry((dim_key, bucket))
-                    .or_default()
-                    .insert(bit);
+                groups.entry((dim_key, bucket)).or_default().insert(bit);
             }
         }
 
@@ -118,9 +115,7 @@ impl sequential::Handler for TransactionBitmap {
 
     fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Row>) {
         for row in values {
-            let entry = batch
-                .entry((row.dimension_key, row.bucket))
-                .or_default();
+            let entry = batch.entry((row.dimension_key, row.bucket)).or_default();
             *entry |= row.bitmap;
         }
     }
@@ -132,8 +127,7 @@ impl sequential::Handler for TransactionBitmap {
     ) -> anyhow::Result<usize> {
         let cf = &conn.store.schema().transaction_bitmap;
         for ((dim_key, bucket), bitmap) in batch {
-            let (k, v) =
-                transaction_bitmap::store_bitmap(dim_key.clone(), *bucket, bitmap.clone());
+            let (k, v) = transaction_bitmap::store_bitmap(dim_key.clone(), *bucket, bitmap.clone());
             conn.batch.merge(cf, &k, &v)?;
         }
         Ok(batch.len())

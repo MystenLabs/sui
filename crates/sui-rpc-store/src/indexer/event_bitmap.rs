@@ -72,9 +72,7 @@ impl Processor for EventBitmap {
         for (i, tx) in checkpoint.transactions.iter().enumerate() {
             let tx_seq = tx_seq_at(checkpoint, i);
             if tx_seq > MAX_TX_SEQ {
-                anyhow::bail!(
-                    "tx_seq {tx_seq} exceeds packed event-seq limit {MAX_TX_SEQ}",
-                );
+                anyhow::bail!("tx_seq {tx_seq} exceeds packed event-seq limit {MAX_TX_SEQ}",);
             }
             let sender = tx.transaction.sender();
 
@@ -132,9 +130,7 @@ impl sequential::Handler for EventBitmap {
 
     fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Row>) {
         for row in values {
-            let entry = batch
-                .entry((row.dimension_key, row.bucket))
-                .or_default();
+            let entry = batch.entry((row.dimension_key, row.bucket)).or_default();
             *entry |= row.bitmap;
         }
     }
@@ -146,8 +142,7 @@ impl sequential::Handler for EventBitmap {
     ) -> anyhow::Result<usize> {
         let cf = &conn.store.schema().event_bitmap;
         for ((dim_key, bucket), bitmap) in batch {
-            let (k, v) =
-                event_bitmap::store_bitmap(dim_key.clone(), *bucket, bitmap.clone());
+            let (k, v) = event_bitmap::store_bitmap(dim_key.clone(), *bucket, bitmap.clone());
             conn.batch.merge(cf, &k, &v)?;
         }
         Ok(batch.len())
