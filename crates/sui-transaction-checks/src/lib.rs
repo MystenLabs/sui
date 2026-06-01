@@ -421,6 +421,13 @@ mod checked {
         // load all gas coins (skip coin reservations - they're not loaded as input objects)
         let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();
 
+        let gas_owner = transaction.gas_owner();
+
+        // Total of coin balances + reservation amounts. Limit to i64::MAX so smash_gas's
+        // i64 conversion doesn't overflow. (Not summed for address-balance-paid gas; that
+        // path never converts the budget to i64.)
+        let mut total: u128 = 0;
+
         let (gas_objects, available_address_balance_gas) = if gas_paid_from_address_balance {
             // When paying from address balance via gas_data.payment = [], the budget is reserved by the scheduler
             // and guaranteed to be available.
@@ -432,14 +439,25 @@ mod checked {
             let mut gas_objects = vec![];
             for obj_ref in gas {
                 if let Ok(parsed) = ParsedDigest::try_from(obj_ref.2) {
+                    let amount = parsed.reservation_amount();
                     available_address_balance_gas =
-                        available_address_balance_gas.saturating_add(parsed.reservation_amount());
+                        available_address_balance_gas.saturating_add(amount);
+                    total += amount as u128;
                 } else {
-                    let obj = objects.get(&obj_ref.0);
-                    let obj = *obj.ok_or(UserInputError::ObjectNotFound {
-                        object_id: obj_ref.0,
-                        version: Some(obj_ref.1),
-                    })?;
+                    let obj = *objects
+                        .get(&obj_ref.0)
+                        .ok_or(UserInputError::ObjectNotFound {
+                            object_id: obj_ref.0,
+                            version: Some(obj_ref.1),
+                        })?;
+                    let object = obj.as_object().ok_or(UserInputError::MissingGasPayment)?;
+                    if gas_ownership_checks && object.owner != Owner::AddressOwner(gas_owner) {
+                        return Err(UserInputError::GasObjectNotOwnedObject {
+                            owner: object.owner.clone(),
+                        }
+                        .into());
+                    }
+                    total += sui_types::gas::get_gas_balance(object)? as u128;
                     gas_objects.push(obj);
                 }
             }
@@ -447,6 +465,13 @@ mod checked {
         };
 
         if !is_gasless {
+            if i64::try_from(total).is_err() {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: "Total gas payment (coins + reservations) exceeds i64::MAX".to_string(),
+                }
+                .into());
+            }
+
             if gas_ownership_checks {
                 gas_status.check_gas_objects(&gas_objects)?;
             }
@@ -455,34 +480,6 @@ mod checked {
                 gas_budget,
                 available_address_balance_gas,
             )?;
-
-            // smash_gas converts gas payment amounts to i64 via unwrap(). The combined
-            // total of all gas payment values (real coin balances + coin reservation amounts)
-            // must fit in i64. In production this is never an issue since reaching i64::MAX
-            // would require ~92% of the total SUI supply.
-            //
-            // Note: when paying from address balance (gas_data.payment = []), the budget
-            // is the AddressBalance reservation in payment_kind(), but smash_gas never
-            // converts it to i64 (smashed_payments is empty so line 609 doesn't fire, and
-            // deposit = total_smashed - reservation = 0 so line 632 is skipped). So we
-            // intentionally don't sum available_address_balance_gas here.
-            let mut total: u128 = 0;
-            for obj in &gas_objects {
-                if let Some(object) = obj.as_object() {
-                    total += sui_types::gas::get_gas_balance(object).unwrap_or(0) as u128;
-                }
-            }
-            for obj_ref in gas {
-                if let Ok(parsed) = ParsedDigest::try_from(obj_ref.2) {
-                    total += parsed.reservation_amount() as u128;
-                }
-            }
-            if i64::try_from(total).is_err() {
-                return Err(UserInputError::InvalidWithdrawReservation {
-                    error: "Total gas payment (coins + reservations) exceeds i64::MAX".to_string(),
-                }
-                .into());
-            }
         }
         Ok(gas_status)
     }
