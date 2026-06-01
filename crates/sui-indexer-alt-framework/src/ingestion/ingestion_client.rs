@@ -53,7 +53,7 @@ const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
 const SLOW_OPERATION_WARNING_THRESHOLD: Duration = Duration::from_secs(60);
 
 #[async_trait]
-pub(crate) trait IngestionClientTrait: Send + Sync {
+pub trait IngestionClientTrait: Send + Sync {
     async fn chain_id(&self) -> anyhow::Result<ChainIdentifier>;
 
     async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult;
