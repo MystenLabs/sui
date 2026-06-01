@@ -2443,19 +2443,29 @@ async fn test_poc_smash_target_deposit_overflow_panics() {
         .build()
         .await;
 
-    let (sender, _) = test_env.get_sender_and_gas(0);
-
-    // Fund 1 MIST into sender's address balance so check_amounts_available passes for the
-    // tiny coin reservation. Use account 1 (normal-sized gas) to pay for the funding
-    // transaction so the huge coin is not used as gas payment here.
-    let (funder, funder_gas) = test_env.get_sender_and_gas(1);
+    // `gas_objects` is a BTreeMap, so positional lookup by `get_sender_and_gas(i)` returns
+    // accounts in SuiAddress sort order rather than the order they were configured. Identify
+    // accounts by their gas-object layout instead: the huge-gas account has exactly 1 coin,
+    // the funding accounts have 2.
+    let sender = *test_env
+        .gas_objects
+        .iter()
+        .find(|(_, gas)| gas.len() == 1)
+        .expect("huge-gas account should have 1 gas object")
+        .0;
+    let (funder, funder_gas) = test_env
+        .gas_objects
+        .iter()
+        .find(|(_, gas)| gas.len() == 2)
+        .map(|(addr, gas)| (*addr, gas[0]))
+        .expect("default-gas account should have 2 gas objects");
     let funding_tx = test_env
         .tx_builder_with_gas_objects(funder, vec![funder_gas])
         .transfer_sui_to_address_balance(FundSource::coin(funder_gas), vec![(1, sender)])
         .build();
     test_env.exec_tx_directly(funding_tx).await.unwrap();
 
-    let (_, huge_gas_coin) = test_env.get_sender_and_gas(0);
+    let huge_gas_coin = test_env.gas_objects[&sender][0];
     let small_reservation = test_env.encode_coin_reservation(sender, 0, 1);
 
     // gas_data.payment = [small_reservation (smash target), huge_gas_coin (smashed)]
