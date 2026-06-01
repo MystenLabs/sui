@@ -136,6 +136,7 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
         commit_pool_size,
         num_flusher_threads,
         batch_codec,
+        relocation_max_reclaim_pct: 100,
         ..Config::default()
     };
 

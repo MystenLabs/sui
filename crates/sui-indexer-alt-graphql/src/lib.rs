@@ -29,6 +29,7 @@ use axum::routing::MethodRouter;
 use axum::routing::get;
 use axum::routing::post;
 use axum_extra::TypedHeader;
+use config::LoggingConfig;
 use config::RpcConfig;
 use extensions::query_limits::QueryLimitsChecker;
 use extensions::query_limits::rich;
@@ -407,6 +408,7 @@ pub async fn start_rpc(
         .route(HEALTH_PATH, get(health::check))
         .layer(watermark_task.watermarks())
         .layer(config.health)
+        .layer(config.logging)
         .layer(DbProbe(database_url))
         .extension(Timeout::new(config.limits.timeouts()))
         .extension(QueryLimitsChecker::new(
@@ -472,6 +474,7 @@ async fn graphql(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Extension(schema): Extension<Schema<Query, Mutation, Subscription>>,
     Extension(watermark): Extension<WatermarksLock>,
+    Extension(logging): Extension<LoggingConfig>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
     headers: axum::http::HeaderMap,
@@ -480,7 +483,7 @@ async fn graphql(
     let mut request = request
         .into_inner()
         .data(content_length)
-        .data(Session::new(addr).with_client_info(ClientInfo::from_headers(&headers)))
+        .data(Session::new(addr).with_client_info(ClientInfo::from_headers(&headers, &logging)))
         .data(watermark.read().await.clone())
         .data(rich::Meter::default());
 

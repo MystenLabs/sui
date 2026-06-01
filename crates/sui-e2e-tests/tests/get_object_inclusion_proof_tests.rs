@@ -3,22 +3,14 @@
 
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
-use sui_rpc_api::grpc::alpha::proof_service_proto::GetObjectInclusionProofRequest;
-use sui_rpc_api::grpc::alpha::proof_service_proto::proof_service_client::ProofServiceClient;
+use sui_rpc::proto::sui::rpc::v2alpha::GetCheckpointObjectProofRequest;
+use sui_rpc::proto::sui::rpc::v2alpha::get_checkpoint_object_proof_response;
+use sui_rpc::proto::sui::rpc::v2alpha::proof_service_client::ProofServiceClient;
 use sui_types::base_types::ObjectID;
 use test_cluster::{TestCluster, TestClusterBuilder};
 
-fn create_rpc_config_with_authenticated_events() -> sui_config::RpcConfig {
+fn create_rpc_config_with_indexing() -> sui_config::RpcConfig {
     sui_config::RpcConfig {
-        authenticated_events_indexing: Some(true),
-        enable_indexing: Some(true),
-        ..Default::default()
-    }
-}
-
-fn create_rpc_config_without_authenticated_events() -> sui_config::RpcConfig {
-    sui_config::RpcConfig {
-        authenticated_events_indexing: Some(false),
         enable_indexing: Some(true),
         ..Default::default()
     }
@@ -36,37 +28,10 @@ async fn get_test_object(test_cluster: &TestCluster) -> ObjectID {
 }
 
 #[sim_test]
-async fn test_feature_flag_disabled() {
-    let test_cluster = TestClusterBuilder::new()
-        .disable_fullnode_pruning()
-        .with_rpc_config(create_rpc_config_without_authenticated_events())
-        .build()
-        .await;
-
-    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
-
-    let mut req = GetObjectInclusionProofRequest::default();
-    req.object_id = Some(ObjectID::random().to_string());
-    req.checkpoint = Some(1);
-
-    let result = proof_client.get_object_inclusion_proof(req).await;
-
-    assert!(result.is_err());
-    let err = result.unwrap_err();
-    assert_eq!(err.code(), tonic::Code::Unimplemented);
-    assert!(
-        err.message()
-            .contains("Authenticated events indexing is disabled")
-    );
-}
-
-#[sim_test]
 async fn test_missing_object_id() {
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
-        .with_rpc_config(create_rpc_config_with_authenticated_events())
+        .with_rpc_config(create_rpc_config_with_indexing())
         .build()
         .await;
 
@@ -74,11 +39,9 @@ async fn test_missing_object_id() {
         .await
         .unwrap();
 
-    let mut req = GetObjectInclusionProofRequest::default();
-    req.object_id = None;
-    req.checkpoint = Some(1);
+    let request = GetCheckpointObjectProofRequest::default().with_checkpoint(1);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = proof_client.get_checkpoint_object_proof(request).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -90,7 +53,7 @@ async fn test_missing_object_id() {
 async fn test_empty_object_id() {
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
-        .with_rpc_config(create_rpc_config_with_authenticated_events())
+        .with_rpc_config(create_rpc_config_with_indexing())
         .build()
         .await;
 
@@ -98,11 +61,11 @@ async fn test_empty_object_id() {
         .await
         .unwrap();
 
-    let mut req = GetObjectInclusionProofRequest::default();
-    req.object_id = Some("".to_string());
-    req.checkpoint = Some(1);
+    let request = GetCheckpointObjectProofRequest::default()
+        .with_object_id("")
+        .with_checkpoint(1);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = proof_client.get_checkpoint_object_proof(request).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -114,7 +77,7 @@ async fn test_empty_object_id() {
 async fn test_invalid_object_id_format() {
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
-        .with_rpc_config(create_rpc_config_with_authenticated_events())
+        .with_rpc_config(create_rpc_config_with_indexing())
         .build()
         .await;
 
@@ -122,11 +85,11 @@ async fn test_invalid_object_id_format() {
         .await
         .unwrap();
 
-    let mut req = GetObjectInclusionProofRequest::default();
-    req.object_id = Some("invalid_object_id".to_string());
-    req.checkpoint = Some(1);
+    let request = GetCheckpointObjectProofRequest::default()
+        .with_object_id("invalid_object_id")
+        .with_checkpoint(1);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = proof_client.get_checkpoint_object_proof(request).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -138,7 +101,7 @@ async fn test_invalid_object_id_format() {
 async fn test_missing_checkpoint() {
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
-        .with_rpc_config(create_rpc_config_with_authenticated_events())
+        .with_rpc_config(create_rpc_config_with_indexing())
         .build()
         .await;
 
@@ -148,11 +111,9 @@ async fn test_missing_checkpoint() {
         .await
         .unwrap();
 
-    let mut req = GetObjectInclusionProofRequest::default();
-    req.object_id = Some(object_id.to_string());
-    req.checkpoint = None;
+    let request = GetCheckpointObjectProofRequest::default().with_object_id(object_id.to_string());
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = proof_client.get_checkpoint_object_proof(request).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -164,7 +125,7 @@ async fn test_missing_checkpoint() {
 async fn test_checkpoint_not_yet_indexed() {
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
-        .with_rpc_config(create_rpc_config_with_authenticated_events())
+        .with_rpc_config(create_rpc_config_with_indexing())
         .build()
         .await;
 
@@ -174,11 +135,11 @@ async fn test_checkpoint_not_yet_indexed() {
         .await
         .unwrap();
 
-    let mut req = GetObjectInclusionProofRequest::default();
-    req.object_id = Some(object_id.to_string());
-    req.checkpoint = Some(999999);
+    let request = GetCheckpointObjectProofRequest::default()
+        .with_object_id(object_id.to_string())
+        .with_checkpoint(999999);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let result = proof_client.get_checkpoint_object_proof(request).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -186,11 +147,13 @@ async fn test_checkpoint_not_yet_indexed() {
     assert!(err.message().contains("not yet indexed"));
 }
 
+/// When the object id was not modified in the requested checkpoint, the
+/// server returns a non-inclusion proof rather than an error.
 #[sim_test]
-async fn test_object_not_found_in_checkpoint() {
+async fn test_object_not_modified_returns_non_inclusion() {
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
-        .with_rpc_config(create_rpc_config_with_authenticated_events())
+        .with_rpc_config(create_rpc_config_with_indexing())
         .build()
         .await;
 
@@ -203,23 +166,31 @@ async fn test_object_not_found_in_checkpoint() {
         .await
         .unwrap();
 
-    let mut req = GetObjectInclusionProofRequest::default();
-    req.object_id = Some(non_existent_object_id.to_string());
-    req.checkpoint = Some(latest_checkpoint);
+    let request = GetCheckpointObjectProofRequest::default()
+        .with_object_id(non_existent_object_id.to_string())
+        .with_checkpoint(latest_checkpoint);
 
-    let result = proof_client.get_object_inclusion_proof(req).await;
+    let response = proof_client
+        .get_checkpoint_object_proof(request)
+        .await
+        .expect("non-inclusion proof should succeed")
+        .into_inner();
 
-    assert!(result.is_err());
-    let err = result.unwrap_err();
-    assert_eq!(err.code(), tonic::Code::FailedPrecondition);
-    assert!(err.message().contains("was not written at checkpoint"));
+    let proof = response.proof.expect("proof should be present");
+    assert!(
+        matches!(
+            proof,
+            get_checkpoint_object_proof_response::Proof::NonInclusion(_)
+        ),
+        "expected non-inclusion proof for a random object id"
+    );
 }
 
 #[sim_test]
 async fn test_valid_request() {
     let test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
-        .with_rpc_config(create_rpc_config_with_authenticated_events())
+        .with_rpc_config(create_rpc_config_with_indexing())
         .build()
         .await;
 
@@ -232,34 +203,35 @@ async fn test_valid_request() {
         .await
         .unwrap();
 
-    let mut found_checkpoint = None;
+    // Walk forward through checkpoints until we find one that modified the
+    // target object — the server returns inclusion in that case and
+    // non-inclusion otherwise.
+    let mut found = None;
     for checkpoint_seq in 0..=latest_checkpoint {
-        let mut req = GetObjectInclusionProofRequest::default();
-        req.object_id = Some(object_id.to_string());
-        req.checkpoint = Some(checkpoint_seq);
+        let request = GetCheckpointObjectProofRequest::default()
+            .with_object_id(object_id.to_string())
+            .with_checkpoint(checkpoint_seq);
+        let response = proof_client
+            .get_checkpoint_object_proof(request)
+            .await
+            .expect("proof request should succeed")
+            .into_inner();
 
-        let result = proof_client.get_object_inclusion_proof(req).await;
-        if result.is_ok() {
-            found_checkpoint = Some(checkpoint_seq);
+        if let Some(get_checkpoint_object_proof_response::Proof::Inclusion(p)) =
+            response.proof.as_ref()
+        {
+            found = Some((checkpoint_seq, p.clone(), response.clone()));
             break;
         }
     }
 
-    assert!(
-        found_checkpoint.is_some(),
-        "Object not found in any checkpoint"
-    );
-    let checkpoint_seq = found_checkpoint.unwrap();
+    let (checkpoint_seq, inclusion_proof, response) =
+        found.expect("Object should be modified in at least one checkpoint");
 
-    let mut req = GetObjectInclusionProofRequest::default();
-    req.object_id = Some(object_id.to_string());
-    req.checkpoint = Some(checkpoint_seq);
-
-    let result = proof_client.get_object_inclusion_proof(req).await;
-    assert!(result.is_ok());
-    let response = result.unwrap().into_inner();
-
-    let object_ref = response.object_ref.expect("object_ref should be present");
+    let object_ref = inclusion_proof
+        .object_ref
+        .as_ref()
+        .expect("object_ref should be present");
     assert!(
         object_ref.object_id.is_some(),
         "object_id should be present"
@@ -267,9 +239,6 @@ async fn test_valid_request() {
     assert!(object_ref.version.is_some(), "version should be present");
     assert!(object_ref.digest.is_some(), "digest should be present");
 
-    let inclusion_proof = response
-        .inclusion_proof
-        .expect("inclusion_proof should be present");
     assert!(
         inclusion_proof.merkle_proof.is_some(),
         "merkle_proof should be present"
@@ -284,7 +253,14 @@ async fn test_valid_request() {
     );
 
     assert!(
-        response.object_data.is_some(),
-        "object_data should be present"
+        inclusion_proof.object_data.is_some(),
+        "object_data should be present for a live object"
     );
+
+    assert!(
+        response.checkpoint_summary.is_some(),
+        "checkpoint_summary should be present"
+    );
+
+    let _ = checkpoint_seq;
 }

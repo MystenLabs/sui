@@ -16,10 +16,13 @@ use move_core_types::identifier::Identifier;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
-use sui_rpc_api::grpc::alpha::event_service_proto::event_service_client::EventServiceClient;
-use sui_rpc_api::grpc::alpha::proof_service_proto::proof_service_client::ProofServiceClient;
-use sui_rpc_api::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
-use sui_rpc_api::proto::sui::rpc::v2::{GetCheckpointRequest, GetEpochRequest};
+use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::{GetCheckpointRequest, GetEpochRequest};
+use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as V2AlphaLedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2alpha::proof_service_client::ProofServiceClient;
+use sui_rpc::proto::sui::rpc::v2alpha::{
+    EventItem, GetCheckpointObjectProofResponse, get_checkpoint_object_proof_response,
+};
 use sui_types::accumulator_root::{EventStreamHead, derive_event_stream_head_object_id};
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::Committee;
@@ -38,23 +41,17 @@ pub struct AuthenticatedEvent {
     pub event: Event,
     /// The checkpoint sequence number where this event was included.
     pub checkpoint: u64,
-    /// The accumulator version when this event was committed.
-    pub accumulator_version: u64,
-    /// The transaction index within the checkpoint.
-    pub transaction_idx: u32,
+    /// The transaction's zero-based position within its checkpoint.
+    pub transaction_offset: u64,
     /// The event index within the transaction.
-    pub event_idx: u32,
+    pub event_index: u32,
 }
 
-impl TryFrom<sui_rpc_api::grpc::alpha::event_service_proto::AuthenticatedEvent>
-    for AuthenticatedEvent
-{
+impl TryFrom<EventItem> for AuthenticatedEvent {
     type Error = ClientError;
 
-    fn try_from(
-        event: sui_rpc_api::grpc::alpha::event_service_proto::AuthenticatedEvent,
-    ) -> Result<Self, Self::Error> {
-        let proto_event = event
+    fn try_from(item: EventItem) -> Result<Self, Self::Error> {
+        let proto_event = item
             .event
             .ok_or_else(|| ClientError::InternalError("Missing event data".to_string()))?;
 
@@ -104,37 +101,32 @@ impl TryFrom<sui_rpc_api::grpc::alpha::event_service_proto::AuthenticatedEvent>
             contents: event_bytes.to_vec(),
         };
 
-        let checkpoint = event
+        let checkpoint = item
             .checkpoint
             .ok_or_else(|| ClientError::InternalError("Missing checkpoint".to_string()))?;
-        let transaction_idx = event
-            .transaction_idx
-            .ok_or_else(|| ClientError::InternalError("Missing transaction_idx".to_string()))?;
-        let event_idx = event
-            .event_idx
-            .ok_or_else(|| ClientError::InternalError("Missing event_idx".to_string()))?;
-        let accumulator_version = event
-            .accumulator_version
-            .ok_or_else(|| ClientError::InternalError("Missing accumulator_version".to_string()))?;
+        let transaction_offset = item
+            .transaction_offset
+            .ok_or_else(|| ClientError::InternalError("Missing transaction_offset".to_string()))?;
+        let event_index = item
+            .event_index
+            .ok_or_else(|| ClientError::InternalError("Missing event_index".to_string()))?;
 
         Ok(AuthenticatedEvent {
             event: event_data,
             checkpoint,
-            accumulator_version,
-            transaction_idx,
-            event_idx,
+            transaction_offset,
+            event_index,
         })
     }
 }
 
 /// Configuration for the authenticated events client.
 ///
-/// Controls streaming behavior (page size, polling, pagination) and RPC communication (timeouts).
+/// Controls streaming behavior (page size, polling) and RPC communication (timeouts).
 #[derive(Debug, Clone)]
 pub struct ClientConfig {
     pub page_size: u32,
     pub poll_interval: Duration,
-    pub max_pagination_iterations: usize,
     pub rpc_timeout: Duration,
 }
 
@@ -142,7 +134,6 @@ impl ClientConfig {
     pub fn new(
         page_size: u32,
         poll_interval: Duration,
-        max_pagination_iterations: usize,
         rpc_timeout: Duration,
     ) -> Result<Self, String> {
         if page_size == 0 {
@@ -154,9 +145,6 @@ impl ClientConfig {
         if poll_interval.is_zero() {
             return Err("poll_interval must be greater than 0".to_string());
         }
-        if max_pagination_iterations == 0 {
-            return Err("max_pagination_iterations must be greater than 0".to_string());
-        }
         if rpc_timeout.is_zero() {
             return Err("rpc_timeout must be greater than 0".to_string());
         }
@@ -164,7 +152,6 @@ impl ClientConfig {
         Ok(Self {
             page_size,
             poll_interval,
-            max_pagination_iterations,
             rpc_timeout,
         })
     }
@@ -175,7 +162,6 @@ impl Default for ClientConfig {
         Self {
             page_size: 1000,
             poll_interval: Duration::from_secs(1),
-            max_pagination_iterations: 100,
             rpc_timeout: Duration::from_secs(30),
         }
     }
@@ -229,9 +215,9 @@ impl ClientError {
 }
 
 pub struct AuthenticatedEventsClient {
-    event_service: EventServiceClient<tonic::transport::Channel>,
-    proof_service: ProofServiceClient<tonic::transport::Channel>,
-    ledger_service: LedgerServiceClient<tonic::transport::Channel>,
+    ledger_service_v2alpha: V2AlphaLedgerServiceClient<Channel>,
+    proof_service: ProofServiceClient<Channel>,
+    ledger_service: LedgerServiceClient<Channel>,
     epoch_cache: Arc<tokio::sync::Mutex<EpochCache>>,
     config: ClientConfig,
 }
@@ -256,13 +242,13 @@ impl AuthenticatedEventsClient {
         for _ in 0..MAX_RETRIES {
             match endpoint.connect().await {
                 Ok(ch) => {
-                    let event_service = EventServiceClient::new(ch.clone());
+                    let ledger_service_v2alpha = V2AlphaLedgerServiceClient::new(ch.clone());
                     let proof_service = ProofServiceClient::new(ch.clone());
                     let ledger_service = LedgerServiceClient::new(ch);
                     let epoch_cache = EpochCache::new(genesis_committee);
 
                     return Ok(Self {
-                        event_service,
+                        ledger_service_v2alpha,
                         proof_service,
                         ledger_service,
                         epoch_cache: Arc::new(tokio::sync::Mutex::new(epoch_cache)),
@@ -525,8 +511,8 @@ impl AuthenticatedEventsClient {
         }
     }
 
-    pub(crate) fn event_service(&self) -> EventServiceClient<tonic::transport::Channel> {
-        self.event_service.clone()
+    pub(crate) fn ledger_service_v2alpha(&self) -> V2AlphaLedgerServiceClient<Channel> {
+        self.ledger_service_v2alpha.clone()
     }
 
     pub(crate) async fn fetch_and_verify_stream_head(
@@ -538,27 +524,46 @@ impl AuthenticatedEventsClient {
 
         let mut proof_client = self.proof_service.clone();
 
-        let mut request =
-            sui_rpc_api::grpc::alpha::proof_service_proto::GetObjectInclusionProofRequest::default(
-            );
-        request.object_id = Some(stream_object_id.to_string());
-        request.checkpoint = Some(checkpoint);
+        let request = sui_rpc::proto::sui::rpc::v2alpha::GetCheckpointObjectProofRequest::default()
+            .with_object_id(stream_object_id.to_string())
+            .with_checkpoint(checkpoint);
 
-        let response = match proof_client.get_object_inclusion_proof(request).await {
-            Ok(resp) => resp.into_inner(),
-            Err(status) if status.code() == tonic::Code::FailedPrecondition => {
+        let response = proof_client
+            .get_checkpoint_object_proof(request)
+            .await
+            .map_err(ClientError::RpcError)?
+            .into_inner();
+
+        let proof = response
+            .proof
+            .as_ref()
+            .ok_or_else(|| ClientError::InternalError("Missing proof in response".to_string()))?;
+
+        let inclusion_proof = match proof {
+            get_checkpoint_object_proof_response::Proof::Inclusion(p) => p,
+            get_checkpoint_object_proof_response::Proof::NonInclusion(_) => {
+                // The stream head was not modified at this checkpoint, which
+                // means no events were emitted on this stream there. Surface
+                // this as an internal error so the caller can decide whether
+                // to retry at a different checkpoint.
                 return Err(ClientError::InternalError(format!(
                     "EventStreamHead was not updated at checkpoint {} (no events were emitted)",
                     checkpoint
                 )));
             }
-            Err(status) => return Err(ClientError::RpcError(status)),
+            _ => {
+                return Err(ClientError::InternalError(
+                    "Unknown proof variant".to_string(),
+                ));
+            }
         };
 
-        let object_data_bytes = response
-            .object_data
-            .as_ref()
-            .ok_or_else(|| ClientError::InternalError("Missing object data".to_string()))?;
+        let object_data_bytes = inclusion_proof.object_data.as_ref().ok_or_else(|| {
+            ClientError::InternalError(
+                "Missing object data on inclusion proof (object was deleted or wrapped)"
+                    .to_string(),
+            )
+        })?;
 
         let object: sui_types::object::Object = bcs::from_bytes(object_data_bytes)?;
         let stream_head = Self::extract_stream_head_from_object(&object)?;
@@ -574,7 +579,7 @@ impl AuthenticatedEventsClient {
     ) -> Result<Option<(EventStreamHead, u64)>, ClientError> {
         let mut ledger_client = self.ledger_service.clone();
 
-        let mut request = sui_rpc_api::proto::sui::rpc::v2::GetObjectRequest::default();
+        let mut request = sui_rpc::proto::sui::rpc::v2::GetObjectRequest::default();
         request.object_id = Some(stream_object_id.to_string());
         request.read_mask = Some(FieldMask::from_paths(["bcs"]));
 
@@ -694,7 +699,7 @@ impl AuthenticatedEventsClient {
     fn verify_ocs_inclusion_proof(
         &self,
         committee: &Committee,
-        response: &sui_rpc_api::grpc::alpha::proof_service_proto::GetObjectInclusionProofResponse,
+        response: &GetCheckpointObjectProofResponse,
     ) -> Result<(), ClientError> {
         let checkpoint_summary_bytes = response
             .checkpoint_summary
@@ -704,15 +709,28 @@ impl AuthenticatedEventsClient {
         let checkpoint_summary: sui_types::messages_checkpoint::CertifiedCheckpointSummary =
             bcs::from_bytes(checkpoint_summary_bytes)?;
 
-        let object_ref_proto = response
+        let proof = response
+            .proof
+            .as_ref()
+            .ok_or_else(|| ClientError::InternalError("Missing proof".to_string()))?;
+        let inclusion_proof = match proof {
+            get_checkpoint_object_proof_response::Proof::Inclusion(p) => p,
+            get_checkpoint_object_proof_response::Proof::NonInclusion(_) => {
+                return Err(ClientError::InternalError(
+                    "verify_ocs_inclusion_proof called with non-inclusion proof".to_string(),
+                ));
+            }
+            _ => {
+                return Err(ClientError::InternalError(
+                    "Unknown proof variant".to_string(),
+                ));
+            }
+        };
+
+        let object_ref_proto = inclusion_proof
             .object_ref
             .as_ref()
             .ok_or_else(|| ClientError::InternalError("Missing object_ref".to_string()))?;
-
-        let inclusion_proof = response
-            .inclusion_proof
-            .as_ref()
-            .ok_or_else(|| ClientError::InternalError("Missing inclusion proof".to_string()))?;
 
         let object_ref = converters::proto_object_ref_to_sui_object_ref(object_ref_proto)?;
         let ocs_inclusion_proof =

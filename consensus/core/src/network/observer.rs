@@ -38,10 +38,20 @@ pub(crate) struct BlockStreamRequest {
     pub(crate) highest_round_per_authority: Vec<u64>,
 }
 
+/// Auxiliary data carried alongside blocks in the observer stream.
+/// Currently used for randomness signatures; extensible for future use.
+#[derive(Clone, prost::Message)]
+pub(crate) struct AuxiliaryData {
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    pub(crate) randomness_signatures: Vec<Bytes>,
+}
+
 #[derive(Clone, prost::Message)]
 pub(crate) struct BlockStreamResponse {
     #[prost(bytes = "bytes", repeated, tag = "1")]
     pub(crate) blocks: Vec<Bytes>,
+    #[prost(message, optional, tag = "2")]
+    pub(crate) auxiliary_data: Option<AuxiliaryData>,
 }
 
 // Observer fetch messages
@@ -86,7 +96,6 @@ pub(crate) struct FetchCommitsResponse {
 /// Information about an observer peer connection, set in request extensions by the server.
 #[derive(Clone, Debug)]
 pub(crate) struct ObserverPeerInfo {
-    #[allow(unused)]
     pub(crate) public_key: NetworkPublicKey,
 }
 
@@ -219,7 +228,6 @@ impl TonicObserverClient {
         }
     }
 
-    #[allow(unused)]
     async fn get_client(
         &self,
         peer: PeerId,
@@ -267,7 +275,10 @@ impl ObserverNetworkClient for TonicObserverClient {
                 let peer_cloned = peer.clone();
                 async move {
                     match b {
-                        Ok(response) => Some(response.blocks),
+                        Ok(response) => Some(super::ObserverStreamItem {
+                            blocks: response.blocks,
+                            auxiliary_data: response.auxiliary_data.unwrap_or_default(),
+                        }),
                         Err(e) => {
                             debug!("Network error received from {:?}: {e:?}", peer_cloned);
                             None
@@ -417,7 +428,16 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
 
-        let response_stream = block_stream.map(|blocks| Ok(BlockStreamResponse { blocks }));
+        let response_stream = block_stream.map(|item| {
+            Ok(BlockStreamResponse {
+                blocks: item.blocks,
+                auxiliary_data: if item.auxiliary_data.randomness_signatures.is_empty() {
+                    None
+                } else {
+                    Some(item.auxiliary_data)
+                },
+            })
+        });
 
         Ok(Response::new(Box::pin(response_stream)))
     }
@@ -547,7 +567,10 @@ mod tests {
             .await
             .unwrap();
 
-        let blocks: Vec<Bytes> = block_stream.flat_map(stream::iter).collect().await;
+        let blocks: Vec<Bytes> = block_stream
+            .flat_map(|item| stream::iter(item.blocks))
+            .collect()
+            .await;
 
         assert_eq!(blocks.len(), 100);
         assert_eq!(blocks[0], Bytes::from(vec![1u8; 16]));
@@ -579,7 +602,10 @@ mod tests {
             .await
             .unwrap();
 
-        let blocks: Vec<Bytes> = block_stream.flat_map(stream::iter).collect().await;
+        let blocks: Vec<Bytes> = block_stream
+            .flat_map(|item| stream::iter(item.blocks))
+            .collect()
+            .await;
 
         assert_eq!(blocks.len(), 50);
         assert_eq!(blocks[0], Bytes::from(vec![51u8; 16]));
@@ -645,8 +671,8 @@ mod tests {
         // If it fails, it's likely due to authentication/allowlist configuration
         let mut stream = result.unwrap();
         let mut count = 0;
-        while let Some(batch) = stream.next().await {
-            for block in batch {
+        while let Some(item) = stream.next().await {
+            for block in item.blocks {
                 // Verify the blocks are in the expected range (rounds 11-50)
                 assert!(block.len() == 16);
                 count += 1;

@@ -1,3 +1,8 @@
+---
+name: dual-replay
+description: Run Sui dual execution replay between base and tip commits, recover failed steps, build, and commit replay instrumentation.
+---
+
 # Dual Execution Replay
 
 Instruments the `latest` execution path to run every transaction twice — once with a base executor (built from an execution-layer cut taken at `<base-sha>`) and once with the tip executor at `<tip-sha>` — and diffs the two outputs. The base result is committed; the tip result is for comparison only.

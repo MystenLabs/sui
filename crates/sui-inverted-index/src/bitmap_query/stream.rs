@@ -32,17 +32,20 @@ use super::BitmapQuery;
 use super::BitmapScanLimitExceeded;
 use super::BucketItem;
 use super::BucketStream;
+use super::DedupedQuery;
 use super::LeafHead;
 use super::MultiError;
 use super::ScanDirection;
-use super::TermSpec;
 use super::Watermarked;
 use super::WatermarkedBucketStream;
 use super::bound_in_direction;
 use super::bucket_edges;
+use super::build_term_specs;
+use super::count_on_floor_refs;
 use super::eval_term_at_bucket;
 use super::frontier_advanced;
-use super::split_term_literals;
+use super::recompute_unreferenced;
+use super::take_snapshot_bitmap;
 
 /// Per-request bucket-scan accounting, delivered via the `on_metrics`
 /// callback passed to `eval_bitmap_query_stream`. Fires once when the
@@ -54,7 +57,7 @@ pub struct BitmapScanMetrics {
     /// Buckets actually evaluated (charged against the per-request
     /// budget). At exhaustion each leaf may have fetched one extra
     /// bucket that was discarded rather than evaluated, so observed
-    /// backend reads can exceed this by up to `BitmapQuery::leaf_count()`.
+    /// backend reads can exceed this by up to `BitmapQuery::unique_leaf_count()`.
     pub buckets_evaluated: u64,
 }
 
@@ -86,12 +89,12 @@ impl BitmapScanBudget {
 
     /// Charge a leaf's mandatory first bucket: decrements the shared pool
     /// when it can, but ALWAYS succeeds. The runtime guards `budget >=
-    /// leaf_count`, but a *shared* atomic with concurrent leaves gives no
-    /// ordering guarantee — a sparse term can drain the pool before a
-    /// slower sibling leaf charges its first bucket, leaving that leaf
-    /// unable to report its first position (a cursorless `SCAN_LIMIT`).
-    /// Reserving the first bucket per leaf makes the `leaf_count` floor's
-    /// promise — "every leaf reaches its first bucket" — actually hold.
+    /// unique_leaf_count`, but a *shared* atomic with concurrent leaves
+    /// gives no ordering guarantee — a sparse term can drain the pool
+    /// before a slower sibling leaf charges its first bucket, leaving that
+    /// leaf unable to report its first position (a cursorless `SCAN_LIMIT`).
+    /// Reserving the first bucket per leaf makes the `unique_leaf_count`
+    /// floor's promise — "every leaf reaches its first bucket" — hold.
     /// Charging-when-possible keeps `buckets_evaluated` accurate in the
     /// common `budget >> leaves` case; it only undercounts a first bucket
     /// taken after the pool was already exhausted by other leaves.
@@ -149,7 +152,7 @@ where
     S: BitmapBucketSource,
     F: FnOnce(BitmapScanMetrics) + Send + 'static,
 {
-    let leaves = query.leaf_count();
+    let leaves = query.unique_leaf_count();
     if (budget as usize) < leaves {
         // Misconfig guard: short-circuit before any scan setup. No
         // `on_metrics` here — there's no scan to account for, and the
@@ -229,37 +232,23 @@ pub(crate) fn eval_bitmap_query_bucket_stream<S>(
 where
     S: BitmapBucketSource,
 {
-    // One peekable leaf per literal; terms reference them by index. Budgeted
-    // bucket streams are `'static`, so `source` is only borrowed while building.
-    let mut leaves: Vec<Peekable<BucketStream>> = Vec::new();
-    let mut terms: Vec<TermSpec> = Vec::new();
-    for term in query.terms {
-        let (includes, excludes) = split_term_literals(term);
-        let mut include_idx = Vec::with_capacity(includes.len());
-        for key in includes {
-            include_idx.push(leaves.len());
-            let raw = source.scan_bucket_stream(key, range.clone(), direction);
-            leaves.push(
-                budgeted_bucket_stream(raw, budget.clone())
-                    .boxed()
-                    .peekable(),
-            );
-        }
-        let mut exclude_idx = Vec::with_capacity(excludes.len());
-        for key in excludes {
-            exclude_idx.push(leaves.len());
-            let raw = source.scan_bucket_stream(key, range.clone(), direction);
-            leaves.push(
-                budgeted_bucket_stream(raw, budget.clone())
-                    .boxed()
-                    .peekable(),
-            );
-        }
-        terms.push(TermSpec {
-            includes: include_idx,
-            excludes: exclude_idx,
-            dead: false,
-        });
+    // One peekable leaf per *unique* dimension key — terms reference them by
+    // index. Identical keys across literals share a single backend scan, so
+    // `(sender=A AND module=X) OR (sender=A AND type=Y)` reads `sender=A`
+    // once. Budgeted bucket streams are `'static`, so `source` is only
+    // borrowed while building.
+    let DedupedQuery {
+        keys: unique_keys,
+        mut terms,
+    } = build_term_specs(query.terms);
+    let mut leaves: Vec<Peekable<BucketStream>> = Vec::with_capacity(unique_keys.len());
+    for key in unique_keys {
+        let raw = source.scan_bucket_stream(key, range.clone(), direction);
+        leaves.push(
+            budgeted_bucket_stream(raw, budget.clone())
+                .boxed()
+                .peekable(),
+        );
     }
 
     let leaf_count = leaves.len();
@@ -275,8 +264,9 @@ where
     };
 
     async_stream::try_stream! {
-        // `gone[i]`: leaf retired (its term died or it is a spent exclude).
-        let mut gone = vec![false; leaf_count];
+        // `unreferenced[i]`: leaf is retired — either no satisfiable term still
+        // points at it, or its bucket stream is at EOF (a spent exclude).
+        let mut unreferenced = vec![false; leaf_count];
         // `front[i]`: clamped position each leaf has provably scanned to. Bounds
         // the resume cursor when a leaf errors before it can advance.
         let mut front = vec![request_floor; leaf_count];
@@ -287,7 +277,7 @@ where
             // parallelism), recording each head and the position it scanned to.
             let mut peeks = Vec::new();
             for (i, leaf) in leaves.iter_mut().enumerate() {
-                if !gone[i] {
+                if !unreferenced[i] {
                     peeks.push(peek_leaf(
                         Pin::new(leaf),
                         i,
@@ -307,38 +297,30 @@ where
                 class[i] = Some(head);
             }
 
-            // An include at EOF kills its term (the intersection is permanently
-            // empty); drop all of that term's leaves so they stop being polled.
+            // An include at EOF makes its term unsatisfiable (the intersection
+            // is permanently empty). With dedup, an EOF'd leaf may be an
+            // include for several terms; all of them become unsatisfiable.
             for term in terms.iter_mut() {
-                if !term.dead
+                if !term.unsatisfiable
                     && term
                         .includes
                         .iter()
                         .any(|&i| matches!(class[i], Some(LeafHead::Eof)))
                 {
-                    term.dead = true;
+                    term.unsatisfiable = true;
                 }
             }
-            for term in &terms {
-                if term.dead {
-                    for &i in term.includes.iter().chain(term.excludes.iter()) {
-                        gone[i] = true;
-                    }
-                } else {
-                    // A spent exclude just stops contributing subtractions.
-                    for &i in &term.excludes {
-                        if matches!(class[i], Some(LeafHead::Eof)) {
-                            gone[i] = true;
-                        }
-                    }
-                }
-            }
+            // Recompute leaf liveness from current term state. A leaf may be
+            // shared across terms (include for one, exclude for another), so it
+            // can only be retired when no satisfiable term still references
+            // it — or when its head is at EOF.
+            recompute_unreferenced(&terms, &class, &mut unreferenced);
 
             // Consume any budget-error frame so the error surfaces (after the
             // floor watermark below).
             let mut errors: Vec<anyhow::Error> = Vec::new();
             for i in 0..leaf_count {
-                if !gone[i] && matches!(class[i], Some(LeafHead::Error)) {
+                if !unreferenced[i] && matches!(class[i], Some(LeafHead::Error)) {
                     match Pin::new(&mut leaves[i]).next().await {
                         Some(Err(e)) => errors.push(e),
                         _ => unreachable!("peek classified Error"),
@@ -346,7 +328,7 @@ where
                 }
             }
 
-            let active: Vec<usize> = (0..leaf_count).filter(|&i| !gone[i]).collect();
+            let active: Vec<usize> = (0..leaf_count).filter(|&i| !unreferenced[i]).collect();
             if active.is_empty() {
                 // Every term retired naturally: cap at the range terminus so the
                 // client learns the scan covered the whole range.
@@ -388,34 +370,49 @@ where
                 .expect("active leaves carry buckets when there is no error");
             let (_pre, post) = bucket_edges(floor_bucket, bucket_size, &range, direction);
 
-            // Take the bitmaps of a term side that sit on `floor_bucket`,
-            // consuming those leaves (and advancing their `front` past the
-            // bucket); leaves on a later bucket contribute `None`.
-            macro_rules! take_side {
-                ($side:expr) => {{
-                    let mut out = Vec::with_capacity($side.len());
-                    for &i in $side {
-                        if matches!(class[i], Some(LeafHead::Bucket(b)) if b == floor_bucket) {
-                            front[i] = post;
-                            out.push(match Pin::new(&mut leaves[i]).next().await {
-                                Some(Ok((_, bitmap))) => Some(bitmap),
-                                _ => None,
-                            });
-                        } else {
-                            out.push(None);
-                        }
-                    }
-                    out
-                }};
+            // Snapshot the bitmaps of leaves sitting on `floor_bucket` —
+            // each unique leaf consumed exactly once, regardless of how many
+            // terms reference it — then distribute. Without dedup, a leaf
+            // shared across multiple terms would otherwise be polled once per
+            // term, each call advancing past the bucket so siblings see
+            // nothing. The single-consume + distribute keeps storage reads
+            // proportional to unique keys, not literal occurrences.
+            let mut snapshot: Vec<Option<RoaringBitmap>> =
+                (0..leaf_count).map(|_| None).collect();
+            let mut on_floor = vec![false; leaf_count];
+            for i in 0..leaf_count {
+                if !unreferenced[i]
+                    && matches!(class[i], Some(LeafHead::Bucket(b)) if b == floor_bucket)
+                {
+                    on_floor[i] = true;
+                    front[i] = post;
+                    snapshot[i] = match Pin::new(&mut leaves[i]).next().await {
+                        Some(Ok((_, bitmap))) => Some(bitmap),
+                        _ => None,
+                    };
+                }
             }
+            let mut remaining_refs = count_on_floor_refs(&terms, &on_floor);
 
             let mut result: Option<RoaringBitmap> = None;
             for term in &terms {
-                if term.dead {
+                if term.unsatisfiable {
                     continue;
                 }
-                let includes = take_side!(&term.includes);
-                let excludes = take_side!(&term.excludes);
+                let includes: Vec<Option<RoaringBitmap>> = term
+                    .includes
+                    .iter()
+                    .map(|&i| {
+                        take_snapshot_bitmap(&mut snapshot, &mut remaining_refs, &on_floor, i)
+                    })
+                    .collect();
+                let excludes: Vec<Option<RoaringBitmap>> = term
+                    .excludes
+                    .iter()
+                    .map(|&i| {
+                        take_snapshot_bitmap(&mut snapshot, &mut remaining_refs, &on_floor, i)
+                    })
+                    .collect();
                 if let Some(bitmap) = eval_term_at_bucket(includes, excludes) {
                     result = Some(match result {
                         None => bitmap,
@@ -673,7 +670,7 @@ mod tests {
 
     /// Tightest-budget starvation. `term1 = (a AND b)` is disjoint (matches
     /// nothing) and `term2 = c`'s only data sits far ahead of the request floor.
-    /// With `budget == leaf_count`, round 1 still fetches every leaf's first
+    /// With `budget == unique_leaf_count`, round 1 still fetches every leaf's first
     /// bucket, so the driver derives a real floor watermark before the budget
     /// exhausts advancing `a`. The scan therefore ends with that forward-progress
     /// watermark ahead of `SCAN_LIMIT` — never a cursorless error that would
@@ -702,7 +699,7 @@ mod tests {
         ])
         .unwrap();
 
-        // Budget == leaf_count: the runtime floor, the tightest starvation.
+        // Budget == unique_leaf_count: the runtime floor, the tightest starvation.
         let stream = eval_bitmap_query_stream(
             source,
             query,
@@ -834,6 +831,81 @@ mod tests {
         );
         assert!(BitmapLiteral::include(vec![0xff, 0x00]).is_err());
         assert!(BitmapTerm::new(vec![exclude(b"neg")]).is_err());
+    }
+
+    /// Two terms share the same include literal `a`. Dedup must collapse them
+    /// to a single backend scan of `a` and distribute its per-bucket bitmap to
+    /// both terms — otherwise term 2 would see `a` already consumed by term 1
+    /// at the floor bucket and silently drop matches.
+    #[tokio::test]
+    async fn shared_include_across_terms_scans_dimension_once() {
+        use crate::bitmap_query::test_utils::CountingBucketSource;
+
+        let source = CountingBucketSource::new(BTreeMap::from([
+            (test_key(b"a"), vec![(0, vec![1, 2, 3])]),
+            (test_key(b"b"), vec![(0, vec![1])]),
+            (test_key(b"c"), vec![(0, vec![2])]),
+        ]));
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), include(b"b")]).unwrap(),
+            BitmapTerm::new(vec![include(b"a"), include(b"c")]).unwrap(),
+        ])
+        .unwrap();
+
+        let stream = eval_bitmap_query_stream(
+            source.clone(),
+            query,
+            0..200_000,
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            u64::MAX,
+            |_| {},
+        );
+        let (items, _watermarks) = drain_marked(stream).await.unwrap();
+
+        // Term 1: a ∩ b = {1}; term 2: a ∩ c = {2}; OR = {1, 2}. If `a` were
+        // not distributed to term 2, term 2 would be empty and items = [1].
+        assert_eq!(items, vec![1, 2]);
+        // The dedup property: `a` was scanned exactly once.
+        assert_eq!(source.scan_count(&test_key(b"a")), 1);
+        assert_eq!(source.scan_count(&test_key(b"b")), 1);
+        assert_eq!(source.scan_count(&test_key(b"c")), 1);
+    }
+
+    /// Same key appearing as include in one term and exclude in another:
+    /// dedup still collapses to one leaf, and snapshot-distribute clones so
+    /// both polarities see the bitmap.
+    #[tokio::test]
+    async fn shared_key_across_include_and_exclude_terms_scans_once() {
+        use crate::bitmap_query::test_utils::CountingBucketSource;
+
+        let source = CountingBucketSource::new(BTreeMap::from([
+            (test_key(b"a"), vec![(0, vec![1, 2])]),
+            (test_key(b"b"), vec![(0, vec![1, 2, 3])]),
+        ]));
+        // term 1: b AND NOT a -> {3}
+        // term 2: b AND a     -> {1, 2}
+        // OR -> {1, 2, 3}
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"b"), exclude(b"a")]).unwrap(),
+            BitmapTerm::new(vec![include(b"b"), include(b"a")]).unwrap(),
+        ])
+        .unwrap();
+
+        let stream = eval_bitmap_query_stream(
+            source.clone(),
+            query,
+            0..100_000,
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            u64::MAX,
+            |_| {},
+        );
+        let (items, _watermarks) = drain_marked(stream).await.unwrap();
+
+        assert_eq!(items, vec![1, 2, 3]);
+        assert_eq!(source.scan_count(&test_key(b"a")), 1);
+        assert_eq!(source.scan_count(&test_key(b"b")), 1);
     }
 
     #[tokio::test]
@@ -1000,7 +1072,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn scan_budget_below_leaf_count_yields_misconfig_error() {
+    async fn scan_budget_below_unique_leaf_count_yields_misconfig_error() {
         // Defensive runtime guard: a per-request budget smaller than the
         // query's leaf count would produce a cursorless SCAN_LIMIT
         // (merged watermarks stay None until every child reports). The
@@ -1117,7 +1189,7 @@ mod tests {
 
         // Budget = leaf count gives every leaf one bucket fetch (the
         // minimum the runtime guard allows; see
-        // `scan_budget_below_leaf_count_yields_misconfig_error`). Once
+        // `scan_budget_below_unique_leaf_count_yields_misconfig_error`). Once
         // the budget exhausts mid-scan, ScanLimitExceeded propagates
         // without the driver mistaking the exclude leaf's error for a
         // natural EOF.

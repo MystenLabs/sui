@@ -789,8 +789,8 @@ impl LocalExec {
             &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::Err(error),
-            None => ExecutionOrEarlyError::Ok(()),
+            None => ExecutionOrEarlyError::ok(None),
+            Some(errors) => ExecutionOrEarlyError::failed(errors, None),
         };
         let (inner_store, gas_status, effects, _timings, result) = executor
             .execute_transaction_to_effects_and_execution_error(
@@ -867,8 +867,8 @@ impl LocalExec {
             &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::Err(error),
-            None => ExecutionOrEarlyError::Ok(()),
+            None => ExecutionOrEarlyError::ok(None),
+            Some(errors) => ExecutionOrEarlyError::failed(errors, None),
         };
         if let ProgrammableTransaction(pt) = transaction_kind {
             trace!(
@@ -985,8 +985,8 @@ impl LocalExec {
             &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::Err(error),
-            None => ExecutionOrEarlyError::Ok(()),
+            None => ExecutionOrEarlyError::ok(None),
+            Some(errors) => ExecutionOrEarlyError::failed(errors, None),
         };
         let (_, _, effects, _timings, exec_res) = executor
             .execute_transaction_to_effects_and_execution_error(

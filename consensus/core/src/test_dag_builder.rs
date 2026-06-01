@@ -428,7 +428,6 @@ pub struct LayerBuilder<'a> {
     blocks: Vec<VerifiedBlock>,
 }
 
-#[allow(unused)]
 impl<'a> LayerBuilder<'a> {
     fn new(dag_builder: &'a mut DagBuilder, start_round: Round) -> Self {
         assert!(start_round > 0, "genesis round is created by default");
@@ -642,7 +641,7 @@ impl<'a> LayerBuilder<'a> {
         round: Round,
     ) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
         let quorum_threshold = self.dag_builder.context.committee.quorum_threshold() as usize;
-        let mut authorities: Vec<AuthorityIndex> = self
+        let authorities: Vec<AuthorityIndex> = self
             .dag_builder
             .context
             .committee
@@ -707,7 +706,7 @@ impl<'a> LayerBuilder<'a> {
     fn configure_no_leader_links(
         &mut self,
         authorities: Vec<AuthorityIndex>,
-        round: Round,
+        _round: Round,
     ) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
         let mut missing_leaders = Vec::new();
         let mut specified_leader_offsets = self

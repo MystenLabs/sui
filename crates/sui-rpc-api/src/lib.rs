@@ -153,8 +153,8 @@ impl RpcService {
         // reflection services and the metrics allowlist so they cannot drift
         // out of sync.
         let file_descriptor_sets: Vec<&[u8]> = [
-            crate::proto::google::protobuf::FILE_DESCRIPTOR_SET,
-            crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
+            sui_rpc::proto::google::protobuf::FILE_DESCRIPTOR_SET,
+            sui_rpc::proto::google::rpc::FILE_DESCRIPTOR_SET,
             sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
             sui_rpc::proto::sui::rpc::v2alpha::FILE_DESCRIPTOR_SET,
             tonic_health::pb::FILE_DESCRIPTOR_SET,
@@ -181,6 +181,11 @@ impl RpcService {
                     self.clone(),
                 )
                 .send_compressed(tonic::codec::CompressionEncoding::Zstd);
+            let proof_service_v2alpha =
+                sui_rpc::proto::sui::rpc::v2alpha::proof_service_server::ProofServiceServer::new(
+                    self.clone(),
+                )
+                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
             let transaction_execution_service = sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionServiceServer::new(self.clone())
                 .send_compressed(tonic::codec::CompressionEncoding::Zstd);
             let state_service =
@@ -197,15 +202,6 @@ impl RpcService {
                     self.clone(),
                 )
                 .send_compressed(tonic::codec::CompressionEncoding::Zstd);
-
-            let event_service_alpha =
-                crate::grpc::alpha::event_service_proto::event_service_server::EventServiceServer::new(
-                    self.clone(),
-                );
-            let proof_service_alpha =
-                crate::grpc::alpha::proof_service_proto::proof_service_server::ProofServiceServer::new(
-                    crate::grpc::alpha::proof_service::ProofServiceImpl::new(self.clone()),
-                );
 
             let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -233,8 +229,7 @@ impl RpcService {
                 service_name(&move_package_service),
                 service_name(&name_service),
                 service_name(&ledger_service_v2alpha),
-                service_name(&event_service_alpha),
-                service_name(&proof_service_alpha),
+                service_name(&proof_service_v2alpha),
                 service_name(&reflection_v1),
                 service_name(&reflection_v1alpha),
             ] {
@@ -253,9 +248,7 @@ impl RpcService {
                 .add_service(name_service)
                 // V2alpha
                 .add_service(ledger_service_v2alpha)
-                // alpha
-                .add_service(event_service_alpha)
-                .add_service(proof_service_alpha)
+                .add_service(proof_service_v2alpha)
                 // Reflection
                 .add_service(reflection_v1)
                 .add_service(reflection_v1alpha);

@@ -13,23 +13,22 @@ use tap::TapFallible;
 use tokio::sync::broadcast;
 
 use crate::{
-    BlockVerifier, TransactionVoteTracker,
+    BlockVerifier, RandomnessSignatureHandler, TransactionVoteTracker,
     authority_service::{BroadcastStream, SubscriptionCounter},
     block::{BlockAPI as _, SignedBlock, VerifiedBlock},
     block_sync_service::BlockSyncService,
     commit::{CommitRange, TrustedCommit},
-    commit_vote_monitor::CommitVoteMonitor,
+    commit_vote_monitor::{CommitVoteMonitor, is_commit_lagging},
     context::Context,
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    network::{NodeId, ObserverBlockStream, ObserverNetworkService, PeerId},
+    network::{
+        NodeId, ObserverBlockStream, ObserverNetworkService, ObserverStreamItem, PeerId,
+        observer::AuxiliaryData,
+    },
     synchronizer::SynchronizerHandle,
 };
-
-// Is used to calculate the threshold for blocking blocks when the commit index is lagging too far from the quorum commit index.
-// This is a multiplier of the commit_sync_batch_size.
-pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
 
 /// Serves observer requests from observer or validator peers. It is the server-side
 /// counterpart to `ObserverNetworkClient`.
@@ -44,6 +43,7 @@ pub(crate) struct ObserverService {
     transaction_vote_tracker: TransactionVoteTracker,
     synchronizer: Arc<SynchronizerHandle>,
     block_sync_service: Arc<BlockSyncService>,
+    randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
 }
 
 impl ObserverService {
@@ -57,6 +57,7 @@ impl ObserverService {
         transaction_vote_tracker: TransactionVoteTracker,
         synchronizer: Arc<SynchronizerHandle>,
         block_sync_service: Arc<BlockSyncService>,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
         Self {
@@ -70,6 +71,7 @@ impl ObserverService {
             transaction_vote_tracker,
             synchronizer,
             block_sync_service,
+            randomness_signature_handler,
         }
     }
 }
@@ -153,12 +155,11 @@ impl ObserverNetworkService for ObserverService {
         // it is ok to reject after block verifications instead of before.
         let last_commit_index = self.dag_state.read().last_commit_index();
         let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
-        // The threshold to ignore block should be larger than commit_sync_batch_size,
-        // to avoid excessive block rejections and synchronizations.
-        if last_commit_index
-            + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
-            < quorum_commit_index
-        {
+        if is_commit_lagging(
+            self.context.as_ref(),
+            last_commit_index,
+            quorum_commit_index,
+        ) {
             self.context
                 .metrics
                 .node_metrics
@@ -244,27 +245,50 @@ impl ObserverNetworkService for ObserverService {
             past_blocks
         };
 
-        let past_stream = stream::iter(
-            past_blocks
-                .into_iter()
-                .map(move |block| vec![block.serialized().clone()]),
-        );
+        let past_stream =
+            stream::iter(
+                past_blocks
+                    .into_iter()
+                    .map(move |block| ObserverStreamItem {
+                        blocks: vec![block.serialized().clone()],
+                        auxiliary_data: Default::default(),
+                    }),
+            );
 
         const MAX_BLOCKS_PER_POLL: usize = 20;
-        let live_stream = BroadcastStream::<VerifiedBlock>::new(
+        let live_block_stream = BroadcastStream::<VerifiedBlock>::new(
             PeerId::Observer(Box::new(peer)),
             self.rx_accepted_block_broadcast.resubscribe(),
             MAX_BLOCKS_PER_POLL,
             self.subscription_counter.clone(),
         )
-        .map(|blocks| {
-            blocks
+        .map(|blocks| ObserverStreamItem {
+            blocks: blocks
                 .into_iter()
                 .map(|block| block.serialized().clone())
-                .collect()
+                .collect(),
+            auxiliary_data: Default::default(),
         });
 
-        Ok(Box::pin(past_stream.chain(live_stream)))
+        let block_stream = past_stream.chain(live_block_stream);
+
+        // Merge randomness signature broadcast into the block stream when a handler is available.
+        if let Some(handler) = &self.randomness_signature_handler {
+            const MAX_SIGNATURES_PER_POLL: usize = 20;
+            let sig_stream = BroadcastStream::new_untracked(
+                handler.subscribe_randomness_signatures(),
+                MAX_SIGNATURES_PER_POLL,
+            )
+            .map(|sigs| ObserverStreamItem {
+                blocks: vec![],
+                auxiliary_data: AuxiliaryData {
+                    randomness_signatures: sigs,
+                },
+            });
+            Ok(Box::pin(futures::stream::select(block_stream, sig_stream)))
+        } else {
+            Ok(Box::pin(block_stream))
+        }
     }
 
     async fn handle_fetch_blocks(
@@ -350,6 +374,7 @@ mod tests {
             transaction_vote_tracker,
             create_mock_synchronizer(),
             block_sync_service,
+            None,
         );
 
         // Observer starts with no blocks seen
@@ -374,8 +399,8 @@ mod tests {
         // Collect all blocks from the batched stream.
         let mut received_blocks = Vec::new();
         while received_blocks.len() < 3 {
-            let batch = stream.next().await.unwrap();
-            for block_bytes in batch {
+            let item = stream.next().await.unwrap();
+            for block_bytes in item.blocks {
                 let signed: SignedBlock = bcs::from_bytes(&block_bytes).unwrap();
                 received_blocks.push(VerifiedBlock::new_verified(signed, block_bytes));
             }
@@ -421,6 +446,7 @@ mod tests {
             transaction_vote_tracker,
             create_mock_synchronizer(),
             block_sync_service,
+            None,
         );
 
         let peer = keys[0].0.public().clone();

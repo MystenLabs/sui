@@ -29,8 +29,6 @@ jobs:
             ubuntu-ghcloud,
             ubuntu-arm64,
             windows-ghcloud,
-            macos-latest-large,
-            macos-latest-xlarge,
           ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -48,35 +46,11 @@ jobs:
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
-      - name: Install postgres (MacOS arm64)
-        if: ${{ matrix.os == 'macos-latest-xlarge' }}
-        shell: bash
-        env:
-          PQ_LIB_DIR: "$(brew --prefix libpq)/lib"
-          LIBRARY_PATH: "/opt/homebrew/lib:$LIBRARY_PATH"
-          PKG_CONFIG_PATH: "/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
-          PATH: "/opt/homebrew/bin:$PATH"
-        run: |
-          brew install postgresql
-
       - name: Install postgres (Ubuntu arm64)
         if: ${{ matrix.os == 'ubuntu-arm64' }}
         shell: bash
         run: |
           sudo apt update && sudo apt install -y libpq-dev
-
-      - name: Remove unused apps (MacOS arm64)
-        if: ${{ matrix.os == 'macos-latest-xlarge' }}
-        continue-on-error: true
-        shell: bash
-        run: |
-          # MacOS arm64 runner only has 14GB avaialble, which is too small for our builds, so removing unused softwared.
-          df -h /
-          sudo rm -rf /Applications/Xcode*.app
-          sudo rm -rf ~/Library/Developer/Xcode/DerivedData
-          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/*
-          sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
-          df -h /
 
       - uses: ./.github/actions/setup-sccache
         with:
@@ -190,7 +164,7 @@ jobs:
           echo "| Platform | Objects | Size | Job Status |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|---|---|" >> $GITHUB_STEP_SUMMARY
 
-          for os in ubuntu-ghcloud ubuntu-arm64 windows-ghcloud macos-latest-large macos-latest-xlarge; do
+          for os in ubuntu-ghcloud ubuntu-arm64 windows-ghcloud; do
             stats=$(aws s3 ls "s3://mystenlabs-sccache/${os}/" --summarize --recursive 2>&1 | tail -2)
             objects=$(echo "$stats" | grep 'Total Objects' | awk '{print $3}')
             bytes=$(echo "$stats" | grep 'Total Size' | awk '{print $3}')

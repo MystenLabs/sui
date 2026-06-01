@@ -126,8 +126,8 @@ pub fn execute_transaction_to_effects(
         &FundsWithdrawStatus::MaybeSufficient,
     );
     let execution_params = match early_execution_error {
-        Some(error) => ExecutionOrEarlyError::Err(error),
-        None => ExecutionOrEarlyError::Ok(()),
+        None => ExecutionOrEarlyError::ok(None),
+        Some(errors) => ExecutionOrEarlyError::failed(errors, None),
     };
     let (inner_store, gas_status, effects, _execution_timing, result) = executor
         .executor

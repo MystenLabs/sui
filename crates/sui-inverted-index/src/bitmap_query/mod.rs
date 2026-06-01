@@ -25,6 +25,8 @@
 //! source is sparse, ordered by the requested scan direction, and stores bitmap
 //! positions relative to that bucket.
 
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ops::Range;
 
 use anyhow::Result;
@@ -257,6 +259,12 @@ impl BitmapLiteral {
     pub fn exclude(dimension_key: Vec<u8>) -> Result<Self> {
         Ok(Self::Exclude(BitmapKey::new(dimension_key)?))
     }
+
+    pub(crate) fn key_bytes(&self) -> &[u8] {
+        match self {
+            BitmapLiteral::Include(k) | BitmapLiteral::Exclude(k) => k.as_bytes(),
+        }
+    }
 }
 
 impl BitmapQuery {
@@ -275,11 +283,17 @@ impl BitmapQuery {
         })
     }
 
-    /// Total leaf literal count across every term. The per-request
-    /// budget must be at least this many so every leaf can emit its
-    /// first watermark.
-    pub fn leaf_count(&self) -> usize {
-        self.terms.iter().map(|t| t.literals.len()).sum()
+    /// Count of distinct dimension-key leaves the query will scan. Identical
+    /// keys across literals (whether within a term or across terms) collapse
+    /// to one leaf at evaluation time, so the per-request budget floor —
+    /// "every leaf can emit its first watermark" — applies to this
+    /// deduplicated count, not the raw literal total.
+    pub fn unique_leaf_count(&self) -> usize {
+        self.terms
+            .iter()
+            .flat_map(|t| t.literals.iter().map(|l| l.key_bytes()))
+            .collect::<HashSet<_>>()
+            .len()
     }
 }
 
@@ -295,16 +309,50 @@ impl BitmapTerm {
     }
 }
 
-fn split_term_literals(term: BitmapTerm) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
-    let mut include = Vec::new();
-    let mut exclude = Vec::new();
-    for literal in term.literals {
-        match literal {
-            BitmapLiteral::Include(key) => include.push(key.into_inner()),
-            BitmapLiteral::Exclude(key) => exclude.push(key.into_inner()),
+/// Deduplicated leaf list + per-term references over those leaves, ready for
+/// the evaluator. `keys[i]` is the dimension-key bytes for leaf `i`; each
+/// [`TermSpec`] references leaves by that index.
+pub(crate) struct DedupedQuery {
+    pub(crate) keys: Vec<Vec<u8>>,
+    pub(crate) terms: Vec<TermSpec>,
+}
+
+/// Deduplicate literals across the whole query and translate each term's
+/// includes/excludes into indices over the shared leaf list.
+///
+/// Dedup is keyed on encoded dimension-key bytes, so the same key appearing
+/// in multiple terms (e.g. `(sender=A AND module=X) OR (sender=A AND
+/// type=Y)`) maps to a single backend scan instead of two duplicate scans.
+pub(crate) fn build_term_specs(terms: Vec<BitmapTerm>) -> DedupedQuery {
+    let mut key_to_idx: HashMap<Vec<u8>, usize> = HashMap::new();
+    let mut keys: Vec<Vec<u8>> = Vec::new();
+    let mut specs: Vec<TermSpec> = Vec::with_capacity(terms.len());
+    for term in terms {
+        let mut include_idx = Vec::with_capacity(term.literals.len());
+        let mut exclude_idx = Vec::with_capacity(term.literals.len());
+        for literal in term.literals {
+            let (push_target, key) = match literal {
+                BitmapLiteral::Include(k) => (&mut include_idx, k.into_inner()),
+                BitmapLiteral::Exclude(k) => (&mut exclude_idx, k.into_inner()),
+            };
+            let idx = match key_to_idx.get(&key) {
+                Some(&i) => i,
+                None => {
+                    let i = keys.len();
+                    key_to_idx.insert(key.clone(), i);
+                    keys.push(key);
+                    i
+                }
+            };
+            push_target.push(idx);
         }
+        specs.push(TermSpec {
+            includes: include_idx,
+            excludes: exclude_idx,
+            unsatisfiable: false,
+        });
     }
-    (include, exclude)
+    DedupedQuery { keys, terms: specs }
 }
 
 /// The less-advanced of two frontier positions in scan direction: the min
@@ -350,6 +398,79 @@ pub(crate) fn bucket_edges(
     }
 }
 
+/// Pull the snapshotted bitmap for leaf `i` to give to one referencing term
+/// this round. Returns `None` if the leaf isn't on the floor bucket (so the
+/// term short-circuits). When `remaining_refs[i] > 1`, the bitmap is cloned so
+/// other referencing terms still see it; the last reference takes by value to
+/// avoid an unnecessary copy in the common single-reference case.
+pub(crate) fn take_snapshot_bitmap(
+    snapshot: &mut [Option<RoaringBitmap>],
+    remaining_refs: &mut [usize],
+    on_floor: &[bool],
+    i: usize,
+) -> Option<RoaringBitmap> {
+    if !on_floor[i] {
+        return None;
+    }
+    if remaining_refs[i] > 1 {
+        remaining_refs[i] -= 1;
+        snapshot[i].clone()
+    } else {
+        remaining_refs[i] = remaining_refs[i].saturating_sub(1);
+        snapshot[i].take()
+    }
+}
+
+/// Per-round refcount: how many satisfiable term-side slots reference each
+/// on-floor leaf. Drives [`take_snapshot_bitmap`]'s take-vs-clone decision so
+/// the last referencing slot reclaims the bitmap by value.
+pub(crate) fn count_on_floor_refs(terms: &[TermSpec], on_floor: &[bool]) -> Vec<usize> {
+    let mut refs = vec![0usize; on_floor.len()];
+    for term in terms {
+        if term.unsatisfiable {
+            continue;
+        }
+        for &i in term.includes.iter().chain(term.excludes.iter()) {
+            if on_floor[i] {
+                refs[i] += 1;
+            }
+        }
+    }
+    refs
+}
+
+/// Recompute leaf liveness from current term state. A leaf becomes
+/// `unreferenced` when no satisfiable term still points at it, or when its
+/// head is at EOF (the bucket stream is permanently exhausted; any further
+/// peek would be wasted work, and any include-referencing term will be marked
+/// `unsatisfiable` separately).
+///
+/// `unreferenced` is monotonic — entries only transition false → true — so
+/// this is safe to invoke each round; previously-retired leaves stay retired.
+pub(crate) fn recompute_unreferenced(
+    terms: &[TermSpec],
+    class: &[Option<LeafHead>],
+    unreferenced: &mut [bool],
+) {
+    let leaf_count = unreferenced.len();
+    let mut referenced = vec![false; leaf_count];
+    for term in terms {
+        if term.unsatisfiable {
+            continue;
+        }
+        for &i in term.includes.iter().chain(term.excludes.iter()) {
+            if !unreferenced[i] && !matches!(class[i], Some(LeafHead::Eof)) {
+                referenced[i] = true;
+            }
+        }
+    }
+    for i in 0..leaf_count {
+        if !referenced[i] {
+            unreferenced[i] = true;
+        }
+    }
+}
+
 /// Evaluate one DNF term at a single bucket from the per-leaf bitmaps present
 /// there: intersect the includes (any absent include ⇒ empty term), then
 /// subtract the union of the present excludes (`a AND NOT b`). Returns the
@@ -381,9 +502,9 @@ pub(crate) fn eval_term_at_bucket(
 pub(crate) struct TermSpec {
     pub(crate) includes: Vec<usize>,
     pub(crate) excludes: Vec<usize>,
-    /// Set once any include leaf hits EOF: the intersection can never match
-    /// again, so the whole term is retired and its leaves dropped.
-    pub(crate) dead: bool,
+    /// Set once any include leaf hits EOF: the term's intersection is
+    /// permanently empty (it can never match again). Latched.
+    pub(crate) unsatisfiable: bool,
 }
 
 /// A leaf's head this round, from a non-consuming peek.
@@ -394,21 +515,23 @@ pub(crate) enum LeafHead {
 }
 
 #[cfg(test)]
-mod test_utils {
+pub(crate) mod test_utils {
     use std::collections::BTreeMap;
+    use std::collections::HashMap;
     use std::sync::Arc;
+    use std::sync::Mutex;
 
     use futures::StreamExt;
     use futures::stream;
 
     use super::*;
 
-    pub(super) const BUCKET_SIZE: u64 = 100_000;
-    pub(super) type TestBuckets = BTreeMap<Vec<u8>, Vec<(u64, Vec<u32>)>>;
+    pub(crate) const BUCKET_SIZE: u64 = 100_000;
+    pub(crate) type TestBuckets = BTreeMap<Vec<u8>, Vec<(u64, Vec<u32>)>>;
 
     #[derive(Clone)]
-    pub(super) struct TestBucketSource {
-        pub(super) buckets: Arc<TestBuckets>,
+    pub(crate) struct TestBucketSource {
+        pub(crate) buckets: Arc<TestBuckets>,
     }
 
     impl BitmapBucketSource for TestBucketSource {
@@ -436,7 +559,7 @@ mod test_utils {
     }
 
     impl TestBucketSource {
-        pub(super) fn bucket_items(
+        pub(crate) fn bucket_items(
             &self,
             dimension_key: &[u8],
             direction: ScanDirection,
@@ -452,7 +575,7 @@ mod test_utils {
         }
     }
 
-    pub(super) fn make_bitmap(bits: &[u32]) -> RoaringBitmap {
+    pub(crate) fn make_bitmap(bits: &[u32]) -> RoaringBitmap {
         let mut bm = RoaringBitmap::new();
         for &b in bits {
             bm.insert(b);
@@ -460,15 +583,89 @@ mod test_utils {
         bm
     }
 
-    pub(super) fn test_key(value: &[u8]) -> Vec<u8> {
+    pub(crate) fn test_key(value: &[u8]) -> Vec<u8> {
         crate::dimensions::encode_dimension_key(crate::dimensions::IndexDimension::Sender, value)
     }
 
-    pub(super) fn include(value: &[u8]) -> BitmapLiteral {
+    pub(crate) fn include(value: &[u8]) -> BitmapLiteral {
         BitmapLiteral::include(test_key(value)).unwrap()
     }
 
-    pub(super) fn exclude(value: &[u8]) -> BitmapLiteral {
+    /// A `TestBucketSource` that records how many times `scan_bucket_*` is
+    /// invoked per dimension key. Used to verify the evaluator deduplicates
+    /// leaves across terms (a key referenced from multiple terms should be
+    /// scanned exactly once).
+    #[derive(Clone)]
+    pub(crate) struct CountingBucketSource {
+        pub(crate) buckets: Arc<TestBuckets>,
+        scan_counts: Arc<Mutex<HashMap<Vec<u8>, usize>>>,
+    }
+
+    impl CountingBucketSource {
+        pub(crate) fn new(buckets: TestBuckets) -> Self {
+            Self {
+                buckets: Arc::new(buckets),
+                scan_counts: Arc::new(Mutex::new(HashMap::new())),
+            }
+        }
+
+        pub(crate) fn scan_count(&self, key: &[u8]) -> usize {
+            self.scan_counts
+                .lock()
+                .unwrap()
+                .get(key)
+                .copied()
+                .unwrap_or(0)
+        }
+
+        fn record(&self, key: &[u8]) {
+            *self
+                .scan_counts
+                .lock()
+                .unwrap()
+                .entry(key.to_vec())
+                .or_insert(0) += 1;
+        }
+
+        fn bucket_items(&self, dimension_key: &[u8], direction: ScanDirection) -> Vec<BucketItem> {
+            let mut buckets = self.buckets.get(dimension_key).cloned().unwrap_or_default();
+            if matches!(direction, ScanDirection::Descending) {
+                buckets.reverse();
+            }
+            buckets
+                .into_iter()
+                .map(|(bucket_id, bits)| Ok((bucket_id, make_bitmap(&bits))))
+                .collect()
+        }
+    }
+
+    impl BitmapBucketSource for CountingBucketSource {
+        fn scan_bucket_stream(
+            &self,
+            dimension_key: Vec<u8>,
+            _range: Range<u64>,
+            direction: ScanDirection,
+        ) -> BucketStream {
+            self.record(&dimension_key);
+            stream::iter(self.bucket_items(&dimension_key, direction)).boxed()
+        }
+    }
+
+    impl<'a> BitmapBucketIteratorSource<'a> for CountingBucketSource {
+        type Iter = std::vec::IntoIter<BucketItem>;
+
+        fn scan_bucket_iter(
+            &self,
+            dimension_key: Vec<u8>,
+            _range: Range<u64>,
+            direction: ScanDirection,
+        ) -> Self::Iter {
+            self.record(&dimension_key);
+            self.bucket_items(&dimension_key, direction).into_iter()
+        }
+    }
+
+    pub(crate) fn exclude(value: &[u8]) -> BitmapLiteral {
         BitmapLiteral::exclude(test_key(value)).unwrap()
     }
 }
@@ -476,6 +673,7 @@ mod test_utils {
 #[cfg(test)]
 mod tests {
     use super::test_utils::exclude;
+    use super::test_utils::include;
     use super::*;
 
     #[test]
@@ -488,5 +686,37 @@ mod tests {
         );
         assert!(BitmapLiteral::include(vec![0xff, 0x00]).is_err());
         assert!(BitmapTerm::new(vec![exclude(b"neg")]).is_err());
+    }
+
+    #[test]
+    fn unique_leaf_count_counts_distinct_keys_across_terms() {
+        // Two terms both include `a` and `b`; only `c` is unique to term 1
+        // and `d` to term 2. The raw literal count is 6, but only 4 unique
+        // dimension keys are scanned at eval time.
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), include(b"b"), include(b"c")]).unwrap(),
+            BitmapTerm::new(vec![include(b"a"), include(b"b"), include(b"d")]).unwrap(),
+        ])
+        .unwrap();
+        assert_eq!(query.unique_leaf_count(), 4);
+    }
+
+    #[test]
+    fn build_term_specs_collapses_duplicate_keys_to_one_leaf() {
+        // Same key used as include in one term and exclude in another should
+        // share a single leaf slot, with each term referring to it by the
+        // same index.
+        let terms = vec![
+            BitmapTerm::new(vec![include(b"a"), include(b"b")]).unwrap(),
+            BitmapTerm::new(vec![include(b"b"), exclude(b"a")]).unwrap(),
+        ];
+        let DedupedQuery { keys, terms: specs } = build_term_specs(terms);
+        assert_eq!(keys.len(), 2, "only `a` and `b` are unique");
+        // Term 0: include a (slot 0), include b (slot 1).
+        assert_eq!(specs[0].includes, vec![0, 1]);
+        assert!(specs[0].excludes.is_empty());
+        // Term 1: include b (slot 1), exclude a (slot 0) — same slots as term 0.
+        assert_eq!(specs[1].includes, vec![1]);
+        assert_eq!(specs[1].excludes, vec![0]);
     }
 }

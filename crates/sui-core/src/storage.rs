@@ -613,64 +613,6 @@ impl RpcStateReader for RestReadStore {
     }
 }
 
-struct BatchedEventIterator<'a, I>
-where
-    I: Iterator<Item = Result<crate::rpc_index::EventIndexKey, TypedStoreError>>,
-{
-    key_iter: I,
-    rocks: &'a RocksDbStore,
-    current_checkpoint: Option<u64>,
-    current_checkpoint_contents: Option<sui_types::messages_checkpoint::CheckpointContents>,
-    cached_tx_events: Option<TransactionEvents>,
-    cached_tx_digest: Option<TransactionDigest>,
-}
-
-impl<I> Iterator for BatchedEventIterator<'_, I>
-where
-    I: Iterator<Item = Result<crate::rpc_index::EventIndexKey, TypedStoreError>>,
-{
-    type Item = Result<(u64, u64, u32, u32, sui_types::event::Event), TypedStoreError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let key = match self.key_iter.next()? {
-            Ok(k) => k,
-            Err(e) => return Some(Err(e)),
-        };
-
-        if self.current_checkpoint != Some(key.checkpoint_seq) {
-            self.current_checkpoint = Some(key.checkpoint_seq);
-            self.current_checkpoint_contents = self
-                .rocks
-                .get_checkpoint_contents_by_sequence_number(key.checkpoint_seq);
-            self.cached_tx_events = None;
-            self.cached_tx_digest = None;
-        }
-
-        let checkpoint_contents = self.current_checkpoint_contents.as_ref()?;
-
-        let exec_digest = checkpoint_contents
-            .iter()
-            .nth(key.transaction_idx as usize)?;
-        let tx_digest = exec_digest.transaction;
-
-        if self.cached_tx_digest != Some(tx_digest) {
-            self.cached_tx_digest = Some(tx_digest);
-            self.cached_tx_events = self.rocks.get_events(&tx_digest);
-        }
-
-        let tx_events = self.cached_tx_events.as_ref()?;
-        let event = tx_events.data.get(key.event_index as usize)?.clone();
-
-        Some(Ok((
-            key.checkpoint_seq,
-            key.accumulator_version,
-            key.transaction_idx,
-            key.event_index,
-            event,
-        )))
-    }
-}
-
 impl RpcIndexes for RestReadStore {
     fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<sui_types::storage::EpochInfo>> {
         self.index()?
@@ -860,45 +802,5 @@ impl RpcIndexes for RestReadStore {
                 descending,
             )
             .map_err(Into::into)
-    }
-
-    fn authenticated_event_iter(
-        &self,
-        stream_id: SuiAddress,
-        start_checkpoint: u64,
-        start_accumulator_version: Option<u64>,
-        start_transaction_idx: Option<u32>,
-        start_event_idx: Option<u32>,
-        end_checkpoint: u64,
-        limit: u32,
-    ) -> sui_types::storage::error::Result<
-        Box<
-            dyn Iterator<
-                    Item = Result<(u64, u64, u32, u32, sui_types::event::Event), TypedStoreError>,
-                > + '_,
-        >,
-    > {
-        let index = self.index()?;
-        let key_iter = index.event_iter(
-            stream_id,
-            start_checkpoint,
-            start_accumulator_version.unwrap_or(0),
-            start_transaction_idx.unwrap_or(0),
-            start_event_idx.unwrap_or(0),
-            end_checkpoint,
-            limit,
-        )?;
-
-        let rocks = &self.rocks;
-        let iter = BatchedEventIterator {
-            key_iter,
-            rocks,
-            current_checkpoint: None,
-            current_checkpoint_contents: None,
-            cached_tx_events: None,
-            cached_tx_digest: None,
-        };
-
-        Ok(Box::new(iter))
     }
 }
