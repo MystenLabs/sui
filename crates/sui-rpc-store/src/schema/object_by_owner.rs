@@ -288,10 +288,8 @@ impl<R: Reader> super::RpcStoreSchema<R> {
         owner: SuiAddress,
         type_filter: &'a super::type_filter::TypeFilter,
     ) -> Result<Iter<'a, Key, U64Varint>, Error> {
-        self.object_by_owner.iter_prefix(&AddressOwnerTypePrefix {
-            owner,
-            type_filter,
-        })
+        self.object_by_owner
+            .iter_prefix(&AddressOwnerTypePrefix { owner, type_filter })
     }
 
     /// Iterate over every live object owned (in the object-owner

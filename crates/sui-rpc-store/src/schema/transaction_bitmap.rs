@@ -87,17 +87,14 @@ pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
     let mut opts = base_options.clone();
     opts.set_merge_operator_associative("transaction_bitmap_merge", merge);
     let floor = tx_seq_floor().clone();
-    opts.set_compaction_filter(
-        "transaction_bitmap_pruning",
-        move |_level, key, _value| {
-            let pruned_exclusive = floor.load(Ordering::Relaxed);
-            if should_remove_bucket(key, pruned_exclusive) {
-                rocksdb::CompactionDecision::Remove
-            } else {
-                rocksdb::CompactionDecision::Keep
-            }
-        },
-    );
+    opts.set_compaction_filter("transaction_bitmap_pruning", move |_level, key, _value| {
+        let pruned_exclusive = floor.load(Ordering::Relaxed);
+        if should_remove_bucket(key, pruned_exclusive) {
+            rocksdb::CompactionDecision::Remove
+        } else {
+            rocksdb::CompactionDecision::Keep
+        }
+    });
     opts
 }
 
@@ -370,7 +367,10 @@ mod tests {
         }
         .encode()
         .unwrap();
-        assert!(!should_remove_bucket(&just_at_floor_key, TX_BUCKET_SIZE - 1));
+        assert!(!should_remove_bucket(
+            &just_at_floor_key,
+            TX_BUCKET_SIZE - 1
+        ));
 
         // Move the floor one past the bucket's highest tx_seq:
         // every entry it could hold is pruned, removable.

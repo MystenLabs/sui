@@ -90,7 +90,12 @@ mod tests {
     fn get_returns_none_for_unknown_digest() {
         let (_dir, _db, schema) = fresh_db();
         let digest = CheckpointDigest::random();
-        assert!(schema.get_checkpoint_seq_by_digest(&digest).unwrap().is_none());
+        assert!(
+            schema
+                .get_checkpoint_seq_by_digest(&digest)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -130,13 +135,7 @@ mod tests {
             .unwrap();
         batch.commit().unwrap();
 
-        assert_eq!(
-            schema.get_checkpoint_seq_by_digest(&d1).unwrap(),
-            Some(1),
-        );
-        assert_eq!(
-            schema.get_checkpoint_seq_by_digest(&d2).unwrap(),
-            Some(2),
-        );
+        assert_eq!(schema.get_checkpoint_seq_by_digest(&d1).unwrap(), Some(1),);
+        assert_eq!(schema.get_checkpoint_seq_by_digest(&d2).unwrap(), Some(2),);
     }
 }

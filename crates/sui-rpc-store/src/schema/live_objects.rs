@@ -65,10 +65,7 @@ pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
 impl<R: Reader> super::RpcStoreSchema<R> {
     /// Look up the latest live version of an object id, without
     /// fetching the object itself.
-    pub fn get_live_object_version(
-        &self,
-        id: ObjectID,
-    ) -> Result<Option<SequenceNumber>, Error> {
+    pub fn get_live_object_version(&self, id: ObjectID) -> Result<Option<SequenceNumber>, Error> {
         Ok(self
             .live_objects
             .get(&Key(id))?
@@ -198,11 +195,7 @@ mod tests {
             )
             .unwrap();
         batch
-            .put(
-                &schema.live_objects,
-                &Key(id),
-                &U64Varint(version.value()),
-            )
+            .put(&schema.live_objects, &Key(id), &U64Varint(version.value()))
             .unwrap();
         batch.commit().unwrap();
 

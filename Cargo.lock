@@ -16729,6 +16729,7 @@ dependencies = [
  "bytes",
  "move-core-types",
  "prost 0.14.1",
+ "roaring",
  "rocksdb",
  "sui-consistent-store",
  "sui-indexer-alt-framework",

@@ -60,10 +60,7 @@ pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
 impl<R: Reader> super::RpcStoreSchema<R> {
     /// Look up the sequence number of the transaction identified
     /// by `digest`.
-    pub fn get_tx_seq_by_digest(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<u64>, Error> {
+    pub fn get_tx_seq_by_digest(&self, digest: &TransactionDigest) -> Result<Option<u64>, Error> {
         Ok(self.tx_seq_by_digest.get(&Key(*digest))?.map(|v| v.0))
     }
 }

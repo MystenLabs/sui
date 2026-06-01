@@ -207,7 +207,8 @@ impl<R: Reader> super::RpcStoreSchema<R> {
         &self,
         dimension_key: Vec<u8>,
     ) -> Result<Iter<'_, Key, Value>, Error> {
-        self.event_bitmap.iter_prefix(&DimensionPrefix(dimension_key))
+        self.event_bitmap
+            .iter_prefix(&DimensionPrefix(dimension_key))
     }
 }
 
@@ -431,10 +432,7 @@ mod tests {
         assert_eq!(packed_pruning_floor(1), 1u64 << EVENT_BITS);
         // Just below the overflow threshold.
         let just_below = (1u64 << (64 - EVENT_BITS)) - 1;
-        assert_eq!(
-            packed_pruning_floor(just_below),
-            just_below << EVENT_BITS,
-        );
+        assert_eq!(packed_pruning_floor(just_below), just_below << EVENT_BITS,);
         // At the threshold — `tx_seq << EVENT_BITS` would
         // overflow, so we saturate.
         assert_eq!(packed_pruning_floor(1u64 << (64 - EVENT_BITS)), u64::MAX);
@@ -450,11 +448,7 @@ mod tests {
         // buckets: bucket 0, bucket 1 (just past 4096 txs), and
         // bucket 3.
         let txs_per_bucket = EVENT_BUCKET_SIZE >> EVENT_BITS;
-        let tx_seqs = [
-            0u64,
-            txs_per_bucket + 5,
-            3 * txs_per_bucket + 9,
-        ];
+        let tx_seqs = [0u64, txs_per_bucket + 5, 3 * txs_per_bucket + 9];
 
         let mut batch = db.batch();
         for tx in tx_seqs {
@@ -463,7 +457,9 @@ mod tests {
         }
         // Unrelated dimension — must not appear in our iter.
         let (k_other, v_other) = store_match(other, 0, 0);
-        batch.merge(&schema.event_bitmap, &k_other, &v_other).unwrap();
+        batch
+            .merge(&schema.event_bitmap, &k_other, &v_other)
+            .unwrap();
         batch.commit().unwrap();
 
         let buckets: Vec<u64> = schema

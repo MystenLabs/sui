@@ -36,10 +36,7 @@ pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
 /// BCS-encode failures here would indicate either OOM or a bug in
 /// the types' `Serialize` impls; we panic rather than thread a
 /// `Result` through every call site.
-pub fn store(
-    summary: &CheckpointSummary,
-    signature: &AuthorityStrongQuorumSignInfo,
-) -> Value {
+pub fn store(summary: &CheckpointSummary, signature: &AuthorityStrongQuorumSignInfo) -> Value {
     let summary_bcs = bcs::to_bytes(summary).expect("bcs encode CheckpointSummary");
     let signature_bcs = bcs::to_bytes(signature).expect("bcs encode AuthorityStrongQuorumSignInfo");
     Protobuf(StoredCheckpointSummary {
@@ -66,9 +63,7 @@ impl<R: Reader> super::RpcStoreSchema<R> {
         let summary: CheckpointSummary = bcs::from_bytes(&stored.summary_bcs)
             .map_err(|e| DecodeError::with_source("bcs decode CheckpointSummary", e))?;
         let signature: AuthorityStrongQuorumSignInfo = bcs::from_bytes(&stored.signature_bcs)
-            .map_err(|e| {
-                DecodeError::with_source("bcs decode AuthorityStrongQuorumSignInfo", e)
-            })?;
+            .map_err(|e| DecodeError::with_source("bcs decode AuthorityStrongQuorumSignInfo", e))?;
         let certified = CertifiedCheckpointSummary::new_from_data_and_sig(summary, signature);
         Ok(Some(VerifiedCheckpoint::new_unchecked(certified)))
     }
@@ -161,18 +156,10 @@ mod tests {
 
         let mut batch = db.batch();
         batch
-            .put(
-                &schema.checkpoint_summary,
-                &U64Be(42),
-                &store(&first, &sig),
-            )
+            .put(&schema.checkpoint_summary, &U64Be(42), &store(&first, &sig))
             .unwrap();
         batch
-            .put(
-                &schema.checkpoint_summary,
-                &U64Be(42),
-                &store(&later, &sig),
-            )
+            .put(&schema.checkpoint_summary, &U64Be(42), &store(&later, &sig))
             .unwrap();
         batch.commit().unwrap();
 

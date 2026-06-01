@@ -157,7 +157,12 @@ impl<R: Reader> super::RpcStoreSchema<R> {
         };
         let system_state: SuiSystemState = bcs::from_bytes(&bytes)
             .map_err(|e| DecodeError::with_source("bcs decode SuiSystemState", e))?;
-        Ok(Some(system_state.get_current_epoch_committee().committee().clone()))
+        Ok(Some(
+            system_state
+                .get_current_epoch_committee()
+                .committee()
+                .clone(),
+        ))
     }
 }
 

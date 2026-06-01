@@ -30,8 +30,7 @@ pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
 /// `Result` through every call site.
 pub fn store(effects: &TransactionEffects, unchanged_loaded: &[ObjectKey]) -> Value {
     let bcs = bcs::to_bytes(effects).expect("bcs encode TransactionEffects");
-    let unchanged_loaded_bcs =
-        bcs::to_bytes(unchanged_loaded).expect("bcs encode Vec<ObjectKey>");
+    let unchanged_loaded_bcs = bcs::to_bytes(unchanged_loaded).expect("bcs encode Vec<ObjectKey>");
     Protobuf(StoredEffects {
         bcs: bcs.into(),
         unchanged_loaded_bcs: unchanged_loaded_bcs.into(),
@@ -99,8 +98,7 @@ mod tests {
             .unwrap();
         batch.commit().unwrap();
 
-        let (read_effects, read_loaded) =
-            schema.get_effects(42).unwrap().expect("effects present");
+        let (read_effects, read_loaded) = schema.get_effects(42).unwrap().expect("effects present");
         assert_eq!(read_effects, effects);
         assert_eq!(read_loaded, loaded);
     }

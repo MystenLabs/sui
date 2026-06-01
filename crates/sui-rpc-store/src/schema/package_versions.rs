@@ -144,7 +144,12 @@ mod tests {
     fn get_returns_none_for_unknown_version() {
         let (_dir, _db, schema) = fresh_db();
         let original = ObjectID::random();
-        assert!(schema.get_package_storage_id(original, 1).unwrap().is_none());
+        assert!(
+            schema
+                .get_package_storage_id(original, 1)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]

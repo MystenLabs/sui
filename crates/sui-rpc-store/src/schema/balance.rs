@@ -151,10 +151,7 @@ impl<R: Reader> super::RpcStoreSchema<R> {
     }
 
     /// Iterate every coin type that `owner` has a balance in.
-    pub fn iter_balances_owned_by(
-        &self,
-        owner: SuiAddress,
-    ) -> Result<Iter<'_, Key, Value>, Error> {
+    pub fn iter_balances_owned_by(&self, owner: SuiAddress) -> Result<Iter<'_, Key, Value>, Error> {
         self.balance.iter_prefix(&OwnerPrefix(owner))
     }
 }
@@ -218,8 +215,7 @@ fn merge(
             coin = coin.saturating_add(read_i128_field_or_panic(&next.coin, "coin"));
         }
         if !next.address.is_empty() {
-            address =
-                address.saturating_add(read_i128_field_or_panic(&next.address, "address"));
+            address = address.saturating_add(read_i128_field_or_panic(&next.address, "address"));
         }
     }
 
@@ -390,9 +386,8 @@ mod tests {
     #[test]
     fn iter_balances_walks_only_target_owner() {
         let (_dir, db, schema) = fresh_db();
-        let target_types: BTreeSet<TypeTag> = [coin_type("SUI"), coin_type("USDC")]
-            .into_iter()
-            .collect();
+        let target_types: BTreeSet<TypeTag> =
+            [coin_type("SUI"), coin_type("USDC")].into_iter().collect();
 
         let mut batch = db.batch();
         for t in &target_types {

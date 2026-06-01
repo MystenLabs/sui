@@ -165,13 +165,7 @@ mod tests {
             .unwrap();
         batch.commit().unwrap();
 
-        assert_eq!(
-            schema.get_object_by_key(id, v1).unwrap().unwrap(),
-            o1,
-        );
-        assert_eq!(
-            schema.get_object_by_key(id, v2).unwrap().unwrap(),
-            o2,
-        );
+        assert_eq!(schema.get_object_by_key(id, v1).unwrap().unwrap(), o1,);
+        assert_eq!(schema.get_object_by_key(id, v2).unwrap().unwrap(), o2,);
     }
 }
