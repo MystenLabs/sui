@@ -1021,10 +1021,10 @@ async fn start(
         sui_config_path
     };
 
-    // the indexer requires to set the fullnode's data ingestion directory
+    // the indexer and consistent store require the fullnode's data ingestion directory
     // note that this overrides the default configuration that is set when running the genesis
     // command, which sets data_ingestion_dir to None.
-    if with_indexer.is_some() && data_ingestion_dir.is_none() {
+    if (with_indexer.is_some() || with_consistent_store.is_some()) && data_ingestion_dir.is_none() {
         data_ingestion_dir = Some(mysten_common::tempdir()?.keep())
     }
 
@@ -1051,8 +1051,6 @@ async fn start(
 
     let mut swarm = swarm_builder.build();
     swarm.launch().await?;
-    // Let nodes connect to one another
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     info!("Cluster started");
 
     let fullnode_rpc_url = socket_addr_to_url(fullnode_rpc_address)?

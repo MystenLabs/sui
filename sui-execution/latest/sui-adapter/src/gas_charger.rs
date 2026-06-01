@@ -346,6 +346,7 @@ pub mod checked {
         pub fn charge_gas<T, E: ExecutionErrorTrait>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
+            protocol_config: &ProtocolConfig,
             execution_result: &mut Result<T, E>,
         ) -> GasCostSummary {
             // at this point, we have done *all* charging for computation,
@@ -402,6 +403,7 @@ pub mod checked {
                 })
                 .unwrap_or(false)
                 && matches!(gas_payment_location, Some(PaymentLocation::AddressBalance(_))) {
+                    debug_assert!(!protocol_config.early_exit_on_iffw(), "Should have not reached charge gas in this case with IFFW");
                     // If we don't have enough balance to withdraw, don't charge for gas
                     // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
                     return GasCostSummary::default();
