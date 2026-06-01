@@ -3082,7 +3082,7 @@ mod tests {
                     .published
                     .values()
                     .map(|dep| {
-                        let storage_id = AccountAddress::from(dep.published_at);
+                        let storage_id = dep.published_id.0;
                         let runtime_id = package_runtime_id(
                             &packages_by_storage_id
                                 .get(&storage_id)

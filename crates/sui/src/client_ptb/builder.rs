@@ -1026,12 +1026,7 @@ impl<'a> PTBBuilder<'a> {
                 let upgrade_receipt = self.ptb.upgrade(
                     package_id,
                     upgrade_ticket,
-                    compiled_package
-                        .dependency_ids
-                        .published
-                        .values()
-                        .map(|dep| dep.published_at)
-                        .collect::<Vec<_>>(),
+                    compiled_package.get_published_dependencies_ids(),
                     compiled_modules,
                 );
                 let res = self.ptb.command(Tx::Command::move_call(

@@ -70,8 +70,9 @@ dependency of the root.
 pub struct PackageDependencies {
     /// Published dependencies, keyed by original ID.
     pub published: BTreeMap<OriginalID, PublishedDep>,
-    /// Names of dependencies with no on-chain publication.
-    pub unpublished: BTreeSet<Symbol>,
+    /// Unpublished dependencies, keyed by package graph ID (carried unchanged from the
+    /// pre-rework `PackageDependencies`).
+    pub unpublished: BTreeMap<Symbol, UnpublishedDependency>,
 }
 
 pub struct PublishedDep {
@@ -274,26 +275,47 @@ are attached to fetch failures by the caller via `.with_context`, never passed i
 ## Implementation changes
 
 **`move-package-alt`**
-- `src/schema/shared.rs`: add `Copy, Debug` to `OriginalID` and `PublishedID`; add `Hash`
-  to `PublishedID`.
+- `src/schema/shared.rs`: add `Copy` to `OriginalID` and `PublishedID`, and `Hash` to
+  `PublishedID`. (`Debug` is already provided by hand-written impls — no derive needed.)
 - `RootPackage`: add a public accessor returning the root's direct dependencies as
   `BTreeSet<OriginalID>`; keep `PackageInfo::direct_deps()` private.
-- `src/graph/linkage.rs`: add a one-line note by the override-rule doc that the property
-  is relied upon when computing publishable linkage tables.
+- `PackageInfo`: add a narrow `version()` accessor so the package-system version of each
+  resolved dependency is reachable (needed for Check B).
+- `src/graph/linkage.rs`: add a note by the override-rule doc that the property is
+  relied upon when computing publishable linkage tables.
 
 **`sui-move-build`**
 - Reshape `PackageDependencies` / add `PublishedDep` as above; rewrite
-  `PackageDependencies::new`; collapse the two duplicate getter methods.
+  `PackageDependencies::new`; re-export `OriginalID` and `PublishedID` so other crates
+  can name dependency identities without depending on `move-package-alt` directly.
+- The two duplicate getters (`get_dependency_storage_package_ids`,
+  `get_published_dependencies_ids`) have 20+ callers across the workspace; their
+  signatures are unchanged by the reshape, so they are kept as-is with a TODO to
+  collapse them in a follow-up.
 
 **`sui`**
 - New module `crates/sui/src/tree_shake.rs` with the five functions and the module-level
   correctness doc comment.
-- `client_commands.rs`: delete `fetch_move_packages`, `trans_deps_original_ids`, the old
-  `pkg_tree_shake`, and the in-progress sketch; update the call site.
+- `client_commands.rs`: delete `fetch_move_packages`, `trans_deps_original_ids`, and the
+  old `pkg_tree_shake`; update the call site.
 - `sui_commands.rs`: update the `pkg_tree_shake` import/call site.
-- `client_ptb/builder.rs`: update for the reshaped `PackageDependencies`.
+- `client_ptb/builder.rs`: update for the reshaped `PackageDependencies` (uses the
+  `get_published_dependencies_ids` getter).
 - `tests/shell_tests.rs`: fix the stale `// Temporarily disabled` comment on the
   `with_network` directory.
+
+**Test infrastructure consumers of `PublishedDependency`** (discovered during
+implementation — not in the plan's original list):
+- `sui-core/src/unit_tests/auth_unit_test_utils.rs` — constructs `PublishedDep`s when
+  faking publication of unpublished deps.
+- `sui-core/src/unit_tests/move_package_upgrade_tests.rs` — reads `.published_at`.
+- `sui-single-node-benchmark/src/tx_generator/package_publish_tx_generator.rs` —
+  constructs `PublishedDep`s.
+- `sui-source-validation/src/lib.rs` and `tests.rs` — reads `.published_at` and the
+  name-keyed contains-check; updated to use the address-keyed map and the
+  `get_published_dependencies_ids` getter.
+- `sui-package-resolver/src/lib.rs`, `sui-surfer/src/surfer_state.rs` — read
+  `.published_at`.
 
 ## Testing
 

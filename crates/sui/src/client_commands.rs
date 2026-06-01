@@ -33,7 +33,6 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_bytecode_verifier_meter::Scope;
 use move_core_types::{
-    account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
 };
@@ -80,7 +79,7 @@ use sui_types::{
     gas_coin::GasCoin,
     message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
-    move_package::{MovePackage, UpgradeCap},
+    move_package::UpgradeCap,
     object::{Object, Owner},
     parse_sui_type_tag,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -109,7 +108,6 @@ use move_package_alt::{
     RootPackage,
     schema::{OriginalID, Publication, PublishAddresses, PublishedID},
 };
-use move_symbol_pool::Symbol;
 use sui_keys::key_derive;
 use sui_package_alt::{BuildParams, SuiFlavor, find_environment};
 use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
@@ -2090,7 +2088,7 @@ pub(crate) async fn compile_package(
 
     compatibility_checks(client.clone(), &compiled_package).await?;
 
-    pkg_tree_shake(client, with_unpublished_deps, &mut compiled_package).await?;
+    crate::tree_shake::pkg_tree_shake(client, with_unpublished_deps, &mut compiled_package).await?;
 
     // TODO: pluck back in
     // if with_unpublished_dependencies {
@@ -3564,168 +3562,6 @@ async fn check_protocol_version_and_warn(client: &Client) -> Result<(), anyhow::
             .bold()
         );
     }
-
-    Ok(())
-}
-
-/// Fetch move packages
-async fn fetch_move_packages(
-    mut client: Client,
-    immediate_dep_packages: &BTreeMap<Symbol, ObjectID>,
-) -> Result<Vec<MovePackage>, anyhow::Error> {
-    let package_ids: Vec<_> = immediate_dep_packages.values().cloned().collect(); // a map from id to pkg name for finding package names for error reporting.
-    let pkg_id_to_name: BTreeMap<_, _> = immediate_dep_packages
-        .iter()
-        .map(|(name, id)| (id, name))
-        .collect();
-
-    let mut packages = Vec::with_capacity(package_ids.len());
-    for id in package_ids {
-        let o = client
-            .get_object(id)
-            .await
-            .map_err(|e| anyhow::anyhow!("{}", e.message()))
-            .with_context(|| {
-                format!(
-                    "Failed to fetch package {}",
-                    pkg_id_to_name
-                        .get(&id)
-                        .map_or("of unknown name", |x| x.as_str())
-                )
-            })?;
-        let package = o.data.try_as_package().cloned().ok_or_else(|| {
-            anyhow::anyhow!(
-                "Failed to fetch package {}, found object instead of package",
-                pkg_id_to_name
-                    .get(&id)
-                    .map_or("of unknown name", |x| x.as_str())
-            )
-        })?;
-        packages.push(package);
-    }
-
-    Ok(packages)
-}
-
-// Fetch the original ids of all the transitive dependencies of the immediate package dependencies
-async fn trans_deps_original_ids(
-    client: Client,
-    immediate_dep_packages: &BTreeMap<Symbol, ObjectID>,
-) -> Result<BTreeSet<ObjectID>, anyhow::Error> {
-    let pkgs = fetch_move_packages(client, immediate_dep_packages).await?;
-    let linkage_table = pkgs
-        .iter()
-        .flat_map(|pkg| pkg.linkage_table().keys())
-        .copied()
-        .collect();
-
-    Ok(linkage_table)
-}
-
-/// Filter out a package's dependencies which are not referenced in the source code. The algorithm
-/// finds the immediate dependencies of this package, and the original ids of each transitive
-/// dependencies for all these immediate package dependencies. For packages that are not referenced
-/// in the source code, they will be filtered out from the list of dependencies.
-pub(crate) async fn pkg_tree_shake(
-    client: Client,
-    with_unpublished_deps: bool,
-    compiled_package: &mut CompiledPackage,
-) -> Result<(), anyhow::Error> {
-    info!(
-        "Dependency ids before tree shaking {:?}",
-        compiled_package.dependency_ids
-    );
-
-    // Start from the root modules (or all modules if with_unpublished_deps is true as we
-    // need to include modules with 0x0 address)
-    let root_modules: Vec<_> = if with_unpublished_deps {
-        compiled_package
-            .package
-            .all_compiled_units_with_source()
-            .filter(|m| m.unit.address.into_inner() == AccountAddress::ZERO)
-            .map(|x| x.unit.clone())
-            .collect()
-    } else {
-        compiled_package
-            .package
-            .root_modules()
-            .map(|x| x.unit.clone())
-            .collect()
-    };
-
-    let mut pkgs_to_keep: BTreeSet<Symbol> = BTreeSet::new();
-    let module_to_pkg_name: BTreeMap<_, _> = compiled_package
-        .package
-        .all_compiled_units_with_source()
-        .map(|m| (m.unit.module.self_id(), m.unit.package_name))
-        .collect();
-
-    // Find the immediate dependencies for each root module and store the package name
-    // in the pkgs_to_keep set. This basically prunes the packages that are not used
-    // based on the modules information.
-    for module in &root_modules {
-        let immediate_deps = module.module.immediate_dependencies();
-        info!(
-            "Module {} immediate deps: {:?}",
-            module.module.self_id(),
-            immediate_deps
-        );
-        for dep in immediate_deps {
-            if let Some(pkg_name) = module_to_pkg_name.get(&dep) {
-                let Some(pkg_name) = pkg_name else {
-                    bail!("Expected a package name but it's None")
-                };
-                pkgs_to_keep.insert(*pkg_name);
-            }
-        }
-    }
-
-    // filter out packages that are published and exist in the manifest at the
-    // compilation time but are not referenced in the source code.
-    let immediate_dep_packages: BTreeMap<_, _> = compiled_package
-        .dependency_ids
-        .clone()
-        .published
-        .into_iter()
-        .filter(|(pkg_name, _)| {
-            // println!("Pkgs to keep {:?}", pkgs_to_keep);
-            // println!("Pkg name {pkg_name}");
-            // println!("{}", pkgs_to_keep.contains(pkg_name));
-            pkgs_to_keep.contains(pkg_name)
-        })
-        .map(|(pkg_name, dep)| (pkg_name, dep.published_at))
-        .collect();
-
-    info!("Pkgs to keep {pkgs_to_keep:#?}");
-    info!("Immediate dep packages {:?}", immediate_dep_packages);
-
-    let pkg_name_to_orig_id: BTreeMap<Symbol, ObjectID> = compiled_package
-        .package
-        .deps_compiled_units
-        .iter()
-        .map(|(pkg_name, module)| (*pkg_name, ObjectID::from(module.unit.address.into_inner())))
-        .collect();
-
-    info!("Pkg name to orig id {:#?}", pkg_name_to_orig_id);
-
-    let trans_deps_orig_ids = trans_deps_original_ids(client, &immediate_dep_packages).await?;
-
-    info!("Trans deps orig ids {:?}", trans_deps_orig_ids);
-
-    // for every published package in the original list of published dependencies, get its original
-    // id and then check if that id exists in the linkage table. If it does, then we need to keep
-    // this package. Similarly, all immediate dep packages must stay
-    compiled_package.dependency_ids.published.retain(|pkg, _| {
-        immediate_dep_packages.contains_key(pkg)
-            || pkg_name_to_orig_id
-                .get(pkg)
-                .is_some_and(|id| trans_deps_orig_ids.contains(id))
-    });
-
-    info!(
-        "Deps ids after tree shaking {:?}",
-        compiled_package.dependency_ids
-    );
 
     Ok(())
 }

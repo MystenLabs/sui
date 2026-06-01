@@ -57,8 +57,10 @@ dependency of the root.
 pub struct PackageDependencies {
     /// Published dependencies, keyed by original ID.
     pub published: BTreeMap<OriginalID, PublishedDep>,
-    /// Names of dependencies with no on-chain publication.
-    pub unpublished: BTreeSet<Symbol>,
+    /// Unpublished dependencies, keyed by package graph ID (carried unchanged from the
+    /// pre-rework `PackageDependencies`; `UnpublishedDependency` holds the graph id and
+    /// display name).
+    pub unpublished: BTreeMap<Symbol, UnpublishedDependency>,
 }
 
 pub struct PublishedDep {

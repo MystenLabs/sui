@@ -10,7 +10,7 @@ use move_package_alt::schema::Environment;
 use move_symbol_pool::Symbol;
 use mysten_common::ZipDebugEqIteratorExt;
 use std::collections::{HashMap, HashSet};
-use sui_move_build::CompiledPackage;
+use sui_move_build::{CompiledPackage, OriginalID};
 use sui_rpc_api::Client;
 use sui_types::base_types::ObjectID;
 use sui_types::move_package::MovePackage;
@@ -240,11 +240,11 @@ impl ValidationMode {
             // only keep modules that are actually used
             let deps_compiled_units: Vec<_> = deps_compiled_units
                 .into_iter()
-                .filter(|pkg| {
+                .filter(|(_, local_unit)| {
                     sui_package
                         .dependency_ids
                         .published
-                        .contains_key(&Symbol::from(pkg.0.as_str()))
+                        .contains_key(&OriginalID(local_unit.unit.address.into_inner()))
                 })
                 .collect();
 
@@ -450,5 +450,5 @@ fn dependency_addresses(package: &CompiledPackage) -> impl Iterator<Item = Accou
         .dependency_ids
         .published
         .values()
-        .map(|dep| AccountAddress::from(dep.published_at))
+        .map(|dep| dep.published_id.0)
 }

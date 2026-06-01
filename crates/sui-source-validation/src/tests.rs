@@ -863,12 +863,7 @@ async fn upgrade_package(
     let with_unpublished_deps = false;
     let package_bytes = package.get_package_bytes(with_unpublished_deps);
     let package_digest = package.get_package_digest(with_unpublished_deps).to_vec();
-    let package_deps = package
-        .dependency_ids
-        .published
-        .into_values()
-        .map(|dep| dep.published_at)
-        .collect();
+    let package_deps = package.get_published_dependencies_ids();
 
     upgrade_package_with_wallet(
         context,

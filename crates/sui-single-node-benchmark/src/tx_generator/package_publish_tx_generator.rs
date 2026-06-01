@@ -4,12 +4,13 @@
 use crate::benchmark_context::BenchmarkContext;
 use crate::mock_account::Account;
 use crate::tx_generator::TxGenerator;
+use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
-use sui_move_build::{BuildConfig, CompiledPackage, PublishedDependency};
+use sui_move_build::{BuildConfig, CompiledPackage, OriginalID, PublishedDep, PublishedID};
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::transaction::{DEFAULT_VALIDATOR_GAS_PRICE, Transaction};
 use tracing::info;
@@ -83,7 +84,16 @@ impl PackagePublishTxGenerator {
         let published_deps = dep_map
             .iter()
             .map(|(name, published_at)| {
-                (*name, PublishedDependency::new(*name, *name, *published_at))
+                let addr = AccountAddress::from(*published_at);
+                (
+                    OriginalID(addr),
+                    PublishedDep {
+                        published_id: PublishedID(addr),
+                        version: 1,
+                        is_direct: true,
+                        name: *name,
+                    },
+                )
             })
             .collect();
 

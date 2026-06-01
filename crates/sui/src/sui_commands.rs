@@ -87,12 +87,12 @@ use url::Url;
 use crate::client_commands::{
     SuiClientCommands, USER_AGENT, check_for_unpublished_deps,
     load_root_pkg_for_ephemeral_publish_or_upgrade, load_root_pkg_for_publish_upgrade,
-    pkg_tree_shake,
 };
 use crate::fire_drill::{FireDrill, run_fire_drill};
 use crate::genesis_ceremony::{Ceremony, run};
 use crate::keytool::KeyToolCommand;
 use crate::trace_analysis_commands::AnalyzeTraceCommand;
+use crate::tree_shake::pkg_tree_shake;
 use crate::validator_commands::SuiValidatorCommand;
 
 const DEFAULT_EPOCH_DURATION_MS: u64 = 60_000;

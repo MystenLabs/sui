@@ -3,7 +3,7 @@
 
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
-use sui_move_build::{BuildConfig, CompiledPackage, PublishedDependency};
+use sui_move_build::{BuildConfig, CompiledPackage, OriginalID, PublishedDep, PublishedID};
 use sui_types::crypto::Signature;
 use sui_types::move_package::UpgradePolicy;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -55,12 +55,13 @@ pub fn build_test_modules_with_dep_addr(
                 .dependency_ids
                 .published
                 .insert(
-                    unpublished_dep.id,
-                    PublishedDependency::new(
-                        unpublished_dep.id,
-                        unpublished_dep.name,
-                        *published_id,
-                    ),
+                    OriginalID(AccountAddress::from(*published_id)),
+                    PublishedDep {
+                        published_id: PublishedID(AccountAddress::from(*published_id)),
+                        version: 1,
+                        is_direct: true,
+                        name: unpublished_dep.name,
+                    },
                 )
                 .is_none()
         )
