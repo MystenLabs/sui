@@ -81,7 +81,6 @@ mod _accessor_impls {
             Self {
                 tx_seq_lo: 0,
                 checkpoint_lo: 0,
-                object_lo: 0,
             }
         }
         #[doc(hidden)]
@@ -115,20 +114,6 @@ mod _accessor_impls {
         ///Sets `checkpoint_lo` with the provided value.
         pub fn with_checkpoint_lo(mut self, field: u64) -> Self {
             self.set_checkpoint_lo(field);
-            self
-        }
-        ///Returns a mutable reference to `object_lo`.
-        ///If the field is unset, it is first initialized with the default value.
-        pub fn object_lo_mut(&mut self) -> &mut u64 {
-            &mut self.object_lo
-        }
-        ///Sets `object_lo` with the provided value.
-        pub fn set_object_lo(&mut self, field: u64) {
-            self.object_lo = field;
-        }
-        ///Sets `object_lo` with the provided value.
-        pub fn with_object_lo(mut self, field: u64) -> Self {
-            self.set_object_lo(field);
             self
         }
     }

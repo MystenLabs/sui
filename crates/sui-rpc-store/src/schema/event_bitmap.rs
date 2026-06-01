@@ -8,11 +8,13 @@
 //! single event by `(tx_seq << EVENT_BITS) | event_idx`.
 //!
 //! The merge operator is identical in structure to the
-//! transaction-bitmap one (union + optimize). A per-bucket
-//! compaction filter is deliberately deferred — the filter needs
-//! to translate the tx_seq pruning floor into packed-event-seq
-//! space, which depends on the shared `Arc<AtomicU64>` from
-//! `pruning_watermark` (not yet implemented).
+//! transaction-bitmap one (union + optimize). The per-bucket
+//! compaction filter translates the `tx_seq` pruning floor from
+//! [`pruning_watermark::tx_seq_floor`](super::pruning_watermark::tx_seq_floor)
+//! into packed-event-seq space (`tx_seq << EVENT_BITS`) and drops
+//! buckets that fit entirely below it.
+
+use std::sync::atomic::Ordering;
 
 use bytes::Buf;
 use bytes::BufMut;
@@ -28,6 +30,7 @@ use sui_consistent_store::error::Error;
 use sui_consistent_store::reader::Reader;
 
 use crate::proto::BitmapBlob;
+use crate::schema::pruning_watermark::tx_seq_floor;
 
 pub const NAME: &str = "event_bitmap";
 
@@ -79,13 +82,57 @@ impl Decode for Key {
     }
 }
 
-/// CF options: install the bitmap-union merge operator. The
-/// per-bucket compaction filter is deferred until
-/// `pruning_watermark` lands.
+/// CF options: install the bitmap-union merge operator and a
+/// per-bucket compaction filter that drops buckets whose entire
+/// packed-event-seq range sits below the pruning floor.
 pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
     let mut opts = base_options.clone();
     opts.set_merge_operator_associative("event_bitmap_merge", merge);
+    let floor = tx_seq_floor().clone();
+    opts.set_compaction_filter("event_bitmap_pruning", move |_level, key, _value| {
+        let tx_seq_pruned = floor.load(Ordering::Relaxed);
+        if should_remove_bucket(key, tx_seq_pruned) {
+            rocksdb::CompactionDecision::Remove
+        } else {
+            rocksdb::CompactionDecision::Keep
+        }
+    });
     opts
+}
+
+/// Pure logic of the compaction filter.
+///
+/// Translates the `tx_seq` floor into packed-event-seq space and
+/// asks whether every packed event the bucket could hold is
+/// strictly below the translated floor. Kept on any malformed
+/// input — silent data loss is worse than a stuck row.
+pub(crate) fn should_remove_bucket(key: &[u8], tx_seq_pruned_exclusive: u64) -> bool {
+    if key.len() < 8 {
+        return false;
+    }
+    let bucket_id_bytes: [u8; 8] = key[key.len() - 8..].try_into().expect("slice length");
+    let bucket_id = u64::from_be_bytes(bucket_id_bytes);
+    let packed_floor = packed_pruning_floor(tx_seq_pruned_exclusive);
+    bucket_id
+        .checked_add(1)
+        .and_then(|b| b.checked_mul(EVENT_BUCKET_SIZE))
+        .is_some_and(|highest_plus_one| highest_plus_one <= packed_floor)
+}
+
+/// Translate the `tx_seq` floor into packed-event-seq space.
+///
+/// `packed_event_seq = tx_seq << EVENT_BITS`. For
+/// `tx_seq >= 2^(64 - EVENT_BITS)` the shift would overflow a
+/// `u64`; we saturate to `u64::MAX`, which represents "every
+/// possible event has been pruned" — the conservative direction
+/// for a removal decision.
+fn packed_pruning_floor(tx_seq_pruned_exclusive: u64) -> u64 {
+    const OVERFLOW_THRESHOLD: u64 = 1u64 << (64 - EVENT_BITS);
+    if tx_seq_pruned_exclusive < OVERFLOW_THRESHOLD {
+        tx_seq_pruned_exclusive << EVENT_BITS
+    } else {
+        u64::MAX
+    }
 }
 
 /// Pack `(tx_seq, event_idx)` into a single 64-bit positional
@@ -338,6 +385,60 @@ mod tests {
             .unwrap();
         assert_eq!(coin.iter().collect::<Vec<u32>>(), vec![bit_of(pack(42, 1))]);
         assert_eq!(nft.iter().collect::<Vec<u32>>(), vec![bit_of(pack(100, 2))]);
+    }
+
+    #[test]
+    fn should_remove_bucket_drops_only_fully_pruned_ranges() {
+        let dim = b"emitting_module:coin";
+        let bucket_0_key = Key {
+            dimension_key: dim.to_vec(),
+            bucket: 0,
+        }
+        .encode()
+        .unwrap();
+
+        // Floor 0 → nothing pruned.
+        assert!(!should_remove_bucket(&bucket_0_key, 0));
+
+        // EVENT_BUCKET_SIZE in packed-event-seq space corresponds
+        // to `EVENT_BUCKET_SIZE >> EVENT_BITS` transactions —
+        // anything below that tx_seq floor keeps bucket 0 alive.
+        let txs_per_bucket = EVENT_BUCKET_SIZE >> EVENT_BITS;
+        assert!(!should_remove_bucket(&bucket_0_key, txs_per_bucket - 1));
+        // At the tx_seq floor that translates to exactly
+        // EVENT_BUCKET_SIZE in packed space, bucket 0 becomes
+        // fully pruned.
+        assert!(should_remove_bucket(&bucket_0_key, txs_per_bucket));
+
+        // Bucket 5 needs floor past 6 * EVENT_BUCKET_SIZE in
+        // packed space, i.e. tx_seq past 6 * txs_per_bucket.
+        let bucket_5_key = Key {
+            dimension_key: dim.to_vec(),
+            bucket: 5,
+        }
+        .encode()
+        .unwrap();
+        assert!(!should_remove_bucket(&bucket_5_key, 6 * txs_per_bucket - 1));
+        assert!(should_remove_bucket(&bucket_5_key, 6 * txs_per_bucket));
+
+        // Key too short → kept.
+        assert!(!should_remove_bucket(&[0u8; 4], u64::MAX));
+    }
+
+    #[test]
+    fn packed_pruning_floor_saturates_on_overflow() {
+        assert_eq!(packed_pruning_floor(0), 0);
+        assert_eq!(packed_pruning_floor(1), 1u64 << EVENT_BITS);
+        // Just below the overflow threshold.
+        let just_below = (1u64 << (64 - EVENT_BITS)) - 1;
+        assert_eq!(
+            packed_pruning_floor(just_below),
+            just_below << EVENT_BITS,
+        );
+        // At the threshold — `tx_seq << EVENT_BITS` would
+        // overflow, so we saturate.
+        assert_eq!(packed_pruning_floor(1u64 << (64 - EVENT_BITS)), u64::MAX);
+        assert_eq!(packed_pruning_floor(u64::MAX), u64::MAX);
     }
 
     #[test]

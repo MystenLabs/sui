@@ -13,11 +13,13 @@
 //! operand against the existing on-disk bitmap and emits a single
 //! consolidated value optimized for the on-disk encoding.
 //!
-//! A per-bucket compaction filter that drops buckets entirely
-//! below the pruning floor is intentionally omitted in this pass —
-//! it'll land alongside `pruning_watermark`, since both halves
-//! need to agree on the shared `Arc<AtomicU64>` carrying the
+//! A per-bucket compaction filter reads the shared `tx_seq`
+//! pruning floor from
+//! [`pruning_watermark::tx_seq_floor`](super::pruning_watermark::tx_seq_floor)
+//! and drops buckets whose entire `tx_seq` range sits below the
 //! floor.
+
+use std::sync::atomic::Ordering;
 
 use bytes::Buf;
 use bytes::BufMut;
@@ -33,6 +35,7 @@ use sui_consistent_store::error::Error;
 use sui_consistent_store::reader::Reader;
 
 use crate::proto::BitmapBlob;
+use crate::schema::pruning_watermark::tx_seq_floor;
 
 pub const NAME: &str = "transaction_bitmap";
 
@@ -77,13 +80,48 @@ impl Decode for Key {
     }
 }
 
-/// CF options: install the bitmap-union merge operator. The
-/// per-bucket compaction filter is deferred until
-/// `pruning_watermark` lands.
+/// CF options: install the bitmap-union merge operator and a
+/// per-bucket compaction filter that drops buckets whose entire
+/// `tx_seq` range sits below the pruning floor.
 pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
     let mut opts = base_options.clone();
     opts.set_merge_operator_associative("transaction_bitmap_merge", merge);
+    let floor = tx_seq_floor().clone();
+    opts.set_compaction_filter(
+        "transaction_bitmap_pruning",
+        move |_level, key, _value| {
+            let pruned_exclusive = floor.load(Ordering::Relaxed);
+            if should_remove_bucket(key, pruned_exclusive) {
+                rocksdb::CompactionDecision::Remove
+            } else {
+                rocksdb::CompactionDecision::Keep
+            }
+        },
+    );
     opts
+}
+
+/// Pure logic of the compaction filter: decide whether the bucket
+/// identified by `key`'s trailing 8-byte big-endian `bucket_id`
+/// can be removed given the exclusive `tx_seq` pruning floor.
+///
+/// A bucket is removable iff every `tx_seq` it covers is strictly
+/// below the floor — i.e. `(bucket_id + 1) * TX_BUCKET_SIZE <=
+/// pruned_exclusive`. Arithmetic uses `checked_*` so a corrupted
+/// `bucket_id` can't overflow and cause spurious removal.
+///
+/// Kept rather than removed on any malformed input — silent data
+/// loss is worse than a stuck row.
+pub(crate) fn should_remove_bucket(key: &[u8], pruned_exclusive: u64) -> bool {
+    if key.len() < 8 {
+        return false;
+    }
+    let bucket_id_bytes: [u8; 8] = key[key.len() - 8..].try_into().expect("slice length");
+    let bucket_id = u64::from_be_bytes(bucket_id_bytes);
+    bucket_id
+        .checked_add(1)
+        .and_then(|b| b.checked_mul(TX_BUCKET_SIZE))
+        .is_some_and(|highest_plus_one| highest_plus_one <= pruned_exclusive)
 }
 
 /// The bucket that owns a given `tx_seq`.
@@ -317,6 +355,48 @@ mod tests {
             .unwrap();
         assert_eq!(alice.iter().collect::<Vec<u32>>(), vec![42]);
         assert_eq!(bob.iter().collect::<Vec<u32>>(), vec![100]);
+    }
+
+    #[test]
+    fn should_remove_bucket_drops_only_fully_pruned_ranges() {
+        let dim = b"sender:alice";
+
+        // A bucket whose highest tx_seq is exactly at the floor:
+        // the floor is *exclusive*, so this bucket is still
+        // partially live and must not be removed.
+        let just_at_floor_key = Key {
+            dimension_key: dim.to_vec(),
+            bucket: 0,
+        }
+        .encode()
+        .unwrap();
+        assert!(!should_remove_bucket(&just_at_floor_key, TX_BUCKET_SIZE - 1));
+
+        // Move the floor one past the bucket's highest tx_seq:
+        // every entry it could hold is pruned, removable.
+        assert!(should_remove_bucket(&just_at_floor_key, TX_BUCKET_SIZE));
+
+        // Bucket 3 covers `tx_seq` in `[3 * BUCKET, 4 * BUCKET)`.
+        // Floor sitting in the middle of the bucket keeps it.
+        let middle_key = Key {
+            dimension_key: dim.to_vec(),
+            bucket: 3,
+        }
+        .encode()
+        .unwrap();
+        assert!(!should_remove_bucket(
+            &middle_key,
+            3 * TX_BUCKET_SIZE + (TX_BUCKET_SIZE / 2),
+        ));
+
+        // Floor past the bucket's high end → removable.
+        assert!(should_remove_bucket(&middle_key, 4 * TX_BUCKET_SIZE));
+
+        // Key shorter than 8 bytes → kept.
+        assert!(!should_remove_bucket(&[0u8; 4], u64::MAX));
+
+        // Floor of 0 → nothing removable.
+        assert!(!should_remove_bucket(&middle_key, 0));
     }
 
     #[test]

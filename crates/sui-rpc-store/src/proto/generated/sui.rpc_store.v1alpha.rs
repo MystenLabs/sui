@@ -184,21 +184,16 @@ pub struct StoredEpoch {
     pub system_state_bcs: ::core::option::Option<::prost::bytes::Bytes>,
 }
 /// The lowest still-available data per axis. Drives compaction
-/// filters and feeds `available_range` queries. Stored under a
-/// singleton key in the `pruning_watermark` CF.
+/// filters on the bitmap CFs and feeds `available_range` queries.
+/// Stored under a singleton key in the `pruning_watermark` CF.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PruningWatermarks {
-    /// Lowest `tx_seq` whose `tx_meta_by_seq`, `transactions`,
-    /// `effects`, `events` rows are still present.
+    /// Lowest `tx_seq` whose `tx_metadata_by_seq`, `transactions`,
+    /// `effects`, `events`, and bitmap rows are still present.
     #[prost(uint64, tag = "1")]
     pub tx_seq_lo: u64,
     /// Lowest checkpoint sequence number whose `checkpoint_summary`
     /// / `checkpoint_contents` rows are still present.
     #[prost(uint64, tag = "2")]
     pub checkpoint_lo: u64,
-    /// Lowest object version retained. Objects below this version
-    /// may have been pruned even when newer versions are still in
-    /// `objects`.
-    #[prost(uint64, tag = "3")]
-    pub object_lo: u64,
 }

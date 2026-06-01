@@ -185,17 +185,13 @@ message StoredEpoch {
 // === Pruning watermarks ========================================
 
 // The lowest still-available data per axis. Drives compaction
-// filters and feeds `available_range` queries. Stored under a
-// singleton key in the `pruning_watermark` CF.
+// filters on the bitmap CFs and feeds `available_range` queries.
+// Stored under a singleton key in the `pruning_watermark` CF.
 message PruningWatermarks {
-  // Lowest `tx_seq` whose `tx_meta_by_seq`, `transactions`,
-  // `effects`, `events` rows are still present.
+  // Lowest `tx_seq` whose `tx_metadata_by_seq`, `transactions`,
+  // `effects`, `events`, and bitmap rows are still present.
   uint64 tx_seq_lo = 1;
   // Lowest checkpoint sequence number whose `checkpoint_summary`
   // / `checkpoint_contents` rows are still present.
   uint64 checkpoint_lo = 2;
-  // Lowest object version retained. Objects below this version
-  // may have been pruned even when newer versions are still in
-  // `objects`.
-  uint64 object_lo = 3;
 }
