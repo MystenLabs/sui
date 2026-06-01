@@ -72,16 +72,6 @@ pub struct StoredCheckpointContents {
     #[prost(bytes = "bytes", tag = "1")]
     pub bcs: ::prost::bytes::Bytes,
 }
-/// The validator committee for an epoch.
-///
-/// Value type for the `committees` column family, keyed by
-/// `EpochId` (`u64`).
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct StoredCommittee {
-    /// BCS-encoded `sui_types::committee::Committee`.
-    #[prost(bytes = "bytes", tag = "1")]
-    pub bcs: ::prost::bytes::Bytes,
-}
 /// Per-transaction metadata, keyed by the assigned `tx_seq`.
 ///
 /// This is the canonical "what is at this tx_seq" record. It

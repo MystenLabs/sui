@@ -20,7 +20,6 @@ pub mod balance;
 pub mod checkpoint_contents;
 pub mod checkpoint_seq_by_digest;
 pub mod checkpoint_summary;
-pub mod committees;
 pub mod effects;
 pub mod epochs;
 pub mod event_bitmap;
@@ -51,9 +50,6 @@ pub struct RpcStoreSchema<R: Reader = Db> {
     /// Per-epoch metadata: protocol version, gas price, start and
     /// end timestamps, and the epoch's final checkpoint.
     pub epochs: DbMap<epochs::Key, epochs::Value, R>,
-
-    /// The validator committee active during each epoch.
-    pub committees: DbMap<committees::Key, committees::Value, R>,
 
     /// Signed checkpoint headers. The lightweight metadata served
     /// by most "fetch a checkpoint" requests; the heavier contents
@@ -137,7 +133,6 @@ impl Schema for RpcStoreSchema {
     fn cfs(base_options: &rocksdb::Options) -> Vec<CfDescriptor> {
         vec![
             CfDescriptor::new(epochs::NAME, epochs::options(base_options)),
-            CfDescriptor::new(committees::NAME, committees::options(base_options)),
             CfDescriptor::new(
                 checkpoint_summary::NAME,
                 checkpoint_summary::options(base_options),
@@ -188,7 +183,6 @@ impl Schema for RpcStoreSchema {
     fn open(db: &Db) -> Result<Self, OpenError> {
         Ok(Self {
             epochs: DbMap::new(db.clone(), epochs::NAME)?,
-            committees: DbMap::new(db.clone(), committees::NAME)?,
             checkpoint_summary: DbMap::new(db.clone(), checkpoint_summary::NAME)?,
             checkpoint_contents: DbMap::new(db.clone(), checkpoint_contents::NAME)?,
             checkpoint_seq_by_digest: DbMap::new(db.clone(), checkpoint_seq_by_digest::NAME)?,
@@ -215,7 +209,6 @@ impl SchemaAtSnapshot for RpcStoreSchema {
     fn at(&self, snap: &Snapshot) -> Self::At {
         RpcStoreSchema {
             epochs: self.epochs.at(snap),
-            committees: self.committees.at(snap),
             checkpoint_summary: self.checkpoint_summary.at(snap),
             checkpoint_contents: self.checkpoint_contents.at(snap),
             checkpoint_seq_by_digest: self.checkpoint_seq_by_digest.at(snap),

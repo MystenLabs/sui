@@ -85,15 +85,6 @@ message StoredCheckpointContents {
   bytes bcs = 1;
 }
 
-// The validator committee for an epoch.
-//
-// Value type for the `committees` column family, keyed by
-// `EpochId` (`u64`).
-message StoredCommittee {
-  // BCS-encoded `sui_types::committee::Committee`.
-  bytes bcs = 1;
-}
-
 // === Tx-seq layer ==============================================
 
 // Per-transaction metadata, keyed by the assigned `tx_seq`.

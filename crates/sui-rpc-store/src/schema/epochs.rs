@@ -14,9 +14,11 @@ use sui_consistent_store::Protobuf;
 use sui_consistent_store::error::DecodeError;
 use sui_consistent_store::error::Error;
 use sui_consistent_store::reader::Reader;
+use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
 use sui_types::storage::EpochInfo;
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 
 use crate::proto::StoredEpoch;
 use crate::schema::keys::U64Be;
@@ -136,6 +138,27 @@ impl<R: Reader> super::RpcStoreSchema<R> {
             system_state,
         }))
     }
+
+    /// Look up the validator committee active during an epoch.
+    ///
+    /// Derived from the stored `SuiSystemState` rather than kept
+    /// in its own CF — the system state already carries the
+    /// validator set, so a dedicated committee row would just be
+    /// duplicate bytes. Returns `Ok(None)` if no epoch row exists
+    /// or if the epoch row exists but no `system_state_bcs` has
+    /// been observed yet.
+    pub fn get_committee(&self, epoch: EpochId) -> Result<Option<Committee>, Error> {
+        let Some(stored) = self.epochs.get(&U64Be(epoch))? else {
+            return Ok(None);
+        };
+        let stored = stored.into_inner();
+        let Some(bytes) = stored.system_state_bcs else {
+            return Ok(None);
+        };
+        let system_state: SuiSystemState = bcs::from_bytes(&bytes)
+            .map_err(|e| DecodeError::with_source("bcs decode SuiSystemState", e))?;
+        Ok(Some(system_state.get_current_epoch_committee().committee().clone()))
+    }
 }
 
 #[cfg(test)]
@@ -222,6 +245,27 @@ mod tests {
         assert_eq!(info.reference_gas_price, Some(1500));
         assert_eq!(info.start_timestamp_ms, Some(222));
         assert_eq!(info.start_checkpoint, Some(501));
+    }
+
+    #[test]
+    fn get_committee_returns_none_for_unknown_epoch() {
+        let (_dir, _db, schema) = fresh_db();
+        assert!(schema.get_committee(7).unwrap().is_none());
+    }
+
+    #[test]
+    fn get_committee_returns_none_when_system_state_absent() {
+        // A row exists for the epoch but only the end-of-epoch
+        // partial record has been written, so we can't derive a
+        // committee from it.
+        let (_dir, db, schema) = fresh_db();
+        let mut batch = db.batch();
+        batch
+            .merge(&schema.epochs, &U64Be(42), &end(999, 600))
+            .unwrap();
+        batch.commit().unwrap();
+
+        assert!(schema.get_committee(42).unwrap().is_none());
     }
 
     #[test]

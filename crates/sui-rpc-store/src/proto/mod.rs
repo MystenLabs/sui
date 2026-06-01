@@ -22,7 +22,6 @@ pub use sui::rpc_store::v1alpha::PackageVersionInfo;
 pub use sui::rpc_store::v1alpha::PruningWatermarks;
 pub use sui::rpc_store::v1alpha::StoredCheckpointContents;
 pub use sui::rpc_store::v1alpha::StoredCheckpointSummary;
-pub use sui::rpc_store::v1alpha::StoredCommittee;
 pub use sui::rpc_store::v1alpha::StoredEffects;
 pub use sui::rpc_store::v1alpha::StoredEpoch;
 pub use sui::rpc_store::v1alpha::StoredEvents;

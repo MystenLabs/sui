@@ -190,27 +190,6 @@ mod _accessor_impls {
             self
         }
     }
-    impl super::StoredCommittee {
-        pub const fn const_default() -> Self {
-            Self {
-                bcs: ::prost::bytes::Bytes::new(),
-            }
-        }
-        #[doc(hidden)]
-        pub fn default_instance() -> &'static Self {
-            static DEFAULT: super::StoredCommittee = super::StoredCommittee::const_default();
-            &DEFAULT
-        }
-        ///Sets `bcs` with the provided value.
-        pub fn set_bcs<T: Into<::prost::bytes::Bytes>>(&mut self, field: T) {
-            self.bcs = field.into().into();
-        }
-        ///Sets `bcs` with the provided value.
-        pub fn with_bcs<T: Into<::prost::bytes::Bytes>>(mut self, field: T) -> Self {
-            self.set_bcs(field.into());
-            self
-        }
-    }
     impl super::StoredEffects {
         pub const fn const_default() -> Self {
             Self {
