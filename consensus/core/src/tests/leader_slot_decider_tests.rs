@@ -354,6 +354,50 @@ async fn try_direct_decide_equivocating_skip() {
     expect_skip(decider.try_direct_decide(slot), slot);
 }
 
+/// A leader simultaneously reaching the commit quorum and the skip quorum can
+/// only happen if Byzantine authorities equivocate in the voting round. The
+/// direct rule must detect this broken fault assumption and panic instead of
+/// returning a decision.
+#[tokio::test]
+#[should_panic(expected = "cannot be both committed and skipped")]
+async fn try_direct_decide_panics_when_committed_and_skipped() {
+    telemetry_subscribers::init_for_testing();
+    // v3 committee with quorum = 7 out of 9.
+    let (context, dag_state, decider) = setup(9, 1, 1);
+    assert_eq!(context.committee.quorum_threshold(), 7);
+
+    let refs_round_1 = build_dag(context.clone(), dag_state.clone(), None, 1);
+    let slot = Slot::new_for_test(1, 1);
+    let refs_without_leader: Vec<_> = refs_round_1
+        .iter()
+        .cloned()
+        .filter(|r| r.author != slot.authority)
+        .collect();
+
+    // All 9 authorities vote for the leader -> commit quorum (children_stake = 9).
+    build_dag(
+        context.clone(),
+        dag_state.clone(),
+        Some(refs_round_1.clone()),
+        2,
+    );
+
+    // 7 Byzantine authorities (2..=8, skipping local author 0) also publish a
+    // round-2 block that omits the leader -> skip quorum (reject_votes = 7), so
+    // the leader is both committed and skipped.
+    for author in 2..=8u32 {
+        let non_vote = VerifiedBlock::new_for_test(
+            TestBlock::new(2, author)
+                .set_ancestors(refs_without_leader.clone())
+                .set_transactions(vec![Transaction::new(vec![1])])
+                .build(),
+        );
+        dag_state.write().accept_block(non_vote);
+    }
+
+    decider.try_direct_decide(slot);
+}
+
 /// An anchor whose causal history includes the round-1 leader certifies it
 /// indirectly — we must commit.
 #[tokio::test]
@@ -540,4 +584,48 @@ async fn try_indirect_decide_skip_multiple_certified_blocks() {
 
     assert_eq!(statuses.len(), 1);
     expect_skip(statuses.into_iter().next().unwrap(), slot);
+}
+
+/// `try_indirect_decide` requires at least one decision slot.
+#[tokio::test]
+#[should_panic(expected = "assertion failed: !decision_slots.is_empty()")]
+async fn try_indirect_decide_panics_on_empty_decision_slots() {
+    telemetry_subscribers::init_for_testing();
+    let (context, dag_state, decider) = setup(4, 1, 0);
+
+    let refs_round_2 = build_dag(context.clone(), dag_state.clone(), None, 2);
+    let anchor = dag_state.read().get_block(&refs_round_2[0]).unwrap();
+
+    decider.try_indirect_decide(&anchor, &[]);
+}
+
+/// All decision slots passed to `try_indirect_decide` must share the same round.
+#[tokio::test]
+#[should_panic(expected = "decision_slots.iter().all")]
+async fn try_indirect_decide_panics_on_mismatched_decision_rounds() {
+    telemetry_subscribers::init_for_testing();
+    let (context, dag_state, decider) = setup(4, 1, 0);
+
+    let refs_round_2 = build_dag(context.clone(), dag_state.clone(), None, 2);
+    let anchor = dag_state.read().get_block(&refs_round_2[0]).unwrap();
+
+    decider.try_indirect_decide(
+        &anchor,
+        &[Slot::new_for_test(1, 0), Slot::new_for_test(2, 0)],
+    );
+}
+
+/// The anchor block must be at least `INDIRECT_COMMIT_DEPTH` rounds above the
+/// decision round.
+#[tokio::test]
+#[should_panic(expected = "is too close to decision round")]
+async fn try_indirect_decide_panics_when_anchor_too_close() {
+    telemetry_subscribers::init_for_testing();
+    let (context, dag_state, decider) = setup(4, 1, 0);
+
+    // Anchor at round 2; decision round 1 requires anchor.round() >= 1 + 2 = 3.
+    let refs_round_2 = build_dag(context.clone(), dag_state.clone(), None, 2);
+    let anchor = dag_state.read().get_block(&refs_round_2[0]).unwrap();
+
+    decider.try_indirect_decide(&anchor, &[Slot::new_for_test(1, 0)]);
 }
