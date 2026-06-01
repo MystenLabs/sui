@@ -12,10 +12,10 @@ use crate::{VARIANT_TAG_MAX_VALUE, account_address::AccountAddress, u256};
 use serde::{Deserialize, de::Error as _};
 
 // -------------------------------------------------------------------------
-// Deserialization — DeserializeSeed for &MoveTypeLayout
+// Deserialization — DeserializeSeed for MoveTypeLayoutRef / &MoveTypeLayout
 // -------------------------------------------------------------------------
 
-impl<'d> serde::de::DeserializeSeed<'d> for &MoveTypeLayout {
+impl<'d, T: TypeLayout> serde::de::DeserializeSeed<'d> for &MoveTypeLayout<T> {
     type Value = AnnValue;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(
@@ -26,7 +26,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveTypeLayout {
     }
 }
 
-impl<'a, 'd> serde::de::DeserializeSeed<'d> for MoveTypeLayoutRef<'a> {
+impl<'a, 'd, T: TypeLayout> serde::de::DeserializeSeed<'d> for MoveTypeLayoutRef<'a, T> {
     type Value = AnnValue;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(
@@ -74,9 +74,9 @@ impl<'a, 'd> serde::de::DeserializeSeed<'d> for MoveTypeLayoutRef<'a> {
     }
 }
 
-struct CompressedVectorVisitor<'a>(MoveTypeLayoutRef<'a>);
+struct CompressedVectorVisitor<'a, T: TypeLayout>(MoveTypeLayoutRef<'a, T>);
 
-impl<'a, 'd> serde::de::Visitor<'d> for CompressedVectorVisitor<'a> {
+impl<'a, 'd, T: TypeLayout> serde::de::Visitor<'d> for CompressedVectorVisitor<'a, T> {
     type Value = Vec<AnnValue>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -95,9 +95,9 @@ impl<'a, 'd> serde::de::Visitor<'d> for CompressedVectorVisitor<'a> {
     }
 }
 
-struct CompressedStructFieldVisitor<'a>(MoveFieldsLayout<'a>);
+struct CompressedStructFieldVisitor<'a, T: TypeLayout>(MoveFieldsLayout<'a, T>);
 
-impl<'a, 'd> serde::de::Visitor<'d> for CompressedStructFieldVisitor<'a> {
+impl<'a, 'd, T: TypeLayout> serde::de::Visitor<'d> for CompressedStructFieldVisitor<'a, T> {
     type Value = Vec<(Identifier, AnnValue)>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -119,9 +119,9 @@ impl<'a, 'd> serde::de::Visitor<'d> for CompressedStructFieldVisitor<'a> {
     }
 }
 
-struct CompressedEnumFieldVisitor<'a>(MoveEnumLayout<'a>);
+struct CompressedEnumFieldVisitor<'a, T: TypeLayout>(MoveEnumLayout<'a, T>);
 
-impl<'a, 'd> serde::de::Visitor<'d> for CompressedEnumFieldVisitor<'a> {
+impl<'a, 'd, T: TypeLayout> serde::de::Visitor<'d> for CompressedEnumFieldVisitor<'a, T> {
     type Value = (Identifier, VariantTag, Vec<(Identifier, AnnValue)>);
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -160,9 +160,9 @@ impl<'a, 'd> serde::de::Visitor<'d> for CompressedEnumFieldVisitor<'a> {
     }
 }
 
-struct CompressedVariantFieldSeed<'a>(MoveFieldsLayout<'a>);
+struct CompressedVariantFieldSeed<'a, T: TypeLayout>(MoveFieldsLayout<'a, T>);
 
-impl<'a, 'd> serde::de::DeserializeSeed<'d> for CompressedVariantFieldSeed<'a> {
+impl<'a, 'd, T: TypeLayout> serde::de::DeserializeSeed<'d> for CompressedVariantFieldSeed<'a, T> {
     type Value = Vec<(Identifier, AnnValue)>;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(
