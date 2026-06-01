@@ -4153,7 +4153,6 @@ async fn test_poc_net_ptb_gas_coverage_panics() {
     let (package_id, vault_id) = test_env
         .setup_funded_object_balance_vault(200_000_000_000)
         .await;
-    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
 
     // The bug requires gas_coin_value + gas_budget < withdrawal_amount.
     // Split a dedicated small gas coin (50M MIST) so this condition is satisfied:
@@ -4258,9 +4257,9 @@ async fn test_poc_net_ptb_gas_coverage_panics() {
     });
 
     // Dry-run via JSON-RPC (sui_dryRunTransactionBlock).
-    test_env
-        .cluster
-        .sui_client()
+    #[allow(deprecated)]
+    let sui_client = test_env.cluster.sui_client();
+    sui_client
         .read_api()
         .dry_run_transaction_block(tx_data.clone())
         .await

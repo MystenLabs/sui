@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(deprecated)]
+
 use move_core_types::ident_str;
 use sui_macros::*;
 use sui_simulator::has_mainnet_protocol_config_override;
@@ -2312,7 +2314,7 @@ async fn test_poc_oversized_address_balance_gas_reservation_panics() {
         return;
     }
 
-    let mut test_env = TestEnvBuilder::new()
+    let test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
             cfg
@@ -2360,7 +2362,7 @@ async fn test_poc_gas_reservation_dedup_overflow_panics() {
         return;
     }
 
-    let mut test_env = TestEnvBuilder::new()
+    let test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
             cfg

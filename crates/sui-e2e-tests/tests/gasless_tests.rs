@@ -1087,9 +1087,9 @@ async fn test_poc_gasless_withdrawal_reservation_overflow_panics() {
     // Dry-run via JSON-RPC (sui_dryRunTransactionBlock, TransactionChecks::Enabled).
     // pre_object_load_checks → accumulate_funds_withdrawals → checked_add catches u64::MAX+1
     // and returns a graceful error; compute_input_reservations is never reached.
-    let result = test_env
-        .cluster
-        .sui_client()
+    #[allow(deprecated)]
+    let sui_client = test_env.cluster.sui_client();
+    let result = sui_client
         .read_api()
         .dry_run_transaction_block(tx_data.clone())
         .await;
