@@ -105,7 +105,6 @@ const tx = buildTransfer('0xRecipientAddress');
 const result = await keypair.signAndExecuteTransaction({
   transaction: tx,
   client,
-  include: { effects: true },
 });
 
 if (result.$kind === 'FailedTransaction') {
