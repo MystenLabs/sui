@@ -744,4 +744,50 @@ mod test {
 
         assert_eq!(&effects, genesis.effects());
     }
+
+    #[test]
+    fn genesis_coins_have_storage_rebate() {
+        // With `genesis_objects_have_storage_rebate` (enabled at the test protocol version),
+        // genesis gas coins must carry a non-zero storage rebate, and the storage fund must be
+        // seeded to match the sum of every object's rebate (a zero conservation imbalance). This is
+        // what lets tests exercise the same rebate-dependent gas/settlement paths as live coins.
+        let network_config =
+            crate::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+        let genesis = network_config.genesis;
+
+        // Conservation must always hold: the storage fund equals the sum of every object's storage
+        // rebate (a zero imbalance), whether or not the flag stamped any rebates.
+        let total_object_rebate: u64 = genesis.objects().iter().map(|o| o.storage_rebate).sum();
+        let storage_fund = genesis
+            .sui_system_object()
+            .into_sui_system_state_summary()
+            .storage_fund_total_object_storage_rebates;
+        assert_eq!(
+            storage_fund, total_object_rebate,
+            "storage fund must equal the sum of object storage rebates (zero conservation imbalance)",
+        );
+
+        // The flag is enabled for all chains at its activation version (it cannot be chain-gated --
+        // genesis is built before the chain ID is known). Skip the rebate assertions only if genesis
+        // happened to run at a protocol version predating the flag.
+        let protocol_version = ProtocolVersion::new(genesis.sui_system_object().protocol_version());
+        let protocol_config = ProtocolConfig::get_for_version(protocol_version, Chain::Unknown);
+        if !protocol_config.genesis_objects_have_storage_rebate() {
+            return;
+        }
+
+        let gas_coins_with_rebate = genesis
+            .objects()
+            .iter()
+            .filter(|o| o.is_gas_coin() && o.storage_rebate > 0)
+            .count();
+        assert!(
+            gas_coins_with_rebate > 0,
+            "expected genesis gas coins to carry a storage rebate",
+        );
+        assert!(
+            storage_fund > 0,
+            "storage fund should be seeded with the genesis rebates",
+        );
+    }
 }

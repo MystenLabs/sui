@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 126;
+const MAX_PROTOCOL_VERSION: u64 = 127;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -354,6 +354,12 @@ const MAINNET_USDB: &str =
 //              Enable timestamp_based_epoch_close on testnet.
 // Version 126: Enable early_exit_on_iffw (gates the gas-underflow fix
 //              shipped to mainnet out-of-band in #26816).
+// Version 127: Genesis stamps gas coins with a storage rebate and seeds the storage fund to match
+//              (genesis_objects_have_storage_rebate). A test-only aid, enabled on all chains: it
+//              cannot be chain-gated because genesis is built before the chain ID is known, so a
+//              chain-dependent genesis option would fork (build vs. node re-execution). Existing
+//              mainnet/testnet are unaffected -- their genesis is pinned to their launch protocol
+//              version, far below 127, so it is never stamped.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1125,6 +1131,16 @@ struct FeatureFlags {
     // If true, exit early for IFWW transactions.
     #[serde(skip_serializing_if = "is_false")]
     early_exit_on_iffw: bool,
+
+    // If true, genesis stamps each genesis gas coin with the storage rebate it would have been
+    // charged under normal metered execution, and seeds the storage fund's
+    // `total_object_storage_rebates` with the matching SUI (a zero conservation imbalance).
+    // Genesis otherwise runs unmetered, leaving genesis coins with a zero storage rebate -- unlike
+    // coins written by ordinary transactions. Only affects networks whose genesis runs at a
+    // protocol version with this flag set, so existing chains (pinned to their launch version) are
+    // unaffected.
+    #[serde(skip_serializing_if = "is_false")]
+    genesis_objects_have_storage_rebate: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2300,6 +2316,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators(&self) -> bool {
         self.feature_flags.enable_accumulators
+    }
+
+    pub fn genesis_objects_have_storage_rebate(&self) -> bool {
+        self.feature_flags.genesis_objects_have_storage_rebate
     }
 
     pub fn enable_coin_reservation_obj_refs(&self) -> bool {
@@ -4992,6 +5012,16 @@ impl ProtocolConfig {
                 }
                 126 => {
                     cfg.feature_flags.early_exit_on_iffw = true;
+                }
+                127 => {
+                    // Genesis stamps gas coins with a realistic storage rebate and seeds the
+                    // storage fund to match, so tests exercise rebate-dependent gas/settlement
+                    // paths. Enabled on all chains, not chain-gated: genesis is built before the
+                    // chain ID is known (it is derived from the genesis digest), so a chain-
+                    // dependent genesis option forks (the builder uses Chain::Unknown while node
+                    // re-execution uses the real chain). Existing mainnet/testnet are untouched --
+                    // their genesis is pinned to their launch protocol version, far below 127.
+                    cfg.feature_flags.genesis_objects_have_storage_rebate = true;
                 }
                 // Use this template when making changes:
                 //

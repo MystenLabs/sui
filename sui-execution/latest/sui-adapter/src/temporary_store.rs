@@ -13,6 +13,7 @@ use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
+use sui_types::dynamic_field::get_dynamic_field_object_from_store;
 use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, TransactionEffects,
     TransactionEvents,
@@ -692,6 +693,69 @@ impl<'backing> TemporaryStore<'backing> {
         assert_eq!(system_state_wrapper.storage_rebate, 0);
         system_state_wrapper.storage_rebate = unmetered_storage_rebate;
         self.mutate_input_object(system_state_wrapper);
+    }
+
+    /// Stamp each genesis gas coin with the storage rebate it would have been charged under normal
+    /// metered execution (`size * storage_per_byte_cost * storage_gas_price`, matching `gas_v2`),
+    /// and seed the storage fund's `total_object_storage_rebates` with the matching SUI so the
+    /// conservation imbalance (`storage_fund - sum(storage_rebate)`) stays zero. Genesis otherwise
+    /// runs unmetered, leaving every genesis coin with a zero storage rebate -- unlike coins written
+    /// by ordinary transactions -- which prevents tests from ever exercising rebate-dependent
+    /// gas/settlement paths. Must be called after gas charging (`collect_storage_and_rebate` would
+    /// otherwise overwrite the rebates back to 0). Genesis always uses the V1 system state layout,
+    /// so any failure here is a genesis bug and panics rather than silently breaking conservation.
+    pub fn seed_genesis_storage_rebates(&mut self) {
+        let storage_gas_price = self.protocol_config.storage_gas_price();
+        let storage_per_byte_cost = self.protocol_config.obj_data_cost_refundable();
+
+        let mut total_rebate: u64 = 0;
+        for object in self.execution_results.written_objects.values_mut() {
+            if !object.is_gas_coin() {
+                continue;
+            }
+            let rebate = object.object_size_for_gas_metering() as u64
+                * storage_per_byte_cost
+                * storage_gas_price;
+            object.storage_rebate = rebate;
+            total_rebate += rebate;
+        }
+        if total_rebate == 0 {
+            return;
+        }
+
+        let wrapper = get_sui_system_state_wrapper(&self.execution_results.written_objects)
+            .expect("genesis must create the system state wrapper object");
+        assert_eq!(
+            wrapper.version, 1,
+            "genesis system state is expected to use the V1 layout"
+        );
+        let mut inner_object = get_dynamic_field_object_from_store(
+            &self.execution_results.written_objects,
+            wrapper.id.id.bytes,
+            &wrapper.version,
+        )
+        .expect("genesis must create the system state inner object");
+        let inner_move = inner_object
+            .data
+            .try_as_move_mut()
+            .expect("system state inner is a Move object");
+        let mut field: sui_types::dynamic_field::Field<
+            u64,
+            sui_types::sui_system_state::sui_system_state_inner_v1::SuiSystemStateInnerV1,
+        > = bcs::from_bytes(inner_move.contents()).expect("system state inner deserializes");
+        let seeded = field
+            .value
+            .storage_fund
+            .total_object_storage_rebates
+            .value()
+            + total_rebate;
+        field.value.storage_fund.total_object_storage_rebates =
+            sui_types::balance::Balance::new(seeded);
+        inner_move
+            .set_contents_unsafe(bcs::to_bytes(&field).expect("system state inner serializes"));
+        self.execution_results
+            .written_objects
+            .insert(inner_object.id(), inner_object);
     }
 
     /// Add an accumulator event to the execution results.

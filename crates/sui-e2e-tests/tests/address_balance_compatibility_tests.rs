@@ -550,7 +550,9 @@ async fn test_gas_coin_callarg_with_mixed_gas() {
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
     assert!(effects.status().is_ok());
 
-    let gas_charge = effects.gas_cost_summary().gas_used();
+    // Net of storage rebate: the gas coin is mutated and credited its own rebate, so the balance
+    // change is the net gas, not the gross `gas_used()`. (Genesis coins now carry a rebate.)
+    let gas_charge = effects.gas_cost_summary().net_gas_usage() as u64;
 
     // The real coin should still exist (it's the gas coin, mutated not deleted)
     assert!(effects.deleted().is_empty(), "No coins should be deleted");
@@ -769,7 +771,9 @@ async fn test_gas_smash_into_fake_coin() {
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
     assert!(effects.status().is_ok());
 
-    let gas_charge = effects.gas_cost_summary().gas_used();
+    // Net of storage rebate: the deleted coin's rebate is credited to the address balance, so the
+    // balance change is the net gas, not the gross `gas_used()`. (Genesis coins now carry a rebate.)
+    let gas_charge = effects.gas_cost_summary().net_gas_usage() as u64;
 
     // The real coin should be deleted (smashed into address balance)
     assert_eq!(effects.deleted().len(), 1, "Real coin should be deleted");
@@ -833,7 +837,9 @@ async fn test_gas_smash_multiple_fake_coins() {
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
     assert!(effects.status().is_ok());
 
-    let gas_charge = effects.gas_cost_summary().gas_used();
+    // Net of storage rebate: the deleted coin's rebate is credited to the address balance, so the
+    // balance change is the net gas, not the gross `gas_used()`. (Genesis coins now carry a rebate.)
+    let gas_charge = effects.gas_cost_summary().net_gas_usage() as u64;
 
     // The real coin should be deleted (smashed into address balance)
     assert_eq!(effects.deleted().len(), 1, "Real coin should be deleted");
@@ -896,7 +902,9 @@ async fn test_gas_smash_from_fake_coin() {
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
     assert!(effects.status().is_ok());
 
-    let gas_charge = effects.gas_cost_summary().gas_used();
+    // Net of storage rebate: the gas coin is mutated and credited its own rebate, so the balance
+    // change is the net gas, not the gross `gas_used()`. (Genesis coins now carry a rebate.)
+    let gas_charge = effects.gas_cost_summary().net_gas_usage() as u64;
 
     // No coins should be deleted - the real coin is mutated (receives the fake coin value)
     assert!(effects.deleted().is_empty(), "No coins should be deleted");
@@ -1170,7 +1178,9 @@ async fn test_merge_coin_into_gas_coin_with_coin_reservation() {
         effects.status()
     );
 
-    let gas_charge = effects.gas_cost_summary().gas_used();
+    // Net of storage rebate: the gas residual goes to the transferred coin, which is credited the
+    // rebate, so use net gas rather than gross `gas_used()`. (Genesis coins now carry a rebate.)
+    let gas_charge = effects.gas_cost_summary().net_gas_usage() as u64;
 
     // When the ephemeral GasCoin is transferred away, gas charges are redirected to the
     // coin itself. The coin keeps: real_coin_balance + (budget - gas_charge).

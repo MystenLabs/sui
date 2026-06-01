@@ -16,8 +16,8 @@ expression: "result.pointer(\"/data/executeTransaction\")"
       "gasUsed": {
         "computationCost": "1000000",
         "storageCost": "1976000",
-        "storageRebate": "0",
-        "nonRefundableStorageFee": "0"
+        "storageRebate": "978120",
+        "nonRefundableStorageFee": "9880"
       },
       "transactionDigest": "[digest]",
       "gasObject": {
@@ -81,7 +81,7 @@ expression: "result.pointer(\"/data/executeTransaction\")"
       {
         "address": "[address]",
         "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
-        "amount": "-3976000"
+        "amount": "-2997880"
       },
       {
         "address": "[address]",

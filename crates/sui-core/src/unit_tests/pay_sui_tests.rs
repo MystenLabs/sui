@@ -344,9 +344,14 @@ async fn test_pay_all_sui_success_one_input_coin() -> anyhow::Result<()> {
         recipient
     );
 
-    let gas_used = effects.gas_cost_summary().gas_used();
+    // Use net gas usage (gross gas_used minus the storage rebate): the gas coin's balance is
+    // deducted by the net, and genesis coins now carry a non-zero rebate so gross != net.
+    let net_gas_used = effects.gas_cost_summary().net_gas_usage();
     let gas_object = res.authority_state.get_object(&object_id).await.unwrap();
-    assert_eq!(GasCoin::try_from(&gas_object)?.value(), 3000000 - gas_used,);
+    assert_eq!(
+        GasCoin::try_from(&gas_object)?.value() as i64,
+        3000000 - net_gas_used,
+    );
     Ok(())
 }
 
@@ -379,9 +384,12 @@ async fn test_pay_all_sui_success_multiple_input_coins() -> anyhow::Result<()> {
         recipient
     );
 
-    let gas_used = effects.gas_cost_summary().gas_used();
+    let net_gas_used = effects.gas_cost_summary().net_gas_usage();
     let gas_object = res.authority_state.get_object(&object_id1).await.unwrap();
-    assert_eq!(GasCoin::try_from(&gas_object)?.value(), 3002000 - gas_used,);
+    assert_eq!(
+        GasCoin::try_from(&gas_object)?.value() as i64,
+        3002000 - net_gas_used,
+    );
     Ok(())
 }
 
