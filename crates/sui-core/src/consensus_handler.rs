@@ -2758,6 +2758,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     self.last_consensus_stats
                         .stats
                         .inc_num_user_transactions(author);
+                    // Per-authority sum of "rounds from leader round" for
+                    // user transactions: how deep in the committed sub-dag
+                    // (relative to the commit leader round) the transaction's
+                    // block sits. 0 for transactions in a leader-round block;
+                    // positive for transactions in ancestor blocks.
+                    let hostname = &self.committee.authority(block.author).hostname;
+                    let depth = commit_info.round.saturating_sub(block.round as u64);
+                    self.metrics
+                        .consensus_user_transaction_rounds_from_leader_total
+                        .with_label_values(&[hostname])
+                        .inc_by(depth);
                 }
 
                 if !initial_reconfig_state.should_accept_consensus_certs() {

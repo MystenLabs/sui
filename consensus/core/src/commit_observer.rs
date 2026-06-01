@@ -91,7 +91,7 @@ impl CommitObserver {
     /// of selected leader blocks, and whether they come from local committer or commit sync remotely.
     ///
     /// Also, buffers the commits to DagState and forwards committed subdags to commit finalizer.
-    pub(crate) fn handle_commit(
+    pub(crate) fn handle_committed_leaders(
         &mut self,
         committed_leaders: Vec<VerifiedBlock>,
         local: bool,
@@ -101,7 +101,7 @@ impl CommitObserver {
             .metrics
             .node_metrics
             .scope_processing_time
-            .with_label_values(&["CommitObserver::handle_commit"])
+            .with_label_values(&["CommitObserver::handle_committed_leaders"])
             .start_timer();
 
         let mut committed_sub_dags = self.commit_interpreter.handle_commit(committed_leaders);
@@ -128,6 +128,16 @@ impl CommitObserver {
             .add_scoring_subdags(committed_sub_dags.clone());
 
         Ok(committed_sub_dags)
+    }
+
+    /// Forwards a committed subdag to the commit finalizer. Used by `Core::post_commit`.
+    /// Also emits per-commit observer metrics (`last_committed_leader_round`,
+    /// `last_commit_index`, `blocks_per_commit_count`, `block_commit_latency`,
+    /// `sub_dags_per_commit_count`); on the v2 path these come from
+    /// `handle_committed_leaders`, but the v3 path goes through this method.
+    pub(crate) fn send_to_finalizer(&self, subdag: CommittedSubDag) -> ConsensusResult<()> {
+        self.report_metrics(std::slice::from_ref(&subdag));
+        self.commit_finalizer_handle.send(subdag)
     }
 
     async fn recover_and_send_commits(&mut self, commit_consumer: &CommitConsumerArgs) {
@@ -261,38 +271,39 @@ impl CommitObserver {
         );
     }
 
-    fn report_metrics(&self, committed: &[CommittedSubDag]) {
+    fn report_commit_metrics(&self, commit: &CommittedSubDag) {
         let metrics = &self.context.metrics.node_metrics;
         let utc_now = self.context.clock.timestamp_utc_ms();
 
-        for commit in committed {
-            info!(
-                "Consensus commit {} with leader {} has {} blocks",
-                commit.commit_ref,
-                commit.leader,
-                commit.blocks.len()
-            );
+        info!(
+            "Consensus commit {} with leader {} has {} blocks",
+            commit.commit_ref,
+            commit.leader,
+            commit.blocks.len()
+        );
 
-            metrics
-                .last_committed_leader_round
-                .set(commit.leader.round as i64);
-            metrics
-                .last_commit_index
-                .set(commit.commit_ref.index as i64);
-            metrics
-                .blocks_per_commit_count
-                .observe(commit.blocks.len() as f64);
+        metrics
+            .last_committed_leader_round
+            .set(commit.leader.round as i64);
+        metrics
+            .last_commit_index
+            .set(commit.commit_ref.index as i64);
+        metrics
+            .blocks_per_commit_count
+            .observe(commit.blocks.len() as f64);
 
-            for block in &commit.blocks {
-                let latency_ms = utc_now
-                    .checked_sub(block.timestamp_ms())
-                    .unwrap_or_default();
-                metrics
-                    .block_commit_latency
-                    .observe(Duration::from_millis(latency_ms).as_secs_f64());
-            }
+        for block in &commit.blocks {
+            let latency_ms = utc_now.saturating_sub(block.timestamp_ms());
+            metrics
+                .block_commit_latency
+                .observe(Duration::from_millis(latency_ms).as_secs_f64());
         }
+    }
 
+    fn report_metrics(&self, committed: &[CommittedSubDag]) {
+        for commit in committed {
+            self.report_commit_metrics(commit);
+        }
         self.context
             .metrics
             .node_metrics
@@ -367,9 +378,11 @@ mod tests {
             .map(Option::unwrap)
             .collect::<Vec<_>>();
 
-        let commits = observer.handle_commit(leaders.clone(), true).unwrap();
+        let commits = observer
+            .handle_committed_leaders(leaders.clone(), true)
+            .unwrap();
 
-        // Check commits are returned by CommitObserver::handle_commit is accurate
+        // Check commits are returned by CommitObserver::handle_committed_leaders is accurate
         let mut expected_stored_refs: Vec<BlockRef> = vec![];
         for (idx, subdag) in commits.iter().enumerate() {
             tracing::info!("{subdag:?}");
@@ -493,7 +506,7 @@ mod tests {
         // consumer of the consensus output channel.
         let expected_last_processed_index: usize = 2;
         let mut commits = observer
-            .handle_commit(leaders[..expected_last_processed_index].to_vec(), true)
+            .handle_committed_leaders(leaders[..expected_last_processed_index].to_vec(), true)
             .unwrap();
 
         // Check commits sent over consensus output channel is accurate
@@ -522,7 +535,7 @@ mod tests {
         // the consumer side where the commits were not persisted.
         commits.append(
             &mut observer
-                .handle_commit(leaders[expected_last_processed_index..].to_vec(), true)
+                .handle_committed_leaders(leaders[expected_last_processed_index..].to_vec(), true)
                 .unwrap(),
         );
 

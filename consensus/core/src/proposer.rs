@@ -391,10 +391,18 @@ impl Proposer for ValidatorProposer {
         if !force {
             {
                 let dag_state = self.dag_state.read();
-                if !leader_slots
+                let missing_leader_hosts: Vec<&str> = leader_slots
                     .iter()
-                    .all(|slot| dag_state.contains_cached_block_at_slot(*slot))
-                {
+                    .filter(|slot| !dag_state.contains_cached_block_at_slot(**slot))
+                    .map(|slot| self.context.committee.authority(slot.authority).hostname.as_str())
+                    .collect();
+                if !missing_leader_hosts.is_empty() {
+                    debug!(
+                        "Skipping block proposal for round {} - waiting on leader(s) at round {}: [{}]",
+                        clock_round,
+                        quorum_round,
+                        missing_leader_hosts.join(", "),
+                    );
                     return None;
                 }
             }
@@ -427,8 +435,9 @@ impl Proposer for ValidatorProposer {
                 "Ancestors should have been returned if force is true!"
             );
             debug!(
-                "Skipping block proposal for round {} because no good ancestor is found",
+                "Skipping block proposal for round {} - smart_ancestors_to_propose returned no good ancestors (excluded={}). Likely missing parent-round quorum among non-excluded authorities.",
                 clock_round,
+                excluded_and_equivocating_ancestors.len(),
             );
             return None;
         }
@@ -450,36 +459,60 @@ impl Proposer for ValidatorProposer {
             self.last_included_ancestors[ancestor.author()] = Some(ancestor.reference());
         }
 
-        // TODO(v3): support these metrics under v3 multi leader logic:
-        // - Leader slots are empty when the quorum round is no greater than last committed leader round,
-        //   because of async process or recovery.
-        // - Record accepted time for each block, to decide the last leader and the amount of time waiting for it.
-        if !self.context.protocol_config.enable_v3() {
-            let leader_slot = leader_slots.first().unwrap();
-            let leader_authority = &self
-                .context
-                .committee
-                .authority(leader_slot.authority)
-                .hostname;
-            self.context
-                .metrics
-                .node_metrics
+        // Diagnostic: any leader we waited for whose slot did not end up as
+        // an ancestor of this proposal — happens on force=true (timeout)
+        // when the leader's block hasn't reached us, or when ancestor
+        // selection dropped it. Logged by hostname for fast cross-reference
+        // with `block_proposal_leader_missing_count`.
+        let missing_leader_hosts: Vec<&str> = leader_slots
+            .iter()
+            .filter(|slot| {
+                !ancestors
+                    .iter()
+                    .any(|a| a.author() == slot.authority && a.round() == slot.round)
+            })
+            .map(|slot| {
+                self.context
+                    .committee
+                    .authority(slot.authority)
+                    .hostname
+                    .as_str()
+            })
+            .collect();
+        if !missing_leader_hosts.is_empty() {
+            info!(
+                "Proposing round {} block without waited leader(s) as ancestor: [{}]",
+                clock_round,
+                missing_leader_hosts.join(", "),
+            );
+        }
+
+        // Record wait metrics for every waited leader slot. Missing leaders
+        // are counted only when a forced proposal proceeds after timeout.
+        let dag_state_read = self.dag_state.read();
+        let quorum_ts = dag_state_read.threshold_clock_quorum_ts();
+        let wait_duration_ms = Instant::now()
+            .saturating_duration_since(quorum_ts)
+            .as_millis() as u64;
+        for slot in &leader_slots {
+            let leader_authority = &self.context.committee.authority(slot.authority).hostname;
+            let metrics = &self.context.metrics.node_metrics;
+            metrics
                 .block_proposal_leader_wait_ms
                 .with_label_values(&[leader_authority])
-                .inc_by(
-                    Instant::now()
-                        .saturating_duration_since(
-                            self.dag_state.read().threshold_clock_quorum_ts(),
-                        )
-                        .as_millis() as u64,
-                );
-            self.context
-                .metrics
-                .node_metrics
+                .inc_by(wait_duration_ms);
+            metrics
                 .block_proposal_leader_wait_count
                 .with_label_values(&[leader_authority])
                 .inc();
+            if force && !dag_state_read.contains_cached_block_at_slot(*slot) {
+                metrics
+                    .block_proposal_leader_missing_count
+                    .with_label_values(&[leader_authority])
+                    .inc();
+            }
         }
+        drop(dag_state_read);
 
         self.context
             .metrics
