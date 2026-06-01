@@ -260,7 +260,7 @@ impl IngestionClient {
             store,
             Some(metrics.total_ingested_bytes.clone()),
         ));
-        Ok(Self::new_impl(client, metrics))
+        Ok(Self::from_trait(client, metrics))
     }
 
     /// An ingestion client that fetches checkpoints from a fullnode, over gRPC.
@@ -283,10 +283,15 @@ impl IngestionClient {
         } else {
             client
         };
-        Ok(Self::new_impl(Arc::new(client), metrics))
+        Ok(Self::from_trait(Arc::new(client), metrics))
     }
 
-    pub(crate) fn new_impl(
+    /// Wrap an arbitrary [`IngestionClientTrait`] implementation in
+    /// an [`IngestionClient`]. Use this when the source of
+    /// checkpoints is not one of the built-in remote object stores
+    /// or gRPC endpoints — for example, when embedding the indexer
+    /// in a fullnode that already has checkpoint data on hand.
+    pub fn from_trait(
         client: Arc<dyn IngestionClientTrait>,
         metrics: Arc<IngestionMetrics>,
     ) -> Self {
@@ -599,7 +604,7 @@ pub(crate) mod tests {
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
         let metrics = IngestionMetrics::new(None, &registry);
         let mock_client = Arc::new(MockIngestionClient::default());
-        let client = IngestionClient::new_impl(mock_client.clone(), metrics);
+        let client = IngestionClient::from_trait(mock_client.clone(), metrics);
         (client, mock_client)
     }
 

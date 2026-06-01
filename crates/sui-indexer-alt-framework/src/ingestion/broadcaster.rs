@@ -400,7 +400,7 @@ mod tests {
     ) -> IngestionClient {
         let mock = MockIngestionClient::default();
         mock.insert_checkpoints(checkpoints);
-        IngestionClient::new_impl(Arc::new(mock), metrics)
+        IngestionClient::from_trait(Arc::new(mock), metrics)
     }
 
     /// Create a test config

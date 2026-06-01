@@ -285,7 +285,7 @@ mod tests {
             latest_checkpoint,
             ..Default::default()
         };
-        IngestionClient::new_impl(Arc::new(mock), metrics)
+        IngestionClient::from_trait(Arc::new(mock), metrics)
     }
 
     async fn test_ingestion(uri: String, ingest_concurrency: usize) -> IngestionService {
