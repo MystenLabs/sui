@@ -53,8 +53,6 @@ use sui_indexer_alt_framework::ingestion::BoxedStreamingClient;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::IngestionService;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
-use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientTrait;
-use sui_indexer_alt_framework::metrics::IngestionMetrics;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::pipeline::sequential::{self};
@@ -230,15 +228,23 @@ impl Indexer {
     /// construct an [`Indexer`] backed by it.
     ///
     /// `ingestion_client` is the pull-side checkpoint source; the
-    /// optional `streaming_client` is the live-tail source. Both
-    /// are trait objects so callers (standalone binary, embedded
-    /// fullnode) can supply implementations sourced from wherever
-    /// makes sense for their environment.
+    /// optional `streaming_client` is the live-tail source. Callers
+    /// (standalone binary, embedded fullnode) build the
+    /// [`IngestionClient`] via [`IngestionClient::new`] (driven by
+    /// `ClientArgs`) or [`IngestionClient::from_trait`] (wrapping
+    /// a custom [`IngestionClientTrait`]), depending on where
+    /// checkpoints come from. The [`IngestionMetrics`] handle the
+    /// service shares with the client is reused from
+    /// [`IngestionClient::metrics`], avoiding double-registration
+    /// against `registry`.
+    ///
+    /// [`IngestionClientTrait`]: sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientTrait
+    /// [`IngestionMetrics`]: sui_indexer_alt_framework::metrics::IngestionMetrics
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         path: impl AsRef<Path>,
         indexer_args: IndexerArgs,
-        ingestion_client: Arc<dyn IngestionClientTrait>,
+        ingestion_client: IngestionClient,
         streaming_client: Option<BoxedStreamingClient>,
         consistency_config: crate::config::ConsistencyConfig,
         ingestion_config: IngestionConfig,
@@ -269,7 +275,7 @@ impl Indexer {
     pub async fn from_store(
         store: Store,
         indexer_args: IndexerArgs,
-        ingestion_client: Arc<dyn IngestionClientTrait>,
+        ingestion_client: IngestionClient,
         streaming_client: Option<BoxedStreamingClient>,
         consistency_config: crate::config::ConsistencyConfig,
         ingestion_config: IngestionConfig,
@@ -286,10 +292,7 @@ impl Indexer {
             indexer_args.first_checkpoint,
         );
 
-        let ingestion_metrics = IngestionMetrics::new(metrics_prefix, registry);
-        let ingestion_client =
-            IngestionClient::from_trait(ingestion_client, ingestion_metrics.clone());
-
+        let ingestion_metrics = ingestion_client.metrics().clone();
         let ingestion_service = IngestionService::with_clients(
             ingestion_client,
             streaming_client,
@@ -476,6 +479,8 @@ mod tests {
     use async_trait::async_trait;
     use sui_indexer_alt_framework::ingestion::ingestion_client::CheckpointError;
     use sui_indexer_alt_framework::ingestion::ingestion_client::CheckpointResult;
+    use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientTrait;
+    use sui_indexer_alt_framework::metrics::IngestionMetrics;
     use sui_types::digests::ChainIdentifier;
 
     use super::*;
@@ -508,10 +513,13 @@ mod tests {
     async fn build_indexer(layer: PipelineLayer) -> Indexer {
         let dir = tempfile::tempdir().unwrap();
         let registry = Registry::new();
+        let ingestion_metrics = IngestionMetrics::new(Some(METRICS_PREFIX), &registry);
+        let ingestion_client =
+            IngestionClient::from_trait(Arc::new(StubIngestionClient), ingestion_metrics);
         let mut indexer = Indexer::new(
             dir.path().join("db"),
             IndexerArgs::default(),
-            Arc::new(StubIngestionClient),
+            ingestion_client,
             None,
             crate::config::ConsistencyConfig::default(),
             IngestionConfig::default(),
