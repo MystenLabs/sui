@@ -561,6 +561,8 @@ impl SuiNode {
             &store,
             backpressure_manager.clone(),
         );
+        checkpoint_store
+            .set_transaction_cache_reader(cache_traits.transaction_cache_reader.clone());
 
         let auth_agg = {
             let safe_client_metrics_base = SafeClientMetricsBase::new(&prometheus_registry);

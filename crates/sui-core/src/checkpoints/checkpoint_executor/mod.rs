@@ -531,6 +531,7 @@ impl CheckpointExecutor {
             &locally_built_checkpoint,
             &checkpoint,
             &self.checkpoint_store,
+            &*self.transaction_cache_reader,
         );
 
         // Checkpoint builder triggers accumulation of the checkpoint, so this is guaranteed to finish.
@@ -877,6 +878,8 @@ impl CheckpointExecutor {
                             tx_digest,
                             expected_fx_digest,
                             executed_fx_digest,
+                            txn,
+                            effects,
                             &*self.transaction_cache_reader,
                         );
                         None
