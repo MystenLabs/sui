@@ -16,7 +16,6 @@
 //! [`sui_consistent_store::Db::open`]. Keys reused across multiple
 //! CFs live in [`keys`].
 
-pub mod address_balance;
 pub mod balance;
 pub mod checkpoint_contents;
 pub mod checkpoint_seq_by_digest;
@@ -69,7 +68,6 @@ pub struct RpcStoreSchema<R: Reader = Db> {
     pub type_index: DbMap<type_index::Key, type_index::Value, R>,
     pub dynamic_fields: DbMap<dynamic_fields::Key, dynamic_fields::Value, R>,
     pub balance: DbMap<balance::Key, balance::Value, R>,
-    pub address_balance: DbMap<address_balance::Key, address_balance::Value, R>,
     pub package_versions: DbMap<package_versions::Key, package_versions::Value, R>,
     pub epoch_info: DbMap<epoch_info::Key, epoch_info::Value, R>,
     pub transaction_bitmap: DbMap<transaction_bitmap::Key, transaction_bitmap::Value, R>,
@@ -110,10 +108,6 @@ impl Schema for RpcStoreSchema {
             CfDescriptor::new(dynamic_fields::NAME, dynamic_fields::options(base_options)),
             CfDescriptor::new(balance::NAME, balance::options(base_options)),
             CfDescriptor::new(
-                address_balance::NAME,
-                address_balance::options(base_options),
-            ),
-            CfDescriptor::new(
                 package_versions::NAME,
                 package_versions::options(base_options),
             ),
@@ -147,7 +141,6 @@ impl Schema for RpcStoreSchema {
             type_index: DbMap::new(db.clone(), type_index::NAME)?,
             dynamic_fields: DbMap::new(db.clone(), dynamic_fields::NAME)?,
             balance: DbMap::new(db.clone(), balance::NAME)?,
-            address_balance: DbMap::new(db.clone(), address_balance::NAME)?,
             package_versions: DbMap::new(db.clone(), package_versions::NAME)?,
             epoch_info: DbMap::new(db.clone(), epoch_info::NAME)?,
             transaction_bitmap: DbMap::new(db.clone(), transaction_bitmap::NAME)?,
@@ -176,7 +169,6 @@ impl SchemaAtSnapshot for RpcStoreSchema {
             type_index: self.type_index.at(snap),
             dynamic_fields: self.dynamic_fields.at(snap),
             balance: self.balance.at(snap),
-            address_balance: self.address_balance.at(snap),
             package_versions: self.package_versions.at(snap),
             epoch_info: self.epoch_info.at(snap),
             transaction_bitmap: self.transaction_bitmap.at(snap),
@@ -198,8 +190,7 @@ mod tests {
     #[test]
     fn opens_with_all_cfs() {
         let dir = tempfile::tempdir().unwrap();
-        let (_db, schema) =
-            Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let (_db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
         // Empty database — every typed handle is constructed; a
         // miss on any of them returns None instead of an open-time
         // missing-CF error.

@@ -60,8 +60,10 @@ impl Decode for Key {
     }
 }
 
-// TODO: install an associative i128 merge operator and a
-// zero-row compaction filter once the balance indexer lands.
+// TODO: install a field-wise i128 merge operator (summing
+// `coin` and `address` independently) and a compaction filter
+// that drops rows where both components are zero. Lands with the
+// balance + accumulator indexers.
 pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
     base_options.clone()
 }

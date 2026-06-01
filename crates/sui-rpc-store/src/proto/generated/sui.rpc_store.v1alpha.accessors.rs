@@ -3,7 +3,8 @@ mod _accessor_impls {
     impl super::BalanceDelta {
         pub const fn const_default() -> Self {
             Self {
-                value: ::prost::bytes::Bytes::new(),
+                coin: ::prost::bytes::Bytes::new(),
+                address: ::prost::bytes::Bytes::new(),
             }
         }
         #[doc(hidden)]
@@ -11,13 +12,22 @@ mod _accessor_impls {
             static DEFAULT: super::BalanceDelta = super::BalanceDelta::const_default();
             &DEFAULT
         }
-        ///Sets `value` with the provided value.
-        pub fn set_value<T: Into<::prost::bytes::Bytes>>(&mut self, field: T) {
-            self.value = field.into().into();
+        ///Sets `coin` with the provided value.
+        pub fn set_coin<T: Into<::prost::bytes::Bytes>>(&mut self, field: T) {
+            self.coin = field.into().into();
         }
-        ///Sets `value` with the provided value.
-        pub fn with_value<T: Into<::prost::bytes::Bytes>>(mut self, field: T) -> Self {
-            self.set_value(field.into());
+        ///Sets `coin` with the provided value.
+        pub fn with_coin<T: Into<::prost::bytes::Bytes>>(mut self, field: T) -> Self {
+            self.set_coin(field.into());
+            self
+        }
+        ///Sets `address` with the provided value.
+        pub fn set_address<T: Into<::prost::bytes::Bytes>>(&mut self, field: T) {
+            self.address = field.into().into();
+        }
+        ///Sets `address` with the provided value.
+        pub fn with_address<T: Into<::prost::bytes::Bytes>>(mut self, field: T) -> Self {
+            self.set_address(field.into());
             self
         }
     }

@@ -177,16 +177,28 @@ pub mod dynamic_field_info {
         }
     }
 }
-/// A signed 128-bit balance value, stored as the merge-operator
-/// accumulator behind `balance` and `address_balance`.
+/// `(owner, coin_type)` → coin + accumulator balance deltas.
 ///
-/// Encoded as a 16-byte little-endian `i128`. The merge operator
-/// sums two 16-byte operands directly without re-parsing protobuf.
-/// The compaction filter drops zero entries.
+/// Each field is a 16-byte little-endian `i128`. The merge operator
+/// adds fields component-wise; the compaction filter drops rows
+/// where both components are zero. Readers compute the displayed
+/// total as `coin + address`.
+///
+/// Two sources contribute independently:
+///
+/// * `coin`: aggregated from `Coin<T>` objects owned by `owner`.
+/// * `address`: aggregated from the address-scoped accumulator
+///   bucket for `(owner, type)`.
+///
+/// Each indexer writes only its own field (the other left at the
+/// default zero), so the merge operator never has to reconcile
+/// concurrent writes to the same component.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BalanceDelta {
     #[prost(bytes = "bytes", tag = "1")]
-    pub value: ::prost::bytes::Bytes,
+    pub coin: ::prost::bytes::Bytes,
+    #[prost(bytes = "bytes", tag = "2")]
+    pub address: ::prost::bytes::Bytes,
 }
 /// The storage id of one version of a Move package, stored in
 /// `package_versions` keyed by `(original_package_id, version)`.
