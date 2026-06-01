@@ -82,7 +82,8 @@ pub trait BlockAPI {
     /// Votes on if a transaction should be accepted or rejected.
     fn transaction_votes(&self) -> &[BlockTransactionVotes];
 
-    /// The author's local GC round at the time the block was proposed.
+    /// Transactions in this blocks' casual history at and before the cutoff round
+    /// will not receive accept votes from this block.
     /// Only `BlockV3` carries this — earlier variants panic.
     fn transaction_votes_cutoff_round(&self) -> Round;
 
