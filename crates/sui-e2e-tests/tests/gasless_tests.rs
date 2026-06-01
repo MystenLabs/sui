@@ -1002,3 +1002,127 @@ async fn test_gasless_rate_limit_rejects() {
 
     test_env.trigger_reconfiguration().await;
 }
+
+// `compute_input_reservations` aggregates FundsWithdrawalArg amounts via checked `+=`
+// under `#[sui_macros::with_checked_arithmetic]`. Two same-(sender, type) withdrawal
+// args with amounts u64::MAX and 1 would overflow before PTB execution begins.
+//
+// `pre_object_load_checks` is called unconditionally inside `simulate_transaction` on
+// all paths including TransactionChecks::Disabled. It calls
+// `process_funds_withdrawals_for_signing` → `accumulate_funds_withdrawals` with its own
+// `checked_add`, returning "Balance withdraw reservation overflow" before the executor
+// is invoked. No RPC path reaches `compute_input_reservations` with overflowing sums.
+// This test documents that behavior.
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_poc_gasless_withdrawal_reservation_overflow_panics() {
+    let test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_gasless_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+    let coin_type = GAS::type_tag();
+    transaction::add_gasless_token_for_testing(coin_type.to_canonical_string(true), 0);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    let withdrawal_0 = builder
+        .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
+            u64::MAX,
+            coin_type.clone(),
+        ))
+        .unwrap();
+    let balance_0 = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("redeem_funds").unwrap(),
+        vec![coin_type.clone()],
+        vec![withdrawal_0],
+    );
+    let recipient_0 = builder.pure(recipient).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec![coin_type.clone()],
+        vec![balance_0, recipient_0],
+    );
+
+    let withdrawal_1 = builder
+        .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
+            1,
+            coin_type.clone(),
+        ))
+        .unwrap();
+    let balance_1 = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("redeem_funds").unwrap(),
+        vec![coin_type.clone()],
+        vec![withdrawal_1],
+    );
+    let recipient_1 = builder.pure(recipient).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec![coin_type],
+        vec![balance_1, recipient_1],
+    );
+
+    let tx_data = test_env.gasless_transaction_data(
+        TransactionKind::ProgrammableTransaction(builder.finish()),
+        sender,
+        0,
+        0,
+    );
+
+    let overflow_msg = "Balance withdraw reservation overflow";
+
+    // Dry-run via JSON-RPC (sui_dryRunTransactionBlock, TransactionChecks::Enabled).
+    // pre_object_load_checks → accumulate_funds_withdrawals → checked_add catches u64::MAX+1
+    // and returns a graceful error; compute_input_reservations is never reached.
+    let result = test_env
+        .cluster
+        .sui_client()
+        .read_api()
+        .dry_run_transaction_block(tx_data.clone())
+        .await;
+    let err = result.expect_err("dry-run should reject overflowing withdrawal sum");
+    assert!(
+        err.to_string().contains(overflow_msg),
+        "unexpected dry-run error: {err}"
+    );
+
+    // gRPC simulate with checks=disabled (dev-inspect path).
+    // pre_object_load_checks is still called unconditionally before the dev-inspect fork.
+    let result = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&tx_data, false, false)
+        .await;
+    let err = result.expect_err("gRPC simulate should reject overflowing withdrawal sum");
+    assert!(
+        err.to_string().contains(overflow_msg),
+        "unexpected gRPC simulate error: {err}"
+    );
+
+    // Real execution via gRPC: validators call pre_object_load_checks during handle_transaction,
+    // so the certificate is never formed and the overflowing reservation never reaches execution.
+    let signed_tx = test_env.cluster.sign_transaction(&tx_data).await;
+    let result = test_env
+        .cluster
+        .wallet
+        .execute_transaction_may_fail(signed_tx)
+        .await;
+    let err = result.expect_err("execution should reject overflowing withdrawal sum");
+    assert!(
+        err.to_string().contains(overflow_msg),
+        "unexpected execution error: {err}"
+    );
+}

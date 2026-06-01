@@ -455,6 +455,28 @@ mod checked {
                 gas_budget,
                 available_address_balance_gas,
             )?;
+
+            // smash_gas converts gas payment amounts to i64 via unwrap(). The combined
+            // total of all gas payment values (real coin balances + coin reservation amounts)
+            // must fit in i64. In production this is never an issue since reaching i64::MAX
+            // would require ~92% of the total SUI supply.
+            let mut total: u128 = 0;
+            for obj in &gas_objects {
+                if let Some(object) = obj.as_object() {
+                    total += sui_types::gas::get_gas_balance(object).unwrap_or(0) as u128;
+                }
+            }
+            for obj_ref in gas {
+                if let Ok(parsed) = ParsedDigest::try_from(obj_ref.2) {
+                    total += parsed.reservation_amount() as u128;
+                }
+            }
+            if i64::try_from(total).is_err() {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: "Total gas payment (coins + reservations) exceeds i64::MAX".to_string(),
+                }
+                .into());
+            }
         }
         Ok(gas_status)
     }

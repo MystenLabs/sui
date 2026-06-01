@@ -4117,3 +4117,163 @@ async fn address_balance_gas_transfer_storage_objects_out_of_gas_no_panic() {
     // Reconfig runs SUI conservation invariant checks across the epoch boundary
     test_env.cluster.trigger_reconfiguration().await;
 }
+
+// check_address_balance_changes_impl compared the actual balance change against the PTB's
+// *net* change at each address. When a PTB:
+//   (a) withdraws 150B MIST from vault's address balance (PTB Split of 150B at vault_addr)
+//   (b) sends the gas coin to vault via coin::send_funds<SUI>(GasCoin, vault_addr),
+//       depositing (gas_coin_value + gas_budget) at vault_addr as PTB events,
+//
+// the net ptb_change[vault_addr] = gas_coin_value + gas_budget - 150B. When the gas coin
+// is small relative to the withdrawal (gas_coin_value + gas_budget < 150B) this is
+// negative. Gas charging then emits a runtime Split at vault_addr, making actual <
+// ptb_change and triggering the invariant assertion.
+//
+// A regular sender gas coin with billions of MIST keeps ptb_change positive and masks
+// the condition. We use a dedicated small gas coin (50M MIST) to satisfy it.
+#[sim_test]
+async fn test_poc_net_ptb_gas_coverage_panics() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg.set_enable_object_funds_withdraw_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let recipient = test_env.get_sender(1);
+
+    // Fund vault's address balance with 200B MIST (well above the 150B withdrawal).
+    let (package_id, vault_id) = test_env
+        .setup_funded_object_balance_vault(200_000_000_000)
+        .await;
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+
+    // The bug requires gas_coin_value + gas_budget < withdrawal_amount.
+    // Split a dedicated small gas coin (50M MIST) so this condition is satisfied:
+    //   50M + 10M = 60M << 150B  →  ptb_change[vault] < 0
+    let gas_budget = 10_000_000u64; // 10M MIST
+    let small_gas_coin_value = 50_000_000u64; // 50M MIST
+    let withdrawal_amount = 150_000_000_000u64; // 150B MIST
+
+    let (_, sender_gas) = test_env.get_sender_and_gas(0);
+    let split_tx = TransactionData::V1(TransactionDataV1 {
+        kind: {
+            let mut b = ProgrammableTransactionBuilder::new();
+            let amount = b.pure(small_gas_coin_value).unwrap();
+            let Argument::Result(split_idx) =
+                b.command(Command::SplitCoins(Argument::GasCoin, vec![amount]))
+            else {
+                unreachable!()
+            };
+            // Transfer the split coin to sender so it appears in created objects.
+            let sender_arg = b.pure(sender).unwrap();
+            b.command(Command::TransferObjects(
+                vec![Argument::NestedResult(split_idx, 0)],
+                sender_arg,
+            ));
+            TransactionKind::ProgrammableTransaction(b.finish())
+        },
+        sender,
+        gas_data: GasData {
+            payment: vec![sender_gas],
+            owner: sender,
+            price: test_env.rgp,
+            budget: gas_budget,
+        },
+        expiration: TransactionExpiration::None,
+    });
+    let (split_digest, split_effects) = test_env.exec_tx_directly(split_tx).await.unwrap();
+    test_env
+        .cluster
+        .wait_for_tx_settlement(&[split_digest])
+        .await;
+    let small_gas_coin = split_effects
+        .created()
+        .into_iter()
+        .next()
+        .expect("split should create a new coin")
+        .0;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+
+    // PTB with the small gas coin as payment:
+    //   1. withdraw_funds<SUI>(vault, 150B) — PTB Split(150B) at vault_addr
+    //   2. balance::send_funds<SUI>(balance, recipient) — PTB Merge(150B) at recipient
+    //   3. coin::send_funds<SUI>(GasCoin, vault_addr) — PTB Merge(small_coin + gas_budget) at vault_addr,
+    //      overrides gas charge location to AddressBalance(vault_addr)
+    //
+    // ptb_change[vault_addr] = (50M + 10M) − 150B ≈ −150B  (negative)
+    // runtime gas charge emits Split(gas_cost) at vault_addr
+    // actual[vault_addr] = ptb_change − gas_cost < ptb_change
+    // assert_invariant!(actual >= ptb_change.min(0)) ≡ −gas_cost >= 0 — always false.
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    let vault_arg = builder
+        .obj(ObjectArg::ImmOrOwnedObject(vault_oref))
+        .unwrap();
+    let withdraw_amount_arg = builder.pure(withdrawal_amount).unwrap();
+    let balance = builder.programmable_move_call(
+        package_id,
+        Identifier::new("object_balance").unwrap(),
+        Identifier::new("withdraw_funds").unwrap(),
+        vec![GAS::type_tag()],
+        vec![vault_arg, withdraw_amount_arg],
+    );
+
+    let recipient_arg = builder.pure(recipient).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec![GAS::type_tag()],
+        vec![balance, recipient_arg],
+    );
+
+    let vault_addr_arg = builder.pure(SuiAddress::from(vault_id)).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("coin").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec![GAS::type_tag()],
+        vec![Argument::GasCoin, vault_addr_arg],
+    );
+
+    let tx_data = TransactionData::V1(TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(builder.finish()),
+        sender,
+        gas_data: GasData {
+            payment: vec![small_gas_coin], // small coin: value + gas_budget << withdrawal
+            owner: sender,
+            price: test_env.rgp,
+            budget: gas_budget,
+        },
+        expiration: TransactionExpiration::None,
+    });
+
+    // Dry-run via JSON-RPC (sui_dryRunTransactionBlock).
+    test_env
+        .cluster
+        .sui_client()
+        .read_api()
+        .dry_run_transaction_block(tx_data.clone())
+        .await
+        .unwrap();
+
+    // Real execution via gRPC — fully legitimate transaction with a real gas coin; validators
+    // sign it without issue. check_address_balance_changes_impl panics after PTB execution
+    // detects actual < ptb_change (the gas cost makes actual more negative than ptb_change).
+    let signed_tx = test_env.cluster.sign_transaction(&tx_data).await;
+    test_env
+        .cluster
+        .wallet
+        .execute_transaction_may_fail(signed_tx)
+        .await
+        .unwrap();
+}

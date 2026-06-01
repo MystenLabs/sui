@@ -247,10 +247,6 @@ pub mod checked {
         // This function is called when the transaction is about to be executed.
         // It will smash all gas coins into a single one and set the logical gas coin
         // to be the first one in the list.
-        // After this call, `gas_coin` will return it id of the gas coin.
-        // This function panics if errors are found while operation on the gas coins.
-        // Transaction and certificate input checks must have insured that all gas coins
-        // are correct.
         fn smash_gas(&mut self, temporary_store: &mut TemporaryStore<'_>) {
             match &mut self.payment {
                 PaymentMetadata::Unmetered | PaymentMetadata::Gasless => (),
@@ -715,6 +711,8 @@ pub mod checked {
                             unreachable!("Payment method does not match location")
                         };
                         assert_eq!(*addr, other, "Payment method does not match location");
+                        // validity_check guarantees the total of all reservation amounts fits in
+                        // i64, so this addition and the i64 conversion in smash_gas are both safe.
                         *amount += additional;
                     }
                     (indexmap::map::Entry::Occupied(_), _) => {
