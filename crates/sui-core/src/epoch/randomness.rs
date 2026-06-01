@@ -1094,7 +1094,7 @@ mod tests {
     use std::num::NonZeroUsize;
     use sui_protocol_config::ProtocolConfig;
     use sui_protocol_config::{Chain, ProtocolVersion};
-    use sui_types::messages_consensus::ConsensusTransactionKind;
+    use sui_types::{base_types::AuthorityName, messages_consensus::ConsensusTransactionKind};
     use tokio::sync::mpsc;
     use typed_store::Map;
 
@@ -1106,6 +1106,7 @@ mod tests {
         network_config: sui_swarm_config::network_config::NetworkConfig,
         epoch_stores: Vec<Guard<Arc<AuthorityPerEpochStore>>>,
         randomness_managers: Vec<RandomnessManager>,
+        tx_consensus: mpsc::Sender<Vec<ConsensusTransaction>>,
         rx_consensus: mpsc::Receiver<Vec<ConsensusTransaction>>,
         num_validators: usize,
     }
@@ -1208,9 +1209,64 @@ mod tests {
                 network_config,
                 epoch_stores,
                 randomness_managers,
+                tx_consensus,
                 rx_consensus,
                 num_validators,
             }
+        }
+
+        fn consensus_adapter(&self, authority: AuthorityName) -> Arc<ConsensusAdapter> {
+            let mut mock_consensus_client = MockConsensusClient::new();
+            let tx_consensus = self.tx_consensus.clone();
+            mock_consensus_client
+                .expect_submit()
+                .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
+                    tx_consensus.try_send(transactions.to_vec()).unwrap();
+                    true
+                })
+                .returning(|_, _| {
+                    Ok((
+                        Vec::new(),
+                        with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                    ))
+                });
+
+            Arc::new(ConsensusAdapter::new(
+                Arc::new(mock_consensus_client),
+                CheckpointStore::new_for_tests(),
+                authority,
+                100_000,
+                100_000,
+                ConsensusAdapterMetrics::new_test(),
+                Arc::new(tokio::sync::Notify::new()),
+            ))
+        }
+
+        async fn recover_validator_randomness_managers(&mut self) -> usize {
+            let mut recovered_randomness_managers = Vec::new();
+            for (i, validator) in self
+                .network_config
+                .validator_configs
+                .iter()
+                .enumerate()
+                .take(self.num_validators)
+            {
+                let consensus_adapter = self.consensus_adapter(self.epoch_stores[i].name);
+                recovered_randomness_managers.push(
+                    RandomnessManager::try_new(
+                        Arc::downgrade(&self.epoch_stores[i]),
+                        Box::new(consensus_adapter),
+                        sui_network::randomness::Handle::new_stub(),
+                        Some(validator.protocol_key_pair()),
+                        RandomnessRoundReceiverHandle::new_for_testing(),
+                    )
+                    .await
+                    .unwrap(),
+                );
+            }
+            let recovered_count = recovered_randomness_managers.len();
+            self.randomness_managers = recovered_randomness_managers;
+            recovered_count
         }
 
         /// Runs start_dkg on all managers and collects the DKG messages from validators.
@@ -1240,6 +1296,16 @@ mod tests {
             dkg_messages: &[VersionedDkgMessage],
             advance_round: Round,
         ) {
+            let indexed_messages: Vec<_> = dkg_messages.iter().cloned().enumerate().collect();
+            self.distribute_indexed_messages_and_advance(&indexed_messages, advance_round)
+                .await;
+        }
+
+        async fn distribute_indexed_messages_and_advance(
+            &mut self,
+            dkg_messages: &[(usize, VersionedDkgMessage)],
+            advance_round: Round,
+        ) {
             for i in 0..self.randomness_managers.len() {
                 let mut output = ConsensusCommitOutput::new(0);
                 output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
@@ -1249,7 +1315,7 @@ mod tests {
                     },
                     ..Default::default()
                 });
-                for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
+                for (j, dkg_message) in dkg_messages.iter().cloned() {
                     self.randomness_managers[i]
                         .add_message(&self.epoch_stores[j].name, dkg_message)
                         .unwrap();
@@ -1339,35 +1405,71 @@ mod tests {
             assert_eq!(DkgStatus::Failed, rm.dkg_status());
         }
 
-        // Verify the failure is durably loaded on restart: a RandomnessManager reconstructed
-        // from the same epoch store must report DKG as failed (not pending), exercising the
+        let recovered_count = setup.recover_validator_randomness_managers().await;
+        assert_eq!(setup.num_validators, recovered_count);
+
+        // Verify the failure is durably loaded on restart: RandomnessManagers reconstructed
+        // from the same epoch stores must report DKG as failed (not pending), exercising the
         // `dkg_output_v2` failure-load path in `try_new`.
-        for (i, validator) in setup
-            .network_config
-            .validator_configs
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Failed, rm.dkg_status());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dkg_recovers_processed_messages_after_restart() {
+        telemetry_subscribers::init_for_testing();
+
+        let mut setup = DkgTestSetup::new(false).await;
+        let dkg_messages = setup.start_dkg_and_collect_messages().await;
+        let processed_before_restart = 1;
+        assert!(processed_before_restart > 0);
+        assert!(processed_before_restart < setup.num_validators);
+        let pre_restart_messages: Vec<_> = dkg_messages
             .iter()
+            .cloned()
             .enumerate()
-            .take(setup.num_validators)
-        {
-            let consensus_adapter = Arc::new(ConsensusAdapter::new(
-                Arc::new(MockConsensusClient::new()),
-                CheckpointStore::new_for_tests(),
-                setup.epoch_stores[i].name,
-                100_000,
-                100_000,
-                ConsensusAdapterMetrics::new_test(),
-                Arc::new(tokio::sync::Notify::new()),
-            ));
-            let recovered_randomness_manager = RandomnessManager::try_new(
-                Arc::downgrade(&setup.epoch_stores[i]),
-                Box::new(consensus_adapter),
-                sui_network::randomness::Handle::new_stub(),
-                Some(validator.protocol_key_pair()),
-                RandomnessRoundReceiverHandle::new_for_testing(),
-            )
-            .await
-            .unwrap();
-            assert_eq!(DkgStatus::Failed, recovered_randomness_manager.dkg_status());
+            .take(processed_before_restart)
+            .collect();
+        let post_restart_messages: Vec<_> = dkg_messages
+            .iter()
+            .cloned()
+            .enumerate()
+            .skip(processed_before_restart)
+            .collect();
+
+        setup
+            .distribute_indexed_messages_and_advance(&pre_restart_messages, 0)
+            .await;
+
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Pending, rm.dkg_status());
+            assert_eq!(processed_before_restart, rm.processed_messages.len());
+            assert!(!rm.used_messages.initialized());
+        }
+
+        let recovered_count = setup.recover_validator_randomness_managers().await;
+        assert_eq!(setup.num_validators, recovered_count);
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Pending, rm.dkg_status());
+            assert_eq!(processed_before_restart, rm.processed_messages.len());
+            assert!(!rm.used_messages.initialized());
+        }
+
+        setup
+            .distribute_indexed_messages_and_advance(&post_restart_messages, 0)
+            .await;
+
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Pending, rm.dkg_status());
+            assert_eq!(setup.num_validators, rm.processed_messages.len());
+            assert!(rm.used_messages.initialized());
+        }
+
+        setup.collect_and_distribute_confirmations().await;
+
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Successful, rm.dkg_status());
         }
     }
 
