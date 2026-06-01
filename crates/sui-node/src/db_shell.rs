@@ -344,9 +344,7 @@ fn list_children(
             },
         ]),
         VfsPath::Epochs => {
-            let epochs = committee_store
-                .list_epochs(None, limit)
-                .map_err(|e| internal(e))?;
+            let epochs = committee_store.list_epochs(None, limit).map_err(internal)?;
             Ok(epochs
                 .into_iter()
                 .map(|(id, _)| DirEntry {
@@ -453,7 +451,7 @@ fn list_checkpoints_from_seq(
                 })
                 .collect()
         })
-        .map_err(|e| internal(e))
+        .map_err(internal)
 }
 
 fn list_checkpoint_digests_from(
@@ -472,7 +470,7 @@ fn list_checkpoint_digests_from(
                 })
                 .collect()
         })
-        .map_err(|e| internal(e))
+        .map_err(internal)
 }
 
 fn list_checkpoint_contents_from(
@@ -491,7 +489,7 @@ fn list_checkpoint_contents_from(
                 })
                 .collect()
         })
-        .map_err(|e| internal(e))
+        .map_err(internal)
 }
 
 fn list_epoch_checkpoints_from(
@@ -511,7 +509,7 @@ fn list_epoch_checkpoints_from(
                 })
                 .collect()
         })
-        .map_err(|e| internal(e))
+        .map_err(internal)
 }
 
 fn list_transactions_from(
@@ -521,7 +519,7 @@ fn list_transactions_from(
 ) -> Result<Vec<DirEntry>, ApiError> {
     let tx_digests = auth_store
         .list_transactions_from(start, limit)
-        .map_err(|e| internal(e))?;
+        .map_err(internal)?;
     let mut entries = Vec::with_capacity(tx_digests.len() * 2);
     for digest in &tx_digests {
         entries.push(DirEntry {
@@ -550,7 +548,7 @@ fn list_consensus_commits_from(
     let end_idx = start_idx.saturating_add(limit as u32);
     let commits = cs
         .scan_commits(CommitRange::new(start_idx..=end_idx))
-        .map_err(|e| internal(e))?;
+        .map_err(internal)?;
     Ok(commits
         .into_iter()
         .map(|c| DirEntry {
@@ -570,14 +568,14 @@ fn render_consensus_commit_summary(
     })?;
     let commits = cs
         .scan_commits(CommitRange::new(index..=index))
-        .map_err(|e| internal(e))?;
+        .map_err(internal)?;
     let commit = commits
         .into_iter()
         .next()
         .ok_or_else(|| not_found(format!("consensus commit {index} not found")))?;
 
     let block_refs: Vec<_> = commit.blocks().to_vec();
-    let blocks = cs.read_blocks(&block_refs).map_err(|e| internal(e))?;
+    let blocks = cs.read_blocks(&block_refs).map_err(internal)?;
 
     let mut tx_keys: Vec<String> = Vec::new();
     for block_opt in blocks {
@@ -643,118 +641,118 @@ fn resolve_read(
         VfsPath::EpochFirstCheckpoint(epoch) => {
             let first_seq = cp_store
                 .get_epoch_first_checkpoint_seq(*epoch)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("no data for epoch {epoch}")))?;
             let cp = cp_store
                 .get_checkpoint_by_sequence_number(first_seq)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("checkpoint {first_seq} not found")))?;
             render_summary(cp.data(), format)
         }
         VfsPath::EpochLastCheckpoint(epoch) => {
             let cp = cp_store
                 .get_epoch_last_checkpoint(*epoch)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("no last checkpoint for epoch {epoch}")))?;
             render_summary(cp.data(), format)
         }
         VfsPath::EpochCommittee(epoch) => {
             let committee = committee_store
                 .get_committee(epoch)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("no committee for epoch {epoch}")))?;
             render_value(committee.as_ref(), format)
         }
         VfsPath::EpochCheckpointBySeq(_epoch, seq) => {
             let cp = cp_store
                 .get_checkpoint_by_sequence_number(*seq)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("checkpoint {seq} not found")))?;
             render_summary(cp.data(), format)
         }
         VfsPath::EpochCheckpointByDigest(_epoch, digest) => {
             let cp = cp_store
                 .get_checkpoint_by_digest(digest)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("checkpoint {digest} not found")))?;
             render_summary(cp.data(), format)
         }
         VfsPath::CheckpointSeqSummary(seq) => {
             let cp = cp_store
                 .get_checkpoint_by_sequence_number(*seq)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("checkpoint {seq} not found")))?;
             render_summary(cp.data(), format)
         }
         VfsPath::CheckpointSeqContents(seq) => {
             let cp = cp_store
                 .get_checkpoint_by_sequence_number(*seq)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("checkpoint {seq} not found")))?;
             let contents = cp_store
                 .get_checkpoint_contents(&cp.content_digest)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("contents for checkpoint {seq} not found")))?;
             render_value(&contents, format)
         }
         VfsPath::CheckpointSeqContentsShort(seq) => {
             let cp = cp_store
                 .get_checkpoint_by_sequence_number(*seq)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("checkpoint {seq} not found")))?;
             let contents = cp_store
                 .get_checkpoint_contents(&cp.content_digest)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("contents for checkpoint {seq} not found")))?;
             render_contents_short(&contents, format)
         }
         VfsPath::CheckpointDigestSummary(digest) => {
             let cp = cp_store
                 .get_checkpoint_by_digest(digest)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("checkpoint {digest} not found")))?;
             render_summary(cp.data(), format)
         }
         VfsPath::CheckpointDigestContents(digest) => {
             let cp = cp_store
                 .get_checkpoint_by_digest(digest)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("checkpoint {digest} not found")))?;
             let contents = cp_store
                 .get_checkpoint_contents(&cp.content_digest)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("contents for checkpoint {digest} not found")))?;
             render_value(&contents, format)
         }
         VfsPath::CheckpointDigestContentsShort(digest) => {
             let cp = cp_store
                 .get_checkpoint_by_digest(digest)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("checkpoint {digest} not found")))?;
             let contents = cp_store
                 .get_checkpoint_contents(&cp.content_digest)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("contents for checkpoint {digest} not found")))?;
             render_contents_short(&contents, format)
         }
         VfsPath::CheckpointContentsEntry(digest) => {
             let contents = cp_store
                 .get_checkpoint_contents(digest)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("checkpoint contents {digest} not found")))?;
             render_value(&contents, format)
         }
         VfsPath::TransactionEntry(digest) => {
             let tx = auth_store
                 .get_transaction_block(digest)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found(format!("transaction {digest} not found")))?;
             render_value(tx.data(), format)
         }
         VfsPath::TransactionEffectsEntry(tx_digest, fx_digest) => {
             let effects = auth_store
                 .get_effects(fx_digest)
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| {
                     not_found(format!("effects {fx_digest} for tx {tx_digest} not found"))
                 })?;
@@ -766,7 +764,7 @@ fn resolve_read(
             })?;
             let commit = cs
                 .read_last_commit()
-                .map_err(|e| internal(e))?
+                .map_err(internal)?
                 .ok_or_else(|| not_found("no commits yet"))?;
             let index = commit.index();
             match format {
