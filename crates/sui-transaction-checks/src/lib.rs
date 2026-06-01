@@ -460,6 +460,12 @@ mod checked {
             // total of all gas payment values (real coin balances + coin reservation amounts)
             // must fit in i64. In production this is never an issue since reaching i64::MAX
             // would require ~92% of the total SUI supply.
+            //
+            // Note: when paying from address balance (gas_data.payment = []), the budget
+            // is the AddressBalance reservation in payment_kind(), but smash_gas never
+            // converts it to i64 (smashed_payments is empty so line 609 doesn't fire, and
+            // deposit = total_smashed - reservation = 0 so line 632 is skipped). So we
+            // intentionally don't sum available_address_balance_gas here.
             let mut total: u128 = 0;
             for obj in &gas_objects {
                 if let Some(object) = obj.as_object() {
