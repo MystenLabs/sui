@@ -602,6 +602,15 @@ of new validators based on a minimum voting power rather than a minimum stake.
 
 
 
+<a name="sui_system_validator_set_EAlreadyValidator"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EAlreadyValidator">EAlreadyValidator</a>: u64 = 15;
+</code></pre>
+
+
+
 <a name="sui_system_validator_set_ACTIVE_VALIDATOR_ONLY"></a>
 
 
@@ -723,6 +732,14 @@ Called by <code><a href="../sui_system/sui_system.md#sui_system_sui_system">sui_
 ) {
     <b>let</b> validator_address = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.sui_address();
     <b>assert</b>!(!self.validator_candidates.contains(validator_address), <a href="../sui_system/validator_set.md#sui_system_validator_set_EAlreadyValidatorCandidate">EAlreadyValidatorCandidate</a>);
+    <b>assert</b>!(
+        <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator">find_validator</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, validator_address).is_none(),
+        <a href="../sui_system/validator_set.md#sui_system_validator_set_EAlreadyValidator">EAlreadyValidator</a>,
+    );
+    <b>assert</b>!(
+        <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(&self.pending_active_validators, validator_address).is_none(),
+        <a href="../sui_system/validator_set.md#sui_system_validator_set_EAlreadyValidator">EAlreadyValidator</a>,
+    );
     // The next assertions are not critical <b>for</b> the protocol, but they are here
     // to catch problematic configs earlier.
     <b>assert</b>!(!self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>), <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>);

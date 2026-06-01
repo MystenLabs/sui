@@ -42,6 +42,7 @@ const ENotAPendingValidator: u64 = 12;
 const EValidatorSetEmpty: u64 = 13;
 const EInvalidCap: u64 = 101;
 const EInvalidValidatorSelector: u64 = 14;
+const EAlreadyValidator: u64 = 15;
 
 // same as in sui_system
 const ACTIVE_VALIDATOR_ONLY: u8 = 1;
@@ -171,6 +172,14 @@ public(package) fun request_add_validator_candidate(
 ) {
     let validator_address = validator.sui_address();
     assert!(!self.validator_candidates.contains(validator_address), EAlreadyValidatorCandidate);
+    assert!(
+        find_validator(&self.active_validators, validator_address).is_none(),
+        EAlreadyValidator,
+    );
+    assert!(
+        find_validator_from_table_vec(&self.pending_active_validators, validator_address).is_none(),
+        EAlreadyValidator,
+    );
 
     // The next assertions are not critical for the protocol, but they are here
     // to catch problematic configs earlier.

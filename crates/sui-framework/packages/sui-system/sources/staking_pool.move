@@ -375,7 +375,13 @@ fun process_pending_stake_withdraw(pool: &mut StakingPool) {
     } else {
         // the diff will be applied in the `process_pending_stake` function.
         let diff = pool.pending_total_sui_withdraw - pool.sui_balance;
-        pool.extra_fields.add(UnderflowSuiBalance {}, diff);
+        let key = UnderflowSuiBalance {};
+        if (pool.extra_fields.contains(key)) {
+            let value = pool.extra_fields.borrow_mut<_, u64>(key);
+            *value = *value + diff;
+        } else {
+            pool.extra_fields.add(key, diff);
+        };
         0
     };
 
