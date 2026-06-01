@@ -130,14 +130,51 @@ impl IngestionService {
                     config.streaming_statement_timeout(),
                 )) as BoxedStreamingClient
             });
+        Ok(Self::from_clients(
+            ingestion_client,
+            streaming_client,
+            config,
+            metrics,
+        ))
+    }
 
-        Ok(Self {
+    /// Construct an [`IngestionService`] from pre-built clients,
+    /// bypassing [`ClientArgs`]-driven construction.
+    ///
+    /// Callers that supply their own [`IngestionClientTrait`] /
+    /// [`CheckpointStreamingClient`] implementations — for example,
+    /// when embedding the indexer in a fullnode that already has
+    /// checkpoint data on hand — use this constructor instead of
+    /// [`Self::new`].
+    pub fn with_clients(
+        ingestion_client: IngestionClient,
+        streaming_client: Option<BoxedStreamingClient>,
+        config: IngestionConfig,
+        metrics_prefix: Option<&str>,
+        registry: &Registry,
+    ) -> Self {
+        let metrics = IngestionMetrics::new(metrics_prefix, registry);
+        Self::from_clients(ingestion_client, streaming_client, config, metrics)
+    }
+
+    /// Common assembly point for both [`Self::new`] and
+    /// [`Self::with_clients`]: stamps the fields onto the struct
+    /// once a metrics handle has been resolved (either built fresh
+    /// from a registry, or in the [`Self::new`] case, threaded
+    /// through from the ingestion-client construction).
+    fn from_clients(
+        ingestion_client: IngestionClient,
+        streaming_client: Option<BoxedStreamingClient>,
+        config: IngestionConfig,
+        metrics: Arc<IngestionMetrics>,
+    ) -> Self {
+        Self {
             config,
             ingestion_client,
             streaming_client,
             subscribers: Vec::new(),
             metrics,
-        })
+        }
     }
 
     /// The ingestion client this service uses to fetch checkpoints.
@@ -570,5 +607,42 @@ mod tests {
 
         let error = serde_json::from_value::<IngestionConfig>(config).unwrap_err();
         assert!(error.to_string().contains("nonzero"));
+    }
+
+    /// `with_clients` resolves `latest_checkpoint_number` through
+    /// the supplied streaming client when it is healthy, without
+    /// going through `ClientArgs`-driven setup.
+    #[tokio::test]
+    async fn with_clients_uses_supplied_streaming_client() {
+        const STREAM_LATEST: u64 = 42;
+
+        let registry = Registry::new();
+        let mut service = IngestionService::with_clients(
+            mock_ingestion_client(FALLBACK),
+            Some(Box::new(MockStreamingClient::new([STREAM_LATEST], None))),
+            IngestionConfig::default(),
+            None,
+            &registry,
+        );
+
+        let latest = service.latest_checkpoint_number().await.unwrap();
+        assert_eq!(latest, STREAM_LATEST);
+    }
+
+    /// With no streaming client supplied, `with_clients` falls back
+    /// to the ingestion client for the latest-checkpoint probe.
+    #[tokio::test]
+    async fn with_clients_falls_back_to_ingestion_when_no_streaming() {
+        let registry = Registry::new();
+        let mut service = IngestionService::with_clients(
+            mock_ingestion_client(FALLBACK),
+            None,
+            IngestionConfig::default(),
+            None,
+            &registry,
+        );
+
+        let latest = service.latest_checkpoint_number().await.unwrap();
+        assert_eq!(latest, FALLBACK);
     }
 }
