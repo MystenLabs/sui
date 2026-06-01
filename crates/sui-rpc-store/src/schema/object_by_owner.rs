@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! `OwnerIndexKey` → latest live `version`.
+//! `(OwnerKind, type, inverted_balance?, ObjectID)` → latest live
+//! `version`.
 //!
 //! Supports owner-and-type filtering with optional balance-based
 //! ordering. The leading [`OwnerKind`] byte clusters entries by
@@ -25,7 +26,7 @@ use sui_types::base_types::SuiAddress;
 
 use crate::schema::keys::U64Varint;
 
-pub const NAME: &str = "owner_index";
+pub const NAME: &str = "object_by_owner";
 
 /// The four kinds of ownership this index distinguishes. The
 /// address-owner and object-owner variants carry the owning

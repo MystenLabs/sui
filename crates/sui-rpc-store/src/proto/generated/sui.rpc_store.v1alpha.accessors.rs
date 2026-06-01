@@ -52,133 +52,6 @@ mod _accessor_impls {
             self
         }
     }
-    impl super::DynamicFieldInfo {
-        pub const fn const_default() -> Self {
-            Self {
-                kind: 0,
-                name_type_bcs: ::prost::bytes::Bytes::new(),
-            }
-        }
-        #[doc(hidden)]
-        pub fn default_instance() -> &'static Self {
-            static DEFAULT: super::DynamicFieldInfo = super::DynamicFieldInfo::const_default();
-            &DEFAULT
-        }
-        ///Sets `name_type_bcs` with the provided value.
-        pub fn set_name_type_bcs<T: Into<::prost::bytes::Bytes>>(&mut self, field: T) {
-            self.name_type_bcs = field.into().into();
-        }
-        ///Sets `name_type_bcs` with the provided value.
-        pub fn with_name_type_bcs<T: Into<::prost::bytes::Bytes>>(
-            mut self,
-            field: T,
-        ) -> Self {
-            self.set_name_type_bcs(field.into());
-            self
-        }
-    }
-    impl super::EpochInfo {
-        pub const fn const_default() -> Self {
-            Self {
-                protocol_version: 0,
-                reference_gas_price: 0,
-                start_timestamp_ms: 0,
-                end_timestamp_ms: 0,
-                end_checkpoint: 0,
-                system_state_bcs: ::prost::bytes::Bytes::new(),
-            }
-        }
-        #[doc(hidden)]
-        pub fn default_instance() -> &'static Self {
-            static DEFAULT: super::EpochInfo = super::EpochInfo::const_default();
-            &DEFAULT
-        }
-        ///Returns a mutable reference to `protocol_version`.
-        ///If the field is unset, it is first initialized with the default value.
-        pub fn protocol_version_mut(&mut self) -> &mut u64 {
-            &mut self.protocol_version
-        }
-        ///Sets `protocol_version` with the provided value.
-        pub fn set_protocol_version(&mut self, field: u64) {
-            self.protocol_version = field;
-        }
-        ///Sets `protocol_version` with the provided value.
-        pub fn with_protocol_version(mut self, field: u64) -> Self {
-            self.set_protocol_version(field);
-            self
-        }
-        ///Returns a mutable reference to `reference_gas_price`.
-        ///If the field is unset, it is first initialized with the default value.
-        pub fn reference_gas_price_mut(&mut self) -> &mut u64 {
-            &mut self.reference_gas_price
-        }
-        ///Sets `reference_gas_price` with the provided value.
-        pub fn set_reference_gas_price(&mut self, field: u64) {
-            self.reference_gas_price = field;
-        }
-        ///Sets `reference_gas_price` with the provided value.
-        pub fn with_reference_gas_price(mut self, field: u64) -> Self {
-            self.set_reference_gas_price(field);
-            self
-        }
-        ///Returns a mutable reference to `start_timestamp_ms`.
-        ///If the field is unset, it is first initialized with the default value.
-        pub fn start_timestamp_ms_mut(&mut self) -> &mut u64 {
-            &mut self.start_timestamp_ms
-        }
-        ///Sets `start_timestamp_ms` with the provided value.
-        pub fn set_start_timestamp_ms(&mut self, field: u64) {
-            self.start_timestamp_ms = field;
-        }
-        ///Sets `start_timestamp_ms` with the provided value.
-        pub fn with_start_timestamp_ms(mut self, field: u64) -> Self {
-            self.set_start_timestamp_ms(field);
-            self
-        }
-        ///Returns a mutable reference to `end_timestamp_ms`.
-        ///If the field is unset, it is first initialized with the default value.
-        pub fn end_timestamp_ms_mut(&mut self) -> &mut u64 {
-            &mut self.end_timestamp_ms
-        }
-        ///Sets `end_timestamp_ms` with the provided value.
-        pub fn set_end_timestamp_ms(&mut self, field: u64) {
-            self.end_timestamp_ms = field;
-        }
-        ///Sets `end_timestamp_ms` with the provided value.
-        pub fn with_end_timestamp_ms(mut self, field: u64) -> Self {
-            self.set_end_timestamp_ms(field);
-            self
-        }
-        ///Returns a mutable reference to `end_checkpoint`.
-        ///If the field is unset, it is first initialized with the default value.
-        pub fn end_checkpoint_mut(&mut self) -> &mut u64 {
-            &mut self.end_checkpoint
-        }
-        ///Sets `end_checkpoint` with the provided value.
-        pub fn set_end_checkpoint(&mut self, field: u64) {
-            self.end_checkpoint = field;
-        }
-        ///Sets `end_checkpoint` with the provided value.
-        pub fn with_end_checkpoint(mut self, field: u64) -> Self {
-            self.set_end_checkpoint(field);
-            self
-        }
-        ///Sets `system_state_bcs` with the provided value.
-        pub fn set_system_state_bcs<T: Into<::prost::bytes::Bytes>>(
-            &mut self,
-            field: T,
-        ) {
-            self.system_state_bcs = field.into().into();
-        }
-        ///Sets `system_state_bcs` with the provided value.
-        pub fn with_system_state_bcs<T: Into<::prost::bytes::Bytes>>(
-            mut self,
-            field: T,
-        ) -> Self {
-            self.set_system_state_bcs(field.into());
-            self
-        }
-    }
     impl super::PackageVersionInfo {
         pub const fn const_default() -> Self {
             Self {
@@ -375,6 +248,108 @@ mod _accessor_impls {
             self
         }
     }
+    impl super::StoredEpoch {
+        pub const fn const_default() -> Self {
+            Self {
+                protocol_version: 0,
+                reference_gas_price: 0,
+                start_timestamp_ms: 0,
+                end_timestamp_ms: 0,
+                end_checkpoint: 0,
+                system_state_bcs: ::prost::bytes::Bytes::new(),
+            }
+        }
+        #[doc(hidden)]
+        pub fn default_instance() -> &'static Self {
+            static DEFAULT: super::StoredEpoch = super::StoredEpoch::const_default();
+            &DEFAULT
+        }
+        ///Returns a mutable reference to `protocol_version`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn protocol_version_mut(&mut self) -> &mut u64 {
+            &mut self.protocol_version
+        }
+        ///Sets `protocol_version` with the provided value.
+        pub fn set_protocol_version(&mut self, field: u64) {
+            self.protocol_version = field;
+        }
+        ///Sets `protocol_version` with the provided value.
+        pub fn with_protocol_version(mut self, field: u64) -> Self {
+            self.set_protocol_version(field);
+            self
+        }
+        ///Returns a mutable reference to `reference_gas_price`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn reference_gas_price_mut(&mut self) -> &mut u64 {
+            &mut self.reference_gas_price
+        }
+        ///Sets `reference_gas_price` with the provided value.
+        pub fn set_reference_gas_price(&mut self, field: u64) {
+            self.reference_gas_price = field;
+        }
+        ///Sets `reference_gas_price` with the provided value.
+        pub fn with_reference_gas_price(mut self, field: u64) -> Self {
+            self.set_reference_gas_price(field);
+            self
+        }
+        ///Returns a mutable reference to `start_timestamp_ms`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn start_timestamp_ms_mut(&mut self) -> &mut u64 {
+            &mut self.start_timestamp_ms
+        }
+        ///Sets `start_timestamp_ms` with the provided value.
+        pub fn set_start_timestamp_ms(&mut self, field: u64) {
+            self.start_timestamp_ms = field;
+        }
+        ///Sets `start_timestamp_ms` with the provided value.
+        pub fn with_start_timestamp_ms(mut self, field: u64) -> Self {
+            self.set_start_timestamp_ms(field);
+            self
+        }
+        ///Returns a mutable reference to `end_timestamp_ms`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn end_timestamp_ms_mut(&mut self) -> &mut u64 {
+            &mut self.end_timestamp_ms
+        }
+        ///Sets `end_timestamp_ms` with the provided value.
+        pub fn set_end_timestamp_ms(&mut self, field: u64) {
+            self.end_timestamp_ms = field;
+        }
+        ///Sets `end_timestamp_ms` with the provided value.
+        pub fn with_end_timestamp_ms(mut self, field: u64) -> Self {
+            self.set_end_timestamp_ms(field);
+            self
+        }
+        ///Returns a mutable reference to `end_checkpoint`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn end_checkpoint_mut(&mut self) -> &mut u64 {
+            &mut self.end_checkpoint
+        }
+        ///Sets `end_checkpoint` with the provided value.
+        pub fn set_end_checkpoint(&mut self, field: u64) {
+            self.end_checkpoint = field;
+        }
+        ///Sets `end_checkpoint` with the provided value.
+        pub fn with_end_checkpoint(mut self, field: u64) -> Self {
+            self.set_end_checkpoint(field);
+            self
+        }
+        ///Sets `system_state_bcs` with the provided value.
+        pub fn set_system_state_bcs<T: Into<::prost::bytes::Bytes>>(
+            &mut self,
+            field: T,
+        ) {
+            self.system_state_bcs = field.into().into();
+        }
+        ///Sets `system_state_bcs` with the provided value.
+        pub fn with_system_state_bcs<T: Into<::prost::bytes::Bytes>>(
+            mut self,
+            field: T,
+        ) -> Self {
+            self.set_system_state_bcs(field.into());
+            self
+        }
+    }
     impl super::StoredEvents {
         pub const fn const_default() -> Self {
             Self {
@@ -438,7 +413,7 @@ mod _accessor_impls {
             self
         }
     }
-    impl super::TxMeta {
+    impl super::TxMetadata {
         pub const fn const_default() -> Self {
             Self {
                 digest: ::prost::bytes::Bytes::new(),
@@ -450,7 +425,7 @@ mod _accessor_impls {
         }
         #[doc(hidden)]
         pub fn default_instance() -> &'static Self {
-            static DEFAULT: super::TxMeta = super::TxMeta::const_default();
+            static DEFAULT: super::TxMetadata = super::TxMetadata::const_default();
             &DEFAULT
         }
         ///Sets `digest` with the provided value.

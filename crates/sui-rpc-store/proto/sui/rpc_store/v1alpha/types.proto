@@ -101,7 +101,7 @@ message StoredCommittee {
 // This is the canonical "what is at this tx_seq" record. It
 // resolves the `tx_seq → digest` direction of the bijection; the
 // inverse lives in `tx_seq_by_digest`.
-message TxMeta {
+message TxMetadata {
   // 32-byte `TransactionDigest`.
   bytes digest = 1;
   // Checkpoint that contains this transaction.
@@ -128,25 +128,6 @@ message BitmapBlob {
 }
 
 // === Indexes ===================================================
-
-// Per-dynamic-field metadata. Stored in `dynamic_fields` keyed by
-// `(parent ObjectID, field_id ObjectID)`. Mostly an existence
-// marker today, but the proto wrapper leaves room for kind and
-// name-type metadata that would let listings answer common
-// queries (filter by name type, distinguish Field vs.
-// DynamicObject) without a second object load.
-message DynamicFieldInfo {
-  // Whether the dynamic field stores its value inline (`FIELD`)
-  // or as a separately owned object (`DYNAMIC_OBJECT`).
-  enum Kind {
-    KIND_UNSPECIFIED = 0;
-    KIND_FIELD = 1;
-    KIND_DYNAMIC_OBJECT = 2;
-  }
-  Kind kind = 1;
-  // BCS-encoded `TypeTag` of the dynamic field's name component.
-  bytes name_type_bcs = 2;
-}
 
 // `(owner, coin_type)` → coin + accumulator balance deltas.
 //
@@ -176,7 +157,7 @@ message PackageVersionInfo {
   bytes storage_id = 1;
 }
 
-// Per-epoch metadata. Stored in `epoch_info` keyed by `EpochId`.
+// Per-epoch metadata. Stored in `epochs` keyed by `EpochId`.
 //
 // `end_*` fields are only populated for epochs that have ended;
 // the current epoch's record carries `end_timestamp_ms = 0` and
@@ -184,7 +165,7 @@ message PackageVersionInfo {
 // the on-disk row a fixed shape; readers should consult the
 // pruning / available-range watermarks to distinguish current
 // from past).
-message EpochInfo {
+message StoredEpoch {
   uint64 protocol_version = 1;
   uint64 reference_gas_price = 2;
   uint64 start_timestamp_ms = 3;

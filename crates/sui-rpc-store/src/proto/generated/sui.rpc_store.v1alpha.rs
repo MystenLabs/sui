@@ -88,7 +88,7 @@ pub struct StoredCommittee {
 /// resolves the `tx_seq → digest` direction of the bijection; the
 /// inverse lives in `tx_seq_by_digest`.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct TxMeta {
+pub struct TxMetadata {
     /// 32-byte `TransactionDigest`.
     #[prost(bytes = "bytes", tag = "1")]
     pub digest: ::prost::bytes::Bytes,
@@ -118,64 +118,6 @@ pub struct TxMeta {
 pub struct BitmapBlob {
     #[prost(bytes = "bytes", tag = "1")]
     pub data: ::prost::bytes::Bytes,
-}
-/// Per-dynamic-field metadata. Stored in `dynamic_fields` keyed by
-/// `(parent ObjectID, field_id ObjectID)`. Mostly an existence
-/// marker today, but the proto wrapper leaves room for kind and
-/// name-type metadata that would let listings answer common
-/// queries (filter by name type, distinguish Field vs.
-/// DynamicObject) without a second object load.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct DynamicFieldInfo {
-    #[prost(enumeration = "dynamic_field_info::Kind", tag = "1")]
-    pub kind: i32,
-    /// BCS-encoded `TypeTag` of the dynamic field's name component.
-    #[prost(bytes = "bytes", tag = "2")]
-    pub name_type_bcs: ::prost::bytes::Bytes,
-}
-/// Nested message and enum types in `DynamicFieldInfo`.
-pub mod dynamic_field_info {
-    /// Whether the dynamic field stores its value inline (`FIELD`)
-    /// or as a separately owned object (`DYNAMIC_OBJECT`).
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
-    #[repr(i32)]
-    pub enum Kind {
-        Unspecified = 0,
-        Field = 1,
-        DynamicObject = 2,
-    }
-    impl Kind {
-        /// String value of the enum field names used in the ProtoBuf definition.
-        ///
-        /// The values are not transformed in any way and thus are considered stable
-        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-        pub fn as_str_name(&self) -> &'static str {
-            match self {
-                Self::Unspecified => "KIND_UNSPECIFIED",
-                Self::Field => "KIND_FIELD",
-                Self::DynamicObject => "KIND_DYNAMIC_OBJECT",
-            }
-        }
-        /// Creates an enum from field names used in the ProtoBuf definition.
-        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-            match value {
-                "KIND_UNSPECIFIED" => Some(Self::Unspecified),
-                "KIND_FIELD" => Some(Self::Field),
-                "KIND_DYNAMIC_OBJECT" => Some(Self::DynamicObject),
-                _ => None,
-            }
-        }
-    }
 }
 /// `(owner, coin_type)` → coin + accumulator balance deltas.
 ///
@@ -209,7 +151,7 @@ pub struct PackageVersionInfo {
     #[prost(bytes = "bytes", tag = "1")]
     pub storage_id: ::prost::bytes::Bytes,
 }
-/// Per-epoch metadata. Stored in `epoch_info` keyed by `EpochId`.
+/// Per-epoch metadata. Stored in `epochs` keyed by `EpochId`.
 ///
 /// `end_*` fields are only populated for epochs that have ended;
 /// the current epoch's record carries `end_timestamp_ms = 0` and
@@ -218,7 +160,7 @@ pub struct PackageVersionInfo {
 /// pruning / available-range watermarks to distinguish current
 /// from past).
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct EpochInfo {
+pub struct StoredEpoch {
     #[prost(uint64, tag = "1")]
     pub protocol_version: u64,
     #[prost(uint64, tag = "2")]

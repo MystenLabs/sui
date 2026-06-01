@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! `tx_seq` → `TxMeta`.
+//! `tx_seq` → `TxMetadata`.
 //!
 //! Carries digest, containing checkpoint, position-within-checkpoint,
 //! event count, and timestamp. The `tx_seq → digest` direction of the
@@ -10,13 +10,13 @@
 
 use sui_consistent_store::Protobuf;
 
-use crate::proto::TxMeta;
+use crate::proto::TxMetadata;
 use crate::schema::keys::U64Be;
 
-pub const NAME: &str = "tx_meta_by_seq";
+pub const NAME: &str = "tx_metadata_by_seq";
 
 pub type Key = U64Be;
-pub type Value = Protobuf<TxMeta>;
+pub type Value = Protobuf<TxMetadata>;
 
 pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
     base_options.clone()

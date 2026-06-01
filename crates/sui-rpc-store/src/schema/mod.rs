@@ -21,22 +21,21 @@ pub mod checkpoint_contents;
 pub mod checkpoint_seq_by_digest;
 pub mod checkpoint_summary;
 pub mod committees;
-pub mod dynamic_fields;
 pub mod effects;
-pub mod epoch_info;
+pub mod epochs;
 pub mod event_bitmap;
 pub mod events;
 pub mod keys;
 pub mod live_objects;
+pub mod object_by_owner;
+pub mod object_by_type;
 pub mod objects;
-pub mod owner_index;
 pub mod package_versions;
 pub mod pruning_watermark;
 pub mod transaction_bitmap;
 pub mod transactions;
-pub mod tx_meta_by_seq;
+pub mod tx_metadata_by_seq;
 pub mod tx_seq_by_digest;
-pub mod type_index;
 
 use sui_consistent_store::CfDescriptor;
 use sui_consistent_store::Db;
@@ -49,42 +48,96 @@ use sui_consistent_store::reader::Reader;
 
 /// Typed handles to every CF in the `sui-rpc-store` layout.
 pub struct RpcStoreSchema<R: Reader = Db> {
-    // --- Raw chain data ---
-    pub objects: DbMap<objects::Key, objects::Value, R>,
-    pub live_objects: DbMap<live_objects::Key, live_objects::Value, R>,
-    pub transactions: DbMap<transactions::Key, transactions::Value, R>,
-    pub effects: DbMap<effects::Key, effects::Value, R>,
-    pub events: DbMap<events::Key, events::Value, R>,
+    /// Per-epoch metadata: protocol version, gas price, start and
+    /// end timestamps, and the epoch's final checkpoint.
+    pub epochs: DbMap<epochs::Key, epochs::Value, R>,
+
+    /// The validator committee active during each epoch.
+    pub committees: DbMap<committees::Key, committees::Value, R>,
+
+    /// Signed checkpoint headers. The lightweight metadata served
+    /// by most "fetch a checkpoint" requests; the heavier contents
+    /// list lives in a separate CF.
     pub checkpoint_summary: DbMap<checkpoint_summary::Key, checkpoint_summary::Value, R>,
+
+    /// The ordered list of executed transaction digests in each
+    /// checkpoint.
     pub checkpoint_contents: DbMap<checkpoint_contents::Key, checkpoint_contents::Value, R>,
+
+    /// Resolves a checkpoint digest to its sequence number, which
+    /// is then the key for every other checkpoint-keyed CF.
     pub checkpoint_seq_by_digest:
         DbMap<checkpoint_seq_by_digest::Key, checkpoint_seq_by_digest::Value, R>,
-    pub committees: DbMap<committees::Key, committees::Value, R>,
-    pub tx_seq_by_digest: DbMap<tx_seq_by_digest::Key, tx_seq_by_digest::Value, R>,
-    pub tx_meta_by_seq: DbMap<tx_meta_by_seq::Key, tx_meta_by_seq::Value, R>,
 
-    // --- Derived indexes ---
-    pub owner_index: DbMap<owner_index::Key, owner_index::Value, R>,
-    pub type_index: DbMap<type_index::Key, type_index::Value, R>,
-    pub dynamic_fields: DbMap<dynamic_fields::Key, dynamic_fields::Value, R>,
+    /// Signed transactions, keyed by their assigned tx_seq.
+    pub transactions: DbMap<transactions::Key, transactions::Value, R>,
+
+    /// Resolves a transaction digest to its assigned tx_seq.
+    pub tx_seq_by_digest: DbMap<tx_seq_by_digest::Key, tx_seq_by_digest::Value, R>,
+
+    /// Per-transaction metadata: digest, the containing
+    /// checkpoint, position within that checkpoint, event count,
+    /// and the checkpoint's timestamp.
+    pub tx_metadata_by_seq: DbMap<tx_metadata_by_seq::Key, tx_metadata_by_seq::Value, R>,
+
+    /// The effects produced by each transaction, together with the
+    /// set of objects loaded but unchanged during execution.
+    pub effects: DbMap<effects::Key, effects::Value, R>,
+
+    /// The events emitted by each transaction.
+    pub events: DbMap<events::Key, events::Value, R>,
+
+    /// Every version of every object that has ever existed. A
+    /// prefix scan on the object id walks all versions in
+    /// ascending order.
+    pub objects: DbMap<objects::Key, objects::Value, R>,
+
+    /// The latest live version of each object — point lookups
+    /// avoid an iteration over the multi-version `objects` CF.
+    pub live_objects: DbMap<live_objects::Key, live_objects::Value, R>,
+
+    /// Supports listing an owner's objects, optionally filtered by
+    /// Move type. Coin-like objects sort richest-first within
+    /// each `(owner, type)` group so paginating valuable holdings
+    /// is a forward prefix scan.
+    pub object_by_owner: DbMap<object_by_owner::Key, object_by_owner::Value, R>,
+
+    /// Supports listing every live object of a given Move type,
+    /// regardless of owner.
+    pub object_by_type: DbMap<object_by_type::Key, object_by_type::Value, R>,
+
+    /// Tracks an account's balance per coin type, combining the
+    /// coin-derived component (sum of owned `Coin<T>` balances)
+    /// and the accumulator-derived component into a single row
+    /// merged from independent indexer pipelines.
     pub balance: DbMap<balance::Key, balance::Value, R>,
+
+    /// Tracks every published version of a Move package and the
+    /// storage id under which each version lives.
     pub package_versions: DbMap<package_versions::Key, package_versions::Value, R>,
-    pub epoch_info: DbMap<epoch_info::Key, epoch_info::Value, R>,
+
+    /// Inverted bitmap index over transaction-sequence space,
+    /// supporting filtered transaction queries by indexed fields
+    /// such as sender, called function, or input/changed object.
     pub transaction_bitmap: DbMap<transaction_bitmap::Key, transaction_bitmap::Value, R>,
+
+    /// Inverted bitmap index over packed event-sequence space,
+    /// supporting filtered event queries by event type, emitting
+    /// module, sender, and similar indexed fields.
     pub event_bitmap: DbMap<event_bitmap::Key, event_bitmap::Value, R>,
 
     // --- Bookkeeping ---
+    /// Singleton holding the lowest still-available `tx_seq`,
+    /// `checkpoint_seq`, and object version. Drives compaction
+    /// filters and feeds `available_range` responses.
     pub pruning_watermark: DbMap<pruning_watermark::Key, pruning_watermark::Value, R>,
 }
 
 impl Schema for RpcStoreSchema {
     fn cfs(base_options: &rocksdb::Options) -> Vec<CfDescriptor> {
         vec![
-            CfDescriptor::new(objects::NAME, objects::options(base_options)),
-            CfDescriptor::new(live_objects::NAME, live_objects::options(base_options)),
-            CfDescriptor::new(transactions::NAME, transactions::options(base_options)),
-            CfDescriptor::new(effects::NAME, effects::options(base_options)),
-            CfDescriptor::new(events::NAME, events::options(base_options)),
+            CfDescriptor::new(epochs::NAME, epochs::options(base_options)),
+            CfDescriptor::new(committees::NAME, committees::options(base_options)),
             CfDescriptor::new(
                 checkpoint_summary::NAME,
                 checkpoint_summary::options(base_options),
@@ -97,21 +150,29 @@ impl Schema for RpcStoreSchema {
                 checkpoint_seq_by_digest::NAME,
                 checkpoint_seq_by_digest::options(base_options),
             ),
-            CfDescriptor::new(committees::NAME, committees::options(base_options)),
+            CfDescriptor::new(transactions::NAME, transactions::options(base_options)),
             CfDescriptor::new(
                 tx_seq_by_digest::NAME,
                 tx_seq_by_digest::options(base_options),
             ),
-            CfDescriptor::new(tx_meta_by_seq::NAME, tx_meta_by_seq::options(base_options)),
-            CfDescriptor::new(owner_index::NAME, owner_index::options(base_options)),
-            CfDescriptor::new(type_index::NAME, type_index::options(base_options)),
-            CfDescriptor::new(dynamic_fields::NAME, dynamic_fields::options(base_options)),
+            CfDescriptor::new(
+                tx_metadata_by_seq::NAME,
+                tx_metadata_by_seq::options(base_options),
+            ),
+            CfDescriptor::new(effects::NAME, effects::options(base_options)),
+            CfDescriptor::new(events::NAME, events::options(base_options)),
+            CfDescriptor::new(objects::NAME, objects::options(base_options)),
+            CfDescriptor::new(live_objects::NAME, live_objects::options(base_options)),
+            CfDescriptor::new(
+                object_by_owner::NAME,
+                object_by_owner::options(base_options),
+            ),
+            CfDescriptor::new(object_by_type::NAME, object_by_type::options(base_options)),
             CfDescriptor::new(balance::NAME, balance::options(base_options)),
             CfDescriptor::new(
                 package_versions::NAME,
                 package_versions::options(base_options),
             ),
-            CfDescriptor::new(epoch_info::NAME, epoch_info::options(base_options)),
             CfDescriptor::new(
                 transaction_bitmap::NAME,
                 transaction_bitmap::options(base_options),
@@ -126,23 +187,22 @@ impl Schema for RpcStoreSchema {
 
     fn open(db: &Db) -> Result<Self, OpenError> {
         Ok(Self {
-            objects: DbMap::new(db.clone(), objects::NAME)?,
-            live_objects: DbMap::new(db.clone(), live_objects::NAME)?,
-            transactions: DbMap::new(db.clone(), transactions::NAME)?,
-            effects: DbMap::new(db.clone(), effects::NAME)?,
-            events: DbMap::new(db.clone(), events::NAME)?,
+            epochs: DbMap::new(db.clone(), epochs::NAME)?,
+            committees: DbMap::new(db.clone(), committees::NAME)?,
             checkpoint_summary: DbMap::new(db.clone(), checkpoint_summary::NAME)?,
             checkpoint_contents: DbMap::new(db.clone(), checkpoint_contents::NAME)?,
             checkpoint_seq_by_digest: DbMap::new(db.clone(), checkpoint_seq_by_digest::NAME)?,
-            committees: DbMap::new(db.clone(), committees::NAME)?,
+            transactions: DbMap::new(db.clone(), transactions::NAME)?,
             tx_seq_by_digest: DbMap::new(db.clone(), tx_seq_by_digest::NAME)?,
-            tx_meta_by_seq: DbMap::new(db.clone(), tx_meta_by_seq::NAME)?,
-            owner_index: DbMap::new(db.clone(), owner_index::NAME)?,
-            type_index: DbMap::new(db.clone(), type_index::NAME)?,
-            dynamic_fields: DbMap::new(db.clone(), dynamic_fields::NAME)?,
+            tx_metadata_by_seq: DbMap::new(db.clone(), tx_metadata_by_seq::NAME)?,
+            effects: DbMap::new(db.clone(), effects::NAME)?,
+            events: DbMap::new(db.clone(), events::NAME)?,
+            objects: DbMap::new(db.clone(), objects::NAME)?,
+            live_objects: DbMap::new(db.clone(), live_objects::NAME)?,
+            object_by_owner: DbMap::new(db.clone(), object_by_owner::NAME)?,
+            object_by_type: DbMap::new(db.clone(), object_by_type::NAME)?,
             balance: DbMap::new(db.clone(), balance::NAME)?,
             package_versions: DbMap::new(db.clone(), package_versions::NAME)?,
-            epoch_info: DbMap::new(db.clone(), epoch_info::NAME)?,
             transaction_bitmap: DbMap::new(db.clone(), transaction_bitmap::NAME)?,
             event_bitmap: DbMap::new(db.clone(), event_bitmap::NAME)?,
             pruning_watermark: DbMap::new(db.clone(), pruning_watermark::NAME)?,
@@ -154,23 +214,22 @@ impl SchemaAtSnapshot for RpcStoreSchema {
     type At = RpcStoreSchema<Snapshot>;
     fn at(&self, snap: &Snapshot) -> Self::At {
         RpcStoreSchema {
-            objects: self.objects.at(snap),
-            live_objects: self.live_objects.at(snap),
-            transactions: self.transactions.at(snap),
-            effects: self.effects.at(snap),
-            events: self.events.at(snap),
+            epochs: self.epochs.at(snap),
+            committees: self.committees.at(snap),
             checkpoint_summary: self.checkpoint_summary.at(snap),
             checkpoint_contents: self.checkpoint_contents.at(snap),
             checkpoint_seq_by_digest: self.checkpoint_seq_by_digest.at(snap),
-            committees: self.committees.at(snap),
+            transactions: self.transactions.at(snap),
             tx_seq_by_digest: self.tx_seq_by_digest.at(snap),
-            tx_meta_by_seq: self.tx_meta_by_seq.at(snap),
-            owner_index: self.owner_index.at(snap),
-            type_index: self.type_index.at(snap),
-            dynamic_fields: self.dynamic_fields.at(snap),
+            tx_metadata_by_seq: self.tx_metadata_by_seq.at(snap),
+            effects: self.effects.at(snap),
+            events: self.events.at(snap),
+            objects: self.objects.at(snap),
+            live_objects: self.live_objects.at(snap),
+            object_by_owner: self.object_by_owner.at(snap),
+            object_by_type: self.object_by_type.at(snap),
             balance: self.balance.at(snap),
             package_versions: self.package_versions.at(snap),
-            epoch_info: self.epoch_info.at(snap),
             transaction_bitmap: self.transaction_bitmap.at(snap),
             event_bitmap: self.event_bitmap.at(snap),
             pruning_watermark: self.pruning_watermark.at(snap),

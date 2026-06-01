@@ -18,7 +18,7 @@ use sui_types::base_types::ObjectID;
 
 use crate::schema::keys::U64Varint;
 
-pub const NAME: &str = "type_index";
+pub const NAME: &str = "object_by_type";
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Key {
