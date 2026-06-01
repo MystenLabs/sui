@@ -62,8 +62,11 @@ impl sequential::Handler for TxSeqByDigest {
     ) -> anyhow::Result<usize> {
         let cf = &conn.store.schema().tx_seq_by_digest;
         for row in batch {
-            conn.batch
-                .put(cf, &tx_seq_by_digest::Key(row.digest), &U64Varint(row.tx_seq))?;
+            conn.batch.put(
+                cf,
+                &tx_seq_by_digest::Key(row.digest),
+                &U64Varint(row.tx_seq),
+            )?;
         }
         Ok(batch.len())
     }

@@ -56,9 +56,7 @@ impl Processor for Balance {
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Delta>> {
         let mut deltas = Vec::new();
         for tx in &checkpoint.transactions {
-            for change in
-                derive_detailed_balance_changes_2(&tx.effects, &checkpoint.object_set)
-            {
+            for change in derive_detailed_balance_changes_2(&tx.effects, &checkpoint.object_set) {
                 deltas.push(Delta {
                     owner: change.address,
                     coin_type: change.coin_type,
@@ -99,8 +97,7 @@ impl sequential::Handler for Balance {
     ) -> anyhow::Result<usize> {
         let cf = &conn.store.schema().balance;
         for (key, (coin, address)) in batch {
-            let (_, value) =
-                balance::delta(key.owner, key.coin_type.clone(), *coin, *address);
+            let (_, value) = balance::delta(key.owner, key.coin_type.clone(), *coin, *address);
             conn.batch.merge(cf, key, &value)?;
         }
         Ok(batch.len())

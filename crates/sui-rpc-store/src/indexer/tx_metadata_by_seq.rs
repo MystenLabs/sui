@@ -70,8 +70,11 @@ impl sequential::Handler for TxMetadataBySeq {
     ) -> anyhow::Result<usize> {
         let cf = &conn.store.schema().tx_metadata_by_seq;
         for row in batch {
-            conn.batch
-                .put(cf, &U64Be(row.tx_seq), &tx_metadata_by_seq::store(&row.metadata))?;
+            conn.batch.put(
+                cf,
+                &U64Be(row.tx_seq),
+                &tx_metadata_by_seq::store(&row.metadata),
+            )?;
         }
         Ok(batch.len())
     }

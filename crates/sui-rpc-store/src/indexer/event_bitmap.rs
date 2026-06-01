@@ -79,11 +79,8 @@ impl sequential::Handler for EventBitmap {
     ) -> anyhow::Result<usize> {
         let cf = &conn.store.schema().event_bitmap;
         for row in batch {
-            let (k, v) = event_bitmap::store_match(
-                row.dimension_key.clone(),
-                row.tx_seq,
-                row.event_idx,
-            );
+            let (k, v) =
+                event_bitmap::store_match(row.dimension_key.clone(), row.tx_seq, row.event_idx);
             conn.batch.merge(cf, &k, &v)?;
         }
         Ok(batch.len())

@@ -16725,6 +16725,7 @@ name = "sui-rpc-store"
 version = "1.74.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bcs",
  "bytes",
  "move-core-types",
@@ -16737,6 +16738,7 @@ dependencies = [
  "sui-types",
  "tempfile",
  "thiserror 1.0.69",
+ "tokio",
  "tracing",
 ]
 
