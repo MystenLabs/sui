@@ -5,6 +5,11 @@
 //!
 //! Resolves a checkpoint digest to its sequence number, which then
 //! keys every checkpoint-keyed CF.
+//!
+//! Both `Key` and `Value` are thin newtypes (a 32-byte digest and a
+//! varint-encoded `u64`), so no `store` helper is provided —
+//! indexer pipelines stage writes directly via
+//! `batch.put(&schema.checkpoint_seq_by_digest, &Key(digest), &U64Varint(seq))`.
 
 use bytes::Buf;
 use bytes::BufMut;
@@ -12,7 +17,10 @@ use sui_consistent_store::Decode;
 use sui_consistent_store::Encode;
 use sui_consistent_store::error::DecodeError;
 use sui_consistent_store::error::EncodeError;
+use sui_consistent_store::error::Error;
+use sui_consistent_store::reader::Reader;
 use sui_types::digests::CheckpointDigest;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::schema::keys::U64Varint;
 
@@ -48,4 +56,87 @@ impl Decode for Key {
 
 pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
     base_options.clone()
+}
+
+impl<R: Reader> super::RpcStoreSchema<R> {
+    /// Look up the sequence number of the checkpoint identified by
+    /// `digest`.
+    pub fn get_checkpoint_seq_by_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        Ok(self
+            .checkpoint_seq_by_digest
+            .get(&Key(*digest))?
+            .map(|v| v.0))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_consistent_store::Db;
+    use sui_consistent_store::DbOptions;
+
+    use super::*;
+    use crate::RpcStoreSchema;
+
+    fn fresh_db() -> (tempfile::TempDir, sui_consistent_store::Db, RpcStoreSchema) {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        (dir, db, schema)
+    }
+
+    #[test]
+    fn get_returns_none_for_unknown_digest() {
+        let (_dir, _db, schema) = fresh_db();
+        let digest = CheckpointDigest::random();
+        assert!(schema.get_checkpoint_seq_by_digest(&digest).unwrap().is_none());
+    }
+
+    #[test]
+    fn put_then_get_round_trips() {
+        let (_dir, db, schema) = fresh_db();
+        let digest = CheckpointDigest::random();
+
+        let mut batch = db.batch();
+        batch
+            .put(
+                &schema.checkpoint_seq_by_digest,
+                &Key(digest),
+                &U64Varint(42),
+            )
+            .unwrap();
+        batch.commit().unwrap();
+
+        let seq = schema
+            .get_checkpoint_seq_by_digest(&digest)
+            .unwrap()
+            .expect("digest present");
+        assert_eq!(seq, 42);
+    }
+
+    #[test]
+    fn distinct_digests_dont_collide() {
+        let (_dir, db, schema) = fresh_db();
+        let d1 = CheckpointDigest::random();
+        let d2 = CheckpointDigest::random();
+
+        let mut batch = db.batch();
+        batch
+            .put(&schema.checkpoint_seq_by_digest, &Key(d1), &U64Varint(1))
+            .unwrap();
+        batch
+            .put(&schema.checkpoint_seq_by_digest, &Key(d2), &U64Varint(2))
+            .unwrap();
+        batch.commit().unwrap();
+
+        assert_eq!(
+            schema.get_checkpoint_seq_by_digest(&d1).unwrap(),
+            Some(1),
+        );
+        assert_eq!(
+            schema.get_checkpoint_seq_by_digest(&d2).unwrap(),
+            Some(2),
+        );
+    }
 }
