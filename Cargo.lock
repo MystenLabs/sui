@@ -16735,6 +16735,7 @@ dependencies = [
  "sui-consistent-store",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-framework-store-traits",
+ "sui-inverted-index",
  "sui-types",
  "tempfile",
  "thiserror 1.0.69",

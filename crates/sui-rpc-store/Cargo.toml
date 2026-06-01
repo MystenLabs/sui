@@ -17,6 +17,7 @@ roaring.workspace = true
 rocksdb = { version = "0.22.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
 sui-consistent-store.workspace = true
 sui-indexer-alt-framework = { workspace = true, default-features = false }
+sui-inverted-index.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true
 sui-types.workspace = true
 thiserror.workspace = true
