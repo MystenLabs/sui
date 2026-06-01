@@ -124,19 +124,10 @@ mod checked {
         })
     }
 
-    /// Mainnet-only backfill: true for an IFFW transaction at/above the recovery version.
-    /// `accumulator_version` is set only for mainnet committed execution, so this is inert on
-    /// every other chain and on non-committed paths.
-    fn mainnet_address_balance_smash_gate(execution_params: &ExecutionOrEarlyError) -> bool {
-        head_error_is_insufficient_funds_for_withdraw(execution_params)
-            && execution_params
-                .accumulator_version()
-                .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION)
-    }
-
-    /// Whether to prune the address-balance leg of gas smashing for an IFFW transaction. The
-    /// `early_exit_on_iffw` flag governs it on every chain from v126; the
-    /// mainnet-only accumulator backfill additionally replays the pre-flag incident hotfix.
+    /// Whether to prune the address-balance leg of gas smashing for an IFFW transaction. This is
+    /// the mainnet-only accumulator backfill that replays the pre-flag incident hotfix below the
+    /// short-circuit rollout point; once `early_exit_on_iffw` is set the short-circuit handles IFFW
+    /// upstream, so reaching here implies the flag is off (asserted below).
     fn should_filter_address_balance_gas_smash(
         execution_params: &ExecutionOrEarlyError,
         protocol_config: &ProtocolConfig,
@@ -144,7 +135,14 @@ mod checked {
         if !head_error_is_insufficient_funds_for_withdraw(execution_params) {
             return false;
         }
-        protocol_config.early_exit_on_iffw() || mainnet_address_balance_smash_gate(execution_params)
+        debug_assert!(
+            !protocol_config.early_exit_on_iffw(),
+            "Should not reach gas smashing filtering address balances if IFFW early exit is enabled"
+        );
+        protocol_config.early_exit_on_iffw()
+            || execution_params
+                .accumulator_version()
+                .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION)
     }
 
     /// Whether to short-circuit an IFFW transaction. When an accumulator version is assigned
@@ -165,10 +163,10 @@ mod checked {
         }
 
         // otherwise if gate by accumulator version (if present) or protocol flag
-        execution_params
-            .accumulator_version()
-            .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION)
-            || protocol_config.early_exit_on_iffw()
+        protocol_config.early_exit_on_iffw()
+            || execution_params
+                .accumulator_version()
+                .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION)
     }
 
     fn payment_kind(
@@ -660,7 +658,7 @@ mod checked {
             ));
         }
 
-        let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
+        let cost_summary = gas_charger.charge_gas(temporary_store, protocol_config, &mut result);
         // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
         // information provided to check_sui_conserved, because we mint rewards, and burn
         // the rebates. We also need to pass in the unmetered_storage_rebate because storage
@@ -675,7 +673,7 @@ mod checked {
             gas_charger,
             digest,
             move_vm,
-            protocol_config.simple_conservation_checks(),
+            protocol_config,
             enable_expensive_checks,
             &cost_summary,
             is_genesis_tx,
@@ -695,13 +693,14 @@ mod checked {
         gas_charger: &mut GasCharger,
         tx_digest: TransactionDigest,
         move_vm: &Arc<MoveRuntime>,
-        simple_conservation_checks: bool,
+        protocol_config: &ProtocolConfig,
         enable_expensive_checks: bool,
         cost_summary: &GasCostSummary,
         is_genesis_tx: bool,
         advance_epoch_gas_summary: Option<(u64, u64)>,
         input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
     ) -> Result<(), Mode::Error> {
+        let simple_conservation_checks = protocol_config.simple_conservation_checks();
         let mut result: Result<(), Mode::Error> = Ok(());
         if !is_genesis_tx && !Mode::skip_conservation_checks() {
             let run_checks = |store: &TemporaryStore<'_>| -> Result<(), ExecutionError> {
@@ -737,7 +736,7 @@ mod checked {
                 // violation if all of that works.
                 result = Err(conservation_err.into());
                 gas_charger.reset(temporary_store);
-                gas_charger.charge_gas(temporary_store, &mut result);
+                gas_charger.charge_gas(temporary_store, protocol_config, &mut result);
                 if let Err(recovery_err) = run_checks(temporary_store) {
                     // if we still fail, it's a problem with gas charging that happens even in the
                     // "aborted" case — no other option but panic. We will create or destroy SUI
@@ -1823,12 +1822,23 @@ mod checked {
     #[cfg(test)]
     mod address_balance_smash_gate_tests {
         use super::{
-            ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION, mainnet_address_balance_smash_gate,
+            ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION,
+            should_filter_address_balance_gas_smash,
         };
         use nonempty::NonEmpty;
+        use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
         use sui_types::base_types::SequenceNumber;
         use sui_types::execution_params::ExecutionOrEarlyError;
         use sui_types::execution_status::ExecutionErrorKind;
+
+        /// The filter is only ever consulted with the `early_exit_on_iffw` flag off (a flag-on
+        /// IFFW short-circuits upstream), so the backfill gating is exercised against a flag-off
+        /// config. Protocol version 125 is one below the version-126 activation arm.
+        fn config_without_flag() -> ProtocolConfig {
+            let config = ProtocolConfig::get_for_version(ProtocolVersion::new(125), Chain::Unknown);
+            assert!(!config.early_exit_on_iffw());
+            config
+        }
 
         fn version(n: u64) -> Option<SequenceNumber> {
             Some(SequenceNumber::from_u64(n))
@@ -1838,11 +1848,12 @@ mod checked {
         fn applies_at_or_above_activation_version() {
             let activation = ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION.value();
             for v in [activation, activation + 1] {
-                assert!(mainnet_address_balance_smash_gate(
+                assert!(should_filter_address_balance_gas_smash(
                     &ExecutionOrEarlyError::failed(
                         NonEmpty::new(ExecutionErrorKind::InsufficientFundsForWithdraw),
                         version(v),
-                    )
+                    ),
+                    &config_without_flag(),
                 ));
             }
         }
@@ -1850,11 +1861,12 @@ mod checked {
         #[test]
         fn preserves_old_behavior_below_activation_version() {
             let below = ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION.value() - 1;
-            assert!(!mainnet_address_balance_smash_gate(
+            assert!(!should_filter_address_balance_gas_smash(
                 &ExecutionOrEarlyError::failed(
                     NonEmpty::new(ExecutionErrorKind::InsufficientFundsForWithdraw),
                     version(below),
-                )
+                ),
+                &config_without_flag(),
             ));
         }
 
@@ -1863,20 +1875,23 @@ mod checked {
             // No assigned accumulator version (every non-mainnet / non-committed path): the
             // mainnet backfill must never fire, regardless of the early error.
             let above = version(ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION.value() + 1);
-            assert!(!mainnet_address_balance_smash_gate(
-                &ExecutionOrEarlyError::ok(above)
+            assert!(!should_filter_address_balance_gas_smash(
+                &ExecutionOrEarlyError::ok(above),
+                &config_without_flag(),
             ));
-            assert!(!mainnet_address_balance_smash_gate(
+            assert!(!should_filter_address_balance_gas_smash(
                 &ExecutionOrEarlyError::failed(
                     NonEmpty::new(ExecutionErrorKind::CertificateDenied),
                     above
-                )
+                ),
+                &config_without_flag(),
             ));
-            assert!(!mainnet_address_balance_smash_gate(
+            assert!(!should_filter_address_balance_gas_smash(
                 &ExecutionOrEarlyError::failed(
                     NonEmpty::new(ExecutionErrorKind::InsufficientFundsForWithdraw),
                     None,
-                )
+                ),
+                &config_without_flag(),
             ));
         }
     }
