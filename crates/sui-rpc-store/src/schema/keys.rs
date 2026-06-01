@@ -40,6 +40,36 @@ impl Decode for U64Be {
     }
 }
 
+/// A `u64` encoded as a protobuf-style varint, suitable for
+/// *value* positions where on-disk size matters more than sort
+/// order. Compared to [`U64Be`]: smaller for typical values (1–5
+/// bytes for anything below `2^35`), slightly larger only near the
+/// `u64::MAX` corner (up to 10 bytes), and never sort-stable —
+/// hence values only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct U64Varint(pub u64);
+
+impl Encode for U64Varint {
+    fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {
+        prost::encoding::encode_varint(self.0, buf);
+        Ok(())
+    }
+}
+
+impl Decode for U64Varint {
+    fn decode<B: Buf>(buf: &mut B) -> Result<Self, DecodeError> {
+        let value = prost::encoding::decode_varint(buf)
+            .map_err(|e| DecodeError::with_source("decode varint", e))?;
+        if buf.has_remaining() {
+            return Err(DecodeError::msg(format!(
+                "expected exact varint length, {} bytes remain",
+                buf.remaining(),
+            )));
+        }
+        Ok(U64Varint(value))
+    }
+}
+
 /// Zero-byte key for singleton CFs. Encodes as the empty byte
 /// string; decoding requires the input to be empty too.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -14,7 +14,7 @@ use sui_consistent_store::error::DecodeError;
 use sui_consistent_store::error::EncodeError;
 use sui_types::digests::TransactionDigest;
 
-use crate::schema::keys::U64Be;
+use crate::schema::keys::U64Varint;
 
 pub const NAME: &str = "tx_seq_by_digest";
 
@@ -23,7 +23,7 @@ pub const NAME: &str = "tx_seq_by_digest";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Key(pub TransactionDigest);
 
-pub type Value = U64Be;
+pub type Value = U64Varint;
 
 impl Encode for Key {
     fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {

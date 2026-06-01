@@ -42,65 +42,6 @@ mod _accessor_impls {
             self
         }
     }
-    impl super::CoinInfo {
-        pub const fn const_default() -> Self {
-            Self {
-                coin_metadata_object_id: ::prost::bytes::Bytes::new(),
-                treasury_object_id: ::prost::bytes::Bytes::new(),
-                regulated_coin_metadata_object_id: ::prost::bytes::Bytes::new(),
-            }
-        }
-        #[doc(hidden)]
-        pub fn default_instance() -> &'static Self {
-            static DEFAULT: super::CoinInfo = super::CoinInfo::const_default();
-            &DEFAULT
-        }
-        ///Sets `coin_metadata_object_id` with the provided value.
-        pub fn set_coin_metadata_object_id<T: Into<::prost::bytes::Bytes>>(
-            &mut self,
-            field: T,
-        ) {
-            self.coin_metadata_object_id = field.into().into();
-        }
-        ///Sets `coin_metadata_object_id` with the provided value.
-        pub fn with_coin_metadata_object_id<T: Into<::prost::bytes::Bytes>>(
-            mut self,
-            field: T,
-        ) -> Self {
-            self.set_coin_metadata_object_id(field.into());
-            self
-        }
-        ///Sets `treasury_object_id` with the provided value.
-        pub fn set_treasury_object_id<T: Into<::prost::bytes::Bytes>>(
-            &mut self,
-            field: T,
-        ) {
-            self.treasury_object_id = field.into().into();
-        }
-        ///Sets `treasury_object_id` with the provided value.
-        pub fn with_treasury_object_id<T: Into<::prost::bytes::Bytes>>(
-            mut self,
-            field: T,
-        ) -> Self {
-            self.set_treasury_object_id(field.into());
-            self
-        }
-        ///Sets `regulated_coin_metadata_object_id` with the provided value.
-        pub fn set_regulated_coin_metadata_object_id<T: Into<::prost::bytes::Bytes>>(
-            &mut self,
-            field: T,
-        ) {
-            self.regulated_coin_metadata_object_id = field.into().into();
-        }
-        ///Sets `regulated_coin_metadata_object_id` with the provided value.
-        pub fn with_regulated_coin_metadata_object_id<T: Into<::prost::bytes::Bytes>>(
-            mut self,
-            field: T,
-        ) -> Self {
-            self.set_regulated_coin_metadata_object_id(field.into());
-            self
-        }
-    }
     impl super::DynamicFieldInfo {
         pub const fn const_default() -> Self {
             Self {
@@ -225,42 +166,6 @@ mod _accessor_impls {
             field: T,
         ) -> Self {
             self.set_system_state_bcs(field.into());
-            self
-        }
-    }
-    impl super::LiveObjectRef {
-        pub const fn const_default() -> Self {
-            Self {
-                version: 0,
-                digest: ::prost::bytes::Bytes::new(),
-            }
-        }
-        #[doc(hidden)]
-        pub fn default_instance() -> &'static Self {
-            static DEFAULT: super::LiveObjectRef = super::LiveObjectRef::const_default();
-            &DEFAULT
-        }
-        ///Returns a mutable reference to `version`.
-        ///If the field is unset, it is first initialized with the default value.
-        pub fn version_mut(&mut self) -> &mut u64 {
-            &mut self.version
-        }
-        ///Sets `version` with the provided value.
-        pub fn set_version(&mut self, field: u64) {
-            self.version = field;
-        }
-        ///Sets `version` with the provided value.
-        pub fn with_version(mut self, field: u64) -> Self {
-            self.set_version(field);
-            self
-        }
-        ///Sets `digest` with the provided value.
-        pub fn set_digest<T: Into<::prost::bytes::Bytes>>(&mut self, field: T) {
-            self.digest = field.into().into();
-        }
-        ///Sets `digest` with the provided value.
-        pub fn with_digest<T: Into<::prost::bytes::Bytes>>(mut self, field: T) -> Self {
-            self.set_digest(field.into());
             self
         }
     }
@@ -485,7 +390,6 @@ mod _accessor_impls {
         pub const fn const_default() -> Self {
             Self {
                 bcs: ::prost::bytes::Bytes::new(),
-                checkpoint_seq: 0,
             }
         }
         #[doc(hidden)]
@@ -500,20 +404,6 @@ mod _accessor_impls {
         ///Sets `bcs` with the provided value.
         pub fn with_bcs<T: Into<::prost::bytes::Bytes>>(mut self, field: T) -> Self {
             self.set_bcs(field.into());
-            self
-        }
-        ///Returns a mutable reference to `checkpoint_seq`.
-        ///If the field is unset, it is first initialized with the default value.
-        pub fn checkpoint_seq_mut(&mut self) -> &mut u64 {
-            &mut self.checkpoint_seq
-        }
-        ///Sets `checkpoint_seq` with the provided value.
-        pub fn set_checkpoint_seq(&mut self, field: u64) {
-            self.checkpoint_seq = field;
-        }
-        ///Sets `checkpoint_seq` with the provided value.
-        pub fn with_checkpoint_seq(mut self, field: u64) -> Self {
-            self.set_checkpoint_seq(field);
             self
         }
     }
@@ -616,42 +506,6 @@ mod _accessor_impls {
         ///Sets `timestamp_ms` with the provided value.
         pub fn with_timestamp_ms(mut self, field: u64) -> Self {
             self.set_timestamp_ms(field);
-            self
-        }
-    }
-    impl super::VersionDigest {
-        pub const fn const_default() -> Self {
-            Self {
-                version: 0,
-                digest: ::prost::bytes::Bytes::new(),
-            }
-        }
-        #[doc(hidden)]
-        pub fn default_instance() -> &'static Self {
-            static DEFAULT: super::VersionDigest = super::VersionDigest::const_default();
-            &DEFAULT
-        }
-        ///Returns a mutable reference to `version`.
-        ///If the field is unset, it is first initialized with the default value.
-        pub fn version_mut(&mut self) -> &mut u64 {
-            &mut self.version
-        }
-        ///Sets `version` with the provided value.
-        pub fn set_version(&mut self, field: u64) {
-            self.version = field;
-        }
-        ///Sets `version` with the provided value.
-        pub fn with_version(mut self, field: u64) -> Self {
-            self.set_version(field);
-            self
-        }
-        ///Sets `digest` with the provided value.
-        pub fn set_digest<T: Into<::prost::bytes::Bytes>>(&mut self, field: T) {
-            self.digest = field.into().into();
-        }
-        ///Sets `digest` with the provided value.
-        pub fn with_digest<T: Into<::prost::bytes::Bytes>>(mut self, field: T) -> Self {
-            self.set_digest(field.into());
             self
         }
     }

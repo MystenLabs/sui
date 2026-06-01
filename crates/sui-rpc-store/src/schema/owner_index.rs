@@ -14,14 +14,13 @@ use bytes::BufMut;
 use move_core_types::language_storage::StructTag;
 use sui_consistent_store::Decode;
 use sui_consistent_store::Encode;
-use sui_consistent_store::Protobuf;
 use sui_consistent_store::error::DecodeError;
 use sui_consistent_store::error::EncodeError;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SUI_ADDRESS_LENGTH;
 use sui_types::base_types::SuiAddress;
 
-use crate::proto::VersionDigest;
+use crate::schema::keys::U64Varint;
 
 pub const NAME: &str = "owner_index";
 
@@ -55,7 +54,7 @@ pub struct Key {
     pub object_id: ObjectID,
 }
 
-pub type Value = Protobuf<VersionDigest>;
+pub type Value = U64Varint;
 
 impl OwnerKind {
     fn from_byte(b: u8) -> Result<Self, DecodeError> {

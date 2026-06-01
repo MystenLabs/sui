@@ -1,22 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! `ObjectID` → `LiveObjectRef`.
+//! `ObjectID` → latest live `version`.
 //!
-//! Points at the latest live version of an object. Callers resolve
-//! the `(version, digest)` reference here and then read the
-//! corresponding row from [`super::objects`](super::objects).
+//! Resolves the latest live version of an object. Callers then read
+//! the corresponding row from [`super::objects`](super::objects) to
+//! fetch the full object.
 
 use bytes::Buf;
 use bytes::BufMut;
 use sui_consistent_store::Decode;
 use sui_consistent_store::Encode;
-use sui_consistent_store::Protobuf;
 use sui_consistent_store::error::DecodeError;
 use sui_consistent_store::error::EncodeError;
 use sui_types::base_types::ObjectID;
 
-use crate::proto::LiveObjectRef;
+use crate::schema::keys::U64Varint;
 
 pub const NAME: &str = "live_objects";
 
@@ -24,7 +23,7 @@ pub const NAME: &str = "live_objects";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Key(pub ObjectID);
 
-pub type Value = Protobuf<LiveObjectRef>;
+pub type Value = U64Varint;
 
 impl Encode for Key {
     fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {

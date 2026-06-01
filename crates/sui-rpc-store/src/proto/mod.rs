@@ -18,10 +18,8 @@ pub mod sui {
 
 pub use sui::rpc_store::v1alpha::BalanceDelta;
 pub use sui::rpc_store::v1alpha::BitmapBlob;
-pub use sui::rpc_store::v1alpha::CoinInfo;
 pub use sui::rpc_store::v1alpha::DynamicFieldInfo;
 pub use sui::rpc_store::v1alpha::EpochInfo;
-pub use sui::rpc_store::v1alpha::LiveObjectRef;
 pub use sui::rpc_store::v1alpha::PackageVersionInfo;
 pub use sui::rpc_store::v1alpha::PruningWatermarks;
 pub use sui::rpc_store::v1alpha::StoredCheckpointContents;
@@ -32,4 +30,3 @@ pub use sui::rpc_store::v1alpha::StoredEvents;
 pub use sui::rpc_store::v1alpha::StoredObject;
 pub use sui::rpc_store::v1alpha::StoredTransaction;
 pub use sui::rpc_store::v1alpha::TxMeta;
-pub use sui::rpc_store::v1alpha::VersionDigest;

@@ -8,23 +8,6 @@ pub struct StoredObject {
     /// BCS-encoded `sui_types::object::Object`.
     #[prost(bytes = "bytes", tag = "1")]
     pub bcs: ::prost::bytes::Bytes,
-    /// Sequence number of the checkpoint at which this version was
-    /// first observed. Used for "object created/modified at" queries.
-    #[prost(uint64, tag = "2")]
-    pub checkpoint_seq: u64,
-}
-/// A reference to the latest live version of an object.
-///
-/// Value type for the `live_objects` column family, keyed by
-/// `ObjectID`. Lookup yields the `(version, digest)` pair the caller
-/// can then use to fetch the full object out of `objects`.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct LiveObjectRef {
-    #[prost(uint64, tag = "1")]
-    pub version: u64,
-    /// 32-byte `ObjectDigest`.
-    #[prost(bytes = "bytes", tag = "2")]
-    pub digest: ::prost::bytes::Bytes,
 }
 /// A signed transaction.
 ///
@@ -136,17 +119,6 @@ pub struct BitmapBlob {
     #[prost(bytes = "bytes", tag = "1")]
     pub data: ::prost::bytes::Bytes,
 }
-/// `(version, digest)` pair used as the value for `owner_index` and
-/// `type_index`. Lets a caller filter live objects without an extra
-/// `live_objects` lookup.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct VersionDigest {
-    #[prost(uint64, tag = "1")]
-    pub version: u64,
-    /// 32-byte `ObjectDigest`.
-    #[prost(bytes = "bytes", tag = "2")]
-    pub digest: ::prost::bytes::Bytes,
-}
 /// Per-dynamic-field metadata. Stored in `dynamic_fields` keyed by
 /// `(parent ObjectID, field_id ObjectID)`. Mostly an existence
 /// marker today, but the proto wrapper leaves room for kind and
@@ -204,23 +176,6 @@ pub mod dynamic_field_info {
             }
         }
     }
-}
-/// Object ids of the metadata / treasury / regulated-metadata
-/// objects associated with a coin type. Stored in `coin_index`
-/// keyed by `coin_type` (`StructTag`). All three fields are
-/// optional — a coin may not have every associated object.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct CoinInfo {
-    /// 32-byte `ObjectID` of the `CoinMetadata<T>` object, if any.
-    #[prost(bytes = "bytes", tag = "1")]
-    pub coin_metadata_object_id: ::prost::bytes::Bytes,
-    /// 32-byte `ObjectID` of the `TreasuryCap<T>` object, if any.
-    #[prost(bytes = "bytes", tag = "2")]
-    pub treasury_object_id: ::prost::bytes::Bytes,
-    /// 32-byte `ObjectID` of the `RegulatedCoinMetadata<T>` object,
-    /// if any.
-    #[prost(bytes = "bytes", tag = "3")]
-    pub regulated_coin_metadata_object_id: ::prost::bytes::Bytes,
 }
 /// A signed 128-bit balance value, stored as the merge-operator
 /// accumulator behind `balance` and `address_balance`.

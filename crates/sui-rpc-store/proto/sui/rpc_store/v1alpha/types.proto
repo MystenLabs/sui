@@ -26,21 +26,6 @@ package sui.rpc_store.v1alpha;
 message StoredObject {
   // BCS-encoded `sui_types::object::Object`.
   bytes bcs = 1;
-
-  // Sequence number of the checkpoint at which this version was
-  // first observed. Used for "object created/modified at" queries.
-  uint64 checkpoint_seq = 2;
-}
-
-// A reference to the latest live version of an object.
-//
-// Value type for the `live_objects` column family, keyed by
-// `ObjectID`. Lookup yields the `(version, digest)` pair the caller
-// can then use to fetch the full object out of `objects`.
-message LiveObjectRef {
-  uint64 version = 1;
-  // 32-byte `ObjectDigest`.
-  bytes digest = 2;
 }
 
 // A signed transaction.
@@ -144,15 +129,6 @@ message BitmapBlob {
 
 // === Indexes ===================================================
 
-// `(version, digest)` pair used as the value for `owner_index` and
-// `type_index`. Lets a caller filter live objects without an extra
-// `live_objects` lookup.
-message VersionDigest {
-  uint64 version = 1;
-  // 32-byte `ObjectDigest`.
-  bytes digest = 2;
-}
-
 // Per-dynamic-field metadata. Stored in `dynamic_fields` keyed by
 // `(parent ObjectID, field_id ObjectID)`. Mostly an existence
 // marker today, but the proto wrapper leaves room for kind and
@@ -170,20 +146,6 @@ message DynamicFieldInfo {
   Kind kind = 1;
   // BCS-encoded `TypeTag` of the dynamic field's name component.
   bytes name_type_bcs = 2;
-}
-
-// Object ids of the metadata / treasury / regulated-metadata
-// objects associated with a coin type. Stored in `coin_index`
-// keyed by `coin_type` (`StructTag`). All three fields are
-// optional — a coin may not have every associated object.
-message CoinInfo {
-  // 32-byte `ObjectID` of the `CoinMetadata<T>` object, if any.
-  bytes coin_metadata_object_id = 1;
-  // 32-byte `ObjectID` of the `TreasuryCap<T>` object, if any.
-  bytes treasury_object_id = 2;
-  // 32-byte `ObjectID` of the `RegulatedCoinMetadata<T>` object,
-  // if any.
-  bytes regulated_coin_metadata_object_id = 3;
 }
 
 // A signed 128-bit balance value, stored as the merge-operator

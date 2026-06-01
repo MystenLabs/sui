@@ -21,7 +21,6 @@ pub mod balance;
 pub mod checkpoint_contents;
 pub mod checkpoint_seq_by_digest;
 pub mod checkpoint_summary;
-pub mod coin_index;
 pub mod committees;
 pub mod dynamic_fields;
 pub mod effects;
@@ -69,7 +68,6 @@ pub struct RpcStoreSchema<R: Reader = Db> {
     pub owner_index: DbMap<owner_index::Key, owner_index::Value, R>,
     pub type_index: DbMap<type_index::Key, type_index::Value, R>,
     pub dynamic_fields: DbMap<dynamic_fields::Key, dynamic_fields::Value, R>,
-    pub coin_index: DbMap<coin_index::Key, coin_index::Value, R>,
     pub balance: DbMap<balance::Key, balance::Value, R>,
     pub address_balance: DbMap<address_balance::Key, address_balance::Value, R>,
     pub package_versions: DbMap<package_versions::Key, package_versions::Value, R>,
@@ -110,7 +108,6 @@ impl Schema for RpcStoreSchema {
             CfDescriptor::new(owner_index::NAME, owner_index::options(base_options)),
             CfDescriptor::new(type_index::NAME, type_index::options(base_options)),
             CfDescriptor::new(dynamic_fields::NAME, dynamic_fields::options(base_options)),
-            CfDescriptor::new(coin_index::NAME, coin_index::options(base_options)),
             CfDescriptor::new(balance::NAME, balance::options(base_options)),
             CfDescriptor::new(
                 address_balance::NAME,
@@ -149,7 +146,6 @@ impl Schema for RpcStoreSchema {
             owner_index: DbMap::new(db.clone(), owner_index::NAME)?,
             type_index: DbMap::new(db.clone(), type_index::NAME)?,
             dynamic_fields: DbMap::new(db.clone(), dynamic_fields::NAME)?,
-            coin_index: DbMap::new(db.clone(), coin_index::NAME)?,
             balance: DbMap::new(db.clone(), balance::NAME)?,
             address_balance: DbMap::new(db.clone(), address_balance::NAME)?,
             package_versions: DbMap::new(db.clone(), package_versions::NAME)?,
@@ -179,7 +175,6 @@ impl SchemaAtSnapshot for RpcStoreSchema {
             owner_index: self.owner_index.at(snap),
             type_index: self.type_index.at(snap),
             dynamic_fields: self.dynamic_fields.at(snap),
-            coin_index: self.coin_index.at(snap),
             balance: self.balance.at(snap),
             address_balance: self.address_balance.at(snap),
             package_versions: self.package_versions.at(snap),
