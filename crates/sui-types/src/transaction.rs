@@ -3465,6 +3465,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         Ok(())
     }
 
+
     /// Check if the transaction is sponsored (namely gas owner != sender)
     fn is_sponsored_tx(&self) -> bool {
         self.gas_owner() != self.sender
@@ -3539,6 +3540,22 @@ impl TransactionDataAPI for TransactionDataV1 {
 }
 
 impl TransactionDataV1 {
+    fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult {
+        self.kind().validity_check(config)?;
+
+        if config.enable_gasless() && self.is_gasless_transaction() {
+            let TransactionKind::ProgrammableTransaction(pt) = &self.kind else {
+                debug_fatal!("gasless transaction is not a ProgrammableTransaction");
+                return Err(UserInputError::Unsupported(
+                    "Gasless transactions must be programmable transactions".to_string(),
+                ));
+            };
+            pt.validate_gasless_transaction(config)?;
+        }
+
+        self.check_sponsorship()
+    }
+
     fn accumulate_funds_withdrawals(
         &self,
         chain_identifier: ChainIdentifier,
