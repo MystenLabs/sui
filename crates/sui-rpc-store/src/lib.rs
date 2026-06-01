@@ -17,7 +17,6 @@
 //! `proto/sui/rpc_store/`, mirroring the build setup in
 //! `sui-consistent-store`.
 
-pub mod keys;
 pub mod proto;
 pub mod schema;
 
