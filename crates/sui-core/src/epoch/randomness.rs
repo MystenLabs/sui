@@ -303,61 +303,85 @@ impl RandomnessManager {
             next_randomness_round: RandomnessRound(0),
             highest_completed_round: Arc::new(Mutex::new(highest_completed_round)),
         };
-        let dkg_output = tables
-            .dkg_output
+        let dkg_output = match tables
+            .dkg_output_v2
             .get(&SINGLETON_KEY)
-            .expect("typed_store should not fail");
-        if let Some(dkg_output) = dkg_output {
-            info!(
-                "random beacon: loaded existing DKG output for epoch {}",
-                committee.epoch()
-            );
-            epoch_store
-                .metrics
-                .epoch_random_beacon_dkg_num_shares
-                .set(dkg_output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
-            rm.dkg_output
-                .set(Some(dkg_output.clone()))
-                .expect("setting new OnceCell should succeed");
-            network_handle.update_epoch(
-                committee.epoch(),
-                rm.authority_info.clone(),
-                dkg_output,
-                rm.party.t(),
-                highest_completed_round,
-            );
-        } else {
-            info!(
-                "random beacon: no existing DKG output found for epoch {}",
-                committee.epoch()
-            );
-
-            // Load intermediate data.
-            assert!(
-                epoch_store.protocol_config().dkg_version() > 0,
-                "BUG: DKG version 0 is deprecated"
-            );
-            rm.processed_messages.extend(
-                tables
-                    .dkg_processed_messages_v2
-                    .safe_iter()
-                    .map(|result| result.expect("typed_store should not fail")),
-            );
-            if let Some(used_messages) = tables
-                .dkg_used_messages_v2
+            .expect("typed_store should not fail")
+        {
+            Some(dkg_output) => Some(dkg_output),
+            None => tables
+                .dkg_output
                 .get(&SINGLETON_KEY)
                 .expect("typed_store should not fail")
-            {
-                rm.used_messages
-                    .set(used_messages.clone())
+                .map(Some),
+        };
+        match dkg_output {
+            Some(Some(dkg_output)) => {
+                info!(
+                    "random beacon: loaded existing DKG output for epoch {}",
+                    committee.epoch()
+                );
+                epoch_store
+                    .metrics
+                    .epoch_random_beacon_dkg_num_shares
+                    .set(dkg_output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
+                rm.dkg_output
+                    .set(Some(dkg_output.clone()))
+                    .expect("setting new OnceCell should succeed");
+                network_handle.update_epoch(
+                    committee.epoch(),
+                    rm.authority_info.clone(),
+                    dkg_output,
+                    rm.party.t(),
+                    highest_completed_round,
+                );
+            }
+            Some(None) => {
+                // DKG previously completed as a failure (recorded only in `dkg_output_v2`).
+                // Restore that terminal state so DKG isn't re-run and randomness stays disabled
+                // for the epoch.
+                error!(
+                    "random beacon: loaded failed DKG for epoch {}. Randomness disabled for this epoch. All randomness-using transactions will fail.",
+                    committee.epoch()
+                );
+                epoch_store.metrics.epoch_random_beacon_dkg_failed.set(1);
+                rm.dkg_output
+                    .set(None)
                     .expect("setting new OnceCell should succeed");
             }
-            rm.confirmations.extend(
-                tables
-                    .dkg_confirmations_v2
-                    .safe_iter()
-                    .map(|result| result.expect("typed_store should not fail")),
-            );
+            None => {
+                info!(
+                    "random beacon: no existing DKG output found for epoch {}",
+                    committee.epoch()
+                );
+
+                // Load intermediate data.
+                assert!(
+                    epoch_store.protocol_config().dkg_version() > 0,
+                    "BUG: DKG version 0 is deprecated"
+                );
+                rm.processed_messages.extend(
+                    tables
+                        .dkg_processed_messages_v2
+                        .safe_iter()
+                        .map(|result| result.expect("typed_store should not fail")),
+                );
+                if let Some(used_messages) = tables
+                    .dkg_used_messages_v2
+                    .get(&SINGLETON_KEY)
+                    .expect("typed_store should not fail")
+                {
+                    rm.used_messages
+                        .set(used_messages.clone())
+                        .expect("setting new OnceCell should succeed");
+                }
+                rm.confirmations.extend(
+                    tables
+                        .dkg_confirmations_v2
+                        .safe_iter()
+                        .map(|result| result.expect("typed_store should not fail")),
+                );
+            }
         }
 
         // Resume randomness generation from where we left off.
@@ -555,7 +579,7 @@ impl RandomnessManager {
                         self.party.t(),
                         None,
                     );
-                    consensus_output.set_dkg_output(output);
+                    consensus_output.set_dkg_output(Some(output));
                 }
                 Err(FastCryptoError::NotEnoughInputs) => (), // wait for more input
                 Err(e) => error!("random beacon: error while processing DKG Confirmations: {e:?}"),
@@ -577,6 +601,7 @@ impl RandomnessManager {
             self.dkg_output
                 .set(None)
                 .expect("checked above that `dkg_output` is uninitialized");
+            consensus_output.set_dkg_output(None);
         }
 
         Ok(())
@@ -1092,6 +1117,30 @@ mod tests {
         // Verify DKG failed.
         for randomness_manager in &randomness_managers {
             assert_eq!(DkgStatus::Failed, randomness_manager.dkg_status());
+        }
+
+        // Verify the failure is durably loaded on restart: a RandomnessManager reconstructed
+        // from the same epoch store must report DKG as failed (not pending), exercising the
+        // `dkg_output_v2` failure-load path in `try_new`.
+        for (i, validator) in network_config.validator_configs.iter().enumerate() {
+            let consensus_adapter = Arc::new(ConsensusAdapter::new(
+                Arc::new(MockConsensusClient::new()),
+                CheckpointStore::new_for_tests(),
+                epoch_stores[i].name,
+                100_000,
+                100_000,
+                ConsensusAdapterMetrics::new_test(),
+                Arc::new(tokio::sync::Notify::new()),
+            ));
+            let recovered_randomness_manager = RandomnessManager::try_new(
+                Arc::downgrade(&epoch_stores[i]),
+                Box::new(consensus_adapter),
+                sui_network::randomness::Handle::new_stub(),
+                validator.protocol_key_pair(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(DkgStatus::Failed, recovered_randomness_manager.dkg_status());
         }
     }
 }
