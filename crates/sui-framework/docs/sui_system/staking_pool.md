@@ -1037,14 +1037,11 @@ Also called immediately upon withdrawal if the pool is inactive.
     pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_sui_balance">sui_balance</a> = <b>if</b> (pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_sui_balance">sui_balance</a> &gt;= pool.pending_total_sui_withdraw) {
         pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_sui_balance">sui_balance</a> - pool.pending_total_sui_withdraw
     } <b>else</b> {
-        // the diff will be applied in the `<a href="../sui_system/staking_pool.md#sui_system_staking_pool_process_pending_stake">process_pending_stake</a>` function.
         <b>let</b> diff = pool.pending_total_sui_withdraw - pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_sui_balance">sui_balance</a>;
-        <b>let</b> key = <a href="../sui_system/staking_pool.md#sui_system_staking_pool_UnderflowSuiBalance">UnderflowSuiBalance</a> {};
-        <b>if</b> (pool.extra_fields.contains(key)) {
-            <b>let</b> value = pool.extra_fields.borrow_mut&lt;_, u64&gt;(key);
-            *value = *value + diff;
-        } <b>else</b> {
-            pool.extra_fields.add(key, diff);
+        // While this key is expected to be removed in the next call to `<a href="../sui_system/staking_pool.md#sui_system_staking_pool_process_pending_stake">process_pending_stake</a>`,
+        // we do not call `<a href="../sui_system/staking_pool.md#sui_system_staking_pool_process_pending_stake">process_pending_stake</a>` <b>for</b> inactive pools — skip the bookkeeping.
+        <b>if</b> (!pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_is_inactive">is_inactive</a>()) {
+            pool.extra_fields.add(<a href="../sui_system/staking_pool.md#sui_system_staking_pool_UnderflowSuiBalance">UnderflowSuiBalance</a> {}, diff);
         };
         0
     };
