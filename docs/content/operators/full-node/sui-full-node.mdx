@@ -103,7 +103,7 @@ The `rpc` configuration block supports additional settings. The most important o
 - `tls`: TLS configuration for the RPC server.
 - `max-json-move-value-size`: Maximum size in bytes for JSON Move values returned by the RPC server.
 
-Refer to the [full node YAML template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml) for the complete list of available `rpc` options.
+Refer to the [`RpcConfig` source](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/src/rpc_config.rs) for the complete list of available `rpc` options.
 
 You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. All applications must migrate to gRPC or [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) by July 2026. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
 
