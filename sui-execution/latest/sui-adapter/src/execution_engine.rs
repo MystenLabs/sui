@@ -102,7 +102,7 @@ mod checked {
     /// superseding the address-balance gas-payment pruning hotfix. A compiled constant, not a
     /// protocol flag, because it must take effect mid-epoch during recovery when the network cannot
     /// reconfigure. Only consulted when an accumulator version is assigned (mainnet committed
-    /// execution); everywhere else the short-circuit applies unconditionally (see
+    /// execution); everywhere else the short-circuit is protocol gated (see
     /// `should_short_circuit_insufficient_funds`).
     ///
     /// Value is the mainnet accumulator root version where the new binary was activated on the network.
@@ -150,7 +150,7 @@ mod checked {
     /// Whether to short-circuit an IFFW transaction. When an accumulator version is assigned
     /// (mainnet committed execution) it gates on the settlement-version rollout point; otherwise
     /// (every other chain and non-committed paths, where no accumulator version is assigned) the
-    /// short-circuit applies unconditionally.
+    /// short-circuit applies based on `early_exit_on_iffw`.
     fn should_short_circuit_insufficient_funds(
         execution_params: &ExecutionOrEarlyError,
         protocol_config: &ProtocolConfig,
@@ -167,7 +167,7 @@ mod checked {
         // otherwise if gate by accumulator version (if present) or protocol flag
         execution_params
             .accumulator_version()
-            .is_none_or(|v| v >= ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION)
+            .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION)
             || protocol_config.early_exit_on_iffw()
     }
 
@@ -305,7 +305,7 @@ mod checked {
         // inputs (so locks advance) and emit effects with a zero gas cost summary. On mainnet
         // committed execution this is gated on the settlement-version rollout point (below it we
         // fall through to the address-balance gas-payment pruning hotfix instead); everywhere else
-        // it applies unconditionally.
+        // it applies based on `early_exit_on_iffw`.
         if should_short_circuit_insufficient_funds(&execution_params, protocol_config) {
             temporary_store.ensure_active_inputs_mutated();
             transaction_dependencies.remove(&TransactionDigest::genesis_marker());
@@ -1971,15 +1971,65 @@ mod checked {
         }
 
         #[test]
-        fn short_circuits_without_accumulator_version_regardless_of_flag() {
-            // Every non-mainnet / non-committed path passes `None`: short-circuit unconditionally,
-            // independent of the protocol flag.
-            for config in [config_with_flag(), config_without_flag()] {
-                assert!(should_short_circuit_insufficient_funds(
-                    &iffw(None),
-                    &config
-                ));
-            }
+        fn no_accumulator_version_preserves_old_behavior_without_protocol_flag() {
+            // No assigned accumulator version (non-mainnet / non-committed paths) must not
+            // activate the mainnet compiled-constant backfill by itself. Otherwise a mixed-version
+            // slow upgrade can execute the same IFFW transaction differently on old vs new binary.
+            assert!(!should_short_circuit_insufficient_funds(
+                &iffw(None),
+                &config_without_flag(),
+            ));
+        }
+
+        #[test]
+        fn no_accumulator_version_short_circuits_with_protocol_flag() {
+            // Once the protocol flag is active, chains without accumulator versions should use the
+            // new short-circuit behavior.
+            assert!(should_short_circuit_insufficient_funds(
+                &iffw(None),
+                &config_with_flag(),
+            ));
+        }
+
+        #[test]
+        fn iffw_short_circuit_applies_even_when_iffw_is_not_head_error() {
+            // Intentional: once the short-circuit gate is active, any IFFW early error wins even
+            // if another early error has higher/head priority.
+            let errors = NonEmpty::from((
+                ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable,
+                vec![ExecutionErrorKind::InsufficientFundsForWithdraw],
+            ));
+
+            // Protocol-flag activation path, e.g. non-mainnet / no accumulator version.
+            assert!(should_short_circuit_insufficient_funds(
+                &ExecutionOrEarlyError::failed(errors.clone(), None),
+                &config_with_flag(),
+            ));
+
+            // Mainnet compiled-constant activation path.
+            assert!(should_short_circuit_insufficient_funds(
+                &ExecutionOrEarlyError::failed(
+                    errors,
+                    version(ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION.value()),
+                ),
+                &config_without_flag(),
+            ));
+        }
+
+        #[test]
+        fn non_head_iffw_does_not_bypass_short_circuit_activation_gate() {
+            // The non-head IFFW override decides which early-error behavior wins only after the
+            // short-circuit feature is active. It must not independently activate the new behavior
+            // on pre-flag, non-mainnet / non-committed paths.
+            let errors = NonEmpty::from((
+                ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable,
+                vec![ExecutionErrorKind::InsufficientFundsForWithdraw],
+            ));
+
+            assert!(!should_short_circuit_insufficient_funds(
+                &ExecutionOrEarlyError::failed(errors, None),
+                &config_without_flag(),
+            ));
         }
 
         #[test]
