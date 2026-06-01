@@ -16729,6 +16729,7 @@ dependencies = [
  "bcs",
  "bytes",
  "move-core-types",
+ "prometheus",
  "prost 0.14.1",
  "roaring",
  "rocksdb",
