@@ -252,7 +252,7 @@ $ sui client party-transfer \
 
 ### Publish and upgrade ephemeral packages
 
-`sui client test-publish` and `sui client test-upgrade` publish and upgrade packages _ephemerally_ — without recording the published addresses in the package's `Published.toml`. They build the package for a given environment and publish it on the current network, taking dependency addresses from an ephemeral publication file (the _pubfile_) and recording the new publication information back into that pubfile. This is useful for testing a package against the live network without mutating your canonical publication state. For background, see [Move Package Management](/develop/manage-packages/move-package-management).
+`sui client test-publish` and `sui client test-upgrade` publish and upgrade packages without recording the published addresses in the package's `Published.toml`. They build the package for a given environment and publish it on the current network, taking dependency addresses from an ephemeral publication file (the pubfile) and recording the new publication information back into that pubfile. This is useful for testing a package against the live network without mutating your canonical publication state. For background, see [Move Package Management](/develop/manage-packages/move-package-management).
 
 Publish a package ephemerally, building for the `testnet` environment and recording publication info in a pubfile:
 
