@@ -146,14 +146,22 @@ impl IngestionService {
     /// when embedding the indexer in a fullnode that already has
     /// checkpoint data on hand — use this constructor instead of
     /// [`Self::new`].
+    ///
+    /// `metrics` is the shared [`IngestionMetrics`] handle. The
+    /// caller is expected to have built it once and passed the
+    /// same handle to [`IngestionClient::from_trait`] (or another
+    /// `IngestionClient` constructor) so the service and the
+    /// client report against a single set of registered metric
+    /// vectors — building two sets against the same prometheus
+    /// registry would double-register the metric names.
+    ///
+    /// [`IngestionClientTrait`]: crate::ingestion::ingestion_client::IngestionClientTrait
     pub fn with_clients(
         ingestion_client: IngestionClient,
         streaming_client: Option<BoxedStreamingClient>,
         config: IngestionConfig,
-        metrics_prefix: Option<&str>,
-        registry: &Registry,
+        metrics: Arc<IngestionMetrics>,
     ) -> Self {
-        let metrics = IngestionMetrics::new(metrics_prefix, registry);
         Self::from_clients(ingestion_client, streaming_client, config, metrics)
     }
 
@@ -617,12 +625,18 @@ mod tests {
         const STREAM_LATEST: u64 = 42;
 
         let registry = Registry::new();
+        let metrics = IngestionMetrics::new(None, &registry);
         let mut service = IngestionService::with_clients(
-            mock_ingestion_client(FALLBACK),
+            IngestionClient::from_trait(
+                Arc::new(MockIngestionClient {
+                    latest_checkpoint: FALLBACK,
+                    ..Default::default()
+                }),
+                metrics.clone(),
+            ),
             Some(Box::new(MockStreamingClient::new([STREAM_LATEST], None))),
             IngestionConfig::default(),
-            None,
-            &registry,
+            metrics,
         );
 
         let latest = service.latest_checkpoint_number().await.unwrap();
@@ -634,12 +648,18 @@ mod tests {
     #[tokio::test]
     async fn with_clients_falls_back_to_ingestion_when_no_streaming() {
         let registry = Registry::new();
+        let metrics = IngestionMetrics::new(None, &registry);
         let mut service = IngestionService::with_clients(
-            mock_ingestion_client(FALLBACK),
+            IngestionClient::from_trait(
+                Arc::new(MockIngestionClient {
+                    latest_checkpoint: FALLBACK,
+                    ..Default::default()
+                }),
+                metrics.clone(),
+            ),
             None,
             IngestionConfig::default(),
-            None,
-            &registry,
+            metrics,
         );
 
         let latest = service.latest_checkpoint_number().await.unwrap();
