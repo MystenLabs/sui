@@ -431,7 +431,7 @@ fn list_children(
             name: "summary".into(),
             is_dir: false,
         }]),
-        _ => Err(bad_request(format!("path is not a directory"))),
+        _ => Err(bad_request("path is not a directory")),
     }
 }
 
