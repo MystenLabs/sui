@@ -28,14 +28,18 @@ message StoredObject {
   bytes bcs = 1;
 }
 
-// A signed transaction.
+// A signed transaction, keyed by its assigned `tx_seq`.
 //
-// Value type for the `transactions` column family, keyed by
-// `tx_seq` (`u64`). The BCS payload bundles both `TransactionData`
-// and the user signatures (`sui_types::transaction::Transaction`).
+// Stored as two BCS payloads rather than the wrapped envelope so
+// callers can read or rewrite either side without touching the
+// other. The two together are equivalent to a
+// `sui_types::transaction::Transaction` envelope.
 message StoredTransaction {
-  // BCS-encoded `sui_types::transaction::Transaction`.
-  bytes bcs = 1;
+  // BCS-encoded `sui_types::transaction::TransactionData`.
+  bytes transaction_bcs = 1;
+  // BCS-encoded `Vec<sui_types::signature::GenericSignature>` —
+  // the user signatures over `transaction_bcs`.
+  bytes signatures_bcs = 2;
 }
 
 // The effects of a transaction.

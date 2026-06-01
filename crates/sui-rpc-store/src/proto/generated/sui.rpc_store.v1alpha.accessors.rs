@@ -441,7 +441,8 @@ mod _accessor_impls {
     impl super::StoredTransaction {
         pub const fn const_default() -> Self {
             Self {
-                bcs: ::prost::bytes::Bytes::new(),
+                transaction_bcs: ::prost::bytes::Bytes::new(),
+                signatures_bcs: ::prost::bytes::Bytes::new(),
             }
         }
         #[doc(hidden)]
@@ -449,13 +450,28 @@ mod _accessor_impls {
             static DEFAULT: super::StoredTransaction = super::StoredTransaction::const_default();
             &DEFAULT
         }
-        ///Sets `bcs` with the provided value.
-        pub fn set_bcs<T: Into<::prost::bytes::Bytes>>(&mut self, field: T) {
-            self.bcs = field.into().into();
+        ///Sets `transaction_bcs` with the provided value.
+        pub fn set_transaction_bcs<T: Into<::prost::bytes::Bytes>>(&mut self, field: T) {
+            self.transaction_bcs = field.into().into();
         }
-        ///Sets `bcs` with the provided value.
-        pub fn with_bcs<T: Into<::prost::bytes::Bytes>>(mut self, field: T) -> Self {
-            self.set_bcs(field.into());
+        ///Sets `transaction_bcs` with the provided value.
+        pub fn with_transaction_bcs<T: Into<::prost::bytes::Bytes>>(
+            mut self,
+            field: T,
+        ) -> Self {
+            self.set_transaction_bcs(field.into());
+            self
+        }
+        ///Sets `signatures_bcs` with the provided value.
+        pub fn set_signatures_bcs<T: Into<::prost::bytes::Bytes>>(&mut self, field: T) {
+            self.signatures_bcs = field.into().into();
+        }
+        ///Sets `signatures_bcs` with the provided value.
+        pub fn with_signatures_bcs<T: Into<::prost::bytes::Bytes>>(
+            mut self,
+            field: T,
+        ) -> Self {
+            self.set_signatures_bcs(field.into());
             self
         }
     }

@@ -9,16 +9,21 @@ pub struct StoredObject {
     #[prost(bytes = "bytes", tag = "1")]
     pub bcs: ::prost::bytes::Bytes,
 }
-/// A signed transaction.
+/// A signed transaction, keyed by its assigned `tx_seq`.
 ///
-/// Value type for the `transactions` column family, keyed by
-/// `tx_seq` (`u64`). The BCS payload bundles both `TransactionData`
-/// and the user signatures (`sui_types::transaction::Transaction`).
+/// Stored as two BCS payloads rather than the wrapped envelope so
+/// callers can read or rewrite either side without touching the
+/// other. The two together are equivalent to a
+/// `sui_types::transaction::Transaction` envelope.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct StoredTransaction {
-    /// BCS-encoded `sui_types::transaction::Transaction`.
+    /// BCS-encoded `sui_types::transaction::TransactionData`.
     #[prost(bytes = "bytes", tag = "1")]
-    pub bcs: ::prost::bytes::Bytes,
+    pub transaction_bcs: ::prost::bytes::Bytes,
+    /// BCS-encoded `Vec<sui_types::signature::GenericSignature>` —
+    /// the user signatures over `transaction_bcs`.
+    #[prost(bytes = "bytes", tag = "2")]
+    pub signatures_bcs: ::prost::bytes::Bytes,
 }
 /// The effects of a transaction.
 ///
