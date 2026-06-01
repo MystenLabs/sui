@@ -711,8 +711,9 @@ pub mod checked {
                             unreachable!("Payment method does not match location")
                         };
                         assert_eq!(*addr, other, "Payment method does not match location");
-                        // validity_check guarantees the total of all reservation amounts fits in
-                        // i64, so this addition and the i64 conversion in smash_gas are both safe.
+                        // sui_transaction_checks::check_gas guarantees the total of all gas
+                        // payment values (coin balances + reservation amounts) fits in i64,
+                        // so this addition and the i64 conversion in smash_gas are both safe.
                         *amount += additional;
                     }
                     (indexmap::map::Entry::Occupied(_), _) => {
