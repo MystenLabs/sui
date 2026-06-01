@@ -103,6 +103,21 @@ pub fn address_delta(owner: SuiAddress, coin_type: TypeTag, delta: i128) -> (Key
     )
 }
 
+/// Build a `(Key, Value)` pair representing both sides of the
+/// balance change for `(owner, coin_type)` in a single merge
+/// operand. Either field may be zero; the merge operator's
+/// field-wise sum makes a zero contribution a no-op against the
+/// accumulator.
+pub fn delta(owner: SuiAddress, coin_type: TypeTag, coin: i128, address: i128) -> (Key, Value) {
+    (
+        Key { owner, coin_type },
+        Protobuf(BalanceDelta {
+            coin: coin.to_le_bytes().to_vec().into(),
+            address: address.to_le_bytes().to_vec().into(),
+        }),
+    )
+}
+
 /// Caller-facing view of one balance row, decomposed into its
 /// two contributing sources.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

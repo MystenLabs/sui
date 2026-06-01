@@ -14,7 +14,6 @@
 //!
 //! Every pipeline targets the same backing [`RpcStoreSchema`].
 
-pub mod address_balance;
 pub mod balance;
 pub mod checkpoint_contents;
 pub mod checkpoint_seq_by_digest;
