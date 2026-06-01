@@ -72,7 +72,7 @@ pub struct DbShellArgs {
     pub start_path: String,
 
     /// Path to the consensus database directory (direct mode only).
-    /// Enables the /consensus namespace. Typically at <config_dir>/consensus_db/<key>.
+    /// Enables the /consensus namespace. Typically at `<config_dir>/consensus_db/<key>`.
     #[arg(long)]
     pub consensus_db_path: Option<PathBuf>,
 }
