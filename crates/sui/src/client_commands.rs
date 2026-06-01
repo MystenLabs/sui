@@ -227,6 +227,9 @@ pub enum SuiClientCommands {
         /// The url to the faucet
         #[clap(long)]
         url: Option<String>,
+        /// Output just the first received coin's ID (for scripting)
+        #[clap(long)]
+        coin_id: bool,
     },
 
     /// Obtain all gas objects owned by the address.
@@ -1381,7 +1384,11 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
                 SuiClientCommandResult::Gas(coins)
             }
-            SuiClientCommands::Faucet { address, url } => {
+            SuiClientCommands::Faucet {
+                address,
+                url,
+                coin_id,
+            } => {
                 let address = context.get_identity_address(address)?;
                 let url = if let Some(url) = url {
                     ensure!(
@@ -1399,7 +1406,15 @@ impl SuiClientCommands {
                 };
                 let coins = request_tokens_from_faucet(address, url).await?;
                 let _ = context.cache_chain_id().await?;
-                SuiClientCommandResult::Faucet(coins)
+                if coin_id {
+                    let id = coins
+                        .first()
+                        .ok_or_else(|| anyhow::anyhow!("Faucet returned no coins"))?
+                        .id;
+                    SuiClientCommandResult::FaucetCoinId(id)
+                } else {
+                    SuiClientCommandResult::Faucet(coins)
+                }
             }
             SuiClientCommands::ChainIdentifier => {
                 let ci = context.cache_chain_id().await?;
@@ -2048,6 +2063,9 @@ impl Display for SuiClientCommandResult {
                 table.with(style);
                 write!(f, "{}", table)?
             }
+            SuiClientCommandResult::FaucetCoinId(id) => {
+                write!(writer, "{}", id)?;
+            }
             SuiClientCommandResult::Faucet(coins) => {
                 if coins.is_empty() {
                     write!(
@@ -2532,6 +2550,7 @@ pub enum SuiClientCommandResult {
     DevInspect(SimulateTransactionResponse),
     Envs(Vec<SuiEnv>, Option<String>),
     Faucet(Vec<CoinInfo>),
+    FaucetCoinId(ObjectID),
     Gas(Vec<GasCoin>),
     NewAddress(NewAddressOutput),
     NewEnv(SuiEnv),

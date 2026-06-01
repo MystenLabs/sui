@@ -8,6 +8,8 @@
 # A is a git dependency (not published ephemerally)
 # B depends on A. Should publish both A and B.
 
+GAS=$(sui client --client.config $CONFIG faucet --coin-id)
+
 # use default git settings
 export GIT_CONFIG_GLOBAL=""
 
@@ -23,6 +25,6 @@ mv b/Move.toml b/Move.toml.tmp
 sed "s|a = { local = \"../a\" }|${GIT_DEP}|g" b/Move.toml.tmp > b/Move.toml
 
 echo "publishing b (using --publish-unpublished-deps)"
-sui client --client.config $CONFIG test-publish --build-env testnet \
+sui client --client.config $CONFIG test-publish --gas $GAS --build-env testnet \
   --pubfile-path Pub.local.toml --publish-unpublished-deps b \
   > out.log 2>&1 || cat out.log

@@ -15,11 +15,13 @@
 #
 # We publish A, B, C, D, E in order
 
+GAS=$(sui client --client.config $CONFIG faucet --coin-id)
+
 for i in a b c d e
 do
   echo === building $i ===
   sui client --client.config $CONFIG \
-    test-publish --build-env testnet --pubfile-path Pub.local.toml $i \
+    test-publish --gas $GAS --build-env testnet --pubfile-path Pub.local.toml $i \
     > out.log 2>&1 || cat out.log
 
 done

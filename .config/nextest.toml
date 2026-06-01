@@ -1,3 +1,5 @@
+experimental = ["setup-scripts"]
+
 [profile.ci]
 # Print output for failing tests only when they fail.
 failure-output = "immediate"
@@ -23,3 +25,14 @@ slow-timeout = { period = "30m", terminate-after = 3 }
 
 [profile.ci.junit]
 path = "junit.xml"
+
+# Start a shared test cluster for shell_tests::with_network tests.
+# The setup script starts `sui start --with-faucet` and writes the config dir to NEXTEST_ENV.
+[script.start-cluster]
+command = 'crates/sui/tests/start-test-cluster.sh'
+slow-timeout = { period = "120s", terminate-after = 3 }
+
+[[profile.default.scripts]]
+filter = 'package(sui) & test(shell_tests::with_network)'
+platform = 'cfg(unix)'
+setup = ['start-cluster']

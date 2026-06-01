@@ -4,6 +4,9 @@
 
 # Test that various client commands all properly cache chain_id
 
+# Strip pre-cached chain_id so we can test caching behavior
+grep -v "chain_id:" $CONFIG > $CONFIG.tmp && mv $CONFIG.tmp $CONFIG
+
 echo "=== Initial state ==="
 if grep -q "chain_id:" $CONFIG 2>&1; then
     echo "chain_id field exists: YES"

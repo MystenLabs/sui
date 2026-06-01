@@ -4,6 +4,9 @@
 
 # Test that chain_id persists across multiple commands
 
+# Strip pre-cached chain_id so we can test caching behavior
+grep -v "chain_id:" $CONFIG > $CONFIG.tmp && mv $CONFIG.tmp $CONFIG
+
 echo "=== First command (chain-identifier) ==="
 sui client --client.config $CONFIG chain-identifier > chain_id_1.txt 2>&1
 echo "Command executed"

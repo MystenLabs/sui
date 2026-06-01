@@ -4,6 +4,9 @@
 
 # Test that running a client command for the first time caches the chain_id to client.yaml
 
+# Strip pre-cached chain_id so we can test caching behavior
+grep -v "chain_id:" $CONFIG > $CONFIG.tmp && mv $CONFIG.tmp $CONFIG
+
 echo "=== Initial config state ==="
 if grep -q "chain_id:" $CONFIG 2>&1; then
     echo "chain_id field exists: YES"

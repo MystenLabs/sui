@@ -8,6 +8,7 @@
 #
 # This should fail, because we try to get the linkage table for `b` because `b` is not on-chain
 
+GAS=$(sui client --client.config $CONFIG faucet --coin-id)
 chain_id=$(sui client --client.config $CONFIG chain-identifier)
 
 add_env_to_toml() {
@@ -20,4 +21,4 @@ add_env_to_toml b
 
 echo "=== publish a ==="
 
-sui client --client.config $CONFIG publish a
+sui client --client.config $CONFIG publish --gas $GAS a

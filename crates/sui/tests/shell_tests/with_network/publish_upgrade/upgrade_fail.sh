@@ -7,6 +7,7 @@
 # C --> B
 # C --> A
 
+GAS=$(sui client --client.config $CONFIG faucet --coin-id)
 chain_id=$(sui client --client.config $CONFIG chain-identifier)
 
 add_env_to_toml() {
@@ -17,7 +18,7 @@ add_env_to_toml() {
 add_env_to_toml a
 
 echo "=== expect to fail when upgrading a because it is not even published yet ==="
-sui client --client.config $CONFIG upgrade a
+sui client --client.config $CONFIG upgrade --gas $GAS a
 
 echo "=== expect to fail because we should never upgrade with --test flag ==="
-sui client --client.config $CONFIG upgrade a --test
+sui client --client.config $CONFIG upgrade --gas $GAS a --test

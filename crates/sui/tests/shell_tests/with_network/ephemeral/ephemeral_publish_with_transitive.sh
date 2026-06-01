@@ -15,11 +15,13 @@
 #
 # We publish A, B, C, D, E (should transitively publish all).
 
+GAS=$(sui client --client.config $CONFIG faucet --coin-id)
+
 echo "publishing e (using --publish-unpublished-deps)"
-sui client --client.config $CONFIG test-publish --build-env testnet \
+sui client --client.config $CONFIG test-publish --gas $GAS --build-env testnet \
   --pubfile-path Pub.local.toml --publish-unpublished-deps e \
   > out.log 2>&1 || cat out.log
 
 echo "attempting a second ephemeral publish of e, which should fail"
-sui client --client.config $CONFIG test-publish --build-env testnet \
+sui client --client.config $CONFIG test-publish --gas $GAS --build-env testnet \
   --pubfile-path Pub.local.toml --publish-unpublished-deps e

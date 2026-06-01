@@ -10,7 +10,6 @@ use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_KEYSTORE_FILENAME};
 use sui_keys::keystore::{FileBasedKeystore, Keystore};
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use tempfile::TempDir;
-use test_cluster::TestClusterBuilder;
 
 // [shell_test_snapshot] is run on every file matching [TEST_PATTERN] in [TEST_DIR].
 // Files in [TEST_NET_DIR] will be run with a [TestCluster] configured.
@@ -19,7 +18,6 @@ use test_cluster::TestClusterBuilder;
 // insta test --review` to update the snapshots.
 
 const TEST_DIR: &str = "tests/shell_tests";
-// Temporarily disabled by deleting the folder
 const TEST_NET_DIR: &str = "tests/shell_tests/with_network";
 const TEST_PATTERN: &str = r"\.sh$";
 
@@ -28,27 +26,11 @@ const TEST_PATTERN: &str = r"\.sh$";
 /// of [path], with the `sui` binary on the path.
 ///
 /// The `CONFIG` environment variable is set to a client config file appropriate for the test:
-/// - For `with_network` tests: either a shared external cluster (via `SUI_TEST_CLUSTER_CONFIG_DIR`
-///   env var) or a per-test [TestCluster].
+/// - For `with_network` tests: a copy of the shared cluster config from
+///   `SUI_TEST_CLUSTER_CONFIG_DIR` (set by the nextest setup script).
 /// - For other tests: a temporary config with a bogus RPC URL (see [make_temp_config_dir]).
-#[tokio::main]
-async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
+fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
     let is_network_test = path.starts_with(TEST_NET_DIR);
-    let shared_config_dir = std::env::var("SUI_TEST_CLUSTER_CONFIG_DIR").ok();
-
-    // Create a per-test cluster only for network tests without a shared external cluster
-    let cluster = if is_network_test && shared_config_dir.is_none() {
-        Some(
-            TestClusterBuilder::new()
-                .with_epoch_duration_ms(60 * 60 * 1_000)
-                // TODO: bump back to default once we figure out why it fails on windows
-                .with_num_validators(1)
-                .build()
-                .await,
-        )
-    } else {
-        None
-    };
 
     // copy files into temporary directory
     let srcdir = path.parent().unwrap();
@@ -77,27 +59,17 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
         .current_dir(sandbox)
         .arg(path.file_name().unwrap());
 
-    // Set up config directory for the test. For shared cluster tests, we copy the config and
-    // request a fresh gas coin via faucet so tests can run in parallel without gas conflicts.
+    let shared_config_dir = std::env::var("SUI_TEST_CLUSTER_CONFIG_DIR").ok();
     let temp_config_dir =
         if let Some(ref shared_dir) = shared_config_dir.filter(|_| is_network_test) {
-            let dir = copy_shared_cluster_config(Path::new(shared_dir));
-            request_faucet(&dir.path().join(SUI_CLIENT_CONFIG));
-            dir
+            copy_shared_cluster_config(Path::new(shared_dir))
         } else {
             make_temp_config_dir()
         };
-    let config_dir = if let Some(ref cluster) = cluster {
-        cluster.swarm.dir()
-    } else {
-        temp_config_dir.path()
-    };
-    shell.env("CONFIG", config_dir.join(SUI_CLIENT_CONFIG));
+    shell.env("CONFIG", temp_config_dir.path().join(SUI_CLIENT_CONFIG));
 
     // run it; snapshot test output
-    let output = tokio::task::spawn_blocking(move || shell.output())
-        .await
-        .unwrap()?;
+    let output = shell.output()?;
     let result = format!(
         "----- script -----\n{}\n----- results -----\nsuccess: {:?}\nexit_code: {}\n----- stdout -----\n{}\n----- stderr -----\n{}",
         std::fs::read_to_string(path)?,
@@ -173,24 +145,6 @@ fn copy_shared_cluster_config(shared_dir: &Path) -> TempDir {
     )
     .expect("can copy keystore from shared cluster");
     result
-}
-
-/// Request a gas coin from the faucet for the active address in the given config.
-/// The faucet auto-detects the localhost endpoint when the RPC URL points to 127.0.0.1.
-fn request_faucet(config_path: &Path) {
-    let sui_bin = get_cargo_bin("sui");
-    let output = Command::new(sui_bin)
-        .arg("client")
-        .arg("--client.config")
-        .arg(config_path)
-        .arg("faucet")
-        .output()
-        .expect("can run faucet command");
-    assert!(
-        output.status.success(),
-        "faucet request failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
 }
 
 /// return the path to the `sui` binary that is currently under test

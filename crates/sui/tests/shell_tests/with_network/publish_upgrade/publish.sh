@@ -33,6 +33,7 @@ extract_published() {
   echo "=== End Published.toml ==="
 }
 
+GAS=$(sui client --client.config $CONFIG faucet --coin-id)
 chain_id=$(sui client --client.config $CONFIG chain-identifier)
 
 for i in a b c d e
@@ -41,6 +42,6 @@ do
   echo "=== publishing $i ==="
   add_env_to_toml $i
 
-  sui client --client.config $CONFIG publish $i > output.log 2>&1 || cat output.log
+  sui client --client.config $CONFIG publish --gas $GAS $i > output.log 2>&1 || cat output.log
   extract_published $i/Published.toml
 done

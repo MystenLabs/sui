@@ -15,9 +15,11 @@
 #
 # We publish A, B, C, D, E in order
 
+GAS=$(sui client --client.config $CONFIG faucet --coin-id)
+
 echo "=== expect to fail when publishing e because prereqs aren't published ==="
 sui client --client.config $CONFIG \
-  test-publish --build-env testnet --pubfile-path Pub.local.toml e \
+  test-publish --gas $GAS --build-env testnet --pubfile-path Pub.local.toml e \
   > output.log 2>&1 || cat output.log
 
 
@@ -25,10 +27,10 @@ sui client --client.config $CONFIG \
 echo ""
 echo "=== this should be succesful ==="
 sui client --client.config $CONFIG \
-  test-publish --build-env testnet --pubfile-path Pub.local.toml a \
+  test-publish --gas $GAS --build-env testnet --pubfile-path Pub.local.toml a \
   > output.log 2>&1 || cat output.log
 
 # trying to republish should fail now.
 echo ""
 echo "=== this should fail ==="
-sui client --client.config $CONFIG test-publish --build-env testnet --pubfile-path Pub.local.toml a
+sui client --client.config $CONFIG test-publish --gas $GAS --build-env testnet --pubfile-path Pub.local.toml a

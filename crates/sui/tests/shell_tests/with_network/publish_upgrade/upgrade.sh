@@ -5,6 +5,7 @@
 # Test an ephemeral upgrade workflow. We have
 # B --> A
 
+GAS=$(sui client --client.config $CONFIG faucet --coin-id)
 chain_id=$(sui client --client.config $CONFIG chain-identifier)
 
 extract_published() {
@@ -32,24 +33,24 @@ add_env_to_toml b
 
 echo "=== test-publish a, then test-publish b, then add a module to b & upgrade b ==="
 
-sui client --client.config $CONFIG publish a > output.log 2>&1 || cat output.log
+sui client --client.config $CONFIG publish --gas $GAS a > output.log 2>&1 || cat output.log
 
 echo "=== published a ==="
 extract_published a/Published.toml
 
-sui client --client.config $CONFIG publish b > output.log 2>&1 || cat output.log
+sui client --client.config $CONFIG publish --gas $GAS b > output.log 2>&1 || cat output.log
 
 echo "=== published b ==="
 extract_published b/Published.toml
 
 echo "module b::new_module; public fun b() { a::a::a() }" >> b/sources/new_module.move
 
-sui client --client.config $CONFIG upgrade b > output.log 2>&1 || cat output.log
+sui client --client.config $CONFIG upgrade --gas $GAS b > output.log 2>&1 || cat output.log
 
 echo "=== upgraded b ==="
 extract_published b/Published.toml
 
-sui client --client.config $CONFIG upgrade a > output.log 2>&1 || cat output.log
+sui client --client.config $CONFIG upgrade --gas $GAS a > output.log 2>&1 || cat output.log
 
 echo "=== upgraded a ==="
 extract_published a/Published.toml
@@ -60,4 +61,4 @@ echo "=== expect to fail when upgrading a because it is not compatible with b ==
 # Does an incompatilbe update (changes public function's return type)
 echo "module b::new_module; public fun b(): bool { true }" > b/sources/new_module.move
 
-sui client --client.config $CONFIG upgrade b
+sui client --client.config $CONFIG upgrade --gas $GAS b

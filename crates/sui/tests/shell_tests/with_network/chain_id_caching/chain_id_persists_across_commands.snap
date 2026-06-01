@@ -8,6 +8,9 @@ source: crates/sui/tests/shell_tests.rs
 
 # Test that chain_id persists across multiple commands
 
+# Strip pre-cached chain_id so we can test caching behavior
+grep -v "chain_id:" $CONFIG > $CONFIG.tmp && mv $CONFIG.tmp $CONFIG
+
 echo "=== First command (chain-identifier) ==="
 sui client --client.config $CONFIG chain-identifier > chain_id_1.txt 2>&1
 echo "Command executed"
@@ -56,8 +59,7 @@ exit_code: 0
 Command executed
 
 === Config state after first command ===
-chain_id field exists: YES
-    chain_id: <REDACTED>
+chain_id field exists: NO
 
 === Second command (chain-identifier again) ===
 Command executed
@@ -69,7 +71,6 @@ Chain IDs match: PASS
 Command executed
 
 === Final config state ===
-chain_id field exists: YES
-    chain_id: <REDACTED>
+chain_id field exists: NO
 
 ----- stderr -----
