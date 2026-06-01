@@ -24,6 +24,7 @@ mod error;
 mod leader_schedule;
 mod leader_schedule_v3;
 mod leader_scoring;
+mod leader_slot_decider;
 mod leader_timeout;
 mod linearizer;
 mod metrics;
