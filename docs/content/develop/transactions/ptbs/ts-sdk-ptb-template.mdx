@@ -15,25 +15,7 @@ This page is a starting point, not the full guide. For complete coverage of tran
 
 ## Set up your project
 
-The Sui TypeScript SDK is published as an ESM only package, so a few project settings keep your imports working. Set `"type": "module"` in your `package.json`, and set `module` and `moduleResolution` in your `tsconfig.json` to a value that supports ESM, such as `NodeNext`. Avoid `commonjs`.
-
-When `tsconfig.json` uses `"module": "commonjs"`, VS Code and other editors auto-import from an internal build path instead of the package entry point. That path is not a supported entry point and can break at runtime. Compare the two:
-
-```ts
-// Wrong: auto-imported from an internal build path
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/dist/cjs/client';
-
-// Correct: import from the package entry point
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-```
-
-:::caution
-
-If an import path includes `dist/cjs`, your editor generated it from a `commonjs` configuration. Fix the path, and set `module` to `NodeNext` in your `tsconfig.json` so future imports resolve correctly.
-
-:::
-
-For a backend script that runs on Node.js, this minimal `tsconfig.json` produces correct imports:
+The Sui TypeScript SDK ships as an ES module. For a Node.js backend, use a `tsconfig.json` whose `module` and `moduleResolution` settings resolve ES modules, such as `NodeNext`:
 
 ```json title='tsconfig.json'
 {
@@ -42,55 +24,34 @@ For a backend script that runs on Node.js, this minimal `tsconfig.json` produces
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
-    "esModuleInterop": true,
     "skipLibCheck": true
   }
 }
 ```
 
-For a frontend app, scaffold a new project with the Sui dApp Kit starter. It sets up a working `tsconfig.json` and project structure for you:
+For a frontend app, scaffold a new project with the dApp Kit starter, which sets up the project structure and configuration for you:
 
 ```bash
 $ npm create @mysten/dapp
 ```
 
-## Build the transaction
+## Send a transaction from a backend script
 
-Build the PTB once in a reusable function, then execute it from either a backend script or a frontend wallet. This pattern keeps transaction construction separate from execution, which matters for wallet compatibility because the construction step must stay synchronous when a wallet popup is involved.
+A backend script signs with a key pair that you control. Load the secret key from an environment variable, never from a hardcoded string.
 
-First, install the core SDK package:
+Install the core SDK package:
 
 ```bash
 $ npm install @mysten/sui
 ```
 
-The following function builds a transaction that sends 0.1 SUI to a recipient. Place it in a shared file that both your backend and frontend can import:
-
-```ts title='buildTransfer.ts'
-import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
-import { MIST_PER_SUI } from '@mysten/sui/utils';
-
-// Build a transaction that sends 0.1 SUI to a recipient.
-export function buildTransfer(recipient: string) {
-  const tx = new Transaction();
-  tx.transferObjects(
-    [coinWithBalance({ balance: BigInt(0.1 * Number(MIST_PER_SUI)) })],
-    recipient,
-  );
-  return tx;
-}
-```
-
-The `coinWithBalance` intent selects coins for the requested amount when the transaction resolves, so you do not need to pick coins yourself. The `transferObjects` command sends the resulting coin to the recipient address.
-
-## Execute from a backend script
-
-A backend script signs with a key pair that you control. Load the secret key from an environment variable, never from a hardcoded string. The following script imports the shared function, signs the transaction, executes it, and checks the result:
+The following script builds a transaction that sends 0.1 SUI to a recipient, signs it, executes it, and checks the result:
 
 ```ts title='send.ts'
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
-import { buildTransfer } from './buildTransfer';
+import { Transaction } from '@mysten/sui/transactions';
+import { MIST_PER_SUI } from '@mysten/sui/utils';
 
 const client = new SuiGrpcClient({
   network: 'devnet',
@@ -100,12 +61,11 @@ const client = new SuiGrpcClient({
 // Load the secret key from the environment, never hardcode it.
 const keypair = Ed25519Keypair.fromSecretKey(process.env.SUI_SECRET_KEY!);
 
-const tx = buildTransfer('0xRecipientAddress');
+// Build a transaction that sends 0.1 SUI to a recipient.
+const tx = new Transaction();
+tx.transferObjects([tx.coin({ balance: 0.1 * Number(MIST_PER_SUI) })], '0xRecipientAddress');
 
-const result = await keypair.signAndExecuteTransaction({
-  transaction: tx,
-  client,
-});
+const result = await keypair.signAndExecuteTransaction({ transaction: tx, client });
 
 if (result.$kind === 'FailedTransaction') {
   throw new Error(`Transaction failed: ${result.FailedTransaction.status.error?.message}`);
@@ -114,55 +74,61 @@ if (result.$kind === 'FailedTransaction') {
 console.log('Transaction digest:', result.Transaction.digest);
 ```
 
+The `tx.coin` method sources the requested amount from your address balance when available and falls back to owned coins, so you do not need to pick coins yourself. The `transferObjects` command then sends that coin to the recipient.
+
 Always check the `$kind` field on the result. A transaction can be submitted and still fail onchain, so treat a `FailedTransaction` result as an error rather than assuming success.
 
-## Execute from a frontend wallet
+## Send a transaction from a frontend wallet
 
 A frontend app does not hold the user's key. The user's wallet signs the transaction through Sui dApp Kit, so your code only builds the transaction and hands it to the wallet.
 
-Install Sui dApp Kit alongside the core SDK:
+Install dApp Kit alongside the core SDK:
 
 ```bash
-$ npm install @mysten/dapp-kit
+$ npm install @mysten/dapp-kit-react @mysten/sui
 ```
 
-The following component imports the same `buildTransfer` function and prompts the connected wallet to sign and execute the transaction. This example assumes a `SuiClientProvider` and `WalletProvider` already wrap your app:
+This example assumes a `DAppKitProvider` wraps your app, configured with `createDAppKit`. The dApp Kit starter from [Set up your project](#set-up-your-project) sets this up for you. For the provider setup, see [Getting started with dApp Kit for React](https://sdk.mystenlabs.com/dapp-kit/getting-started/react).
+
+The following component builds the transaction in the click handler and asks the connected wallet to sign and execute it:
 
 ```tsx title='SendButton.tsx'
-import { ConnectButton, useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
-import { buildTransfer } from './buildTransfer';
+import { ConnectButton } from '@mysten/dapp-kit-react/ui';
+import { useCurrentAccount, useDAppKit } from '@mysten/dapp-kit-react';
+import { Transaction } from '@mysten/sui/transactions';
+import { MIST_PER_SUI } from '@mysten/sui/utils';
 
 export function SendButton() {
-  const currentAccount = useCurrentAccount();
-  const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+  const account = useCurrentAccount();
+  const dAppKit = useDAppKit();
+
+  async function handleSend() {
+    if (!account) return;
+
+    // Build a transaction that sends 0.1 SUI to the connected account.
+    const tx = new Transaction();
+    tx.transferObjects([tx.coin({ balance: 0.1 * Number(MIST_PER_SUI) })], account.address);
+
+    const result = await dAppKit.signAndExecuteTransaction({ transaction: tx });
+
+    if (result.$kind === 'FailedTransaction') {
+      console.error(result.FailedTransaction.status.error?.message);
+      return;
+    }
+
+    console.log('Transaction digest:', result.Transaction.digest);
+  }
 
   return (
     <div>
       <ConnectButton />
-      {currentAccount && (
-        <button
-          onClick={() => {
-            signAndExecuteTransaction(
-              {
-                transaction: buildTransfer(currentAccount.address),
-                chain: 'sui:devnet',
-              },
-              {
-                onSuccess: (result) => console.log('Transaction digest:', result.digest),
-                onError: (error) => console.error(error),
-              },
-            );
-          }}
-        >
-          Send
-        </button>
-      )}
+      {account && <button onClick={handleSend}>Send</button>}
     </div>
   );
 }
 ```
 
-The wallet sets the sender and signs the transaction, then returns the result to your `onSuccess` callback. You never touch the user's key.
+Pass the `Transaction` instance directly to the wallet. The wallet sets the sender, selects gas coins, and signs, so you never call `tx.build()` yourself and never touch the user's key.
 
 :::danger
 
