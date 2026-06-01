@@ -4,7 +4,7 @@ mvir 0x5::M {
     public fun new(): vector<u64> {
         let v: vector<u64>;
     label b0:
-        v = vec_pack_1<u64>(100);
+        v = vector<u64; 1>(100);
         vec_push_back<u64>(&mut v, 200);
         return move(v);
     }

@@ -4,7 +4,7 @@ mvir 0x1::M {
     fun f() {
         let v: vector<Self::R>;
     label b0:
-        v = vec_pack_0<Self::R>();
+        v = vector<Self::R; 0>();
         return;
     }
 }

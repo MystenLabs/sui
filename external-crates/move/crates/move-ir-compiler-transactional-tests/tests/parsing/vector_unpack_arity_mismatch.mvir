@@ -1,0 +1,13 @@
+//# print-bytecode
+// The bracket count on a vector unpack must match the arity in `#N`.
+// Here we declare arity 2 but provide only 1 LValue, which is a parse error.
+mvir 0x42::M {
+    public fun foo() {
+        let v: vector<u64>;
+        let x: u64;
+    label b0:
+        v = vector<u64; 2>(1, 2);
+        vector<u64; 2>(x) = move(v);
+        return;
+    }
+}

@@ -4,7 +4,7 @@ mvir 0x6::m {
 entry fun foo() {
     let v: vector<u64>;
 label b0:
-    v = vec_pack_0<u64>();
+    v = vector<u64; 0>();
     vec_push_back<u64>(&mut v, 0);
     _ = vec_imm_borrow<u64>(&v, 0);
 
@@ -18,7 +18,7 @@ mvir 0x7::m {
 entry fun foo() {
     let v: vector<u64>;
 label b0:
-    v = vec_pack_1<u64>(42);
+    v = vector<u64; 1>(42);
     _ = vec_imm_borrow<u64>(&v, 0);
 
     return;
@@ -31,7 +31,7 @@ mvir 0x8::m {
 entry fun foo() {
     let v: vector<u64>;
 label b0:
-    v = vec_pack_0<u64>();
+    v = vector<u64; 0>();
     vec_push_back<u64>(&mut v, 0);
     _ = vec_mut_borrow<u64>(&mut v, 0);
 
@@ -45,7 +45,7 @@ mvir 0x9::m {
 entry fun foo() {
     let v: vector<u64>;
 label b0:
-    v = vec_pack_1<u64>(42);
+    v = vector<u64; 1>(42);
     _ = vec_mut_borrow<u64>(&mut v, 0);
 
     return;
@@ -58,7 +58,7 @@ mvir 0xa::m {
 entry fun foo() {
     let v: vector<u64>;
 label b0:
-    v = vec_pack_0<u64>();
+    v = vector<u64; 0>();
     vec_push_back<u64>(&mut v, 0);
     vec_swap<u64>(&mut v, 0, 0);
 
@@ -72,7 +72,7 @@ mvir 0xb::m {
 entry fun foo() {
     let v: vector<u64>;
 label b0:
-    v = vec_pack_1<u64>(42);
+    v = vector<u64; 1>(42);
     vec_swap<u64>(&mut v, 0, 0);
 
     return;
