@@ -451,6 +451,12 @@ mod checked {
                             version: Some(obj_ref.1),
                         })?;
                     let object = obj.as_object().ok_or(UserInputError::MissingGasPayment)?;
+                    if !object.is_gas_coin() {
+                        return Err(UserInputError::InvalidGasObject {
+                            object_id: object.id(),
+                        }
+                        .into());
+                    }
                     if gas_ownership_checks && object.owner != Owner::AddressOwner(gas_owner) {
                         return Err(UserInputError::GasObjectNotOwnedObject {
                             owner: object.owner.clone(),
