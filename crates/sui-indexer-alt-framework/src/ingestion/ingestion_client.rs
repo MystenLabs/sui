@@ -286,6 +286,17 @@ impl IngestionClient {
         Ok(Self::from_trait(Arc::new(client), metrics))
     }
 
+    /// The metrics handle this client reports against. Callers
+    /// constructing peer services (e.g. an [`IngestionService`])
+    /// against the same client should reuse this Arc rather than
+    /// building a second [`IngestionMetrics`] from the same
+    /// registry, which would double-register the metric vectors.
+    ///
+    /// [`IngestionService`]: crate::ingestion::IngestionService
+    pub fn metrics(&self) -> &Arc<IngestionMetrics> {
+        &self.metrics
+    }
+
     /// Wrap an arbitrary [`IngestionClientTrait`] implementation in
     /// an [`IngestionClient`]. Use this when the source of
     /// checkpoints is not one of the built-in remote object stores
