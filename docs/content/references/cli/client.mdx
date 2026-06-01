@@ -235,9 +235,9 @@ $ sui client send-funds \
 The most common options are:
 
 - `--to`: Recipient address (or its keystore alias). Required.
-- `--amount`: Amount to send in MIST. Required unless `--all-coins` is set.
+- `--amount`: Amount to send in the coin's smallest unit (MIST for SUI). Required unless `--all-coins` is set.
 - `--coin-type`: Coin type to send. Defaults to `0x2::sui::SUI`.
-- `--all-coins`: Send all coins of the specified type. Conflicts with `--amount` and `--stateless`.
+- `--all-coins`: Send all owned coin objects of the specified type (not address-balance funds). Conflicts with `--amount` and `--stateless`.
 - `--stateless`: Draw all funds (including gas) from the sender's address balances, producing a transaction with no owned-object inputs. Conflicts with `--all-coins`.
 
 ### Transfer an object to party ownership
@@ -268,7 +268,7 @@ $ sui client test-upgrade --pubfile-path Pub.testnet.toml --build-env testnet
 
 The key options are:
 
-- `--pubfile-path`: Path to the ephemeral publication file. If omitted, defaults to `Pub.<env>.toml` based on the build environment alias.
+- `--pubfile-path`: Path to the ephemeral publication file. If omitted, defaults to `Pub.<active-env-alias>.toml` based on the active Sui environment alias.
 - `--build-env`, `-e`: Environment to build the package for.
 
 These commands do not write to `Published.toml`. Use `sui client publish` and `sui client upgrade` for normal, persistent publication.
