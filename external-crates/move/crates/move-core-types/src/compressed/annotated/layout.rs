@@ -276,6 +276,7 @@ impl<T: TypeLayout> MoveTypeLayout<T> {
     }
 
     /// Borrow this layout without cloning the pool.
+    #[inline]
     pub fn as_ref(&self) -> MoveTypeLayoutRef<'_, T> {
         MoveTypeLayoutRef {
             pool: &self.pool,
@@ -284,6 +285,7 @@ impl<T: TypeLayout> MoveTypeLayout<T> {
     }
 
     /// Create a resolved view for navigating this layout.
+    #[inline]
     pub fn as_view(&self) -> MoveLayoutView<'_, T> {
         self.as_ref().as_view()
     }
@@ -308,6 +310,7 @@ impl<T: TypeLayout> fmt::Display for MoveTypeLayout<T> {
 
 impl<'a, T: TypeLayout> MoveTypeLayoutRef<'a, T> {
     /// Construct a borrowed layout from a pool reference and a root reference.
+    #[inline]
     pub fn new(pool: &'a T, root: &'a T::Root) -> Self {
         MoveTypeLayoutRef { pool, root }
     }
@@ -330,6 +333,7 @@ impl<'a, T: TypeLayout> MoveTypeLayoutRef<'a, T> {
     }
 
     /// Create a resolved view for navigating this layout.
+    #[inline]
     pub fn as_view(self) -> MoveLayoutView<'a, T> {
         self.pool.realize_view(self.root)
     }
@@ -415,6 +419,7 @@ impl<T: TypeLayout> MoveLayoutView<'_, T> {
     }
 
     /// Check whether this layout matches the given [`TypeTag`].
+    #[inline]
     pub fn is_type_tag(&self, t: &TypeTag) -> bool {
         match self {
             MoveLayoutView::Bool => *t == TypeTag::Bool,
@@ -485,6 +490,7 @@ impl<T: TypeLayout> fmt::Display for MoveLayoutView<'_, T> {
 impl<'a, T: TypeLayout> MoveDatatypeLayout<'a, T> {
     /// Wrap a borrowed layout that is known to be a struct or enum.
     /// Returns `None` if the layout is a primitive or vector.
+    #[inline]
     pub fn new(layout: MoveTypeLayoutRef<'a, T>) -> Option<Self> {
         match layout.as_view() {
             MoveLayoutView::Struct(s) => Some(MoveDatatypeLayout::Struct(s)),
@@ -546,11 +552,13 @@ impl<'a, T: TypeLayout> MoveDatatypeLayout<'a, T> {
 
 impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
     /// Number of fields.
+    #[inline]
     pub fn field_count(self) -> usize {
         self.fields.len()
     }
 
     /// Access a field by index, returning `(name, layout)`.
+    #[inline]
     pub fn field(self, i: usize) -> Option<(&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
         self.fields.get(i).map(|entry| {
             (
@@ -564,6 +572,7 @@ impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
     }
 
     /// Look up a field by name, returning its layout.
+    #[inline]
     pub fn field_by_name(self, name: &str) -> Option<MoveTypeLayoutRef<'a, T>> {
         self.fields
             .iter()
@@ -575,6 +584,7 @@ impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
     }
 
     /// Iterate over all fields as `(name, layout)` pairs.
+    #[inline]
     pub fn fields(
         self,
     ) -> impl ExactSizeIterator<Item = (&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
@@ -595,31 +605,37 @@ impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
 
 impl<'a, T: TypeLayout> MoveStructLayout<'a, T> {
     /// The struct's type tag.
+    #[inline]
     pub fn type_(self) -> &'a StructTag {
         self.type_
     }
 
     /// Check whether this struct's type tag matches the given [`TypeTag`].
+    #[inline]
     pub fn is_type_tag(self, t: &TypeTag) -> bool {
         matches!(t, TypeTag::Struct(s) if &**s == self.type_)
     }
 
     /// Access the fields layout.
+    #[inline]
     pub fn fields_layout(self) -> MoveFieldsLayout<'a, T> {
         self.fields
     }
 
     /// Number of fields.
+    #[inline]
     pub fn field_count(self) -> usize {
         self.fields.field_count()
     }
 
     /// Access a field by index, returning `(name, layout)`.
+    #[inline]
     pub fn field(self, i: usize) -> Option<(&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
         self.fields.field(i)
     }
 
     /// Iterate over all fields as `(name, layout)` pairs.
+    #[inline]
     pub fn fields(
         self,
     ) -> impl ExactSizeIterator<Item = (&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
@@ -648,6 +664,7 @@ impl<T: TypeLayout> fmt::Display for MoveStructLayout<'_, T> {
 
 impl<'a, T: TypeLayout> VariantLayout<'a, T> {
     /// The variant's name.
+    #[inline]
     pub fn name(self) -> &'a Identifier {
         match self {
             VariantLayout::Known { name, .. } => name,
@@ -656,6 +673,7 @@ impl<'a, T: TypeLayout> VariantLayout<'a, T> {
     }
 
     /// The variant's tag.
+    #[inline]
     pub fn tag(self) -> VariantTag {
         match self {
             VariantLayout::Known { tag, .. } => tag,
@@ -664,6 +682,7 @@ impl<'a, T: TypeLayout> VariantLayout<'a, T> {
     }
 
     /// The variant's fields, or `None` if the layout is unknown.
+    #[inline]
     pub fn fields(self) -> Option<MoveFieldsLayout<'a, T>> {
         match self {
             VariantLayout::Known { fields, .. } => Some(fields),
@@ -676,26 +695,31 @@ impl<'a, T: TypeLayout> VariantLayout<'a, T> {
 
 impl<'a, T: TypeLayout> MoveEnumLayout<'a, T> {
     /// The enum's type tag.
+    #[inline]
     pub fn type_(self) -> &'a StructTag {
         self.type_
     }
 
     /// Check whether this enum's type tag matches the given [`TypeTag`].
+    #[inline]
     pub fn is_type_tag(self, t: &TypeTag) -> bool {
         matches!(t, TypeTag::Struct(s) if **s == *self.type_)
     }
 
     /// Number of variants.
+    #[inline]
     pub fn variant_count(self) -> usize {
         self.variants.len()
     }
 
     /// Access a variant by position index.
+    #[inline]
     pub fn variant(self, i: usize) -> Option<VariantLayout<'a, T>> {
         self.variants.get(i).map(|v| variant_view(self.pool, v))
     }
 
     /// Find a variant by its tag value.
+    #[inline]
     pub fn variant_by_tag(self, tag: VariantTag) -> Option<VariantLayout<'a, T>> {
         self.variants
             .iter()
@@ -704,12 +728,14 @@ impl<'a, T: TypeLayout> MoveEnumLayout<'a, T> {
     }
 
     /// Iterate over all variants.
+    #[inline]
     pub fn variants(self) -> impl ExactSizeIterator<Item = VariantLayout<'a, T>> {
         let pool = self.pool;
         self.variants.iter().map(move |v| variant_view(pool, v))
     }
 }
 
+#[inline]
 fn variant_view<'a, T: TypeLayout>(
     pool: &'a T,
     v: &'a AnnotatedVariantEntry<T::Root>,

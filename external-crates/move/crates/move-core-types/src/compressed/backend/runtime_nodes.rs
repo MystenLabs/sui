@@ -73,6 +73,7 @@ pub type RuntimePoolBuilder = PoolBuilder<MoveTypeNode<LayoutRef>>;
 // =============================================================================
 
 /// Map a [`LeafType`] to the corresponding leaf variant of [`MoveLayoutView`].
+#[inline]
 pub(crate) fn leaf_view<'a, T: TypeLayout>(leaf: LeafType) -> MoveLayoutView<'a, T> {
     use MoveLayoutView as V;
     match leaf {
@@ -90,6 +91,7 @@ pub(crate) fn leaf_view<'a, T: TypeLayout>(leaf: LeafType) -> MoveLayoutView<'a,
 
 /// Build a `MoveLayoutView` from a node-table entry. Reusable across any
 /// backend whose `Root` matches the node's reference type.
+#[inline]
 pub(crate) fn build_view_from_node<'a, T: TypeLayout>(
     pool: &'a T,
     node: &'a MoveTypeNode<T::Root>,

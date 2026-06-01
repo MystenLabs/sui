@@ -249,6 +249,7 @@ impl<T: TypeLayout> MoveTypeLayout<T> {
     }
 
     /// Borrow this layout without cloning the pool.
+    #[inline]
     pub fn as_ref(&self) -> MoveTypeLayoutRef<'_, T> {
         MoveTypeLayoutRef {
             pool: &self.pool,
@@ -257,6 +258,7 @@ impl<T: TypeLayout> MoveTypeLayout<T> {
     }
 
     /// Create a resolved view for navigating this layout.
+    #[inline]
     pub fn as_view(&self) -> MoveLayoutView<'_, T> {
         self.as_ref().as_view()
     }
@@ -282,6 +284,7 @@ impl<T: TypeLayout> fmt::Display for MoveTypeLayout<T> {
 
 impl<'a, T: TypeLayout> MoveTypeLayoutRef<'a, T> {
     /// Construct a borrowed layout from a pool reference and a root reference.
+    #[inline]
     pub fn new(pool: &'a T, root: &'a T::Root) -> Self {
         MoveTypeLayoutRef { pool, root }
     }
@@ -304,6 +307,7 @@ impl<'a, T: TypeLayout> MoveTypeLayoutRef<'a, T> {
     }
 
     /// Create a resolved view for navigating this layout.
+    #[inline]
     pub fn as_view(self) -> MoveLayoutView<'a, T> {
         self.pool.realize_view(self.root)
     }
@@ -400,11 +404,13 @@ impl<T: TypeLayout> fmt::Display for MoveLayoutView<'_, T> {
 
 impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
     /// Number of fields.
+    #[inline]
     pub fn field_count(self) -> usize {
         self.fields.len()
     }
 
     /// Access a field by index.
+    #[inline]
     pub fn field(self, i: usize) -> Option<MoveTypeLayoutRef<'a, T>> {
         self.fields.get(i).map(|f| MoveTypeLayoutRef {
             pool: self.pool,
@@ -413,6 +419,7 @@ impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
     }
 
     /// Iterate over all fields as layouts.
+    #[inline]
     pub fn fields(self) -> impl ExactSizeIterator<Item = MoveTypeLayoutRef<'a, T>> {
         self.fields.iter().map(move |f| MoveTypeLayoutRef {
             pool: self.pool,
@@ -425,21 +432,25 @@ impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
 
 impl<'a, T: TypeLayout> MoveStructLayout<'a, T> {
     /// Access the fields layout.
+    #[inline]
     pub fn fields_layout(self) -> MoveFieldsLayout<'a, T> {
         self.fields
     }
 
     /// Number of fields.
+    #[inline]
     pub fn field_count(self) -> usize {
         self.fields.field_count()
     }
 
     /// Access a field by index.
+    #[inline]
     pub fn field(self, i: usize) -> Option<MoveTypeLayoutRef<'a, T>> {
         self.fields.field(i)
     }
 
     /// Iterate over all fields as layouts.
+    #[inline]
     pub fn fields(self) -> impl ExactSizeIterator<Item = MoveTypeLayoutRef<'a, T>> {
         self.fields.fields()
     }
@@ -473,22 +484,26 @@ impl<T: TypeLayout> fmt::Display for MoveFieldsLayout<'_, T> {
 
 impl<'a, T: TypeLayout> MoveEnumLayout<'a, T> {
     /// Number of variants.
+    #[inline]
     pub fn variant_count(self) -> usize {
         self.variants.len()
     }
 
     /// Access a variant by index.
+    #[inline]
     pub fn variant(self, i: usize) -> Option<VariantLayout<'a, T>> {
         self.variants.get(i).map(|v| make_variant(self.pool, v))
     }
 
     /// Iterate over all variants.
+    #[inline]
     pub fn variants(self) -> impl ExactSizeIterator<Item = VariantLayout<'a, T>> {
         let pool = self.pool;
         self.variants.iter().map(move |v| make_variant(pool, v))
     }
 }
 
+#[inline]
 fn make_variant<'a, T: TypeLayout>(
     pool: &'a T,
     v: &'a Option<Box<[T::Root]>>,

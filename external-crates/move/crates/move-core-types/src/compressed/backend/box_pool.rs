@@ -73,6 +73,7 @@ pub type RuntimeBoxPool = BoxPool<runtime_nodes::MoveTypeNode<LayoutRef>>;
 impl runtime::TypeLayout for RuntimeBoxPool {
     type Root = LayoutRef;
 
+    #[inline]
     fn realize_view<'a>(&'a self, r: &'a LayoutRef) -> runtime::MoveLayoutView<'a, Self> {
         match r.resolve() {
             ResolvedRef::Leaf(l) => runtime_nodes::leaf_view(l),
@@ -80,6 +81,7 @@ impl runtime::TypeLayout for RuntimeBoxPool {
         }
     }
 
+    #[inline]
     fn node_count(&self) -> usize {
         self.nodes.len()
     }
@@ -88,6 +90,7 @@ impl runtime::TypeLayout for RuntimeBoxPool {
 impl annotated::TypeLayout for AnnotatedBoxPool {
     type Root = LayoutRef;
 
+    #[inline]
     fn realize_view<'a>(&'a self, r: &'a LayoutRef) -> annotated::MoveLayoutView<'a, Self> {
         match r.resolve() {
             ResolvedRef::Leaf(l) => annotated_nodes::leaf_view(l),
@@ -95,6 +98,7 @@ impl annotated::TypeLayout for AnnotatedBoxPool {
         }
     }
 
+    #[inline]
     fn node_count(&self) -> usize {
         self.nodes.len()
     }

@@ -30,6 +30,7 @@ pub enum LeafType {
 }
 
 impl LeafType {
+    #[inline]
     pub(crate) fn from_u8(v: u8) -> Option<Self> {
         match v {
             0 => Some(Self::Bool),
@@ -78,6 +79,7 @@ pub(crate) enum ResolvedRef {
 }
 
 impl LayoutRef {
+    #[inline]
     pub(crate) const fn leaf(ty: LeafType) -> Self {
         LayoutRef(LEAF_TAG | ty as u16)
     }
@@ -89,6 +91,7 @@ impl LayoutRef {
         Ok(LayoutRef(idx as u16))
     }
 
+    #[inline]
     pub(crate) fn resolve(self) -> ResolvedRef {
         if self.0 & LEAF_TAG != 0 {
             let disc = (self.0 & LEAF_MASK) as u8;

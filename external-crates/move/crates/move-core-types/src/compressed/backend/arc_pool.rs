@@ -64,6 +64,7 @@ pub type RuntimeArcPool = ArcPool<runtime_nodes::MoveTypeNode<LayoutRef>>;
 impl runtime::TypeLayout for RuntimeArcPool {
     type Root = LayoutRef;
 
+    #[inline]
     fn realize_view<'a>(&'a self, r: &'a LayoutRef) -> runtime::MoveLayoutView<'a, Self> {
         match r.resolve() {
             ResolvedRef::Leaf(l) => runtime_nodes::leaf_view(l),
@@ -71,6 +72,7 @@ impl runtime::TypeLayout for RuntimeArcPool {
         }
     }
 
+    #[inline]
     fn node_count(&self) -> usize {
         self.nodes.len()
     }
@@ -79,6 +81,7 @@ impl runtime::TypeLayout for RuntimeArcPool {
 impl annotated::TypeLayout for AnnotatedArcPool {
     type Root = LayoutRef;
 
+    #[inline]
     fn realize_view<'a>(&'a self, r: &'a LayoutRef) -> annotated::MoveLayoutView<'a, Self> {
         match r.resolve() {
             ResolvedRef::Leaf(l) => annotated_nodes::leaf_view(l),
@@ -86,6 +89,7 @@ impl annotated::TypeLayout for AnnotatedArcPool {
         }
     }
 
+    #[inline]
     fn node_count(&self) -> usize {
         self.nodes.len()
     }
