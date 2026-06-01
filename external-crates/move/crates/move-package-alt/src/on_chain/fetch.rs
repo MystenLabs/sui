@@ -2,6 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Fetches on-chain packages and generates synthetic manifests and publication files.
+//!
+//! On-chain packages are cached at `~/.move/on-chain/<chain_id>/<address>/`. The cache
+//! contains:
+//! - `bytecode/<module_name>.mv` — serialized `CompiledModule` bytecode (the same format
+//!   the compiler writes to `build/<pkg>/bytecode_modules/`; we use a separate directory
+//!   to avoid clobbering the original bytecode if the package is recompiled)
+//! - `Move.toml` — a generated manifest with `name = "self"`, with environments and
+//!   dep-replacements added incrementally as the package is used from different contexts
+//! - `Published.toml` — publication metadata, also updated incrementally per environment
 
 use std::{
     collections::BTreeMap,
@@ -9,35 +18,75 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, anyhow};
-use toml_edit::{DocumentMut, Item, Table, value};
+use serde_spanned::Spanned;
 
 use crate::{
     flavor::{MoveFlavor, OnChainPackageData},
-    package::{package_loader::PackageConfig, package_lock::PackageSystemLock},
+    package::{
+        layout::SourcePackageLayout, package_loader::PackageConfig,
+        package_lock::PackageSystemLock,
+    },
     schema::{
-        Environment, OriginalID, ParsedPublishedFile, Publication, PublishAddresses, PublishedID,
-        RenderToml,
+        DefaultDependency, Environment, ManifestDependencyInfo, OnChainAddress, OriginalID,
+        PackageName, ParsedManifest, ParsedPublishedFile, Publication, PublishAddresses,
+        PublishedID, RenderToml, ReplacementDependency,
     },
 };
 
-/// Fetch an on-chain package and generate its manifest and publication files. Returns the path
-/// to the generated package directory in the cache.
+use super::{OnChainError, OnChainResult};
+
+/// The package name used for all generated on-chain package manifests.
+const ON_CHAIN_PACKAGE_NAME: &str = "self";
+
+/// Fetch an on-chain package, writing bytecode and generating manifest/publication files
+/// in the cache directory. If the bytecode is already cached, skips the network fetch but
+/// still ensures the manifest and Published.toml include the current environment.
+///
+/// The generated `Move.toml` looks like:
+/// ```toml
+/// [package]
+/// name = "self"
+///
+/// [environments]
+/// mainnet = "35834a8a"
+///
+/// [dep-replacements.mainnet.onchain_0x0000...0002]
+/// on-chain = "0x0000...0002"
+/// ```
+///
+/// Environments and dep-replacements are added incrementally: fetching the same package
+/// for a second environment adds a new entry without disturbing existing ones. This does
+/// not trigger repinning for other environments because the manifest digest is computed
+/// per-environment from the `CombinedDependency` list.
 pub(crate) async fn fetch_onchain<F: MoveFlavor>(
     address: &PublishedID,
     env: &Environment,
     config: &PackageConfig<F>,
-) -> anyhow::Result<PathBuf> {
+) -> OnChainResult<PathBuf> {
     let cache_dir = cache_dir_for(&config.chain_id, address);
+    let bytecode_dir = cache_dir.join("bytecode");
 
-    let _lock = PackageSystemLock::new_for_onchain(&config.chain_id, address)
-        .map_err(|e| anyhow!("failed to acquire lock for on-chain package {address}: {e}"))?;
+    let _lock = PackageSystemLock::new_for_onchain(&config.chain_id, address)?;
 
-    let data = config.flavor.fetch_onchain_package(address).await?;
+    // Skip network fetch if bytecode is already cached
+    let data = if bytecode_dir.exists() && fs::read_dir(&bytecode_dir).is_ok_and(|d| d.count() > 0)
+    {
+        None
+    } else {
+        let data = config
+            .flavor
+            .fetch_onchain_package(address)
+            .await
+            .map_err(|source| OnChainError::FetchFailed {
+                address: address.clone(),
+                source,
+            })?;
+        write_bytecode(&cache_dir, &data.modules)?;
+        Some(data)
+    };
 
-    write_bytecode(&cache_dir, &data.modules)?;
-    update_manifest(&cache_dir, env, &data.dependencies)?;
-    update_published::<F>(&cache_dir, address, env, &data)?;
+    update_manifest(&cache_dir, address, env, data.as_ref())?;
+    update_published::<F>(&cache_dir, address, env, data.as_ref())?;
 
     Ok(cache_dir)
 }
@@ -50,91 +99,164 @@ fn cache_dir_for(chain_id: &str, address: &PublishedID) -> PathBuf {
         .join(address.to_string())
 }
 
-/// Write module bytecode files to `<cache_dir>/bytecode/<name>.mv`.
-fn write_bytecode(cache_dir: &Path, modules: &BTreeMap<String, Vec<u8>>) -> anyhow::Result<()> {
+/// Write serialized `CompiledModule` bytecode to `<cache_dir>/bytecode/<name>.mv`.
+fn write_bytecode(cache_dir: &Path, modules: &BTreeMap<String, Vec<u8>>) -> OnChainResult<()> {
     let bytecode_dir = cache_dir.join("bytecode");
-    fs::create_dir_all(&bytecode_dir)
-        .with_context(|| format!("creating bytecode dir: {}", bytecode_dir.display()))?;
+    fs::create_dir_all(&bytecode_dir).map_err(|source| OnChainError::CacheWriteFailed {
+        path: bytecode_dir.clone(),
+        source,
+    })?;
 
     for (name, bytes) in modules {
         let path = bytecode_dir.join(format!("{name}.mv"));
-        fs::write(&path, bytes)
-            .with_context(|| format!("writing module bytecode: {}", path.display()))?;
+        fs::write(&path, bytes).map_err(|source| OnChainError::CacheWriteFailed {
+            path: path.clone(),
+            source,
+        })?;
     }
 
     Ok(())
 }
 
-/// Generate or update `Move.toml` in the cache directory. Adds the environment and
-/// dep-replacements for on-chain dependencies from the linkage table.
+/// Generate or update the `Move.toml` in the cache directory. Adds the current
+/// environment and dep-replacements for on-chain dependencies from the linkage table.
+/// If the manifest already exists and contains this environment, it is not modified.
 fn update_manifest(
     cache_dir: &Path,
+    address: &PublishedID,
     env: &Environment,
-    dependencies: &BTreeMap<OriginalID, PublishedID>,
-) -> anyhow::Result<()> {
-    let manifest_path = cache_dir.join("Move.toml");
+    data: Option<&OnChainPackageData>,
+) -> OnChainResult<()> {
+    let manifest_path = cache_dir.join(SourcePackageLayout::Manifest.location_str());
 
-    let mut doc = if manifest_path.exists() {
-        let content = fs::read_to_string(&manifest_path)
-            .with_context(|| format!("reading {}", manifest_path.display()))?;
-        content
-            .parse::<DocumentMut>()
-            .with_context(|| format!("parsing {}", manifest_path.display()))?
+    let mut manifest: ParsedManifest = if manifest_path.exists() {
+        let content = fs::read_to_string(&manifest_path).map_err(|source| {
+            OnChainError::CacheWriteFailed {
+                path: manifest_path.clone(),
+                source,
+            }
+        })?;
+        toml_edit::de::from_str(&content).map_err(|source| OnChainError::ManifestParseFailed {
+            path: manifest_path.clone(),
+            source,
+        })?
     } else {
-        fs::create_dir_all(cache_dir)
-            .with_context(|| format!("creating cache dir: {}", cache_dir.display()))?;
-        let mut doc = DocumentMut::new();
-        let mut package = Table::new();
-        package.insert("name", value("self"));
-        doc.insert("package", Item::Table(package));
-        doc
+        fs::create_dir_all(cache_dir).map_err(|source| OnChainError::CacheWriteFailed {
+            path: cache_dir.to_path_buf(),
+            source,
+        })?;
+        new_manifest()
     };
 
-    // Add environment entry
-    if !doc.contains_key("environments") {
-        doc.insert("environments", Item::Table(Table::new()));
-    }
-    doc["environments"][env.name()] = value(env.id());
+    // Check if this environment is already present
+    let env_already_present = manifest
+        .environments
+        .keys()
+        .any(|k| k.as_ref() == env.name());
 
-    // Add dep-replacements for this environment
-    if !dependencies.is_empty() {
-        if !doc.contains_key("dep-replacements") {
-            doc.insert("dep-replacements", Item::Table(Table::new()));
-        }
-        let replacements = &mut doc["dep-replacements"];
-
-        let mut env_table = Table::new();
-        for (original_id, linked_address) in dependencies {
-            let dep_name = format!("onchain_{original_id}");
-            let mut dep_table = Table::new();
-            dep_table.insert("on-chain", value(linked_address.to_string()));
-            env_table.insert(&dep_name, Item::Table(dep_table));
-        }
-        replacements[env.name()] = Item::Table(env_table);
+    if env_already_present {
+        return Ok(());
     }
 
-    fs::write(&manifest_path, doc.to_string())
-        .with_context(|| format!("writing {}", manifest_path.display()))?;
+    // Add environment
+    manifest.environments.insert(
+        Spanned::new(0..1, env.name().to_string()),
+        Spanned::new(0..1, env.id().to_string()),
+    );
+
+    // Add dep-replacements from linkage table
+    if let Some(data) = data {
+        let mut env_replacements = BTreeMap::new();
+        for (original_id, linked_address) in &data.dependencies {
+            let dep_name =
+                PackageName::new(format!("onchain_{original_id}")).expect("valid identifier");
+            let replacement = ReplacementDependency {
+                dependency: Some(DefaultDependency {
+                    dependency_info: ManifestDependencyInfo::OnChainAt(OnChainAddress {
+                        on_chain: linked_address.clone(),
+                    }),
+                    is_override: false,
+                    rename_from: None,
+                    modes: None,
+                }),
+                addresses: None,
+                use_environment: None,
+            };
+            env_replacements.insert(dep_name, Spanned::new(0..1, replacement));
+        }
+        manifest
+            .dep_replacements
+            .insert(env.name().to_string(), env_replacements);
+    }
+
+    // Serialize and write
+    let doc = toml_edit::ser::to_document(&manifest).map_err(|source| {
+        OnChainError::ManifestSerializeFailed {
+            address: address.clone(),
+            source,
+        }
+    })?;
+    fs::write(&manifest_path, doc.to_string()).map_err(|source| {
+        OnChainError::CacheWriteFailed {
+            path: manifest_path,
+            source,
+        }
+    })?;
 
     Ok(())
 }
 
-/// Generate or update `Published.toml` in the cache directory.
+/// Create a new empty `ParsedManifest` for an on-chain package.
+fn new_manifest() -> ParsedManifest {
+    ParsedManifest {
+        package: crate::schema::PackageMetadata {
+            name: Spanned::new(
+                0..1,
+                PackageName::new(ON_CHAIN_PACKAGE_NAME).expect("valid identifier"),
+            ),
+            edition: None,
+            implicit_dependencies: false,
+            unrecognized_fields: BTreeMap::new(),
+        },
+        environments: BTreeMap::new(),
+        dependencies: BTreeMap::new(),
+        dep_replacements: BTreeMap::new(),
+        legacy_data: None,
+    }
+}
+
+/// Generate or update `Published.toml` in the cache directory. Adds a publication entry
+/// for the current environment if not already present.
 fn update_published<F: MoveFlavor>(
     cache_dir: &Path,
     address: &PublishedID,
     env: &Environment,
-    data: &OnChainPackageData,
-) -> anyhow::Result<()> {
+    data: Option<&OnChainPackageData>,
+) -> OnChainResult<()> {
     let pub_path = cache_dir.join("Published.toml");
 
     let mut pubfile: ParsedPublishedFile<F> = if pub_path.exists() {
-        let content = fs::read_to_string(&pub_path)
-            .with_context(|| format!("reading {}", pub_path.display()))?;
-        toml_edit::de::from_str(&content)
-            .with_context(|| format!("parsing {}", pub_path.display()))?
+        let content =
+            fs::read_to_string(&pub_path).map_err(|source| OnChainError::CacheWriteFailed {
+                path: pub_path.clone(),
+                source,
+            })?;
+        toml_edit::de::from_str(&content).map_err(|source| OnChainError::ManifestParseFailed {
+            path: pub_path.clone(),
+            source,
+        })?
     } else {
         ParsedPublishedFile::default()
+    };
+
+    // Skip if this environment is already present
+    if pubfile.published.contains_key(env.name()) {
+        return Ok(());
+    }
+
+    // We need the on-chain data to create a publication entry
+    let Some(data) = data else {
+        return Ok(());
     };
 
     pubfile.published.insert(
@@ -151,7 +273,10 @@ fn update_published<F: MoveFlavor>(
     );
 
     let rendered = pubfile.render_as_toml();
-    fs::write(&pub_path, rendered).with_context(|| format!("writing {}", pub_path.display()))?;
+    fs::write(&pub_path, rendered).map_err(|source| OnChainError::CacheWriteFailed {
+        path: pub_path,
+        source,
+    })?;
 
     Ok(())
 }

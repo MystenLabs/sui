@@ -296,10 +296,9 @@ mod tests {
             .add_on_chain_dep("root", "dep", ADDR, |d| d.in_env(DEFAULT_ENV_NAME))
             .build();
 
-        let err = scenario.root_package_err("root").await;
-        assert!(
-            err.contains("on-chain package not found"),
-            "expected fetch error, got: {err}"
+        assert_snapshot!(
+            scenario.root_package_err("root").await,
+            @"Error while loading dependency <ROOT>/root: failed to fetch on-chain package at 0x0000000000000000000000000000000000000000000000000000000000000001: on-chain package not found: 0x0000000000000000000000000000000000000000000000000000000000000001"
         );
     }
 }
