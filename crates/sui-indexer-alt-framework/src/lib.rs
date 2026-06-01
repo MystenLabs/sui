@@ -219,7 +219,7 @@ impl<S: Store> Indexer<S> {
 
         let metrics = IndexerMetrics::new(metrics_prefix, registry);
 
-        let ingestion_service =
+        let mut ingestion_service =
             IngestionService::new(client_args, ingestion_config, metrics_prefix, registry)?;
 
         let latest_checkpoint = ingestion_service.latest_checkpoint_number().await?;
