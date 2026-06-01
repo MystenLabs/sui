@@ -251,12 +251,13 @@ mod _accessor_impls {
     impl super::StoredEpoch {
         pub const fn const_default() -> Self {
             Self {
-                protocol_version: 0,
-                reference_gas_price: 0,
-                start_timestamp_ms: 0,
-                end_timestamp_ms: 0,
-                end_checkpoint: 0,
-                system_state_bcs: ::prost::bytes::Bytes::new(),
+                protocol_version: None,
+                reference_gas_price: None,
+                start_timestamp_ms: None,
+                end_timestamp_ms: None,
+                start_checkpoint: None,
+                end_checkpoint: None,
+                system_state_bcs: None,
             }
         }
         #[doc(hidden)]
@@ -264,82 +265,148 @@ mod _accessor_impls {
             static DEFAULT: super::StoredEpoch = super::StoredEpoch::const_default();
             &DEFAULT
         }
+        ///If `protocol_version` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn protocol_version_opt_mut(&mut self) -> Option<&mut u64> {
+            self.protocol_version.as_mut().map(|field| field as _)
+        }
         ///Returns a mutable reference to `protocol_version`.
         ///If the field is unset, it is first initialized with the default value.
         pub fn protocol_version_mut(&mut self) -> &mut u64 {
-            &mut self.protocol_version
+            self.protocol_version.get_or_insert_default()
+        }
+        ///If `protocol_version` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn protocol_version_opt(&self) -> Option<u64> {
+            self.protocol_version.as_ref().map(|field| *field)
         }
         ///Sets `protocol_version` with the provided value.
         pub fn set_protocol_version(&mut self, field: u64) {
-            self.protocol_version = field;
+            self.protocol_version = Some(field);
         }
         ///Sets `protocol_version` with the provided value.
         pub fn with_protocol_version(mut self, field: u64) -> Self {
             self.set_protocol_version(field);
             self
         }
+        ///If `reference_gas_price` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn reference_gas_price_opt_mut(&mut self) -> Option<&mut u64> {
+            self.reference_gas_price.as_mut().map(|field| field as _)
+        }
         ///Returns a mutable reference to `reference_gas_price`.
         ///If the field is unset, it is first initialized with the default value.
         pub fn reference_gas_price_mut(&mut self) -> &mut u64 {
-            &mut self.reference_gas_price
+            self.reference_gas_price.get_or_insert_default()
+        }
+        ///If `reference_gas_price` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn reference_gas_price_opt(&self) -> Option<u64> {
+            self.reference_gas_price.as_ref().map(|field| *field)
         }
         ///Sets `reference_gas_price` with the provided value.
         pub fn set_reference_gas_price(&mut self, field: u64) {
-            self.reference_gas_price = field;
+            self.reference_gas_price = Some(field);
         }
         ///Sets `reference_gas_price` with the provided value.
         pub fn with_reference_gas_price(mut self, field: u64) -> Self {
             self.set_reference_gas_price(field);
             self
         }
+        ///If `start_timestamp_ms` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn start_timestamp_ms_opt_mut(&mut self) -> Option<&mut u64> {
+            self.start_timestamp_ms.as_mut().map(|field| field as _)
+        }
         ///Returns a mutable reference to `start_timestamp_ms`.
         ///If the field is unset, it is first initialized with the default value.
         pub fn start_timestamp_ms_mut(&mut self) -> &mut u64 {
-            &mut self.start_timestamp_ms
+            self.start_timestamp_ms.get_or_insert_default()
+        }
+        ///If `start_timestamp_ms` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn start_timestamp_ms_opt(&self) -> Option<u64> {
+            self.start_timestamp_ms.as_ref().map(|field| *field)
         }
         ///Sets `start_timestamp_ms` with the provided value.
         pub fn set_start_timestamp_ms(&mut self, field: u64) {
-            self.start_timestamp_ms = field;
+            self.start_timestamp_ms = Some(field);
         }
         ///Sets `start_timestamp_ms` with the provided value.
         pub fn with_start_timestamp_ms(mut self, field: u64) -> Self {
             self.set_start_timestamp_ms(field);
             self
         }
+        ///If `end_timestamp_ms` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn end_timestamp_ms_opt_mut(&mut self) -> Option<&mut u64> {
+            self.end_timestamp_ms.as_mut().map(|field| field as _)
+        }
         ///Returns a mutable reference to `end_timestamp_ms`.
         ///If the field is unset, it is first initialized with the default value.
         pub fn end_timestamp_ms_mut(&mut self) -> &mut u64 {
-            &mut self.end_timestamp_ms
+            self.end_timestamp_ms.get_or_insert_default()
+        }
+        ///If `end_timestamp_ms` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn end_timestamp_ms_opt(&self) -> Option<u64> {
+            self.end_timestamp_ms.as_ref().map(|field| *field)
         }
         ///Sets `end_timestamp_ms` with the provided value.
         pub fn set_end_timestamp_ms(&mut self, field: u64) {
-            self.end_timestamp_ms = field;
+            self.end_timestamp_ms = Some(field);
         }
         ///Sets `end_timestamp_ms` with the provided value.
         pub fn with_end_timestamp_ms(mut self, field: u64) -> Self {
             self.set_end_timestamp_ms(field);
             self
         }
+        ///If `start_checkpoint` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn start_checkpoint_opt_mut(&mut self) -> Option<&mut u64> {
+            self.start_checkpoint.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `start_checkpoint`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn start_checkpoint_mut(&mut self) -> &mut u64 {
+            self.start_checkpoint.get_or_insert_default()
+        }
+        ///If `start_checkpoint` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn start_checkpoint_opt(&self) -> Option<u64> {
+            self.start_checkpoint.as_ref().map(|field| *field)
+        }
+        ///Sets `start_checkpoint` with the provided value.
+        pub fn set_start_checkpoint(&mut self, field: u64) {
+            self.start_checkpoint = Some(field);
+        }
+        ///Sets `start_checkpoint` with the provided value.
+        pub fn with_start_checkpoint(mut self, field: u64) -> Self {
+            self.set_start_checkpoint(field);
+            self
+        }
+        ///If `end_checkpoint` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn end_checkpoint_opt_mut(&mut self) -> Option<&mut u64> {
+            self.end_checkpoint.as_mut().map(|field| field as _)
+        }
         ///Returns a mutable reference to `end_checkpoint`.
         ///If the field is unset, it is first initialized with the default value.
         pub fn end_checkpoint_mut(&mut self) -> &mut u64 {
-            &mut self.end_checkpoint
+            self.end_checkpoint.get_or_insert_default()
+        }
+        ///If `end_checkpoint` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn end_checkpoint_opt(&self) -> Option<u64> {
+            self.end_checkpoint.as_ref().map(|field| *field)
         }
         ///Sets `end_checkpoint` with the provided value.
         pub fn set_end_checkpoint(&mut self, field: u64) {
-            self.end_checkpoint = field;
+            self.end_checkpoint = Some(field);
         }
         ///Sets `end_checkpoint` with the provided value.
         pub fn with_end_checkpoint(mut self, field: u64) -> Self {
             self.set_end_checkpoint(field);
             self
         }
+        ///If `system_state_bcs` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn system_state_bcs_opt(&self) -> Option<&[u8]> {
+            self.system_state_bcs.as_ref().map(|field| field as _)
+        }
         ///Sets `system_state_bcs` with the provided value.
         pub fn set_system_state_bcs<T: Into<::prost::bytes::Bytes>>(
             &mut self,
             field: T,
         ) {
-            self.system_state_bcs = field.into().into();
+            self.system_state_bcs = Some(field.into().into());
         }
         ///Sets `system_state_bcs` with the provided value.
         pub fn with_system_state_bcs<T: Into<::prost::bytes::Bytes>>(

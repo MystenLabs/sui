@@ -157,23 +157,34 @@ message PackageVersionInfo {
   bytes storage_id = 1;
 }
 
-// Per-epoch metadata. Stored in `epochs` keyed by `EpochId`.
+// Per-epoch metadata stored in `epochs` keyed by `EpochId`.
 //
-// `end_*` fields are only populated for epochs that have ended;
-// the current epoch's record carries `end_timestamp_ms = 0` and
-// `end_checkpoint = 0` (sentinels chosen over `optional` to keep
-// the on-disk row a fixed shape; readers should consult the
-// pruning / available-range watermarks to distinguish current
-// from past).
+// Written as a sequence of partial records that the merge
+// operator combines field-wise:
+//
+// - "Epoch start" sets `protocol_version`,
+//   `reference_gas_price`, `start_timestamp_ms`,
+//   `start_checkpoint`, and `system_state_bcs`.
+// - "Epoch end" sets `end_timestamp_ms` and `end_checkpoint`.
+//
+// The two sides are produced by independent index pipelines and
+// never overlap in steady state, so the merge operator simply
+// takes whichever side has each field set; if the same field is
+// ever rewritten (e.g. during re-index), the latest operand
+// wins.
+//
+// All fields use proto3's `optional` modifier so a zero value
+// (or empty `bytes`) is distinguishable from "not yet observed".
 message StoredEpoch {
-  uint64 protocol_version = 1;
-  uint64 reference_gas_price = 2;
-  uint64 start_timestamp_ms = 3;
-  uint64 end_timestamp_ms = 4;
-  uint64 end_checkpoint = 5;
-  // BCS-encoded `sui_types::sui_system_state::SuiSystemStateSummary`
+  optional uint64 protocol_version = 1;
+  optional uint64 reference_gas_price = 2;
+  optional uint64 start_timestamp_ms = 3;
+  optional uint64 end_timestamp_ms = 4;
+  optional uint64 start_checkpoint = 5;
+  optional uint64 end_checkpoint = 6;
+  // BCS-encoded `sui_types::sui_system_state::SuiSystemState`
   // captured at epoch start.
-  bytes system_state_bcs = 6;
+  optional bytes system_state_bcs = 7;
 }
 
 // === Pruning watermarks ========================================

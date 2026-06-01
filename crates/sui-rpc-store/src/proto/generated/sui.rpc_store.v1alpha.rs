@@ -151,30 +151,42 @@ pub struct PackageVersionInfo {
     #[prost(bytes = "bytes", tag = "1")]
     pub storage_id: ::prost::bytes::Bytes,
 }
-/// Per-epoch metadata. Stored in `epochs` keyed by `EpochId`.
+/// Per-epoch metadata stored in `epochs` keyed by `EpochId`.
 ///
-/// `end_*` fields are only populated for epochs that have ended;
-/// the current epoch's record carries `end_timestamp_ms = 0` and
-/// `end_checkpoint = 0` (sentinels chosen over `optional` to keep
-/// the on-disk row a fixed shape; readers should consult the
-/// pruning / available-range watermarks to distinguish current
-/// from past).
+/// Written as a sequence of partial records that the merge
+/// operator combines field-wise:
+///
+/// * "Epoch start" sets `protocol_version`,
+///   `reference_gas_price`, `start_timestamp_ms`,
+///   `start_checkpoint`, and `system_state_bcs`.
+/// * "Epoch end" sets `end_timestamp_ms` and `end_checkpoint`.
+///
+/// The two sides are produced by independent index pipelines and
+/// never overlap in steady state, so the merge operator simply
+/// takes whichever side has each field set; if the same field is
+/// ever rewritten (e.g. during re-index), the latest operand
+/// wins.
+///
+/// All fields use proto3's `optional` modifier so a zero value
+/// (or empty `bytes`) is distinguishable from "not yet observed".
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct StoredEpoch {
-    #[prost(uint64, tag = "1")]
-    pub protocol_version: u64,
-    #[prost(uint64, tag = "2")]
-    pub reference_gas_price: u64,
-    #[prost(uint64, tag = "3")]
-    pub start_timestamp_ms: u64,
-    #[prost(uint64, tag = "4")]
-    pub end_timestamp_ms: u64,
-    #[prost(uint64, tag = "5")]
-    pub end_checkpoint: u64,
-    /// BCS-encoded `sui_types::sui_system_state::SuiSystemStateSummary`
+    #[prost(uint64, optional, tag = "1")]
+    pub protocol_version: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "2")]
+    pub reference_gas_price: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "3")]
+    pub start_timestamp_ms: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "4")]
+    pub end_timestamp_ms: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "5")]
+    pub start_checkpoint: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "6")]
+    pub end_checkpoint: ::core::option::Option<u64>,
+    /// BCS-encoded `sui_types::sui_system_state::SuiSystemState`
     /// captured at epoch start.
-    #[prost(bytes = "bytes", tag = "6")]
-    pub system_state_bcs: ::prost::bytes::Bytes,
+    #[prost(bytes = "bytes", optional, tag = "7")]
+    pub system_state_bcs: ::core::option::Option<::prost::bytes::Bytes>,
 }
 /// The lowest still-available data per axis. Drives compaction
 /// filters and feeds `available_range` queries. Stored under a
