@@ -152,7 +152,7 @@ fn cmd_ls(args: &[&str], cwd: &VfsPath, backend: &Arc<dyn Backend>) -> anyhow::R
     Ok(())
 }
 
-fn resolve_file_path<'a>(args: &[&'a str], cwd: &VfsPath) -> anyhow::Result<VfsPath> {
+fn resolve_file_path(args: &[&str], cwd: &VfsPath) -> anyhow::Result<VfsPath> {
     let path_str = args
         .first()
         .ok_or_else(|| anyhow::anyhow!("path required"))?;

@@ -25,8 +25,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use sui_core::{
     authority::{
-        authority_store_pruner::PrunerWatermarks,
-        authority_store_tables::AuthorityPerpetualTables,
+        authority_store_pruner::PrunerWatermarks, authority_store_tables::AuthorityPerpetualTables,
     },
     checkpoints::CheckpointStore,
     epoch::committee_store::CommitteeStore,
