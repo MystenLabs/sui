@@ -175,9 +175,22 @@ pub(crate) fn read_type_tag<B: Buf>(buf: &mut B) -> Result<TypeTag, DecodeError>
     })
 }
 
+/// Write a BCS uleb128-encoded `u32`. Always emits the minimal
+/// canonical byte sequence — the longest run of 7-bit groups
+/// needed to represent the value, with no zero-padded tail. This
+/// matches the encoding the [`read_uleb128`] decoder accepts.
+pub(crate) fn write_uleb128<B: BufMut>(value: u32, buf: &mut B) {
+    let mut v = value;
+    while v >= 0x80 {
+        buf.put_u8(((v & 0x7f) as u8) | 0x80);
+        v >>= 7;
+    }
+    buf.put_u8(v as u8);
+}
+
 /// Read a BCS uleb128-encoded `u32`. Matches the canonical
 /// encoding bcs uses (rejects non-canonical zero-padded forms).
-fn read_uleb128<B: Buf>(buf: &mut B) -> Result<u32, DecodeError> {
+pub(crate) fn read_uleb128<B: Buf>(buf: &mut B) -> Result<u32, DecodeError> {
     let mut value: u64 = 0;
     for shift in (0..32).step_by(7) {
         if !buf.has_remaining() {

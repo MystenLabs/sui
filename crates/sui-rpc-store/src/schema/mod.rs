@@ -35,6 +35,7 @@ pub mod transaction_bitmap;
 pub mod transactions;
 pub mod tx_metadata_by_seq;
 pub mod tx_seq_by_digest;
+pub mod type_filter;
 
 use sui_consistent_store::CfDescriptor;
 use sui_consistent_store::Db;

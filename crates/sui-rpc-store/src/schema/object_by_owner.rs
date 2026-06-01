@@ -9,20 +9,26 @@
 //! ownership category: address-owned, object-owned, shared,
 //! immutable. The address variants carry the owning address in the
 //! key; shared and immutable do not. Within each
-//! `(kind, owner, type)` group, coin-like objects carry an
-//! inverted balance that sorts richest-first, and non-coin objects
-//! carry no balance at all.
+//! `(kind, owner, type)` group, coin-like objects carry the
+//! ones-complement of their balance (`!balance`) so richer coins
+//! sort first under a forward prefix scan; non-coin objects carry
+//! no balance at all.
 
 use bytes::Buf;
 use bytes::BufMut;
 use move_core_types::language_storage::StructTag;
 use sui_consistent_store::Decode;
 use sui_consistent_store::Encode;
+use sui_consistent_store::Iter;
 use sui_consistent_store::error::DecodeError;
 use sui_consistent_store::error::EncodeError;
+use sui_consistent_store::error::Error;
+use sui_consistent_store::reader::Reader;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SUI_ADDRESS_LENGTH;
 use sui_types::base_types::SuiAddress;
+use sui_types::object::Object;
+use sui_types::object::Owner;
 
 use crate::schema::keys::U64Varint;
 
@@ -40,6 +46,27 @@ pub enum OwnerKind {
     Immutable,
 }
 
+impl OwnerKind {
+    /// Project a canonical [`Owner`] onto this index's
+    /// [`OwnerKind`] shape.
+    ///
+    /// - `ConsensusAddressOwner` collapses into `AddressOwner` so
+    ///   address-based listings return objects regardless of
+    ///   whether they sit on the consensus path.
+    /// - `Party` is intentionally unimplemented: the canonical
+    ///   type is still in flux upstream.
+    pub fn from_owner(owner: &Owner) -> Self {
+        match owner {
+            Owner::AddressOwner(address) => OwnerKind::AddressOwner(*address),
+            Owner::ObjectOwner(address) => OwnerKind::ObjectOwner(*address),
+            Owner::Shared { .. } => OwnerKind::Shared,
+            Owner::Immutable => OwnerKind::Immutable,
+            Owner::ConsensusAddressOwner { owner, .. } => OwnerKind::AddressOwner(*owner),
+            Owner::Party { .. } => todo!("Party owner WIP"),
+        }
+    }
+}
+
 /// Encoded as
 /// `kind_tag(1) || owner?(32) || type(bcs) || balance_tag(1) || balance?(8 BE) || object_id(32)`.
 ///
@@ -47,9 +74,10 @@ pub enum OwnerKind {
 /// AddressOwner, `1` = ObjectOwner, `2` = Shared, `3` = Immutable).
 /// The 32-byte owning address follows only for the two owner-kind
 /// variants. `balance_tag` is `0` for non-coin rows (no balance
-/// follows) and `1` for coin-like rows (followed by an 8-byte
-/// big-endian inverted balance — i.e. `u64::MAX - balance`, so
-/// richer coins sort first).
+/// follows) and `1` for coin-like rows (followed by 8 big-endian
+/// bytes of the ones-complement of the coin's balance —
+/// `!balance`, so richer coins sort first under a forward prefix
+/// scan).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Key {
     pub kind: OwnerKind,
@@ -169,9 +197,122 @@ pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
     base_options.clone()
 }
 
+/// Build the `(Key, Value)` pair indexing a Move object by owner.
+///
+/// Returns `None` for objects that aren't Move objects (packages,
+/// for example) — those have no `StructTag` and aren't part of
+/// this index. For coin-like Move objects the balance is captured
+/// as the ones-complement `!balance` so richer coins sort first
+/// within their `(owner, type)` group.
+pub fn store(object: &Object) -> Option<(Key, U64Varint)> {
+    let type_: StructTag = object.type_()?.clone().into();
+    Some((
+        Key {
+            kind: OwnerKind::from_owner(object.owner()),
+            type_,
+            inverted_balance: object.as_coin_maybe().map(|coin| !coin.balance.value()),
+            object_id: object.id(),
+        },
+        U64Varint(object.version().value()),
+    ))
+}
+
+/// Prefix encoder for "all address-owned objects of `owner`".
+///
+/// Encodes as `kind_tag(1) || owner(32)` — exactly the first 33
+/// bytes of every `Key` whose `kind` is `AddressOwner(owner)`. The
+/// schema's `Encode` impl matches this layout, so passing this
+/// type to [`DbMap::iter_prefix`](sui_consistent_store::DbMap::iter_prefix)
+/// walks every row owned by the given address.
+pub struct AddressOwnerPrefix(pub SuiAddress);
+
+impl Encode for AddressOwnerPrefix {
+    fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {
+        buf.put_u8(0);
+        buf.put_slice(self.0.as_ref());
+        Ok(())
+    }
+}
+
+/// Prefix encoder for "all objects owned by parent object `owner`".
+///
+/// Same layout as [`AddressOwnerPrefix`] but with the
+/// `ObjectOwner` discriminant — i.e. the leading 33 bytes of every
+/// `Key` whose `kind` is `ObjectOwner(owner)`. Useful for
+/// enumerating dynamic fields and other object-owned children of
+/// a parent.
+pub struct ObjectOwnerPrefix(pub SuiAddress);
+
+impl Encode for ObjectOwnerPrefix {
+    fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {
+        buf.put_u8(1);
+        buf.put_slice(self.0.as_ref());
+        Ok(())
+    }
+}
+
+/// Prefix encoder for "all objects owned by `owner` that match
+/// `type_filter`". Composes [`AddressOwnerPrefix`] with a
+/// [`TypeFilter`](super::type_filter::TypeFilter).
+pub struct AddressOwnerTypePrefix<'a> {
+    pub owner: SuiAddress,
+    pub type_filter: &'a super::type_filter::TypeFilter,
+}
+
+impl Encode for AddressOwnerTypePrefix<'_> {
+    fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {
+        buf.put_u8(0);
+        buf.put_slice(self.owner.as_ref());
+        self.type_filter.encode_into(buf)
+    }
+}
+
+impl<R: Reader> super::RpcStoreSchema<R> {
+    /// Iterate over every live object owned (in the address-owner
+    /// sense) by `owner`, in the natural sort order of the index:
+    /// by Move type, then within each type by descending balance
+    /// for coin-like objects, then by object id.
+    pub fn iter_objects_owned_by_address(
+        &self,
+        owner: SuiAddress,
+    ) -> Result<Iter<'_, Key, U64Varint>, Error> {
+        self.object_by_owner.iter_prefix(&AddressOwnerPrefix(owner))
+    }
+
+    /// Iterate over every live object owned (in the address-owner
+    /// sense) by `owner` whose Move type matches `type_filter`.
+    /// See [`type_filter::TypeFilter`](super::type_filter::TypeFilter)
+    /// for the matching contract.
+    pub fn iter_objects_owned_by_address_of_type<'a>(
+        &'a self,
+        owner: SuiAddress,
+        type_filter: &'a super::type_filter::TypeFilter,
+    ) -> Result<Iter<'a, Key, U64Varint>, Error> {
+        self.object_by_owner.iter_prefix(&AddressOwnerTypePrefix {
+            owner,
+            type_filter,
+        })
+    }
+
+    /// Iterate over every live object owned (in the object-owner
+    /// sense) by the parent object at the given id.
+    pub fn iter_objects_owned_by_object(
+        &self,
+        parent: SuiAddress,
+    ) -> Result<Iter<'_, Key, U64Varint>, Error> {
+        self.object_by_owner.iter_prefix(&ObjectOwnerPrefix(parent))
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
+    use sui_consistent_store::Db;
+    use sui_consistent_store::DbOptions;
+
     use super::*;
+    use crate::RpcStoreSchema;
 
     fn sui_tag() -> StructTag {
         StructTag {
@@ -226,5 +367,109 @@ mod tests {
             inverted_balance: None,
             object_id: ObjectID::new([0xAAu8; 32]),
         });
+    }
+
+    fn fresh_db() -> (tempfile::TempDir, sui_consistent_store::Db, RpcStoreSchema) {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        (dir, db, schema)
+    }
+
+    fn dummy_object(id: ObjectID, owner: SuiAddress) -> Object {
+        Object::with_id_owner_for_testing(id, owner)
+    }
+
+    #[test]
+    fn store_derives_key_from_object() {
+        let owner = SuiAddress::from_bytes([5u8; 32]).unwrap();
+        let id = ObjectID::random();
+        let object = dummy_object(id, owner);
+        let (key, value) = store(&object).expect("Move object");
+
+        assert_eq!(key.kind, OwnerKind::AddressOwner(owner));
+        assert_eq!(key.object_id, id);
+        assert_eq!(value.0, object.version().value());
+        // Gas-coin test objects carry a balance, so the inverted
+        // balance should be populated.
+        assert!(key.inverted_balance.is_some());
+    }
+
+    #[test]
+    fn iter_returns_empty_for_owner_with_no_objects() {
+        let (_dir, _db, schema) = fresh_db();
+        let owner = SuiAddress::from_bytes([1u8; 32]).unwrap();
+        let count = schema.iter_objects_owned_by_address(owner).unwrap().count();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn iter_with_type_filter_narrows_to_matching_objects() {
+        // All gas-coin test objects share the same Move type
+        // (`0x2::coin::Coin<0x2::sui::SUI>`). A `TypeFilter::Type`
+        // pointing at that type should return every one of them;
+        // a `TypeFilter::Type` at a different type should return
+        // none.
+        let (_dir, db, schema) = fresh_db();
+        let owner = SuiAddress::from_bytes([1u8; 32]).unwrap();
+
+        let mut expected_ids = BTreeSet::new();
+        let mut batch = db.batch();
+        let mut shared_type = None;
+        for _ in 0..3 {
+            let id = ObjectID::random();
+            expected_ids.insert(id);
+            let (k, v) = store(&dummy_object(id, owner)).unwrap();
+            shared_type.get_or_insert(k.type_.clone());
+            batch.put(&schema.object_by_owner, &k, &v).unwrap();
+        }
+        batch.commit().unwrap();
+
+        let shared_type = shared_type.unwrap();
+        let matching_filter = super::super::type_filter::TypeFilter::Type(shared_type.clone());
+        let found: BTreeSet<ObjectID> = schema
+            .iter_objects_owned_by_address_of_type(owner, &matching_filter)
+            .unwrap()
+            .map(|res| res.unwrap().0.object_id)
+            .collect();
+        assert_eq!(found, expected_ids);
+
+        let mismatched_filter = super::super::type_filter::TypeFilter::Type(StructTag {
+            name: move_core_types::identifier::Identifier::new("Other").unwrap(),
+            ..shared_type
+        });
+        let mismatched_count = schema
+            .iter_objects_owned_by_address_of_type(owner, &mismatched_filter)
+            .unwrap()
+            .count();
+        assert_eq!(mismatched_count, 0);
+    }
+
+    #[test]
+    fn iter_finds_only_objects_for_target_owner() {
+        let (_dir, db, schema) = fresh_db();
+        let target = SuiAddress::from_bytes([1u8; 32]).unwrap();
+        let other = SuiAddress::from_bytes([2u8; 32]).unwrap();
+
+        let mut target_ids = BTreeSet::new();
+        let mut batch = db.batch();
+        for _ in 0..3 {
+            let id = ObjectID::random();
+            target_ids.insert(id);
+            let (k, v) = store(&dummy_object(id, target)).unwrap();
+            batch.put(&schema.object_by_owner, &k, &v).unwrap();
+        }
+        for _ in 0..2 {
+            let id = ObjectID::random();
+            let (k, v) = store(&dummy_object(id, other)).unwrap();
+            batch.put(&schema.object_by_owner, &k, &v).unwrap();
+        }
+        batch.commit().unwrap();
+
+        let found: BTreeSet<ObjectID> = schema
+            .iter_objects_owned_by_address(target)
+            .unwrap()
+            .map(|res| res.unwrap().0.object_id)
+            .collect();
+        assert_eq!(found, target_ids);
     }
 }
