@@ -2417,9 +2417,9 @@ impl AuthorityState {
             .into());
         }
 
-        // Compute input/receiving object kinds before mock gas injection so the mock
-        // gas reference is not included in input_object_kinds (it is added to
-        // input_objects directly after object loading).
+        // Full validity check including gas budget and price.
+        transaction.validity_check(&epoch_store.tx_validity_check_context())?;
+
         let input_object_kinds = transaction.input_objects()?;
         let receiving_object_refs = transaction.receiving_objects();
 
