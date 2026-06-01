@@ -31,6 +31,8 @@ pub struct ConsensusProtocolConfig {
     leader_schedule_window_size: u32,
     /// Number of commit indices that use the same Mysticeti v3 leader schedule.
     leader_schedule_update_interval: u32,
+    /// Whether to enforce transaction-vote targets as block acceptance dependencies.
+    enforce_transaction_vote_dependencies: bool,
 }
 
 impl Default for ConsensusProtocolConfig {
@@ -48,6 +50,7 @@ impl Default for ConsensusProtocolConfig {
             enable_v3: false,
             leader_schedule_window_size: 600,
             leader_schedule_update_interval: 60,
+            enforce_transaction_vote_dependencies: false,
         }
     }
 }
@@ -66,6 +69,7 @@ impl ConsensusProtocolConfig {
         enable_v3: bool,
         leader_schedule_window_size: u32,
         leader_schedule_update_interval: u32,
+        enforce_transaction_vote_dependencies: bool,
     ) -> Self {
         Self {
             protocol_version,
@@ -80,6 +84,7 @@ impl ConsensusProtocolConfig {
             enable_v3,
             leader_schedule_window_size,
             leader_schedule_update_interval,
+            enforce_transaction_vote_dependencies,
         }
     }
 
@@ -99,6 +104,9 @@ impl ConsensusProtocolConfig {
             enable_v3: false,
             leader_schedule_window_size: 600,
             leader_schedule_update_interval: 60,
+            // Kept false in for_testing so existing tests are unaffected; tests that exercise the
+            // enforcement opt in via set_enforce_transaction_vote_dependencies_for_testing.
+            enforce_transaction_vote_dependencies: false,
         }
     }
 
@@ -155,6 +163,10 @@ impl ConsensusProtocolConfig {
         self.leader_schedule_update_interval.max(1)
     }
 
+    pub fn enforce_transaction_vote_dependencies(&self) -> bool {
+        self.enforce_transaction_vote_dependencies
+    }
+
     // Test setter methods
 
     pub fn set_gc_depth_for_testing(&mut self, val: u32) {
@@ -195,5 +207,9 @@ impl ConsensusProtocolConfig {
 
     pub fn set_leader_schedule_update_interval_for_testing(&mut self, val: u32) {
         self.leader_schedule_update_interval = val;
+    }
+
+    pub fn set_enforce_transaction_vote_dependencies_for_testing(&mut self, val: bool) {
+        self.enforce_transaction_vote_dependencies = val;
     }
 }

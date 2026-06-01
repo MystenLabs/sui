@@ -805,6 +805,12 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     consensus_zstd_compression: bool,
 
+    // If true, enforce that a block's transaction-vote targets (the `block_ref`s in
+    // `transaction_votes`) are well-formed and present before the block is accepted. The voted-on
+    // target blocks become additional acceptance dependencies, treated like missing ancestors.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_enforce_transaction_vote_dependencies: bool,
+
     // If true, enables the optimizations for child object mutations, removing unnecessary mutations
     #[serde(skip_serializing_if = "is_false")]
     minimize_child_object_mutations: bool,
@@ -2526,6 +2532,11 @@ impl ProtocolConfig {
 
     pub fn consensus_zstd_compression(&self) -> bool {
         self.feature_flags.consensus_zstd_compression
+    }
+
+    pub fn consensus_enforce_transaction_vote_dependencies(&self) -> bool {
+        self.feature_flags
+            .consensus_enforce_transaction_vote_dependencies
     }
 
     pub fn enable_nitro_attestation(&self) -> bool {

@@ -164,6 +164,7 @@ fn to_consensus_protocol_config(config: &ProtocolConfig, chain: Chain) -> Consen
         /* enable_v3 */ false,
         /* leader_schedule_window_size */ 300,
         /* leader_schedule_update_interval */ 12,
+        config.consensus_enforce_transaction_vote_dependencies(),
     )
 }
 
