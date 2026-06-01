@@ -17,6 +17,11 @@
 pub mod checkpoint_contents;
 pub mod checkpoint_seq_by_digest;
 pub mod checkpoint_summary;
+pub mod effects;
+pub mod events;
+pub mod transactions;
+pub mod tx_metadata_by_seq;
+pub mod tx_seq_by_digest;
 
 use sui_types::full_checkpoint_content::Checkpoint;
 
