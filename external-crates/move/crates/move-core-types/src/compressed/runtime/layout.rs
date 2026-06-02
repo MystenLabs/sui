@@ -222,6 +222,64 @@ pub trait BackendBuilder: Sized {
         })
     }
 
+    /// Recursively absorb an existing compressed layout (from any backend)
+    /// into this builder, deduplicating shared subtrees against the builder's
+    /// pool.
+    fn from_layout<U: TypeLayout>(
+        &mut self,
+        layout: &MoveTypeLayout<U>,
+    ) -> Result<Self::Root, Self::Error> {
+        self.intern_view(layout.as_view())
+    }
+
+    /// Recursively intern a [`MoveLayoutView`] (a borrowed resolved layout)
+    /// into this builder.
+    fn intern_view<U: TypeLayout>(
+        &mut self,
+        view: MoveLayoutView<'_, U>,
+    ) -> Result<Self::Root, Self::Error> {
+        Ok(match view {
+            MoveLayoutView::Bool => self.bool(),
+            MoveLayoutView::U8 => self.u8(),
+            MoveLayoutView::U16 => self.u16(),
+            MoveLayoutView::U32 => self.u32(),
+            MoveLayoutView::U64 => self.u64(),
+            MoveLayoutView::U128 => self.u128(),
+            MoveLayoutView::U256 => self.u256(),
+            MoveLayoutView::Address => self.address(),
+            MoveLayoutView::Signer => self.signer(),
+            MoveLayoutView::Vector(inner) => {
+                let inner_h = self.intern_view(inner.as_view())?;
+                self.vector(inner_h)?
+            }
+            MoveLayoutView::Struct(s) => {
+                let fields = s
+                    .fields()
+                    .map(|f| self.intern_view(f.as_view()))
+                    .collect::<Result<Vec<_>, _>>()?;
+                self.struct_layout(&fields)?
+            }
+            MoveLayoutView::Enum(e) => {
+                let variant_handles: Vec<Option<Vec<Self::Root>>> = e
+                    .variants()
+                    .map(|v| match v {
+                        VariantLayout::Known(fs) => fs
+                            .fields()
+                            .map(|f| self.intern_view(f.as_view()))
+                            .collect::<Result<Vec<_>, _>>()
+                            .map(Some),
+                        VariantLayout::Unknown => Ok(None),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let variant_refs: Vec<Option<&[Self::Root]>> = variant_handles
+                    .iter()
+                    .map(|v| v.as_deref())
+                    .collect();
+                self.enum_layout(&variant_refs)?
+            }
+        })
+    }
+
     /// Finalize the builder and wrap the result in a [`MoveTypeLayout`].
     fn build(self, root: Self::Root) -> MoveTypeLayout<Self::Output> {
         let pool = self.finalize(root.clone());

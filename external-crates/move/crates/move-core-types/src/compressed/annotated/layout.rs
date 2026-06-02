@@ -255,6 +255,85 @@ pub trait BackendBuilder: Sized {
         })
     }
 
+    /// Recursively absorb an existing compressed annotated layout (from any
+    /// backend) into this builder, deduplicating shared subtrees against the
+    /// builder's pool.
+    fn from_layout<U: TypeLayout>(
+        &mut self,
+        layout: &MoveTypeLayout<U>,
+    ) -> Result<Self::Root, Self::Error> {
+        self.intern_view(layout.as_view())
+    }
+
+    /// Recursively intern a [`MoveLayoutView`] (a borrowed resolved layout)
+    /// into this builder.
+    fn intern_view<U: TypeLayout>(
+        &mut self,
+        view: MoveLayoutView<'_, U>,
+    ) -> Result<Self::Root, Self::Error> {
+        Ok(match view {
+            MoveLayoutView::Bool => self.bool(),
+            MoveLayoutView::U8 => self.u8(),
+            MoveLayoutView::U16 => self.u16(),
+            MoveLayoutView::U32 => self.u32(),
+            MoveLayoutView::U64 => self.u64(),
+            MoveLayoutView::U128 => self.u128(),
+            MoveLayoutView::U256 => self.u256(),
+            MoveLayoutView::Address => self.address(),
+            MoveLayoutView::Signer => self.signer(),
+            MoveLayoutView::Vector(inner) => {
+                let inner_h = self.intern_view(inner.as_view())?;
+                self.vector(inner_h)?
+            }
+            MoveLayoutView::Struct(s) => {
+                let type_tag = s.type_().clone();
+                let fields: Vec<(Identifier, Self::Root)> = s
+                    .fields()
+                    .map(|(name, layout)| Ok((name.clone(), self.intern_view(layout.as_view())?)))
+                    .collect::<Result<_, Self::Error>>()?;
+                let field_refs: Vec<(&Identifier, Self::Root)> =
+                    fields.iter().map(|(n, h)| (n, h.clone())).collect();
+                self.struct_layout(&type_tag, &field_refs)?
+            }
+            MoveLayoutView::Enum(e) => {
+                let type_tag = e.type_().clone();
+                // First collect (name, tag, optional field handles) so we
+                // can build the borrowed slices in a second pass.
+                let variants: Vec<(Identifier, VariantTag, Option<Vec<(Identifier, Self::Root)>>)> =
+                    e.variants()
+                        .map(|v| match v {
+                            VariantLayout::Known { name, tag, fields } => {
+                                let fs: Vec<(Identifier, Self::Root)> = fields
+                                    .fields()
+                                    .map(|(n, l)| {
+                                        Ok((n.clone(), self.intern_view(l.as_view())?))
+                                    })
+                                    .collect::<Result<_, Self::Error>>()?;
+                                Ok((name.clone(), tag, Some(fs)))
+                            }
+                            VariantLayout::Unknown { name, tag } => {
+                                Ok((name.clone(), tag, None))
+                            }
+                        })
+                        .collect::<Result<_, Self::Error>>()?;
+                let variant_field_refs: Vec<Option<Vec<(&Identifier, Self::Root)>>> = variants
+                    .iter()
+                    .map(|(_, _, fs)| {
+                        fs.as_ref()
+                            .map(|fs| fs.iter().map(|(n, h)| (n, h.clone())).collect())
+                    })
+                    .collect();
+                let variant_refs: Vec<(&Identifier, VariantTag, Option<&[(&Identifier, Self::Root)]>)> =
+                    variants
+                        .iter()
+                        .zip(variant_field_refs.iter())
+                        .map(|((name, tag, _), fs)| (name, *tag, fs.as_deref()))
+                        .collect();
+                self.enum_layout(&type_tag, &variant_refs)?
+            }
+        })
+    }
+
     /// Finalize the builder and wrap the result in a [`MoveTypeLayout`].
     fn build(self, root: Self::Root) -> MoveTypeLayout<Self::Output> {
         let pool = self.finalize(root.clone());
