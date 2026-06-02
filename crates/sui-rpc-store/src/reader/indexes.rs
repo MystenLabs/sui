@@ -42,6 +42,28 @@ fn to_typed_store_err(e: sui_consistent_store::error::Error) -> TypedStoreError 
     TypedStoreError::RocksDBError(format!("{e:#}"))
 }
 
+/// Find the object id of the first row whose Move type matches the
+/// pinned `struct_tag`. The `object_by_type` index sorts by
+/// `(type, id)`, so the first prefix-scan row IS the lowest-id
+/// match — there should only be at most one in practice for the
+/// coin-wrapper types this is used with (CoinMetadata, TreasuryCap,
+/// RegulatedCoinMetadata are all unique per coin type).
+fn first_object_of_type<R: Reader + Send + Sync>(
+    reader: &RpcStoreReader<R>,
+    struct_tag: move_core_types::language_storage::StructTag,
+) -> StorageResult<Option<ObjectID>> {
+    let filter = TypeFilter::Type(struct_tag);
+    let mut iter = reader
+        .schema()
+        .iter_objects_of_type(&filter)
+        .map_err(sui_types::storage::error::Error::custom)?;
+    match iter.next() {
+        Some(Ok((key, _value))) => Ok(Some(key.object_id)),
+        Some(Err(e)) => Err(sui_types::storage::error::Error::custom(e)),
+        None => Ok(None),
+    }
+}
+
 impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
     fn get_epoch_info(
         &self,
@@ -137,11 +159,35 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         Ok(Box::new(mapped))
     }
 
-    fn get_coin_info(&self, _coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
+    fn get_coin_info(&self, coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
         // Coin metadata / treasury cap / regulated coin metadata
-        // are typed objects discoverable through `object_by_type`
-        // prefix scans. Wiring is a follow-up.
-        Ok(None)
+        // are typed objects whose Move type wraps the requested
+        // `coin_type`. Discover each via an `object_by_type`
+        // prefix scan keyed on the corresponding wrapper struct
+        // tag and take the first match.
+        let coin_metadata_object_id = first_object_of_type(
+            self,
+            sui_types::coin::CoinMetadata::type_(coin_type.clone()),
+        )?;
+        let treasury_object_id =
+            first_object_of_type(self, sui_types::coin::TreasuryCap::type_(coin_type.clone()))?;
+        let regulated_coin_metadata_object_id = first_object_of_type(
+            self,
+            sui_types::coin::RegulatedCoinMetadata::type_(coin_type.clone()),
+        )?;
+
+        if coin_metadata_object_id.is_none()
+            && treasury_object_id.is_none()
+            && regulated_coin_metadata_object_id.is_none()
+        {
+            return Ok(None);
+        }
+
+        Ok(Some(CoinInfo {
+            coin_metadata_object_id,
+            treasury_object_id,
+            regulated_coin_metadata_object_id,
+        }))
     }
 
     fn get_balance(
@@ -421,6 +467,7 @@ mod tests {
 
     use sui_consistent_store::Db;
     use sui_consistent_store::DbOptions;
+    use sui_types::base_types::ObjectID;
     use sui_types::storage::RpcIndexes;
 
     use crate::RpcStoreSchema;
@@ -537,6 +584,79 @@ mod tests {
             .collect();
         // Bob's bucket is not visible under Alice's dimension.
         assert_eq!(buckets, vec![0]);
+    }
+
+    #[test]
+    fn get_coin_info_finds_metadata_and_treasury_objects() {
+        use move_core_types::language_storage::StructTag;
+
+        use crate::schema::keys::U64Varint;
+        use crate::schema::object_by_type;
+
+        let (_dir, db, reader) = setup();
+
+        // Construct a synthetic coin type and seed
+        // `object_by_type` rows for its CoinMetadata and
+        // TreasuryCap wrappers. The real on-chain pipeline writes
+        // these rows for every Move object it sees; the test
+        // bypasses pipelines and writes the rows directly.
+        let coin_type = StructTag {
+            address: move_core_types::account_address::AccountAddress::new([2u8; 32]),
+            module: move_core_types::identifier::Identifier::new("sui").unwrap(),
+            name: move_core_types::identifier::Identifier::new("SUI").unwrap(),
+            type_params: vec![],
+        };
+        let metadata_type = sui_types::coin::CoinMetadata::type_(coin_type.clone());
+        let treasury_type = sui_types::coin::TreasuryCap::type_(coin_type.clone());
+
+        let metadata_object_id = ObjectID::from_single_byte(0xA1);
+        let treasury_object_id = ObjectID::from_single_byte(0xA2);
+
+        let mut batch = db.batch();
+        batch
+            .put(
+                &reader.schema().object_by_type,
+                &object_by_type::Key {
+                    type_: metadata_type,
+                    object_id: metadata_object_id,
+                },
+                &U64Varint(1),
+            )
+            .unwrap();
+        batch
+            .put(
+                &reader.schema().object_by_type,
+                &object_by_type::Key {
+                    type_: treasury_type,
+                    object_id: treasury_object_id,
+                },
+                &U64Varint(1),
+            )
+            .unwrap();
+        batch.commit().unwrap();
+
+        let info = reader
+            .get_coin_info(&coin_type)
+            .unwrap()
+            .expect("coin info present");
+        assert_eq!(info.coin_metadata_object_id, Some(metadata_object_id));
+        assert_eq!(info.treasury_object_id, Some(treasury_object_id));
+        assert_eq!(info.regulated_coin_metadata_object_id, None);
+    }
+
+    #[test]
+    fn get_coin_info_returns_none_when_no_wrappers_indexed() {
+        use move_core_types::language_storage::StructTag;
+
+        let (_dir, _db, reader) = setup();
+
+        let coin_type = StructTag {
+            address: move_core_types::account_address::AccountAddress::new([3u8; 32]),
+            module: move_core_types::identifier::Identifier::new("custom").unwrap(),
+            name: move_core_types::identifier::Identifier::new("COIN").unwrap(),
+            type_params: vec![],
+        };
+        assert!(reader.get_coin_info(&coin_type).unwrap().is_none());
     }
 
     #[test]
