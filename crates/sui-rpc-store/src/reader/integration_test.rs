@@ -13,8 +13,6 @@
 //! a single handle — not to re-cover the per-method scenarios
 //! that the sibling unit tests already pin down.
 
-#![cfg(test)]
-
 use std::sync::Arc;
 
 use sui_consistent_store::Db;

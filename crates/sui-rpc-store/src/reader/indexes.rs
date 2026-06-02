@@ -35,7 +35,6 @@ type PackageVersionsIterator<'a> =
 use sui_types::storage::error::Result as StorageResult;
 use typed_store_error::TypedStoreError;
 
-use crate::RpcStoreSchema;
 use crate::reader::RpcStoreReader;
 use crate::schema::type_filter::TypeFilter;
 
@@ -321,13 +320,26 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         end_bucket_exclusive: u64,
         descending: bool,
     ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
-        bitmap_iter(
-            &self.schema().transaction_bitmap,
+        let map = &self.schema().transaction_bitmap;
+        let lower = crate::schema::transaction_bitmap::Key {
+            dimension_key: dimension_key.clone(),
+            bucket: start_bucket,
+        };
+        let upper = crate::schema::transaction_bitmap::Key {
             dimension_key,
-            start_bucket,
-            end_bucket_exclusive,
-            descending,
-        )
+            bucket: end_bucket_exclusive,
+        };
+        if descending {
+            let iter = map
+                .iter_rev(lower..upper)
+                .map_err(sui_types::storage::error::Error::custom)?;
+            Ok(Box::new(iter.map(project_bitmap_row)))
+        } else {
+            let iter = map
+                .iter(lower..upper)
+                .map_err(sui_types::storage::error::Error::custom)?;
+            Ok(Box::new(iter.map(project_bitmap_row)))
+        }
     }
 
     fn event_bitmap_bucket_iter(
@@ -337,48 +349,217 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         end_bucket_exclusive: u64,
         descending: bool,
     ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
-        bitmap_iter(
-            &self.schema().event_bitmap,
+        let map = &self.schema().event_bitmap;
+        let lower = crate::schema::event_bitmap::Key {
+            dimension_key: dimension_key.clone(),
+            bucket: start_bucket,
+        };
+        let upper = crate::schema::event_bitmap::Key {
             dimension_key,
-            start_bucket,
-            end_bucket_exclusive,
-            descending,
-        )
+            bucket: end_bucket_exclusive,
+        };
+        if descending {
+            let iter = map
+                .iter_rev(lower..upper)
+                .map_err(sui_types::storage::error::Error::custom)?;
+            Ok(Box::new(iter.map(project_event_bitmap_row)))
+        } else {
+            let iter = map
+                .iter(lower..upper)
+                .map_err(sui_types::storage::error::Error::custom)?;
+            Ok(Box::new(iter.map(project_event_bitmap_row)))
+        }
     }
 }
 
-/// Shared body of the two bitmap iterators — both
-/// `transaction_bitmap` and `event_bitmap` share the
-/// `(dim_key, bucket)` → `BitmapBlob` layout, so the projection
-/// logic is identical.
-fn bitmap_iter<'a, K, R>(
-    map: &'a sui_consistent_store::DbMap<
-        K,
-        sui_consistent_store::Protobuf<crate::proto::BitmapBlob>,
-        R,
+/// Project a `(transaction_bitmap::Key, Protobuf<BitmapBlob>)`
+/// row into a [`LedgerBitmapBucket`], deserializing the raw
+/// RoaringBitmap bytes off the protobuf payload.
+fn project_bitmap_row(
+    row: Result<
+        (
+            crate::schema::transaction_bitmap::Key,
+            crate::schema::transaction_bitmap::Value,
+        ),
+        sui_consistent_store::error::Error,
     >,
-    _dimension_key: Vec<u8>,
-    _start_bucket: u64,
-    _end_bucket_exclusive: u64,
-    _descending: bool,
-) -> StorageResult<LedgerBitmapBucketIterator<'a>>
-where
-    K: sui_consistent_store::Encode + sui_consistent_store::Decode,
-    R: Reader,
-{
-    // The `(dim_key, bucket)` key encodes the variable-length
-    // dimension key followed by an 8-byte big-endian bucket. We
-    // can't construct a typed `K` from raw bytes here, so this
-    // helper is a placeholder until we add a typed prefix-scan
-    // entry point on the bitmap CFs. Returns an empty iterator
-    // for now.
-    let _ = map;
-    Ok(Box::new(std::iter::empty()))
+) -> Result<sui_types::storage::LedgerBitmapBucket, TypedStoreError> {
+    let (key, value) = row.map_err(to_typed_store_err)?;
+    let bitmap = roaring::RoaringBitmap::deserialize_from(value.into_inner().data.as_ref())
+        .map_err(|e| TypedStoreError::SerializationError(format!("RoaringBitmap: {e}")))?;
+    Ok(sui_types::storage::LedgerBitmapBucket {
+        bucket_id: key.bucket,
+        bitmap,
+    })
 }
 
-/// Helper: the existing inherent `RpcStoreSchema::get_balance`
-/// returns `Balance { coin, address }` (see
-/// [`crate::schema::balance::Balance`]) — kept here as a marker
-/// for where the projection happens.
-#[allow(dead_code)]
-fn _balance_projection_marker(_: &RpcStoreSchema) {}
+/// Project an `(event_bitmap::Key, Protobuf<BitmapBlob>)` row into
+/// a [`LedgerBitmapBucket`]. Same shape as
+/// [`project_bitmap_row`] but typed against the distinct event-CF
+/// key.
+fn project_event_bitmap_row(
+    row: Result<
+        (
+            crate::schema::event_bitmap::Key,
+            crate::schema::event_bitmap::Value,
+        ),
+        sui_consistent_store::error::Error,
+    >,
+) -> Result<sui_types::storage::LedgerBitmapBucket, TypedStoreError> {
+    let (key, value) = row.map_err(to_typed_store_err)?;
+    let bitmap = roaring::RoaringBitmap::deserialize_from(value.into_inner().data.as_ref())
+        .map_err(|e| TypedStoreError::SerializationError(format!("RoaringBitmap: {e}")))?;
+    Ok(sui_types::storage::LedgerBitmapBucket {
+        bucket_id: key.bucket,
+        bitmap,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use sui_consistent_store::Db;
+    use sui_consistent_store::DbOptions;
+    use sui_types::storage::RpcIndexes;
+
+    use crate::RpcStoreSchema;
+    use crate::reader::RpcStoreReader;
+    use crate::schema::transaction_bitmap;
+
+    fn setup() -> (tempfile::TempDir, Db, RpcStoreReader) {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let reader = RpcStoreReader::new(db.clone(), Arc::new(schema));
+        (dir, db, reader)
+    }
+
+    #[test]
+    fn transaction_bitmap_bucket_iter_walks_range_ascending() {
+        let (_dir, db, reader) = setup();
+        let dim = b"sender:alice".to_vec();
+
+        let mut batch = db.batch();
+        for tx_seq in [
+            1u64,
+            transaction_bitmap::TX_BUCKET_SIZE + 5,
+            3 * transaction_bitmap::TX_BUCKET_SIZE + 9,
+        ] {
+            let (k, v) = transaction_bitmap::store_match(dim.clone(), tx_seq);
+            batch
+                .merge(&reader.schema().transaction_bitmap, &k, &v)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        let buckets: Vec<u64> = reader
+            .transaction_bitmap_bucket_iter(dim.clone(), 0, 5, false)
+            .unwrap()
+            .map(|res| res.unwrap().bucket_id)
+            .collect();
+        assert_eq!(buckets, vec![0, 1, 3]);
+    }
+
+    #[test]
+    fn transaction_bitmap_bucket_iter_respects_bucket_range_bounds() {
+        let (_dir, db, reader) = setup();
+        let dim = b"sender:alice".to_vec();
+
+        let mut batch = db.batch();
+        for tx_seq in [
+            1u64,
+            transaction_bitmap::TX_BUCKET_SIZE + 5,
+            3 * transaction_bitmap::TX_BUCKET_SIZE + 9,
+        ] {
+            let (k, v) = transaction_bitmap::store_match(dim.clone(), tx_seq);
+            batch
+                .merge(&reader.schema().transaction_bitmap, &k, &v)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        // Buckets `[1, 3)` — only the middle bucket survives.
+        let buckets: Vec<u64> = reader
+            .transaction_bitmap_bucket_iter(dim.clone(), 1, 3, false)
+            .unwrap()
+            .map(|res| res.unwrap().bucket_id)
+            .collect();
+        assert_eq!(buckets, vec![1]);
+    }
+
+    #[test]
+    fn transaction_bitmap_bucket_iter_descending_reverses_order() {
+        let (_dir, db, reader) = setup();
+        let dim = b"sender:alice".to_vec();
+
+        let mut batch = db.batch();
+        for tx_seq in [
+            1u64,
+            transaction_bitmap::TX_BUCKET_SIZE + 5,
+            3 * transaction_bitmap::TX_BUCKET_SIZE + 9,
+        ] {
+            let (k, v) = transaction_bitmap::store_match(dim.clone(), tx_seq);
+            batch
+                .merge(&reader.schema().transaction_bitmap, &k, &v)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        let buckets: Vec<u64> = reader
+            .transaction_bitmap_bucket_iter(dim, 0, 5, true)
+            .unwrap()
+            .map(|res| res.unwrap().bucket_id)
+            .collect();
+        assert_eq!(buckets, vec![3, 1, 0]);
+    }
+
+    #[test]
+    fn transaction_bitmap_bucket_iter_isolates_dimension() {
+        let (_dir, db, reader) = setup();
+        let alice = b"sender:alice".to_vec();
+        let bob = b"sender:bob".to_vec();
+
+        let mut batch = db.batch();
+        let (k_a, v_a) = transaction_bitmap::store_match(alice.clone(), 1);
+        let (k_b, v_b) = transaction_bitmap::store_match(bob, 1);
+        batch
+            .merge(&reader.schema().transaction_bitmap, &k_a, &v_a)
+            .unwrap();
+        batch
+            .merge(&reader.schema().transaction_bitmap, &k_b, &v_b)
+            .unwrap();
+        batch.commit().unwrap();
+
+        let buckets: Vec<u64> = reader
+            .transaction_bitmap_bucket_iter(alice, 0, 5, false)
+            .unwrap()
+            .map(|res| res.unwrap().bucket_id)
+            .collect();
+        // Bob's bucket is not visible under Alice's dimension.
+        assert_eq!(buckets, vec![0]);
+    }
+
+    #[test]
+    fn transaction_bitmap_bucket_iter_returns_decoded_bitmap() {
+        let (_dir, db, reader) = setup();
+        let dim = b"sender:alice".to_vec();
+
+        let mut batch = db.batch();
+        for tx_seq in [1u64, 17, 256] {
+            let (k, v) = transaction_bitmap::store_match(dim.clone(), tx_seq);
+            batch
+                .merge(&reader.schema().transaction_bitmap, &k, &v)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        let first = reader
+            .transaction_bitmap_bucket_iter(dim, 0, 1, false)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+        let bits: Vec<u32> = first.bitmap.iter().collect();
+        assert_eq!(bits, vec![1, 17, 256]);
+    }
+}
