@@ -20,6 +20,7 @@
 //! [`RpcIndexes`]: sui_types::storage::RpcIndexes
 //! [`Reader`]: sui_consistent_store::reader::Reader
 
+mod child_resolver;
 mod indexes;
 mod object_store;
 mod read_store;
