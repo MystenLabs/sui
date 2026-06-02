@@ -21,6 +21,7 @@
 //! [`Reader`]: sui_consistent_store::reader::Reader
 
 mod object_store;
+mod read_store;
 
 use std::sync::Arc;
 
