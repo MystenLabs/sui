@@ -3,18 +3,23 @@
 
 use std::path::PathBuf;
 
+use move_core_types::ident_str;
 use prost_types::FieldMask;
 use sui_macros::sim_test;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::Bcs;
 use sui_rpc::proto::sui::rpc::v2::ExecuteTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::ExecuteTransactionResponse;
+use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_sdk_types::BalanceChange;
 use sui_test_transaction_builder::{TestTransactionBuilder, make_transfer_sui_transaction};
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionDataAPI;
 use test_cluster::TestClusterBuilder;
 
@@ -222,6 +227,76 @@ async fn execute_transaction_too_many_signatures() {
         error.message().contains("exceeds the maximum allowed"),
         "unexpected error message: {}",
         error.message()
+    );
+}
+
+#[sim_test]
+async fn simulate_transaction_exposes_execution_error_metadata() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let mut client = TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let (sender, gas_object) = test_cluster
+        .wallet
+        .get_one_gas_object()
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            ObjectID::from_single_byte(1),
+            ident_str!("option").to_owned(),
+            ident_str!("bad_function").to_owned(),
+            vec![],
+            vec![],
+        )
+        .unwrap();
+    let transaction_data = TransactionData::new_programmable(
+        sender,
+        vec![gas_object],
+        builder.finish(),
+        50_000_000,
+        gas_price,
+    );
+
+    let mut transaction = Transaction::default();
+    transaction.bcs = Some(Bcs::serialize(&transaction_data).unwrap());
+
+    let response = client
+        .simulate_transaction(SimulateTransactionRequest::new(transaction).with_read_mask(
+            FieldMask::from_paths(["transaction.effects.status.error.metadata"]),
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+
+    let metadata = response
+        .transaction
+        .unwrap()
+        .effects
+        .unwrap()
+        .status
+        .unwrap()
+        .error
+        .unwrap()
+        .metadata
+        .unwrap();
+
+    assert!(
+        metadata
+            .message
+            .as_deref()
+            .is_some_and(|message| message.contains("bad_function")),
+        "unexpected execution error metadata: {:?}",
+        metadata.message
     );
 }
 
