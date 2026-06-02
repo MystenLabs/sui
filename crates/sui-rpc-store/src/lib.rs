@@ -20,6 +20,7 @@
 pub mod config;
 pub mod indexer;
 pub mod proto;
+pub mod reader;
 pub mod schema;
 
 use std::path::Path;
@@ -42,6 +43,7 @@ pub use crate::config::PipelineLayer;
 pub use crate::config::ServiceConfig;
 pub use crate::indexer::Indexer;
 pub use crate::indexer::METRICS_PREFIX;
+pub use crate::reader::RpcStoreReader;
 pub use crate::schema::RpcStoreSchema;
 
 //TODO
