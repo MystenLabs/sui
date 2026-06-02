@@ -22,6 +22,8 @@
 
 mod child_resolver;
 mod indexes;
+#[cfg(test)]
+mod integration_test;
 mod layout;
 mod object_store;
 mod read_store;
