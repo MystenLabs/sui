@@ -23,6 +23,7 @@ use crate::ingestion::ingestion_client::retry_transient_with_slow_monitor;
 use crate::ingestion::streaming_client::CheckpointStreamingClient;
 use crate::ingestion::streaming_client::GrpcStreamingClient;
 use crate::ingestion::streaming_client::StreamingClientArgs;
+use crate::metrics::IngestionMetrics;
 
 /// Type alias for a boxed [`CheckpointStreamingClient`] trait object,
 /// the form [`IngestionService`] stores and the broadcaster consumes.
@@ -32,7 +33,6 @@ use crate::ingestion::streaming_client::StreamingClientArgs;
 /// boundaries and be shared behind a reference when an enclosing
 /// [`IngestionService`] is held across threads.
 pub type BoxedStreamingClient = Box<dyn CheckpointStreamingClient + Send + Sync>;
-use crate::metrics::IngestionMetrics;
 
 mod broadcaster;
 mod byte_count;
@@ -138,22 +138,18 @@ impl IngestionService {
         ))
     }
 
-    /// Construct an [`IngestionService`] from pre-built clients,
-    /// bypassing [`ClientArgs`]-driven construction.
+    /// Construct an [`IngestionService`] from pre-built clients, bypassing [`ClientArgs`]-driven
+    /// construction.
     ///
-    /// Callers that supply their own [`IngestionClientTrait`] /
-    /// [`CheckpointStreamingClient`] implementations — for example,
-    /// when embedding the indexer in a fullnode that already has
-    /// checkpoint data on hand — use this constructor instead of
-    /// [`Self::new`].
+    /// Callers that supply their own [`IngestionClientTrait`] / [`CheckpointStreamingClient`]
+    /// implementations — for example, when embedding the indexer in a fullnode that already has
+    /// checkpoint data on hand — use this constructor instead of [`Self::new`].
     ///
-    /// `metrics` is the shared [`IngestionMetrics`] handle. The
-    /// caller is expected to have built it once and passed the
-    /// same handle to [`IngestionClient::from_trait`] (or another
-    /// `IngestionClient` constructor) so the service and the
-    /// client report against a single set of registered metric
-    /// vectors — building two sets against the same prometheus
-    /// registry would double-register the metric names.
+    /// `metrics` is the shared [`IngestionMetrics`] handle. The caller is expected to have built
+    /// it once and passed the same handle to [`IngestionClient::from_trait`] (or another
+    /// `IngestionClient` constructor) so the service and the client report against a single set of
+    /// registered metric vectors — building two sets against the same prometheus registry would
+    /// double-register the metric names.
     ///
     /// [`IngestionClientTrait`]: crate::ingestion::ingestion_client::IngestionClientTrait
     pub fn with_clients(
@@ -165,11 +161,10 @@ impl IngestionService {
         Self::from_clients(ingestion_client, streaming_client, config, metrics)
     }
 
-    /// Common assembly point for both [`Self::new`] and
-    /// [`Self::with_clients`]: stamps the fields onto the struct
-    /// once a metrics handle has been resolved (either built fresh
-    /// from a registry, or in the [`Self::new`] case, threaded
-    /// through from the ingestion-client construction).
+    /// Common assembly point for both [`Self::new`] and [`Self::with_clients`]: stamps the fields
+    /// onto the struct once a metrics handle has been resolved (either built fresh from a
+    /// registry, or in the [`Self::new`] case, threaded through from the ingestion-client
+    /// construction).
     fn from_clients(
         ingestion_client: IngestionClient,
         streaming_client: Option<BoxedStreamingClient>,
@@ -192,11 +187,6 @@ impl IngestionService {
 
     /// Return the latest checkpoint number known to the ingestion service, preferably via the
     /// streaming client, and failing that via the ingestion client.
-    ///
-    /// Takes `&mut self` because the streaming client is a boxed
-    /// trait object whose `latest_checkpoint_number` method requires
-    /// `&mut`. The streaming side is consulted at most once; the
-    /// ingestion-client fallback is retried on transient errors.
     pub async fn latest_checkpoint_number(&mut self) -> anyhow::Result<u64> {
         if let Some(streaming_client) = self.streaming_client.as_deref_mut() {
             match streaming_client.latest_checkpoint_number().await {
@@ -309,35 +299,6 @@ impl Default for IngestionConfig {
     }
 }
 
-/// Probe the streaming client (if any) for the latest checkpoint
-/// number, falling back to the ingestion client on
-/// no-streaming-client or streaming-side failure. Mirrors the
-/// inline logic in [`IngestionService::latest_checkpoint_number`]
-/// in a form unit tests can drive directly with concrete mock
-/// clients (without having to build an `IngestionService`).
-#[cfg(test)]
-async fn latest_checkpoint_number<S>(
-    streaming_client: Option<&mut S>,
-    ingestion_client: &IngestionClient,
-) -> anyhow::Result<u64>
-where
-    S: CheckpointStreamingClient + Send + ?Sized,
-{
-    if let Some(streaming_client) = streaming_client {
-        match streaming_client.latest_checkpoint_number().await {
-            Ok(checkpoint_number) => return Ok(checkpoint_number),
-            Err(e) => {
-                warn!(
-                    operation = "latest_checkpoint_number",
-                    "Failed to get latest checkpoint number from streaming client: {e}"
-                );
-            }
-        }
-    }
-
-    ingestion_client.latest_checkpoint_number().await
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Mutex;
@@ -407,6 +368,33 @@ mod tests {
 
             seqs
         }))
+    }
+
+    /// Probe the streaming client (if any) for the latest checkpoint number, falling back to the
+    /// ingestion client on no-streaming-client or streaming-side failure. Mirrors the inline logic in
+    /// [`IngestionService::latest_checkpoint_number`] in a form unit tests can drive directly with
+    /// concrete mock clients (without having to build an `IngestionService`).
+    #[cfg(test)]
+    async fn latest_checkpoint_number<S>(
+        streaming_client: Option<&mut S>,
+        ingestion_client: &IngestionClient,
+    ) -> anyhow::Result<u64>
+    where
+        S: CheckpointStreamingClient + Send + ?Sized,
+    {
+        if let Some(streaming_client) = streaming_client {
+            match streaming_client.latest_checkpoint_number().await {
+                Ok(checkpoint_number) => return Ok(checkpoint_number),
+                Err(e) => {
+                    warn!(
+                        operation = "latest_checkpoint_number",
+                        "Failed to get latest checkpoint number from streaming client: {e}"
+                    );
+                }
+            }
+        }
+
+        ingestion_client.latest_checkpoint_number().await
     }
 
     /// If the ingestion service has no subscribers, it will fail fast (before fetching any
@@ -617,9 +605,8 @@ mod tests {
         assert!(error.to_string().contains("nonzero"));
     }
 
-    /// `with_clients` resolves `latest_checkpoint_number` through
-    /// the supplied streaming client when it is healthy, without
-    /// going through `ClientArgs`-driven setup.
+    /// `with_clients` resolves `latest_checkpoint_number` through the supplied streaming client
+    /// when it is healthy, without going through `ClientArgs`-driven setup.
     #[tokio::test]
     async fn with_clients_uses_supplied_streaming_client() {
         const STREAM_LATEST: u64 = 42;
@@ -643,8 +630,8 @@ mod tests {
         assert_eq!(latest, STREAM_LATEST);
     }
 
-    /// With no streaming client supplied, `with_clients` falls back
-    /// to the ingestion client for the latest-checkpoint probe.
+    /// With no streaming client supplied, `with_clients` falls back to the ingestion client for
+    /// the latest-checkpoint probe.
     #[tokio::test]
     async fn with_clients_falls_back_to_ingestion_when_no_streaming() {
         let registry = Registry::new();
