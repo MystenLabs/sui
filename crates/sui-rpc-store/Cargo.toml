@@ -19,9 +19,11 @@ rocksdb = { version = "0.22.0", default-features = false, features = ["snappy", 
 serde.workspace = true
 sui-consistent-store.workspace = true
 sui-default-config.workspace = true
+sui-execution.workspace = true
 sui-indexer-alt-framework = { workspace = true, default-features = false }
 sui-inverted-index.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true
+sui-protocol-config.workspace = true
 sui-types.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
