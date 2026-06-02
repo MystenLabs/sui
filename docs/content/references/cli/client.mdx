@@ -275,7 +275,7 @@ These commands do not write to `Published.toml`. Use `sui client publish` and `s
 
 ### Execute a serialized transaction
 
-Several commands that build a transaction accept `--serialize-unsigned-transaction` (to output base64 `TransactionData`) and `--serialize-signed-transaction` (to output base64 `SenderSignedData`). The `serialized-tx` and `execute-combined-signed-tx` commands consume those outputs — useful for [offline signing](/develop/transactions/transaction-auth/offline-signing) and multisig flows where the build, sign, and execute steps happen separately.
+Several commands that build a transaction accept `--serialize-unsigned-transaction` (to output base64 `TransactionData`) and `--serialize-signed-transaction` (to output base64 `SenderSignedData`). The `serialized-tx` and `execute-combined-signed-tx` commands consume those outputs. This is useful for [offline signing](/develop/transactions/transaction-auth/offline-signing) and multisig flows where the build, sign, and execute steps happen separately.
 
 Use `sui client serialized-tx` to dry-run, dev-inspect, or execute an already serialized `TransactionData` (base64-encoded BCS). The sender, gas payment, and gas budget are read from the serialized data:
 
