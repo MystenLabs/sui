@@ -275,21 +275,37 @@ where
         };
 
         let inner = self.inner.clone();
-        let (response, _) = spawn_monitored_task!(Inner::<A>::execute_transaction_with_retry(
-            inner,
-            request,
-            client_addr
-        ))
+        let tx_digest = *request.transaction.digest();
+        let (response, executed_locally) = spawn_monitored_task!(
+            Inner::<A>::execute_transaction_with_retry(inner, request, client_addr)
+        )
         .await
         .map_err(|e| TransactionSubmissionError::TransactionFailed {
             category: ErrorCategory::Internal,
             details: e.to_string(),
         })??;
 
+        // If the transaction has not been executed locally, then wait for it.
+        // TODO: this is temporary code and we are using it so we can compare the local execution speed up between
+        // full nodes with consensus sync enabled vs state sync only.
+        if !executed_locally {
+            let _ = Inner::<A>::wait_for_finalized_tx_executed_locally_with_timeout(
+                &self.inner.validator_state,
+                tx_digest,
+                tx_type,
+                &self.inner.metrics,
+            )
+            .await
+            .is_ok();
+            add_server_timing("local_execution done");
+        }
+
+        let executed_locally = if executed_locally { "true" } else { "false" };
+
         self.inner
             .metrics
             .request_latency
-            .with_label_values(&[tx_type.as_str(), "execute_transaction_v3", "false"])
+            .with_label_values(&[tx_type.as_str(), "execute_transaction_v3", executed_locally])
             .observe(timer.elapsed().as_secs_f64());
 
         let QuorumTransactionResponse {

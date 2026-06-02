@@ -974,7 +974,9 @@ impl ValidatorProxy for FullNodeProxy {
             match self
                 .sui_client
                 .clone()
-                .execute_transaction_and_wait_for_checkpoint(&tx)
+                // TODO: temporarily changing this to just executing the transaction, and not waiting for the checkpoint
+                // That way we can measure latencies without including the checkpoint certification latency cost.
+                .execute_transaction(&tx)
                 .await
             {
                 Ok(resp) => {
