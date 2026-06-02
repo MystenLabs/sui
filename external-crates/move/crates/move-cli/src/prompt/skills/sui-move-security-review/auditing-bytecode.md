@@ -9,9 +9,9 @@ disassembly — is not a finding.
 
 ## Workflow
 
-1. **Stand up tools** — invoke `sui-audit-toolchain` (confirm `SUI_REF` with the user, suiup-managed
+1. **Stand up tools** — invoke `sui-and-move-tools` (confirm `SUI_REF` with the user, suiup-managed
    `sui`, clone, fetch the package's `.mv` modules). **Never reuse a local Sui checkout or any
-   binary built inside one** — the audit uses only the freshly-built decompiler in `$AUDIT_WORK`
+   binary built inside one** — the audit uses only the freshly-built decompiler in `$WORK_DIR` (set up by `sui-and-move-tools`)
    and the `suiup`-managed `sui` CLI (the toolchain skill enforces this).
 2. **Disassemble every module** — this is the analysis substrate. The toolchain runbook also
    decompiles every module, but those `.move` files are for *later* finding-explanation only; do

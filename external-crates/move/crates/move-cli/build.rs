@@ -6,23 +6,35 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 fn main() {
-    // Embed every skill markdown file under `src/prompt/skills/` into the binary so
-    // `move prompt skill <bundle>` can return its contents at runtime without touching
-    // the filesystem. Walks the directory and emits `$OUT_DIR/skill_files.rs`: a flat
-    // array of `PromptSkillFile` entries whose `content` is `include_str!`'d at compile
-    // time. The `cargo:rerun-if-changed` directive ensures a rebuild whenever a skill
-    // is added, removed, or edited.
+    // Embed every skill markdown file under `src/prompt/skills/` and every category
+    // under `src/prompt/categories/` into the binary so `move prompt skill <bundle>` and
+    // `move prompt category <name>` can return their contents at runtime without touching
+    // the filesystem. Walks both directories and emits `$OUT_DIR/embedded.rs`: a single
+    // generated file holding the `SKILL_FILES` and `CATEGORIES` slices, whose textual
+    // content is `include_str!`'d at compile time. The `cargo:rerun-if-changed`
+    // directives ensure a rebuild whenever the underlying content changes.
+    //
+    // Both skills and categories are embedded raw — frontmatter is part of the content
+    // an agent reads. The only build-time parse is a one-line peek for `description:` so
+    // `move prompt categories` can show a short summary alongside each category name.
 
     let manifest = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set by cargo");
     let skills_dir = PathBuf::from(&manifest).join("src/prompt/skills");
+    let categories_dir = PathBuf::from(&manifest).join("src/prompt/categories");
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR not set by cargo");
-    let dst = PathBuf::from(&out_dir).join("skill_files.rs");
+    let dst = PathBuf::from(&out_dir).join("embedded.rs");
 
-    // Rebuild if any skill markdown changes (or is added/removed).
+    // Rebuild if any skill or category markdown changes (or is added/removed).
     println!("cargo:rerun-if-changed=src/prompt/skills");
+    println!("cargo:rerun-if-changed=src/prompt/categories");
     println!("cargo:rerun-if-changed=build.rs");
 
-    let mut entries: Vec<(String, String, PathBuf)> = Vec::new();
+    // 1. Collect skills. Walk `src/prompt/skills/<bundle>/` and turn every `.md` file
+    //    (at any depth) into one `SKILL_FILES` entry. `collect_md` recurses so a bundle
+    //    can group its reference files into subdirectories if its author wants. No file
+    //    content is read at build time — each file is `include_str!`'d at compile time
+    //    by the generated `embedded.rs`.
+    let mut skill_entries: Vec<(String, String, PathBuf)> = Vec::new();
     if skills_dir.exists() {
         for bundle_entry in fs::read_dir(&skills_dir)
             .expect("read src/prompt/skills/")
@@ -37,14 +49,55 @@ fn main() {
                 .and_then(|s| s.to_str())
                 .expect("bundle name is valid UTF-8")
                 .to_owned();
-            collect_md(&bundle, &bundle_path, &bundle_path, &mut entries);
+            collect_md(&bundle, &bundle_path, &bundle_path, &mut skill_entries);
         }
     }
 
+    // 2. Collect categories. Each `src/prompt/categories/<name>/CATEGORY.md` becomes one
+    //    `CATEGORIES` entry. The category `name` is taken from the directory; the
+    //    `description` is peeked from a single frontmatter line (see
+    //    `read_category_description`) so `move prompt categories` can show it alongside
+    //    the name. Everything else in
+    //    `CATEGORY.md` — the whole file, frontmatter included — is embedded raw and
+    //    served verbatim by `move prompt category <name>`, the same convention as skills.
+    let mut category_entries: Vec<(String, String, PathBuf)> = Vec::new();
+    if categories_dir.exists() {
+        for entry in fs::read_dir(&categories_dir)
+            .expect("read src/prompt/categories/")
+            .filter_map(Result::ok)
+        {
+            let dir = entry.path();
+            if !dir.is_dir() {
+                continue;
+            }
+            let name = dir
+                .file_name()
+                .and_then(|s| s.to_str())
+                .expect("category dir name is valid UTF-8")
+                .to_owned();
+            let category_md = dir.join("CATEGORY.md");
+            if !category_md.is_file() {
+                continue;
+            }
+            let description = read_category_description(&category_md).unwrap_or_else(|| {
+                panic!(
+                    "{} is missing a `description: <one-line>` line in its frontmatter",
+                    category_md.display()
+                )
+            });
+            category_entries.push((name, description, category_md));
+        }
+    }
+
+    // 3. Emit `embedded.rs` with the two static slices, side by side. Both use
+    //    `include_str!(r"<abs path>")` so the actual file content is pulled in by rustc
+    //    at compile time — `build.rs` never sees the bytes itself for skills, and only
+    //    sees them once (the `description:` peek) for categories.
     let mut src = String::new();
-    src.push_str("// Auto-generated by build.rs. Do not edit by hand.\n");
+    src.push_str("// Auto-generated by build.rs. Do not edit by hand.\n\n");
+
     src.push_str("pub static SKILL_FILES: &[PromptSkillFile] = &[\n");
-    for (bundle, file, abs) in &entries {
+    for (bundle, file, abs) in &skill_entries {
         src.push_str(&format!(
             "    PromptSkillFile {{ bundle: \"{}\", file: \"{}\", content: include_str!(r\"{}\") }},\n",
             escape(bundle),
@@ -52,9 +105,20 @@ fn main() {
             abs.display()
         ));
     }
+    src.push_str("];\n\n");
+
+    src.push_str("pub static CATEGORIES: &[PromptCategory] = &[\n");
+    for (name, description, abs) in &category_entries {
+        src.push_str(&format!(
+            "    PromptCategory {{ name: \"{}\", description: \"{}\", content: include_str!(r\"{}\") }},\n",
+            escape(name),
+            escape(description),
+            abs.display()
+        ));
+    }
     src.push_str("];\n");
 
-    fs::write(&dst, src).expect("write skill_files.rs");
+    fs::write(&dst, src).expect("write embedded.rs");
 }
 
 /// Recursively collect every `.md` file under `dir` into `out` as
@@ -80,9 +144,28 @@ fn collect_md(bundle: &str, root: &Path, dir: &Path, out: &mut Vec<(String, Stri
     }
 }
 
+/// Scan a `CATEGORY.md` for its `description:` line and return the trimmed value.
+///
+/// Only the single-line form `description: <text>` is recognized; this is intentional —
+/// adding YAML breadth (folded `>` form, multi-line, anchors) is preemptive complexity
+/// until something needs it. If a future `CATEGORY.md` needs a longer description, put
+/// it in the body and keep the frontmatter line short.
+fn read_category_description(path: &Path) -> Option<String> {
+    let content = fs::read_to_string(path).ok()?;
+    for line in content.lines() {
+        if let Some(rest) = line.strip_prefix("description:") {
+            let value = rest.trim();
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+    }
+    None
+}
+
 /// Escape a string for embedding inside a Rust double-quoted string literal in the
-/// generated `skill_files.rs` (`\` and `"` are the only characters that need escaping
-/// inside the `PromptSkillFile.bundle` / `.file` fields).
+/// generated `embedded.rs` (`\` and `"` are the only characters that need escaping
+/// inside the static-data fields).
 fn escape(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }

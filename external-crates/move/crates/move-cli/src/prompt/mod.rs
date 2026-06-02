@@ -1,25 +1,28 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! `move prompt` — audit-information CLI (agent-agnostic).
+//! `move prompt` — entry point to expert Move knowledge (agent-agnostic CLI).
 //!
 //! See `move-cli/src/prompt/README.md` for usage with worked examples.
 //!
 //! ## Architecture
 //!
-//! - Skills are embedded at **build time** (see `move-cli/build.rs`). The generated
-//!   `$OUT_DIR/skill_files.rs` defines [`SKILL_FILES`], a flat slice of
-//!   [`PromptSkillFile`] entries whose `content` is `include_str!`'d from the
-//!   `move-cli/src/prompt/skills/` directory.
-//! - The CLI surface is intentionally small: read the no-args overview, list the
-//!   embedded skill bundles, and read a bundle's content. That's everything this
-//!   subcommand currently does.
+//! - **Skills** and **categories** are embedded at **build time** (see
+//!   `move-cli/build.rs`). The generated `$OUT_DIR/embedded.rs` defines [`SKILL_FILES`]
+//!   (one entry per `.md` file under `src/prompt/skills/<bundle>/`) and [`CATEGORIES`]
+//!   (one entry per `src/prompt/categories/<name>/CATEGORY.md`). Both static slices'
+//!   text is `include_str!`'d at compile time; no runtime filesystem access.
+//! - The CLI surface routes between three concerns: the no-args overview
+//!   (`prompt-output.md`), skill access (flat — `skills` / `skill <name>`), and
+//!   category access (`categories` / `category <name>`). Categories reference skills by
+//!   name; a skill can appear in multiple categories trivially.
 
 use clap::{Parser, Subcommand};
 use std::collections::BTreeSet;
 
-// build.rs generates this file with `SKILL_FILES: &[PromptSkillFile]`.
-include!(concat!(env!("OUT_DIR"), "/skill_files.rs"));
+// build.rs generates this file with `SKILL_FILES: &[PromptSkillFile]` and
+// `CATEGORIES: &[PromptCategory]`.
+include!(concat!(env!("OUT_DIR"), "/embedded.rs"));
 
 /// The `move prompt` no-args overview rendered to the agent. Source is
 /// `prompt-output.md` next to this file, embedded at build time via `include_str!`.
@@ -36,11 +39,24 @@ pub struct PromptSkillFile {
     pub content: &'static str,
 }
 
-/// `move prompt` — audit-information CLI for compiled Move bytecode.
+/// One category, embedded in the binary at build time. The `content` is the full
+/// `CATEGORY.md` (frontmatter included) — that is what `move prompt category <name>`
+/// prints, consistent with how skills are served.
+pub struct PromptCategory {
+    /// Category name — comes from the directory under `categories/<name>/`.
+    pub name: &'static str,
+    /// One-line description, extracted from the `description:` frontmatter line at
+    /// build time. Used by `move prompt categories` for the listing.
+    pub description: &'static str,
+    /// Full `CATEGORY.md` content (frontmatter + body).
+    pub content: &'static str,
+}
+
+/// `move prompt` — entry point to expert Move knowledge (agent-agnostic CLI).
 #[derive(Parser)]
 #[clap(
     name = "prompt",
-    about = "Audit-information CLI for compiled Move bytecode (agent-agnostic). \
+    about = "Entry point to expert Move knowledge (agent-agnostic). \
              Call with no subcommand to print the discoverability overview."
 )]
 pub struct Prompt {
@@ -52,6 +68,15 @@ pub struct Prompt {
 /// Subcommands of `move prompt`. Each variant maps 1:1 to a `print_*` helper below.
 #[derive(Subcommand)]
 pub enum PromptCommand {
+    /// List embedded categories with one-line descriptions.
+    Categories,
+
+    /// Read a category's content (workflow, skills, references).
+    Category {
+        /// Category name (e.g. `audit`). See `move prompt categories`.
+        name: String,
+    },
+
     /// List bundled skill bundles.
     Skills,
 
@@ -80,6 +105,11 @@ impl Prompt {
                 print!("{}", OVERVIEW);
                 Ok(())
             }
+            Some(PromptCommand::Categories) => {
+                print_categories();
+                Ok(())
+            }
+            Some(PromptCommand::Category { name }) => print_category(&name),
             Some(PromptCommand::Skills) => {
                 print_skills();
                 Ok(())
@@ -168,5 +198,46 @@ fn print_skill(bundle: &str, list: bool, file: Option<&str>) -> anyhow::Result<(
             bundle,
             bundle
         ),
+    }
+}
+
+/// Print every embedded category's name + description to stdout, alphabetically.
+/// Categories are sorted at print time, so the order of entries in [`CATEGORIES`] does
+/// not affect what the agent sees.
+fn print_categories() {
+    let mut entries: Vec<&PromptCategory> = CATEGORIES.iter().collect();
+    entries.sort_by_key(|c| c.name);
+    if entries.is_empty() {
+        println!("No categories are embedded in this binary.");
+        return;
+    }
+    println!("Embedded categories ({}):", entries.len());
+    for c in &entries {
+        println!("  {} — {}", c.name, c.description);
+    }
+    println!();
+    println!("Commands:");
+    println!("  move prompt category <name>   — read the category's content");
+    println!("  move prompt skills            — list all skill bundles (flat)");
+    println!("  move prompt skill <bundle>    — read a skill bundle's SKILL.md");
+}
+
+/// Print the named category's content (frontmatter + body) verbatim — the same convention
+/// as skills. Returns an error if the category isn't embedded; the error message includes
+/// the valid category names so an agent can recover with a single retry.
+fn print_category(name: &str) -> anyhow::Result<()> {
+    match CATEGORIES.iter().find(|c| c.name == name) {
+        Some(c) => {
+            print!("{}", c.content);
+            Ok(())
+        }
+        None => {
+            let valid = CATEGORIES
+                .iter()
+                .map(|c| c.name)
+                .collect::<Vec<_>>()
+                .join(", ");
+            anyhow::bail!("no embedded category named '{name}'. Valid categories: {valid}")
+        }
     }
 }

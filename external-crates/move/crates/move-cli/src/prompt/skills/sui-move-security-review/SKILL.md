@@ -18,7 +18,9 @@ description: >
 > below.** The detection heuristics, severity ratings, exploit sketches, and bytecode
 > signals live in those per-category files; the routing table is a summary only. Read a
 > specific reference file with `move prompt skill sui-move-security-review --file <ref>`.
-> No filesystem install is required — the binary is self-contained.
+> This skill belongs to one or more categories — run `move prompt categories` to see them
+> and `move prompt category <name>` to read the category's workflow. No filesystem install
+> is required — the binary is self-contained.
 
 > Offensive counterpart to the constructive Sui Move skills. Each constructive "must / never /
 > always" rule implies a vulnerability when violated. This skill is the violation catalog: every
@@ -33,7 +35,7 @@ description: >
 > source.
 
 > **Auditing on-chain bytecode?** If the target is a deployed package (not source): first stand up
-> tools with the `sui-audit-toolchain` skill (clone Sui, fetch the package, **disassemble** every
+> tools with the `sui-and-move-tools` skill (clone Sui, fetch the package, **disassemble** every
 > module — and build `move decompile` for the explanation step). **Apply the `SM-*` rules to the
 > disassembly** (`sui move disassemble` output): it is faithful, 1:1 with the executed bytecode.
 > Once a finding is confirmed on the assembly, render the matching decompiled `.move` snippet

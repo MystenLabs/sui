@@ -1,9 +1,9 @@
 # Fetch, disassemble (analyze), and decompile (explain)
 
-Goal: produce the **analysis substrate** for the audit (the disassembly of every module) and the
-matching **explanation layer** (decompiled `.move` of every module), from a target package.
+Goal: produce the **analysis substrate** (the disassembly of every module) and the matching
+**explanation layer** (decompiled `.move` of every module) for a target package.
 Assumes `setup.md` is done: `$MOVE_BIN` points at the freshly-built `move` binary in
-`$AUDIT_WORK`, and `sui` resolves to the `suiup`-managed CLI (provenance-checked in `setup.md`
+`$WORK_DIR`, and `sui` resolves to the `suiup`-managed CLI (provenance-checked in `setup.md`
 step 1). Every `sui` invocation below uses that same provenance-checked binary — no other.
 
 > Roles, restated: **`.asm` is the analysis source of truth (1:1 with executed bytecode).**
@@ -19,7 +19,7 @@ Make sure the CLI is pointed at the right network first (`sui client active-env`
 
 ```sh
 PKG=0x<package_id>
-OUT="$AUDIT_WORK/target/$PKG"
+OUT="$WORK_DIR/target/$PKG"
 mkdir -p "$OUT/mv"
 
 # Fetch the package object as JSON. Package bytecode lives in:
@@ -60,10 +60,11 @@ done
 ls "$OUT/asm/"
 ```
 
-Feed `$OUT/asm/*.asm` to `sui-move-security-review`. The auditor reasons over the assembly:
-faithful opcodes, exact `Call` symbols (e.g. `Call transfer::transfer<T>` vs
-`Call transfer::public_transfer<T>`), `CastU*` instructions, abort code values, ability sets on
-struct headers, visibility/`entry` on function headers. **Do not switch surfaces** mid-analysis.
+`$OUT/asm/*.asm` is what downstream skills read. Reason over the assembly: faithful opcodes,
+exact `Call` symbols (e.g. `Call transfer::transfer<T>` vs `Call transfer::public_transfer<T>`),
+`CastU*` instructions, abort code values, ability sets on struct headers, visibility/`entry`
+on function headers. **Do not switch surfaces** mid-analysis. (For audits, the consuming skill
+is `sui-move-security-review`.)
 
 ## 3. Decompile every module — for finding-explanation only
 
@@ -86,6 +87,7 @@ expanded) so you can present without misreading them.
 
 ## Hand-off
 
-Report to the audit step: the **assembly dir** (`$OUT/asm/`) as the analysis substrate, the matched
-**decompiled dir** (`$OUT/decompiled/`) for finding-explanation, the module list, the network +
-package id (or file provenance), and `SUI_REF` — so the finding set is reproducible.
+Pass along to the consumer: the **assembly dir** (`$OUT/asm/`) as the analysis substrate, the
+matched **decompiled dir** (`$OUT/decompiled/`) for confirmed-result rendering, the module
+list, the network + package id (or file provenance), and `SUI_REF` — so the result set is
+reproducible.

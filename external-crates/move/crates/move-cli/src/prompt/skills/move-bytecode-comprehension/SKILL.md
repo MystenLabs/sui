@@ -6,8 +6,8 @@ description: >
   information survives compilation (and what is lost), and how to read disassembly and decompiled
   output so conclusions about on-chain packages are sound. Trigger when auditing an on-chain Sui
   package, interpreting a `.mv` module, or deciding whether a decompiled construct faithfully
-  reflects the original. Pair with `sui-audit-toolchain` (to produce the output) and
-  `sui-move-security-review` (to know what to look for).
+  reflects the original. Pair with `sui-and-move-tools` (to produce the output) and, for
+  audits, `sui-move-security-review` (to know what to look for).
 ---
 
 # Move Bytecode Comprehension
@@ -16,7 +16,9 @@ description: >
 > relying on the routing in this SKILL.md, enumerate the reference files (`move prompt skill
 > move-bytecode-comprehension --list`) and read each (`--file <ref>`).** They cover the
 > bytecode format and the practice of reading disassembly / decompiled output; this SKILL.md
-> is the mental-model wrapper. No filesystem install is required — the binary is self-contained.
+> is the mental-model wrapper. This skill belongs to one or more categories — run
+> `move prompt categories` to see them and `move prompt category <name>` to read the
+> category's workflow. No filesystem install is required — the binary is self-contained.
 
 On-chain Sui packages are compiled **Move bytecode** (`.mv`, magic `0xA11CEB0B`). You analyze it
 two ways: **disassembly** (stack-machine assembly, via `sui move disassemble`) and
