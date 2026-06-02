@@ -46,7 +46,9 @@ use anyhow::Context as _;
 use prometheus::Registry;
 use sui_consistent_store::Db;
 use sui_consistent_store::DbOptions;
+use sui_consistent_store::PipelineTaskKey;
 use sui_consistent_store::Synchronizer;
+use sui_consistent_store::restore_state;
 use sui_indexer_alt_framework as framework;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::BoxedStreamingClient;
@@ -436,6 +438,15 @@ impl Indexer {
     /// framework indexer so that, by the time the first batch
     /// flows through, the synchronizer task is already waiting on
     /// the pipeline's queue.
+    ///
+    /// Refuses to register a pipeline whose persisted [`RestoreState`]
+    /// is still `InProgress`: tip-mode indexing of a pipeline that
+    /// has not finished restoring would commit checkpoints atop a
+    /// partial bulk-load, producing an inconsistent CF. Pipelines
+    /// with no restore row (never restored) and pipelines marked
+    /// `Complete` are allowed.
+    ///
+    /// [`RestoreState`]: sui_consistent_store::RestoreState
     async fn sequential_pipeline<H>(
         &mut self,
         handler: H,
@@ -444,6 +455,25 @@ impl Indexer {
     where
         H: sequential::Handler<Store = Store> + Send + Sync + 'static,
     {
+        let restore_state = self
+            .store()
+            .db()
+            .framework()
+            .restore
+            .get(&PipelineTaskKey::new(H::NAME))
+            .with_context(|| format!("Reading restore state for pipeline {:?}", H::NAME))?;
+
+        if let Some(state) = restore_state.as_ref().and_then(|s| s.state.as_ref()) {
+            match state {
+                restore_state::State::InProgress(_) => {
+                    anyhow::bail!("Restoration in progress for pipeline {:?}", H::NAME);
+                }
+                restore_state::State::Complete(_) => {
+                    // Restore finished — tip indexing may proceed.
+                }
+            }
+        }
+
         self.sync
             .register_pipeline(H::NAME)
             .with_context(|| format!("Failed to add pipeline {:?} to synchronizer", H::NAME))?;
@@ -600,5 +630,95 @@ mod tests {
                 "event_bitmap",
             ])
         );
+    }
+
+    /// Open the rpc-store DB at `path` and write a single
+    /// pre-existing `RestoreState` entry for `pipeline` directly
+    /// to the framework's `__restore` CF. Returns the [`Store`]
+    /// the orchestrator should pick up. Used by the restore-guard
+    /// tests below to seed an `InProgress` or `Complete` state
+    /// before [`Indexer::from_store`] runs.
+    fn open_with_seeded_restore(
+        path: &std::path::Path,
+        pipeline: &str,
+        state: sui_consistent_store::RestoreState,
+    ) -> Store {
+        let (db, schema) = Db::open::<RpcStoreSchema>(path, DbOptions::default()).unwrap();
+        let framework = sui_consistent_store::FrameworkSchema::new(db.clone());
+        let mut batch = db.batch();
+        batch
+            .put(&framework.restore, &PipelineTaskKey::new(pipeline), &state)
+            .unwrap();
+        batch.commit().unwrap();
+        sui_consistent_store::Store::new(db, Arc::new(schema))
+    }
+
+    async fn build_indexer_with_store(store: Store) -> anyhow::Result<Indexer> {
+        let registry = Registry::new();
+        let ingestion_metrics = IngestionMetrics::new(Some(METRICS_PREFIX), &registry);
+        let ingestion_client =
+            IngestionClient::from_trait(Arc::new(StubIngestionClient), ingestion_metrics);
+        Indexer::from_store(
+            store,
+            IndexerArgs::default(),
+            ingestion_client,
+            None,
+            crate::config::ConsistencyConfig::default(),
+            IngestionConfig::default(),
+            &registry,
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn add_pipelines_refuses_pipeline_with_in_progress_restore() {
+        let dir = tempfile::tempdir().unwrap();
+        let in_progress = sui_consistent_store::RestoreState {
+            state: Some(restore_state::State::InProgress(
+                restore_state::InProgress::default(),
+            )),
+        };
+        let store = open_with_seeded_restore(&dir.path().join("db"), "balance", in_progress);
+
+        let mut indexer = build_indexer_with_store(store).await.unwrap();
+        let err = indexer
+            .add_pipelines(
+                PipelineLayer {
+                    balance: Some(crate::config::CommitterLayer::default()),
+                    ..PipelineLayer::default()
+                },
+                CommitterConfig::default(),
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            format!("{err:#}").contains("Restoration in progress for pipeline"),
+            "expected restore-in-progress error, got: {err:#}",
+        );
+    }
+
+    #[tokio::test]
+    async fn add_pipelines_allows_pipeline_with_completed_restore() {
+        let dir = tempfile::tempdir().unwrap();
+        let complete = sui_consistent_store::RestoreState {
+            state: Some(restore_state::State::Complete(restore_state::Complete {
+                restored_at: 42,
+            })),
+        };
+        let store = open_with_seeded_restore(&dir.path().join("db"), "balance", complete);
+
+        let mut indexer = build_indexer_with_store(store).await.unwrap();
+        indexer
+            .add_pipelines(
+                PipelineLayer {
+                    balance: Some(crate::config::CommitterLayer::default()),
+                    ..PipelineLayer::default()
+                },
+                CommitterConfig::default(),
+            )
+            .await
+            .unwrap();
+        let names: std::collections::BTreeSet<_> = indexer.pipelines().collect();
+        assert_eq!(names, std::collections::BTreeSet::from(["balance"]));
     }
 }
