@@ -633,7 +633,11 @@ impl<T: TypeLayout> Eq for MoveStructLayout<'_, T> {}
 
 impl<T: TypeLayout> fmt::Display for MoveStructLayout<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "struct {}", self.fields)
+        if f.alternate() {
+            write!(f, "struct {:#}", self.fields)
+        } else {
+            write!(f, "struct {}", self.fields)
+        }
     }
 }
 

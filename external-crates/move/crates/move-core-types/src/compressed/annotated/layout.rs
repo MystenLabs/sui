@@ -557,7 +557,7 @@ impl<T: TypeLayout> MoveLayoutView<'_, T> {
 
     /// Check whether this layout matches the given [`TypeTag`].
     #[inline]
-    pub fn is_type_tag(&self, t: &TypeTag) -> bool {
+    pub fn is_type(&self, t: &TypeTag) -> bool {
         match self {
             MoveLayoutView::Bool => *t == TypeTag::Bool,
             MoveLayoutView::U8 => *t == TypeTag::U8,
@@ -568,15 +568,15 @@ impl<T: TypeLayout> MoveLayoutView<'_, T> {
             MoveLayoutView::U256 => *t == TypeTag::U256,
             MoveLayoutView::Address => *t == TypeTag::Address,
             MoveLayoutView::Signer => *t == TypeTag::Signer,
-            MoveLayoutView::Struct(sv) => sv.is_type_tag(t),
+            MoveLayoutView::Struct(sv) => sv.is_type(t),
             MoveLayoutView::Vector(vv) => {
                 if let TypeTag::Vector(inner) = t {
-                    vv.as_view().is_type_tag(inner)
+                    vv.as_view().is_type(inner)
                 } else {
                     false
                 }
             }
-            MoveLayoutView::Enum(ev) => ev.is_type_tag(t),
+            MoveLayoutView::Enum(ev) => ev.is_type(t),
         }
     }
 
@@ -647,6 +647,8 @@ impl<T: TypeLayout> fmt::Display for MoveLayoutView<'_, T> {
             MoveLayoutView::Struct(sv) => write!(f, "{sv}"),
             MoveLayoutView::Enum(ev) if f.alternate() => write!(f, "{ev:#}"),
             MoveLayoutView::Enum(ev) => write!(f, "{ev}"),
+            // Note: Struct/Enum cases above already include the "struct"/"enum" prefix in their
+            // own Display impls (matching the tree-based annotated_value::MoveTypeLayout output).
         }
     }
 }
@@ -816,7 +818,7 @@ impl<'a, T: TypeLayout> MoveStructLayout<'a, T> {
 
     /// Check whether this struct's type tag matches the given [`TypeTag`].
     #[inline]
-    pub fn is_type_tag(self, t: &TypeTag) -> bool {
+    pub fn is_type(self, t: &TypeTag) -> bool {
         matches!(t, TypeTag::Struct(s) if &**s == self.type_)
     }
 
@@ -863,18 +865,23 @@ impl<T: TypeLayout> Eq for MoveStructLayout<'_, T> {}
 
 impl<T: TypeLayout> fmt::Display for MoveStructLayout<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {{ ", self.type_)?;
-        for (i, (name, layout)) in self.fields().enumerate() {
-            if i > 0 {
-                write!(f, ", ")?;
-            }
-            if f.alternate() {
-                write!(f, "{name}: {layout:#}")?;
-            } else {
-                write!(f, "{name}: {layout}")?;
-            }
+        write!(f, "struct {} ", self.type_)?;
+        let mut map = f.debug_map();
+        for (name, layout) in self.fields() {
+            map.entry(&DebugAsDisplay(&name), &DebugAsDisplay(&layout));
         }
-        write!(f, " }}")
+        map.finish()
+    }
+}
+
+struct DebugAsDisplay<'a, T>(&'a T);
+impl<T: fmt::Display> fmt::Debug for DebugAsDisplay<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            write!(f, "{:#}", self.0)
+        } else {
+            write!(f, "{}", self.0)
+        }
     }
 }
 
@@ -920,7 +927,7 @@ impl<'a, T: TypeLayout> MoveEnumLayout<'a, T> {
 
     /// Check whether this enum's type tag matches the given [`TypeTag`].
     #[inline]
-    pub fn is_type_tag(self, t: &TypeTag) -> bool {
+    pub fn is_type(self, t: &TypeTag) -> bool {
         matches!(t, TypeTag::Struct(s) if **s == *self.type_)
     }
 
@@ -1012,29 +1019,29 @@ fn variant_view<'a, T: TypeLayout>(
 
 impl<T: TypeLayout> fmt::Display for MoveEnumLayout<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {{ ", self.type_)?;
-        for (i, vl) in self.variants().enumerate() {
-            if i > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}(", vl.name())?;
-            match vl.fields() {
-                Some(fields) => {
-                    for (j, (name, layout)) in fields.fields().enumerate() {
-                        if j > 0 {
-                            write!(f, ", ")?;
-                        }
-                        if f.alternate() {
-                            write!(f, "{name}: {layout:#}")?;
-                        } else {
-                            write!(f, "{name}: {layout}")?;
-                        }
-                    }
-                }
-                None => write!(f, "?")?,
-            }
-            write!(f, ")")?;
+        write!(f, "enum {} ", self.type_)?;
+        let mut vmap = f.debug_set();
+        for vl in self.variants() {
+            vmap.entry(&DebugAsDisplay(&VariantDisplay(vl)));
         }
-        write!(f, " }}")
+        vmap.finish()
+    }
+}
+
+struct VariantDisplay<'a, T: TypeLayout>(VariantLayout<'a, T>);
+
+impl<T: TypeLayout> fmt::Display for VariantDisplay<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let name = self.0.name();
+        match self.0.fields() {
+            Some(fields) => {
+                let mut s = f.debug_struct(name.as_str());
+                for (n, layout) in fields.fields() {
+                    s.field(n.as_str(), &DebugAsDisplay(&layout));
+                }
+                s.finish()
+            }
+            None => write!(f, "{name}(?)"),
+        }
     }
 }

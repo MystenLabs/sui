@@ -67,7 +67,7 @@ where
 
     pub fn deserialize_value(
         bytes: &'b [u8],
-        layout: &'l A::MoveTypeLayout,
+        layout: crate::compressed::annotated::MoveTypeLayoutRef<'l>,
         inner: &'v mut V,
         path: Vec<Element<'p>>,
     ) -> Result<Option<V::Value>, V::Error> {
@@ -77,7 +77,7 @@ where
 
     pub fn deserialize_struct(
         bytes: &'b [u8],
-        layout: &'l A::MoveStructLayout,
+        layout: crate::compressed::annotated::MoveStructLayout<'l>,
         inner: &'v mut V,
         path: Vec<Element<'p>>,
     ) -> Result<Option<V::Value>, V::Error> {
@@ -201,7 +201,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
         // If there is a type element, check that it is a vector type with the correct element
         // type, and remove it from the path.
         let path = if let [E::Type(t), path @ ..] = self.path {
-            if !matches!(t, T::Vector(t) if driver.element_layout().is_type(t)) {
+            if !matches!(t, T::Vector(inner) if driver.element_layout().as_view().is_type(inner)) {
                 return Ok(None);
             }
             path
@@ -235,12 +235,11 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
         driver: &mut AV::StructDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
         use Element as E;
-        use TypeTag as T;
 
         // If there is a type element, check that it is a struct type with the correct struct tag,
         // and remove it from the path.
         let path = if let [E::Type(t), path @ ..] = self.path {
-            if !matches!(t, T::Struct(t) if driver.struct_layout().is_type(t)) {
+            if !driver.struct_layout().is_type(t) {
                 return Ok(None);
             }
             path
@@ -256,7 +255,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
         match field {
             // Skip over mismatched fields by name.
             E::Field(f) => {
-                while matches!(driver.peek_field(), Some(l) if l.name.as_str() != *f) {
+                while matches!(driver.peek_field(), Some(l) if l.0.as_str() != *f) {
                     driver.skip_field()?;
                 }
             }
@@ -281,12 +280,11 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
         driver: &mut AV::VariantDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
         use Element as E;
-        use TypeTag as T;
 
         // If there is a type element, check that it is a struct type with the correct struct tag,
         // and remove it from the path.
         let path = if let [E::Type(t), path @ ..] = self.path {
-            if !matches!(t, T::Struct(t) if driver.enum_layout().is_type(t)) {
+            if !driver.enum_layout().is_type(t) {
                 return Ok(None);
             }
             path
@@ -312,7 +310,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
         match field {
             // Skip over mismatched fields by name.
             E::Field(f) => {
-                while matches!(driver.peek_field(), Some(l) if l.name.as_str() != *f) {
+                while matches!(driver.peek_field(), Some(l) if l.0.as_str() != *f) {
                     driver.skip_field()?;
                 }
             }

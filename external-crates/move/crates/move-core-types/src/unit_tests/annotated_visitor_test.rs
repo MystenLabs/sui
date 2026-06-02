@@ -12,11 +12,46 @@ use crate::{
         self, NullTraversal, StructDriver, Traversal, ValueDriver, VariantDriver, VecDriver,
         Visitor,
     },
+    compressed::annotated as CA,
     identifier::Identifier,
     language_storage::StructTag,
     u256::U256,
 };
 use std::{fmt::Write, str::FromStr};
+
+/// Convert a tree-form `MoveTypeLayout` into a compressed layout.
+fn compress(ty: &MoveTypeLayout) -> CA::MoveTypeLayout {
+    ty.try_into().unwrap()
+}
+
+/// Test-only wrappers that take tree-form layouts (the natural shape for these tests'
+/// inputs) and forward to the compressed-layout-based visit_deserialize.
+fn tree_visit_value<'b, V: Visitor<'b, 'b>>(
+    bytes: &'b [u8],
+    ty: &MoveTypeLayout,
+    visitor: &mut V,
+) -> Result<V::Value, V::Error>
+where
+    V::Error: std::error::Error + Send + Sync + 'static,
+{
+    // Leak the compressed layout to give it a `'static` lifetime so `'l` can match `'b`.
+    let compressed: &'static CA::MoveTypeLayout = Box::leak(Box::new(compress(ty)));
+    MoveValue::visit_deserialize(bytes, compressed.as_ref(), visitor)
+}
+
+fn tree_visit_struct<'b, V: Visitor<'b, 'b>>(
+    bytes: &'b [u8],
+    ty: &MoveStructLayout,
+    visitor: &mut V,
+) -> Result<V::Value, V::Error>
+where
+    V::Error: std::error::Error + Send + Sync + 'static,
+{
+    let tree = MoveTypeLayout::Struct(Box::new(ty.clone()));
+    let compressed: &'static CA::MoveTypeLayout = Box::leak(Box::new(compress(&tree)));
+    let struct_view = compressed.as_struct().expect("struct layout");
+    MoveStruct::visit_deserialize(bytes, struct_view, visitor)
+}
 
 #[derive(Default)]
 pub(crate) struct CountingTraversal(usize);
@@ -256,11 +291,11 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
         };
 
         while let Some((field, value)) = driver.next_field(&mut field_visitor)? {
-            fields.push((field.name.clone(), value));
+            fields.push((field.0.clone(), value));
         }
 
         self.output = field_visitor.output;
-        let type_ = driver.struct_layout().type_.clone();
+        let type_ = driver.struct_layout().type_().clone();
         Ok(MoveValue::Struct(MoveStruct { type_, fields }))
     }
 
@@ -278,11 +313,11 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
         };
 
         while let Some((field, value)) = driver.next_field(&mut field_visitor)? {
-            fields.push((field.name.clone(), value));
+            fields.push((field.0.clone(), value));
         }
 
         self.output = field_visitor.output;
-        let type_ = driver.enum_layout().type_.clone();
+        let type_ = driver.enum_layout().type_().clone();
         Ok(MoveValue::Variant(MoveVariant {
             type_,
             variant_name: driver.variant_name().to_owned(),
@@ -346,10 +381,10 @@ fn traversal() {
     let bytes = serialize(value);
 
     let mut value_traversal = CountingTraversal::default();
-    MoveValue::visit_deserialize(&bytes, &type_layout, &mut value_traversal).unwrap();
+    tree_visit_value(&bytes, &type_layout, &mut value_traversal).unwrap();
 
     let mut struct_traversal = CountingTraversal::default();
-    MoveStruct::visit_deserialize(&bytes, struct_layout, &mut struct_traversal).unwrap();
+    tree_visit_struct(&bytes, struct_layout, &mut struct_traversal).unwrap();
 
     assert_eq!(18, value_traversal.0);
     assert_eq!(18, struct_traversal.0);
@@ -374,14 +409,14 @@ fn unexpected_eof() {
 
     assert_eq!(
         "unexpected end of input",
-        MoveValue::visit_deserialize(&bytes, &type_layout, &mut NullTraversal)
+        tree_visit_value(&bytes, &type_layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
 
     assert_eq!(
         "unexpected end of input",
-        MoveStruct::visit_deserialize(&bytes, struct_layout, &mut NullTraversal)
+        tree_visit_struct(&bytes, struct_layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -400,7 +435,7 @@ fn no_enum_tag() {
 
     assert_eq!(
         "invalid variant tag: 42",
-        MoveValue::visit_deserialize(&bytes, &layout, &mut NullTraversal)
+        tree_visit_value(&bytes, &layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -419,7 +454,7 @@ fn out_of_range_enum_tag() {
 
     assert_eq!(
         "invalid variant tag: 127",
-        MoveValue::visit_deserialize(&bytes, &layout, &mut NullTraversal)
+        tree_visit_value(&bytes, &layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -438,7 +473,7 @@ fn invalid_variant_tag() {
 
     assert_eq!(
         "invalid variant tag: 1",
-        MoveValue::visit_deserialize(&bytes, &layout, &mut NullTraversal)
+        tree_visit_value(&bytes, &layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -449,7 +484,7 @@ fn bad_bool_byte() {
     use MoveTypeLayout as T;
     assert_eq!(
         "unexpected byte: 42",
-        MoveValue::visit_deserialize(&[42], &T::Bool, &mut NullTraversal)
+        tree_visit_value(&[42], &T::Bool, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -470,7 +505,7 @@ fn bad_vector_length() {
 
     assert_eq!(
         "unexpected end of input",
-        MoveValue::visit_deserialize(&bytes, &layout, &mut NullTraversal)
+        tree_visit_value(&bytes, &layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -481,7 +516,7 @@ fn trailing_bytes() {
     use MoveTypeLayout as T;
     assert_eq!(
         "trailing 1 byte(s) at the end of input",
-        MoveValue::visit_deserialize(&[42, 42], &T::U8, &mut NullTraversal)
+        tree_visit_value(&[42, 42], &T::U8, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -537,11 +572,11 @@ fn nested_datatype_visit() {
 
     let mut value_visitor = PrintVisitor::default();
     let from_value =
-        MoveValue::visit_deserialize(&bytes, &type_layout, &mut value_visitor).unwrap();
+        tree_visit_value(&bytes, &type_layout, &mut value_visitor).unwrap();
 
     let mut struct_visitor = PrintVisitor::default();
     let from_struct =
-        MoveStruct::visit_deserialize(&bytes, struct_layout, &mut struct_visitor).unwrap();
+        tree_visit_struct(&bytes, struct_layout, &mut struct_visitor).unwrap();
 
     // This is a little strange -- even though we are deserializing a struct, we still get a value.
     // This is because the return type comes from the visitor, not the deserializer.
@@ -582,7 +617,7 @@ fn peek_field_test() {
             };
 
             while let Some(layout) = driver.peek_field() {
-                if layout.name.as_str() == *field {
+                if layout.0.as_str() == *field {
                     return driver
                         .next_field(&mut Self { fields })
                         .map(|value| value.and_then(|(_, v)| v));
@@ -603,7 +638,7 @@ fn peek_field_test() {
             };
 
             while let Some(layout) = driver.peek_field() {
-                if layout.name.as_str() == *field {
+                if layout.0.as_str() == *field {
                     return driver
                         .next_field(&mut Self { fields })
                         .map(|value| value.and_then(|(_, v)| v));
@@ -726,11 +761,11 @@ fn peek_field_test() {
     let bytes = serialize(value);
 
     let visit_value = |fields| {
-        MoveValue::visit_deserialize(&bytes, &type_layout, &mut PeekU64Visitor { fields }).unwrap()
+        tree_visit_value(&bytes, &type_layout, &mut PeekU64Visitor { fields }).unwrap()
     };
 
     let visit_struct = |fields| {
-        MoveStruct::visit_deserialize(&bytes, struct_layout, &mut PeekU64Visitor { fields })
+        tree_visit_struct(&bytes, struct_layout, &mut PeekU64Visitor { fields })
             .unwrap()
     };
 
@@ -988,10 +1023,10 @@ fn byte_offset_test() {
     ));
 
     let mut value_visitor = ByteOffsetVisitor::default();
-    MoveValue::visit_deserialize(&bytes, &type_layout, &mut value_visitor).unwrap();
+    tree_visit_value(&bytes, &type_layout, &mut value_visitor).unwrap();
 
     let mut struct_visitor = ByteOffsetVisitor::default();
-    MoveStruct::visit_deserialize(&bytes, struct_layout, &mut struct_visitor).unwrap();
+    tree_visit_struct(&bytes, struct_layout, &mut struct_visitor).unwrap();
 
     assert_eq!(value_visitor.0, struct_visitor.0);
     insta::assert_snapshot!(value_visitor.0);

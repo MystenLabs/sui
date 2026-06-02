@@ -203,7 +203,7 @@ impl MoveValue {
     /// layout, unexpected bytes or trailing bytes), or a custom error expressed by the visitor.
     pub fn visit_deserialize<'b, 'l, V: Visitor<'b, 'l>>(
         blob: &'b [u8],
-        ty: &'l MoveTypeLayout,
+        ty: crate::compressed::annotated::MoveTypeLayoutRef<'l>,
         visitor: &mut V,
     ) -> Result<V::Value, V::Error>
     where
@@ -266,7 +266,7 @@ impl MoveStruct {
     /// `MoveStructLayout`).
     pub fn visit_deserialize<'b, 'l, V: Visitor<'b, 'l>>(
         blob: &'b [u8],
-        ty: &'l MoveStructLayout,
+        ty: crate::compressed::annotated::MoveStructLayout<'l>,
         visitor: &mut V,
     ) -> Result<V::Value, V::Error>
     where
