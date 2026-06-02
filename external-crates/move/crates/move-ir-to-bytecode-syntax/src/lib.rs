@@ -86,6 +86,8 @@
 //!                                    // "constructor" for 'n'
 //!                                    // "packs" the values, binding them to the fields, and creates a new instance of 'n'
 //!                                    // 'n' must be declared in the current module
+//!   | const::c                       // load the named constant 'c' by value (LdConst)
+//!                                    // constant names live in their own 'const::' namespace
 //!   // boolean operators
 //!   | !e_1
 //!   | e_1 || e_2
@@ -161,6 +163,10 @@
 //!   | public struct n { f_1: t_1, ..., f_j: t_j } // declaration of a struct;
 //!                                                 // currently `public` is the only supported visibility
 //!
+//! cdecl ∈ ConstantDecl ::=
+//!   | const c: t = v; // a named constant; the value is self-describing and is
+//!                     // not checked against 't' here (the verifier does that)
+//!
 //! body ∈ ProcedureBody ::=
 //!  | let x_1; ... let x_j; s // The locals declared in this procedure, and the code for that procedure
 //!
@@ -172,8 +178,9 @@
 //!                                                             // the procedure may be public, or internal to the module
 //!
 //! mdecl ∈ ModuleDecl ::=
-//!   | mvir m { idecl_1 ... idecl_i sdecl_1 ... sdecl_j pdecl_1 ... pdecl_k } // module declaration; `mvir` (rather than Move source's `module`)
-//!                                                                            // makes it visually obvious that a snippet is IR, not source
+//!   | mvir m { idecl_1 ... idecl_i sdecl_1 ... sdecl_j cdecl_1 ... cdecl_k pdecl_1 ... pdecl_l } // module declaration; `mvir` (rather than Move
+//!                                                                                                // source's `module`) makes it visually obvious
+//!                                                                                                // that a snippet is IR, not source
 //! ```
 //!
 //! ## Transaction Scripts

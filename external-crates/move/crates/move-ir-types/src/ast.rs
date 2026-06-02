@@ -645,6 +645,10 @@ pub enum Exp_ {
     /// Takes the given field values and instantiates the variant of the enum.
     /// `e::v { f_1: e_1, ... , f_j: e_j }`
     PackVariant(DatatypeName, VariantName, Vec<Type>, ExpFields),
+    /// Load a named constant by value: `const::NAME`. Constant names live in
+    /// their own namespace (not carried into the bytecode) so they cannot
+    /// collide with struct, function, or local names.
+    Constant(ConstantName),
 }
 
 /// The type for a `Exp_` and its location
@@ -1717,6 +1721,7 @@ impl fmt::Display for Exp_ {
                     ))
                 )
             }
+            Exp_::Constant(name) => write!(f, "const::{}", name.0),
         }
     }
 }
