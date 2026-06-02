@@ -14,12 +14,16 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use sui_consistent_store::Batch;
+use sui_consistent_store::Restore;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::sequential;
 use sui_types::base_types::ObjectID;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::object::Data;
+use sui_types::object::Object;
 
+use crate::RpcStoreSchema;
 use crate::indexer::Schema;
 use crate::indexer::Store;
 use crate::indexer::checkpoint_output_objects;
@@ -54,6 +58,30 @@ impl Processor for PackageVersions {
     }
 }
 
+impl Restore for PackageVersions {
+    type Schema = RpcStoreSchema;
+
+    fn restore(
+        &self,
+        schema: &Self::Schema,
+        object: &Object,
+        batch: &mut Batch,
+    ) -> anyhow::Result<()> {
+        // Packages are immutable, so each published version lives
+        // forever as its own live object. The live object set
+        // therefore contains every package version ever published,
+        // each emitting a single row mapping
+        // `(original_id, version) → storage_id`.
+        let Data::Package(pkg) = &object.data else {
+            return Ok(());
+        };
+        let (key, value) =
+            package_versions::store(pkg.original_package_id(), pkg.version().value(), pkg.id());
+        batch.put(&schema.package_versions, &key, &value)?;
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl sequential::Handler for PackageVersions {
     type Store = Store;
@@ -81,6 +109,10 @@ impl sequential::Handler for PackageVersions {
 mod tests {
     use std::sync::Arc;
 
+    use sui_consistent_store::Db;
+    use sui_consistent_store::DbOptions;
+    use sui_types::base_types::SuiAddress;
+    use sui_types::object::Object;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     use super::*;
@@ -89,5 +121,34 @@ mod tests {
     async fn process_runs_against_synthetic_checkpoint() {
         let checkpoint = Arc::new(TestCheckpointBuilder::new(1).build_checkpoint());
         let _rows = PackageVersions.process(&checkpoint).await.unwrap();
+    }
+
+    /// Verify the non-package skip branch: ordinary Move objects
+    /// have `Data::Move`, not `Data::Package`, and must not produce
+    /// a `package_versions` row. The happy-path encoding is shared
+    /// with the tip pipeline via [`package_versions::store`] and
+    /// covered there.
+    #[test]
+    fn restore_skips_non_package_objects() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+
+        let non_pkg =
+            Object::with_id_owner_for_testing(ObjectID::from_single_byte(7), SuiAddress::ZERO);
+        let mut batch = db.batch();
+        PackageVersions
+            .restore(&schema, &non_pkg, &mut batch)
+            .unwrap();
+        batch.commit().unwrap();
+
+        // No row written: an `iter_package_versions` over the
+        // (non-existent) original_id of a non-package returns an
+        // empty iterator.
+        let rows: Vec<_> = schema
+            .iter_package_versions(non_pkg.id())
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(rows.is_empty());
     }
 }
