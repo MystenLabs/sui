@@ -3,7 +3,7 @@
 
 //! `(dimension_key, bucket)` → `BitmapBlob`.
 //!
-//! Same wire shape as [`super::transaction_bitmap`](super::transaction_bitmap)
+//! Same wire shape as [`super::transaction_bitmap`]
 //! but indexes packed-event-seq space — each set bit identifies a
 //! single event by `(tx_seq << EVENT_BITS) | event_idx`.
 //!

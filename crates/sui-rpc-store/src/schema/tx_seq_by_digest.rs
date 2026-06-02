@@ -4,7 +4,7 @@
 //! `TransactionDigest` → `tx_seq`.
 //!
 //! One half of the digest <-> sequence bijection. The inverse lives
-//! in [`super::tx_metadata_by_seq`](super::tx_metadata_by_seq).
+//! in [`super::tx_metadata_by_seq`].
 //!
 //! Both `Key` and `Value` are thin newtypes (a 32-byte digest and a
 //! varint-encoded `u64`), so no `store` helper is provided —

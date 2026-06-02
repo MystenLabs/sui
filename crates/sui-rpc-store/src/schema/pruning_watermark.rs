@@ -17,10 +17,10 @@
 //!    install compaction filters that clone the `Arc` and read the
 //!    atomic on every key they consider.
 //! 3. Indexer pipelines that advance pruning call
-//!    [`RpcStoreSchema::set_pruning_floor`] after their batch
+//!    [`super::RpcStoreSchema::set_pruning_floor`] after their batch
 //!    commits, so the on-disk row and the atomic agree.
 //! 4. On startup callers run
-//!    [`RpcStoreSchema::refresh_pruning_atomics`] once to load the
+//!    [`super::RpcStoreSchema::refresh_pruning_atomics`] once to load the
 //!    persisted floor into the atomic.
 
 use std::sync::Arc;

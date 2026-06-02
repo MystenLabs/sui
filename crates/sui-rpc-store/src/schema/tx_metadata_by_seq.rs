@@ -6,7 +6,7 @@
 //! Carries digest, containing checkpoint, position-within-checkpoint,
 //! event count, and timestamp. The `tx_seq → digest` direction of the
 //! bijection lives here; the inverse is
-//! [`super::tx_seq_by_digest`](super::tx_seq_by_digest).
+//! [`super::tx_seq_by_digest`].
 
 use sui_consistent_store::Protobuf;
 use sui_consistent_store::error::DecodeError;

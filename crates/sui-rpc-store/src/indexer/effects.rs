@@ -3,7 +3,7 @@
 
 //! Sequential pipeline that populates the
 //! [`schema::effects`](crate::schema::effects) CF: one row per
-//! executed transaction carrying its [`TransactionEffects`] and
+//! executed transaction carrying its [`sui_types::effects::TransactionEffects`] and
 //! the set of objects loaded but not modified during execution.
 
 use std::sync::Arc;

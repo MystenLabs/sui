@@ -4,7 +4,7 @@
 //! `ObjectID` → latest live `version`.
 //!
 //! Resolves the latest live version of an object. Callers then read
-//! the corresponding row from [`super::objects`](super::objects) to
+//! the corresponding row from [`super::objects`] to
 //! fetch the full object — the convenience method
 //! [`RpcStoreSchema::get_object`](super::RpcStoreSchema::get_object)
 //! composes both lookups in one call.

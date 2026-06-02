@@ -5,7 +5,7 @@
 //!
 //! Type-only filtering: list every live object of a given Move
 //! type regardless of owner. The `StructTag` component is
-//! BCS-encoded, so [`TypeFilter`](super::type_filter::TypeFilter)
+//! BCS-encoded, so [`TypeFilter`]
 //! values double as valid prefix encoders for this CF.
 
 use bytes::Buf;
@@ -88,7 +88,7 @@ pub fn store(object: &Object) -> Option<(Key, U64Varint)> {
 impl<R: Reader> super::RpcStoreSchema<R> {
     /// Iterate over every live object whose Move type matches
     /// `type_filter`, regardless of owner. See
-    /// [`TypeFilter`](super::type_filter::TypeFilter) for the
+    /// [`TypeFilter`] for the
     /// matching contract.
     ///
     /// `TypeFilter` encodes to the same leading bytes that

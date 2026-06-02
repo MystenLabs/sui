@@ -5,7 +5,7 @@
 //!
 //! Holds the lightweight, signed checkpoint header. Contents — the
 //! list of executed tx digests — live in
-//! [`super::checkpoint_contents`](super::checkpoint_contents) so
+//! [`super::checkpoint_contents`] so
 //! summary-only lookups skip the larger payload.
 
 use sui_consistent_store::Protobuf;

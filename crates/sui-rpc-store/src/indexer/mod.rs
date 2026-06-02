@@ -12,7 +12,7 @@
 //! into a `Vec<Value>` (with the heavy lifting done in the
 //! processor-pool, off the commit hot path), `batch` folds many
 //! values into a single `Batch`, and `commit` stages the batch's
-//! writes against a [`Connection`] from
+//! writes against a [`sui_consistent_store::Connection`] from
 //! [`sui_consistent_store::Store`].
 //!
 //! Every pipeline targets the same backing [`RpcStoreSchema`].
@@ -106,7 +106,7 @@ pub fn tx_seq_at(checkpoint: &Checkpoint, i: usize) -> u64 {
 ///
 /// Objects created or unwrapped within the checkpoint are
 /// excluded. Used by the diff-based indexes
-/// ([`object_by_owner`](crate::indexer::object_by_owner) etc.) to
+/// ([`object_by_owner`] etc.) to
 /// remove the rows that the *prior* state contributed before
 /// re-inserting the rows that the *posterior* state contributes.
 pub fn checkpoint_input_objects(
@@ -160,7 +160,7 @@ pub fn checkpoint_input_objects(
 /// `sui-indexer-alt-consistent-store::handlers`.
 ///
 /// Used to populate the latest-version views
-/// ([`live_objects`](crate::indexer::live_objects)) and the
+/// ([`live_objects`]) and the
 /// diff-based indexes once the prior state has been retracted.
 pub fn checkpoint_output_objects(
     checkpoint: &Checkpoint,
