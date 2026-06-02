@@ -25,6 +25,7 @@ mod indexes;
 mod layout;
 mod object_store;
 mod read_store;
+mod state_reader;
 
 use std::sync::Arc;
 
