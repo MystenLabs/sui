@@ -283,6 +283,15 @@ impl Indexer {
     ) -> anyhow::Result<Self> {
         let metrics_prefix = Some(METRICS_PREFIX);
 
+        // Load the persisted pruning watermarks into the
+        // in-memory bitmap floor so the bitmap CFs' compaction
+        // filters resume against the on-disk watermark instead of
+        // the process-default zero (which would prune nothing).
+        store
+            .schema()
+            .refresh_pruning_atomics()
+            .context("Failed to refresh pruning watermarks")?;
+
         let stride = NonZero::new(consistency_config.stride)
             .context("ConsistencyConfig::stride must be non-zero")?;
         let sync = Synchronizer::new(
