@@ -22,12 +22,17 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use move_core_types::language_storage::TypeTag;
+use sui_consistent_store::Batch;
+use sui_consistent_store::Restore;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::sequential;
 use sui_types::balance_change::derive_detailed_balance_changes_2;
 use sui_types::base_types::SuiAddress;
 use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::object::Object;
+use sui_types::object::Owner;
 
+use crate::RpcStoreSchema;
 use crate::indexer::Schema;
 use crate::indexer::Store;
 use crate::schema::balance;
@@ -66,6 +71,39 @@ impl Processor for Balance {
             }
         }
         Ok(deltas)
+    }
+}
+
+impl Restore for Balance {
+    type Schema = RpcStoreSchema;
+
+    fn restore(
+        &self,
+        schema: &Self::Schema,
+        object: &Object,
+        batch: &mut Batch,
+    ) -> anyhow::Result<()> {
+        // Only address-owned coin objects contribute to the
+        // restored balance. Coins owned by other objects (rare) are
+        // skipped — the row would be keyed by an address that does
+        // not actually hold the coin. The address-derived half of
+        // every row stays zero: it is sourced from
+        // `AccumulatorWrite` events on tip and cannot be recovered
+        // from the live object set alone. Pipelines will re-derive
+        // it as the tip phase plays back from the restore anchor.
+        let Owner::AddressOwner(owner) = object.owner() else {
+            return Ok(());
+        };
+        let Some(coin) = object.as_coin_maybe() else {
+            return Ok(());
+        };
+        let Some(coin_type) = object.coin_type_maybe() else {
+            return Ok(());
+        };
+
+        let (key, value) = balance::delta(*owner, coin_type, coin.balance.value() as i128, 0);
+        batch.merge(&schema.balance, &key, &value)?;
+        Ok(())
     }
 }
 
@@ -108,6 +146,9 @@ impl sequential::Handler for Balance {
 mod tests {
     use std::sync::Arc;
 
+    use sui_consistent_store::Db;
+    use sui_consistent_store::DbOptions;
+    use sui_types::base_types::ObjectID;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     use super::*;
@@ -116,5 +157,45 @@ mod tests {
     async fn process_runs_against_synthetic_checkpoint() {
         let checkpoint = Arc::new(TestCheckpointBuilder::new(1).build_checkpoint());
         let _ = Balance.process(&checkpoint).await.unwrap();
+    }
+
+    #[test]
+    fn restore_credits_coin_half_for_address_owned_gas_coin() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+
+        let owner = SuiAddress::ZERO;
+        let coin = Object::with_id_owner_gas_for_testing(ObjectID::from_single_byte(5), owner, 42);
+        let coin_type = coin.coin_type_maybe().unwrap();
+
+        let mut batch = db.batch();
+        Balance.restore(&schema, &coin, &mut batch).unwrap();
+        batch.commit().unwrap();
+
+        let balance = schema
+            .get_balance(owner, coin_type)
+            .unwrap()
+            .expect("balance row present");
+        assert_eq!(balance.coin, 42);
+        // Address half is left to be re-derived from accumulator
+        // writes on tip.
+        assert_eq!(balance.address, 0);
+    }
+
+    #[test]
+    fn restore_skips_non_coin_objects() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+
+        let owner = SuiAddress::ZERO;
+        let non_coin = Object::with_id_owner_for_testing(ObjectID::from_single_byte(9), owner);
+
+        let mut batch = db.batch();
+        Balance.restore(&schema, &non_coin, &mut batch).unwrap();
+        batch.commit().unwrap();
+        // Nothing to assert on read because we don't know the
+        // (non-coin) type to query by; the meaningful assertion
+        // is just that `restore` returned `Ok` without staging a
+        // bad write.
     }
 }
