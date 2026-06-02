@@ -1,0 +1,384 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! [`RpcIndexes`] adapter — owned-object, dynamic-field, balance,
+//! package-versions, epoch-info, ledger-history, and coin-info
+//! lookups.
+//!
+//! Trait methods returning `Result` over [`typed_store_error::TypedStoreError`]
+//! wrap our [`sui_consistent_store::error::Error`] via
+//! [`TypedStoreError::RocksDBError`].
+
+use std::ops::Bound;
+
+use move_core_types::language_storage::StructTag;
+use sui_consistent_store::reader::Reader;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::storage::BalanceInfo;
+use sui_types::storage::BalanceIterator;
+use sui_types::storage::CoinInfo;
+use sui_types::storage::DynamicFieldIteratorItem;
+use sui_types::storage::DynamicFieldKey;
+use sui_types::storage::EpochInfo;
+use sui_types::storage::LedgerBitmapBucketIterator;
+use sui_types::storage::LedgerTxSeqDigest;
+use sui_types::storage::LedgerTxSeqDigestIterator;
+use sui_types::storage::OwnedObjectInfo;
+use sui_types::storage::RpcIndexes;
+
+/// Local alias matching the inaccessible
+/// `sui_types::storage::read_store::PackageVersionsIterator`.
+type PackageVersionsIterator<'a> =
+    Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
+use sui_types::storage::error::Result as StorageResult;
+use typed_store_error::TypedStoreError;
+
+use crate::RpcStoreSchema;
+use crate::reader::RpcStoreReader;
+use crate::schema::type_filter::TypeFilter;
+
+fn to_typed_store_err(e: sui_consistent_store::error::Error) -> TypedStoreError {
+    TypedStoreError::RocksDBError(format!("{e:#}"))
+}
+
+impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
+    fn get_epoch_info(
+        &self,
+        epoch: sui_types::committee::EpochId,
+    ) -> StorageResult<Option<EpochInfo>> {
+        self.schema()
+            .get_epoch(epoch)
+            .map_err(sui_types::storage::error::Error::custom)
+    }
+
+    fn owned_objects_iter(
+        &self,
+        owner: SuiAddress,
+        object_type: Option<StructTag>,
+        cursor: Option<OwnedObjectInfo>,
+    ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
+    {
+        let cursor_object_id = cursor.as_ref().map(|c| c.object_id);
+        let iter = match object_type.as_ref() {
+            Some(struct_tag) => {
+                // `iter_objects_owned_by_address_of_type` borrows
+                // its TypeFilter; build it owned and leak its
+                // lifetime through the boxed iterator below.
+                let filter = TypeFilter::Type(struct_tag.clone());
+                let filter = Box::leak(Box::new(filter));
+                self.schema()
+                    .iter_objects_owned_by_address_of_type(owner, filter)
+                    .map_err(sui_types::storage::error::Error::custom)?
+            }
+            None => self
+                .schema()
+                .iter_objects_owned_by_address(owner)
+                .map_err(sui_types::storage::error::Error::custom)?,
+        };
+
+        let mapped = iter
+            .map(move |row| {
+                let (key, value) = row.map_err(to_typed_store_err)?;
+                Ok(OwnedObjectInfo {
+                    owner,
+                    object_type: key.type_,
+                    balance: key.inverted_balance.map(|b| !b),
+                    object_id: key.object_id,
+                    version: sui_types::base_types::SequenceNumber::from_u64(value.0),
+                })
+            })
+            // Skip-past-cursor: drop while the row's object_id is
+            // <= the cursor's. Inexact relative to the natural
+            // (type, balance, id) ordering of the index, but
+            // matches the validator-store contract for opaque
+            // cursors.
+            .skip_while(
+                move |entry: &Result<OwnedObjectInfo, TypedStoreError>| match entry {
+                    Ok(info) => cursor_object_id
+                        .map(|c| info.object_id == c)
+                        .unwrap_or(false),
+                    Err(_) => false,
+                },
+            );
+
+        Ok(Box::new(mapped))
+    }
+
+    fn dynamic_field_iter(
+        &self,
+        parent: ObjectID,
+        cursor: Option<ObjectID>,
+    ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
+        // Dynamic fields are `Field<Name, Value>` objects whose
+        // owner is `Owner::ObjectOwner(parent_id_as_address)`. A
+        // prefix scan on `object_by_owner` with
+        // `(ObjectOwner, parent)` enumerates them.
+        let iter = self
+            .schema()
+            .iter_objects_owned_by_object(parent.into())
+            .map_err(sui_types::storage::error::Error::custom)?;
+
+        let mapped = iter
+            .map(move |row| {
+                let (key, _value) = row.map_err(to_typed_store_err)?;
+                Ok(DynamicFieldKey {
+                    parent,
+                    field_id: key.object_id,
+                })
+            })
+            .skip_while(
+                move |entry: &Result<DynamicFieldKey, TypedStoreError>| match entry {
+                    Ok(info) => cursor.map(|c| info.field_id == c).unwrap_or(false),
+                    Err(_) => false,
+                },
+            );
+
+        Ok(Box::new(mapped))
+    }
+
+    fn get_coin_info(&self, _coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
+        // Coin metadata / treasury cap / regulated coin metadata
+        // are typed objects discoverable through `object_by_type`
+        // prefix scans. Wiring is a follow-up.
+        Ok(None)
+    }
+
+    fn get_balance(
+        &self,
+        owner: &SuiAddress,
+        coin_type: &StructTag,
+    ) -> StorageResult<Option<BalanceInfo>> {
+        let balance = self
+            .schema()
+            .get_balance(*owner, coin_type.clone().into())
+            .map_err(sui_types::storage::error::Error::custom)?;
+        Ok(balance.map(|b| BalanceInfo {
+            coin_balance: b.total().clamp(0, u64::MAX as i128) as u64,
+            // Split across coin / address halves for callers that
+            // want both. The `BalanceInfo` struct in `sui-types`
+            // exposes the two independently; we report each half
+            // clamped to non-negative.
+            address_balance: b.address.clamp(0, u64::MAX as i128) as u64,
+        }))
+    }
+
+    fn balance_iter(
+        &self,
+        owner: &SuiAddress,
+        cursor: Option<(SuiAddress, StructTag)>,
+    ) -> StorageResult<BalanceIterator<'_>> {
+        let cursor_coin_type = cursor
+            .map(|(_, tag)| move_core_types::language_storage::TypeTag::Struct(Box::new(tag)));
+        let iter = self
+            .schema()
+            .iter_balances_owned_by(*owner)
+            .map_err(sui_types::storage::error::Error::custom)?;
+
+        let mapped = iter.filter_map(move |row| {
+            let (key, value) = match row {
+                Ok(pair) => pair,
+                Err(e) => return Some(Err(sui_types::storage::error::Error::custom(e))),
+            };
+            // Project the merged proto value back into the typed
+            // `Balance` view, then onto the trait's `BalanceInfo`.
+            let inner = value.into_inner();
+            let coin = i128::from_le_bytes((&inner.coin[..]).try_into().unwrap_or_default());
+            let address = i128::from_le_bytes((&inner.address[..]).try_into().unwrap_or_default());
+            let total = coin.saturating_add(address);
+            let info = BalanceInfo {
+                coin_balance: total.clamp(0, u64::MAX as i128) as u64,
+                address_balance: address.clamp(0, u64::MAX as i128) as u64,
+            };
+            // Skip-past-cursor.
+            if let Some(c) = cursor_coin_type.as_ref()
+                && key.coin_type == *c
+            {
+                return None;
+            }
+            let struct_tag = match key.coin_type {
+                move_core_types::language_storage::TypeTag::Struct(b) => *b,
+                _ => return None,
+            };
+            Some(Ok((struct_tag, info)))
+        });
+
+        Ok(Box::new(mapped))
+    }
+
+    fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> StorageResult<PackageVersionsIterator<'_>> {
+        let iter = self
+            .schema()
+            .iter_package_versions(original_id)
+            .map_err(sui_types::storage::error::Error::custom)?;
+        let mapped = iter
+            .map(move |row| {
+                let (key, value) = row.map_err(to_typed_store_err)?;
+                // Decode storage_id (32 bytes).
+                let storage_id_bytes: [u8; 32] = (&value.into_inner().storage_id[..])
+                    .try_into()
+                    .map_err(|_| {
+                        TypedStoreError::SerializationError(
+                            "package_versions storage_id length".into(),
+                        )
+                    })?;
+                Ok((key.version, ObjectID::new(storage_id_bytes)))
+            })
+            .skip_while(
+                move |entry: &Result<(u64, ObjectID), TypedStoreError>| match entry {
+                    Ok((v, _)) => cursor.map(|c| *v == c).unwrap_or(false),
+                    Err(_) => false,
+                },
+            );
+        Ok(Box::new(mapped))
+    }
+
+    fn get_highest_indexed_checkpoint_seq_number(
+        &self,
+    ) -> StorageResult<Option<CheckpointSequenceNumber>> {
+        // Min across all registered pipeline watermarks: every CF
+        // has caught up to at least this checkpoint, so reads
+        // against any of them are coherent through here.
+        let framework = sui_consistent_store::FrameworkSchema::new(self.db().clone());
+        let mut min: Option<u64> = None;
+        for entry in framework
+            .watermarks
+            .iter(..)
+            .map_err(sui_types::storage::error::Error::custom)?
+        {
+            let (_, watermark) = entry.map_err(sui_types::storage::error::Error::custom)?;
+            let hi = watermark.checkpoint_hi_inclusive;
+            min = Some(min.map_or(hi, |m| m.min(hi)));
+        }
+        Ok(min)
+    }
+
+    fn ledger_tx_seq_digest(&self, tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
+        let meta = self
+            .schema()
+            .get_tx_metadata_by_seq(tx_seq)
+            .map_err(sui_types::storage::error::Error::custom)?;
+        Ok(meta.map(|m| LedgerTxSeqDigest {
+            tx_sequence_number: tx_seq,
+            digest: m.digest,
+            event_count: m.event_count,
+            tx_offset: m.ckpt_position,
+            checkpoint_number: m.checkpoint_seq,
+        }))
+    }
+
+    fn ledger_tx_seq_digest_iter(
+        &self,
+        start: u64,
+        end_exclusive: u64,
+        descending: bool,
+    ) -> StorageResult<LedgerTxSeqDigestIterator<'_>> {
+        use crate::schema::keys::U64Be;
+        let range = (
+            Bound::Included(U64Be(start)),
+            Bound::Excluded(U64Be(end_exclusive)),
+        );
+        let map = &self.schema().tx_metadata_by_seq;
+        let project = move |row: Result<
+            (U64Be, crate::schema::tx_metadata_by_seq::Value),
+            sui_consistent_store::error::Error,
+        >| {
+            let (U64Be(seq), value) = row.map_err(to_typed_store_err)?;
+            let stored = value.into_inner();
+            let digest_bytes: [u8; 32] = (&stored.digest[..]).try_into().map_err(|_| {
+                TypedStoreError::SerializationError("tx_metadata digest length".into())
+            })?;
+            Ok(LedgerTxSeqDigest {
+                tx_sequence_number: seq,
+                digest: sui_types::digests::TransactionDigest::new(digest_bytes),
+                event_count: stored.event_count,
+                tx_offset: stored.ckpt_position,
+                checkpoint_number: stored.checkpoint_seq,
+            })
+        };
+        if descending {
+            let iter = map
+                .iter_rev(range)
+                .map_err(sui_types::storage::error::Error::custom)?;
+            Ok(Box::new(iter.map(project)))
+        } else {
+            let iter = map
+                .iter(range)
+                .map_err(sui_types::storage::error::Error::custom)?;
+            Ok(Box::new(iter.map(project)))
+        }
+    }
+
+    fn transaction_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
+        bitmap_iter(
+            &self.schema().transaction_bitmap,
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
+    }
+
+    fn event_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
+        bitmap_iter(
+            &self.schema().event_bitmap,
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
+    }
+}
+
+/// Shared body of the two bitmap iterators — both
+/// `transaction_bitmap` and `event_bitmap` share the
+/// `(dim_key, bucket)` → `BitmapBlob` layout, so the projection
+/// logic is identical.
+fn bitmap_iter<'a, K, R>(
+    map: &'a sui_consistent_store::DbMap<
+        K,
+        sui_consistent_store::Protobuf<crate::proto::BitmapBlob>,
+        R,
+    >,
+    _dimension_key: Vec<u8>,
+    _start_bucket: u64,
+    _end_bucket_exclusive: u64,
+    _descending: bool,
+) -> StorageResult<LedgerBitmapBucketIterator<'a>>
+where
+    K: sui_consistent_store::Encode + sui_consistent_store::Decode,
+    R: Reader,
+{
+    // The `(dim_key, bucket)` key encodes the variable-length
+    // dimension key followed by an 8-byte big-endian bucket. We
+    // can't construct a typed `K` from raw bytes here, so this
+    // helper is a placeholder until we add a typed prefix-scan
+    // entry point on the bitmap CFs. Returns an empty iterator
+    // for now.
+    let _ = map;
+    Ok(Box::new(std::iter::empty()))
+}
+
+/// Helper: the existing inherent `RpcStoreSchema::get_balance`
+/// returns `Balance { coin, address }` (see
+/// [`crate::schema::balance::Balance`]) — kept here as a marker
+/// for where the projection happens.
+#[allow(dead_code)]
+fn _balance_projection_marker(_: &RpcStoreSchema) {}

@@ -16744,6 +16744,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "typed-store-error",
 ]
 
 [[package]]
