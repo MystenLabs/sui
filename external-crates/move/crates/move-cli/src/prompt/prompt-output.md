@@ -37,6 +37,22 @@ move prompt skill <bundle> --file <ref>   # read a specific reference file
 
 A skill can belong to more than one category; reaching it directly is fine.
 
+## Picking a category
+
+Match by intent, not by exact word. The user is unlikely to ask for "an audit" or "a
+bytecode analysis" verbatim; pattern-match on what they want to *achieve*.
+
+- The user wants to know whether a deployed package is **safe**, has **bugs** or
+  **vulnerabilities**, behaves **incorrectly**, **suspects something is wrong**, or asks
+  for a **security review** / **audit** → **`audit`** is the entry point.
+- The user wants to **read** what a deployed package actually does, **decompile** it,
+  understand its **bytecode**, or inspect a `.mv` without a security framing →
+  **`bytecode`** is the entry point.
+
+If still unsure, run `move prompt categories` and read every description before
+picking — the descriptions are written with common intents in mind, not just the
+literal category name.
+
 ## Universal commands
 
 - `move prompt`                                          — this overview

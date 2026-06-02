@@ -5,8 +5,10 @@ description: >
   packages and disassembling their bytecode (`sui move disassemble`), and the **`move decompile`**
   binary built from a pinned Sui clone for rendering bytecode as readable Move source. Use at
   the START of any session that needs on-chain bytecode in hand — auditing a deployed package,
-  reading a release for comprehension, comparing versions, etc. Self-contained and shareable —
-  depends only on public sources.
+  reading a release for comprehension, comparing versions, etc. Trigger on "fetch this
+  package's bytecode", "get me the .mv for package X", "disassemble this", "set up the move
+  decompiler", or whenever an upstream skill needs `.mv` files on disk. Self-contained and
+  shareable — depends only on public sources.
 ---
 
 # Sui and Move Tools

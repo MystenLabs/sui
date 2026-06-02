@@ -1,6 +1,6 @@
 ---
 name: audit
-description: Auditing compiled Sui Move packages for security vulnerabilities.
+description: Reviewing a deployed Sui Move package for vulnerabilities, exploitable bugs, suspicious behavior, or anything suspected wrong on chain. Reach for this on "is this package safe?", "what's wrong with this?", "I suspect there's a bug in X", "find vulnerabilities", "security review", or a direct "audit this".
 skills:
   - sui-move-security-review
   - sui-and-move-tools

@@ -7,7 +7,9 @@ description: >
   ownership, shared-object and PTB attack surface, dynamic fields & collections, arithmetic &
   coins, init/OTW/package upgrades, hot-potato composability, time & on-chain randomness, and
   test-only code leakage. Trigger on "audit this Move code", "find vulnerabilities in this Sui
-  contract", "security review", or when reasoning about whether a Move function can be abused.
+  contract", "security review", "is this package safe?", "I suspect there's a bug in X",
+  "something is wrong with this contract", or when reasoning about whether a Move function can
+  be abused.
 ---
 
 # Sui Move Security Review
