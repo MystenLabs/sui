@@ -22,6 +22,7 @@
 
 mod child_resolver;
 mod indexes;
+mod layout;
 mod object_store;
 mod read_store;
 
