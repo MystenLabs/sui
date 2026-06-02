@@ -49,6 +49,22 @@ global.run_spec_replay = function(dirname, action) {
     });
 };
 
+
+/**
+ * Formats and clears runtime warnings for snapshot comparison.
+ */
+global.warnings_to_string = function(runtime) {
+    const warnings = runtime.takeWarningsForTest();
+    let res = 'warnings:\n';
+    if (warnings.length === 0) {
+        return res + '  <none>\n';
+    }
+    for (const warning of warnings) {
+        res += '  ' + warning + '\n';
+    }
+    return res;
+};
+
 function findTraceFilePath(dirname) {
     const traceFileName = 'trace.json.zst';
     const entries = fs.readdirSync(dirname, { withFileTypes: true });

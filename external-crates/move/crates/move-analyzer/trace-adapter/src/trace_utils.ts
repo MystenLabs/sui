@@ -286,6 +286,34 @@ export enum TraceEventKind {
 }
 
 /**
+ * Kinds of non-fatal trace/source debug-info mismatches.
+ */
+export enum TraceDiagnosticKind {
+    MissingSourceFunction = 'MissingSourceFunction',
+}
+
+/**
+ * Warning produced while translating a trace to available debug info.
+ * Inserted into the trace during parsing to be emitted
+ * during debugging session.
+ */
+export interface TraceDiagnostic {
+    kind: TraceDiagnosticKind;
+    /**
+     * Opaque UI de-duplication key chosen by each diagnostic kind.
+     */
+    key: string;
+    /**
+     * User-facing warning text.
+     */
+    message: string;
+    /**
+     * Whether to force disassembly view for this frame.
+     */
+    forceDisassembly: boolean;
+}
+
+/**
  * Trace event types containing relevant data.
  */
 export type TraceEvent =
@@ -306,6 +334,14 @@ export type TraceEvent =
         paramValues: RuntimeValueType[]
         optimizedSrcLines: number[]
         optimizedBcodeLines?: number[]
+        /**
+         * Source is unavailable or unsafe for this frame; show bytecode.
+         */
+        forceDisassembly?: boolean
+        /**
+         * Warnings to emit when this event is reached.
+         */
+        diagnostics?: TraceDiagnostic[]
     }
     | { type: TraceEventKind.CloseFrame, id: number }
     | {
@@ -428,6 +464,20 @@ interface ITraceGenFrameInfo {
     * Information for a given function in a disassembled byc file.
     */
     bcodeFunEntry?: IDebugInfoFunction;
+}
+
+/**
+ * Internal representation of a processed OpenFrame trace event.
+ */
+interface ITranslatedOpenFrame {
+    /**
+     * Internal event added to the parsed trace.
+     */
+    event: Extract<TraceEvent, { type: TraceEventKind.OpenFrame }>;
+    /**
+     * Frame information kept while translating subsequent trace events.
+     */
+    frameInfo: ITraceGenFrameInfo;
 }
 
 /**
@@ -579,65 +629,19 @@ export async function readTrace(
                     + modInfo.addr
                     + ' not found');
             }
-            const srcFunEntry = debugInfo.functions.get(frame.function_name);
-            if (!srcFunEntry) {
-                throw new Error('Cannot find function entry in debug info for function '
-                    + frame.function_name
-                    + ' in module '
-                    + modInfo.name
-                    + ' in package '
-                    + modInfo.addr
-                    + ' when processing OpenFrame event');
-            }
-
-            const srcFileHash = debugInfo.fileHash;
-            const optimizedSrcLines = debugInfo.optimizedLines;
-            // there may be no disassembly info
-            let bcodeFileHash = undefined;
-            let optimizedBcodeLines = undefined;
-            let bcodeFunEntry = undefined;
-            let bcodeFilePath = undefined;
-            const bcodeMap = bcodeDebugInfosModMap.get(JSON.stringify(modInfo));
-            if (bcodeMap) {
-                bcodeFileHash = bcodeMap.fileHash;
-                optimizedBcodeLines = bcodeMap.optimizedLines;
-                bcodeFunEntry = bcodeMap.functions.get(frame.function_name);
-                const currentBCodeFile = filesMap.get(bcodeMap.fileHash);
-                if (currentBCodeFile) {
-                    bcodeFilePath = currentBCodeFile.path;
-                }
-
-            }
-            events.push({
-                type: TraceEventKind.OpenFrame,
-                id: frame.frame_id,
-                name: frame.function_name,
-                srcFileHash,
-                bcodeFileHash,
-                isNative: frame.is_native,
+            const translatedFrame = translateOpenFrame(
+                frame,
+                modInfo,
+                debugInfo,
+                bcodeDebugInfosModMap,
                 localsTypes,
-                localsNames: srcFunEntry.localsInfo,
                 paramValues,
-                optimizedSrcLines,
-                optimizedBcodeLines
-            });
-            const currentSrcFile = filesMap.get(debugInfo.fileHash);
-
-            if (!currentSrcFile) {
-                throw new Error(`Cannot find file with hash: ${debugInfo.fileHash}`);
-            }
-            frameInfoStack.push({
-                ID: frame.frame_id,
-                srcFilePath: currentSrcFile.path,
-                bcodeFilePath,
-                srcFileHash,
-                bcodeFileHash,
-                optimizedSrcLines,
-                optimizedBcodeLines: optimizedBcodeLines,
-                funName: frame.function_name,
-                srcFunEntry,
-                bcodeFunEntry
-            });
+                filesMap,
+                events[events.length - 1],
+                frameInfoStack[frameInfoStack.length - 1]
+            );
+            events.push(translatedFrame.event);
+            frameInfoStack.push(translatedFrame.frameInfo);
         } else if (event.CloseFrame) {
             // Extend lifetimes of locals referenced by return values
             for (const returnValue of event.CloseFrame.return_) {
@@ -891,6 +895,140 @@ export async function readTrace(
         throw new Error('Trace contains no events');
     }
     return { events, localLifetimeEnds, tracedSrcLines, tracedBcodeLines };
+}
+
+/**
+ * Converts a JSON OpenFrame into internal trace event/frame info.
+ */
+function translateOpenFrame(
+    frame: JSONTraceFrame,
+    modInfo: ModuleInfo,
+    debugInfo: IDebugInfo,
+    bcodeDebugInfosModMap: Map<string, IDebugInfo>,
+    localsTypes: string[],
+    paramValues: RuntimeValueType[],
+    filesMap: Map<string, IFileInfo>,
+    previousEvent: TraceEvent | undefined,
+    callerFrame: ITraceGenFrameInfo | undefined,
+): ITranslatedOpenFrame {
+    let srcFunEntry = debugInfo.functions.get(frame.function_name);
+    let srcFileHash = debugInfo.fileHash;
+    let optimizedSrcLines = debugInfo.optimizedLines;
+    let currentSrcFile = filesMap.get(debugInfo.fileHash);
+
+    // there may be no disassembly info
+    const bcodeMap = bcodeDebugInfosModMap.get(JSON.stringify(modInfo));
+    let bcodeFileHash = undefined;
+    let optimizedBcodeLines = undefined;
+    let bcodeFunEntry = undefined;
+    let bcodeFilePath = undefined;
+    if (bcodeMap) {
+        bcodeFileHash = bcodeMap.fileHash;
+        optimizedBcodeLines = bcodeMap.optimizedLines;
+        bcodeFunEntry = bcodeMap.functions.get(frame.function_name);
+        const currentBCodeFile = filesMap.get(bcodeMap.fileHash);
+        if (currentBCodeFile) {
+            bcodeFilePath = currentBCodeFile.path;
+        }
+    }
+
+    let forceDisassembly = false;
+    let diagnostics = undefined;
+    if (!srcFunEntry) {
+        if (!bcodeMap || !bcodeFunEntry) {
+            // if we have neither source nor bytecode debug info for the function,
+            // then we have a real problem
+            throw new Error('Cannot find function entry in debug info for function '
+                + frame.function_name
+                + ' in module '
+                + modInfo.name
+                + ' in package '
+                + modInfo.addr
+                + ' when processing OpenFrame event');
+        }
+
+        // Source debug info is stale or incomplete; use bytecode as the only safe view.
+        srcFunEntry = bcodeFunEntry;
+        srcFileHash = bcodeMap.fileHash;
+        optimizedSrcLines = bcodeMap.optimizedLines;
+        currentSrcFile = filesMap.get(bcodeMap.fileHash);
+        bcodeFileHash = undefined;
+        optimizedBcodeLines = undefined;
+        bcodeFilePath = undefined;
+        forceDisassembly = true;
+        diagnostics = [{
+            kind: TraceDiagnosticKind.MissingSourceFunction,
+            key: missingSourceFunctionDiagnosticKey(modInfo, frame.function_name, previousEvent, callerFrame),
+            forceDisassembly: true,
+            message: 'Source debug info for '
+                + modInfo.addr
+                + '::'
+                + modInfo.name
+                + '::'
+                + frame.function_name
+                + ' does not match the trace; showing disassembly for this frame.'
+        }];
+    }
+
+    if (!currentSrcFile) {
+        throw new Error(`Cannot find file with hash: ${srcFileHash}`);
+    }
+
+    return {
+        event: {
+            type: TraceEventKind.OpenFrame,
+            id: frame.frame_id,
+            name: frame.function_name,
+            srcFileHash,
+            bcodeFileHash,
+            isNative: frame.is_native,
+            localsTypes,
+            localsNames: srcFunEntry.localsInfo,
+            paramValues,
+            optimizedSrcLines,
+            optimizedBcodeLines,
+            forceDisassembly,
+            diagnostics,
+        },
+        frameInfo: {
+            ID: frame.frame_id,
+            srcFilePath: currentSrcFile.path,
+            bcodeFilePath,
+            srcFileHash,
+            bcodeFileHash,
+            optimizedSrcLines,
+            optimizedBcodeLines,
+            funName: frame.function_name,
+            srcFunEntry,
+            bcodeFunEntry
+        }
+    };
+}
+
+/**
+ * Builds a de-duplication key for missing-source-function warnings.
+ */
+function missingSourceFunctionDiagnosticKey(
+    modInfo: ModuleInfo,
+    functionName: string,
+    previousEvent: TraceEvent | undefined,
+    callerFrame: ITraceGenFrameInfo | undefined,
+): string {
+    const baseKey = 'MissingSourceFunction:'
+        + modInfo.addr
+        + '::'
+        + modInfo.name
+        + '::'
+        + functionName;
+    // Prefer callsite-specific keys so loops warn once, but distinct callsites still warn.
+    if (previousEvent?.type === TraceEventKind.Instruction
+        && (previousEvent.kind === TraceInstructionKind.CALL
+            || previousEvent.kind === TraceInstructionKind.CALL_GENERIC)
+        && callerFrame?.bcodeFileHash) {
+        return baseKey + ':' + callerFrame.bcodeFileHash + ':' + previousEvent.pc;
+    }
+    // If callsite data is unavailable, fall back to callee-only de-duplication.
+    return baseKey;
 }
 
 /**

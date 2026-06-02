@@ -87,6 +87,11 @@ const TRACE_FILE_LANGUAGE_ID = TRACE_FILE_URI_SCHEME;
 const TRACE_CUSTOM_EDITOR_ID = 'mtrace.viewer';
 
 /**
+ * Custom debug-adapter event carrying a warning for the user.
+ */
+const MOVE_WARNING_EVENT = 'moveWarning';
+
+/**
  * Provider of on-hover information during debug session.
  */
 class MoveEvaluatableExpressionProvider {
@@ -127,6 +132,8 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     let previousSourcePath: string | undefined;
+    // Keys are opaque; each diagnostic kind chooses its own de-duplication scope.
+    const shownDebugWarnings = new Set<string>();
     const decorationType = vscode.window.createTextEditorDecorationType({
         color: 'grey',
         backgroundColor: 'rgba(220, 220, 220, 0.3)' // grey with 30% opacity
@@ -194,10 +201,28 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(() => {
         // reset all decorations when the debug session is terminated
         // to avoid showing lines for code that was optimized away
+        shownDebugWarnings.clear();
         const editor = vscode.window.activeTextEditor;
         if (editor) {
             editor.setDecorations(decorationType, []);
         }
+    }));
+
+    context.subscriptions.push(vscode.debug.onDidReceiveDebugSessionCustomEvent(event => {
+        if (event.event !== MOVE_WARNING_EVENT) {
+            return;
+        }
+        const message = typeof event.body?.message === 'string'
+            ? event.body.message
+            : undefined;
+        const key = typeof event.body?.key === 'string'
+            ? event.body.key
+            : undefined;
+        if (!message || !key || shownDebugWarnings.has(key)) {
+            return;
+        }
+        shownDebugWarnings.add(key);
+        vscode.window.showWarningMessage(message);
     }));
 
     // register custom command to toggle disassembly view

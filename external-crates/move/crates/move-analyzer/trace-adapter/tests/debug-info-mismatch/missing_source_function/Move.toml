@@ -1,0 +1,6 @@
+[package]
+name = "missing_source_function"
+version = "0.0.0"
+
+[addresses]
+missing_source_function = "0x1"
