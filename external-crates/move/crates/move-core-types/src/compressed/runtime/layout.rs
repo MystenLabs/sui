@@ -225,7 +225,7 @@ pub trait BackendBuilder: Sized {
     /// Recursively absorb an existing compressed layout (from any backend)
     /// into this builder, deduplicating shared subtrees against the builder's
     /// pool.
-    fn from_layout<U: TypeLayout>(
+    fn intern_layout<U: TypeLayout>(
         &mut self,
         layout: &MoveTypeLayout<U>,
     ) -> Result<Self::Root, Self::Error> {
@@ -344,6 +344,22 @@ impl<T: TypeLayout> MoveTypeLayout<T> {
     /// if any enum variant has an unknown layout.
     pub fn inflate(&self) -> AResult<RV::MoveTypeLayout> {
         self.as_ref().inflate()
+    }
+
+    /// If this layout is a struct, return a borrowed view onto it.
+    pub fn as_struct(&self) -> Option<MoveStructLayout<'_, T>> {
+        match self.as_view() {
+            MoveLayoutView::Struct(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// If this layout is an enum, return a borrowed view onto it.
+    pub fn as_enum(&self) -> Option<MoveEnumLayout<'_, T>> {
+        match self.as_view() {
+            MoveLayoutView::Enum(e) => Some(e),
+            _ => None,
+        }
     }
 
     /// Returns `true` iff `self` and `other` describe the same Move type,

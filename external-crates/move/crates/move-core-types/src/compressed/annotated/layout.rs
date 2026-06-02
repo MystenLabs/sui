@@ -258,7 +258,7 @@ pub trait BackendBuilder: Sized {
     /// Recursively absorb an existing compressed annotated layout (from any
     /// backend) into this builder, deduplicating shared subtrees against the
     /// builder's pool.
-    fn from_layout<U: TypeLayout>(
+    fn intern_layout<U: TypeLayout>(
         &mut self,
         layout: &MoveTypeLayout<U>,
     ) -> Result<Self::Root, Self::Error> {
@@ -389,6 +389,27 @@ impl<T: TypeLayout> MoveTypeLayout<T> {
     /// Inflate back into a tree-based [`AV::MoveTypeLayout`].
     pub fn inflate(&self) -> AResult<AV::MoveTypeLayout> {
         self.as_ref().inflate()
+    }
+
+    /// If this layout is a struct, return a borrowed view onto it.
+    pub fn as_struct(&self) -> Option<MoveStructLayout<'_, T>> {
+        match self.as_view() {
+            MoveLayoutView::Struct(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// If this layout is an enum, return a borrowed view onto it.
+    pub fn as_enum(&self) -> Option<MoveEnumLayout<'_, T>> {
+        match self.as_view() {
+            MoveLayoutView::Enum(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    /// If this layout is a struct or enum, return a borrowed datatype view.
+    pub fn as_datatype(&self) -> Option<MoveDatatypeLayout<'_, T>> {
+        MoveDatatypeLayout::new(self.as_ref())
     }
 
     /// Returns `true` iff `self` and `other` describe the same Move type,
