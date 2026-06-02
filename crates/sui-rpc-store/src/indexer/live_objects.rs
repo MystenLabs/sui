@@ -17,12 +17,16 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use sui_consistent_store::Batch;
+use sui_consistent_store::Restore;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::sequential;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::object::Object;
 
+use crate::RpcStoreSchema;
 use crate::indexer::Schema;
 use crate::indexer::Store;
 use crate::indexer::checkpoint_input_objects;
@@ -67,6 +71,24 @@ impl Processor for LiveObjects {
     }
 }
 
+impl Restore for LiveObjects {
+    type Schema = RpcStoreSchema;
+
+    fn restore(
+        &self,
+        schema: &Self::Schema,
+        object: &Object,
+        batch: &mut Batch,
+    ) -> anyhow::Result<()> {
+        batch.put(
+            &schema.live_objects,
+            &live_objects::Key(object.id()),
+            &U64Varint(object.version().value()),
+        )?;
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl sequential::Handler for LiveObjects {
     type Store = Store;
@@ -101,6 +123,9 @@ impl sequential::Handler for LiveObjects {
 mod tests {
     use std::sync::Arc;
 
+    use sui_consistent_store::Db;
+    use sui_consistent_store::DbOptions;
+    use sui_types::base_types::SuiAddress;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     use super::*;
@@ -109,5 +134,28 @@ mod tests {
     async fn process_runs_against_synthetic_checkpoint() {
         let checkpoint = Arc::new(TestCheckpointBuilder::new(1).build_checkpoint());
         let _rows = LiveObjects.process(&checkpoint).await.unwrap();
+    }
+
+    #[test]
+    fn restore_writes_live_pointer_per_object() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+
+        let o1 = Object::with_id_owner_for_testing(ObjectID::from_single_byte(1), SuiAddress::ZERO);
+        let o2 = Object::with_id_owner_for_testing(ObjectID::from_single_byte(2), SuiAddress::ZERO);
+
+        let mut batch = db.batch();
+        LiveObjects.restore(&schema, &o1, &mut batch).unwrap();
+        LiveObjects.restore(&schema, &o2, &mut batch).unwrap();
+        batch.commit().unwrap();
+
+        assert_eq!(
+            schema.get_live_object_version(o1.id()).unwrap(),
+            Some(o1.version()),
+        );
+        assert_eq!(
+            schema.get_live_object_version(o2.id()).unwrap(),
+            Some(o2.version()),
+        );
     }
 }
