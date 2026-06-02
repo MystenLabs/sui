@@ -20,6 +20,8 @@
 //! [`RpcIndexes`]: sui_types::storage::RpcIndexes
 //! [`Reader`]: sui_consistent_store::reader::Reader
 
+mod object_store;
+
 use std::sync::Arc;
 
 use sui_consistent_store::Db;
