@@ -14,6 +14,7 @@ use crate::compressed::annotated::{
 };
 use crate::identifier::Identifier;
 use crate::language_storage::StructTag;
+use std::sync::Arc;
 
 // =============================================================================
 // Node types
@@ -32,21 +33,21 @@ pub struct AnnotatedFieldEntry<R> {
 pub struct AnnotatedVariantEntry<R> {
     pub name: Identifier,
     pub tag: VariantTag,
-    pub fields: Option<Box<[AnnotatedFieldEntry<R>]>>,
+    pub fields: Option<Arc<[AnnotatedFieldEntry<R>]>>,
 }
 
 /// Annotated struct layout node with type tag and named fields inline.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MoveStructNode<R> {
     pub(crate) type_: StructTag,
-    pub(crate) fields: Box<[AnnotatedFieldEntry<R>]>,
+    pub(crate) fields: Arc<[AnnotatedFieldEntry<R>]>,
 }
 
 /// Annotated enum layout node with type tag and named variants inline.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MoveEnumNode<R> {
     pub(crate) type_: StructTag,
-    pub(crate) variants: Box<[AnnotatedVariantEntry<R>]>,
+    pub(crate) variants: Arc<[AnnotatedVariantEntry<R>]>,
 }
 
 /// A compound layout node generic over the reference type.
@@ -65,7 +66,7 @@ impl MoveTypeNode<LayoutRef> {
     /// Build a struct node from a type tag and a slice of `(name, layout-ref)`
     /// pairs.
     pub(crate) fn struct_node(type_tag: &StructTag, fields: &[(&Identifier, LayoutRef)]) -> Self {
-        let field_entries: Box<[AnnotatedFieldEntry<LayoutRef>]> = fields
+        let field_entries: Arc<[AnnotatedFieldEntry<LayoutRef>]> = fields
             .iter()
             .map(|(name, h)| AnnotatedFieldEntry {
                 name: (*name).clone(),
@@ -83,7 +84,7 @@ impl MoveTypeNode<LayoutRef> {
         type_tag: &StructTag,
         variants: &[(&Identifier, VariantTag, Option<&[(&Identifier, LayoutRef)]>)],
     ) -> Self {
-        let variant_entries: Box<[AnnotatedVariantEntry<LayoutRef>]> = variants
+        let variant_entries: Arc<[AnnotatedVariantEntry<LayoutRef>]> = variants
             .iter()
             .map(|(vn, tag, fields)| {
                 let field_entries = fields.map(|fields| {

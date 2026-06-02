@@ -11,6 +11,7 @@ use crate::compressed::runtime::{
     MoveEnumLayout, MoveFieldsLayout, MoveLayoutView, MoveStructLayout, MoveTypeLayoutRef,
     TypeLayout,
 };
+use std::sync::Arc;
 
 // =============================================================================
 // Node types
@@ -19,7 +20,7 @@ use crate::compressed::runtime::{
 /// Struct layout node: field types stored as references of type `R`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MoveStructNode<R> {
-    pub(crate) fields: Box<[R]>,
+    pub(crate) fields: Arc<[R]>,
 }
 
 /// Enum layout node: each variant is either a known list of field
@@ -27,7 +28,7 @@ pub struct MoveStructNode<R> {
 /// not available.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MoveEnumNode<R> {
-    pub(crate) variants: Box<[Option<Box<[R]>>]>,
+    pub(crate) variants: Arc<[Option<Arc<[R]>>]>,
 }
 
 /// A compound layout node generic over the reference type.

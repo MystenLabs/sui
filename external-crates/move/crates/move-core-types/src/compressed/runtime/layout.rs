@@ -7,6 +7,7 @@ use crate::compressed::backend::DefaultRuntime;
 use crate::runtime_value as RV;
 use anyhow::Result as AResult;
 use std::fmt;
+use std::sync::Arc;
 
 /// The default compressed-runtime layout builder. Alias so most users can just write
 /// `MoveTypeLayoutBuilder::new()`.
@@ -97,7 +98,7 @@ pub enum MoveLayoutView<'a, T: TypeLayout = DefaultRuntime> {
 #[derive(Debug)]
 pub struct MoveEnumLayout<'a, T: TypeLayout = DefaultRuntime> {
     pub(crate) pool: &'a T,
-    pub(crate) variants: &'a [Option<Box<[T::Root]>>],
+    pub(crate) variants: &'a [Option<Arc<[T::Root]>>],
 }
 
 /// The struct layout of a struct type, as a view into a shared pool.
@@ -630,7 +631,7 @@ impl<T: TypeLayout> Eq for MoveEnumLayout<'_, T> {}
 #[inline]
 fn make_variant<'a, T: TypeLayout>(
     pool: &'a T,
-    v: &'a Option<Box<[T::Root]>>,
+    v: &'a Option<Arc<[T::Root]>>,
 ) -> VariantLayout<'a, T> {
     match v {
         Some(fields) => VariantLayout::Known(MoveFieldsLayout { pool, fields }),
