@@ -608,7 +608,6 @@ pub struct AuthorityEpochTables {
     /// Records the final output of DKG after completion, including the public VSS key and
     /// any local private shares.
     pub(crate) dkg_output: DBMap<u64, dkg_v1::Output<PkG, EncG>>,
-    pub(crate) dkg_output_v2: DBMap<u64, Option<dkg_v1::Output<PkG, EncG>>>,
     /// Holds the value of the next RandomnessRound to be generated.
     pub(crate) randomness_next_round: DBMap<u64, RandomnessRound>,
     /// Holds the value of the highest completed RandomnessRound (as reported to RandomnessReporter).
@@ -627,6 +626,7 @@ pub struct AuthorityEpochTables {
         DBMap<DeferralKey, Vec<DeprecatedWithAliases<TrustedExecutableTransaction>>>,
     deferred_transactions_with_aliases_v3:
         DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
+    pub(crate) dkg_output_v2: DBMap<u64, Option<dkg_v1::Output<PkG, EncG>>>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -870,10 +870,6 @@ impl AuthorityEpochTables {
                 ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
             (
-                "dkg_output_v2".to_string(),
-                ThConfig::new(8, 1, KeyType::uniform(1)),
-            ),
-            (
                 "randomness_next_round".to_string(),
                 ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
@@ -896,6 +892,10 @@ impl AuthorityEpochTables {
             (
                 "execution_time_observations".to_string(),
                 ThConfig::new(8 + 4, mutexes, uniform_key),
+            ),
+            (
+                "dkg_output_v2".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
         ];
         Self::open_tables_read_write(
