@@ -46,6 +46,7 @@ use bytes::Bytes;
 use futures::StreamExt;
 use futures::stream;
 use futures::stream::BoxStream;
+use sui_consistent_store::ChainId;
 use sui_consistent_store::restore::RestoreChunk;
 use sui_consistent_store::restore::RestoreSource;
 use sui_types::base_types::ObjectID;
@@ -79,19 +80,27 @@ pub const CHUNK_SIZE: usize = 50_000;
 pub struct PerpetualStoreRestoreSource {
     perpetual: Arc<AuthorityPerpetualTables>,
     target_checkpoint: u64,
+    chain_id: ChainId,
     chunk_size: usize,
 }
 
 impl PerpetualStoreRestoreSource {
     /// Build a source rooted at `perpetual`, anchored at
-    /// `target_checkpoint`. Tip indexing will resume at
-    /// `target_checkpoint + 1` once restore finishes, so the
-    /// caller should pick the highest executed checkpoint the
-    /// perpetual store has seen at restore time.
-    pub fn new(perpetual: Arc<AuthorityPerpetualTables>, target_checkpoint: u64) -> Self {
+    /// `target_checkpoint` and `chain_id`. Tip indexing will
+    /// resume at `target_checkpoint + 1` once restore finishes
+    /// — pick the highest executed checkpoint the perpetual
+    /// store has seen at restore time. `chain_id` is pinned
+    /// into `__chain_id` on finalise so subsequent tip
+    /// indexing refuses checkpoints from the wrong chain.
+    pub fn new(
+        perpetual: Arc<AuthorityPerpetualTables>,
+        target_checkpoint: u64,
+        chain_id: ChainId,
+    ) -> Self {
         Self {
             perpetual,
             target_checkpoint,
+            chain_id,
             chunk_size: CHUNK_SIZE,
         }
     }
@@ -135,6 +144,10 @@ fn next_id(id: ObjectID) -> Option<ObjectID> {
 impl RestoreSource for PerpetualStoreRestoreSource {
     fn target_checkpoint(&self) -> u64 {
         self.target_checkpoint
+    }
+
+    fn target_chain_id(&self) -> ChainId {
+        self.chain_id
     }
 
     fn shards(&self) -> u32 {
@@ -309,7 +322,8 @@ mod tests {
             perpetual.insert_object_test_only(o.clone()).unwrap();
         }
 
-        let source = PerpetualStoreRestoreSource::new(perpetual.clone(), 7).with_chunk_size(1);
+        let source = PerpetualStoreRestoreSource::new(perpetual.clone(), 7, ChainId([9u8; 32]))
+            .with_chunk_size(1);
         assert_eq!(source.target_checkpoint(), 7);
         assert_eq!(source.shards(), SHARDS);
 
@@ -342,7 +356,7 @@ mod tests {
 
         // Shard 0 covers first byte 0x00..=0x07, so both
         // objects live there.
-        let source = PerpetualStoreRestoreSource::new(perpetual.clone(), 0);
+        let source = PerpetualStoreRestoreSource::new(perpetual.clone(), 0, ChainId([0u8; 32]));
         let cursor = Bytes::copy_from_slice(&a.id().into_bytes());
         let mut stream = source.stream(0, Some(cursor));
         let mut yielded = Vec::new();

@@ -45,6 +45,7 @@ use tracing::info;
 use tracing::warn;
 
 use crate::Batch;
+use crate::ChainId;
 use crate::Db;
 use crate::FrameworkSchema;
 use crate::PipelineTaskKey;
@@ -101,6 +102,21 @@ pub trait RestoreSource: Send + Sync + 'static {
     fn target_watermark(&self) -> Watermark {
         Watermark::for_checkpoint(self.target_checkpoint())
     }
+
+    /// Chain identifier the restored data belongs to.
+    ///
+    /// The driver writes this row into the framework's
+    /// `__chain_id` CF for every registered pipeline at the
+    /// end of the run. Tip indexing's `accepts_chain_id` check
+    /// will then refuse the first checkpoint if it belongs to
+    /// a different chain than the one we restored from,
+    /// instead of silently recording the incoming chain id as
+    /// authoritative.
+    ///
+    /// Required (no default) because the whole point of this
+    /// method is to plug the "silently accept any chain" gap
+    /// — a `[0u8; 32]` default would just paper over it.
+    fn target_chain_id(&self) -> ChainId;
 
     /// Number of shards the source is split into. The driver
     /// will call [`stream`](Self::stream) once per `shard_id`
@@ -299,6 +315,7 @@ impl<S: Send + Sync + 'static, Src: RestoreSource> RestoreDriver<S, Src> {
 
         let target_checkpoint = source.target_checkpoint();
         let target_watermark = source.target_watermark();
+        let target_chain_id = source.target_chain_id();
         let shard_count = source.shards();
         let shard_concurrency = config
             .shard_concurrency
@@ -325,13 +342,14 @@ impl<S: Send + Sync + 'static, Src: RestoreSource> RestoreDriver<S, Src> {
             finalize(
                 target_checkpoint,
                 &target_watermark,
+                target_chain_id,
                 shard_count,
                 pipelines,
                 states,
                 db,
             )
             .await
-            .context("finaliser failed")
+            .context("finalizer failed")
         });
 
         Ok(svc)
@@ -440,12 +458,15 @@ where
 
 /// Final transition: read each pipeline's `__restore` row,
 /// confirm every shard is `Done`, and atomically rewrite the
-/// row as `Complete { restored_at: target_checkpoint }`. The
-/// pipeline's `__watermark` row is set in the same batch so
-/// subsequent tip indexing resumes at the right checkpoint.
+/// row as `Complete { restored_at: target_checkpoint }`.
+/// `__watermark` is set so tip indexing resumes at the right
+/// checkpoint, and `__chain_id` is set so the framework's
+/// chain-id check refuses checkpoints from a different chain.
+/// All three writes commit together in one batch.
 async fn finalize<S>(
     target_checkpoint: u64,
     target_watermark: &Watermark,
+    target_chain_id: ChainId,
     shard_count: u32,
     pipelines: Arc<Vec<PipelineEntry<S>>>,
     states: Arc<Mutex<Vec<RestoreState>>>,
@@ -492,6 +513,7 @@ where
         });
         batch.put(&framework.restore, &entry.key, &complete)?;
         batch.put(&framework.watermarks, &entry.key, target_watermark)?;
+        batch.put(&framework.chain_ids, &entry.key, &target_chain_id)?;
     }
 
     batch.commit()?;
@@ -619,6 +641,7 @@ mod tests {
     /// by skipping any chunk whose index is `<= cursor`.
     struct VecSource {
         target: u64,
+        chain_id: ChainId,
         shards: Vec<Vec<RestoreChunk>>,
         /// Tally of how many chunks each shard yielded across
         /// every `stream()` call. Tests use this to assert that
@@ -630,6 +653,7 @@ mod tests {
         fn new(target: u64, shards: Vec<Vec<RestoreChunk>>) -> Self {
             Self {
                 target,
+                chain_id: ChainId([1u8; 32]),
                 shards,
                 yielded: Arc::new(StdMutex::new(HashMap::new())),
             }
@@ -640,6 +664,10 @@ mod tests {
     impl RestoreSource for VecSource {
         fn target_checkpoint(&self) -> u64 {
             self.target
+        }
+
+        fn target_chain_id(&self) -> ChainId {
+            self.chain_id
         }
 
         fn shards(&self) -> u32 {
@@ -690,9 +718,15 @@ mod tests {
         Object::immutable_with_id_for_testing(ObjectID::from_single_byte(id))
     }
 
-    /// Assert the persisted pipeline state is `Complete { restored_at }`
-    /// and the watermark row matches `expected_watermark`.
-    fn assert_complete(db: &Db, name: &str, expected_watermark: &Watermark) {
+    /// Assert the persisted pipeline state is `Complete { restored_at }`,
+    /// the watermark row matches `expected_watermark`, and the chain
+    /// id is pinned to `expected_chain_id`.
+    fn assert_complete(
+        db: &Db,
+        name: &str,
+        expected_watermark: &Watermark,
+        expected_chain_id: ChainId,
+    ) {
         let key = PipelineTaskKey::new(name);
         let state = db.framework().restore.get(&key).unwrap().unwrap();
         match state.state.unwrap() {
@@ -703,6 +737,8 @@ mod tests {
         }
         let watermark = db.framework().watermarks.get(&key).unwrap().unwrap();
         assert_eq!(&watermark, expected_watermark);
+        let chain_id = db.framework().chain_ids.get(&key).unwrap().unwrap();
+        assert_eq!(chain_id, expected_chain_id);
     }
 
     /// One-shard run: a single shard with two chunks. Verifies
@@ -740,6 +776,7 @@ mod tests {
             &db,
             ObjectVersionPipeline::NAME,
             &Watermark::for_checkpoint(42),
+            ChainId([1u8; 32]),
         );
     }
 
@@ -781,6 +818,7 @@ mod tests {
             &db,
             ObjectVersionPipeline::NAME,
             &Watermark::for_checkpoint(7),
+            ChainId([1u8; 32]),
         );
     }
 
@@ -866,6 +904,7 @@ mod tests {
             &db,
             ObjectVersionPipeline::NAME,
             &Watermark::for_checkpoint(99),
+            ChainId([1u8; 32]),
         );
     }
 }

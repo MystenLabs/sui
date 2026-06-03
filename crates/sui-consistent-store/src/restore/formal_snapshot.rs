@@ -53,12 +53,14 @@ use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
 use prometheus::Registry;
 use sui_futures::future::with_slow_future_monitor;
+use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientTrait;
 use sui_indexer_alt_framework::ingestion::store_client::StoreIngestionClient;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use tracing::info;
 use tracing::warn;
 use url::Url;
 
+use crate::ChainId;
 use crate::Watermark;
 use crate::restore::RestoreChunk;
 use crate::restore::RestoreSource;
@@ -152,6 +154,12 @@ pub struct FormalSnapshot {
     /// place once restore finishes.
     target_watermark: Watermark,
 
+    /// Chain identifier the snapshot belongs to (digest of the
+    /// chain's genesis checkpoint). Pinned into `__chain_id`
+    /// on finalise so tip indexing rejects checkpoints from a
+    /// different chain.
+    target_chain_id: ChainId,
+
     /// Dense `shard_id -> bucket_id` mapping. The number of
     /// shards is `shard_buckets.len()`.
     shard_buckets: Vec<u32>,
@@ -178,7 +186,8 @@ impl FormalSnapshot {
         let (epoch, epoch_dir) = resolve_epoch(&args, &store).await?;
         info!(epoch, epoch_dir, "Connected to valid formal snapshot");
 
-        let target_watermark = anchor_watermark(&args.remote_store_url, epoch).await?;
+        let (target_watermark, target_chain_id) =
+            anchor_watermark_and_chain_id(&args.remote_store_url, epoch).await?;
         info!(
             epoch,
             target_checkpoint = target_watermark.checkpoint_hi_inclusive,
@@ -221,6 +230,7 @@ impl FormalSnapshot {
             source: store,
             epoch_dir,
             target_watermark,
+            target_chain_id,
             shard_buckets,
             shard_partitions,
             metrics,
@@ -259,6 +269,10 @@ impl RestoreSource for FormalSnapshot {
 
     fn target_watermark(&self) -> Watermark {
         self.target_watermark
+    }
+
+    fn target_chain_id(&self) -> ChainId {
+        self.target_chain_id
     }
 
     fn shards(&self) -> u32 {
@@ -408,8 +422,12 @@ async fn resolve_epoch(
 
 /// Hit the remote checkpoint store at `remote_store_url` to
 /// resolve `epoch` to its end-of-epoch checkpoint and return a
-/// fully populated [`Watermark`].
-async fn anchor_watermark(remote_store_url: &Url, epoch: u64) -> anyhow::Result<Watermark> {
+/// fully populated [`Watermark`] alongside the chain id
+/// (digest of checkpoint 0).
+async fn anchor_watermark_and_chain_id(
+    remote_store_url: &Url,
+    epoch: u64,
+) -> anyhow::Result<(Watermark, ChainId)> {
     let client = StoreIngestionClient::new(
         HttpBuilder::new()
             .with_url(remote_store_url.to_string())
@@ -440,12 +458,18 @@ async fn anchor_watermark(remote_store_url: &Url, epoch: u64) -> anyhow::Result<
         "End-of-epoch checkpoint {checkpoint} does not belong to epoch {epoch}",
     );
 
-    Ok(Watermark {
+    let chain_identifier = client
+        .chain_id()
+        .await
+        .context("Failed to fetch chain id from remote checkpoint store")?;
+
+    let watermark = Watermark {
         epoch_hi_inclusive: summary.epoch,
         checkpoint_hi_inclusive: summary.sequence_number,
         tx_hi: summary.network_total_transactions,
         timestamp_ms_hi_inclusive: summary.timestamp_ms,
-    })
+    };
+    Ok((watermark, ChainId(*chain_identifier.as_bytes())))
 }
 
 /// Fetch one `.obj` file with exponential backoff, decode it,

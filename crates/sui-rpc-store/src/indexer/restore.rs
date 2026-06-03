@@ -68,6 +68,7 @@ mod tests {
     use futures::StreamExt;
     use futures::stream;
     use futures::stream::BoxStream;
+    use sui_consistent_store::ChainId;
     use sui_consistent_store::Db;
     use sui_consistent_store::DbOptions;
     use sui_consistent_store::PipelineTaskKey;
@@ -89,11 +90,12 @@ mod tests {
     /// without standing up a real snapshot.
     struct VecSource {
         target: u64,
+        chain_id: ChainId,
         chunks: Vec<RestoreChunk>,
     }
 
     impl VecSource {
-        fn from_objects(target: u64, objects: Vec<Vec<Object>>) -> Self {
+        fn from_objects(target: u64, chain_id: ChainId, objects: Vec<Vec<Object>>) -> Self {
             let chunks = objects
                 .into_iter()
                 .enumerate()
@@ -102,7 +104,11 @@ mod tests {
                     cursor: Bytes::copy_from_slice(&(i as u32).to_be_bytes()),
                 })
                 .collect();
-            Self { target, chunks }
+            Self {
+                target,
+                chain_id,
+                chunks,
+            }
         }
     }
 
@@ -110,6 +116,10 @@ mod tests {
     impl RestoreSource for VecSource {
         fn target_checkpoint(&self) -> u64 {
             self.target
+        }
+
+        fn target_chain_id(&self) -> ChainId {
+            self.chain_id
         }
 
         fn shards(&self) -> u32 {
@@ -166,7 +176,8 @@ mod tests {
             .map(|i| Object::with_id_owner_for_testing(ObjectID::from_single_byte(i), owner))
             .collect();
 
-        let source = VecSource::from_objects(123, vec![objects.clone()]);
+        let chain_id = ChainId([7u8; 32]);
+        let source = VecSource::from_objects(123, chain_id, vec![objects.clone()]);
 
         restore_indexes(
             db.clone(),
@@ -204,7 +215,8 @@ mod tests {
             assert!(matches!(kind, OwnerKind::AddressOwner(addr) if *addr == owner));
         }
 
-        // Every pipeline finished and has both __restore Complete and __watermark set.
+        // Every pipeline finished and has __restore Complete,
+        // __watermark, and __chain_id all set.
         for name in [
             LiveObjects::NAME,
             ObjectByOwner::NAME,
@@ -220,6 +232,8 @@ mod tests {
             }
             let wm = db.framework().watermarks.get(&key).unwrap().unwrap();
             assert_eq!(wm, Watermark::for_checkpoint(123));
+            let pinned_chain_id = db.framework().chain_ids.get(&key).unwrap().unwrap();
+            assert_eq!(pinned_chain_id, chain_id);
         }
     }
 }
