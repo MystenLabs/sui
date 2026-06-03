@@ -21,30 +21,39 @@
 //!   module) — needs a `TransactionExecutor` impl wired into
 //!   `RpcService::with_executor`. The binary doesn't yet set
 //!   one up; see `crates/sui-rpc-node/src/rpc.rs`'s TODO.
+//! - `client.rs::execute_transaction_transfer` — same
+//!   `TransactionExecutor` gap as
+//!   `transaction_execution_service`.
+//! - `client.rs::get_checkpoint_artifacts` — needs
+//!   `ProtocolConfig::apply_overrides_for_testing` to enable
+//!   the artifacts digest field; that override is
+//!   process-global and would conflict with the per-test
+//!   Simulacrum instance.
 //! - `subscription_service.rs` — needs a
 //!   `SubscriptionService` handle on the rpc-api, which the
-//!   binary doesn't construct either.
-//! - `signature_verification_service.rs` — zkLogin test
+//!   binary doesn't construct (the rpc-store is read-only and
+//!   doesn't generate the executor-side subscription events).
+//! - `signature_verification_service.rs` — the zkLogin test
 //!   depends on `with_default_jwks` + epoch transitions with
 //!   authenticator state updates that Simulacrum doesn't
 //!   expose.
-//! - `unchanged_loaded_runtime_objects.rs` — exercises a TTO
-//!   shape that requires a custom on-disk Move package.
-//! - `state_service::balance::test_address_balance*` — needs
-//!   `ProtocolConfig::apply_overrides_for_testing` to enable
-//!   accumulators, which is process-global and clashes with the
-//!   shared Simulacrum instance.
-//! - `state_service::balance::test_custom_coin_balance`,
-//!   `state_service::list_owned_objects::test_indexing_with_tto`,
-//!   and every `move_package_service` test that publishes one
-//!   of the on-disk `crates/sui-e2e-tests/tests/rpc/data/*`
-//!   Move packages — needs `sui-move-build` set up against
-//!   that on-disk Move project layout.
-//! - `client.rs::execute_transaction_transfer` and
-//!   `get_checkpoint_artifacts` — same `TransactionExecutor`
-//!   gap as `transaction_execution_service`, plus the artifact
-//!   tests need post-`apply_overrides_for_testing` protocol
-//!   features.
+//! - `ledger_service::get_epoch::get_epoch_protocol_config_exposes_gasless_allowlist`
+//!   and `state_service::balance::test_address_balance*` —
+//!   both call `ProtocolConfig::apply_overrides_for_testing`
+//!   (gasless allowlist / accumulator enablement). Those
+//!   overrides are process-global and would clash with other
+//!   tests sharing this binary's Simulacrum.
+//! - `state_service::balance::test_balance_apis` — the e2e
+//!   version asserts on `TestClusterBuilder`'s fixed
+//!   `INITIAL_SUI_BALANCE` (150 Peta MIST) grant. Simulacrum's
+//!   `funded_account` takes the amount as a parameter, so the
+//!   port asserts the requested amount instead.
+//! - `unchanged_loaded_runtime_objects::test_unchanged_loaded_runtime_objects`
+//!   — depends on `stake_with_validator(&test_cluster)` (no
+//!   multi-validator concept in Simulacrum) and on a hard-coded
+//!   `validator_set` object address that's specific to
+//!   `TestClusterBuilder`'s setup. The three TTO tests in that
+//!   file are ported.
 //!
 //! # Tests intentionally not ported from `sui-indexer-alt-e2e-tests`
 //!

@@ -149,6 +149,13 @@ impl ServiceConfig {
         cfg.committer.collect_interval_ms = Some(50);
         cfg.committer.watermark_interval_ms = Some(50);
         cfg.rpc.listen_address = rpc_listen_address;
+        // Enable indexing-backed surfaces (v2alpha
+        // `ListTransactions` / `ListEvents` / `ListCheckpoints`)
+        // so the test harness can exercise them. The rpc-store
+        // always materialises the bitmap CFs that back these
+        // endpoints, so honouring the flag costs nothing here.
+        cfg.rpc.config.enable_indexing = Some(true);
+        cfg.rpc.config.ledger_history_indexing = Some(true);
         cfg
     }
 }
