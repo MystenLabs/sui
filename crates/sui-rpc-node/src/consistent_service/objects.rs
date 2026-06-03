@@ -20,12 +20,14 @@
 
 use sui_consistent_store::Schema as _;
 use sui_consistent_store::SchemaAtSnapshot as _;
+use sui_consistent_store::Snapshot;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha as grpc;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::owner::OwnerKind as ProtoOwnerKind;
 use sui_rpc_store::RpcStoreSchema;
 use sui_rpc_store::schema::object_by_owner;
 use sui_rpc_store::schema::type_filter::TypeFilter;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::parse_sui_address;
 use sui_types::parse_sui_module_id;
@@ -120,14 +122,19 @@ pub(super) fn list_owned_objects(
         }
     };
 
+    let mut objects = Vec::with_capacity(resp.results.len());
+    for (token, key, value) in resp.results {
+        objects.push(object_with_digest(
+            &schema,
+            key.object_id,
+            SequenceNumber::from_u64(value.0),
+            Some(token),
+        )?);
+    }
     Ok(grpc::ListObjectsResponse {
         has_previous_page: Some(resp.has_prev),
         has_next_page: Some(resp.has_next),
-        objects: resp
-            .results
-            .into_iter()
-            .map(|(token, key, value)| object_proto(key.object_id, value.0, Some(token)))
-            .collect(),
+        objects,
     })
 }
 
@@ -162,14 +169,41 @@ pub(super) fn list_objects_by_type(
 
     let resp = page.paginate_prefix(&schema.object_by_type, &filter)?;
 
+    let mut objects = Vec::with_capacity(resp.results.len());
+    for (token, key, value) in resp.results {
+        objects.push(object_with_digest(
+            &schema,
+            key.object_id,
+            SequenceNumber::from_u64(value.0),
+            Some(token),
+        )?);
+    }
     Ok(grpc::ListObjectsResponse {
         has_previous_page: Some(resp.has_prev),
         has_next_page: Some(resp.has_next),
-        objects: resp
-            .results
-            .into_iter()
-            .map(|(token, key, value)| object_proto(key.object_id, value.0, Some(token)))
-            .collect(),
+        objects,
+    })
+}
+
+/// Fetch the live `Object` at `(id, version)` from the snapshot
+/// and project it into the proto shape with the digest filled
+/// in. The `object_by_owner` / `object_by_type` indexes only
+/// store `(id, version)`; the digest lives on the row in the
+/// `objects` CF, which we fetch lazily here so a paginated
+/// response carries a real `ObjectDigest`.
+fn object_with_digest(
+    schema: &RpcStoreSchema<Snapshot>,
+    id: ObjectID,
+    version: SequenceNumber,
+    page_token: Option<Vec<u8>>,
+) -> Result<grpc::Object, Error> {
+    let object = schema.get_object_by_key(id, version)?;
+    let digest = object.map(|o| o.digest().base58_encode());
+    Ok(grpc::Object {
+        object_id: Some(id.to_string()),
+        version: Some(version.value()),
+        digest,
+        page_token: page_token.map(Into::into),
     })
 }
 
@@ -293,6 +327,7 @@ impl sui_consistent_store::Encode for KindPrefix {
     }
 }
 
+#[allow(dead_code)]
 fn object_proto(id: ObjectID, version: u64, page_token: Option<Vec<u8>>) -> grpc::Object {
     grpc::Object {
         object_id: Some(id.to_string()),
