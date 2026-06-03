@@ -34,6 +34,7 @@ use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::net::TcpListener;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -56,21 +57,27 @@ use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientTrait;
 use sui_indexer_alt_framework::metrics::IngestionMetrics;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_move_build::BuildConfig;
 use sui_rpc_node::METRICS_PREFIX;
 use sui_rpc_node::config::ServiceConfig;
 use sui_rpc_node::rpc::build_rpc_service;
 use sui_rpc_store::Indexer;
 use sui_rpc_store::PipelineLayer;
 use sui_rpc_store::RpcStoreSchema;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::digests::ChainIdentifier;
 use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::ExecutionError;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::storage::ReadStore;
 use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+use sui_types::utils::to_sender_signed_transaction;
 use tempfile::TempDir;
 use tokio::sync::Mutex;
 use url::Url;
@@ -321,6 +328,75 @@ impl LocalCluster {
         tx: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         self.simulacrum.lock().await.execute_transaction(tx)
+    }
+
+    /// Look up an object directly in Simulacrum's in-memory
+    /// store. Useful when a test needs to filter newly-created
+    /// objects from a transaction's effects by Move type — the
+    /// effects only carry IDs, not types.
+    pub async fn get_object(&self, id: ObjectID) -> Option<sui_types::object::Object> {
+        self.simulacrum.lock().await.store().get_object(&id).cloned()
+    }
+
+    /// Compile the Move package at `path` with
+    /// [`BuildConfig::new_for_testing`], submit a publish
+    /// transaction signed by `sender` using `gas` for gas payment,
+    /// and return the resulting [`ObjectID`] of the published
+    /// package plus the [`TransactionEffects`] (so callers can
+    /// pluck out treasury caps, metadata objects, etc.). The
+    /// transaction is queued; the caller still needs to invoke
+    /// [`Self::create_checkpoint`] before the indexer surfaces
+    /// the new state.
+    pub async fn publish_package(
+        &self,
+        sender: SuiAddress,
+        keypair: &AccountKeyPair,
+        gas: ObjectRef,
+        path: impl AsRef<Path>,
+    ) -> anyhow::Result<(ObjectID, TransactionEffects)> {
+        let compiled_package = BuildConfig::new_for_testing()
+            .build_async(path.as_ref())
+            .await
+            .context("compiling Move package")?;
+        let modules = compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
+        let dependencies = compiled_package.get_dependency_storage_package_ids();
+
+        let rgp = self.reference_gas_price().await;
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.publish_immutable(modules, dependencies);
+        let pt = builder.finish();
+        // Match the e2e helper's 100M MIST budget — large enough
+        // for any of the test Move packages without depending on
+        // protocol-specific publish cost formulas.
+        let tx_data = TransactionData::new_programmable(sender, vec![gas], pt, 100_000_000, rgp);
+        let signed = to_sender_signed_transaction(tx_data, keypair);
+
+        let (effects, err) = self.execute_transaction(signed).await?;
+        if let Some(err) = err {
+            anyhow::bail!("publish transaction failed: {err}");
+        }
+
+        // Move packages and frozen `CoinMetadata` both show up as
+        // `Immutable` in `created()`, so we have to disambiguate
+        // by looking up each object and checking `is_package()`.
+        let mut package_id = None;
+        for (oref, owner) in effects.created() {
+            if !matches!(owner, sui_types::object::Owner::Immutable) {
+                continue;
+            }
+            if self
+                .get_object(oref.0)
+                .await
+                .map(|obj| obj.is_package())
+                .unwrap_or(false)
+            {
+                package_id = Some(oref.0);
+                break;
+            }
+        }
+        let package_id = package_id.context("publish effects missing a Move package object")?;
+
+        Ok((package_id, effects))
     }
 
     /// Roll Simulacrum forward by producing a checkpoint over
