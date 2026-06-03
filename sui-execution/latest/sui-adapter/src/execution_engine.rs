@@ -361,8 +361,10 @@ mod checked {
         );
         let tx_ctx = Rc::new(RefCell::new(tx_ctx));
 
-        let is_gasless = protocol_config.enable_gasless()
-            && is_gasless_transaction(&gas_data, &transaction_kind);
+        // `enable_gasless` has been on for every chain since protocol v119, well below
+        // anything this execution version handles (gas_model 13+ = protocol v123+), so we
+        // don't gate on the flag any more.
+        let is_gasless = is_gasless_transaction(&gas_data, &transaction_kind);
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
 
         let input_reservations =
