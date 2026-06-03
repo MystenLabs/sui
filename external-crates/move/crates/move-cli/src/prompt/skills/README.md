@@ -20,8 +20,7 @@ skills live here in one canonical location.
   `move decompile` binary for human-readable rendering. Includes the confirm-`SUI_REF`
   gate and the isolation rule that forbids local Sui checkouts.
 - **`move-bytecode-comprehension`** — Move binary format essentials + the survival table
-  (what survives compilation), plus how to read disassembly and decompiled output without
-  being misled by decompiler artifacts.
+  (what survives compilation), plus how to read disassembly and decompiled output soundly.
 
 ## Access (any AI agent)
 
