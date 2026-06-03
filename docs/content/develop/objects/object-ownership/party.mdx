@@ -3,7 +3,7 @@ title: Party Objects
 description: Party objects are owned by a specified party at the time of transfer and versioned by consensus. Learn how to create, transfer, and access these objects.
 ---
 
-A party object is a consensus-address-owned object: a single address owns it, but consensus sequences and versions it. APIs expose this ownership with a `ConsensusAddressOwner` owner variant. Like shared objects, party objects use consensus sequencing. Unlike shared objects, they retain single-address ownership and can be transferred to and from other ownership types and wrapped.
+A party object is owned by a `Party`: a permission set that determines which addresses can access the object and how. Like [shared](/develop/objects/object-ownership/shared) objects, party objects are sequenced and versioned by [consensus](/develop/sui-architecture/consensus), so several transactions can use them concurrently. Unlike shared objects, only the owning party can access a party object, and you can transfer it to and from other ownership types and wrap it.
 
 Party objects are transferred using the [`sui::transfer::party_transfer`](/references/framework/sui_sui/transfer#sui_transfer_party_transfer) or [`sui::transfer::public_party_transfer`](/references/framework/sui_sui/transfer#sui_transfer_public_party_transfer) function. The object is accessible to the `Party` to which it is transferred.
 
@@ -124,7 +124,7 @@ tx.moveCall({
 
 You specify party objects as input to a transaction in the same way as shared objects. Sui validators ensure that the sender of the transaction can access the object. A validator might abort a transaction at execution time if the owner of an input party object changed because of an earlier, conflicting transaction.
 
-In the TypeScript SDK, reference a party object with `tx.object(PARTY_OBJECT_ID)`. The SDK reads the object's `ConsensusAddressOwner` owner and resolves the input as a consensus object automatically, using the consensus start version, so you do not pass a version yourself:
+In the TypeScript SDK, reference a party object with `tx.object(PARTY_OBJECT_ID)`. The SDK detects that the object is a consensus object from its owner and resolves the input automatically, using the consensus start version, so you do not pass a version yourself:
 
 ```ts title='use-party-object.ts'
 import { Transaction } from '@mysten/sui/transactions';
@@ -150,17 +150,10 @@ Keep the following constraints in mind when you design with party objects:
 - **No gas payment with party `Coin<SUI>`:** You cannot pay gas with a party object `Coin<SUI>`. Transfer it back to address-owned first.
 - **Cannot be shared after creation:** Once you set an object's ownership, you cannot [share](/develop/objects/object-ownership/shared) it. You can still transfer it to another ownership type, wrap it, or make it [immutable](/develop/objects/object-ownership/immutable).
 
-:::caution
-
-Party objects are not supported on every network. On a network that does not support them, the transfer functions abort with `ENotSupported`. Confirm party object support on your target network before you rely on these functions.
-
-:::
-
 ## Troubleshooting
 
 Use the following guidance when a transaction that uses party objects fails.
 
 - **Invalid party permissions:** A transfer aborts with `EInvalidPartyPermissions` when the party passed to `party_transfer` or `public_party_transfer` has more than one member or does not grant all permissions to a single owner. Build the party with `sui::party::single_owner` so it has exactly one owner with full permissions.
-- **Network does not support party objects:** A transfer aborts with `ENotSupported` when the target network does not support party objects yet. Switch to a network that supports them, or use a different ownership type.
 - **Owner changed or access denied:** A validator aborts the transaction when the owner of an input party object changed because of an earlier, conflicting transaction, or when the sender is not the current owner. Refetch the object's current owner and version, then rebuild and resubmit the transaction.
 - **Gas payment failed with a party coin:** A party object `Coin<SUI>` cannot pay for gas. Transfer the coin back to address-owned, then use it as the gas coin, or select a different address-owned gas coin.
