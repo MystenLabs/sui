@@ -166,6 +166,7 @@ feature_flags:
   use_coin_party_owner: true
   enable_gasless: true
   gasless_verify_remaining_balance: true
+  skip_signing_phase_withdraw_balance_check: true
   disallow_jump_orphans: true
   early_return_receive_object_mismatched_type: true
   timestamp_based_epoch_close: true

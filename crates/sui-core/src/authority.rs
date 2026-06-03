@@ -1025,9 +1025,11 @@ impl AuthorityState {
             self.coin_reservation_resolver.as_ref(),
         )?;
 
-        self.execution_cache_trait_pointers
-            .account_funds_read
-            .check_amounts_available(&declared_withdrawals)?;
+        if !protocol_config.skip_signing_phase_withdraw_balance_check() {
+            self.execution_cache_trait_pointers
+                .account_funds_read
+                .check_amounts_available(&declared_withdrawals)?;
+        }
 
         if protocol_config.gasless_verify_remaining_balance() && tx_data.is_gasless_transaction() {
             let min_amounts =

@@ -1091,6 +1091,9 @@ struct FeatureFlags {
     gasless_verify_remaining_balance: bool,
 
     #[serde(skip_serializing_if = "is_false")]
+    skip_signing_phase_withdraw_balance_check: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
     disallow_jump_orphans: bool,
 
     // If true, return early on type mismatch in receive_object.
@@ -2810,6 +2813,10 @@ impl ProtocolConfig {
 
     pub fn gasless_verify_remaining_balance(&self) -> bool {
         self.feature_flags.gasless_verify_remaining_balance
+    }
+
+    pub fn skip_signing_phase_withdraw_balance_check(&self) -> bool {
+        self.feature_flags.skip_signing_phase_withdraw_balance_check
     }
 
     pub fn gasless_allowed_token_types(&self) -> &[(String, u64)] {
@@ -4979,6 +4986,12 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.timestamp_based_epoch_close = true;
                     }
+                    // EXPERIMENT: skip the signing-phase withdraw balance check in
+                    // non-production environments so existing tests reach the execution-time
+                    // insufficient-balance path.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.skip_signing_phase_withdraw_balance_check = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -5389,6 +5402,10 @@ impl ProtocolConfig {
 
     pub fn enable_multi_epoch_transaction_expiration_for_testing(&mut self) {
         self.feature_flags.enable_multi_epoch_transaction_expiration = true;
+    }
+
+    pub fn set_skip_signing_phase_withdraw_balance_check_for_testing(&mut self, val: bool) {
+        self.feature_flags.skip_signing_phase_withdraw_balance_check = val;
     }
 
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
