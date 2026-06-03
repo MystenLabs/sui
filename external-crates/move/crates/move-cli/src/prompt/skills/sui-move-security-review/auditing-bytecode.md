@@ -9,10 +9,8 @@ disassembly — is not a finding.
 
 ## Workflow
 
-1. **Stand up tools** — invoke `sui-and-move-tools` (confirm `SUI_REF` with the user, suiup-managed
-   `sui`, clone, fetch the package's `.mv` modules). **Never reuse a local Sui checkout or any
-   binary built inside one** — the audit uses only the freshly-built decompiler in `$WORK_DIR` (set up by `sui-and-move-tools`)
-   and the `suiup`-managed `sui` CLI (the toolchain skill enforces this).
+1. **Stand up tools** — invoke `sui-and-move-tools` to fetch the package's `.mv` modules
+   and produce the disassembly + decompiled views.
 2. **Disassemble every module** — this is the analysis substrate. The toolchain runbook also
    decompiles every module, but those `.move` files are for *later* finding-explanation only; do
    not read them as analysis input.
@@ -142,4 +140,13 @@ Why it's exploitable: ...
 Exploit: ...
 ```
 
-Always record `SUI_REF`, network, and package id with the report so the audit is reproducible.
+## Reproducibility
+
+For every audit, record alongside the findings:
+
+- Target package id + network (`mainnet` / `testnet` / `devnet`)
+- GraphQL endpoint used (e.g. `https://graphql.mainnet.sui.io/graphql`)
+- `move --version` (the binary that ran `move prompt`)
+
+`move disassemble` output is byte-for-byte stable across patch versions of the binary, so
+this metadata is enough to re-derive the same findings against the same package.
