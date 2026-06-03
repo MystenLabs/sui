@@ -229,10 +229,7 @@ mod tests {
         // `indexes_only` did not register `objects`, so the
         // `(id, version)` CF stays empty.
         for o in &objects {
-            assert_eq!(
-                schema.get_object_by_key(o.id(), o.version()).unwrap(),
-                None,
-            );
+            assert_eq!(schema.get_object_by_key(o.id(), o.version()).unwrap(), None,);
         }
 
         // Every registered pipeline finished and has __restore
@@ -259,11 +256,7 @@ mod tests {
         }
         let objects_key = PipelineTaskKey::new(Objects::NAME);
         assert!(
-            db.framework()
-                .restore
-                .get(&objects_key)
-                .unwrap()
-                .is_none(),
+            db.framework().restore.get(&objects_key).unwrap().is_none(),
             "indexes_only should leave the objects pipeline unregistered",
         );
     }
