@@ -40,7 +40,9 @@ available when the category context isn't needed.
 
 The SM-* catalog in `sui-move-security-review/` was derived from the constructive
 `MystenLabs/skills` "how to write correct Sui Move" guidance. See
-`sui-move-security-review/LINEAGE.md` for the pinned upstream ref and the refresh protocol.
+`../maintenance/sui-move-security-review/LINEAGE.md` for the pinned upstream ref and the
+refresh protocol — kept out of the embedded surface so the agent's context doesn't carry
+provenance metadata.
 
 ## Editing notes
 

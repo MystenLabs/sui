@@ -166,3 +166,10 @@ A category is a single markdown file plus, optionally, references to existing sk
 2. Optionally reference the new bundle from one or more `CATEGORY.md` frontmatter
    `skills:` lists.
 3. Rebuild.
+
+## Maintainer-only content
+
+Provenance, refresh tooling, and other content that should not be visible to runtime
+agents lives at `src/prompt/maintenance/` (see its own `README.md`). `build.rs` walks
+only `src/prompt/skills/` and `src/prompt/categories/`, so anything under
+`maintenance/` is excluded from the binary by construction.
