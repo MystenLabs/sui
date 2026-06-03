@@ -12,11 +12,15 @@ pub mod checked {
 
     use crate::gas::GasUsageReport;
     use crate::gas_model::gas_predicates::check_for_gas_price_too_high;
+    use crate::gas_model::gas_v2::PerObjectStorage;
     use crate::{
         ObjectID,
         effects::{TransactionEffects, TransactionEffectsAPI},
         error::{ExecutionError, SuiResult, UserInputError, UserInputResult},
-        gas_model::{gas_v2::SuiGasStatus as SuiGasStatusV2, tables::GasStatus},
+        gas_model::{
+            gas_v2::SuiGasStatus as SuiGasStatusV2, gas_v3::SuiGasStatus as SuiGasStatusV3,
+            tables::GasStatus,
+        },
         object::Object,
         sui_serde::{BigInt, Readable},
         transaction::ObjectReadResult,
@@ -54,15 +58,31 @@ pub mod checked {
         fn charge_storage_and_rebate(&mut self) -> Result<(), ExecutionError>;
         fn adjust_computation_on_out_of_gas(&mut self);
         fn gas_usage_report(&self) -> GasUsageReport;
+        fn check_gas_balance(
+            &self,
+            gas_objs: &[&ObjectReadResult],
+            gas_budget: u64,
+            available_address_balance_gas: u64,
+        ) -> UserInputResult;
+        fn check_gas_objects(&self, gas_objs: &[&ObjectReadResult]) -> UserInputResult;
+        fn per_object_storage(&self) -> &Vec<(ObjectID, PerObjectStorage)>;
     }
 
     /// Version aware enum for gas status.
+    ///
+    /// `V2` carries the legacy gas model (used by every executor for `gas_model_version < 15`,
+    /// including replay of old-protocol transactions). `V3` is the v15+ pipeline — same
+    /// invariants as V2 minus the dead branches that legacy versions still need
+    /// (`Option<u64>` abort cap, `GasRoundingMode::Bucketize`/`Stepped`, the
+    /// non-multiplier `base_tx_cost_fixed` arm). The dispatch picks V3 when
+    /// `protocol_config.gas_model_version() >= 15`, V2 otherwise.
     #[enum_dispatch(SuiGasStatusAPI)]
     #[derive(Debug)]
     pub enum SuiGasStatus {
         // V1 does not exists any longer as it was a pre mainnet version.
         // So we start the enum from V2
         V2(SuiGasStatusV2),
+        V3(SuiGasStatusV3),
     }
 
     impl SuiGasStatus {
@@ -92,41 +112,30 @@ pub mod checked {
                 .into());
             }
 
-            Ok(Self::V2(SuiGasStatusV2::new_with_budget(
-                gas_budget,
-                gas_price,
-                reference_gas_price,
-                config,
-            )))
+            // Dispatch by gas model version: v15+ uses the clean gas_v3 pipeline;
+            // everything older keeps the legacy gas_v2 path so replay determinism holds.
+            if config.gas_model_version() >= 15 {
+                Ok(Self::V3(SuiGasStatusV3::new_with_budget(
+                    gas_budget,
+                    gas_price,
+                    reference_gas_price,
+                    config,
+                )))
+            } else {
+                Ok(Self::V2(SuiGasStatusV2::new_with_budget(
+                    gas_budget,
+                    gas_price,
+                    reference_gas_price,
+                    config,
+                )))
+            }
         }
 
         pub fn new_unmetered() -> Self {
-            Self::V2(SuiGasStatusV2::new_unmetered())
-        }
-
-        pub fn check_gas_balance(
-            &self,
-            gas_objs: &[&ObjectReadResult],
-            gas_budget: u64,
-            available_address_balance_gas: u64,
-        ) -> UserInputResult {
-            match self {
-                Self::V2(status) => {
-                    status.check_gas_balance(gas_objs, gas_budget, available_address_balance_gas)
-                }
-            }
-        }
-
-        pub fn check_gas_objects(&self, gas_objs: &[&ObjectReadResult]) -> UserInputResult {
-            match self {
-                Self::V2(status) => status.check_gas_objects(gas_objs),
-            }
-        }
-
-        pub fn gas_price(&self) -> u64 {
-            match self {
-                Self::V2(status) => status.gas_price(),
-            }
+            // Unmetered txs (system, dev-inspect, dry-run) never trigger metering, so the
+            // pipeline choice doesn't matter for their semantics — pick gas_v3 to match the
+            // current execution layer.
+            Self::V3(SuiGasStatusV3::new_unmetered())
         }
     }
 

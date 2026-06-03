@@ -14,8 +14,8 @@ mod checked {
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
     use mysten_common::{assert_reachable, debug_fatal, in_test_configuration};
-    use std::collections::BTreeMap;
-    use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
+    use std::collections::{BTreeMap, BTreeSet};
+    use std::{cell::RefCell, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
@@ -24,6 +24,7 @@ mod checked {
     use sui_types::coin_reservation::ParsedDigest;
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
+    use sui_types::gas_model::gas_predicates::use_step_gas_charging;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::ExecutionMetrics;
     use sui_types::object::OBJECT_START_VERSION;
@@ -63,7 +64,7 @@ mod checked {
     };
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorTrait};
-    use sui_types::execution::{ExecutionTiming, ResultWithTimings};
+    use sui_types::execution::{ExecutionTiming, ResultWithTimings, SharedInput};
     use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
@@ -88,97 +89,107 @@ mod checked {
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
 
-    // MAGIC CONSTANTS -- these are all mainnet-only hardcoded constants and should not be changed
-    // (but can be removed in future execution cuts).
+    /// Output of transaction execution: the inner store carrying all written
+    /// objects, the final gas status, the effects, per-command timings, and the
+    /// mode-specific execution result.
+    type ExecutionOutput<Mode> = (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<<Mode as ExecutionMode>::ExecutionResults, <Mode as ExecutionMode>::Error>,
+    );
 
-    /// Mainnet recovery point: the fix replays for transactions at/above this accumulator root
-    /// version and keeps the old behavior below it. A compiled constant (not a protocol flag)
-    /// because it had to take effect mid-epoch during recovery, when the network can't reconfigure.
-    const ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION: SequenceNumber =
-        SequenceNumber::from_u64(692949576);
-
-    /// Mainnet settlement version at/above which an `InsufficientFundsForWithdraw` transaction
-    /// short-circuits execution entirely (zero-gas effects, mutable-input version bumps only),
-    /// superseding the address-balance gas-payment pruning hotfix. A compiled constant, not a
-    /// protocol flag, because it must take effect mid-epoch during recovery when the network cannot
-    /// reconfigure. Only consulted when an accumulator version is assigned (mainnet committed
-    /// execution); everywhere else the short-circuit is protocol gated (see
-    /// `should_short_circuit_insufficient_funds`).
-    ///
-    /// Value is the mainnet accumulator root version where the new binary was activated on the network.
-    const ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION: SequenceNumber =
-        SequenceNumber::from_u64(693531074);
-
-    /// Whether the *head* early error is `InsufficientFundsForWithdraw`. Used to gate the first
-    /// address-balance gas-payment pruning hotfix: the head error is the one surfaced as the
-    /// failure status, so keying off it (rather than any occurrence) keeps the pruning bit-for-bit
-    /// with the original single-error hotfix.
-    fn head_error_is_insufficient_funds_for_withdraw(
+    /// Whether `InsufficientFundsForWithdraw` appears anywhere in the early-error list.
+    /// `get_early_execution_error` always appends IFFW last (priority 5), so when a
+    /// higher-priority error (CertificateDenied / InputObjectDeleted / ExecutionCancelled-*)
+    /// is also present, IFFW lands in `errors[1..]`. Both the v15+ short-circuit and the
+    /// legacy protocol-gated hotfix predicates must catch it regardless of position, or
+    /// `GasCharger::new` would proceed to call `smash_gas` on the unbacked
+    /// coin-reservation entry — the underflow path #26865 pins.
+    fn any_error_is_insufficient_funds_for_withdraw(
         execution_params: &ExecutionOrEarlyError,
     ) -> bool {
         execution_params.early_errors().is_some_and(|errors| {
-            matches!(
-                errors.head,
-                ExecutionErrorKind::InsufficientFundsForWithdraw
-            )
-        })
-    }
-
-    /// Whether to prune the address-balance leg of gas smashing for an IFFW transaction. This is
-    /// the mainnet-only accumulator backfill that replays the pre-flag incident hotfix below the
-    /// short-circuit rollout point; once `early_exit_on_iffw` is set the short-circuit handles IFFW
-    /// upstream, so reaching here implies the flag is off (asserted below).
-    fn should_filter_address_balance_gas_smash(
-        execution_params: &ExecutionOrEarlyError,
-        protocol_config: &ProtocolConfig,
-    ) -> bool {
-        if !head_error_is_insufficient_funds_for_withdraw(execution_params) {
-            return false;
-        }
-        debug_assert!(
-            !protocol_config.early_exit_on_iffw(),
-            "Should not reach gas smashing filtering address balances if IFFW early exit is enabled"
-        );
-        // In test/debug builds, always apply the fix unconditionally to match the behaviour of
-        // the 1.72 mainnet release (where it was deployed as an ungated hotfix).
-        in_test_configuration()
-            || protocol_config.early_exit_on_iffw()
-            || execution_params
-                .accumulator_version()
-                .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION)
-    }
-
-    /// Whether to short-circuit an IFFW transaction. When an accumulator version is assigned
-    /// (mainnet committed execution) it gates on the settlement-version rollout point; otherwise
-    /// (every other chain and non-committed paths, where no accumulator version is assigned) the
-    /// short-circuit applies based on `early_exit_on_iffw`.
-    fn should_short_circuit_insufficient_funds(
-        execution_params: &ExecutionOrEarlyError,
-        protocol_config: &ProtocolConfig,
-    ) -> bool {
-        // If no IFWWs, then does not apply
-        if !execution_params.early_errors().is_some_and(|errors| {
             errors
                 .iter()
                 .any(|e| matches!(e, ExecutionErrorKind::InsufficientFundsForWithdraw))
-        }) {
+        })
+    }
+
+    /// Whether the v15+ pipeline must short-circuit an IFFW transaction.
+    /// Short-circuit is required only when the gas payment carries
+    /// coin-reservation entries: smashing those emits accumulator events against
+    /// declared amounts that may not be backed by the actual address balance.
+    /// Every other payment shape is safe to run through the normal pipeline:
+    /// all-real-coin payments are fully backed (the failed transaction is charged
+    /// normally), and pure address-balance payments are protected by the
+    /// IFFW+AddressBalance guard in `GasCharger::charge` (zero summary, no debit).
+    ///
+    /// Fallback: if this narrower gate proves problematic, replace the call site
+    /// with `any_error_is_insufficient_funds_for_withdraw(&execution_params)` to
+    /// restore the unconditional short-circuit.
+    fn should_short_circuit_insufficient_funds(
+        execution_params: &ExecutionOrEarlyError,
+        gas_data: &GasData,
+    ) -> bool {
+        if !any_error_is_insufficient_funds_for_withdraw(execution_params) {
             return false;
         }
-
-        // In test/debug builds, always short-circuit unconditionally to match the behaviour of
-        // the 1.72 mainnet release (where it was deployed as an ungated hotfix).
-        if in_test_configuration() {
-            return true;
-        }
-
-        // otherwise gate by accumulator version (if present) or protocol flag
-        protocol_config.early_exit_on_iffw()
-            || execution_params
-                .accumulator_version()
-                .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION)
+        gas_data
+            .payment
+            .iter()
+            .any(|entry| ParsedDigest::try_from(entry.2).is_ok())
     }
 
     fn payment_kind(
+        gas_data: &GasData,
+        transaction_kind: &TransactionKind,
+        protocol_config: &ProtocolConfig,
+        transaction_signer: SuiAddress,
+    ) -> PaymentKind {
+        if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
+            PaymentKind::unmetered()
+        } else if protocol_config.enable_gasless()
+            && is_gasless_transaction(gas_data, transaction_kind)
+        {
+            // Capture the PTB's withdrawal reservations now so they ride on the gasless
+            // payment metadata instead of being threaded through the charging pipeline.
+            let sponsor = (gas_data.owner != transaction_signer).then_some(gas_data.owner);
+            let reservations =
+                compute_gasless_reservations(transaction_kind, transaction_signer, sponsor)
+                    .unwrap_or_default();
+            PaymentKind::gasless(reservations)
+        } else if gas_data.payment.is_empty() {
+            PaymentKind::smash(vec![PaymentMethod::AddressBalance(
+                gas_data.owner,
+                gas_data.budget,
+            )])
+            .expect("unable to create a payment kind with a single address balance")
+        } else {
+            let payment_methods = gas_data
+                .payment
+                .iter()
+                .map(|entry| {
+                    if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
+                        PaymentMethod::AddressBalance(gas_data.owner, parsed.reservation_amount())
+                    } else {
+                        PaymentMethod::Coin(*entry)
+                    }
+                })
+                .collect();
+            PaymentKind::smash(payment_methods).expect(
+                "unable to create a payment kind from payment methods. \
+                 Should not be possible wit ha non-empty vector",
+            )
+        }
+    }
+
+    /// Legacy (gas_model < 15) payment classification. Frozen copy of `payment_kind` whose gasless
+    /// arm carries no reservations (the legacy executor computes its own `withdrawal_reservations`
+    /// local and never reads the charger's gasless metadata). Kept separate so `mod legacy` is
+    /// independent of the v15 reservation logic.
+    fn legacy_payment_kind(
         gas_data: &GasData,
         transaction_kind: &TransactionKind,
         protocol_config: &ProtocolConfig,
@@ -188,7 +199,7 @@ mod checked {
         } else if protocol_config.enable_gasless()
             && is_gasless_transaction(gas_data, transaction_kind)
         {
-            PaymentKind::gasless()
+            PaymentKind::gasless(BTreeMap::new())
         } else if gas_data.payment.is_empty() {
             PaymentKind::smash(vec![PaymentMethod::AddressBalance(
                 gas_data.owner,
@@ -262,12 +273,11 @@ mod checked {
         reservations
     }
 
-    #[allow(clippy::type_complexity)]
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
-        mut gas_data: GasData,
+        gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
@@ -281,22 +291,14 @@ mod checked {
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> (
-        InnerTemporaryStore,
-        SuiGasStatus,
-        TransactionEffects,
-        Vec<ExecutionTiming>,
-        Result<Mode::ExecutionResults, Mode::Error>,
-    ) {
+    ) -> ExecutionOutput<Mode> {
+        //
+        // setup, common to current and legacy execution
+        //
         let input_objects = input_objects.into_inner();
-        let mutable_inputs = if enable_expensive_checks {
-            input_objects.all_mutable_inputs().keys().copied().collect()
-        } else {
-            HashSet::new()
-        };
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
-        let mut transaction_dependencies = input_objects.transaction_dependencies();
+        let transaction_dependencies = input_objects.transaction_dependencies();
 
         let mut temporary_store = TemporaryStore::new(
             store,
@@ -307,115 +309,123 @@ mod checked {
             *epoch_id,
         );
 
-        // Short-circuit on InsufficientFundsForWithdraw: the transaction is guaranteed to fail
-        // and has nothing to execute, so skip the executor pipeline. Bump versions of mutable
-        // inputs (so locks advance) and emit effects with a zero gas cost summary. On mainnet
-        // committed execution this is gated on the settlement-version rollout point (below it we
-        // fall through to the address-balance gas-payment pruning hotfix instead); everywhere else
-        // it applies based on `early_exit_on_iffw`.
-        if should_short_circuit_insufficient_funds(&execution_params, protocol_config) {
-            assert_reachable!("IFFW short-circuit fired");
-            temporary_store.ensure_active_inputs_mutated();
-            transaction_dependencies.remove(&TransactionDigest::genesis_marker());
-
-            let execution_error: Mode::Error =
-                ExecutionError::from_kind(ExecutionErrorKind::InsufficientFundsForWithdraw).into();
-            let status = ExecutionStatus::new_failure(execution_error.to_execution_failure());
-            let mut gas_meter = GasCharger::new(
-                transaction_digest,
-                PaymentKind::gasless(),
-                gas_status,
+        //
+        // dispatch: fork immediately into the current pipeline or the frozen legacy
+        // one; each fork is self-contained through to effects
+        //
+        if use_step_gas_charging(protocol_config.gas_model_version()) {
+            // New model: the inner fork runs execution + the consistency check and hands back an
+            // `Outcome`. This level owns the TemporaryStore lifecycle and builds the effects (the
+            // single terminal): `Proceed` builds them from the charged state; `BumpOnly` installs a
+            // gasless charger, drops writes, bumps the inputs, charges nothing, and reports the error.
+            match execute_transaction_inner::<Mode>(
+                store,
                 &mut temporary_store,
+                gas_data,
+                gas_status,
+                transaction_kind,
+                rewritten_inputs,
+                transaction_signer,
+                transaction_digest,
+                move_vm,
+                epoch_id,
+                epoch_timestamp_ms,
                 protocol_config,
-            );
-
-            let (inner, effects) = temporary_store.into_effects(
-                shared_object_refs,
-                &transaction_digest,
-                transaction_dependencies,
-                GasCostSummary::default(),
-                status,
-                &mut gas_meter,
-                *epoch_id,
-            );
-
-            return (
-                inner,
-                gas_meter.into_gas_status(),
-                effects,
-                vec![],
-                Err(execution_error),
-            );
-        }
-
-        let sponsor = {
-            let gas_owner = gas_data.owner;
-            if gas_owner == transaction_signer {
-                None
-            } else {
-                Some(gas_owner)
+                metrics.clone(),
+                enable_expensive_checks,
+                execution_params,
+                trace_builder_opt,
+            ) {
+                Outcome::Proceed {
+                    gas_charger,
+                    gas_cost_summary,
+                    execution_result,
+                    timings,
+                } => build_effects::<Mode>(
+                    temporary_store,
+                    gas_charger,
+                    gas_cost_summary,
+                    execution_result,
+                    shared_object_refs,
+                    transaction_dependencies,
+                    timings,
+                    transaction_digest,
+                    *epoch_id,
+                    metrics,
+                    move_vm,
+                ),
+                Outcome::BumpOnly { gas_status, error } => {
+                    // One gasless-charger construction for every bail (IFFW + consistency failure).
+                    let gas_charger = GasCharger::new(
+                        transaction_digest,
+                        PaymentKind::gasless(BTreeMap::new()),
+                        gas_status,
+                        &mut temporary_store,
+                        protocol_config,
+                    );
+                    let gas_cost_summary = bump_inputs_only(&mut temporary_store);
+                    build_effects::<Mode>(
+                        temporary_store,
+                        gas_charger,
+                        gas_cost_summary,
+                        Err(error),
+                        shared_object_refs,
+                        transaction_dependencies,
+                        vec![],
+                        transaction_digest,
+                        *epoch_id,
+                        metrics,
+                        move_vm,
+                    )
+                }
             }
-        };
-        let gas_price = gas_status.gas_price();
-        let rgp = gas_status.reference_gas_price();
-
-        // On an IFFW abort, drop the address-balance gas payments (keeping real coins) so the
-        // pruned list flows into `payment_kind`/`compute_input_reservations` with no special
-        // handling. See `should_filter_address_balance_gas_smash` for when this applies.
-        if should_filter_address_balance_gas_smash(&execution_params, protocol_config)
-            && gas_data.payment.len() > 1
-            && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
-        {
-            gas_data
-                .payment
-                .retain(|entry| ParsedDigest::try_from(entry.2).is_err());
+        } else {
+            // TODO: remove all `legacy` code on the next execution version cut
+            legacy::execute_transaction_inner::<Mode>(
+                store,
+                temporary_store,
+                gas_data,
+                gas_status,
+                transaction_kind,
+                rewritten_inputs,
+                transaction_signer,
+                transaction_digest,
+                move_vm,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                execution_params,
+                trace_builder_opt,
+                shared_object_refs,
+                transaction_dependencies,
+            )
         }
+    }
 
-        let mut gas_charger = GasCharger::new(
-            transaction_digest,
-            payment_kind(&gas_data, &transaction_kind, protocol_config),
-            gas_status,
-            &mut temporary_store,
-            protocol_config,
-        );
-
-        let tx_ctx = TxContext::new_from_components(
-            &transaction_signer,
-            &transaction_digest,
-            epoch_id,
-            epoch_timestamp_ms,
-            rgp,
-            gas_price,
-            gas_data.budget,
-            sponsor,
-            protocol_config,
-        );
-        let tx_ctx = Rc::new(RefCell::new(tx_ctx));
-
-        let is_gasless = protocol_config.enable_gasless()
-            && is_gasless_transaction(&gas_data, &transaction_kind);
-        let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
-
-        let input_reservations =
-            compute_input_reservations(&transaction_kind, &gas_data, transaction_signer);
-
-        let (gas_cost_summary, execution_result, timings) = execute_transaction::<Mode>(
-            store,
-            &mut temporary_store,
-            transaction_kind,
-            rewritten_inputs,
-            &mut gas_charger,
-            tx_ctx,
-            move_vm,
-            protocol_config,
-            metrics.clone(),
-            enable_expensive_checks,
-            execution_params,
-            trace_builder_opt,
-            is_gasless,
-            &input_reservations,
-        );
-
+    /// Teardown shared by the current and legacy execution forks: map the result
+    /// to a status, bump-clean the dependencies, run the expensive ownership
+    /// checks, build the effects, and report VM telemetry.
+    #[allow(clippy::too_many_arguments)]
+    fn finish_transaction_to_effects<Mode: ExecutionMode>(
+        temporary_store: TemporaryStore<'_>,
+        mut gas_charger: GasCharger,
+        shared_object_refs: Vec<SharedInput>,
+        mut transaction_dependencies: BTreeSet<TransactionDigest>,
+        sponsor: Option<SuiAddress>,
+        is_epoch_change: bool,
+        input_reservations: BTreeMap<(SuiAddress, TypeTag), u64>,
+        gas_cost_summary: GasCostSummary,
+        execution_result: Result<Mode::ExecutionResults, Mode::Error>,
+        timings: Vec<ExecutionTiming>,
+        transaction_signer: SuiAddress,
+        transaction_digest: TransactionDigest,
+        epoch_id: EpochId,
+        enable_expensive_checks: bool,
+        metrics: Arc<ExecutionMetrics>,
+        move_vm: &Arc<MoveRuntime>,
+    ) -> ExecutionOutput<Mode> {
         let status = if let Err(error) = &execution_result {
             ExecutionStatus::new_failure(error.to_execution_failure())
         } else {
@@ -443,7 +453,6 @@ mod checked {
                     &transaction_signer,
                     &sponsor,
                     &gas_charger,
-                    &mutable_inputs,
                     &input_reservations,
                     is_epoch_change,
                 )
@@ -457,68 +466,13 @@ mod checked {
             gas_cost_summary,
             status,
             &mut gas_charger,
-            *epoch_id,
+            epoch_id,
         );
 
         // Skip VM telemetry on simulation paths (dev-inspect / dry-run) since a new runtime is
         // spun-up each time.
         if !Mode::TRACK_EXECUTION {
-            metrics.vm_telemetry_metrics.try_update(|vm_metrics| {
-                let t = move_vm.get_telemetry_report();
-                vm_metrics
-                    .move_vm_package_cache_count
-                    .set(t.package_cache_count as i64);
-                vm_metrics
-                    .move_vm_total_arena_size_bytes
-                    .set(t.total_arena_size as i64);
-                vm_metrics.move_vm_module_count.set(t.module_count as i64);
-                vm_metrics
-                    .move_vm_function_count
-                    .set(t.function_count as i64);
-                vm_metrics.move_vm_type_count.set(t.type_count as i64);
-                vm_metrics.move_vm_interner_size.set(t.interner_size as i64);
-                vm_metrics
-                    .move_vm_vtable_cache_count
-                    .set(t.vtable_cache_count as i64);
-                vm_metrics
-                    .move_vm_vtable_cache_hits
-                    .set(t.vtable_cache_hits as i64);
-                vm_metrics
-                    .move_vm_vtable_cache_misses
-                    .set(t.vtable_cache_misses as i64);
-                vm_metrics
-                    .move_vm_load_time_ms
-                    .set(t.total_load_time as i64);
-                vm_metrics.move_vm_load_count.set(t.load_count as i64);
-                vm_metrics
-                    .move_vm_validation_time_ms
-                    .set(t.total_validation_time as i64);
-                vm_metrics
-                    .move_vm_validation_count
-                    .set(t.validation_count as i64);
-                vm_metrics.move_vm_jit_time_ms.set(t.total_jit_time as i64);
-                vm_metrics.move_vm_jit_count.set(t.jit_count as i64);
-                vm_metrics
-                    .move_vm_execution_time_ms
-                    .set(t.total_execution_time as i64);
-                vm_metrics
-                    .move_vm_execution_count
-                    .set(t.execution_count as i64);
-                vm_metrics
-                    .move_vm_interpreter_time_ms
-                    .set(t.total_interpreter_time as i64);
-                vm_metrics
-                    .move_vm_interpreter_count
-                    .set(t.interpreter_count as i64);
-                vm_metrics
-                    .move_vm_max_callstack_size
-                    .set(t.max_callstack_size as i64);
-                vm_metrics
-                    .move_vm_max_valuestack_size
-                    .set(t.max_valuestack_size as i64);
-                vm_metrics.move_vm_total_time_ms.set(t.total_time as i64);
-                vm_metrics.move_vm_total_count.set(t.total_count as i64);
-            });
+            update_vm_telemetry_metrics(&metrics, move_vm);
         }
 
         (
@@ -528,6 +482,194 @@ mod checked {
             timings,
             execution_result,
         )
+    }
+
+    /// Check the post-execution consistency invariants (the new path's outer layer, stage 1): SUI
+    /// conservation and the expensive ownership invariants. `Ok(())` → the charge stands and we build
+    /// effects normally; `Err(error)` → an invariant was violated unrecoverably (no panic, no
+    /// recovery, no bump here) and the caller bails to the no-op (`bump_inputs_only`) reporting that
+    /// error.
+    #[allow(clippy::too_many_arguments)]
+    fn check_consistency<Mode: ExecutionMode>(
+        temporary_store: &mut TemporaryStore<'_>,
+        gas_charger: &GasCharger,
+        gas_cost_summary: &GasCostSummary,
+        move_vm: &Arc<MoveRuntime>,
+        enable_expensive_checks: bool,
+        is_genesis_tx: bool,
+        advance_epoch_gas_summary: Option<(u64, u64)>,
+        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
+        transaction_signer: SuiAddress,
+        sponsor: Option<SuiAddress>,
+        is_epoch_change: bool,
+        transaction_digest: TransactionDigest,
+    ) -> Result<(), Mode::Error> {
+        // Conservation: verify SUI is conserved against the charged summary; on failure bail to the
+        // no-op reporting the conservation error.
+        // FIXME: we cannot fail the transaction if this is an epoch change transaction.
+        run_conservation_checks::<Mode>(
+            temporary_store,
+            gas_charger,
+            transaction_digest,
+            move_vm,
+            enable_expensive_checks,
+            gas_cost_summary,
+            is_genesis_tx,
+            advance_epoch_gas_summary,
+            input_reservations,
+        )?;
+
+        if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
+            if let Err(err) = temporary_store.check_ownership_invariants(
+                &transaction_signer,
+                &sponsor,
+                gas_charger,
+                input_reservations,
+                is_epoch_change,
+            ) {
+                // Post-execution ownership invariants are violated — a real bug that should never
+                // fire. Rather than crash the validator, bail to the no-op (the caller drops
+                // everything, bumps the inputs, charges nothing) reporting an invariant violation: a
+                // deterministic, conserving no-op. Alert loudly (with the underlying `SuiError`) so
+                // the violation is visible. The reported status is `InvariantViolation` — the
+                // `SuiError` from ownership checking is not an `ExecutionError`, and an internal
+                // invariant breach is exactly what that status is for.
+                #[skip_checked_arithmetic]
+                tracing::error!(
+                    tx_digest = ?transaction_digest,
+                    error = %err,
+                    "ownership invariants violated; falling back to the no-op exit (State 2): \
+                     dropping all writes and charging nothing",
+                );
+                return Err(
+                    ExecutionError::from_kind(ExecutionErrorKind::InvariantViolation).into(),
+                );
+            }
+        } // else, in dev inspect mode and anything goes--don't check
+
+        Ok(())
+    }
+
+    /// Build the transaction effects from the final state (the new path's outer layer, stage 2):
+    /// derive the status, trim the genesis dependency marker, assemble the effects, and report VM
+    /// telemetry. The charge and consistency checks already ran in `check_consistency`.
+    #[allow(clippy::too_many_arguments)]
+    fn build_effects<Mode: ExecutionMode>(
+        temporary_store: TemporaryStore<'_>,
+        mut gas_charger: GasCharger,
+        gas_cost_summary: GasCostSummary,
+        execution_result: Result<Mode::ExecutionResults, Mode::Error>,
+        shared_object_refs: Vec<SharedInput>,
+        mut transaction_dependencies: BTreeSet<TransactionDigest>,
+        timings: Vec<ExecutionTiming>,
+        transaction_digest: TransactionDigest,
+        epoch_id: EpochId,
+        metrics: Arc<ExecutionMetrics>,
+        move_vm: &Arc<MoveRuntime>,
+    ) -> ExecutionOutput<Mode> {
+        let status = if let Err(error) = &execution_result {
+            ExecutionStatus::new_failure(error.to_execution_failure())
+        } else {
+            ExecutionStatus::Success
+        };
+
+        #[skip_checked_arithmetic]
+        trace!(
+            tx_digest = ?transaction_digest,
+            computation_gas_cost = gas_cost_summary.computation_cost,
+            storage_gas_cost = gas_cost_summary.storage_cost,
+            storage_gas_rebate = gas_cost_summary.storage_rebate,
+            "Finished execution of transaction with status {:?}",
+            status
+        );
+
+        // Genesis writes a special digest to indicate that an object was created during
+        // genesis and not written by any normal transaction - remove that from the
+        // dependencies
+        transaction_dependencies.remove(&TransactionDigest::genesis_marker());
+
+        let (inner, effects) = temporary_store.into_effects(
+            shared_object_refs,
+            &transaction_digest,
+            transaction_dependencies,
+            gas_cost_summary,
+            status,
+            &mut gas_charger,
+            epoch_id,
+        );
+
+        // Skip VM telemetry on simulation paths (dev-inspect / dry-run) since a new runtime is
+        // spun-up each time.
+        if !Mode::TRACK_EXECUTION {
+            update_vm_telemetry_metrics(&metrics, move_vm);
+        }
+
+        (
+            inner,
+            gas_charger.into_gas_status(),
+            effects,
+            timings,
+            execution_result,
+        )
+    }
+
+    fn update_vm_telemetry_metrics(metrics: &ExecutionMetrics, move_vm: &MoveRuntime) {
+        metrics.vm_telemetry_metrics.try_update(|vm_metrics| {
+            let t = move_vm.get_telemetry_report();
+            vm_metrics
+                .move_vm_package_cache_count
+                .set(t.package_cache_count as i64);
+            vm_metrics
+                .move_vm_total_arena_size_bytes
+                .set(t.total_arena_size as i64);
+            vm_metrics.move_vm_module_count.set(t.module_count as i64);
+            vm_metrics
+                .move_vm_function_count
+                .set(t.function_count as i64);
+            vm_metrics.move_vm_type_count.set(t.type_count as i64);
+            vm_metrics.move_vm_interner_size.set(t.interner_size as i64);
+            vm_metrics
+                .move_vm_vtable_cache_count
+                .set(t.vtable_cache_count as i64);
+            vm_metrics
+                .move_vm_vtable_cache_hits
+                .set(t.vtable_cache_hits as i64);
+            vm_metrics
+                .move_vm_vtable_cache_misses
+                .set(t.vtable_cache_misses as i64);
+            vm_metrics
+                .move_vm_load_time_ms
+                .set(t.total_load_time as i64);
+            vm_metrics.move_vm_load_count.set(t.load_count as i64);
+            vm_metrics
+                .move_vm_validation_time_ms
+                .set(t.total_validation_time as i64);
+            vm_metrics
+                .move_vm_validation_count
+                .set(t.validation_count as i64);
+            vm_metrics.move_vm_jit_time_ms.set(t.total_jit_time as i64);
+            vm_metrics.move_vm_jit_count.set(t.jit_count as i64);
+            vm_metrics
+                .move_vm_execution_time_ms
+                .set(t.total_execution_time as i64);
+            vm_metrics
+                .move_vm_execution_count
+                .set(t.execution_count as i64);
+            vm_metrics
+                .move_vm_interpreter_time_ms
+                .set(t.total_interpreter_time as i64);
+            vm_metrics
+                .move_vm_interpreter_count
+                .set(t.interpreter_count as i64);
+            vm_metrics
+                .move_vm_max_callstack_size
+                .set(t.max_callstack_size as i64);
+            vm_metrics
+                .move_vm_max_valuestack_size
+                .set(t.max_valuestack_size as i64);
+            vm_metrics.move_vm_total_time_ms.set(t.total_time as i64);
+            vm_metrics.move_vm_total_count.set(t.total_count as i64);
+        });
     }
 
     pub fn execute_genesis_state_update(
@@ -566,7 +708,181 @@ mod checked {
         Ok(temporary_store.into_inner(BTreeMap::new()))
     }
 
+    /// What the new-model `execute_transaction_inner` hands back to `execute_transaction_to_effects`
+    /// to turn into effects (the single `build_effects` terminal handles both cases).
+    enum Outcome<Mode: ExecutionMode> {
+        /// Execution and all post-checks passed; build effects from this charged state.
+        Proceed {
+            gas_charger: GasCharger,
+            gas_cost_summary: GasCostSummary,
+            execution_result: Result<Mode::ExecutionResults, Mode::Error>,
+            timings: Vec<ExecutionTiming>,
+        },
+        /// Bail to a version-bump-only no-op reporting `error`: the top level installs a gasless
+        /// charger, drops writes, bumps the mutable inputs, and charges nothing. `gas_status` (which
+        /// `SuiGasStatus` cannot clone) is carried out so that single gasless charger can be built up
+        /// the stack — for IFFW it is the untouched input status, for a consistency failure it is the
+        /// post-execution status recovered from the real charger.
+        BumpOnly {
+            gas_status: SuiGasStatus,
+            error: Mode::Error,
+        },
+    }
+
+    /// Execution fork for `gas_model_version >= 15`: IFFW short-circuit, gas
+    /// charger construction, the step-by-step gas-charging pipeline, and the
+    /// consistency check. Entered from `execute_transaction_to_effects` right
+    /// after the common setup; returns an `Outcome` for the top level to finalize.
     #[instrument(name = "tx_execute", level = "debug", skip_all)]
+    fn execute_transaction_inner<Mode: ExecutionMode>(
+        store: &dyn BackingStore,
+        temporary_store: &mut TemporaryStore<'_>,
+        gas_data: GasData,
+        gas_status: SuiGasStatus,
+        transaction_kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
+        transaction_signer: SuiAddress,
+        transaction_digest: TransactionDigest,
+        move_vm: &Arc<MoveRuntime>,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<ExecutionMetrics>,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    ) -> Outcome<Mode> {
+        // ── Exit route ①: pre-execution bail (IFFW) ───────────────────────────────────────────
+        // IFFW is short-circuited only when the gas payment carries coin-reservation entries
+        // (smashing those is unsafe); other payment shapes run the normal pipeline and surface the
+        // IFFW failure through it. We never run the VM; bail with `BumpOnly` carrying the untouched
+        // input `gas_status` — the top level builds the gasless charger, bumps the inputs, and
+        // charges nothing. (Legacy keeps the frozen `respond_with_iffw_short_circuit`.)
+        if should_short_circuit_insufficient_funds(&execution_params, &gas_data) {
+            assert_reachable!("IFFW short-circuit fired");
+            let iffw: Mode::Error =
+                ExecutionError::from_kind(ExecutionErrorKind::InsufficientFundsForWithdraw).into();
+            return Outcome::BumpOnly {
+                gas_status,
+                error: iffw,
+            };
+        }
+
+        // ── Exit route ②: execute → check_consistency → Proceed | BumpOnly ────────────────────
+        let sponsor = {
+            let gas_owner = gas_data.owner;
+            if gas_owner == transaction_signer {
+                None
+            } else {
+                Some(gas_owner)
+            }
+        };
+        let gas_price = gas_status.gas_price();
+        let rgp = gas_status.reference_gas_price();
+        let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
+        // Captured before `transaction_kind` is moved into `execute_transaction`; consumed by the
+        // conservation step in `check_consistency`.
+        let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
+        let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
+
+        let tx_ctx = TxContext::new_from_components(
+            &transaction_signer,
+            &transaction_digest,
+            epoch_id,
+            epoch_timestamp_ms,
+            rgp,
+            gas_price,
+            gas_data.budget,
+            sponsor,
+            protocol_config,
+        );
+        let tx_ctx = Rc::new(RefCell::new(tx_ctx));
+
+        let input_reservations =
+            compute_input_reservations(&transaction_kind, &gas_data, transaction_signer);
+
+        let mut gas_charger = GasCharger::new(
+            transaction_digest,
+            payment_kind(
+                &gas_data,
+                &transaction_kind,
+                protocol_config,
+                transaction_signer,
+            ),
+            gas_status,
+            temporary_store,
+            protocol_config,
+        );
+        // Execution: run the PTB and apply the gas charge (with its internal State-1 resets).
+        let (gas_cost_summary, execution_result, timings) = execute_transaction::<Mode>(
+            store,
+            temporary_store,
+            transaction_kind,
+            rewritten_inputs,
+            &mut gas_charger,
+            tx_ctx,
+            move_vm,
+            protocol_config,
+            metrics,
+            execution_params,
+            trace_builder_opt,
+        );
+
+        // Check the post-execution consistency invariants (conservation + ownership). On violation we
+        // bail with `BumpOnly` carrying that check's own error and the `gas_status` recovered from the
+        // real charger (so the top level can build the single gasless charger); otherwise we proceed
+        // to build effects from the charged state.
+        match check_consistency::<Mode>(
+            temporary_store,
+            &gas_charger,
+            &gas_cost_summary,
+            move_vm,
+            enable_expensive_checks,
+            is_genesis_tx,
+            advance_epoch_gas_summary,
+            &input_reservations,
+            transaction_signer,
+            sponsor,
+            is_epoch_change,
+            transaction_digest,
+        ) {
+            Ok(()) => Outcome::Proceed {
+                gas_charger,
+                gas_cost_summary,
+                execution_result,
+                timings,
+            },
+            Err(error) => Outcome::BumpOnly {
+                gas_status: gas_charger.into_gas_status(),
+                error,
+            },
+        }
+    }
+
+    /// Gas-charging pipeline for `gas_model_version >= 15`. Reads top-to-bottom
+    /// as explicit steps on the running `Result`. Each step that returns
+    /// `Result<(), ExecutionError>` is folded in via `and_then`; the chain
+    /// short-circuits on the first `Err`.
+    ///
+    ///   1. `charge_input_objects`    — charge `storage_read` for every input object.
+    ///   2. early-error gate          — if `execution_params` carries early errors,
+    ///                                  fail with the head (highest-priority) error
+    ///                                  without running the VM; otherwise
+    ///      `execute_ptb`             — run the PTB; bucketize computation at the
+    ///                                  tail regardless of inner Ok/Err.
+    ///   3. `charge_storage`          — collect per-object storage cost and rebate,
+    ///                                  verify they fit in the remaining budget.
+    ///   4. `check_effects`           — meter + written-objects limits + accumulator
+    ///                                  representability. Always runs (metrics fire on err too).
+    ///   5. `reset_writes` (on Err).  — rewind execution writes and recompute
+    ///                                  storage against the rewound state so the
+    ///                                  charges in step 6 match what's actually
+    ///                                  persisted.
+    ///   6. `charge`                  — deduct `net_gas_usage` from the gas coin /
+    ///                                  emit the address-balance accumulator event.
+    ///
+    /// Conservation and effects-building are NOT part of this pipeline — they live one level up in
+    /// `finalize_to_effects`, which consumes the `(cost_summary, result)` this returns.
     fn execute_transaction<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         temporary_store: &mut TemporaryStore<'_>,
@@ -577,213 +893,757 @@ mod checked {
         move_vm: &Arc<MoveRuntime>,
         protocol_config: &ProtocolConfig,
         metrics: Arc<ExecutionMetrics>,
-        enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-        is_gasless: bool,
-        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, Mode::Error>,
         Vec<ExecutionTiming>,
     ) {
-        // At this point no charges have been applied yet
         debug_assert!(
             gas_charger.no_charges(),
             "No gas charges must be applied yet"
         );
 
-        let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
-        let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
-        let digest = tx_ctx.borrow().digest();
-        let withdrawal_reservations =
-            if is_gasless && protocol_config.gasless_verify_remaining_balance() {
-                gasless_withdrawal_reservations(&transaction_kind, &tx_ctx.borrow())
-            } else {
-                None
-            };
+        let mut timings: Vec<ExecutionTiming> = vec![];
 
-        // We must charge object read here during transaction execution, because if this fails
-        // we must still ensure an effect is committed and all objects versions incremented
-        let result = gas_charger.charge_input_objects(temporary_store);
+        // Steps 1–3: charge inputs → early-error gate / execute PTB (with
+        // computation rounding at its tail) → charge storage. Each step is
+        // Ok-only via `and_then`; any earlier Err short-circuits the chain.
+        let result = gas_charger
+            .charge_input_objects(temporary_store)
+            .map_err(Into::into)
+            // Early errors (deny / cancel / deleted input / IFFW that was not
+            // short-circuited) consume the transaction without running the VM:
+            // the head (highest-priority) error becomes the failure. Skipping
+            // `execute_ptb` also skips computation rounding — nothing executed,
+            // so there is no abort price to freeze and nothing to round; the
+            // input charges already on the meter are billed as-is.
+            .and_then(|()| match execution_params.into_early_errors() {
+                Some(early_execution_errors) => {
+                    Err(ExecutionError::new(early_execution_errors.head, None).into())
+                }
+                None => execute_ptb::<Mode>(
+                    store,
+                    temporary_store,
+                    transaction_kind,
+                    rewritten_inputs,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics.clone(),
+                    trace_builder_opt,
+                    &mut timings,
+                ),
+            })
+            .and_then(|v| {
+                gas_charger
+                    .charge_storage(temporary_store)
+                    .map_err(Into::into)
+                    .map(|_| v)
+            });
 
-        let result: ResultWithTimings<Mode::ExecutionResults, Mode::Error> =
-            result.map_err(|e| (e.into(), vec![])).and_then(
-                |()| -> ResultWithTimings<Mode::ExecutionResults, Mode::Error> {
-                    let mut execution_result: ResultWithTimings<
-                        Mode::ExecutionResults,
-                        Mode::Error,
-                    > = match execution_params.into_early_errors() {
-                        Some(early_execution_errors) => {
-                            Err((Mode::Error::from_kind(early_execution_errors.head), vec![]))
-                        }
-                        None => execution_loop::<Mode>(
-                            store,
-                            temporary_store,
-                            transaction_kind,
-                            rewritten_inputs,
-                            tx_ctx,
-                            move_vm,
-                            gas_charger,
-                            protocol_config,
-                            metrics.clone(),
-                            trace_builder_opt,
-                        ),
-                    };
-
-                    let meter_check = check_meter_limit::<Mode>(
-                        temporary_store,
-                        gas_charger,
-                        protocol_config,
-                        metrics.clone(),
-                    );
-                    if let Err(e) = meter_check {
-                        execution_result = Err((e, vec![]));
-                    }
-
-                    if execution_result.is_ok() {
-                        let gas_check = check_written_objects_limit::<Mode>(
-                            temporary_store,
-                            gas_charger,
-                            protocol_config,
-                            metrics,
-                        );
-                        if let Err(e) = gas_check {
-                            execution_result = Err((e, vec![]));
-                        }
-                    }
-
-                    execution_result
-                },
-            );
-
-        let (mut result, timings) = match result {
-            Ok((r, t)) => (Ok(r), t),
-            Err((e, t)) => (Err(e), t),
+        // Step 4: effects-validity checks (meter limit, written-objects limit, accumulator
+        // representability). Always run (so their metrics fire on the err path too); their
+        // errors stick only if `result` was previously Ok.
+        let checks = check_effects::<Mode>(temporary_store, gas_charger, protocol_config, metrics);
+        let result = match (result, checks) {
+            (Err(e), _) => Err(e),     // execution error wins
+            (Ok(_), Err(e)) => Err(e), // else a failed effects check
+            (Ok(v), Ok(())) => Ok(v),
         };
-        if is_gasless
-            && result.is_ok()
-            && let Err(msg) = temporary_store
-                .check_gasless_execution_requirements(withdrawal_reservations.as_ref())
-        {
-            result = Err(Mode::Error::new_with_source(
-                ExecutionErrorKind::InsufficientGas,
-                msg,
-            ));
+
+        if result.is_err() {
+            // on error all writes (changes) are dropped and the state goes back
+            // to the beginning (after transaction loads).
+            // Effectively we are canceling all side effects of the transaction
+            reset_writes(gas_charger, temporary_store);
         }
 
-        // Reject transactions whose per-key accumulator totals are not representable *before*
-        // charging gas. For SUI this bounds each per-key gross Merge/Split total to the total supply;
-        // for other balances it bounds them to u64. Doing so here means the rejected PTB-emitted
-        // accumulator events are dropped during the gas reset on the error path (only the bounded gas
-        // events remain). Bounding SUI to the supply (which is ~8.4B SUI below u64::MAX) leaves enough
-        // headroom that the gas-smash deposit / gas-charge events emitted *after* this point cannot
-        // push any per-key total past u64::MAX, so the fold in AccumulatorWriteV1::merge cannot
-        // overflow even though those gas events are not re-checked here.
-        //
-        // Ungated: this only ever turns a would-be arithmetic failure into a deterministic abort,
-        // which produces no committed effects and so cannot diverge from any previously-committed
-        // result, and it applies uniformly across protocol versions.
-        if result.is_ok()
-            && let Err(e) = temporary_store.check_accumulator_amounts_representable()
-        {
-            result = Err(e.into());
-        }
+        // `charge` also parks any unmetered (system-tx) storage rebate into 0x5 (its
+        // `Unmetered` arm) — a conservation step, not a metered charge.
+        let cost_summary = gas_charger.charge(temporary_store, &result);
 
-        let cost_summary = gas_charger.charge_gas(temporary_store, protocol_config, &mut result);
-        // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
-        // information provided to check_sui_conserved, because we mint rewards, and burn
-        // the rebates. We also need to pass in the unmetered_storage_rebate because storage
-        // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
-        // We could probably clean up the code a bit.
-        // Put all the storage rebate accumulated in the system transaction
-        // to the 0x5 object so that it's not lost.
-        temporary_store.conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
-
-        if let Err(e) = run_conservation_checks::<Mode>(
-            temporary_store,
-            gas_charger,
-            digest,
-            move_vm,
-            protocol_config,
-            enable_expensive_checks,
-            &cost_summary,
-            is_genesis_tx,
-            advance_epoch_gas_summary,
-            input_reservations,
-        ) {
-            // FIXME: we cannot fail the transaction if this is an epoch change transaction.
-            result = Err(e);
-        }
-
+        // Conservation + effects-building happen one level up in `finalize_to_effects`.
         (cost_summary, result, timings)
     }
 
+    /// Execute the programmable transaction, then bucketize computation gas at the
+    /// tail via `round_computation`. Timings from `execution_loop` are written into
+    /// `timings_out` regardless of inner Ok/Err.
+    ///
+    /// Called from inside the v15+ pipeline's `and_then` chain, so this only runs
+    /// after `charge_input_objects` succeeded and the early-error gate passed —
+    /// meaning input objects have been charged and the VM is actually going to run.
+    fn execute_ptb<Mode: ExecutionMode>(
+        store: &dyn BackingStore,
+        temporary_store: &mut TemporaryStore<'_>,
+        transaction_kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
+        tx_ctx: Rc<RefCell<TxContext>>,
+        move_vm: &Arc<MoveRuntime>,
+        gas_charger: &mut GasCharger,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<ExecutionMetrics>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        timings_out: &mut Vec<ExecutionTiming>,
+    ) -> Result<Mode::ExecutionResults, Mode::Error> {
+        let result = match execution_loop::<Mode>(
+            store,
+            temporary_store,
+            transaction_kind,
+            rewritten_inputs,
+            tx_ctx,
+            move_vm,
+            gas_charger,
+            protocol_config,
+            metrics,
+            trace_builder_opt,
+        ) {
+            Ok((v, t)) => {
+                *timings_out = t;
+                Ok(v)
+            }
+            Err((e, t)) => {
+                *timings_out = t;
+                Err(e)
+            }
+        };
+        gas_charger.round_computation(result)
+    }
+
+    /// Err-path handler for the v15+ pipeline. Rewinds to a state consistent
+    /// with "only the input objects were touched": drops execution writes,
+    /// re-smashes gas, re-touches mutable inputs, then recomputes storage
+    /// charges against the rewound store. After this returns, the cost
+    /// summary reports what is actually persisted — the storage charges
+    /// match the input-only mutations (including rebates owed back from
+    /// previously-stored objects), not the writes execution attempted.
+    ///
+    /// If even input-only storage doesn't fit the remaining budget, falls
+    /// back to "computation = full budget, storage = rebates from deleted
+    /// inputs only."
+    fn reset_writes(gas_charger: &mut GasCharger, temporary_store: &mut TemporaryStore<'_>) {
+        gas_charger.reset(temporary_store);
+        gas_charger
+            .charge_storage(temporary_store)
+            .unwrap_or_else(|_| {
+                // Deepest fallback: even input-only storage doesn't fit the
+                // remaining budget. Reset again (which re-bumps the mutable
+                // inputs), charge the full budget for computation, and collect
+                // only the input-object rebates.
+                gas_charger.reset(temporary_store);
+                gas_charger.set_computation_to_budget();
+                temporary_store.collect_rebate(gas_charger);
+            });
+    }
+
+    /// State 2 — the minimal valid exit from execution. Drop every write (PTB outputs, events, the
+    /// gas smash, and any applied charge), bump ONLY the mutable inputs, and charge nothing.
+    /// Touches no value, so it conserves SUI trivially and can never itself fail conservation.
+    /// Used by the IFFW short-circuit and as the conservation last-resort (in place of a panic).
+    /// Returns the (zero) cost summary to record.
+    fn bump_inputs_only(temporary_store: &mut TemporaryStore<'_>) -> GasCostSummary {
+        temporary_store.drop_writes();
+        temporary_store.ensure_active_inputs_mutated();
+        GasCostSummary::default()
+    }
+
+    /// Run the effects-validity checks: meter limit, written-objects limit, and per-key
+    /// accumulator-amount representability. The first two are invoked unconditionally so their
+    /// metrics fire even when the transaction is already failing; all three outcomes are then
+    /// combined with `Result::and` (`meter` first, then `written`, then `representable`, so an
+    /// earlier error wins). The caller folds the returned `Result<(), _>` into the running
+    /// transaction result, which keeps precedence over these.
+    ///
+    /// The representability check runs here, before `charge` adds the gas accumulator events and
+    /// before `reset_writes` — so it sees only the PTB-emitted accumulator events. On the err
+    /// path `reset_writes` later drops those events, leaving only the bounded gas events, so the
+    /// downstream merge fold and conservation sums cannot overflow. The check is `&self` and
+    /// panic-safe (each running total early-returns once it crosses its limit), so running it
+    /// unconditionally alongside the limit checks is harmless even when the tx is already failing.
+    fn check_effects<Mode: ExecutionMode>(
+        temporary_store: &mut TemporaryStore<'_>,
+        gas_charger: &mut GasCharger,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<ExecutionMetrics>,
+    ) -> Result<(), Mode::Error> {
+        let meter = check_meter_limit::<Mode>(
+            temporary_store,
+            gas_charger,
+            protocol_config,
+            metrics.clone(),
+        );
+        let written = check_written_objects_limit::<Mode>(
+            temporary_store,
+            gas_charger,
+            protocol_config,
+            metrics,
+        );
+        let representable = temporary_store
+            .check_accumulator_amounts_representable()
+            .map_err(Into::into);
+        meter.and(written).and(representable)
+    }
+
+    /// v15+ pipeline's conservation check. Runs `check_conservation` once; on failure, logs loudly
+    /// and returns `Err` with the conservation error so the caller bails to State 2
+    /// (`bump_inputs_only`): a deterministic no-op that conserves trivially — no panic.
+    ///
+    /// No recovery is attempted: by the time this runs, `reset_writes` has already aligned the
+    /// storage charges with the actually-persisted (input-only) state, so a conservation failure
+    /// here is a genuine invariant violation, not a recoverable accounting drift — there is no
+    /// partial reset that would balance it. Consequently, no v15+ path recomputes charges after
+    /// they were set. Conservation is a system invariant: if SUI doesn't balance we can't surface
+    /// that as a normal err, so we fall back to the no-op State 2.
     #[instrument(name = "run_conservation_checks", level = "debug", skip_all)]
     fn run_conservation_checks<Mode: ExecutionMode>(
         temporary_store: &mut TemporaryStore<'_>,
-        gas_charger: &mut GasCharger,
+        gas_charger: &GasCharger,
         tx_digest: TransactionDigest,
         move_vm: &Arc<MoveRuntime>,
-        protocol_config: &ProtocolConfig,
         enable_expensive_checks: bool,
         cost_summary: &GasCostSummary,
         is_genesis_tx: bool,
         advance_epoch_gas_summary: Option<(u64, u64)>,
         input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
     ) -> Result<(), Mode::Error> {
-        let simple_conservation_checks = protocol_config.simple_conservation_checks();
-        let mut result: Result<(), Mode::Error> = Ok(());
-        if !is_genesis_tx && !Mode::skip_conservation_checks() {
-            let run_checks = |store: &TemporaryStore<'_>| -> Result<(), ExecutionError> {
-                store
-                    .check_sui_conserved(simple_conservation_checks, cost_summary)
-                    .and_then(|()| {
-                        if enable_expensive_checks {
-                            let mut layout_resolver = TypeLayoutResolver::new(
-                                move_vm,
-                                store.protocol_config(),
-                                Box::new(store),
-                            );
-                            store.check_sui_conserved_expensive(
-                                cost_summary,
-                                advance_epoch_gas_summary,
-                                &mut layout_resolver,
-                            )
-                        } else {
-                            Ok(())
-                        }
-                    })
-                    .and_then(|()| {
-                        store.check_address_balance_changes(
-                            store.protocol_config(),
-                            input_reservations,
-                        )
-                    })
-            };
+        if is_genesis_tx || Mode::skip_conservation_checks() {
+            return Ok(());
+        }
 
-            if let Err(conservation_err) = run_checks(temporary_store) {
-                // conservation violated. try to avoid panic by dumping all writes, charging for gas,
-                // re-checking conservation, and surfacing an aborted transaction with an invariant
-                // violation if all of that works.
-                result = Err(conservation_err.into());
-                gas_charger.reset(temporary_store);
-                gas_charger.charge_gas(temporary_store, protocol_config, &mut result);
-                if let Err(recovery_err) = run_checks(temporary_store) {
-                    // if we still fail, it's a problem with gas charging that happens even in the
-                    // "aborted" case — no other option but panic. We will create or destroy SUI
-                    // otherwise (or admit an unauthorized accumulator Split).
-                    panic!(
-                        "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
-                        tx_digest,
-                        recovery_err,
-                        gas_charger.summary()
-                    )
-                }
+        // `simple_conservation_checks` has been on for every chain since protocol v113,
+        // well below anything this pipeline runs at, so we pass `true` directly.
+        if let Err(conservation_err) = check_conservation(
+            temporary_store,
+            move_vm,
+            enable_expensive_checks,
+            cost_summary,
+            advance_epoch_gas_summary,
+            input_reservations,
+        ) {
+            // `reset_writes` has already aligned charges with the persisted state, so a conservation
+            // failure here is a genuine invariant violation, not a recoverable drift — there is no
+            // partial reset that would balance it. Fall back to State 2 (the caller drops all writes,
+            // bumps the inputs, charges nothing): deterministic, conserves trivially, no panic. Alert
+            // loudly so the (should-never-happen) violation is visible.
+            #[skip_checked_arithmetic]
+            tracing::error!(
+                tx_digest = ?tx_digest,
+                conservation_error = %conservation_err,
+                gas_status = %gas_charger.summary(),
+                "SUI conservation check failed; falling back to the no-op exit (State 2): \
+                 dropping all writes and charging nothing",
+            );
+            return Err(conservation_err.into());
+        }
+
+        Ok(())
+    }
+
+    /// Run SUI conservation against `cost_summary`: the cheap check always,
+    /// the expensive check if requested, and the address-balance check. Returns
+    /// the first failure; otherwise `Ok(())`.
+    fn check_conservation(
+        temporary_store: &mut TemporaryStore<'_>,
+        move_vm: &Arc<MoveRuntime>,
+        enable_expensive_checks: bool,
+        cost_summary: &GasCostSummary,
+        advance_epoch_gas_summary: Option<(u64, u64)>,
+        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
+    ) -> Result<(), ExecutionError> {
+        // `simple_conservation_checks` has been on for every chain since v113;
+        // this new-pipeline `check_conservation` only runs at v127+ so the bool
+        // is hardcoded here instead of plumbed through.
+        temporary_store.check_sui_conserved(true, cost_summary)?;
+        if enable_expensive_checks {
+            let mut layout_resolver = TypeLayoutResolver::new(
+                move_vm,
+                temporary_store.protocol_config(),
+                Box::new(&*temporary_store),
+            );
+            temporary_store.check_sui_conserved_expensive(
+                cost_summary,
+                advance_epoch_gas_summary,
+                &mut layout_resolver,
+            )?;
+        }
+        temporary_store
+            .check_address_balance_changes(temporary_store.protocol_config(), input_reservations)?;
+        Ok(())
+    }
+
+    /// Pre-refactor gas-charging entry point — kept here for replay determinism on
+    /// `gas_model_version < 15`. Verbatim copy of the body that lived directly at
+    /// `mod checked`-level before the refactor (with `charge_gas` calls renamed to
+    /// `legacy_charge_gas` to match `gas_charger`'s `mod legacy`). Will be removed when
+    /// execution_version bumps past 4.
+    mod legacy {
+        use super::*;
+
+        // MAGIC CONSTANTS -- these are all mainnet-only hardcoded constants and should not be
+        // changed (but can be removed in future execution cuts).
+
+        /// Mainnet recovery point: the fix replays for transactions at/above this accumulator root
+        /// version and keeps the old behavior below it. A compiled constant (not a protocol flag)
+        /// because it had to take effect mid-epoch during recovery, when the network can't reconfigure.
+        pub(super) const ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION: SequenceNumber =
+            SequenceNumber::from_u64(692949576);
+
+        /// Mainnet settlement version at/above which an `InsufficientFundsForWithdraw` transaction
+        /// short-circuits execution entirely (zero-gas effects, mutable-input version bumps only),
+        /// superseding the address-balance gas-payment pruning hotfix. A compiled constant, not a
+        /// protocol flag, because it must take effect mid-epoch during recovery when the network
+        /// cannot reconfigure. Only consulted when an accumulator version is assigned (mainnet
+        /// committed execution); everywhere else the short-circuit is protocol gated (see
+        /// `should_short_circuit_insufficient_funds`).
+        ///
+        /// Value is the mainnet accumulator root version where the new binary was activated on the network.
+        pub(super) const ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION:
+            SequenceNumber = SequenceNumber::from_u64(693531074);
+
+        /// Whether to prune the address-balance leg of gas smashing for an IFFW transaction. This is
+        /// the mainnet-only accumulator backfill that replays the pre-flag incident hotfix below the
+        /// short-circuit rollout point; once `early_exit_on_iffw` is set the short-circuit handles IFFW
+        /// upstream, so reaching here implies the flag is off (asserted below).
+        pub(super) fn should_filter_address_balance_gas_smash(
+            execution_params: &ExecutionOrEarlyError,
+            protocol_config: &ProtocolConfig,
+        ) -> bool {
+            if !any_error_is_insufficient_funds_for_withdraw(execution_params) {
+                return false;
             }
-        } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
-        // we're in the non-production dev inspect mode which allows us to violate conservation
-        result
+            debug_assert!(
+                !protocol_config.early_exit_on_iffw(),
+                "Should not reach gas smashing filtering address balances if IFFW early exit is enabled"
+            );
+            // In test/debug builds, always apply the fix unconditionally to match the behaviour of
+            // the 1.72 mainnet release (where it was deployed as an ungated hotfix).
+            in_test_configuration()
+                || protocol_config.early_exit_on_iffw()
+                || execution_params
+                    .accumulator_version()
+                    .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION)
+        }
+
+        /// Whether to short-circuit an IFFW transaction. When an accumulator version is assigned
+        /// (mainnet committed execution) it gates on the settlement-version rollout point; otherwise
+        /// (every other chain and non-committed paths, where no accumulator version is assigned) the
+        /// short-circuit applies based on `early_exit_on_iffw`.
+        pub(super) fn should_short_circuit_insufficient_funds(
+            execution_params: &ExecutionOrEarlyError,
+            protocol_config: &ProtocolConfig,
+        ) -> bool {
+            // If no IFWWs, then does not apply
+            if !execution_params.early_errors().is_some_and(|errors| {
+                errors
+                    .iter()
+                    .any(|e| matches!(e, ExecutionErrorKind::InsufficientFundsForWithdraw))
+            }) {
+                return false;
+            }
+
+            // In test/debug builds, always short-circuit unconditionally to match the behaviour of
+            // the 1.72 mainnet release (where it was deployed as an ungated hotfix).
+            if in_test_configuration() {
+                return true;
+            }
+
+            // otherwise gate by accumulator version (if present) or protocol flag
+            protocol_config.early_exit_on_iffw()
+                || execution_params.accumulator_version().is_some_and(|v| {
+                    v >= ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION
+                })
+        }
+
+        /// Build the legacy pipeline's IFFW short-circuit response: bump versions of mutable inputs,
+        /// emit effects with a zero gas cost summary, and return an `InsufficientFundsForWithdraw`
+        /// failure. (The new v15+ pipeline produces the same response inline via its `BumpOnly`
+        /// outcome + `build_effects`; this copy is kept frozen for the legacy path.)
+        fn respond_with_iffw_short_circuit<Mode: ExecutionMode>(
+            mut temporary_store: TemporaryStore<'_>,
+            shared_object_refs: Vec<SharedInput>,
+            mut transaction_dependencies: BTreeSet<TransactionDigest>,
+            transaction_digest: TransactionDigest,
+            gas_status: SuiGasStatus,
+            protocol_config: &ProtocolConfig,
+            epoch_id: EpochId,
+        ) -> ExecutionOutput<Mode> {
+            assert_reachable!("IFFW short-circuit fired");
+            // State 2: bump the mutable inputs, charge nothing. The store is clean here (no pipeline
+            // ran), so `drop_writes` inside is a no-op — bit-identical to the prior bare bump.
+            let gas_cost_summary = bump_inputs_only(&mut temporary_store);
+            transaction_dependencies.remove(&TransactionDigest::genesis_marker());
+
+            let execution_error: Mode::Error =
+                ExecutionError::from_kind(ExecutionErrorKind::InsufficientFundsForWithdraw).into();
+            let status = ExecutionStatus::new_failure(execution_error.to_execution_failure());
+            let mut gas_meter = GasCharger::new(
+                transaction_digest,
+                // No real payment in the short-circuit; this charger only computes effects with a
+                // default gas summary and never reaches `charge_storage`, so reservations are empty.
+                PaymentKind::gasless(BTreeMap::new()),
+                gas_status,
+                &mut temporary_store,
+                protocol_config,
+            );
+
+            let (inner, effects) = temporary_store.into_effects(
+                shared_object_refs,
+                &transaction_digest,
+                transaction_dependencies,
+                gas_cost_summary,
+                status,
+                &mut gas_meter,
+                epoch_id,
+            );
+
+            (
+                inner,
+                gas_meter.into_gas_status(),
+                effects,
+                vec![],
+                Err(execution_error),
+            )
+        }
+
+        /// Execution fork for `gas_model_version < 15`, frozen at `origin/main`'s
+        /// behavior: protocol-gated IFFW short-circuit, AB-gas-smash hotfix prune,
+        /// gas charger construction, the monolithic `charge_gas` body, and the
+        /// shared teardown. Entered from `execute_transaction_to_effects` right
+        /// after the common setup; self-contained through to effects.
+        #[instrument(name = "tx_execute_legacy", level = "debug", skip_all)]
+        pub(super) fn execute_transaction_inner<Mode: ExecutionMode>(
+            store: &dyn BackingStore,
+            mut temporary_store: TemporaryStore<'_>,
+            mut gas_data: GasData,
+            gas_status: SuiGasStatus,
+            transaction_kind: TransactionKind,
+            rewritten_inputs: Option<Vec<bool>>,
+            transaction_signer: SuiAddress,
+            transaction_digest: TransactionDigest,
+            move_vm: &Arc<MoveRuntime>,
+            epoch_id: &EpochId,
+            epoch_timestamp_ms: u64,
+            protocol_config: &ProtocolConfig,
+            metrics: Arc<ExecutionMetrics>,
+            enable_expensive_checks: bool,
+            execution_params: ExecutionOrEarlyError,
+            trace_builder_opt: &mut Option<MoveTraceBuilder>,
+            shared_object_refs: Vec<SharedInput>,
+            transaction_dependencies: BTreeSet<TransactionDigest>,
+        ) -> ExecutionOutput<Mode> {
+            // Protocol-gated IFFW short-circuit (mainnet-replay concern).
+            if should_short_circuit_insufficient_funds(&execution_params, protocol_config) {
+                return respond_with_iffw_short_circuit::<Mode>(
+                    temporary_store,
+                    shared_object_refs,
+                    transaction_dependencies,
+                    transaction_digest,
+                    gas_status,
+                    protocol_config,
+                    *epoch_id,
+                );
+            }
+            // On an IFFW abort, drop the address-balance gas payments (keeping real coins) so
+            // the pruned list flows into `payment_kind`/`compute_input_reservations` with no
+            // special handling. See `should_filter_address_balance_gas_smash`.
+            if should_filter_address_balance_gas_smash(&execution_params, protocol_config)
+                && gas_data.payment.len() > 1
+                && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
+            {
+                gas_data
+                    .payment
+                    .retain(|entry| ParsedDigest::try_from(entry.2).is_err());
+            }
+
+            let sponsor = {
+                let gas_owner = gas_data.owner;
+                if gas_owner == transaction_signer {
+                    None
+                } else {
+                    Some(gas_owner)
+                }
+            };
+            let gas_price = gas_status.gas_price();
+            let rgp = gas_status.reference_gas_price();
+
+            let mut gas_charger = GasCharger::new(
+                transaction_digest,
+                legacy_payment_kind(&gas_data, &transaction_kind, protocol_config),
+                gas_status,
+                &mut temporary_store,
+                protocol_config,
+            );
+
+            let tx_ctx = TxContext::new_from_components(
+                &transaction_signer,
+                &transaction_digest,
+                epoch_id,
+                epoch_timestamp_ms,
+                rgp,
+                gas_price,
+                gas_data.budget,
+                sponsor,
+                protocol_config,
+            );
+            let tx_ctx = Rc::new(RefCell::new(tx_ctx));
+
+            // `enable_gasless` has been on for every chain since protocol v119, well below
+            // anything this execution version handles (gas_model 13+ = protocol v123+), so we
+            // don't gate on the flag any more.
+            let is_gasless = is_gasless_transaction(&gas_data, &transaction_kind);
+            let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
+
+            let input_reservations =
+                compute_input_reservations(&transaction_kind, &gas_data, transaction_signer);
+
+            let (gas_cost_summary, execution_result, timings) = execute_transaction::<Mode>(
+                store,
+                &mut temporary_store,
+                transaction_kind,
+                rewritten_inputs,
+                &mut gas_charger,
+                tx_ctx,
+                move_vm,
+                protocol_config,
+                metrics.clone(),
+                enable_expensive_checks,
+                execution_params,
+                trace_builder_opt,
+                is_gasless,
+                &input_reservations,
+            );
+
+            finish_transaction_to_effects::<Mode>(
+                temporary_store,
+                gas_charger,
+                shared_object_refs,
+                transaction_dependencies,
+                sponsor,
+                is_epoch_change,
+                input_reservations,
+                gas_cost_summary,
+                execution_result,
+                timings,
+                transaction_signer,
+                transaction_digest,
+                *epoch_id,
+                enable_expensive_checks,
+                metrics,
+                move_vm,
+            )
+        }
+
+        fn execute_transaction<Mode: ExecutionMode>(
+            store: &dyn BackingStore,
+            temporary_store: &mut TemporaryStore<'_>,
+            transaction_kind: TransactionKind,
+            rewritten_inputs: Option<Vec<bool>>,
+            gas_charger: &mut GasCharger,
+            tx_ctx: Rc<RefCell<TxContext>>,
+            move_vm: &Arc<MoveRuntime>,
+            protocol_config: &ProtocolConfig,
+            metrics: Arc<ExecutionMetrics>,
+            enable_expensive_checks: bool,
+            execution_params: ExecutionOrEarlyError,
+            trace_builder_opt: &mut Option<MoveTraceBuilder>,
+            is_gasless: bool,
+            input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
+        ) -> (
+            GasCostSummary,
+            Result<Mode::ExecutionResults, Mode::Error>,
+            Vec<ExecutionTiming>,
+        ) {
+            // At this point no charges have been applied yet
+            debug_assert!(
+                gas_charger.no_charges(),
+                "No gas charges must be applied yet"
+            );
+
+            let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
+            let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
+            let digest = tx_ctx.borrow().digest();
+            let withdrawal_reservations =
+                if is_gasless && protocol_config.gasless_verify_remaining_balance() {
+                    gasless_withdrawal_reservations(&transaction_kind, &tx_ctx.borrow())
+                } else {
+                    None
+                };
+
+            // We must charge object read here during transaction execution, because if this fails
+            // we must still ensure an effect is committed and all objects versions incremented
+            let result = gas_charger.charge_input_objects_legacy(temporary_store);
+
+            let result: ResultWithTimings<Mode::ExecutionResults, Mode::Error> =
+                result.map_err(|e| (e.into(), vec![])).and_then(
+                    |()| -> ResultWithTimings<Mode::ExecutionResults, Mode::Error> {
+                        let mut execution_result: ResultWithTimings<
+                            Mode::ExecutionResults,
+                            Mode::Error,
+                        > = match execution_params.into_early_errors() {
+                            Some(early_execution_errors) => {
+                                Err((Mode::Error::from_kind(early_execution_errors.head), vec![]))
+                            }
+                            None => execution_loop::<Mode>(
+                                store,
+                                temporary_store,
+                                transaction_kind,
+                                rewritten_inputs,
+                                tx_ctx,
+                                move_vm,
+                                gas_charger,
+                                protocol_config,
+                                metrics.clone(),
+                                trace_builder_opt,
+                            ),
+                        };
+
+                        let meter_check = check_meter_limit::<Mode>(
+                            temporary_store,
+                            gas_charger,
+                            protocol_config,
+                            metrics.clone(),
+                        );
+                        if let Err(e) = meter_check {
+                            execution_result = Err((e, vec![]));
+                        }
+
+                        if execution_result.is_ok() {
+                            let gas_check = check_written_objects_limit::<Mode>(
+                                temporary_store,
+                                gas_charger,
+                                protocol_config,
+                                metrics,
+                            );
+                            if let Err(e) = gas_check {
+                                execution_result = Err((e, vec![]));
+                            }
+                        }
+
+                        execution_result
+                    },
+                );
+
+            let (mut result, timings) = match result {
+                Ok((r, t)) => (Ok(r), t),
+                Err((e, t)) => (Err(e), t),
+            };
+            if is_gasless
+                && result.is_ok()
+                && let Err(msg) = temporary_store
+                    .check_gasless_execution_requirements(withdrawal_reservations.as_ref())
+            {
+                result = Err(Mode::Error::new_with_source(
+                    ExecutionErrorKind::InsufficientGas,
+                    msg,
+                ));
+            }
+
+            // Reject transactions whose per-key accumulator totals are not representable, before
+            // charging gas (see the v15+ pipeline for the rationale).
+            if result.is_ok()
+                && let Err(e) = temporary_store.check_accumulator_amounts_representable()
+            {
+                result = Err(e.into());
+            }
+
+            let cost_summary = gas_charger.legacy_charge_gas(temporary_store, &mut result);
+            // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
+            // information provided to check_sui_conserved, because we mint rewards, and burn
+            // the rebates. We also need to pass in the unmetered_storage_rebate because storage
+            // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
+            // We could probably clean up the code a bit.
+            // Put all the storage rebate accumulated in the system transaction
+            // to the 0x5 object so that it's not lost.
+            temporary_store
+                .conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
+
+            if let Err(e) = run_conservation_checks::<Mode>(
+                temporary_store,
+                gas_charger,
+                digest,
+                move_vm,
+                protocol_config.simple_conservation_checks(),
+                enable_expensive_checks,
+                &cost_summary,
+                is_genesis_tx,
+                advance_epoch_gas_summary,
+                input_reservations,
+            ) {
+                // FIXME: we cannot fail the transaction if this is an epoch change transaction.
+                result = Err(e);
+            }
+
+            (cost_summary, result, timings)
+        }
+
+        #[instrument(name = "run_conservation_checks", level = "debug", skip_all)]
+        fn run_conservation_checks<Mode: ExecutionMode>(
+            temporary_store: &mut TemporaryStore<'_>,
+            gas_charger: &mut GasCharger,
+            tx_digest: TransactionDigest,
+            move_vm: &Arc<MoveRuntime>,
+            simple_conservation_checks: bool,
+            enable_expensive_checks: bool,
+            cost_summary: &GasCostSummary,
+            is_genesis_tx: bool,
+            advance_epoch_gas_summary: Option<(u64, u64)>,
+            input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
+        ) -> Result<(), Mode::Error> {
+            let mut result: Result<(), Mode::Error> = Ok(());
+            if !is_genesis_tx && !Mode::skip_conservation_checks() {
+                let run_checks = |store: &TemporaryStore<'_>| -> Result<(), ExecutionError> {
+                    store
+                        .check_sui_conserved(simple_conservation_checks, cost_summary)
+                        .and_then(|()| {
+                            if enable_expensive_checks {
+                                let mut layout_resolver = TypeLayoutResolver::new(
+                                    move_vm,
+                                    store.protocol_config(),
+                                    Box::new(store),
+                                );
+                                store.check_sui_conserved_expensive(
+                                    cost_summary,
+                                    advance_epoch_gas_summary,
+                                    &mut layout_resolver,
+                                )
+                            } else {
+                                Ok(())
+                            }
+                        })
+                        .and_then(|()| {
+                            store.check_address_balance_changes(
+                                store.protocol_config(),
+                                input_reservations,
+                            )
+                        })
+                };
+
+                if let Err(conservation_err) = run_checks(temporary_store) {
+                    // conservation violated. try to avoid panic by dumping all writes, charging for gas,
+                    // re-checking conservation, and surfacing an aborted transaction with an invariant
+                    // violation if all of that works.
+                    result = Err(conservation_err.into());
+                    gas_charger.reset(temporary_store);
+                    gas_charger.legacy_charge_gas(temporary_store, &mut result);
+                    if let Err(recovery_err) = run_checks(temporary_store) {
+                        // if we still fail, it's a problem with gas charging that happens even in the
+                        // "aborted" case — no other option but panic. We will create or destroy SUI
+                        // otherwise (or admit an unauthorized accumulator Split).
+                        panic!(
+                            "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
+                            tx_digest,
+                            recovery_err,
+                            gas_charger.summary()
+                        )
+                    }
+                }
+            } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
+            // we're in the non-production dev inspect mode which allows us to violate conservation
+            result
+        }
     }
 
     #[instrument(name = "check_meter_limit", level = "debug", skip_all)]
@@ -867,6 +1727,45 @@ mod checked {
         Ok(())
     }
 
+    /// v15+ gasless reservation computation: parks the PTB's `FundsWithdrawal` reservations on the
+    /// gasless payment metadata. Takes `sender`/`sponsor` directly (the v15 `payment_kind` has no
+    /// `TxContext` yet at charger-construction time). Kept separate from the legacy
+    /// `gasless_withdrawal_reservations` so `mod legacy` stays frozen.
+    fn compute_gasless_reservations(
+        transaction_kind: &TransactionKind,
+        sender: SuiAddress,
+        sponsor: Option<SuiAddress>,
+    ) -> Option<BTreeMap<(SuiAddress, TypeTag), u64>> {
+        let TransactionKind::ProgrammableTransaction(pt) = transaction_kind else {
+            debug_fatal!("Gasless transaction must be a ProgrammableTransaction");
+            return None;
+        };
+        let mut reservations = BTreeMap::<(SuiAddress, TypeTag), u64>::new();
+        for input in &pt.inputs {
+            let CallArg::FundsWithdrawal(fw) = input else {
+                continue;
+            };
+            let Some(coin_type) = fw.type_arg.get_balance_type_param() else {
+                debug_fatal!("expected Balance type for withdrawal");
+                continue;
+            };
+            let owner = match fw.withdraw_from {
+                WithdrawFrom::Sender => sender,
+                WithdrawFrom::Sponsor => {
+                    debug_fatal!("WithdrawFrom::Sponsor is not expected in gasless transactions");
+                    sponsor.unwrap_or(sender)
+                }
+            };
+            let Reservation::MaxAmountU64(amount) = fw.reservation;
+            let entry = reservations.entry((owner, coin_type)).or_insert(0);
+            *entry = entry.saturating_add(amount);
+        }
+        Some(reservations)
+    }
+
+    /// Legacy (gas_model < 15) gasless reservation computation. Frozen copy that derives
+    /// `sender`/`sponsor` from `TxContext` internally — used only by `mod legacy`, kept bit-for-bit
+    /// so the legacy executor is unaffected by v15 gasless changes.
     fn gasless_withdrawal_reservations(
         transaction_kind: &TransactionKind,
         tx_ctx: &TxContext,
@@ -1853,7 +2752,7 @@ mod checked {
 
     #[cfg(test)]
     mod address_balance_smash_gate_tests {
-        use super::{
+        use super::legacy::{
             ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION,
             should_filter_address_balance_gas_smash,
         };
@@ -1936,7 +2835,7 @@ mod checked {
 
     #[cfg(test)]
     mod address_balance_smash_short_circuit_tests {
-        use super::{
+        use super::legacy::{
             ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION,
             should_short_circuit_insufficient_funds,
         };
