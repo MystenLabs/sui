@@ -19,7 +19,7 @@ pub mod checked {
     use sui_types::error::ExecutionErrorTrait;
     use sui_types::gas::{GasCostSummary, SuiGasStatus, deduct_gas};
     use sui_types::gas_model::gas_predicates::{
-        charge_upgrades, dont_charge_budget_on_storage_oog, refresh_gas_payment_location,
+        dont_charge_budget_on_storage_oog, refresh_gas_payment_location,
     };
     use sui_types::{
         accumulator_event::AccumulatorEvent,
@@ -297,11 +297,9 @@ pub mod checked {
         }
 
         pub fn charge_upgrade_package(&mut self, size: usize) -> Result<(), ExecutionError> {
-            if charge_upgrades(self.gas_model_version) {
-                self.gas_status.charge_publish_package(size)
-            } else {
-                Ok(())
-            }
+            // `charge_upgrades` is on for gas_model >= 7; this execution version's lowest
+            // target is gas_model 13, so the predicate is always true and we charge directly.
+            self.gas_status.charge_publish_package(size)
         }
 
         /// Iterate the transaction's inputs and charge `storage_read` for each
