@@ -34,3 +34,15 @@ sui-indexer-alt-metrics.workspace = true
 sui-rpc-api.workspace = true
 sui-rpc-store.workspace = true
 sui-types.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+simulacrum.workspace = true
+sui-rpc.workspace = true
+sui-sdk-types.workspace = true
+sui-test-transaction-builder.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tonic.workspace = true
+url.workspace = true

@@ -53,6 +53,22 @@ pub async fn build_rpc_service(
     rpc_service.with_metrics(RpcMetrics::new(registry));
     rpc_service.with_config(config.config.clone());
 
+    // TODO: wire a `TransactionExecutor` impl via
+    // `rpc_service.with_executor(...)`. Without one,
+    // `TransactionExecutionService::{execute_transaction,
+    // simulate_transaction}` reject every request with
+    // `Unimplemented`. Three candidate impls:
+    //
+    // - A forwarding executor over `sui_rpc_api::Client`
+    //   that proxies execute / simulate to an upstream
+    //   fullnode or validator (thin read-tier model).
+    // - A local simulate-only executor built over
+    //   `sui-execution` + `RpcStoreReader` (reuses the
+    //   `BackingPackageStore` / `ProtocolConfig` plumbing
+    //   `reader/layout.rs` already exercises) — covers
+    //   `simulate_transaction` only.
+    // - A Simulacrum-backed executor for tests.
+
     let router = rpc_service.into_router().await;
 
     let mut service = Service::new();

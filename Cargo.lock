@@ -16721,6 +16721,7 @@ name = "sui-rpc-node"
 version = "1.74.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum 0.8.3",
  "axum-server",
  "bin-version",
@@ -16729,19 +16730,26 @@ dependencies = [
  "futures",
  "prometheus",
  "serde",
+ "simulacrum",
  "sui-config",
  "sui-consistent-store",
  "sui-default-config",
  "sui-futures",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-metrics",
+ "sui-rpc",
  "sui-rpc-api",
  "sui-rpc-store",
+ "sui-sdk-types",
+ "sui-test-transaction-builder",
  "sui-types",
  "telemetry-subscribers",
+ "tempfile",
  "tokio",
  "toml 0.7.4",
+ "tonic 0.14.6",
  "tracing",
+ "url",
 ]
 
 [[package]]

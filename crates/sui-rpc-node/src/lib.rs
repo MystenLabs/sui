@@ -37,7 +37,7 @@
 
 pub mod args;
 pub mod config;
-mod rpc;
+pub mod rpc;
 
 use std::path::Path;
 use std::sync::Arc;

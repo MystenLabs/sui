@@ -13,6 +13,7 @@
 use std::net::SocketAddr;
 
 use sui_default_config::DefaultConfig;
+use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_rpc_store::CommitterLayer;
@@ -87,5 +88,25 @@ impl ServiceConfig {
             committer: CommitterConfig::default().into(),
             rpc: RpcConfig::default(),
         }
+    }
+
+    /// Configuration suitable for tests: tightens the
+    /// collect / watermark / retry intervals from their
+    /// production defaults (200–500ms) down to 50ms each, and
+    /// pins ingestion concurrency at a fixed `1`. The caller
+    /// supplies an HTTP listen address (typically from
+    /// `get_available_port`) so multiple in-process clusters can
+    /// run concurrently without colliding.
+    ///
+    /// Mirrors `sui_indexer_alt_consistent_store::ServiceConfig::for_test`.
+    pub fn for_test(rpc_listen_address: SocketAddr) -> Self {
+        let mut cfg = Self::example();
+        cfg.ingestion.retry_interval_ms = 10;
+        cfg.ingestion.ingest_concurrency = ConcurrencyConfig::Fixed { value: 1 };
+        cfg.committer.write_concurrency = Some(1);
+        cfg.committer.collect_interval_ms = Some(50);
+        cfg.committer.watermark_interval_ms = Some(50);
+        cfg.rpc.listen_address = rpc_listen_address;
+        cfg
     }
 }
