@@ -648,12 +648,13 @@ mod checked {
         let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
         let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
         let digest = tx_ctx.borrow().digest();
-        let withdrawal_reservations =
-            if is_gasless && protocol_config.gasless_verify_remaining_balance() {
-                gasless_withdrawal_reservations(&transaction_kind, &tx_ctx.borrow())
-            } else {
-                None
-            };
+        // `gasless_verify_remaining_balance` is on at every protocol version this pipeline
+        // ever runs at (v127+), so we don't gate on the flag.
+        let withdrawal_reservations = if is_gasless {
+            gasless_withdrawal_reservations(&transaction_kind, &tx_ctx.borrow())
+        } else {
+            None
+        };
 
         let mut timings: Vec<ExecutionTiming> = vec![];
 
