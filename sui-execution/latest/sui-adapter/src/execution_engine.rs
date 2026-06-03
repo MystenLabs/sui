@@ -721,7 +721,6 @@ mod checked {
             gas_charger,
             digest,
             move_vm,
-            protocol_config,
             enable_expensive_checks,
             &mut cost_summary,
             is_genesis_tx,
@@ -877,7 +876,6 @@ mod checked {
         gas_charger: &mut GasCharger,
         tx_digest: TransactionDigest,
         move_vm: &Arc<MoveRuntime>,
-        protocol_config: &ProtocolConfig,
         enable_expensive_checks: bool,
         cost_summary: &mut GasCostSummary,
         is_genesis_tx: bool,
@@ -889,12 +887,11 @@ mod checked {
             return Ok(());
         }
 
-        let simple_conservation_checks = protocol_config.simple_conservation_checks();
-
+        // `simple_conservation_checks` has been on for every chain since protocol v113,
+        // well below anything this pipeline runs at, so we pass `true` directly.
         if let Err(conservation_err) = check_conservation(
             temporary_store,
             move_vm,
-            simple_conservation_checks,
             enable_expensive_checks,
             cost_summary,
             advance_epoch_gas_summary,
@@ -915,7 +912,6 @@ mod checked {
             if let Err(recovery_err) = check_conservation(
                 temporary_store,
                 move_vm,
-                simple_conservation_checks,
                 enable_expensive_checks,
                 &recovery_cost,
                 advance_epoch_gas_summary,
@@ -945,13 +941,15 @@ mod checked {
     fn check_conservation(
         temporary_store: &mut TemporaryStore<'_>,
         move_vm: &Arc<MoveRuntime>,
-        simple_conservation_checks: bool,
         enable_expensive_checks: bool,
         cost_summary: &GasCostSummary,
         advance_epoch_gas_summary: Option<(u64, u64)>,
         input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
     ) -> Result<(), ExecutionError> {
-        temporary_store.check_sui_conserved(simple_conservation_checks, cost_summary)?;
+        // `simple_conservation_checks` has been on for every chain since v113;
+        // this new-pipeline `check_conservation` only runs at v127+ so the bool
+        // is hardcoded here instead of plumbed through.
+        temporary_store.check_sui_conserved(true, cost_summary)?;
         if enable_expensive_checks {
             let mut layout_resolver = TypeLayoutResolver::new(
                 move_vm,
