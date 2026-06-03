@@ -275,7 +275,7 @@ where
         };
 
         let inner = self.inner.clone();
-        let tx_digest = *request.transaction.digest();
+        let _tx_digest = *request.transaction.digest();
         let (response, executed_locally) = spawn_monitored_task!(
             Inner::<A>::execute_transaction_with_retry(inner, request, client_addr)
         )
@@ -285,6 +285,7 @@ where
             details: e.to_string(),
         })??;
 
+        /*
         // If the transaction has not been executed locally, then wait for it.
         // TODO: this is temporary code and we are using it so we can compare the local execution speed up between
         // full nodes with consensus sync enabled vs state sync only.
@@ -298,7 +299,7 @@ where
             .await
             .is_ok();
             add_server_timing("local_execution done");
-        }
+        }*/
 
         let executed_locally = if executed_locally { "true" } else { "false" };
 
