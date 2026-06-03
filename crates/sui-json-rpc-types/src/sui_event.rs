@@ -3,7 +3,7 @@
 
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Base64;
-use move_core_types::annotated_value::MoveDatatypeLayout;
+use move_core_types::compressed::annotated as CA;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use mysten_metrics::monitored_scope;
@@ -176,7 +176,7 @@ impl SuiEvent {
         tx_digest: TransactionDigest,
         event_seq: u64,
         timestamp_ms: Option<u64>,
-        layout: MoveDatatypeLayout,
+        layout: CA::MoveTypeLayout,
     ) -> SuiResult<Self> {
         let Event {
             package_id,
@@ -190,7 +190,7 @@ impl SuiEvent {
             bcs: contents.to_vec(),
         };
 
-        let move_value = Event::move_event_to_move_value(&contents, layout)?;
+        let move_value = Event::move_event_to_move_value(&contents, layout.as_ref())?;
         let (type_, fields) = type_and_fields_from_move_event_data(move_value)?;
 
         Ok(SuiEvent {

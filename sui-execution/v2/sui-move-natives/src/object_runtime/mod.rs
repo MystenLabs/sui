@@ -13,6 +13,7 @@ use move_core_types::{
     account_address::AccountAddress,
     annotated_value::{MoveTypeLayout, MoveValue},
     annotated_visitor as AV,
+    compressed::annotated as CA,
     language_storage::StructTag,
     runtime_value as R,
     vm_status::StatusCode,
@@ -664,7 +665,7 @@ pub fn get_all_uids(
             &mut self,
             driver: &mut AV::StructDriver<'_, 'b, 'l>,
         ) -> Result<(), Self::Error> {
-            if driver.struct_layout().type_ == UID::type_() {
+            if driver.struct_layout().type_() == &UID::type_() {
                 while driver.next_field(&mut UIDCollector(self.0))?.is_some() {}
             } else {
                 while driver.next_field(self)?.is_some() {}
@@ -685,11 +686,8 @@ pub fn get_all_uids(
         }
     }
 
-    MoveValue::visit_deserialize(
-        bcs_bytes,
-        fully_annotated_layout,
-        &mut UIDTraversal(&mut ids),
-    )
-    .map_err(|e| format!("Failed to deserialize. {e}"))?;
+    let layout: CA::MoveTypeLayout = fully_annotated_layout.try_into().unwrap();
+    MoveValue::visit_deserialize(bcs_bytes, layout.as_ref(), &mut UIDTraversal(&mut ids))
+        .map_err(|e| format!("Failed to deserialize. {e}"))?;
     Ok(ids)
 }

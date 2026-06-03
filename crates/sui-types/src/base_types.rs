@@ -59,6 +59,7 @@ use move_binary_format::file_format::SignatureToken;
 use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
+use move_core_types::compressed::annotated::{self as CA, BackendBuilder as _, LayoutHandle};
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::ModuleId;
@@ -80,6 +81,7 @@ use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
+use std::sync::OnceLock;
 use sui_protocol_config::ProtocolConfig;
 
 #[cfg(test)]
@@ -1138,6 +1140,54 @@ pub const URL_STRUCT_NAME: &IdentStr = ident_str!("Url");
 pub const VEC_MAP_MODULE_NAME: &IdentStr = ident_str!("vec_map");
 pub const VEC_MAP_STRUCT_NAME: &IdentStr = ident_str!("VecMap");
 pub const VEC_MAP_ENTRY_STRUCT_NAME: &IdentStr = ident_str!("Entry");
+
+/// Defines a `pub fn $name() -> CA::MoveStructLayout<'static>` that lazily
+/// builds the compressed form of `$tree_fn()` (a tree-form `A::MoveStructLayout`).
+/// The owned compressed type layout is kept alive forever inside a `OnceLock`,
+/// and the returned struct view borrows into it with a `'static` lifetime.
+macro_rules! cached_compressed_struct_layout {
+    ($name:ident, $tree_fn:ident) => {
+        pub fn $name() -> CA::MoveStructLayout<'static> {
+            static CELL: OnceLock<CA::MoveTypeLayout> = OnceLock::new();
+            let owned = CELL.get_or_init(|| {
+                let tree = A::MoveTypeLayout::Struct(Box::new($tree_fn()));
+                CA::MoveTypeLayout::try_from(&tree).unwrap()
+            });
+            owned.as_struct().expect("struct layout")
+        }
+    };
+}
+
+cached_compressed_struct_layout!(compressed_move_ascii_str_layout, move_ascii_str_layout);
+cached_compressed_struct_layout!(compressed_move_utf8_str_layout, move_utf8_str_layout);
+cached_compressed_struct_layout!(compressed_url_layout, url_layout);
+cached_compressed_struct_layout!(compressed_type_name_layout, type_name_layout);
+
+pub fn move_ascii_str_layout_for_builder(
+    builder: &mut CA::MoveTypeLayoutBuilder,
+) -> anyhow::Result<LayoutHandle> {
+    builder.intern_tree(&A::MoveTypeLayout::Struct(
+        Box::new(move_ascii_str_layout()),
+    ))
+}
+
+pub fn move_utf8_str_layout_for_builder(
+    builder: &mut CA::MoveTypeLayoutBuilder,
+) -> anyhow::Result<LayoutHandle> {
+    builder.intern_tree(&A::MoveTypeLayout::Struct(Box::new(move_utf8_str_layout())))
+}
+
+pub fn url_layout_for_builder(
+    builder: &mut CA::MoveTypeLayoutBuilder,
+) -> anyhow::Result<LayoutHandle> {
+    builder.intern_tree(&A::MoveTypeLayout::Struct(Box::new(url_layout())))
+}
+
+pub fn type_name_layout_for_builder(
+    builder: &mut CA::MoveTypeLayoutBuilder,
+) -> anyhow::Result<LayoutHandle> {
+    builder.intern_tree(&A::MoveTypeLayout::Struct(Box::new(type_name_layout())))
+}
 
 pub fn move_ascii_str_layout() -> A::MoveStructLayout {
     A::MoveStructLayout {

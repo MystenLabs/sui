@@ -248,7 +248,8 @@ impl<S: V::Store> Interpreter<S> {
                 // value. This can consume multiple accessors, but will pause if it encounters a
                 // dynamic (object) field access.
                 (VV::Slice(slice), _) => {
-                    let Some(mut value) = Extractor::deserialize_slice(slice, &mut accessors)?
+                    let Some(mut value) =
+                        Extractor::deserialize_slice(slice.clone(), &mut accessors)?
                     else {
                         return Ok(None);
                     };

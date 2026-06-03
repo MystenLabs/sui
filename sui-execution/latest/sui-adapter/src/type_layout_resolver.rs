@@ -5,7 +5,7 @@ use crate::data_store::cached_package_store::CachedPackageStore;
 use crate::data_store::transaction_package_store::TransactionPackageStore;
 use crate::static_programmable_transactions::linkage::config::{LinkageConfig, ResolutionConfig};
 use crate::static_programmable_transactions::linkage::resolved_linkage::ExecutableLinkage;
-use move_core_types::annotated_value as A;
+use move_core_types::compressed::annotated as CA;
 use move_core_types::language_storage::StructTag;
 use move_vm_runtime::runtime::MoveRuntime;
 use sui_protocol_config::ProtocolConfig;
@@ -45,7 +45,7 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
     fn get_annotated_layout(
         &mut self,
         struct_tag: &StructTag,
-    ) -> Result<A::MoveDatatypeLayout, SuiError> {
+    ) -> Result<CA::MoveTypeLayout, SuiError> {
         let ids = struct_tag.all_addresses().into_iter().map(ObjectID::from);
         let null_resolver = NullSuiResolver(&self.state_view);
         let resolver =
@@ -71,13 +71,8 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
         };
 
         let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
-        match vm
-            .annotated_type_layout(&type_tag)
-            .ok()
-            .and_then(|compressed| compressed.inflate().ok())
-        {
-            Some(A::MoveTypeLayout::Struct(s)) => Ok(A::MoveDatatypeLayout::Struct(s)),
-            Some(A::MoveTypeLayout::Enum(e)) => Ok(A::MoveDatatypeLayout::Enum(e)),
+        match vm.annotated_type_layout(&type_tag).ok() {
+            Some(layout) if layout.as_datatype().is_some() => Ok(layout),
             _ => Err(SuiErrorKind::FailObjectLayout {
                 st: format!("{}", struct_tag),
             }

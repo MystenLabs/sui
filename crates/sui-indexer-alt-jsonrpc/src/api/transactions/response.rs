@@ -6,8 +6,6 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use futures::future::OptionFuture;
-use move_core_types::annotated_value::MoveDatatypeLayout;
-use move_core_types::annotated_value::MoveTypeLayout;
 use sui_indexer_alt_reader::kv_loader::TransactionContents;
 use sui_indexer_alt_reader::objects::VersionedObjectKey;
 use sui_indexer_alt_reader::tx_balance_changes::TxBalanceChangeKey;
@@ -145,7 +143,7 @@ async fn events(
     let mut sui_events = Vec::with_capacity(events.len());
 
     for (ix, event) in events.into_iter().enumerate() {
-        let layout = match ctx
+        let type_layout = ctx
             .package_resolver()
             .type_layout(event.type_.clone().into())
             .await
@@ -154,13 +152,12 @@ async fn events(
                     "Failed to resolve layout for {}",
                     event.type_.to_canonical_display(/* with_prefix */ true)
                 )
-            })? {
-            MoveTypeLayout::Struct(s) => MoveDatatypeLayout::Struct(s),
-            MoveTypeLayout::Enum(e) => MoveDatatypeLayout::Enum(e),
-            _ => rpc_bail!(
+            })?;
+        if type_layout.as_datatype().is_none() {
+            rpc_bail!(
                 "Event {ix} is not a struct or enum: {}",
                 event.type_.to_canonical_string(/* with_prefix */ true)
-            ),
+            );
         };
 
         let sui_event = SuiEvent::try_from(
@@ -168,7 +165,7 @@ async fn events(
             digest,
             ix as u64,
             tx.timestamp_ms(),
-            layout,
+            type_layout,
         )
         .with_context(|| format!("Failed to convert Event {ix} into response"))?;
 

@@ -286,6 +286,7 @@ mod tests {
     use move_core_types::account_address::AccountAddress;
     use move_core_types::annotated_value::MoveTypeLayout;
     use move_core_types::annotated_value::MoveTypeLayout as L;
+    use move_core_types::compressed::annotated as CA;
     use move_core_types::language_storage::TypeTag;
     use move_core_types::u256::U256;
     use serde::Serialize;
@@ -310,6 +311,11 @@ mod tests {
 
     const ONE_MB: usize = 1024 * 1024;
 
+    /// Convert a tree-form layout into its compressed equivalent.
+    fn compress(layout: MoveTypeLayout) -> CA::MoveTypeLayout {
+        (&layout).try_into().unwrap()
+    }
+
     /// Helper to parse a path and extract it from the provided object.
     async fn extract(
         store: MockStore,
@@ -317,7 +323,7 @@ mod tests {
         layout: MoveTypeLayout,
         path: &str,
     ) -> Result<Option<serde_json::Value>, FormatError> {
-        let interpreter = Interpreter::new(OwnedSlice::new(layout, bytes), store);
+        let interpreter = Interpreter::new(OwnedSlice::new(compress(layout), bytes), store);
         let used = AtomicUsize::new(0);
 
         let chain = Extract::parse(Limits::default(), path)?;
@@ -335,7 +341,7 @@ mod tests {
         layout: MoveTypeLayout,
         path: &str,
     ) -> Result<Option<OwnedSlice>, FormatError> {
-        let interpreter = Interpreter::new(OwnedSlice::new(layout, bytes), store);
+        let interpreter = Interpreter::new(OwnedSlice::new(compress(layout), bytes), store);
         let chain = Extract::parse(Limits::default(), path)?;
         let Some(value) = chain.extract(&interpreter).await? else {
             return Ok(None);
@@ -351,7 +357,7 @@ mod tests {
         parent: AccountAddress,
         literal: &str,
     ) -> Result<Option<AccountAddress>, FormatError> {
-        let interpreter = Interpreter::new(OwnedSlice::new(layout, bytes), store);
+        let interpreter = Interpreter::new(OwnedSlice::new(compress(layout), bytes), store);
         let name = Name::parse(Limits::default(), literal)?;
         let Some(value) = name.eval(&interpreter).await? else {
             return Ok(None);
@@ -367,7 +373,7 @@ mod tests {
         parent: AccountAddress,
         literal: &str,
     ) -> Result<Option<AccountAddress>, FormatError> {
-        let interpreter = Interpreter::new(OwnedSlice::new(layout, bytes), store);
+        let interpreter = Interpreter::new(OwnedSlice::new(compress(layout), bytes), store);
         let name = Name::parse(Limits::default(), literal)?;
         let Some(value) = name.eval(&interpreter).await? else {
             return Ok(None);
@@ -383,7 +389,7 @@ mod tests {
         parent: AccountAddress,
         literal: &str,
     ) -> Result<Option<AccountAddress>, FormatError> {
-        let interpreter = Interpreter::new(OwnedSlice::new(layout, bytes), store);
+        let interpreter = Interpreter::new(OwnedSlice::new(compress(layout), bytes), store);
         let name = Name::parse(Limits::default(), literal)?;
         let Some(value) = name.eval(&interpreter).await? else {
             return Ok(None);
@@ -402,7 +408,7 @@ mod tests {
         max_output_size: usize,
         fields: impl IntoIterator<Item = (&'s str, &'s str)>,
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
-        let interpreter = Interpreter::new(OwnedSlice::new(layout, bytes), store);
+        let interpreter = Interpreter::new(OwnedSlice::new(compress(layout), bytes), store);
         Display::parse(limits, fields)?
             .display(max_depth, max_output_size, &interpreter)
             .await
@@ -833,7 +839,7 @@ mod tests {
         ];
 
         let store = MockStore::default();
-        let root = OwnedSlice::new(struct_("0x1::m::S", fields), bytes);
+        let root = OwnedSlice::new(compress(struct_("0x1::m::S", fields)), bytes);
 
         let mut output: Vec<serde_json::Value> = Vec::with_capacity(formats.len());
         let interpreter = Interpreter::new(root, store);
@@ -1582,7 +1588,7 @@ mod tests {
             async fn latest(
                 &self,
                 id: AccountAddress,
-            ) -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>> {
+            ) -> anyhow::Result<Option<(CA::MoveTypeLayout, Vec<u8>)>> {
                 self.barrier.wait().await;
                 self.inner.latest(id).await
             }
@@ -2730,7 +2736,7 @@ mod tests {
         );
 
         let store = MockStore::default();
-        let root = OwnedSlice::new(layout, bytes);
+        let root = OwnedSlice::new(compress(layout), bytes);
         let interpreter = Interpreter::new(root, store);
 
         let formats = ["{st}", "{en}", "{vs}"];

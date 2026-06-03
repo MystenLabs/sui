@@ -36,7 +36,7 @@ pub(crate) async fn render_json(
     let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
     let layout = resolver.type_layout(type_tag).await.ok()?;
     ProtoVisitor::new(MAX_JSON_MOVE_VALUE_SIZE)
-        .deserialize_value(contents, &layout)
+        .deserialize_value(contents, layout)
         .ok()
 }
 

@@ -741,9 +741,14 @@ fn assert_path((value, layout): (MoveValue, MoveTypeLayout), path: Vec<E<'_>>, e
     let mut printer = PrintVisitor::default();
 
     assert!(
-        Extractor::deserialize_value(&bytes, compress(&layout).as_ref(), &mut printer, path.clone())
-            .unwrap()
-            .is_some(),
+        Extractor::deserialize_value(
+            &bytes,
+            compress(&layout).as_ref(),
+            &mut printer,
+            path.clone()
+        )
+        .unwrap()
+        .is_some(),
         "Failed to extract value {path:?}",
     );
 
@@ -759,9 +764,14 @@ fn assert_no_path((value, layout): (MoveValue, MoveTypeLayout), path: Vec<E<'_>>
     let mut printer = PrintVisitor::default();
 
     assert!(
-        Extractor::deserialize_value(&bytes, compress(&layout).as_ref(), &mut printer, path.clone())
-            .unwrap()
-            .is_none(),
+        Extractor::deserialize_value(
+            &bytes,
+            compress(&layout).as_ref(),
+            &mut printer,
+            path.clone()
+        )
+        .unwrap()
+        .is_none(),
         "Expected not to find something at {path:?}",
     );
 

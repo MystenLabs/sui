@@ -725,9 +725,7 @@ impl<'c, 'b, 'l> StructDriver<'c, 'b, 'l> {
 
     /// Skip the next field. Returns the layout of the field that was visited if there was one, or
     /// `None` if there was none.
-    pub fn skip_field(
-        &mut self,
-    ) -> Result<Option<(&'l Identifier, MoveTypeLayoutRef<'l>)>, Error> {
+    pub fn skip_field(&mut self) -> Result<Option<(&'l Identifier, MoveTypeLayoutRef<'l>)>, Error> {
         self.next_field(&mut NullTraversal)
             .map(|res| res.map(|(f, _)| f))
     }
@@ -821,9 +819,7 @@ impl<'c, 'b, 'l> VariantDriver<'c, 'b, 'l> {
     }
 
     /// Skip the next field.
-    pub fn skip_field(
-        &mut self,
-    ) -> Result<Option<(&'l Identifier, MoveTypeLayoutRef<'l>)>, Error> {
+    pub fn skip_field(&mut self) -> Result<Option<(&'l Identifier, MoveTypeLayoutRef<'l>)>, Error> {
         self.next_field(&mut NullTraversal)
             .map(|res| res.map(|(f, _)| f))
     }

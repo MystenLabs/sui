@@ -20,6 +20,7 @@ use jsonrpsee::core::RpcResult;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
+use move_core_types::compressed::annotated as CA;
 use move_core_types::language_storage::StructTag;
 use mysten_common::ZipDebugEqIteratorExt;
 use once_cell::sync::Lazy;
@@ -166,7 +167,7 @@ impl sui_display::v2::Store for DisplayStore<'_> {
     async fn latest(
         &self,
         id: AccountAddress,
-    ) -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>> {
+    ) -> anyhow::Result<Option<(CA::MoveTypeLayout, Vec<u8>)>> {
         let read = self.state.get_object_read(&id.into())?;
         let ObjectRead::Exists(_, object, Some(layout)) = read else {
             return Ok(None);
@@ -176,10 +177,9 @@ impl sui_display::v2::Store for DisplayStore<'_> {
             return Ok(None);
         };
 
-        Ok(Some((
-            MoveTypeLayout::Struct(Box::new(layout)),
-            move_object.contents().to_vec(),
-        )))
+        let tree_layout = MoveTypeLayout::Struct(Box::new(layout));
+        let layout: CA::MoveTypeLayout = (&tree_layout).try_into()?;
+        Ok(Some((layout, move_object.contents().to_vec())))
     }
 }
 
@@ -663,6 +663,14 @@ impl ReadApiServer for ReadApi {
                         {
                             Ok(rendered_fields) => display_fields = Some(rendered_fields),
                             Err(e) => {
+                                let layout = layout
+                                    .as_ref()
+                                    .map(|layout| {
+                                        CA::MoveTypeLayout::try_from(&MoveTypeLayout::Struct(
+                                            Box::new(layout.clone()),
+                                        ))
+                                    })
+                                    .transpose()?;
                                 return Ok(SuiObjectResponse::new(
                                     Some((object_ref, o, layout, options, None).try_into()?),
                                     Some(SuiObjectResponseError::DisplayError {
@@ -672,6 +680,14 @@ impl ReadApiServer for ReadApi {
                             }
                         }
                     }
+                    let layout = layout
+                        .as_ref()
+                        .map(|layout| {
+                            CA::MoveTypeLayout::try_from(&MoveTypeLayout::Struct(Box::new(
+                                layout.clone(),
+                            )))
+                        })
+                        .transpose()?;
                     Ok(SuiObjectResponse::new_with_data(
                         (object_ref, o, layout, options, display_fields).try_into()?,
                     ))
@@ -769,6 +785,14 @@ impl ReadApiServer for ReadApi {
                     } else {
                         None
                     };
+                    let layout = layout
+                        .as_ref()
+                        .map(|layout| {
+                            CA::MoveTypeLayout::try_from(&MoveTypeLayout::Struct(Box::new(
+                                layout.clone(),
+                            )))
+                        })
+                        .transpose()?;
                     Ok(SuiPastObjectResponse::VersionFound(
                         (object_ref, o, layout, options, display_fields).try_into()?,
                     ))
@@ -1342,7 +1366,10 @@ async fn get_display_fields(
 ) -> Result<DisplayFieldsResponse, ObjectDisplayError> {
     let (layout, type_) = if let Some(layout) = original_layout {
         let type_ = &layout.type_;
-        let layout = MoveTypeLayout::Struct(Box::new(layout.clone()));
+        let tree_layout = MoveTypeLayout::Struct(Box::new(layout.clone()));
+        let layout: CA::MoveTypeLayout = (&tree_layout)
+            .try_into()
+            .map_err(ObjectDisplayError::Internal)?;
         (layout, type_)
     } else {
         return Ok(DisplayFieldsResponse {
@@ -1357,7 +1384,8 @@ async fn get_display_fields(
 
     let display: Vec<(String, Result<Json, anyhow::Error>)> =
         if let Some(display_object) = get_display_object_v2_by_type(fullnode_api, type_)? {
-            let root = sui_display::v2::OwnedSlice::new(layout, move_object.contents().to_owned());
+            let root =
+                sui_display::v2::OwnedSlice::new(layout.clone(), move_object.contents().to_owned());
             let store = DisplayStore::new(fullnode_api.state.as_ref());
             let interpreter = sui_display::v2::Interpreter::new(root, store);
             let limits = sui_display::v2::Limits {

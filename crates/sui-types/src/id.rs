@@ -1,9 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::OnceLock;
+
 use crate::MoveTypeTagTrait;
 use crate::{SUI_FRAMEWORK_ADDRESS, base_types::ObjectID};
 use move_core_types::account_address::AccountAddress;
+use move_core_types::compressed::annotated::{self as CA, BackendBuilder as _, LayoutHandle};
 use move_core_types::language_storage::TypeTag;
 use move_core_types::{
     annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
@@ -67,6 +70,24 @@ impl UID {
             )],
         }
     }
+
+    pub fn compressed_layout() -> CA::MoveStructLayout<'static> {
+        static CELL: OnceLock<CA::MoveTypeLayout> = OnceLock::new();
+        let owned = CELL.get_or_init(|| {
+            let tree = MoveTypeLayout::Struct(Box::new(Self::layout()));
+            CA::MoveTypeLayout::try_from(&tree).unwrap()
+        });
+        owned.as_struct().expect("struct layout")
+    }
+
+    pub fn layout_for_builder(
+        builder: &mut CA::MoveTypeLayoutBuilder,
+    ) -> anyhow::Result<LayoutHandle> {
+        let id_layout = ID::layout_for_builder(builder)?;
+        let type_ = Self::type_();
+        let id = ident_str!("id").to_owned();
+        builder.struct_layout(&type_, &[(&id, id_layout)])
+    }
 }
 
 impl ID {
@@ -91,6 +112,24 @@ impl ID {
                 MoveTypeLayout::Address,
             )],
         }
+    }
+
+    pub fn compressed_layout() -> CA::MoveStructLayout<'static> {
+        static CELL: OnceLock<CA::MoveTypeLayout> = OnceLock::new();
+        let owned = CELL.get_or_init(|| {
+            let tree = MoveTypeLayout::Struct(Box::new(Self::layout()));
+            CA::MoveTypeLayout::try_from(&tree).unwrap()
+        });
+        owned.as_struct().expect("struct layout")
+    }
+
+    pub fn layout_for_builder(
+        builder: &mut CA::MoveTypeLayoutBuilder,
+    ) -> anyhow::Result<LayoutHandle> {
+        let address_layout = builder.address();
+        let type_ = Self::type_();
+        let bytes = ident_str!("bytes").to_owned();
+        builder.struct_layout(&type_, &[(&bytes, address_layout)])
     }
 }
 

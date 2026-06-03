@@ -124,8 +124,7 @@ impl<R: ReadApiServer> IndexerApi<R> {
             value,
         } = name;
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let layout = TypeLayoutBuilder::build_with_types(&name_type, epoch_store.module_cache())
-            .and_then(|compressed| compressed.inflate())?;
+        let layout = TypeLayoutBuilder::build_with_types(&name_type, epoch_store.module_cache())?;
         let sui_json_value = SuiJsonValue::new(value)?;
         let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
         Ok((name_type, name_bcs_value))

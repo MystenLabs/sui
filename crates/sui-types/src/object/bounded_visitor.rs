@@ -6,6 +6,7 @@ use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
     annotated_visitor::{self, StructDriver, ValueDriver, VecDriver, Visitor},
+    compressed::annotated as CA,
     language_storage::TypeTag,
     u256::U256,
 };
@@ -80,7 +81,7 @@ impl BoundedVisitor {
     /// budget.
     pub fn deserialize_value(
         bytes: &[u8],
-        layout: &A::MoveTypeLayout,
+        layout: CA::MoveTypeLayoutRef<'_>,
     ) -> anyhow::Result<A::MoveValue> {
         let mut visitor = Self::default();
         Ok(A::MoveValue::visit_deserialize(
@@ -95,7 +96,7 @@ impl BoundedVisitor {
     /// size budget.
     pub fn deserialize_struct(
         bytes: &[u8],
-        layout: &A::MoveStructLayout,
+        layout: CA::MoveStructLayout<'_>,
     ) -> anyhow::Result<A::MoveStruct> {
         let mut visitor = Self::default();
         let A::MoveValue::Struct(struct_) =
@@ -242,16 +243,16 @@ impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
         &mut self,
         driver: &mut StructDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
-        let tag = driver.struct_layout().type_.clone().into();
+        let tag = driver.struct_layout().type_().clone().into();
 
         self.debit_type_size(&tag)?;
-        for field in driver.struct_layout().fields.iter() {
-            self.debit(field.name.len())?;
+        for (name, _) in driver.struct_layout().fields() {
+            self.debit(name.len())?;
         }
 
         let mut fields = vec![];
-        while let Some((field, elem)) = driver.next_field(self)? {
-            fields.push((field.name.clone(), elem));
+        while let Some(((name, _layout), elem)) = driver.next_field(self)? {
+            fields.push((name.clone(), elem));
         }
 
         let TypeTag::Struct(type_) = tag else {
@@ -268,18 +269,18 @@ impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
         &mut self,
         driver: &mut annotated_visitor::VariantDriver<'_, 'b, 'l>,
     ) -> Result<Self::Value, Self::Error> {
-        let type_ = driver.enum_layout().type_.clone().into();
+        let type_ = driver.enum_layout().type_().clone().into();
 
         self.debit_type_size(&type_)?;
         self.debit(driver.variant_name().len())?;
 
-        for field in driver.variant_layout() {
-            self.debit(field.name.len())?;
+        for (name, _) in driver.variant_layout().fields() {
+            self.debit(name.len())?;
         }
 
         let mut fields = vec![];
-        while let Some((field, elem)) = driver.next_field(self)? {
-            fields.push((field.name.clone(), elem));
+        while let Some(((name, _layout), elem)) = driver.next_field(self)? {
+            fields.push((name.clone(), elem));
         }
 
         let TypeTag::Struct(type_) = type_ else {
@@ -308,7 +309,9 @@ pub(crate) mod tests {
     use super::*;
 
     use expect_test::expect;
-    use move_core_types::{identifier::Identifier, language_storage::StructTag};
+    use move_core_types::{
+        compressed::annotated as CA, identifier::Identifier, language_storage::StructTag,
+    };
 
     #[test]
     fn test_success() {
@@ -336,7 +339,9 @@ pub(crate) mod tests {
         let bytes = serialize(value.clone());
 
         let mut visitor = BoundedVisitor::new(1000);
-        let deser = A::MoveValue::visit_deserialize(&bytes, &type_layout, &mut visitor).unwrap();
+        let type_layout = CA::MoveTypeLayout::try_from(&type_layout).unwrap();
+        let deser =
+            A::MoveValue::visit_deserialize(&bytes, type_layout.as_ref(), &mut visitor).unwrap();
         assert_eq!(value, deser);
     }
 
@@ -345,14 +350,15 @@ pub(crate) mod tests {
         use A::MoveTypeLayout as T;
         use A::MoveValue as V;
 
-        let type_layout = layout_(
+        let type_layout: CA::MoveTypeLayout = CA::MoveTypeLayout::try_from(&layout_(
             "0x0::foo::Bar",
             vec![
                 ("a", T::U64),
                 ("b", T::Vector(Box::new(T::U64))),
                 ("c", layout_("0x0::foo::Baz", vec![("d", T::U64)])),
             ],
-        );
+        ))
+        .unwrap();
 
         let value = value_(
             "0x0::foo::Bar",
@@ -371,7 +377,8 @@ pub(crate) mod tests {
             std::env::set_var(MAX_BOUND_VAR_NAME, "10");
         };
         let mut visitor = BoundedVisitor::default();
-        let err = A::MoveValue::visit_deserialize(&bytes, &type_layout, &mut visitor).unwrap_err();
+        let err = A::MoveValue::visit_deserialize(&bytes, type_layout.as_ref(), &mut visitor)
+            .unwrap_err();
         let expect = expect!["Deserialized value too large"];
         expect.assert_eq(&err.to_string());
 
@@ -380,7 +387,8 @@ pub(crate) mod tests {
             std::env::set_var(MAX_BOUND_VAR_NAME, "1000");
         };
         let mut visitor = BoundedVisitor::default();
-        let err = A::MoveValue::visit_deserialize(&bytes, &type_layout, &mut visitor).unwrap_err();
+        let err = A::MoveValue::visit_deserialize(&bytes, type_layout.as_ref(), &mut visitor)
+            .unwrap_err();
         let expect = expect!["Deserialized value too large"];
         expect.assert_eq(&err.to_string());
 
@@ -395,7 +403,8 @@ pub(crate) mod tests {
 
         // Should still fail as the static value is already set.
         let mut visitor = BoundedVisitor::default();
-        let err = A::MoveValue::visit_deserialize(&bytes, &type_layout, &mut visitor).unwrap_err();
+        let err = A::MoveValue::visit_deserialize(&bytes, type_layout.as_ref(), &mut visitor)
+            .unwrap_err();
         let expect = expect!["Deserialized value too large"];
         expect.assert_eq(&err.to_string());
     }
@@ -416,13 +425,15 @@ pub(crate) mod tests {
 
         let bound = DEPTH * (8 + 32 + "foo".len() + "Bar".len() + "f".len());
         let bytes = serialize(value.clone());
+        let layout = CA::MoveTypeLayout::try_from(&layout).unwrap();
 
         let mut visitor = BoundedVisitor::new(bound);
-        let deser = A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+        let deser = A::MoveValue::visit_deserialize(&bytes, layout.as_ref(), &mut visitor).unwrap();
         assert_eq!(deser, value);
 
         let mut visitor = BoundedVisitor::new(bound - 1);
-        let err = A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap_err();
+        let err =
+            A::MoveValue::visit_deserialize(&bytes, layout.as_ref(), &mut visitor).unwrap_err();
 
         let expect = expect!["Deserialized value too large"];
         expect.assert_eq(&err.to_string());
@@ -451,6 +462,7 @@ pub(crate) mod tests {
         }
 
         let layout = layout_("0x0::foo::Bar", fields);
+        let layout = CA::MoveTypeLayout::try_from(&layout).unwrap();
         let value = value_("0x0::foo::Bar", values);
 
         let outer = 8 + 32 + "foo".len() + "Bar".len();
@@ -460,11 +472,12 @@ pub(crate) mod tests {
         let bytes = serialize(value.clone());
 
         let mut visitor = BoundedVisitor::new(bound);
-        let deser = A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+        let deser = A::MoveValue::visit_deserialize(&bytes, layout.as_ref(), &mut visitor).unwrap();
         assert_eq!(deser, value);
 
         let mut visitor = BoundedVisitor::new(bound - 1);
-        let err = A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap_err();
+        let err =
+            A::MoveValue::visit_deserialize(&bytes, layout.as_ref(), &mut visitor).unwrap_err();
 
         let expect = expect!["Deserialized value too large"];
         expect.assert_eq(&err.to_string());
@@ -480,17 +493,19 @@ pub(crate) mod tests {
         let big_type = format!("0x0::{big_mod_}::{big_name}");
 
         let layout = layout_(big_type.as_str(), vec![("f", T::U64)]);
+        let layout = CA::MoveTypeLayout::try_from(&layout).unwrap();
         let value = value_(big_type.as_str(), vec![("f", V::U64(42))]);
 
         let bound = 8 + 32 + big_mod_.len() + big_name.len() + "f".len();
         let bytes = serialize(value.clone());
 
         let mut visitor = BoundedVisitor::new(bound);
-        let deser = A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+        let deser = A::MoveValue::visit_deserialize(&bytes, layout.as_ref(), &mut visitor).unwrap();
         assert_eq!(deser, value);
 
         let mut visitor = BoundedVisitor::new(bound - 1);
-        let err = A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap_err();
+        let err =
+            A::MoveValue::visit_deserialize(&bytes, layout.as_ref(), &mut visitor).unwrap_err();
 
         let expect = expect!["Deserialized value too large"];
         expect.assert_eq(&err.to_string());

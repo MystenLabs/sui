@@ -37,7 +37,7 @@ impl<'b, 'l> Traversal<'b, 'l> for BalanceTraversal {
         &mut self,
         driver: &mut StructDriver<'_, 'b, 'l>,
     ) -> Result<(), Self::Error> {
-        let Some(coin_type) = is_balance(&driver.struct_layout().type_) else {
+        let Some(coin_type) = is_balance(driver.struct_layout().type_()) else {
             // Not a balance, search recursively for balances among fields.
             while driver.next_field(self)?.is_some() {}
             return Ok(());
@@ -76,8 +76,8 @@ mod tests {
     use super::*;
 
     use move_core_types::{
-        account_address::AccountAddress, annotated_value as A, identifier::Identifier,
-        language_storage::StructTag,
+        account_address::AccountAddress, annotated_value as A, compressed::annotated as CA,
+        identifier::Identifier, language_storage::StructTag,
     };
 
     #[test]
@@ -88,7 +88,8 @@ mod tests {
         let bytes = serialize(value.clone());
 
         let mut visitor = BalanceTraversal::default();
-        A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+        let layout = CA::MoveTypeLayout::try_from(&layout).unwrap();
+        A::MoveValue::visit_deserialize(&bytes, layout.as_ref(), &mut visitor).unwrap();
         let balances = visitor.finish();
 
         assert_eq!(balances, BTreeMap::from([(type_("0x42::foo::Bar"), 42)]));
@@ -102,7 +103,8 @@ mod tests {
         let bytes = serialize(value.clone());
 
         let mut visitor = BalanceTraversal::default();
-        A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+        let layout = CA::MoveTypeLayout::try_from(&layout).unwrap();
+        A::MoveValue::visit_deserialize(&bytes, layout.as_ref(), &mut visitor).unwrap();
         let balances = visitor.finish();
 
         assert_eq!(balances, BTreeMap::from([(type_("0x42::foo::Bar"), 42)]));
@@ -120,6 +122,7 @@ mod tests {
                 ("d", T::Vector(Box::new(coin_t("0x42::quy::Frob")))),
             ],
         );
+        let layout = CA::MoveTypeLayout::try_from(&layout).unwrap();
 
         let value = value_(
             "0xa::foo::Bar",
@@ -139,7 +142,7 @@ mod tests {
         let bytes = serialize(value.clone());
 
         let mut visitor = BalanceTraversal::default();
-        A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+        A::MoveValue::visit_deserialize(&bytes, layout.as_ref(), &mut visitor).unwrap();
         let balances = visitor.finish();
 
         assert_eq!(
@@ -155,12 +158,12 @@ mod tests {
     fn test_traverse_primitive() {
         use A::MoveTypeLayout as T;
 
-        let layout = T::U64;
+        let layout = CA::MoveTypeLayout::try_from(&T::U64).unwrap();
         let value = A::MoveValue::U64(42);
         let bytes = serialize(value.clone());
 
         let mut visitor = BalanceTraversal::default();
-        A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+        A::MoveValue::visit_deserialize(&bytes, layout.as_ref(), &mut visitor).unwrap();
         let balances = visitor.finish();
 
         assert_eq!(balances, BTreeMap::from([]));
@@ -185,6 +188,7 @@ mod tests {
                 ),
             ],
         );
+        let layout = CA::MoveTypeLayout::try_from(&layout).unwrap();
 
         let value = value_(
             "0xa::foo::Bar",
@@ -204,7 +208,7 @@ mod tests {
         let bytes = serialize(value.clone());
 
         let mut visitor = BalanceTraversal::default();
-        A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+        A::MoveValue::visit_deserialize(&bytes, layout.as_ref(), &mut visitor).unwrap();
         let balances = visitor.finish();
 
         assert_eq!(

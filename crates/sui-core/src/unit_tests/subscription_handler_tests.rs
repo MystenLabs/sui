@@ -6,6 +6,7 @@ use move_core_types::identifier::Identifier;
 
 use move_core_types::{
     annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
+    compressed::annotated as CA,
     ident_str,
     language_storage::StructTag,
 };
@@ -33,8 +34,12 @@ fn test_to_json_value() {
         ],
     };
     let event_bytes = bcs::to_bytes(&move_event).unwrap();
+    let layout = CA::MoveTypeLayout::try_from(
+        &move_core_types::annotated_value::MoveTypeLayout::Struct(Box::new(TestEvent::layout())),
+    )
+    .unwrap();
     let sui_move_struct: SuiMoveStruct =
-        BoundedVisitor::deserialize_struct(&event_bytes, &TestEvent::layout())
+        BoundedVisitor::deserialize_struct(&event_bytes, layout.as_struct().unwrap())
             .unwrap()
             .into();
     let json_value = sui_move_struct.to_json_value();

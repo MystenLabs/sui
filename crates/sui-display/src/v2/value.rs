@@ -10,7 +10,7 @@ use base64::engine::Engine;
 use chrono::DateTime;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
-use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::compressed::annotated::{self as CA, BackendBuilder as _};
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::u256::U256;
@@ -21,10 +21,11 @@ use serde::ser::SerializeTupleVariant;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::RESOLVED_UTF8_STR;
 use sui_types::base_types::SuiAddress;
-use sui_types::base_types::move_ascii_str_layout;
-use sui_types::base_types::move_utf8_str_layout;
-use sui_types::base_types::type_name_layout;
-use sui_types::base_types::url_layout;
+use sui_types::base_types::compressed_move_ascii_str_layout;
+use sui_types::base_types::compressed_move_utf8_str_layout;
+use sui_types::base_types::compressed_type_name_layout;
+use sui_types::base_types::compressed_url_layout;
+use sui_types::base_types::move_utf8_str_layout_for_builder;
 use sui_types::derived_object::derive_object_id;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::dynamic_field::derive_dynamic_field_id;
@@ -46,13 +47,15 @@ use crate::v2::writer;
 /// (e.g. by deduplicating in-flight requests).
 #[async_trait]
 pub trait Store: Sync {
-    async fn latest(&self, id: AccountAddress)
-    -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>>;
+    async fn latest(
+        &self,
+        id: AccountAddress,
+    ) -> anyhow::Result<Option<(CA::MoveTypeLayout, Vec<u8>)>>;
 
     async fn scoped(
         &self,
         id: AccountAddress,
-    ) -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>> {
+    ) -> anyhow::Result<Option<(CA::MoveTypeLayout, Vec<u8>)>> {
         self.latest(id).await
     }
 }
@@ -121,9 +124,9 @@ pub enum Accessor<'s> {
 }
 
 /// Bytes extracted from the serialized representation of a Move value, along with its layout.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Slice<'s> {
-    pub(crate) layout: &'s MoveTypeLayout,
+    pub(crate) layout: CA::MoveTypeLayoutRef<'s>,
     pub(crate) bytes: &'s [u8],
 
     /// Indicates whether this value came from the parent object being formatted (in which case
@@ -134,7 +137,7 @@ pub struct Slice<'s> {
 /// An owned version of `Slice`.
 #[derive(Clone)]
 pub struct OwnedSlice {
-    pub layout: MoveTypeLayout,
+    pub layout: CA::MoveTypeLayout,
     pub bytes: Vec<u8>,
 
     /// Indicates whether this value came from the parent object being formatted (in which case
@@ -299,7 +302,7 @@ impl Value<'_> {
             Value::Enum(e) => e.type_.clone().into(),
             Value::Struct(s) => s.type_.clone().into(),
 
-            Value::Slice(s) => s.layout.into(),
+            Value::Slice(s) => s.layout.as_view().into(),
 
             Value::String(_) => {
                 let (&address, module, name) = RESOLVED_UTF8_STR;
@@ -318,7 +321,7 @@ impl Value<'_> {
     /// Attempt to coerce this value into a `u64` if that's possible. This works for any numeric
     /// value that can be represented within 64 bits.
     pub(crate) fn as_u64(&self) -> Option<u64> {
-        use MoveTypeLayout as L;
+        use CA::MoveLayoutView as L;
         use Value as V;
 
         match self {
@@ -335,7 +338,7 @@ impl Value<'_> {
                 layout,
                 bytes: data,
                 ..
-            }) => match layout {
+            }) => match layout.as_view() {
                 L::U8 => Some(bcs::from_bytes::<u8>(data).ok()?.into()),
                 L::U16 => Some(bcs::from_bytes::<u16>(data).ok()?.into()),
                 L::U32 => Some(bcs::from_bytes::<u32>(data).ok()?.into()),
@@ -524,7 +527,7 @@ impl<'s> Accessor<'s> {
 }
 
 impl OwnedSlice {
-    pub fn new(layout: MoveTypeLayout, bytes: Vec<u8>) -> Self {
+    pub fn new(layout: CA::MoveTypeLayout, bytes: Vec<u8>) -> Self {
         Self {
             layout,
             bytes,
@@ -534,7 +537,7 @@ impl OwnedSlice {
 
     pub(crate) fn as_slice(&self) -> Slice<'_> {
         Slice {
-            layout: &self.layout,
+            layout: self.layout.as_ref(),
             bytes: &self.bytes,
             scoped: self.scoped,
         }
@@ -576,23 +579,29 @@ impl Value<'_> {
     ///
     /// Returns `None` for compound literals (Struct, Enum, Vector) since we cannot reliably
     /// compute their layouts without access to the full type information.
-    fn layout(&self) -> Option<MoveTypeLayout> {
-        use MoveTypeLayout as L;
+    fn layout(&self) -> Option<CA::MoveTypeLayout> {
+        use CA::MoveTypeLayout as L;
 
         match self {
-            Value::Slice(s) => Some(s.layout.clone()),
+            Value::Slice(s) => Some(s.layout.to_owned()),
 
-            Value::Address(_) => Some(L::Address),
-            Value::Bool(_) => Some(L::Bool),
-            Value::U8(_) => Some(L::U8),
-            Value::U16(_) => Some(L::U16),
-            Value::U32(_) => Some(L::U32),
-            Value::U64(_) => Some(L::U64),
-            Value::U128(_) => Some(L::U128),
-            Value::U256(_) => Some(L::U256),
+            Value::Address(_) => Some(L::address()),
+            Value::Bool(_) => Some(L::bool()),
+            Value::U8(_) => Some(L::u8()),
+            Value::U16(_) => Some(L::u16()),
+            Value::U32(_) => Some(L::u32()),
+            Value::U64(_) => Some(L::u64()),
+            Value::U128(_) => Some(L::u128()),
+            Value::U256(_) => Some(L::u256()),
 
-            Value::Bytes(_) => Some(L::Vector(Box::new(L::U8))),
-            Value::String(_) => Some(L::Struct(Box::new(move_utf8_str_layout()))),
+            Value::Bytes(_) => CA::MoveTypeLayoutBuilder::with_builder(|b| {
+                let inner = b.u8();
+                b.vector(inner)
+            })
+            .ok(),
+            Value::String(_) => {
+                CA::MoveTypeLayoutBuilder::with_builder(move_utf8_str_layout_for_builder).ok()
+            }
 
             // Compound literals: cannot compute layout
             Value::Enum(_) | Value::Struct(_) | Value::Vector(_) => None,
@@ -826,7 +835,7 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
 
     fn try_from(value: Value<'s>) -> Result<Atom<'s>, FormatError> {
         use Atom as A;
-        use MoveTypeLayout as L;
+        use CA::MoveLayoutView as L;
         use TypeTag as T;
         use Value as V;
 
@@ -856,7 +865,9 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
                     .into_iter()
                     .map(|e| match e {
                         V::U8(b) => Ok(b),
-                        V::Slice(Slice { layout, bytes, .. }) if layout == &L::U8 => {
+                        V::Slice(Slice { layout, bytes, .. })
+                            if layout.as_view() == CA::MoveTypeLayout::u8().as_view() =>
+                        {
                             Ok(bcs::from_bytes(bytes)?)
                         }
                         _ => Err(FormatError::TransformInvalid("unexpected vector")),
@@ -866,7 +877,7 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
                 A::Bytes(Cow::Owned(bytes?))
             }
 
-            V::Slice(Slice { layout, bytes, .. }) => match layout {
+            V::Slice(Slice { layout, bytes, .. }) => match layout.as_view() {
                 L::Address => A::Address(bcs::from_bytes(bytes)?),
                 L::Bool => A::Bool(bcs::from_bytes(bytes)?),
                 L::U8 => A::U8(bcs::from_bytes(bytes)?),
@@ -876,23 +887,25 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
                 L::U128 => A::U128(bcs::from_bytes(bytes)?),
                 L::U256 => A::U256(bcs::from_bytes(bytes)?),
 
-                L::Vector(layout) if layout.as_ref() == &L::U8 => {
+                L::Vector(layout) if layout.as_view() == CA::MoveTypeLayout::u8().as_view() => {
                     A::Bytes(Cow::Borrowed(bcs::from_bytes(bytes)?))
                 }
 
                 L::Struct(layout)
                     if [
-                        move_ascii_str_layout(),
-                        move_utf8_str_layout(),
-                        type_name_layout(),
-                        url_layout(),
+                        compressed_move_ascii_str_layout(),
+                        compressed_move_utf8_str_layout(),
+                        compressed_type_name_layout(),
+                        compressed_url_layout(),
                     ]
-                    .contains(layout.as_ref()) =>
+                    .contains(&layout) =>
                 {
                     A::Bytes(Cow::Borrowed(bcs::from_bytes(bytes)?))
                 }
 
-                L::Struct(layout) if [UID::layout(), ID::layout()].contains(layout.as_ref()) => {
+                L::Struct(layout)
+                    if [UID::compressed_layout(), ID::compressed_layout()].contains(&layout) =>
+                {
                     A::Address(bcs::from_bytes(bytes)?)
                 }
 
@@ -922,6 +935,8 @@ pub(crate) mod tests {
     use sui_types::MOVE_STDLIB_ADDRESS;
     use sui_types::base_types::STD_ASCII_MODULE_NAME;
     use sui_types::base_types::STD_ASCII_STRUCT_NAME;
+    use sui_types::base_types::move_utf8_str_layout;
+    use sui_types::base_types::type_name_layout;
     use sui_types::derived_object::derive_object_id;
     use sui_types::dynamic_field::DynamicFieldInfo;
     use sui_types::dynamic_field::Field;
@@ -934,7 +949,12 @@ pub(crate) mod tests {
     /// Mock Store implementation for testing.
     #[derive(Default, Clone)]
     pub struct MockStore {
-        data: BTreeMap<AccountAddress, (MoveTypeLayout, Vec<u8>)>,
+        data: BTreeMap<AccountAddress, (CA::MoveTypeLayout, Vec<u8>)>,
+    }
+
+    /// Convert a tree-form layout into its compressed equivalent.
+    fn compress(layout: &L) -> CA::MoveTypeLayout {
+        layout.try_into().unwrap()
     }
 
     impl MockStore {
@@ -946,9 +966,9 @@ pub(crate) mod tests {
             mut self,
             parent: AccountAddress,
             name: N,
-            name_layout: MoveTypeLayout,
+            name_layout: L,
             value: V,
-            value_layout: MoveTypeLayout,
+            value_layout: L,
         ) -> Self {
             use Identifier as I;
             use MoveFieldLayout as F;
@@ -975,7 +995,7 @@ pub(crate) mod tests {
                 ],
             }));
 
-            self.data.insert(df_id.into(), (layout, bytes));
+            self.data.insert(df_id.into(), (compress(&layout), bytes));
             self
         }
 
@@ -988,9 +1008,9 @@ pub(crate) mod tests {
             mut self,
             parent: AccountAddress,
             name: N,
-            name_layout: MoveTypeLayout,
+            name_layout: L,
             value: V,
-            value_layout: MoveTypeLayout,
+            value_layout: L,
         ) -> Self {
             use AccountAddress as A;
             use Identifier as I;
@@ -1026,8 +1046,10 @@ pub(crate) mod tests {
                 ],
             }));
 
-            self.data.insert(dof_id.into(), (field_layout, field_bytes));
-            self.data.insert(val_id, (value_layout, value_bytes));
+            self.data
+                .insert(dof_id.into(), (compress(&field_layout), field_bytes));
+            self.data
+                .insert(val_id, (compress(&value_layout), value_bytes));
             self
         }
 
@@ -1036,16 +1058,17 @@ pub(crate) mod tests {
             mut self,
             parent: AccountAddress,
             name: N,
-            name_layout: MoveTypeLayout,
+            name_layout: L,
             value: V,
-            value_layout: MoveTypeLayout,
+            value_layout: L,
         ) -> Self {
             let name_bytes = bcs::to_bytes(&name).unwrap();
             let value_bytes = bcs::to_bytes(&value).unwrap();
             let name_type = TypeTag::from(&name_layout);
             let id = derive_object_id(parent, &name_type, &name_bytes).unwrap();
 
-            self.data.insert(id.into(), (value_layout, value_bytes));
+            self.data
+                .insert(id.into(), (compress(&value_layout), value_bytes));
             self
         }
     }
@@ -1055,25 +1078,22 @@ pub(crate) mod tests {
         async fn latest(
             &self,
             id: AccountAddress,
-        ) -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>> {
+        ) -> anyhow::Result<Option<(CA::MoveTypeLayout, Vec<u8>)>> {
             Ok(self.data.get(&id).cloned())
         }
     }
 
-    pub fn struct_(type_: &str, fields: Vec<(&str, MoveTypeLayout)>) -> MoveTypeLayout {
+    pub fn struct_(type_: &str, fields: Vec<(&str, L)>) -> L {
         let type_: StructTag = type_.parse().unwrap();
         let fields = fields
             .into_iter()
             .map(|(name, layout)| MoveFieldLayout::new(Identifier::new(name).unwrap(), layout))
             .collect();
 
-        MoveTypeLayout::Struct(Box::new(MoveStructLayout { type_, fields }))
+        L::Struct(Box::new(MoveStructLayout { type_, fields }))
     }
 
-    pub fn enum_(
-        type_: &str,
-        variants: Vec<(&str, Vec<(&str, MoveTypeLayout)>)>,
-    ) -> MoveTypeLayout {
+    pub fn enum_(type_: &str, variants: Vec<(&str, Vec<(&str, L)>)>) -> L {
         let type_: StructTag = type_.parse().unwrap();
         let variants = variants
             .into_iter()
@@ -1090,14 +1110,14 @@ pub(crate) mod tests {
             })
             .collect();
 
-        MoveTypeLayout::Enum(Box::new(MoveEnumLayout { type_, variants }))
+        L::Enum(Box::new(MoveEnumLayout { type_, variants }))
     }
 
-    pub fn vector_(layout: MoveTypeLayout) -> MoveTypeLayout {
-        MoveTypeLayout::Vector(Box::new(layout))
+    pub fn vector_(layout: L) -> L {
+        L::Vector(Box::new(layout))
     }
 
-    pub fn optional_(layout: MoveTypeLayout) -> MoveTypeLayout {
+    pub fn optional_(layout: L) -> L {
         let type_ = TypeTag::from(&layout);
         struct_(
             &format!("0x1::option::Option<{type_}>"),
@@ -1105,7 +1125,7 @@ pub(crate) mod tests {
         )
     }
 
-    pub fn vec_map(key: MoveTypeLayout, value: MoveTypeLayout) -> MoveTypeLayout {
+    pub fn vec_map(key: L, value: L) -> L {
         let key_type = TypeTag::from(&key);
         let value_type = TypeTag::from(&value);
 
@@ -1124,8 +1144,9 @@ pub(crate) mod tests {
     #[test]
     fn test_slice_serialize_roundtrip() {
         let bytes = &[0x01, 0x02, 0x03, 0x04];
+        let layout = CA::MoveTypeLayout::u64();
         let slice = Slice {
-            layout: &L::U64,
+            layout: layout.as_ref(),
             bytes,
             scoped: false,
         };
@@ -1374,6 +1395,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_literal_to_atom_conversion() {
+        let u8_layout = CA::MoveTypeLayout::u8();
         let values = vec![
             Value::Bool(true),
             Value::U8(42),
@@ -1391,7 +1413,7 @@ pub(crate) mod tests {
                     Value::U8(4),
                     Value::U8(5),
                     Value::Slice(Slice {
-                        layout: &L::U8,
+                        layout: u8_layout.as_ref(),
                         bytes: &[6],
                         scoped: false,
                     }),
@@ -1433,63 +1455,74 @@ pub(crate) mod tests {
         let type_name_bytes = bcs::to_bytes("0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>").unwrap();
         let vec_bytes = bcs::to_bytes(&vec![1u8, 2, 3]).unwrap();
 
-        let str_layout = L::Struct(Box::new(move_utf8_str_layout()));
-        let type_name_layout = L::Struct(Box::new(type_name_layout()));
-        let vec_layout = L::Vector(Box::new(L::U8));
+        let str_tree = L::Struct(Box::new(move_utf8_str_layout()));
+        let type_name_tree = L::Struct(Box::new(type_name_layout()));
+        let vec_tree = L::Vector(Box::new(L::U8));
+        let str_layout = CA::MoveTypeLayout::try_from(&str_tree).unwrap();
+        let type_name_layout = CA::MoveTypeLayout::try_from(&type_name_tree).unwrap();
+        let vec_layout = CA::MoveTypeLayout::try_from(&vec_tree).unwrap();
+        let bool_layout = CA::MoveTypeLayout::bool();
+        let u8_layout = CA::MoveTypeLayout::u8();
+        let u16_layout = CA::MoveTypeLayout::u16();
+        let u32_layout = CA::MoveTypeLayout::u32();
+        let u64_layout = CA::MoveTypeLayout::u64();
+        let u128_layout = CA::MoveTypeLayout::u128();
+        let u256_layout = CA::MoveTypeLayout::u256();
+        let address_layout = CA::MoveTypeLayout::address();
 
         let values = vec![
             Value::Slice(Slice {
-                layout: &L::Bool,
+                layout: bool_layout.as_ref(),
                 bytes: &bool_bytes,
                 scoped: false,
             }),
             Value::Slice(Slice {
-                layout: &L::U8,
+                layout: u8_layout.as_ref(),
                 bytes: &u8_bytes,
                 scoped: false,
             }),
             Value::Slice(Slice {
-                layout: &L::U16,
+                layout: u16_layout.as_ref(),
                 bytes: &u16_bytes,
                 scoped: false,
             }),
             Value::Slice(Slice {
-                layout: &L::U32,
+                layout: u32_layout.as_ref(),
                 bytes: &u32_bytes,
                 scoped: false,
             }),
             Value::Slice(Slice {
-                layout: &L::U64,
+                layout: u64_layout.as_ref(),
                 bytes: &u64_bytes,
                 scoped: false,
             }),
             Value::Slice(Slice {
-                layout: &L::U128,
+                layout: u128_layout.as_ref(),
                 bytes: &u128_bytes,
                 scoped: false,
             }),
             Value::Slice(Slice {
-                layout: &L::U256,
+                layout: u256_layout.as_ref(),
                 bytes: &u256_bytes,
                 scoped: false,
             }),
             Value::Slice(Slice {
-                layout: &L::Address,
+                layout: address_layout.as_ref(),
                 bytes: &addr_bytes,
                 scoped: false,
             }),
             Value::Slice(Slice {
-                layout: &str_layout,
+                layout: str_layout.as_ref(),
                 bytes: &str_bytes,
                 scoped: false,
             }),
             Value::Slice(Slice {
-                layout: &type_name_layout,
+                layout: type_name_layout.as_ref(),
                 bytes: &type_name_bytes,
                 scoped: false,
             }),
             Value::Slice(Slice {
-                layout: &vec_layout,
+                layout: vec_layout.as_ref(),
                 bytes: &vec_bytes,
                 scoped: false,
             }),
@@ -1565,11 +1598,13 @@ pub(crate) mod tests {
             ]),
         });
 
+        let layout = struct_(
+            "0x2::foo::Bar",
+            vec![("x", L::U32), ("y", L::U32), ("z", L::Address)],
+        );
+        let layout = CA::MoveTypeLayout::try_from(&layout).unwrap();
         let slice = Value::Slice(Slice {
-            layout: &struct_(
-                "0x2::foo::Bar",
-                vec![("x", L::U32), ("y", L::U32), ("z", L::Address)],
-            ),
+            layout: layout.as_ref(),
             bytes: &bcs::to_bytes(&(100u32, 200u32, "0x300".parse::<AccountAddress>().unwrap()))
                 .unwrap(),
             scoped: false,
@@ -1596,11 +1631,13 @@ pub(crate) mod tests {
             fields: Fields::Named(vec![("b", Value::U64(42)), ("c", Value::Bool(true))]),
         });
 
+        let layout = enum_(
+            "0x1::m::E",
+            vec![("A", vec![("b", L::U64), ("c", L::Bool)])],
+        );
+        let layout = CA::MoveTypeLayout::try_from(&layout).unwrap();
         let slice = Value::Slice(Slice {
-            layout: &enum_(
-                "0x1::m::E",
-                vec![("A", vec![("b", L::U64), ("c", L::Bool)])],
-            ),
+            layout: layout.as_ref(),
             bytes: &bcs::to_bytes(&(0u8, 42u64, true)).unwrap(),
             scoped: false,
         });

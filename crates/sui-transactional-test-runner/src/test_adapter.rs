@@ -1003,9 +1003,11 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 Ok(Some(match &obj.data {
                     object::Data::Move(move_obj) => {
                         let layout = move_obj.get_layout(&&*self).unwrap();
-                        let move_struct =
-                            BoundedVisitor::deserialize_struct(move_obj.contents(), &layout)
-                                .unwrap();
+                        let move_struct = BoundedVisitor::deserialize_struct(
+                            move_obj.contents(),
+                            layout.as_struct().unwrap(),
+                        )
+                        .unwrap();
 
                         let msg =
                             format!("Owner: {}\nVersion: {}", &obj.owner, obj.version().value());

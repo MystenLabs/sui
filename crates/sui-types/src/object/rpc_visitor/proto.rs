@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::annotated_value as A;
+use move_core_types::compressed::annotated as CA;
 use prost_types::Value;
 
 use crate::object::rpc_visitor as RV;
@@ -25,11 +26,11 @@ impl ProtoVisitor {
     pub fn deserialize_value(
         mut self,
         bytes: &[u8],
-        layout: &A::MoveTypeLayout,
+        layout: CA::MoveTypeLayout,
     ) -> Result<Value, RV::Error> {
         A::MoveValue::visit_deserialize(
             bytes,
-            layout,
+            layout.as_ref(),
             &mut RV::RpcVisitor::<Value, _>::new(RV::LocalMeter::new(&mut self.bound, MAX_DEPTH)),
         )
     }
@@ -40,12 +41,12 @@ impl ProtoVisitor {
     /// it is exhausted, deserialization fails with `MeterError::TooBig`.
     pub fn deserialize_value_with_budget(
         bytes: &[u8],
-        layout: &A::MoveTypeLayout,
+        layout: CA::MoveTypeLayout,
         size_budget: &mut usize,
     ) -> Result<Value, RV::Error> {
         A::MoveValue::visit_deserialize(
             bytes,
-            layout,
+            layout.as_ref(),
             &mut RV::RpcVisitor::<Value, _>::new(RV::LocalMeter::new(size_budget, MAX_DEPTH)),
         )
     }
@@ -68,14 +69,15 @@ pub(crate) mod tests {
 
     #[test]
     fn test_simple() {
-        let type_layout = layout_(
+        let type_layout: CA::MoveTypeLayout = CA::MoveTypeLayout::try_from(&layout_(
             "0x0::foo::Bar",
             vec![
                 ("a", L::U64),
                 ("b", L::Vector(Box::new(L::U64))),
                 ("c", layout_("0x0::foo::Baz", vec![("d", L::U64)])),
             ],
-        );
+        ))
+        .unwrap();
 
         let value = value_(
             "0x0::foo::Bar",
@@ -98,13 +100,13 @@ pub(crate) mod tests {
         let bytes = serialize(value.clone());
 
         let deser = ProtoVisitor::new(bound)
-            .deserialize_value(&bytes, &type_layout)
+            .deserialize_value(&bytes, type_layout.clone())
             .unwrap();
 
         assert_eq!(expected, proto_value_to_json_value(deser));
 
         ProtoVisitor::new(bound - 1)
-            .deserialize_value(&bytes, &type_layout)
+            .deserialize_value(&bytes, type_layout)
             .unwrap_err();
     }
 
@@ -127,7 +129,7 @@ pub(crate) mod tests {
         let bytes = serialize(value.clone());
 
         let deser = ProtoVisitor::new(bound)
-            .deserialize_value(&bytes, &layout)
+            .deserialize_value(&bytes, CA::MoveTypeLayout::try_from(&layout).unwrap())
             .unwrap();
 
         assert_eq!(expected, proto_value_to_json_value(deser));
@@ -138,7 +140,7 @@ pub(crate) mod tests {
         let bytes = serialize(value.clone());
 
         let err = ProtoVisitor::new(bound)
-            .deserialize_value(&bytes, &layout)
+            .deserialize_value(&bytes, CA::MoveTypeLayout::try_from(&layout).unwrap())
             .unwrap_err();
 
         let expect = expect!["Exceeded maximum depth"];

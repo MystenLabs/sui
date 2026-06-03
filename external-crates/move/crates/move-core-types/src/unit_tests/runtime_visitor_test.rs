@@ -539,12 +539,10 @@ fn nested_datatype_visit() {
     let bytes = serialize(value.clone());
 
     let mut value_visitor = PrintVisitor::default();
-    let from_value =
-        tree_visit_value(&bytes, &type_layout, &mut value_visitor).unwrap();
+    let from_value = tree_visit_value(&bytes, &type_layout, &mut value_visitor).unwrap();
 
     let mut struct_visitor = PrintVisitor::default();
-    let from_struct =
-        tree_visit_struct(&bytes, struct_layout, &mut struct_visitor).unwrap();
+    let from_struct = tree_visit_struct(&bytes, struct_layout, &mut struct_visitor).unwrap();
 
     // This is a little strange -- even though we are deserializing a struct, we still get a value.
     // This is because the return type comes from the visitor, not the deserializer.
@@ -716,14 +714,11 @@ fn peek_field_test() {
 
     let bytes = serialize(value);
 
-    let visit_value = |fields| {
-        tree_visit_value(&bytes, &type_layout, &mut PeekU64Visitor { fields }).unwrap()
-    };
+    let visit_value =
+        |fields| tree_visit_value(&bytes, &type_layout, &mut PeekU64Visitor { fields }).unwrap();
 
-    let visit_struct = |fields| {
-        tree_visit_struct(&bytes, struct_layout, &mut PeekU64Visitor { fields })
-            .unwrap()
-    };
+    let visit_struct =
+        |fields| tree_visit_struct(&bytes, struct_layout, &mut PeekU64Visitor { fields }).unwrap();
 
     assert_eq!(visit_value(&[0]), Some(42));
     assert_eq!(visit_value(&[1]), None);

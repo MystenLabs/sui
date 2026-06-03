@@ -10,9 +10,9 @@
 //! handlers where the size of the data is unbounded.
 
 use move_core_types::annotated_value::MoveStruct;
-use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::annotated_value::MoveValue;
 use move_core_types::annotated_visitor as AV;
+use move_core_types::compressed::annotated as CA;
 use move_core_types::language_storage::TypeTag;
 use serde_json::Value;
 use sui_package_resolver::PackageStore;
@@ -57,16 +57,17 @@ pub struct JsonVisitor;
 
 impl JsonVisitor {
     /// Deserialize BCS bytes as JSON using the provided type layout.
-    pub fn deserialize_value(bytes: &[u8], layout: &MoveTypeLayout) -> anyhow::Result<Value> {
+    pub fn deserialize_value(bytes: &[u8], layout: CA::MoveTypeLayout) -> anyhow::Result<Value> {
         let mut visitor = RV::RpcVisitor::new(RV::Unmetered);
-        Ok(MoveValue::visit_deserialize(bytes, layout, &mut visitor)?)
+        Ok(MoveValue::visit_deserialize(
+            bytes,
+            layout.as_ref(),
+            &mut visitor,
+        )?)
     }
 
     /// Deserialize BCS bytes as a JSON object representing a struct.
-    pub fn deserialize_struct(
-        bytes: &[u8],
-        layout: &move_core_types::annotated_value::MoveStructLayout,
-    ) -> anyhow::Result<Value> {
+    pub fn deserialize_struct(bytes: &[u8], layout: CA::MoveStructLayout) -> anyhow::Result<Value> {
         let mut visitor = RV::RpcVisitor::new(RV::Unmetered);
         Ok(MoveStruct::visit_deserialize(bytes, layout, &mut visitor)?)
     }
@@ -89,7 +90,7 @@ impl JsonVisitor {
     {
         let type_tag = TypeTag::Struct(Box::new(event.type_.clone()));
         let layout = resolver.type_layout(type_tag).await?;
-        Ok(Self::deserialize_value(&event.contents, &layout)?)
+        Ok(Self::deserialize_value(&event.contents, layout)?)
     }
 
     /// Deserialize multiple events to JSON concurrently.

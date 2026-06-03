@@ -8,10 +8,8 @@ use crate::{
 use indexmap::{IndexMap, IndexSet};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
-    account_address::AccountAddress,
-    annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout, MoveValue},
-    annotated_visitor as AV,
-    vm_status::StatusCode,
+    account_address::AccountAddress, annotated_value::MoveValue, annotated_visitor as AV,
+    compressed::annotated as CA, vm_status::StatusCode,
 };
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
@@ -658,7 +656,7 @@ fn find_all_wrapped_objects<'a, 'i>(
     struct Traversal<'i, 'u> {
         state: LookingFor,
         ids: &'i mut BTreeSet<ObjectID>,
-        uid: &'u MoveStructLayout,
+        uid: CA::MoveStructLayout<'u>,
     }
 
     impl<'b, 'l> AV::Traversal<'b, 'l> for Traversal<'_, '_> {
@@ -686,8 +684,9 @@ fn find_all_wrapped_objects<'a, 'i>(
                 // We are looking for UID fields. If we find one (which we confirm by checking its
                 // layout), switch to looking for addresses in its sub-structure.
                 LookingFor::Uid => {
-                    while let Some(MoveFieldLayout { name: _, layout }) = driver.peek_field() {
-                        if matches!(layout, MoveTypeLayout::Struct(s) if s.as_ref() == self.uid) {
+                    while let Some((_, layout)) = driver.peek_field() {
+                        if matches!(layout.as_view(), CA::MoveLayoutView::Struct(s) if s == self.uid)
+                        {
                             driver.next_field(&mut Traversal {
                                 state: LookingFor::Address,
                                 ids: self.ids,
@@ -720,7 +719,7 @@ fn find_all_wrapped_objects<'a, 'i>(
         }
     }
 
-    let uid = UID::layout();
+    let uid = UID::compressed_layout();
     for (_id, ty, value) in new_object_values {
         let Ok(Some(layout)) = context.type_to_type_layout(ty) else {
             debug_assert!(false);
@@ -731,15 +730,16 @@ fn find_all_wrapped_objects<'a, 'i>(
             debug_assert!(false);
             continue;
         };
+        let annotated_layout: CA::MoveTypeLayout = (&annotated_layout).try_into().unwrap();
 
         let blob = value.borrow().simple_serialize(&layout).unwrap();
         MoveValue::visit_deserialize(
             &blob,
-            &annotated_layout,
+            annotated_layout.as_ref(),
             &mut Traversal {
                 state: LookingFor::Wrapped,
                 ids,
-                uid: &uid,
+                uid,
             },
         )
         .unwrap();

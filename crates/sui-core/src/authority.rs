@@ -81,7 +81,7 @@ use sui_types::execution_params::get_early_execution_error;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::layout_resolver::LayoutResolver;
-use sui_types::layout_resolver::into_struct_layout;
+use sui_types::layout_resolver::into_tree_struct_layout;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::node_role::NodeRole;
 use sui_types::object::bounded_visitor::BoundedVisitor;
@@ -3043,19 +3043,15 @@ impl AuthorityState {
             return Ok(None);
         }
 
-        let layout = resolver
-            .get_annotated_layout(&move_object.type_().clone().into())?
-            .into_layout();
+        let layout = resolver.get_annotated_layout(&move_object.type_().clone().into())?;
 
-        let field =
-            DFV::FieldVisitor::deserialize(move_object.contents(), &layout).map_err(|e| {
-                SuiErrorKind::ObjectDeserializationError {
-                    error: e.to_string(),
-                }
+        let field = DFV::FieldVisitor::deserialize(move_object.contents(), layout.as_ref())
+            .map_err(|e| SuiErrorKind::ObjectDeserializationError {
+                error: e.to_string(),
             })?;
 
         let type_ = field.kind;
-        let name_type: TypeTag = field.name_layout.into();
+        let name_type: TypeTag = field.name_layout.as_view().into();
         let bcs_name = field.name_bytes.to_owned();
 
         let name_value = BoundedVisitor::deserialize_value(field.name_bytes, field.name_layout)
@@ -3410,7 +3406,7 @@ impl AuthorityState {
             (request.generate_layout, object.data.try_as_move())
         {
             let epoch_store = self.load_epoch_store_one_call_per_task();
-            Some(into_struct_layout(
+            Some(into_tree_struct_layout(
                 epoch_store
                     .executor()
                     .type_layout_resolver(
@@ -4561,7 +4557,7 @@ impl AuthorityState {
             .try_as_move()
             .map(|object| {
                 let epoch_store = self.load_epoch_store_one_call_per_task();
-                into_struct_layout(
+                into_tree_struct_layout(
                     epoch_store
                         .executor()
                         // TODO(cache) - must read through cache

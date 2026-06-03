@@ -6,7 +6,7 @@ use crate::programmable_transactions::{
     context::load_type,
     linkage_view::{LinkageInfo, LinkageView},
 };
-use move_core_types::annotated_value as A;
+use move_core_types::compressed::annotated as CA;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use sui_types::base_types::ObjectID;
@@ -40,7 +40,7 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
     fn get_annotated_layout(
         &mut self,
         struct_tag: &StructTag,
-    ) -> Result<A::MoveDatatypeLayout, SuiError> {
+    ) -> Result<CA::MoveTypeLayout, SuiError> {
         let type_tag: TypeTag = TypeTag::from(struct_tag.clone());
         let Ok(ty) = load_type(&mut self.session, &type_tag) else {
             return Err(SuiErrorKind::FailObjectLayout {
@@ -48,14 +48,19 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
             }
             .into());
         };
-        let layout = self.session.type_to_fully_annotated_layout(&ty);
-        let Ok(A::MoveTypeLayout::Struct(layout)) = layout else {
+        let Ok(layout) = self.session.type_to_fully_annotated_layout(&ty) else {
             return Err(SuiErrorKind::FailObjectLayout {
                 st: format!("{}", struct_tag),
             }
             .into());
         };
-        Ok(A::MoveDatatypeLayout::Struct(layout))
+        match CA::MoveTypeLayout::try_from(&layout).ok() {
+            Some(layout) if layout.as_datatype().is_some() => Ok(layout),
+            _ => Err(SuiErrorKind::FailObjectLayout {
+                st: format!("{}", struct_tag),
+            }
+            .into()),
+        }
     }
 }
 
