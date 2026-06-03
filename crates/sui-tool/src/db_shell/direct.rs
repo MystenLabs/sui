@@ -6,7 +6,7 @@
 
 use anyhow::{Context, bail};
 use consensus_core::{
-    BlockAPI, CommitAPI, CommitIndex, CommitRange,
+    BlockAPI, CommitAPI, CommitIndex, CommitRange, CommitRef,
     storage::{Store as ConsensusStore, rocksdb_store::RocksDBStore},
 };
 use std::sync::Arc;
@@ -230,16 +230,40 @@ impl DirectBackend {
             .next()
             .ok_or_else(|| anyhow::anyhow!("commit {index} not found"))?;
 
+        let commit_ref: CommitRef = commit.reference();
         let block_refs: Vec<_> = commit.blocks().to_vec();
         let blocks = cs
             .read_blocks(&block_refs)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
 
+        let rejected = cs
+            .read_rejected_transactions(commit_ref)
+            .map_err(|e| anyhow::anyhow!("{e}"))?
+            .unwrap_or_default();
+
         let mut tx_keys = Vec::new();
-        for block in blocks.iter().flatten() {
-            for tx_bytes in block.transactions_data() {
+        let mut missing_blocks = Vec::new();
+        for (block_ref, block_opt) in block_refs.iter().zip(blocks) {
+            let block = match block_opt {
+                Some(b) => b,
+                // Missing block indicates storage corruption or a bug; note the ref explicitly.
+                None => {
+                    missing_blocks.push(format!("{block_ref:?}"));
+                    continue;
+                }
+            };
+            let rejected_indices: std::collections::HashSet<u16> = rejected
+                .get(block_ref)
+                .map(|v| v.iter().copied().collect())
+                .unwrap_or_default();
+            for (i, tx_bytes) in block.transactions_data().iter().enumerate() {
                 if let Ok(tx) = bcs::from_bytes::<ConsensusTransaction>(tx_bytes) {
-                    tx_keys.push(format!("{:?}", tx.key()));
+                    let key = format!("{:?}", tx.key());
+                    if rejected_indices.contains(&(i as u16)) {
+                        tx_keys.push(format!("{key} [rejected]"));
+                    } else {
+                        tx_keys.push(key);
+                    }
                 }
             }
         }
@@ -251,6 +275,7 @@ impl DirectBackend {
             "previous_digest": commit.previous_digest().to_string(),
             "block_count": block_refs.len(),
             "transactions": tx_keys,
+            "missing_blocks": missing_blocks,
         }))
     }
 
