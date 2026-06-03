@@ -16,9 +16,12 @@ use axum_server::tls_rustls::RustlsConfig;
 use prometheus::Registry;
 use sui_consistent_store::Db;
 use sui_futures::service::Service;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha as consistent;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_server::ConsistentServiceServer;
 use sui_rpc_api::RpcMetrics;
 use sui_rpc_api::RpcService;
 use sui_rpc_api::ServerVersion;
+use sui_rpc_store::ConsistencyConfig;
 use sui_rpc_store::RpcStoreReader;
 use sui_rpc_store::RpcStoreSchema;
 use tokio::net::TcpListener;
@@ -26,6 +29,7 @@ use tokio::sync::oneshot;
 use tracing::info;
 
 use crate::config::RpcConfig;
+use crate::consistent_service::State as ConsistentState;
 
 /// Build an HTTP (and optionally HTTPS) RPC server backed by
 /// [`RpcStoreReader`] over the live [`Db`] and return a
@@ -34,9 +38,11 @@ use crate::config::RpcConfig;
 /// `version` ends up as the `X-Sui-Rpc-Version` header on every
 /// response (built by `main.rs`); `bin_name` names this binary in
 /// the `Server` header.
+#[allow(clippy::too_many_arguments)]
 pub async fn build_rpc_service(
     db: Db,
     schema: Arc<RpcStoreSchema>,
+    consistency: ConsistencyConfig,
     config: RpcConfig,
     bin_name: &'static str,
     version: &'static str,
@@ -47,11 +53,19 @@ pub async fn build_rpc_service(
         .validate()
         .context("sui-rpc-api configuration failed validation")?;
 
-    let reader = RpcStoreReader::new(db, schema);
+    let reader = RpcStoreReader::new(db.clone(), schema);
     let mut rpc_service = RpcService::new(Arc::new(reader));
     rpc_service.with_server_version(ServerVersion::new(bin_name, version));
     rpc_service.with_metrics(RpcMetrics::new(registry));
     rpc_service.with_config(config.config.clone());
+
+    // Mount the v1alpha `ConsistentService` over the same `Db`
+    // / schema. The service hands out paginated, checkpoint-
+    // consistent reads through snapshots taken by the
+    // synchronizer.
+    let consistent_state = ConsistentState::new(db.clone(), config.pagination.clone(), consistency);
+    rpc_service.with_custom_service(ConsistentServiceServer::new(consistent_state));
+    rpc_service.with_file_descriptor_set(consistent::FILE_DESCRIPTOR_SET);
 
     // TODO: wire a `TransactionExecutor` impl via
     // `rpc_service.with_executor(...)`. Without one,

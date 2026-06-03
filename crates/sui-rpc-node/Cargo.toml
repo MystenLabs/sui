@@ -24,11 +24,19 @@ tokio.workspace = true
 toml.workspace = true
 tracing.workspace = true
 
+async-trait.workspace = true
+bincode = { version = "2.0.1", features = ["serde"] }
+bytes.workspace = true
+move-core-types.workspace = true
+thiserror.workspace = true
+tonic.workspace = true
+
 bin-version.workspace = true
 sui-config.workspace = true
 sui-consistent-store.workspace = true
 sui-default-config.workspace = true
 sui-futures.workspace = true
+sui-indexer-alt-consistent-api.workspace = true
 sui-indexer-alt-framework = { workspace = true, default-features = false }
 sui-indexer-alt-metrics.workspace = true
 sui-rpc-api.workspace = true

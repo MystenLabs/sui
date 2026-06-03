@@ -47,4 +47,5 @@
 //!   features.
 
 mod cluster;
+mod v1alpha;
 mod v2;

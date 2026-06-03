@@ -37,6 +37,7 @@
 
 pub mod args;
 pub mod config;
+mod consistent_service;
 pub mod rpc;
 
 use std::path::Path;
@@ -123,7 +124,7 @@ pub async fn start_service(
         indexer_args,
         ingestion_client,
         streaming_client,
-        consistency,
+        consistency.clone(),
         ingestion,
         DbOptions::default(),
         registry,
@@ -147,6 +148,7 @@ pub async fn start_service(
     let rpc_service = build_rpc_service(
         db.clone(),
         Arc::new(RpcStoreSchema::open(&db).context("Failed to bind RpcStoreSchema for reads")?),
+        consistency,
         rpc,
         bin_name,
         version,

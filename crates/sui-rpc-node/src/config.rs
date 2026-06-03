@@ -65,6 +65,14 @@ pub struct RpcConfig {
     /// rpc-node matches what `sui-node` ships.
     #[serde(flatten)]
     pub config: sui_rpc_api::Config,
+
+    /// Pagination defaults exposed by the v1alpha
+    /// [`ConsistentService`] endpoints (`ListBalances`,
+    /// `ListOwnedObjects`, `ListObjectsByType`,
+    /// `BatchGetBalances`).
+    ///
+    /// [`ConsistentService`]: sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha
+    pub pagination: PaginationConfig,
 }
 
 impl Default for RpcConfig {
@@ -72,6 +80,40 @@ impl Default for RpcConfig {
         Self {
             listen_address: "0.0.0.0:9000".parse().unwrap(),
             config: sui_rpc_api::Config::default(),
+            pagination: PaginationConfig::default(),
+        }
+    }
+}
+
+/// Defaults / clamps for the [`ConsistentService`] paginated
+/// endpoints. Mirrors
+/// `sui_indexer_alt_consistent_store::rpc::pagination::PaginationConfig`
+/// so the standalone rpc-node and the alt-consistent-store agree
+/// on what pages a client should expect.
+///
+/// [`ConsistentService`]: sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha
+#[DefaultConfig]
+#[derive(Clone)]
+#[serde(deny_unknown_fields)]
+pub struct PaginationConfig {
+    /// Page size returned when a request omits `page_size`.
+    pub default_page_size: u32,
+
+    /// Maximum number of `GetBalanceRequest`s allowed in a
+    /// single `BatchGetBalances` call. Exceeding this returns
+    /// `InvalidArgument`.
+    pub max_batch_size: u32,
+
+    /// Upper bound a request's `page_size` is clamped to.
+    pub max_page_size: u32,
+}
+
+impl Default for PaginationConfig {
+    fn default() -> Self {
+        Self {
+            default_page_size: 50,
+            max_batch_size: 200,
+            max_page_size: 200,
         }
     }
 }

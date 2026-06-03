@@ -200,6 +200,7 @@ impl LocalCluster {
             committer,
             rpc,
         } = config;
+        let consistency_for_rpc = consistency.clone();
 
         // Stand up the ingestion client over Simulacrum. The
         // framework's `IngestionService` shares its
@@ -255,6 +256,7 @@ impl LocalCluster {
         let rpc_service = build_rpc_service(
             db.clone(),
             schema.clone(),
+            consistency_for_rpc,
             rpc,
             "sui-rpc-node-tests",
             "0.0",
