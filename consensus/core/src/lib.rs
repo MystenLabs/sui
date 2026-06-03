@@ -21,6 +21,7 @@ mod core;
 mod core_thread;
 mod dag_state;
 mod error;
+mod flex_committer;
 mod leader_schedule;
 mod leader_schedule_v3;
 mod leader_scoring;
