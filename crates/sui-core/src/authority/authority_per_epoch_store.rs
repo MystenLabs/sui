@@ -626,9 +626,6 @@ pub struct AuthorityEpochTables {
         DBMap<DeferralKey, Vec<DeprecatedWithAliases<TrustedExecutableTransaction>>>,
     deferred_transactions_with_aliases_v3:
         DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
-    /// Records the final DKG output, or a terminal DKG failure, after completion.
-    ///
-    /// Keep this table at the end for Tidehunter append-only keyspace compatibility.
     pub(crate) dkg_output_v2: DBMap<u64, Option<dkg_v1::Output<PkG, EncG>>>,
 }
 
