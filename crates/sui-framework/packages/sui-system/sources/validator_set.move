@@ -183,8 +183,7 @@ public(package) fun request_add_validator_candidate(
 
     // The next assertions are not critical for the protocol, but they are here
     // to catch problematic configs earlier.
-    assert!(!self.is_duplicate_with_active_validator(&validator), EDuplicateValidator);
-    assert!(!self.is_duplicate_with_pending_validator(&validator), EDuplicateValidator);
+    self.assert_no_pending_or_active_duplicates(&validator);
 
     assert!(validator.is_preactive(), EValidatorNotCandidate);
     // Add validator to the candidates mapping and the pool id mappings so that users can start
@@ -267,7 +266,6 @@ public(package) fun assert_no_pending_or_active_duplicates(
     self: &ValidatorSet,
     validator: &Validator,
 ) {
-    // Validator here must be active or pending, and thus must be identified as duplicate exactly once.
     assert!(!self.is_duplicate_with_active_validator(validator), EDuplicateValidator);
     assert!(!self.is_duplicate_with_pending_validator(validator), EDuplicateValidator);
 }

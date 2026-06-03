@@ -742,8 +742,7 @@ Called by <code><a href="../sui_system/sui_system.md#sui_system_sui_system">sui_
     );
     // The next assertions are not critical <b>for</b> the protocol, but they are here
     // to catch problematic configs earlier.
-    <b>assert</b>!(!self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>), <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>);
-    <b>assert</b>!(!self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>), <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>);
+    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_assert_no_pending_or_active_duplicates">assert_no_pending_or_active_duplicates</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
     <b>assert</b>!(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.is_preactive(), <a href="../sui_system/validator_set.md#sui_system_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
     // Add <a href="../sui_system/validator.md#sui_system_validator">validator</a> to the candidates mapping and the pool id mappings so that users can start
     // staking with this candidate.
@@ -918,7 +917,6 @@ return (min, low, very low voting power) thresholds
     self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>,
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator,
 ) {
-    // Validator here must be active or pending, and thus must be identified <b>as</b> duplicate exactly once.
     <b>assert</b>!(!self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>), <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>);
     <b>assert</b>!(!self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>), <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>);
 }
