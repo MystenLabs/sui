@@ -30,6 +30,7 @@ pub mod object_by_owner;
 pub mod object_by_type;
 pub mod objects;
 pub mod package_versions;
+pub mod restore;
 pub mod transaction_bitmap;
 pub mod transactions;
 pub mod tx_metadata_by_seq;

@@ -43,6 +43,7 @@ pub use crate::config::PipelineLayer;
 pub use crate::config::ServiceConfig;
 pub use crate::indexer::Indexer;
 pub use crate::indexer::METRICS_PREFIX;
+pub use crate::indexer::restore::restore_indexes;
 pub use crate::reader::RpcStoreReader;
 pub use crate::schema::RpcStoreSchema;
 

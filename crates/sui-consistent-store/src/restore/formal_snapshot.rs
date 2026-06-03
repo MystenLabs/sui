@@ -59,6 +59,7 @@ use tracing::info;
 use tracing::warn;
 use url::Url;
 
+use crate::Watermark;
 use crate::restore::RestoreChunk;
 use crate::restore::RestoreSource;
 use crate::restore::format::EpochManifest;
@@ -145,8 +146,11 @@ pub struct FormalSnapshot {
     /// Path of the epoch's subdirectory within `source`.
     epoch_dir: String,
 
-    /// Checkpoint sequence number this snapshot is anchored at.
-    target_checkpoint: u64,
+    /// Watermark this snapshot is anchored at (epoch, checkpoint,
+    /// tx count, timestamp). The driver writes this into
+    /// `__watermark` so tip indexing resumes from the right
+    /// place once restore finishes.
+    target_watermark: Watermark,
 
     /// Dense `shard_id -> bucket_id` mapping. The number of
     /// shards is `shard_buckets.len()`.
@@ -174,10 +178,11 @@ impl FormalSnapshot {
         let (epoch, epoch_dir) = resolve_epoch(&args, &store).await?;
         info!(epoch, epoch_dir, "Connected to valid formal snapshot");
 
-        let target_checkpoint = anchor_checkpoint(&args.remote_store_url, epoch).await?;
+        let target_watermark = anchor_watermark(&args.remote_store_url, epoch).await?;
         info!(
             epoch,
-            target_checkpoint, "Anchored snapshot at end-of-epoch checkpoint",
+            target_checkpoint = target_watermark.checkpoint_hi_inclusive,
+            "Anchored snapshot at end-of-epoch checkpoint",
         );
 
         let manifest_bytes = store
@@ -215,7 +220,7 @@ impl FormalSnapshot {
         Ok(Self {
             source: store,
             epoch_dir,
-            target_checkpoint,
+            target_watermark,
             shard_buckets,
             shard_partitions,
             metrics,
@@ -249,7 +254,11 @@ impl FormalSnapshot {
 #[async_trait]
 impl RestoreSource for FormalSnapshot {
     fn target_checkpoint(&self) -> u64 {
-        self.target_checkpoint
+        self.target_watermark.checkpoint_hi_inclusive
+    }
+
+    fn target_watermark(&self) -> Watermark {
+        self.target_watermark
     }
 
     fn shards(&self) -> u32 {
@@ -397,9 +406,10 @@ async fn resolve_epoch(
     Ok((epoch, epoch_dir))
 }
 
-/// Hit the remote checkpoint store at `remote_store_url` to map
-/// `epoch` to its end-of-epoch checkpoint sequence number.
-async fn anchor_checkpoint(remote_store_url: &Url, epoch: u64) -> anyhow::Result<u64> {
+/// Hit the remote checkpoint store at `remote_store_url` to
+/// resolve `epoch` to its end-of-epoch checkpoint and return a
+/// fully populated [`Watermark`].
+async fn anchor_watermark(remote_store_url: &Url, epoch: u64) -> anyhow::Result<Watermark> {
     let client = StoreIngestionClient::new(
         HttpBuilder::new()
             .with_url(remote_store_url.to_string())
@@ -430,7 +440,12 @@ async fn anchor_checkpoint(remote_store_url: &Url, epoch: u64) -> anyhow::Result
         "End-of-epoch checkpoint {checkpoint} does not belong to epoch {epoch}",
     );
 
-    Ok(summary.sequence_number)
+    Ok(Watermark {
+        epoch_hi_inclusive: summary.epoch,
+        checkpoint_hi_inclusive: summary.sequence_number,
+        tx_hi: summary.network_total_transactions,
+        timestamp_ms_hi_inclusive: summary.timestamp_ms,
+    })
 }
 
 /// Fetch one `.obj` file with exponential backoff, decode it,

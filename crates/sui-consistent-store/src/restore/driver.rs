@@ -49,6 +49,7 @@ use crate::Db;
 use crate::FrameworkSchema;
 use crate::PipelineTaskKey;
 use crate::RestoreState;
+use crate::Watermark;
 use crate::restore::Restore;
 use crate::restore_state;
 use crate::restore_state::ShardProgress;
@@ -85,6 +86,21 @@ pub trait RestoreSource: Send + Sync + 'static {
     /// Anchor checkpoint for this restore. Tip indexing resumes
     /// at `target_checkpoint + 1` once the driver finishes.
     fn target_checkpoint(&self) -> u64;
+
+    /// Full anchor [`Watermark`] for this restore.
+    ///
+    /// The driver writes this row into the framework's
+    /// `__watermark` CF for every registered pipeline at the
+    /// end of the run, so the framework's tip-indexing path
+    /// resumes at `target_checkpoint + 1` (and other watermark
+    /// fields are populated for any consumer that reads them).
+    ///
+    /// Default impl returns a watermark with only
+    /// `checkpoint_hi_inclusive` set — sources that know more
+    /// (epoch, tx count, timestamp) should override.
+    fn target_watermark(&self) -> Watermark {
+        Watermark::for_checkpoint(self.target_checkpoint())
+    }
 
     /// Number of shards the source is split into. The driver
     /// will call [`stream`](Self::stream) once per `shard_id`
@@ -282,6 +298,7 @@ impl<S: Send + Sync + 'static, Src: RestoreSource> RestoreDriver<S, Src> {
         } = self;
 
         let target_checkpoint = source.target_checkpoint();
+        let target_watermark = source.target_watermark();
         let shard_count = source.shards();
         let shard_concurrency = config
             .shard_concurrency
@@ -305,9 +322,16 @@ impl<S: Send + Sync + 'static, Src: RestoreSource> RestoreDriver<S, Src> {
                 })
                 .await?;
 
-            finalize(target_checkpoint, shard_count, pipelines, states, db)
-                .await
-                .context("finaliser failed")
+            finalize(
+                target_checkpoint,
+                &target_watermark,
+                shard_count,
+                pipelines,
+                states,
+                db,
+            )
+            .await
+            .context("finaliser failed")
         });
 
         Ok(svc)
@@ -416,9 +440,12 @@ where
 
 /// Final transition: read each pipeline's `__restore` row,
 /// confirm every shard is `Done`, and atomically rewrite the
-/// row as `Complete { restored_at: target_checkpoint }`.
+/// row as `Complete { restored_at: target_checkpoint }`. The
+/// pipeline's `__watermark` row is set in the same batch so
+/// subsequent tip indexing resumes at the right checkpoint.
 async fn finalize<S>(
     target_checkpoint: u64,
+    target_watermark: &Watermark,
     shard_count: u32,
     pipelines: Arc<Vec<PipelineEntry<S>>>,
     states: Arc<Mutex<Vec<RestoreState>>>,
@@ -464,6 +491,7 @@ where
             restored_at: target_checkpoint,
         });
         batch.put(&framework.restore, &entry.key, &complete)?;
+        batch.put(&framework.watermarks, &entry.key, target_watermark)?;
     }
 
     batch.commit()?;
@@ -662,18 +690,19 @@ mod tests {
         Object::immutable_with_id_for_testing(ObjectID::from_single_byte(id))
     }
 
-    /// Assert the persisted pipeline state is `Complete { restored_at }`.
-    fn assert_complete(db: &Db, name: &str, restored_at: u64) {
-        let state = db
-            .framework()
-            .restore
-            .get(&PipelineTaskKey::new(name))
-            .unwrap()
-            .unwrap();
+    /// Assert the persisted pipeline state is `Complete { restored_at }`
+    /// and the watermark row matches `expected_watermark`.
+    fn assert_complete(db: &Db, name: &str, expected_watermark: &Watermark) {
+        let key = PipelineTaskKey::new(name);
+        let state = db.framework().restore.get(&key).unwrap().unwrap();
         match state.state.unwrap() {
-            restore_state::State::Complete(c) => assert_eq!(c.restored_at, restored_at),
+            restore_state::State::Complete(c) => {
+                assert_eq!(c.restored_at, expected_watermark.checkpoint_hi_inclusive,)
+            }
             other => panic!("expected Complete, got {other:?}"),
         }
+        let watermark = db.framework().watermarks.get(&key).unwrap().unwrap();
+        assert_eq!(&watermark, expected_watermark);
     }
 
     /// One-shard run: a single shard with two chunks. Verifies
@@ -707,7 +736,11 @@ mod tests {
                 Some(U64Be(o.version().value())),
             );
         }
-        assert_complete(&db, ObjectVersionPipeline::NAME, 42);
+        assert_complete(
+            &db,
+            ObjectVersionPipeline::NAME,
+            &Watermark::for_checkpoint(42),
+        );
     }
 
     /// Multiple shards in parallel: every shard's objects land
@@ -744,7 +777,11 @@ mod tests {
                 Some(U64Be(o.version().value())),
             );
         }
-        assert_complete(&db, ObjectVersionPipeline::NAME, 7);
+        assert_complete(
+            &db,
+            ObjectVersionPipeline::NAME,
+            &Watermark::for_checkpoint(7),
+        );
     }
 
     /// Resume from a partial restore: pre-seed the pipeline's
@@ -825,6 +862,10 @@ mod tests {
             None,
         );
 
-        assert_complete(&db, ObjectVersionPipeline::NAME, 99);
+        assert_complete(
+            &db,
+            ObjectVersionPipeline::NAME,
+            &Watermark::for_checkpoint(99),
+        );
     }
 }
