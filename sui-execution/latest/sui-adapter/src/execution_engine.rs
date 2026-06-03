@@ -14,7 +14,7 @@ mod checked {
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
     use mysten_common::debug_fatal;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
     use sui_types::balance::{
@@ -64,7 +64,7 @@ mod checked {
     };
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorTrait};
-    use sui_types::execution::{ExecutionTiming, ResultWithTimings};
+    use sui_types::execution::{ExecutionTiming, ResultWithTimings, SharedInput};
     use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
@@ -89,31 +89,9 @@ mod checked {
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
 
-    // MAGIC CONSTANTS -- these are all mainnet-only hardcoded constants and should not be changed
-    // (but can be removed in future execution cuts).
-
-    /// Mainnet recovery point: the fix replays for transactions at/above this accumulator root
-    /// version and keeps the old behavior below it. A compiled constant (not a protocol flag)
-    /// because it had to take effect mid-epoch during recovery, when the network can't reconfigure.
-    const ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION: SequenceNumber =
-        SequenceNumber::from_u64(692949576);
-
-    /// Mainnet settlement version at/above which an `InsufficientFundsForWithdraw` transaction
-    /// short-circuits execution entirely (zero-gas effects, mutable-input version bumps only),
-    /// superseding the address-balance gas-payment pruning hotfix. A compiled constant, not a
-    /// protocol flag, because it must take effect mid-epoch during recovery when the network cannot
-    /// reconfigure. Only consulted when an accumulator version is assigned (mainnet committed
-    /// execution); everywhere else the short-circuit is protocol gated (see
-    /// `should_short_circuit_insufficient_funds`).
-    ///
-    /// Value is the mainnet accumulator root version where the new binary was activated on the network.
-    const ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION: SequenceNumber =
-        SequenceNumber::from_u64(693531074);
-
-    /// Whether the *head* early error is `InsufficientFundsForWithdraw`. Used to gate the first
-    /// address-balance gas-payment pruning hotfix: the head error is the one surfaced as the
-    /// failure status, so keying off it (rather than any occurrence) keeps the pruning bit-for-bit
-    /// with the original single-error hotfix.
+    /// Whether the *head* early error is `InsufficientFundsForWithdraw`. The new-pipeline
+    /// (v15+) IFFW short-circuit triggers on this directly; `mod legacy` uses it inside its
+    /// protocol-gated hotfix predicates.
     fn head_error_is_insufficient_funds_for_withdraw(
         execution_params: &ExecutionOrEarlyError,
     ) -> bool {
@@ -125,49 +103,57 @@ mod checked {
         })
     }
 
-    /// Whether to prune the address-balance leg of gas smashing for an IFFW transaction. This is
-    /// the mainnet-only accumulator backfill that replays the pre-flag incident hotfix below the
-    /// short-circuit rollout point; once `early_exit_on_iffw` is set the short-circuit handles IFFW
-    /// upstream, so reaching here implies the flag is off (asserted below).
-    fn should_filter_address_balance_gas_smash(
-        execution_params: &ExecutionOrEarlyError,
+    /// Build the IFFW short-circuit response: bump versions of mutable inputs, emit effects
+    /// with a zero gas cost summary, and return an `InsufficientFundsForWithdraw` failure.
+    /// Shared between the new (v15+) pipeline's unconditional check and the legacy pipeline's
+    /// protocol-gated check — the response shape is identical regardless of which gate fired.
+    #[allow(clippy::type_complexity)]
+    fn respond_with_iffw_short_circuit<Mode: ExecutionMode>(
+        mut temporary_store: TemporaryStore<'_>,
+        shared_object_refs: Vec<SharedInput>,
+        mut transaction_dependencies: BTreeSet<TransactionDigest>,
+        transaction_digest: TransactionDigest,
+        gas_status: SuiGasStatus,
         protocol_config: &ProtocolConfig,
-    ) -> bool {
-        if !head_error_is_insufficient_funds_for_withdraw(execution_params) {
-            return false;
-        }
-        debug_assert!(
-            !protocol_config.early_exit_on_iffw(),
-            "Should not reach gas smashing filtering address balances if IFFW early exit is enabled"
+        epoch_id: EpochId,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<Mode::ExecutionResults, Mode::Error>,
+    ) {
+        temporary_store.ensure_active_inputs_mutated();
+        transaction_dependencies.remove(&TransactionDigest::genesis_marker());
+
+        let execution_error: Mode::Error =
+            ExecutionError::from_kind(ExecutionErrorKind::InsufficientFundsForWithdraw).into();
+        let status = ExecutionStatus::new_failure(execution_error.to_execution_failure());
+        let mut gas_meter = GasCharger::new(
+            transaction_digest,
+            PaymentKind::gasless(),
+            gas_status,
+            &mut temporary_store,
+            protocol_config,
         );
-        protocol_config.early_exit_on_iffw()
-            || execution_params
-                .accumulator_version()
-                .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION)
-    }
 
-    /// Whether to short-circuit an IFFW transaction. When an accumulator version is assigned
-    /// (mainnet committed execution) it gates on the settlement-version rollout point; otherwise
-    /// (every other chain and non-committed paths, where no accumulator version is assigned) the
-    /// short-circuit applies based on `early_exit_on_iffw`.
-    fn should_short_circuit_insufficient_funds(
-        execution_params: &ExecutionOrEarlyError,
-        protocol_config: &ProtocolConfig,
-    ) -> bool {
-        // If no IFWWs, then does not apply
-        if !execution_params.early_errors().is_some_and(|errors| {
-            errors
-                .iter()
-                .any(|e| matches!(e, ExecutionErrorKind::InsufficientFundsForWithdraw))
-        }) {
-            return false;
-        }
+        let (inner, effects) = temporary_store.into_effects(
+            shared_object_refs,
+            &transaction_digest,
+            transaction_dependencies,
+            GasCostSummary::default(),
+            status,
+            &mut gas_meter,
+            epoch_id,
+        );
 
-        // otherwise if gate by accumulator version (if present) or protocol flag
-        protocol_config.early_exit_on_iffw()
-            || execution_params
-                .accumulator_version()
-                .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION)
+        (
+            inner,
+            gas_meter.into_gas_status(),
+            effects,
+            vec![],
+            Err(execution_error),
+        )
     }
 
     fn payment_kind(
@@ -299,44 +285,48 @@ mod checked {
             *epoch_id,
         );
 
-        // Short-circuit on InsufficientFundsForWithdraw: the transaction is guaranteed to fail
-        // and has nothing to execute, so skip the executor pipeline. Bump versions of mutable
-        // inputs (so locks advance) and emit effects with a zero gas cost summary. On mainnet
-        // committed execution this is gated on the settlement-version rollout point (below it we
-        // fall through to the address-balance gas-payment pruning hotfix instead); everywhere else
-        // it applies based on `early_exit_on_iffw`.
-        if should_short_circuit_insufficient_funds(&execution_params, protocol_config) {
-            temporary_store.ensure_active_inputs_mutated();
-            transaction_dependencies.remove(&TransactionDigest::genesis_marker());
-
-            let execution_error: Mode::Error =
-                ExecutionError::from_kind(ExecutionErrorKind::InsufficientFundsForWithdraw).into();
-            let status = ExecutionStatus::new_failure(execution_error.to_execution_failure());
-            let mut gas_meter = GasCharger::new(
-                transaction_digest,
-                PaymentKind::gasless(),
-                gas_status,
-                &mut temporary_store,
-                protocol_config,
-            );
-
-            let (inner, effects) = temporary_store.into_effects(
-                shared_object_refs,
-                &transaction_digest,
-                transaction_dependencies,
-                GasCostSummary::default(),
-                status,
-                &mut gas_meter,
-                *epoch_id,
-            );
-
-            return (
-                inner,
-                gas_meter.into_gas_status(),
-                effects,
-                vec![],
-                Err(execution_error),
-            );
+        // IFFW handling diverges between the v15+ pipeline and the legacy pipeline; the
+        // legacy pipeline also carries the mainnet AB-gas-smash hotfix prune.
+        if use_step_gas_charging(protocol_config.gas_model_version()) {
+            // New pipeline: IFFW is short-circuited unconditionally. `early_exit_on_iffw` is on
+            // at every protocol version that selects this pipeline (v126+), so there's no
+            // protocol gate to consult.
+            if head_error_is_insufficient_funds_for_withdraw(&execution_params) {
+                return respond_with_iffw_short_circuit::<Mode>(
+                    temporary_store,
+                    shared_object_refs,
+                    transaction_dependencies,
+                    transaction_digest,
+                    gas_status,
+                    protocol_config,
+                    *epoch_id,
+                );
+            }
+        } else {
+            // Legacy pipeline: protocol-gated IFFW short-circuit and AB-smash hotfix prune.
+            // Both are mainnet-replay concerns and live in `mod legacy`.
+            if legacy::should_short_circuit_insufficient_funds(&execution_params, protocol_config) {
+                return respond_with_iffw_short_circuit::<Mode>(
+                    temporary_store,
+                    shared_object_refs,
+                    transaction_dependencies,
+                    transaction_digest,
+                    gas_status,
+                    protocol_config,
+                    *epoch_id,
+                );
+            }
+            // On an IFFW abort, drop the address-balance gas payments (keeping real coins) so
+            // the pruned list flows into `payment_kind`/`compute_input_reservations` with no
+            // special handling. See `legacy::should_filter_address_balance_gas_smash`.
+            if legacy::should_filter_address_balance_gas_smash(&execution_params, protocol_config)
+                && gas_data.payment.len() > 1
+                && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
+            {
+                gas_data
+                    .payment
+                    .retain(|entry| ParsedDigest::try_from(entry.2).is_err());
+            }
         }
 
         let sponsor = {
@@ -349,18 +339,6 @@ mod checked {
         };
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
-
-        // On an IFFW abort, drop the address-balance gas payments (keeping real coins) so the
-        // pruned list flows into `payment_kind`/`compute_input_reservations` with no special
-        // handling. See `should_filter_address_balance_gas_smash` for when this applies.
-        if should_filter_address_balance_gas_smash(&execution_params, protocol_config)
-            && gas_data.payment.len() > 1
-            && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
-        {
-            gas_data
-                .payment
-                .retain(|entry| ParsedDigest::try_from(entry.2).is_err());
-        }
 
         let mut gas_charger = GasCharger::new(
             transaction_digest,
@@ -995,6 +973,72 @@ mod checked {
     /// execution_version bumps past 4.
     mod legacy {
         use super::*;
+
+        // MAGIC CONSTANTS -- these are all mainnet-only hardcoded constants and should not be
+        // changed (but can be removed in future execution cuts).
+
+        /// Mainnet recovery point: the fix replays for transactions at/above this accumulator root
+        /// version and keeps the old behavior below it. A compiled constant (not a protocol flag)
+        /// because it had to take effect mid-epoch during recovery, when the network can't reconfigure.
+        pub(super) const ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION: SequenceNumber =
+            SequenceNumber::from_u64(692949576);
+
+        /// Mainnet settlement version at/above which an `InsufficientFundsForWithdraw` transaction
+        /// short-circuits execution entirely (zero-gas effects, mutable-input version bumps only),
+        /// superseding the address-balance gas-payment pruning hotfix. A compiled constant, not a
+        /// protocol flag, because it must take effect mid-epoch during recovery when the network
+        /// cannot reconfigure. Only consulted when an accumulator version is assigned (mainnet
+        /// committed execution); everywhere else the short-circuit is protocol gated (see
+        /// `should_short_circuit_insufficient_funds`).
+        ///
+        /// Value is the mainnet accumulator root version where the new binary was activated on the network.
+        pub(super) const ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION:
+            SequenceNumber = SequenceNumber::from_u64(693531074);
+
+        /// Whether to prune the address-balance leg of gas smashing for an IFFW transaction. This is
+        /// the mainnet-only accumulator backfill that replays the pre-flag incident hotfix below the
+        /// short-circuit rollout point; once `early_exit_on_iffw` is set the short-circuit handles IFFW
+        /// upstream, so reaching here implies the flag is off (asserted below).
+        pub(super) fn should_filter_address_balance_gas_smash(
+            execution_params: &ExecutionOrEarlyError,
+            protocol_config: &ProtocolConfig,
+        ) -> bool {
+            if !head_error_is_insufficient_funds_for_withdraw(execution_params) {
+                return false;
+            }
+            debug_assert!(
+                !protocol_config.early_exit_on_iffw(),
+                "Should not reach gas smashing filtering address balances if IFFW early exit is enabled"
+            );
+            protocol_config.early_exit_on_iffw()
+                || execution_params
+                    .accumulator_version()
+                    .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION)
+        }
+
+        /// Whether to short-circuit an IFFW transaction. When an accumulator version is assigned
+        /// (mainnet committed execution) it gates on the settlement-version rollout point; otherwise
+        /// (every other chain and non-committed paths, where no accumulator version is assigned) the
+        /// short-circuit applies based on `early_exit_on_iffw`.
+        pub(super) fn should_short_circuit_insufficient_funds(
+            execution_params: &ExecutionOrEarlyError,
+            protocol_config: &ProtocolConfig,
+        ) -> bool {
+            // If no IFWWs, then does not apply
+            if !execution_params.early_errors().is_some_and(|errors| {
+                errors
+                    .iter()
+                    .any(|e| matches!(e, ExecutionErrorKind::InsufficientFundsForWithdraw))
+            }) {
+                return false;
+            }
+
+            // otherwise if gate by accumulator version (if present) or protocol flag
+            protocol_config.early_exit_on_iffw()
+                || execution_params.accumulator_version().is_some_and(|v| {
+                    v >= ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION
+                })
+        }
 
         #[instrument(name = "tx_execute_legacy", level = "debug", skip_all)]
         pub(super) fn execute_transaction<Mode: ExecutionMode>(
@@ -2266,7 +2310,7 @@ mod checked {
 
     #[cfg(test)]
     mod address_balance_smash_gate_tests {
-        use super::{
+        use super::legacy::{
             ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION,
             should_filter_address_balance_gas_smash,
         };
@@ -2343,7 +2387,7 @@ mod checked {
 
     #[cfg(test)]
     mod address_balance_smash_short_circuit_tests {
-        use super::{
+        use super::legacy::{
             ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION,
             should_short_circuit_insufficient_funds,
         };
