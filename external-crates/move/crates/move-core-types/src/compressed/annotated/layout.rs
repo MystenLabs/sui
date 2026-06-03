@@ -255,6 +255,85 @@ pub trait BackendBuilder: Sized {
         })
     }
 
+    /// Recursively absorb an existing compressed annotated layout (from any
+    /// backend) into this builder, deduplicating shared subtrees against the
+    /// builder's pool.
+    fn intern_layout<U: TypeLayout>(
+        &mut self,
+        layout: &MoveTypeLayout<U>,
+    ) -> Result<Self::Root, Self::Error> {
+        self.intern_view(layout.as_view())
+    }
+
+    /// Recursively intern a [`MoveLayoutView`] (a borrowed resolved layout)
+    /// into this builder.
+    fn intern_view<U: TypeLayout>(
+        &mut self,
+        view: MoveLayoutView<'_, U>,
+    ) -> Result<Self::Root, Self::Error> {
+        Ok(match view {
+            MoveLayoutView::Bool => self.bool(),
+            MoveLayoutView::U8 => self.u8(),
+            MoveLayoutView::U16 => self.u16(),
+            MoveLayoutView::U32 => self.u32(),
+            MoveLayoutView::U64 => self.u64(),
+            MoveLayoutView::U128 => self.u128(),
+            MoveLayoutView::U256 => self.u256(),
+            MoveLayoutView::Address => self.address(),
+            MoveLayoutView::Signer => self.signer(),
+            MoveLayoutView::Vector(inner) => {
+                let inner_h = self.intern_view(inner.as_view())?;
+                self.vector(inner_h)?
+            }
+            MoveLayoutView::Struct(s) => {
+                let type_tag = s.type_().clone();
+                let fields: Vec<(Identifier, Self::Root)> = s
+                    .fields()
+                    .map(|(name, layout)| Ok((name.clone(), self.intern_view(layout.as_view())?)))
+                    .collect::<Result<_, Self::Error>>()?;
+                let field_refs: Vec<(&Identifier, Self::Root)> =
+                    fields.iter().map(|(n, h)| (n, h.clone())).collect();
+                self.struct_layout(&type_tag, &field_refs)?
+            }
+            MoveLayoutView::Enum(e) => {
+                let type_tag = e.type_().clone();
+                // First collect (name, tag, optional field handles) so we
+                // can build the borrowed slices in a second pass.
+                let variants: Vec<(Identifier, VariantTag, Option<Vec<(Identifier, Self::Root)>>)> =
+                    e.variants()
+                        .map(|v| match v {
+                            VariantLayout::Known { name, tag, fields } => {
+                                let fs: Vec<(Identifier, Self::Root)> = fields
+                                    .fields()
+                                    .map(|(n, l)| {
+                                        Ok((n.clone(), self.intern_view(l.as_view())?))
+                                    })
+                                    .collect::<Result<_, Self::Error>>()?;
+                                Ok((name.clone(), tag, Some(fs)))
+                            }
+                            VariantLayout::Unknown { name, tag } => {
+                                Ok((name.clone(), tag, None))
+                            }
+                        })
+                        .collect::<Result<_, Self::Error>>()?;
+                let variant_field_refs: Vec<Option<Vec<(&Identifier, Self::Root)>>> = variants
+                    .iter()
+                    .map(|(_, _, fs)| {
+                        fs.as_ref()
+                            .map(|fs| fs.iter().map(|(n, h)| (n, h.clone())).collect())
+                    })
+                    .collect();
+                let variant_refs: Vec<(&Identifier, VariantTag, Option<&[(&Identifier, Self::Root)]>)> =
+                    variants
+                        .iter()
+                        .zip(variant_field_refs.iter())
+                        .map(|((name, tag, _), fs)| (name, *tag, fs.as_deref()))
+                        .collect();
+                self.enum_layout(&type_tag, &variant_refs)?
+            }
+        })
+    }
+
     /// Finalize the builder and wrap the result in a [`MoveTypeLayout`].
     fn build(self, root: Self::Root) -> MoveTypeLayout<Self::Output> {
         let pool = self.finalize(root.clone());
@@ -311,7 +390,42 @@ impl<T: TypeLayout> MoveTypeLayout<T> {
     pub fn inflate(&self) -> AResult<AV::MoveTypeLayout> {
         self.as_ref().inflate()
     }
+
+    /// If this layout is a struct, return a borrowed view onto it.
+    pub fn as_struct(&self) -> Option<MoveStructLayout<'_, T>> {
+        match self.as_view() {
+            MoveLayoutView::Struct(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// If this layout is an enum, return a borrowed view onto it.
+    pub fn as_enum(&self) -> Option<MoveEnumLayout<'_, T>> {
+        match self.as_view() {
+            MoveLayoutView::Enum(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    /// If this layout is a struct or enum, return a borrowed datatype view.
+    pub fn as_datatype(&self) -> Option<MoveDatatypeLayout<'_, T>> {
+        MoveDatatypeLayout::new(self.as_ref())
+    }
+
+    /// Returns `true` iff `self` and `other` describe the same Move type,
+    /// regardless of pool ordering or how subtrees are shared.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveTypeLayout<U>) -> bool {
+        self.as_ref().equivalent(&other.as_ref())
+    }
 }
+
+impl<T: TypeLayout> PartialEq for MoveTypeLayout<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl<T: TypeLayout> Eq for MoveTypeLayout<T> {}
 
 impl<T: TypeLayout> fmt::Display for MoveTypeLayout<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -358,6 +472,12 @@ impl<'a, T: TypeLayout> MoveTypeLayoutRef<'a, T> {
     /// Inflate back into a tree-based [`AV::MoveTypeLayout`].
     pub fn inflate(self) -> AResult<AV::MoveTypeLayout> {
         self.as_view().inflate()
+    }
+
+    /// Returns `true` iff the two layouts describe the same Move type,
+    /// regardless of pool ordering or how subtrees are shared.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveTypeLayoutRef<'_, U>) -> bool {
+        (*self).as_view().equivalent(&(*other).as_view())
     }
 }
 
@@ -459,7 +579,36 @@ impl<T: TypeLayout> MoveLayoutView<'_, T> {
             MoveLayoutView::Enum(ev) => ev.is_type_tag(t),
         }
     }
+
+    /// Returns `true` iff `self` and `other` describe the same Move type,
+    /// regardless of pool ordering or how subtrees are shared.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveLayoutView<'_, U>) -> bool {
+        use MoveLayoutView::*;
+        match (self, other) {
+            (Bool, Bool)
+            | (U8, U8)
+            | (U16, U16)
+            | (U32, U32)
+            | (U64, U64)
+            | (U128, U128)
+            | (U256, U256)
+            | (Address, Address)
+            | (Signer, Signer) => true,
+            (Vector(a), Vector(b)) => a.equivalent(b),
+            (Struct(a), Struct(b)) => a.equivalent(b),
+            (Enum(a), Enum(b)) => a.equivalent(b),
+            _ => false,
+        }
+    }
 }
+
+impl<T: TypeLayout> PartialEq for MoveLayoutView<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl<T: TypeLayout> Eq for MoveLayoutView<'_, T> {}
 
 impl<T: TypeLayout> From<MoveLayoutView<'_, T>> for TypeTag {
     fn from(view: MoveLayoutView<'_, T>) -> TypeTag {
@@ -563,7 +712,25 @@ impl<'a, T: TypeLayout> MoveDatatypeLayout<'a, T> {
             }
         }
     }
+
+    /// Returns `true` iff `self` and `other` describe the same datatype,
+    /// regardless of pool ordering.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveDatatypeLayout<'_, U>) -> bool {
+        match (self, other) {
+            (MoveDatatypeLayout::Struct(a), MoveDatatypeLayout::Struct(b)) => a.equivalent(b),
+            (MoveDatatypeLayout::Enum(a), MoveDatatypeLayout::Enum(b)) => a.equivalent(b),
+            _ => false,
+        }
+    }
 }
+
+impl<T: TypeLayout> PartialEq for MoveDatatypeLayout<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl<T: TypeLayout> Eq for MoveDatatypeLayout<'_, T> {}
 
 // --- MoveFieldsLayout ---
 
@@ -616,7 +783,27 @@ impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
             )
         })
     }
+
+    /// Returns `true` iff the two field-lists describe the same fields
+    /// (same arity, pairwise-equivalent layouts, identical names),
+    /// regardless of pool ordering.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveFieldsLayout<'_, U>) -> bool {
+        if self.field_count() != other.field_count() {
+            return false;
+        }
+        self.fields()
+            .zip(other.fields())
+            .all(|((na, la), (nb, lb))| na == nb && la.equivalent(&lb))
+    }
 }
+
+impl<T: TypeLayout> PartialEq for MoveFieldsLayout<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl<T: TypeLayout> Eq for MoveFieldsLayout<'_, T> {}
 
 // --- MoveStructLayout ---
 
@@ -658,7 +845,21 @@ impl<'a, T: TypeLayout> MoveStructLayout<'a, T> {
     ) -> impl ExactSizeIterator<Item = (&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
         self.fields.fields()
     }
+
+    /// Returns `true` iff `self` and `other` describe the same struct type
+    /// (same type tag, same fields), regardless of pool ordering.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveStructLayout<'_, U>) -> bool {
+        self.type_ == other.type_ && self.fields.equivalent(&other.fields)
+    }
 }
+
+impl<T: TypeLayout> PartialEq for MoveStructLayout<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl<T: TypeLayout> Eq for MoveStructLayout<'_, T> {}
 
 impl<T: TypeLayout> fmt::Display for MoveStructLayout<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -744,7 +945,52 @@ impl<'a, T: TypeLayout> MoveEnumLayout<'a, T> {
         let pool = self.pool;
         self.variants.iter().map(move |v| variant_view(pool, v))
     }
+
+    /// Returns `true` iff `self` and `other` describe the same enum type
+    /// (same type tag, same variants with matching names/tags/fields),
+    /// regardless of pool ordering.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveEnumLayout<'_, U>) -> bool {
+        if self.type_ != other.type_ {
+            return false;
+        }
+        if self.variant_count() != other.variant_count() {
+            return false;
+        }
+        self.variants().zip(other.variants()).all(|pair| match pair {
+            (
+                VariantLayout::Unknown {
+                    name: na,
+                    tag: ta,
+                },
+                VariantLayout::Unknown {
+                    name: nb,
+                    tag: tb,
+                },
+            ) => na == nb && ta == tb,
+            (
+                VariantLayout::Known {
+                    name: na,
+                    tag: ta,
+                    fields: fa,
+                },
+                VariantLayout::Known {
+                    name: nb,
+                    tag: tb,
+                    fields: fb,
+                },
+            ) => na == nb && ta == tb && fa.equivalent(&fb),
+            _ => false,
+        })
+    }
 }
+
+impl<T: TypeLayout> PartialEq for MoveEnumLayout<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl<T: TypeLayout> Eq for MoveEnumLayout<'_, T> {}
 
 #[inline]
 fn variant_view<'a, T: TypeLayout>(
