@@ -1,14 +1,12 @@
 ---
 name: move-bytecode-comprehension
 description: >
-  Use when reading or reasoning about compiled Move bytecode, `sui move disassemble` output, or
-  decompiled Move source (from `move decompile`). Explains the Move binary format, exactly what
-  information survives compilation (and what is lost), and how to read disassembly and decompiled
-  output so conclusions about on-chain packages are sound. Trigger on "what does this package
-  do?", "read this .mv module", "interpret this disassembly", "is the decompiled source
-  trustworthy?", or whenever an analysis (audit or otherwise) needs to interpret bytecode
-  faithfully. Pair with `sui-and-move-tools` (to produce the output) and, for audits,
-  `sui-move-security-review` (to know what to look for).
+  Use when reading or reasoning about compiled Move bytecode, `sui move disassemble`
+  output, or decompiled Move source (from `move decompile`). Mental model for the binary
+  format, what survives compilation (and what's lost), and how to read each output
+  soundly. Trigger on "what does this package do?", "read this .mv module", "interpret
+  this disassembly", "is the decompiled source trustworthy?", or whenever an analysis
+  needs to interpret bytecode faithfully.
 ---
 
 # Move Bytecode Comprehension

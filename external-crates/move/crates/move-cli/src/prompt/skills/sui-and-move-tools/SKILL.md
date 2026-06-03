@@ -1,14 +1,12 @@
 ---
 name: sui-and-move-tools
 description: >
-  Tools for working with Move on Sui: the **`suiup`-managed `sui` CLI** for fetching on-chain
-  packages and disassembling their bytecode (`sui move disassemble`), and the **`move decompile`**
-  binary built from a pinned Sui clone for rendering bytecode as readable Move source. Use at
-  the START of any session that needs on-chain bytecode in hand — auditing a deployed package,
-  reading a release for comprehension, comparing versions, etc. Trigger on "fetch this
-  package's bytecode", "get me the .mv for package X", "disassemble this", "set up the move
-  decompiler", or whenever an upstream skill needs `.mv` files on disk. Self-contained and
-  shareable — depends only on public sources.
+  Use to set up the toolchain for working with on-chain Move on Sui: the `suiup`-managed
+  `sui` CLI (fetches packages, runs `sui move disassemble`) and the `move decompile` binary
+  (renders bytecode as readable Move source for human explanation). Run at the START of any
+  session that needs `.mv` files in hand — auditing a deployed package, reading a release,
+  comparing versions. Trigger on "fetch this package's bytecode", "get me the .mv for
+  package X", "disassemble this", or "set up the move decompiler".
 ---
 
 # Sui and Move Tools
