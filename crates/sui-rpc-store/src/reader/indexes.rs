@@ -274,12 +274,20 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
                     })?;
                 Ok((key.version, ObjectID::new(storage_id_bytes)))
             })
-            .skip_while(
-                move |entry: &Result<(u64, ObjectID), TypedStoreError>| match entry {
-                    Ok((v, _)) => cursor.map(|c| *v == c).unwrap_or(false),
-                    Err(_) => false,
-                },
-            );
+            // The cursor passed in by `list_package_versions` is
+            // the version of the first row that should appear on
+            // the next page — the previous page popped its
+            // `page_size + 1`th row to derive this token, so we
+            // want to resume *at* it (inclusive). `filter` (not
+            // `skip_while`) is correct here because the
+            // underlying iterator yields versions in ascending
+            // order but `skip_while` would only suppress a leading
+            // run that matches, leaving every earlier row in the
+            // output.
+            .filter(move |entry: &Result<(u64, ObjectID), TypedStoreError>| match entry {
+                Ok((v, _)) => cursor.map(|c| *v >= c).unwrap_or(true),
+                Err(_) => true,
+            });
         Ok(Box::new(mapped))
     }
 
