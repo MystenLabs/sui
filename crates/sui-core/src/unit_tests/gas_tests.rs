@@ -384,6 +384,47 @@ async fn test_oog_computation_oog_storage_final_one_coin() -> SuiResult {
     .await
 }
 
+// Regression test for the full-budget OOG fallback charging the budget exactly.
+//
+// When computation OOGs and even input-only storage doesn't fit, the pipeline
+// forces `computation_cost = gas_budget` (`force_computation_cost_to_budget`).
+// A previous version derived the cost from the meter as
+// `(gas_budget / user_gas_price) * effective_gas_price`, which floors away
+// `gas_budget % user_gas_price` MIST and undercharged the sender. Here the
+// budget is deliberately NOT a multiple of the gas price, so any reintroduction
+// of that integer-division floor makes `computation_cost != BUDGET` and fails.
+#[tokio::test]
+async fn test_oog_full_budget_charge_exact_when_budget_indivisible_by_price() -> SuiResult {
+    const GAS_PRICE: u64 = 1000;
+    const MAX_UNIT_BUDGET: u64 = 5_000_000;
+    // Add a remainder so BUDGET % GAS_PRICE == 777 (not a clean multiple).
+    const BUDGET: u64 = MAX_UNIT_BUDGET * GAS_PRICE + 777;
+    let (sender, sender_key) = get_key_pair();
+    check_oog_transaction(
+        sender,
+        sender_key,
+        "loopy",
+        vec![],
+        BUDGET,
+        GAS_PRICE,
+        1,
+        |summary, initial_value, final_value| {
+            // Deepest fallback: storage is zeroed, computation absorbs the full budget.
+            assert_eq!(summary.storage_cost, 0);
+            assert_eq!(summary.storage_rebate, 0);
+            assert_eq!(summary.non_refundable_storage_fee, 0);
+            // The exact-charge guarantee: the full budget is charged, with no MIST
+            // lost to integer-division flooring of (budget / price) * price.
+            assert_eq!(summary.computation_cost, BUDGET);
+            let gas_used = summary.net_gas_usage() as u64;
+            assert_eq!(gas_used, BUDGET);
+            assert_eq!(initial_value - gas_used, final_value);
+            Ok(())
+        },
+    )
+    .await
+}
+
 // - computation ok, OOG for storage, minimal storage ok
 #[tokio::test]
 async fn test_computation_ok_oog_storage_minimal_ok_one_coin() -> SuiResult {
