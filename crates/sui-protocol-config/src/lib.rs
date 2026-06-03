@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 126;
+const MAX_PROTOCOL_VERSION: u64 = 127;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -352,9 +352,13 @@ const MAINNET_USDB: &str =
 //              transfer per stable.
 // Version 125: Enable granular_post_execution_checks.
 //              Enable timestamp_based_epoch_close on testnet.
-// Version 126: Enable early_exit_on_iffw (gates the gas-underflow fix
-//              shipped to mainnet out-of-band in #26816).
+// Version 126: Enable early_exit_on_iffw (full executor short-circuit for IFFW
+//              transactions, superseding the pruning hotfix shipped to mainnet
+//              out-of-band in #26816).
 //              Enable always_advance_dkg_to_resolution.
+// Version 127: Step-by-step gas-charging pipeline (gas_model v15). Replaces the
+//              monolithic charge_gas with discrete steps: round_computation /
+//              finalize_storage / charge.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5002,6 +5006,9 @@ impl ProtocolConfig {
                 126 => {
                     cfg.feature_flags.early_exit_on_iffw = true;
                     cfg.feature_flags.always_advance_dkg_to_resolution = true;
+                }
+                127 => {
+                    cfg.gas_model_version = Some(15);
                 }
                 // Use this template when making changes:
                 //
