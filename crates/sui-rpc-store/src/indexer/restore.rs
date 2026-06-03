@@ -25,20 +25,39 @@
 
 use std::sync::Arc;
 
+use anyhow::Context as _;
+use sui_consistent_store::ChainId;
 use sui_consistent_store::Db;
+use sui_consistent_store::FrameworkSchema;
+use sui_consistent_store::PipelineTaskKey;
+use sui_consistent_store::Schema as _;
+use sui_consistent_store::Watermark;
 use sui_consistent_store::restore::RestoreDriver;
 use sui_consistent_store::restore::RestoreDriverConfig;
 use sui_consistent_store::restore::RestoreSource;
 use sui_futures::service::Service;
+use sui_indexer_alt_framework::pipeline::Processor;
 
 use crate::RestoreLayer;
 use crate::RpcStoreSchema;
 use crate::indexer::balance::Balance;
+use crate::indexer::checkpoint_contents::CheckpointContents;
+use crate::indexer::checkpoint_seq_by_digest::CheckpointSeqByDigest;
+use crate::indexer::checkpoint_summary::CheckpointSummary;
+use crate::indexer::effects::Effects;
+use crate::indexer::epochs::Epochs;
+use crate::indexer::event_bitmap::EventBitmap;
+use crate::indexer::events::Events;
 use crate::indexer::live_objects::LiveObjects;
 use crate::indexer::object_by_owner::ObjectByOwner;
 use crate::indexer::object_by_type::ObjectByType;
 use crate::indexer::objects::Objects;
 use crate::indexer::package_versions::PackageVersions;
+use crate::indexer::transaction_bitmap::TransactionBitmap;
+use crate::indexer::transactions::Transactions;
+use crate::indexer::tx_metadata_by_seq::TxMetadataBySeq;
+use crate::indexer::tx_seq_by_digest::TxSeqByDigest;
+use crate::schema::pruning_watermark;
 
 /// Register every [`Restore`]-implementing pipeline opted in by
 /// `layer` on a [`RestoreDriver`] bound to `db` / `schema` and
@@ -68,6 +87,122 @@ pub fn restore_indexes<Src: RestoreSource>(
         driver.register(Objects)?;
     }
     driver.run()
+}
+
+/// After [`restore_indexes`] returns, prime the framework state of
+/// every pipeline that the restore did *not* cover so tip indexing
+/// resumes from `target_watermark.checkpoint_hi_inclusive + 1`
+/// across the board instead of replaying from genesis for the
+/// raw-chain-data and bitmap pipelines.
+///
+/// Specifically, for every pipeline not in `layer`'s restored
+/// set, writes:
+///
+/// - `__watermark = target_watermark` — the framework's
+///   tip-resume reads this and starts at
+///   `checkpoint_hi_inclusive + 1`.
+/// - `__chain_id = target_chain_id` — pins the pipeline to the
+///   chain the snapshot was taken from, matching what
+///   [`restore_indexes`]'s finalize step already wrote for the
+///   restored pipelines.
+///
+/// Also writes the singleton `pruning_watermark` so
+/// `available_range` queries and the bitmap CFs' compaction
+/// filters reflect that data only starts at the post-restore
+/// floor (`tx_seq_lo = target_watermark.tx_hi`,
+/// `checkpoint_lo = checkpoint_hi_inclusive + 1`).
+///
+/// Idempotent: re-running after a successful restore overwrites
+/// the unrestored pipelines' watermarks with the same values and
+/// re-writes the pruning row.
+pub fn floor_unrestored_pipelines(
+    db: &Db,
+    target_watermark: Watermark,
+    target_chain_id: ChainId,
+    layer: &RestoreLayer,
+) -> anyhow::Result<()> {
+    let restored: &[&'static str] = if layer.objects {
+        &[
+            LiveObjects::NAME,
+            ObjectByOwner::NAME,
+            ObjectByType::NAME,
+            Balance::NAME,
+            PackageVersions::NAME,
+            Objects::NAME,
+        ]
+    } else {
+        &[
+            LiveObjects::NAME,
+            ObjectByOwner::NAME,
+            ObjectByType::NAME,
+            Balance::NAME,
+            PackageVersions::NAME,
+        ]
+    };
+
+    // Every rpc-store pipeline. Kept exhaustive so any new
+    // pipeline added to `PipelineLayer` needs an explicit
+    // decision here about whether it's a restore-time pipeline
+    // or a tip-only one.
+    let all: &[&'static str] = &[
+        Epochs::NAME,
+        CheckpointSummary::NAME,
+        CheckpointContents::NAME,
+        CheckpointSeqByDigest::NAME,
+        Transactions::NAME,
+        TxSeqByDigest::NAME,
+        TxMetadataBySeq::NAME,
+        Effects::NAME,
+        Events::NAME,
+        Objects::NAME,
+        LiveObjects::NAME,
+        ObjectByOwner::NAME,
+        ObjectByType::NAME,
+        Balance::NAME,
+        PackageVersions::NAME,
+        TransactionBitmap::NAME,
+        EventBitmap::NAME,
+    ];
+
+    // Use the owned `FrameworkSchema` over `Db` (rather than the
+    // borrowed view from `Db::framework`) so the `DbMap`s line up
+    // with `Batch::put`'s `R = Db` expectation.
+    let framework = FrameworkSchema::new(db.clone());
+    let mut batch = db.batch();
+    for name in all.iter().filter(|n| !restored.contains(n)) {
+        let key = PipelineTaskKey::new(*name);
+        batch
+            .put(&framework.watermarks, &key, &target_watermark)
+            .with_context(|| format!("stage __watermark for {name:?}"))?;
+        batch
+            .put(&framework.chain_ids, &key, &target_chain_id)
+            .with_context(|| format!("stage __chain_id for {name:?}"))?;
+    }
+
+    // Resolve the rpc-store schema handle once for the
+    // pruning-watermark CF. The schema is cheap to re-bind to a
+    // live `Db` and gives the typed `store` helper plus the
+    // pruning-floor setter the bitmap CFs depend on.
+    let schema =
+        Arc::new(RpcStoreSchema::open(db).context("re-open RpcStoreSchema for pruning watermark")?);
+    let (k, v) = pruning_watermark::store(&pruning_watermark::Watermarks {
+        tx_seq_lo: target_watermark.tx_hi,
+        checkpoint_lo: target_watermark.checkpoint_hi_inclusive.saturating_add(1),
+    });
+    batch
+        .put(&schema.pruning_watermark, &k, &v)
+        .context("stage pruning_watermark row")?;
+
+    batch.commit().context("commit floor batch")?;
+
+    // Mirror the on-disk floor into the process-wide atomic so any
+    // compaction-filter clones started in this process see the
+    // updated value immediately. A subsequent `Indexer::from_store`
+    // also calls `refresh_pruning_atomics` so cross-process boots
+    // converge.
+    schema.set_pruning_floor(target_watermark.tx_hi);
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -259,6 +394,108 @@ mod tests {
             db.framework().restore.get(&objects_key).unwrap().is_none(),
             "indexes_only should leave the objects pipeline unregistered",
         );
+    }
+
+    /// `floor_unrestored_pipelines` writes a `__watermark` /
+    /// `__chain_id` row for every pipeline outside the restored
+    /// set and stamps the singleton `pruning_watermark` so the
+    /// available range tracks the post-restore floor.
+    #[test]
+    fn floor_unrestored_pipelines_writes_watermarks_for_tip_only_pipelines() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, _schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+
+        let chain_id = ChainId([42u8; 32]);
+        let target = Watermark {
+            epoch_hi_inclusive: 7,
+            checkpoint_hi_inclusive: 1_000,
+            tx_hi: 5_000,
+            timestamp_ms_hi_inclusive: 1_700_000_000_000,
+        };
+
+        floor_unrestored_pipelines(&db, target, chain_id, &RestoreLayer::all()).unwrap();
+
+        // Sample raw-chain-data / bitmap pipelines that the
+        // formal-snapshot path doesn't cover — every one of them
+        // should be primed with the target watermark + chain id.
+        for name in [
+            Epochs::NAME,
+            CheckpointSummary::NAME,
+            CheckpointContents::NAME,
+            CheckpointSeqByDigest::NAME,
+            Transactions::NAME,
+            TxSeqByDigest::NAME,
+            TxMetadataBySeq::NAME,
+            Effects::NAME,
+            Events::NAME,
+            TransactionBitmap::NAME,
+            EventBitmap::NAME,
+        ] {
+            let key = PipelineTaskKey::new(name);
+            assert_eq!(
+                db.framework().watermarks.get(&key).unwrap(),
+                Some(target),
+                "{name} should have the post-restore watermark",
+            );
+            assert_eq!(
+                db.framework().chain_ids.get(&key).unwrap(),
+                Some(chain_id),
+                "{name} should pin the restored chain id",
+            );
+        }
+
+        // Restored pipelines are left to whatever the restore
+        // driver wrote (here: nothing, since we didn't actually
+        // run a restore in this test). The helper must not
+        // clobber them.
+        for name in [
+            LiveObjects::NAME,
+            ObjectByOwner::NAME,
+            ObjectByType::NAME,
+            Balance::NAME,
+            PackageVersions::NAME,
+            Objects::NAME,
+        ] {
+            let key = PipelineTaskKey::new(name);
+            assert!(
+                db.framework().watermarks.get(&key).unwrap().is_none(),
+                "{name} watermark should be untouched by the floor helper",
+            );
+            assert!(
+                db.framework().chain_ids.get(&key).unwrap().is_none(),
+                "{name} chain id should be untouched by the floor helper",
+            );
+        }
+
+        // Pruning singleton reflects the post-restore floor: tx
+        // ids and checkpoint sequences below this row aren't
+        // available in the new database.
+        let schema = RpcStoreSchema::open(&db).unwrap();
+        assert_eq!(
+            schema.get_pruning_watermarks().unwrap(),
+            Some(crate::schema::pruning_watermark::Watermarks {
+                tx_seq_lo: target.tx_hi,
+                checkpoint_lo: target.checkpoint_hi_inclusive + 1,
+            }),
+        );
+    }
+
+    /// With `RestoreLayer::indexes_only`, the `objects` pipeline
+    /// is *not* in the restored set, so the floor helper primes
+    /// it the same way it does the raw-chain-data pipelines.
+    #[test]
+    fn floor_unrestored_pipelines_includes_objects_when_layer_skips_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, _schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+
+        let chain_id = ChainId([11u8; 32]);
+        let target = Watermark::for_checkpoint(42);
+
+        floor_unrestored_pipelines(&db, target, chain_id, &RestoreLayer::indexes_only()).unwrap();
+
+        let key = PipelineTaskKey::new(Objects::NAME);
+        assert_eq!(db.framework().watermarks.get(&key).unwrap(), Some(target),);
+        assert_eq!(db.framework().chain_ids.get(&key).unwrap(), Some(chain_id));
     }
 
     /// `RestoreLayer::all` additionally registers the `objects`
