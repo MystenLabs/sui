@@ -1,93 +1,61 @@
-# Fetch, disassemble (analyze), and decompile (explain)
+# Fetch bytecode + produce readable views for a deployed Sui package
 
-Goal: produce the **analysis substrate** (the disassembly of every module) and the matching
-**explanation layer** (decompiled `.move` of every module) for a target package.
-Assumes `setup.md` is done: `$MOVE_BIN` points at the freshly-built `move` binary in
-`$WORK_DIR`, and `sui` resolves to the `suiup`-managed CLI (provenance-checked in `setup.md`
-step 1). Every `sui` invocation below uses that same provenance-checked binary — no other.
+Produces `.mv` (raw bytecode), `.asm` (disassembly), and optionally `.move` (decompiled
+source) files for every module in the package.
 
-> Roles, restated: **`.asm` is the analysis source of truth (1:1 with executed bytecode).**
-> **`.move` (decompiled) is a heuristic reconstruction used only to render confirmed findings
-> for human readers.** Do not derive findings from `.move`.
-
-## 1. Get the `.mv` modules
-
-### Route A — fetch on-chain bytecode by package id
-
-Make sure the CLI is pointed at the right network first (`sui client active-env`; switch with
-`sui client switch --env mainnet` etc. — the package id is network-specific).
+## 1. Choose network + target
 
 ```sh
 PKG=0x<package_id>
-OUT="$WORK_DIR/target/$PKG"
-mkdir -p "$OUT/mv"
-
-# Fetch the package object as JSON. Package bytecode lives in:
-#   .content.Package.module_map  ->  { "<module_name>": [<u8 bytes...>], ... }
-#   (the byte array starts with the Move magic 161,28,235,11 = 0xA11CEB0B)
-sui client object "$PKG" --json > "$OUT/package.json"
-
-# Write each module's bytes to a .mv file (robust int-array -> binary).
-python3 - "$OUT/package.json" "$OUT/mv" <<'PY'
-import json, os, sys
-data = json.load(open(sys.argv[1])); outdir = sys.argv[2]
-os.makedirs(outdir, exist_ok=True)
-mods = data["content"]["Package"]["module_map"]
-for name, byts in mods.items():
-    open(os.path.join(outdir, name + ".mv"), "wb").write(bytes(byts))
-print(f"wrote {len(mods)} modules to {outdir}")
-PY
+NETWORK=mainnet                 # or testnet, devnet
+GQL="https://graphql.${NETWORK}.sui.io/graphql"
+OUT="./.move-work/$PKG"
+mkdir -p "$OUT/mv" "$OUT/asm"
 ```
 
-If a different `sui` version emits base64 strings instead of int arrays under `module_map`, swap
-the inner write for `base64.b64decode(byts)`. Verify a file is real bytecode:
-`xxd "$OUT/mv/"*.mv | head -1` should begin with `a11c eb0b`.
-
-### Route B — package supplied directly
-
-If given `.mv` files or a build output dir, point at it directly — e.g. a compiled package's
-`build/<pkg>/bytecode_modules/` already contains `.mv` files. Set `OUT/mv` to that directory (or
-copy the files in). No fetch needed.
-
-## 2. Disassemble every module — THIS is the analysis input
+## 2. One GraphQL call → bytes + disassembly for every module
 
 ```sh
-mkdir -p "$OUT/asm"
-for mv in "$OUT/mv/"*.mv; do
-  base=$(basename "$mv" .mv)
-  sui move disassemble "$mv" > "$OUT/asm/$base.asm"
+curl -s "$GQL" -H 'Content-Type: application/json' \
+  -d "{\"query\":\"{ object(address:\\\"$PKG\\\") { asMovePackage { modules { nodes { name bytes disassembly } } } } }\"}" \
+  > "$OUT/package.json"
+jq '.errors // "ok"' "$OUT/package.json"   # sanity-check
+```
+
+The response, under `data.object.asMovePackage.modules.nodes[]`, has one entry per module
+with `{name, bytes, disassembly}`:
+
+- `bytes` — Base64-encoded raw bytecode (decoded into `.mv` for the optional decompile step)
+- `disassembly` — text of the module's disassembly (byte-for-byte equivalent to what
+  `move disassemble <file>.mv` would produce locally)
+
+## 3. Write per-module .mv + .asm files
+
+```sh
+jq -c '.data.object.asMovePackage.modules.nodes[]' "$OUT/package.json" | while read -r mod; do
+  name=$(jq -r '.name' <<<"$mod")
+  jq -r '.bytes'       <<<"$mod" | base64 -d > "$OUT/mv/$name.mv"
+  jq -r '.disassembly' <<<"$mod"               > "$OUT/asm/$name.asm"
 done
-ls "$OUT/asm/"
+
+# Magic-byte sanity (each .mv should start with a11ceb0b)
+for f in "$OUT/mv/"*.mv; do
+  head -c 4 "$f" | xxd -p | grep -q '^a11ceb0b' || echo "WARN: $f missing magic"
+done
 ```
 
-`$OUT/asm/*.asm` is what downstream skills read. Reason over the assembly: faithful opcodes,
-exact `Call` symbols (e.g. `Call transfer::transfer<T>` vs `Call transfer::public_transfer<T>`),
-`CastU*` instructions, abort code values, ability sets on struct headers, visibility/`entry`
-on function headers. **Do not switch surfaces** mid-analysis. (For audits, the consuming skill
-is `sui-move-security-review`.)
-
-## 3. Decompile every module — for finding-explanation only
+## 4. (Optional) Decompile for the human-explanation layer
 
 ```sh
-"$MOVE_BIN" decompile --input "$OUT/mv" --output "$OUT/decompiled"
-# Recurses the input dir for *.mv; deserializes each module; tolerates missing dependencies
-# (allow_missing_dependencies = true), so a single package decompiles without its deps.
-# Output: $OUT/decompiled/<package>/<module>.move
-ls -R "$OUT/decompiled"
+move decompile --input "$OUT/mv" --output "$OUT/decompiled"
 ```
 
-The decompiled `.move` is reached for **only after a finding is confirmed on the assembly**, to
-render the matching construct as readable Move alongside the finding ("Human view" in the report).
-If the decompiled view disagrees with the assembly, the **assembly wins** — that disagreement is
-itself information about decompiler imprecision, not about the package.
+The decompiled `.move` is a heuristic reconstruction; see
+`move-bytecode-comprehension/reading-decompiled.md` for the artifacts to recognize when
+presenting findings to humans.
 
-Read `move-bytecode-comprehension/reading-decompiled.md` for the decompiler's known artifacts (e.g.
-constants renamed `C0/C1…`, empty structs gain `dummy_field: bool`, locals invented, macros
-expanded) so you can present without misreading them.
+## Output paths
 
-## Hand-off
-
-Pass along to the consumer: the **assembly dir** (`$OUT/asm/`) as the analysis substrate, the
-matched **decompiled dir** (`$OUT/decompiled/`) for confirmed-result rendering, the module
-list, the network + package id (or file provenance), and `SUI_REF` — so the result set is
-reproducible.
+- `$OUT/mv/<module>.mv`             — raw bytecode
+- `$OUT/asm/<module>.asm`           — disassembly (analysis substrate)
+- `$OUT/decompiled/<package>/<module>.move`  — decompiled source (optional)
