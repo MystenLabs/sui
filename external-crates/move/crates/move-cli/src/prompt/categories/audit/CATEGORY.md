@@ -19,9 +19,10 @@ Read each in order. Each skill bundle is **two-tier** — a SKILL.md that routes
 and a set of reference files where the actual content lives. Enumerate (`--list`) and read
 every reference file in each bundle before walking its rules.
 
-1. **`sui-and-move-tools`** — set up the toolchain: `suiup`-managed `sui` for fetching
-   on-chain packages and disassembling them, plus a freshly-built `move decompile` binary
-   for the human-explanation layer.
+1. **`sui-and-move-tools`** — get the package's bytecode + readable views: one Sui GraphQL
+   call returns every module's bytes + disassembly (the analysis source of truth), and
+   `move decompile` (already on the system, running `move prompt`) produces the optional
+   `.move` view (the human-explanation layer).
 
    ```sh
    move prompt skill sui-and-move-tools
