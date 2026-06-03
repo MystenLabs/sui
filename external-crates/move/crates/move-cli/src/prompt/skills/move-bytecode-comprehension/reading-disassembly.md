@@ -10,46 +10,13 @@ Disassembly is faithful but low-level: a stack machine with numbered locals and 
 sui move disassemble path/to/module.mv
 ```
 
-## Worked example (real output)
-
-```
-// Move bytecode v6
-module 5c00..a3d8.nft_claim {
-use 0000..0001::string;
-use 0000..0002::transfer;
-
-struct ClaimCap has store, key {
-	id: UID,
-	claimed: VecSet<address>
-}
-
-struct NFT_CLAIM has drop {
-	dummy_field: bool
-}
-
-init(Arg0: NFT_CLAIM, Arg1: &mut TxContext) {
-L2:	loc0: Display<DEEPClaimNFT>
-B0:
-	0: LdConst[0](vector<u8>: "nam..)
-	1: Call string::utf8(vector<u8>): String
-	...
-	18: Call package::claim<NFT_CLAIM>(NFT_CLAIM, &mut TxContext): Publisher
-	38: CopyLoc[1](Arg1: &mut TxContext)
-	39: Call object::new(&mut TxContext): UID
-	40: Call vec_set::empty<address>(): VecSet<address>
-	41: Pack[1](ClaimCap)
-	44: Call tx_context::sender(&TxContext): address
-	45: Call transfer::transfer<ClaimCap>(ClaimCap, address)
-	46: Ret
-}
-```
-
 ## How to read it
 
 - **Header:** `// Move bytecode vN` (version) and `module <addr>.<name> { ... }`. `use` lines are
   dependencies, fully address-qualified.
-- **Structs:** name + `has <abilities>` + fields. Note `NFT_CLAIM has drop { dummy_field: bool }`
-  — an empty source struct (the OTW) is represented with a synthetic `dummy_field: bool`.
+- **Structs:** name + `has <abilities>` + fields. A fields-less source struct (e.g. an OTW
+  named `MODULE_NAME`) is represented with a synthetic `dummy_field: bool` — expected, not
+  a bug.
 - **Functions:** signature line shows `name(Arg0: T, Arg1: U): Ret`, with `public` / `entry`
   prefixes when present (this `init` is the special initializer, shown without them). Parameters
   are `Arg0, Arg1, ...`; declared locals are `loc0, loc1, ...` with `Ln:` slot labels — **these
@@ -80,9 +47,9 @@ B0:
 
 ## Audit moves from disassembly
 
-- **Transfer variant:** `Call transfer::transfer<ClaimCap>` (module-internal, no `store` needed) vs
-  `transfer::public_transfer<T>` (needs `store`, callable anywhere) — the exact symbol disambiguates
-  SM-B2 / soulbound questions. In the example, `ClaimCap` is `transfer`'d to `tx_context::sender`.
+- **Transfer variant:** `Call transfer::transfer<T>` (module-internal, no `store` needed) vs
+  `Call transfer::public_transfer<T>` (needs `store`, callable anywhere) — the exact symbol
+  disambiguates SM-B2 / soulbound questions.
 - **Abort codes:** find the `LdConst`/`LdU64` immediately before an `Abort`; that integer is the
   abort code (the source name is gone — reason from the code + the checked condition).
 - **Casts:** any `CastU*` is a candidate SM-F1 truncation; check the source/target width and the
