@@ -18,22 +18,26 @@
 //! object in that chunk, so resuming with `Some(c)` starts the
 //! next iteration immediately after that id.
 //!
-//! # Consistency caveat
+//! # Snapshot consistency
 //!
-//! `range_iter_live_object_set` does not take a RocksDB snapshot,
-//! so this source observes whatever live state the perpetual
-//! store contains during iteration. If the validator continues
-//! to execute transactions while restore runs, later shards (or
-//! later chunks within a shard) may observe newer object
-//! versions than earlier ones. Tip indexing then resumes at
-//! `target_checkpoint + 1`; for pipelines whose
-//! [`Restore::restore`](sui_consistent_store::Restore::restore)
-//! is idempotent (everything in `sui-rpc-store` except
-//! `balance`), re-application via tip reads is harmless. The
-//! `balance` pipeline's merge semantics mean the validator must
-//! quiesce (or the caller must take an explicit snapshot)
-//! before invoking the restore for fully consistent results;
-//! that snapshot mechanism is left as follow-up work.
+//! Each shard's stream opens exactly one RocksDB iterator and
+//! drives it to completion from a single `spawn_blocking` task,
+//! pushing chunks back over a tokio mpsc. RocksDB iterators
+//! created without an explicit snapshot implicitly pin one at
+//! construction time, so a shard sees a single point-in-time
+//! view for its full run — including the merge-based `balance`
+//! pipeline, which is safe against concurrent execution.
+//!
+//! Different shards take their snapshots at the moments their
+//! `spawn_blocking` tasks start, so cross-shard skew can still
+//! exist if the validator commits between shard launches. This
+//! does not affect any of the `sui-rpc-store` pipelines because
+//! every object lives in exactly one shard.
+//!
+//! A side-effect of holding open one iterator per shard for the
+//! full restore is that the SSTs it references stay pinned and
+//! cannot compact away for the duration. That is acceptable for
+//! a one-shot bootstrap.
 
 use std::sync::Arc;
 
@@ -46,6 +50,8 @@ use sui_consistent_store::restore::RestoreChunk;
 use sui_consistent_store::restore::RestoreSource;
 use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::authority::authority_store_tables::LiveObject;
@@ -142,7 +148,7 @@ impl RestoreSource for PerpetualStoreRestoreSource {
     ) -> BoxStream<'_, anyhow::Result<RestoreChunk>> {
         let (shard_start, shard_end) = shard_range(shard_id);
 
-        let initial = match cursor {
+        let start_id = match cursor {
             None => Some(shard_start),
             Some(bytes) => match ObjectID::from_bytes(&bytes[..]) {
                 Ok(id) => next_id(id).filter(|n| *n <= shard_end),
@@ -155,66 +161,77 @@ impl RestoreSource for PerpetualStoreRestoreSource {
             },
         };
 
+        let Some(start_id) = start_id else {
+            return stream::empty().boxed();
+        };
+
+        // Bounded mpsc applies backpressure on the iterator
+        // task so it pauses when the driver hasn't committed
+        // the previous chunk yet.
+        let (tx, rx) = mpsc::channel::<anyhow::Result<RestoreChunk>>(2);
         let perpetual = self.perpetual.clone();
         let chunk_size = self.chunk_size;
 
-        stream::unfold(initial, move |state| {
-            let perpetual = perpetual.clone();
-            async move {
-                let start_id = state?;
-                let result = tokio::task::spawn_blocking(move || {
-                    fetch_chunk(&perpetual, start_id, shard_end, chunk_size)
-                })
-                .await;
+        tokio::task::spawn_blocking(move || {
+            iterate_shard(perpetual, start_id, shard_end, chunk_size, tx);
+        });
 
-                match result {
-                    Ok(Ok(Some((objects, last)))) => {
-                        let cursor = Bytes::copy_from_slice(&last.into_bytes());
-                        let next = next_id(last).filter(|n| *n <= shard_end);
-                        Some((Ok(RestoreChunk { objects, cursor }), next))
-                    }
-                    Ok(Ok(None)) => None,
-                    Ok(Err(e)) => Some((Err(e), None)),
-                    Err(e) => Some((Err(anyhow::anyhow!("blocking task panicked: {e}")), None)),
-                }
-            }
-        })
-        .boxed()
+        ReceiverStream::new(rx).boxed()
     }
 }
 
-/// Read up to `chunk_size` `LiveObject::Normal` rows from the
-/// shard range starting at `start_id`. Returns the collected
-/// objects and the last object's id, or `None` if no objects
-/// remain. Skips wrapped entries defensively even though
-/// `include_wrapped_object` is `false`.
-fn fetch_chunk(
-    perpetual: &AuthorityPerpetualTables,
+/// Drive one shard's iteration end-to-end in a single
+/// `spawn_blocking` task.
+///
+/// Opens exactly one `range_iter_live_object_set` and pushes
+/// chunks of up to `chunk_size` `LiveObject::Normal` rows over
+/// `tx`. The iterator's implicit RocksDB snapshot is held for
+/// the lifetime of this function, so the whole shard observes
+/// a single point-in-time view of the perpetual store.
+///
+/// Returns early without sending anything if the receiver is
+/// dropped (e.g. the driver was cancelled).
+fn iterate_shard(
+    perpetual: Arc<AuthorityPerpetualTables>,
     start_id: ObjectID,
     shard_end: ObjectID,
     chunk_size: usize,
-) -> anyhow::Result<Option<(Vec<Object>, ObjectID)>> {
-    let mut objects = Vec::with_capacity(chunk_size.min(1024));
-    let mut last_id: Option<ObjectID> = None;
+    tx: mpsc::Sender<anyhow::Result<RestoreChunk>>,
+) {
     let iter = perpetual.range_iter_live_object_set(Some(start_id), Some(shard_end), false);
+    let mut buffer: Vec<Object> = Vec::with_capacity(chunk_size.min(1024));
+
     for live in iter {
-        if let LiveObject::Normal(obj) = live {
-            last_id = Some(obj.id());
-            objects.push(obj);
-            if objects.len() >= chunk_size {
-                break;
+        let LiveObject::Normal(obj) = live else {
+            continue;
+        };
+        buffer.push(obj);
+        if buffer.len() >= chunk_size {
+            let chunk = std::mem::replace(&mut buffer, Vec::with_capacity(chunk_size.min(1024)));
+            if send_chunk(&tx, chunk).is_err() {
+                return;
             }
         }
     }
 
-    if objects.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some((
-            objects,
-            last_id.expect("non-empty chunk has last_id"),
-        )))
+    if !buffer.is_empty() {
+        let _ = send_chunk(&tx, buffer);
     }
+}
+
+/// Wrap `objects` in a [`RestoreChunk`] (cursor = last object's
+/// id) and blocking-send it. Returns `Err(())` if the receiver
+/// is closed so the caller can stop iterating.
+fn send_chunk(
+    tx: &mpsc::Sender<anyhow::Result<RestoreChunk>>,
+    objects: Vec<Object>,
+) -> Result<(), ()> {
+    let last_id = objects.last().expect("non-empty chunk").id();
+    let chunk = RestoreChunk {
+        objects,
+        cursor: Bytes::copy_from_slice(&last_id.into_bytes()),
+    };
+    tx.blocking_send(Ok(chunk)).map_err(|_| ())
 }
 
 #[cfg(test)]
