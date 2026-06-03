@@ -1,0 +1,36 @@
+[package]
+name = "sui-rpc-node"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[[bin]]
+name = "sui-rpc-node"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+axum-server = { workspace = true, features = ["tls-rustls-no-provider"] }
+clap.workspace = true
+const-str.workspace = true
+futures.workspace = true
+prometheus.workspace = true
+serde.workspace = true
+telemetry-subscribers.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+
+bin-version.workspace = true
+sui-config.workspace = true
+sui-consistent-store.workspace = true
+sui-default-config.workspace = true
+sui-futures.workspace = true
+sui-indexer-alt-framework = { workspace = true, default-features = false }
+sui-indexer-alt-metrics.workspace = true
+sui-rpc-api.workspace = true
+sui-rpc-store.workspace = true
+sui-types.workspace = true

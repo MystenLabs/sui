@@ -16717,6 +16717,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-rpc-node"
+version = "1.74.0"
+dependencies = [
+ "anyhow",
+ "axum 0.8.3",
+ "axum-server",
+ "bin-version",
+ "clap",
+ "const-str",
+ "futures",
+ "prometheus",
+ "serde",
+ "sui-config",
+ "sui-consistent-store",
+ "sui-default-config",
+ "sui-futures",
+ "sui-indexer-alt-framework",
+ "sui-indexer-alt-metrics",
+ "sui-rpc-api",
+ "sui-rpc-store",
+ "sui-types",
+ "telemetry-subscribers",
+ "tokio",
+ "toml 0.7.4",
+ "tracing",
+]
+
+[[package]]
 name = "sui-rpc-resolver"
 version = "1.74.0"
 dependencies = [
