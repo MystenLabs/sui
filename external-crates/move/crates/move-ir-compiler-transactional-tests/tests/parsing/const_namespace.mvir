@@ -1,0 +1,14 @@
+//# print-bytecode
+// `const::C` lives in its own namespace: the name `C` is simultaneously a
+// constant, a struct, and a local variable without conflict.
+mvir 0x42::M {
+    const C: u64 = 99u64;
+    public struct C { f: u64 }
+    public fun f(): u64 {
+        let C: u64;
+    label b0:
+        C = 1u64;
+        // bare `C` is the local; `const::C` is the constant
+        return move(C) + const::C;
+    }
+}

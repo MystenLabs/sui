@@ -2051,6 +2051,8 @@ fn parse_constant_decl(
 // Each value is self-describing, so the parsed `MoveValue` is independent of the constant's
 // declared type.
 fn parse_constant_value(tokens: &mut Lexer) -> Result<MoveValue, ParseError<Loc, anyhow::Error>> {
+    // `vector(elem, ...)` — element values are self-describing; there is no
+    // element-type annotation.
     if tokens.peek() == Tok::NameValue && tokens.content() == "vector" {
         tokens.advance()?; // consume `vector`
         consume_token(tokens, Tok::LParen)?;
@@ -2058,76 +2060,39 @@ fn parse_constant_value(tokens: &mut Lexer) -> Result<MoveValue, ParseError<Loc,
         consume_token(tokens, Tok::RParen)?;
         return Ok(MoveValue::Vector(elems));
     }
+    // `@addr` — named or literal address, mirroring address expressions.
+    if tokens.peek() == Tok::At {
+        tokens.advance()?;
+        return Ok(MoveValue::Address(parse_account_address(tokens)?));
+    }
+    // A bare integer (no suffix) lexes as `U64Value`; constant values must be
+    // self-describing, so require an explicit suffix.
+    if tokens.peek() == Tok::U64Value && !tokens.content().ends_with("u64") {
+        return Err(ParseError::InvalidToken {
+            location: current_token_loc(tokens),
+            message: "integer constant value requires a type suffix (e.g. 7u64)".to_string(),
+        });
+    }
+    // Reuse the expression literal parser for scalars and byte arrays so the
+    // numeric parsing (and its overflow behavior) is shared with expressions.
+    let val = parse_copyable_val(tokens)?;
+    Ok(copyable_val_to_move_value(val.value))
+}
 
-    let value = match tokens.peek() {
-        Tok::True => {
-            tokens.advance()?;
-            MoveValue::Bool(true)
+fn copyable_val_to_move_value(val: CopyableVal_) -> MoveValue {
+    match val {
+        CopyableVal_::Address(a) => MoveValue::Address(a),
+        CopyableVal_::U8(i) => MoveValue::U8(i),
+        CopyableVal_::U16(i) => MoveValue::U16(i),
+        CopyableVal_::U32(i) => MoveValue::U32(i),
+        CopyableVal_::U64(i) => MoveValue::U64(i),
+        CopyableVal_::U128(i) => MoveValue::U128(i),
+        CopyableVal_::U256(i) => MoveValue::U256(i),
+        CopyableVal_::Bool(b) => MoveValue::Bool(b),
+        CopyableVal_::ByteArray(bytes) => {
+            MoveValue::Vector(bytes.into_iter().map(MoveValue::U8).collect())
         }
-        Tok::False => {
-            tokens.advance()?;
-            MoveValue::Bool(false)
-        }
-        Tok::AccountAddressValue => MoveValue::Address(parse_account_address(tokens)?),
-        Tok::At => {
-            tokens.advance()?; // consume `@`, mirroring address expressions
-            MoveValue::Address(parse_account_address(tokens)?)
-        }
-        Tok::U8Value => {
-            let i = u8::from_str(tokens.content().strip_suffix("u8").unwrap()).unwrap();
-            tokens.advance()?;
-            MoveValue::U8(i)
-        }
-        Tok::U16Value => {
-            let i = u16::from_str(tokens.content().strip_suffix("u16").unwrap()).unwrap();
-            tokens.advance()?;
-            MoveValue::U16(i)
-        }
-        Tok::U32Value => {
-            let i = u32::from_str(tokens.content().strip_suffix("u32").unwrap()).unwrap();
-            tokens.advance()?;
-            MoveValue::U32(i)
-        }
-        Tok::U64Value => {
-            // `Tok::U64Value` also matches a bare integer (no suffix). Constant
-            // values must be self-describing, so require the `u64` suffix.
-            let Some(digits) = tokens.content().strip_suffix("u64") else {
-                return Err(ParseError::InvalidToken {
-                    location: current_token_loc(tokens),
-                    message: "integer constant value requires a type suffix (e.g. 7u64)"
-                        .to_string(),
-                });
-            };
-            let i = u64::from_str(digits).unwrap();
-            tokens.advance()?;
-            MoveValue::U64(i)
-        }
-        Tok::U128Value => {
-            let i = u128::from_str(tokens.content().strip_suffix("u128").unwrap()).unwrap();
-            tokens.advance()?;
-            MoveValue::U128(i)
-        }
-        Tok::U256Value => {
-            let i = u256::U256::from_str(tokens.content().strip_suffix("u256").unwrap()).unwrap();
-            tokens.advance()?;
-            MoveValue::U256(i)
-        }
-        Tok::ByteArrayValue => {
-            let s = tokens.content();
-            let buf = hex::decode(&s[2..s.len() - 1]).unwrap_or_else(|_| {
-                unreachable!("The string {:?} is not a valid hex-encoded byte array", s)
-            });
-            tokens.advance()?;
-            MoveValue::Vector(buf.into_iter().map(MoveValue::U8).collect())
-        }
-        t => {
-            return Err(ParseError::InvalidToken {
-                location: current_token_loc(tokens),
-                message: format!("unrecognized token kind for constant value {:?}", t),
-            });
-        }
-    };
-    Ok(value)
+    }
 }
 
 // ModuleIdent: ModuleIdent = {

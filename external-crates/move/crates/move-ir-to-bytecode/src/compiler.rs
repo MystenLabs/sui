@@ -1751,7 +1751,7 @@ fn type_to_constant_type_layout(ty: Type) -> Result<MoveTypeLayout> {
             bail!("Type parameters are not supported in constant type layouts")
         }
         Type_::Datatype(_ident, _tys) => {
-            bail!("TODO Structs are not *yet* supported in constant type layouts")
+            bail!("Datatypes are not supported in constant type layouts")
         }
     })
 }
