@@ -1,7 +1,7 @@
 ---
 name: move-bytecode-comprehension
 description: >
-  Use when reading or reasoning about compiled Move bytecode, `sui move disassemble`
+  Use when reading or reasoning about compiled Move bytecode, `move disassemble`
   output, or decompiled Move source (from `move decompile`). Mental model for the binary
   format, what survives compilation (and what's lost), and how to read each output
   soundly. Trigger on "what does this package do?", "read this .mv module", "interpret
@@ -20,7 +20,7 @@ description: >
 > category's workflow. No filesystem install is required — the binary is self-contained.
 
 On-chain Sui packages are compiled **Move bytecode** (`.mv`, magic `0xA11CEB0B`). You analyze it
-two ways: **disassembly** (stack-machine assembly, via `sui move disassemble`) and
+two ways: **disassembly** (stack-machine assembly, via `move disassemble`) and
 **decompilation** (reconstructed Move source, via `move decompile`). This skill is the mental model
 for both: the binary format, what survives, and how to read each output.
 
@@ -55,7 +55,7 @@ accordingly.
 | File | Use for |
 |------|---------|
 | `format.md` | The binary format: tables, abilities, visibility, signatures, opcode categories. Read once. |
-| `reading-disassembly.md` | Interpreting `sui move disassemble` (stack machine, locals, the opcodes you'll actually see). |
+| `reading-disassembly.md` | Interpreting `move disassemble` (stack machine, locals, the opcodes you'll actually see). |
 | `reading-decompiled.md` | Use to translate **already-confirmed** findings into readable Move for human explanation; understand the decompiler's artifacts so you don't misread them when presenting. |
 
 ## Practical stance

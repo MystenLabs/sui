@@ -39,7 +39,7 @@ description: >
 > **Auditing on-chain bytecode?** If the target is a deployed package (not source): first stand up
 > tools with the `sui-and-move-tools` skill (clone Sui, fetch the package, **disassemble** every
 > module — and build `move decompile` for the explanation step). **Apply the `SM-*` rules to the
-> disassembly** (`sui move disassemble` output): it is faithful, 1:1 with the executed bytecode.
+> disassembly** (`move disassemble` output): it is faithful, 1:1 with the executed bytecode.
 > Once a finding is confirmed on the assembly, render the matching decompiled `.move` snippet
 > alongside as a *Human view* — but never derive a finding from decompiled source. See
 > `auditing-bytecode.md` for the workflow + per-rule disassembly signals, and

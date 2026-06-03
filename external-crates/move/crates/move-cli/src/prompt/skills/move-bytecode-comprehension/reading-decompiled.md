@@ -40,7 +40,7 @@ findings to humans.
 - **`use` lists are fully address-qualified** and may include the module's own address — normal.
 - **Decompiler limits.** Very complex control flow can produce awkward or (rarely) imperfect
   reconstruction; comments like block markers may appear. If a security-relevant line looks
-  surprising, **confirm against `sui move disassemble`** before calling it.
+  surprising, **confirm against `move disassemble`** before calling it.
 
 ## Role in the audit (presentation, not analysis)
 

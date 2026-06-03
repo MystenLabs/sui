@@ -1,7 +1,7 @@
 # Auditing on-chain (bytecode) targets
 
 The `SM-*` rules are written against source, but on-chain packages are compiled bytecode. **The
-disassembly is the analysis substrate** — `sui move disassemble` output is faithful, 1:1 with the
+disassembly is the analysis substrate** — `move disassemble` output is faithful, 1:1 with the
 executed bytecode, and that is what every `SM-*` finding must be derived from. Decompiled `.move`
 is a *heuristic* reconstruction; reach for it only to render an *already-confirmed* finding for a
 human reader. A pattern visible only in decompiled source — but absent or different in the

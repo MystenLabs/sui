@@ -25,10 +25,11 @@ plus the tools to turn `.mv` files into something a human can read.
    move prompt skill move-bytecode-comprehension --file <ref>
    ```
 
-2. **`sui-and-move-tools`** — once you have a target in mind, this skill bootstraps the
-   tools that actually produce the bytecode views: `suiup`-managed `sui move disassemble`
-   (the analysis source of truth) and `move decompile` (the human-explanation layer).
-   The same toolchain serves any bytecode-reading task.
+2. **`sui-and-move-tools`** — once you have a target in mind, this skill produces the
+   bytecode views: one Sui GraphQL call returns every module's bytes + disassembly (the
+   analysis source of truth) and `move decompile` (already on the system, running
+   `move prompt`) produces the readable `.move` view (the human-explanation layer).
+   The same workflow serves any bytecode-reading task.
 
    ```sh
    move prompt skill sui-and-move-tools

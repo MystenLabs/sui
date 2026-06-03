@@ -15,10 +15,10 @@ skills live here in one canonical location.
   disassembly detection signal, a severity, and an exploit sketch. Includes
   `auditing-bytecode.md` (per-rule disassembly signals + the report format that pairs
   assembly evidence with a human view).
-- **`sui-and-move-tools`** — tools for working with Move on Sui: standing up the
-  `suiup`-managed `sui` CLI for fetching and disassembling on-chain bytecode, and the
-  `move decompile` binary for human-readable rendering. Includes the confirm-`SUI_REF`
-  gate and the isolation rule that forbids local Sui checkouts.
+- **`sui-and-move-tools`** — obtain bytecode + readable views for a deployed Sui package.
+  One Sui GraphQL call returns every module's bytes and disassembly; `move decompile`
+  (already on the system, running `move prompt`) produces the optional decompiled-source
+  view. No `sui` CLI install needed.
 - **`move-bytecode-comprehension`** — Move binary format essentials + the survival table
   (what survives compilation), plus how to read disassembly and decompiled output soundly.
 

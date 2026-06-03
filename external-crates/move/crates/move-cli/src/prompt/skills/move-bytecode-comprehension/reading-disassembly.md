@@ -1,4 +1,4 @@
-# Reading `sui move disassemble` output
+# Reading `move disassemble` output
 
 > **This is the analysis substrate for every `SM-*` finding.** Disassembly is 1:1 with the
 > executed bytecode — no heuristic reconstruction — so it is what you reason over. Decompiled
@@ -7,7 +7,7 @@
 Disassembly is faithful but low-level: a stack machine with numbered locals and basic blocks.
 
 ```sh
-sui move disassemble path/to/module.mv
+move disassemble path/to/module.mv
 ```
 
 ## How to read it
