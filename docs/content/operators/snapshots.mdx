@@ -45,7 +45,7 @@ You can restore a full node using either RocksDB snapshots or formal snapshots.
 To restore from a RocksDB snapshot, follow these steps:
 
 1. Choose the snapshot source for the epoch you want to restore. Mysten Labs managed DB snapshots are available in GCS for Testnet and in GCS or S3 for Mainnet, with one snapshot per epoch.
-1. Download the snapshot to a temporary directory. For example, if the `db-path` value points to `/opt/sui/db/authorities_db/full_node_db` and you want to restore from epoch 10, use one of these commands:
+1. Download the snapshot to a temporary directory using cloud object store tooling. For example, if the `db-path` value points to `/opt/sui/db/authorities_db/full_node_db` and you want to restore from epoch 10, use one of these commands:
 
    Use the AWS CLI for S3 buckets (provided you have credentials to associate with the download):
    `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /tmp/epoch_10 --recursive --request-payer requester`.
@@ -105,7 +105,8 @@ Mysten Labs hosts two tiers of snapshot storage access: high throughput, Request
 **Free, permissionless buckets:**
 * These are currently hosted on Cloudflare R2, currently only in North America.
 * Because the bucket is open to the internet, you do not need to provide any cloud credentials.
-* The free buckets (for example, `sui-tool download-formal-snapshot --no-sign-request`) are only available for formal snapshots. You must use one of the requester pays (S3 or GCS) buckets if downloading a db snapshot.
+* The free buckets are only available for formal snapshots. For example, `sui-tool download-formal-snapshot --no-sign-request` uses the free formal snapshot bucket.
+* For DB snapshots, use cloud object store tooling with one of the Requester Pays buckets.
 
 ### Bucket names
 
