@@ -7,11 +7,16 @@ use crate::{
     account_address::AccountAddress,
     annotated_extractor::{Element as E, Extractor},
     annotated_value::{MoveTypeLayout, MoveValue},
+    compressed::annotated as CA,
     language_storage::TypeTag,
     unit_tests::annotated_visitor_test::{
         PrintVisitor, enum_layout_, serialize, struct_layout_, struct_value_, variant_value_,
     },
 };
+
+fn compress(ty: &MoveTypeLayout) -> &'static CA::MoveTypeLayout {
+    Box::leak(Box::new(ty.try_into().unwrap()))
+}
 
 #[test]
 fn struct_() {
@@ -736,7 +741,7 @@ fn assert_path((value, layout): (MoveValue, MoveTypeLayout), path: Vec<E<'_>>, e
     let mut printer = PrintVisitor::default();
 
     assert!(
-        Extractor::deserialize_value(&bytes, &layout, &mut printer, path.clone())
+        Extractor::deserialize_value(&bytes, compress(&layout).as_ref(), &mut printer, path.clone())
             .unwrap()
             .is_some(),
         "Failed to extract value {path:?}",
@@ -754,7 +759,7 @@ fn assert_no_path((value, layout): (MoveValue, MoveTypeLayout), path: Vec<E<'_>>
     let mut printer = PrintVisitor::default();
 
     assert!(
-        Extractor::deserialize_value(&bytes, &layout, &mut printer, path.clone())
+        Extractor::deserialize_value(&bytes, compress(&layout).as_ref(), &mut printer, path.clone())
             .unwrap()
             .is_none(),
         "Expected not to find something at {path:?}",

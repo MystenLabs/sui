@@ -6,8 +6,11 @@ use std::io::{Cursor, Read};
 use crate::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
-    annotated_value::{MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
-    identifier::IdentStr,
+    compressed::annotated::{
+        MoveEnumLayout, MoveFieldsLayout, MoveLayoutView, MoveStructLayout, MoveTypeLayoutRef,
+        VariantLayout,
+    },
+    identifier::{IdentStr, Identifier},
     u256::U256,
 };
 
@@ -151,6 +154,9 @@ macro_rules! visitor_default {
 pub use visitor_default;
 
 /// Visitors can be used for building values out of a serialized Move struct or value.
+///
+/// `'b` is the lifetime of the byte stream being visited; `'l` is the lifetime of the
+/// compressed annotated layout (i.e. the pool it borrows into).
 pub trait Visitor<'b, 'l> {
     type Value;
 
@@ -452,7 +458,7 @@ impl<'b, 'l, T: Traversal<'b, 'l> + ?Sized> Visitor<'b, 'l> for T {
 /// value being visited.
 pub struct ValueDriver<'c, 'b, 'l> {
     bytes: &'c mut Cursor<&'b [u8]>,
-    layout: Option<&'l MoveTypeLayout>,
+    layout: Option<MoveTypeLayoutRef<'l>>,
     start: usize,
 }
 
@@ -461,7 +467,7 @@ pub struct ValueDriver<'c, 'b, 'l> {
 /// elements).
 pub struct VecDriver<'c, 'b, 'l> {
     inner: ValueDriver<'c, 'b, 'l>,
-    layout: &'l MoveTypeLayout,
+    layout: MoveTypeLayoutRef<'l>,
     len: u64,
     off: u64,
 }
@@ -471,7 +477,7 @@ pub struct VecDriver<'c, 'b, 'l> {
 /// visiting or skipping fields).
 pub struct StructDriver<'c, 'b, 'l> {
     inner: ValueDriver<'c, 'b, 'l>,
-    layout: &'l MoveStructLayout,
+    layout: MoveStructLayout<'l>,
     off: u64,
 }
 
@@ -480,10 +486,10 @@ pub struct StructDriver<'c, 'b, 'l> {
 /// to progress the traversal (by visiting or skipping fields).
 pub struct VariantDriver<'c, 'b, 'l> {
     inner: ValueDriver<'c, 'b, 'l>,
-    layout: &'l MoveEnumLayout,
+    layout: MoveEnumLayout<'l>,
     tag: u16,
-    variant_name: &'l IdentStr,
-    variant_layout: &'l [MoveFieldLayout],
+    variant_name: &'l Identifier,
+    variant_fields: MoveFieldsLayout<'l>,
     off: u64,
 }
 
@@ -501,6 +507,9 @@ pub enum Error {
     #[error("invalid variant tag: {0}")]
     UnexpectedVariantTag(usize),
 
+    #[error("layout for variant tag {0} is unknown")]
+    UnknownVariantLayout(u16),
+
     #[error("no layout available for value")]
     NoValueLayout,
 }
@@ -515,7 +524,10 @@ impl Traversal<'_, '_> for NullTraversal {
 }
 
 impl<'c, 'b, 'l> ValueDriver<'c, 'b, 'l> {
-    pub(crate) fn new(bytes: &'c mut Cursor<&'b [u8]>, layout: Option<&'l MoveTypeLayout>) -> Self {
+    pub(crate) fn new(
+        bytes: &'c mut Cursor<&'b [u8]>,
+        layout: Option<MoveTypeLayoutRef<'l>>,
+    ) -> Self {
         let start = bytes.position() as usize;
         Self {
             bytes,
@@ -538,7 +550,7 @@ impl<'c, 'b, 'l> ValueDriver<'c, 'b, 'l> {
     pub fn bytes(&self) -> &'b [u8] {
         self.bytes.get_ref()
     }
-    ///
+
     /// The bytes that haven't been consumed by the visitor yet.
     pub fn remaining_bytes(&self) -> &'b [u8] {
         &self.bytes.get_ref()[self.position()..]
@@ -547,7 +559,7 @@ impl<'c, 'b, 'l> ValueDriver<'c, 'b, 'l> {
     /// Type layout for the value being visited. May produce an error if a layout was not supplied
     /// when the driver was created (which should only happen if the driver was created for
     /// visiting a struct specifically).
-    pub fn layout(&self) -> Result<&'l MoveTypeLayout, Error> {
+    pub fn layout(&self) -> Result<MoveTypeLayoutRef<'l>, Error> {
         self.layout.ok_or(Error::NoValueLayout)
     }
 
@@ -566,7 +578,7 @@ impl<'c, 'b, 'l> ValueDriver<'c, 'b, 'l> {
 
 #[allow(clippy::len_without_is_empty)]
 impl<'c, 'b, 'l> VecDriver<'c, 'b, 'l> {
-    fn new(inner: ValueDriver<'c, 'b, 'l>, layout: &'l MoveTypeLayout, len: u64) -> Self {
+    fn new(inner: ValueDriver<'c, 'b, 'l>, layout: MoveTypeLayoutRef<'l>, len: u64) -> Self {
         Self {
             inner,
             layout,
@@ -595,15 +607,13 @@ impl<'c, 'b, 'l> VecDriver<'c, 'b, 'l> {
         self.inner.remaining_bytes()
     }
 
-    /// Type layout for the value being visited. May produce an error if a layout was not supplied
-    /// when the driver was created (which should only happen if the driver was created for
-    /// visiting a struct specifically).
-    pub fn layout(&self) -> Result<&'l MoveTypeLayout, Error> {
+    /// Type layout for the value being visited.
+    pub fn layout(&self) -> Result<MoveTypeLayoutRef<'l>, Error> {
         self.inner.layout()
     }
 
     /// Type layout for the vector's inner type.
-    pub fn element_layout(&self) -> &'l MoveTypeLayout {
+    pub fn element_layout(&self) -> MoveTypeLayoutRef<'l> {
         self.layout
     }
 
@@ -625,10 +635,6 @@ impl<'c, 'b, 'l> VecDriver<'c, 'b, 'l> {
     /// Visit the next element in the vector. The driver accepts a visitor to use for this element,
     /// allowing the visitor to be changed on recursive calls or even between elements in the same
     /// vector.
-    ///
-    /// Returns `Ok(None)` if there are no more elements in the vector, `Ok(v)` if there was an
-    /// element and it was successfully visited (where `v` is the value returned by the visitor) or
-    /// an error if there was an underlying deserialization error, or an error during visitation.
     pub fn next_element<V: Visitor<'b, 'l> + ?Sized>(
         &mut self,
         visitor: &mut V,
@@ -650,7 +656,7 @@ impl<'c, 'b, 'l> VecDriver<'c, 'b, 'l> {
 }
 
 impl<'c, 'b, 'l> StructDriver<'c, 'b, 'l> {
-    fn new(inner: ValueDriver<'c, 'b, 'l>, layout: &'l MoveStructLayout) -> Self {
+    fn new(inner: ValueDriver<'c, 'b, 'l>, layout: MoveStructLayout<'l>) -> Self {
         Self {
             inner,
             layout,
@@ -678,15 +684,13 @@ impl<'c, 'b, 'l> StructDriver<'c, 'b, 'l> {
         self.inner.remaining_bytes()
     }
 
-    /// Type layout for the value being visited. May produce an error if a layout was not supplied
-    /// when the driver was created (which should only happen if the driver was created for
-    /// visiting a struct specifically).
-    pub fn layout(&self) -> Result<&'l MoveTypeLayout, Error> {
+    /// Type layout for the value being visited.
+    pub fn layout(&self) -> Result<MoveTypeLayoutRef<'l>, Error> {
         self.inner.layout()
     }
 
     /// The layout of the struct being visited.
-    pub fn struct_layout(&self) -> &'l MoveStructLayout {
+    pub fn struct_layout(&self) -> MoveStructLayout<'l> {
         self.layout
     }
 
@@ -695,35 +699,35 @@ impl<'c, 'b, 'l> StructDriver<'c, 'b, 'l> {
         self.off
     }
 
-    /// The layout of the next field to be visited (if there is one), or `None` otherwise.
-    pub fn peek_field(&self) -> Option<&'l MoveFieldLayout> {
-        self.layout.fields.get(self.off as usize)
+    /// The name and layout of the next field to be visited (if there is one), or `None` otherwise.
+    pub fn peek_field(&self) -> Option<(&'l Identifier, MoveTypeLayoutRef<'l>)> {
+        self.layout.field(self.off as u16)
     }
 
     /// Visit the next field in the struct. The driver accepts a visitor to use for this field,
     /// allowing the visitor to be changed on recursive calls or even between fields in the same
     /// struct.
     ///
-    /// Returns `Ok(None)` if there are no more fields in the struct, `Ok((f, v))` if there was an
-    /// field and it was successfully visited (where `v` is the value returned by the visitor, and
-    /// `f` is the layout of the field that was visited) or an error if there was an underlying
-    /// deserialization error, or an error during visitation.
+    /// Returns `Ok(None)` if there are no more fields in the struct, `Ok(((n, l), v))` if there was
+    /// a field and it was successfully visited.
     pub fn next_field<V: Visitor<'b, 'l> + ?Sized>(
         &mut self,
         visitor: &mut V,
-    ) -> Result<Option<(&'l MoveFieldLayout, V::Value)>, V::Error> {
-        let Some(field) = self.peek_field() else {
+    ) -> Result<Option<((&'l Identifier, MoveTypeLayoutRef<'l>), V::Value)>, V::Error> {
+        let Some((name, layout)) = self.peek_field() else {
             return Ok(None);
         };
 
-        let res = visit_value(self.inner.bytes, &field.layout, visitor)?;
+        let res = visit_value(self.inner.bytes, layout, visitor)?;
         self.off += 1;
-        Ok(Some((field, res)))
+        Ok(Some(((name, layout), res)))
     }
 
     /// Skip the next field. Returns the layout of the field that was visited if there was one, or
-    /// `None` if there was none. Can return an error if there was a deserialization error.
-    pub fn skip_field(&mut self) -> Result<Option<&'l MoveFieldLayout>, Error> {
+    /// `None` if there was none.
+    pub fn skip_field(
+        &mut self,
+    ) -> Result<Option<(&'l Identifier, MoveTypeLayoutRef<'l>)>, Error> {
         self.next_field(&mut NullTraversal)
             .map(|res| res.map(|(f, _)| f))
     }
@@ -732,9 +736,9 @@ impl<'c, 'b, 'l> StructDriver<'c, 'b, 'l> {
 impl<'c, 'b, 'l> VariantDriver<'c, 'b, 'l> {
     fn new(
         inner: ValueDriver<'c, 'b, 'l>,
-        layout: &'l MoveEnumLayout,
-        variant_layout: &'l [MoveFieldLayout],
-        variant_name: &'l IdentStr,
+        layout: MoveEnumLayout<'l>,
+        variant_fields: MoveFieldsLayout<'l>,
+        variant_name: &'l Identifier,
         tag: u16,
     ) -> Self {
         Self {
@@ -742,7 +746,7 @@ impl<'c, 'b, 'l> VariantDriver<'c, 'b, 'l> {
             layout,
             tag,
             variant_name,
-            variant_layout,
+            variant_fields,
             off: 0,
         }
     }
@@ -767,21 +771,19 @@ impl<'c, 'b, 'l> VariantDriver<'c, 'b, 'l> {
         self.inner.remaining_bytes()
     }
 
-    /// Type layout for the value being visited. May produce an error if a layout was not supplied
-    /// when the driver was created (which should only happen if the driver was created for
-    /// visiting a struct specifically).
-    pub fn layout(&self) -> Result<&'l MoveTypeLayout, Error> {
+    /// Type layout for the value being visited.
+    pub fn layout(&self) -> Result<MoveTypeLayoutRef<'l>, Error> {
         self.inner.layout()
     }
 
     /// The layout of the enum being visited.
-    pub fn enum_layout(&self) -> &'l MoveEnumLayout {
+    pub fn enum_layout(&self) -> MoveEnumLayout<'l> {
         self.layout
     }
 
-    /// The layout of the variant being visited.
-    pub fn variant_layout(&self) -> &'l [MoveFieldLayout] {
-        self.variant_layout
+    /// The field layout of the variant being visited.
+    pub fn variant_layout(&self) -> MoveFieldsLayout<'l> {
+        self.variant_fields
     }
 
     /// The tag of the variant being visited.
@@ -791,109 +793,100 @@ impl<'c, 'b, 'l> VariantDriver<'c, 'b, 'l> {
 
     /// The name of the enum variant being visited.
     pub fn variant_name(&self) -> &'l IdentStr {
-        self.variant_name
+        self.variant_name.as_ident_str()
     }
 
-    /// The number of elements in this vector that have been visited so far.
+    /// The number of fields in this variant that have been visited so far.
     pub fn off(&self) -> u64 {
         self.off
     }
 
-    /// The layout of the next field to be visited (if there is one), or `None` otherwise.
-    pub fn peek_field(&self) -> Option<&'l MoveFieldLayout> {
-        self.variant_layout.get(self.off as usize)
+    /// The name and layout of the next field to be visited (if there is one), or `None` otherwise.
+    pub fn peek_field(&self) -> Option<(&'l Identifier, MoveTypeLayoutRef<'l>)> {
+        self.variant_fields.field(self.off as u16)
     }
 
-    /// Visit the next field in the variant. The driver accepts a visitor to use for this field,
-    /// allowing the visitor to be changed on recursive calls or even between fields in the same
-    /// variant.
-    ///
-    /// Returns `Ok(None)` if there are no more fields in the variant, `Ok((f, v))` if there was an
-    /// field and it was successfully visited (where `v` is the value returned by the visitor, and
-    /// `f` is the layout of the field that was visited) or an error if there was an underlying
-    /// deserialization error, or an error during visitation.
+    /// Visit the next field in the variant.
     pub fn next_field<V: Visitor<'b, 'l> + ?Sized>(
         &mut self,
         visitor: &mut V,
-    ) -> Result<Option<(&'l MoveFieldLayout, V::Value)>, V::Error> {
-        let Some(field) = self.peek_field() else {
+    ) -> Result<Option<((&'l Identifier, MoveTypeLayoutRef<'l>), V::Value)>, V::Error> {
+        let Some((name, layout)) = self.peek_field() else {
             return Ok(None);
         };
 
-        let res = visit_value(self.inner.bytes, &field.layout, visitor)?;
+        let res = visit_value(self.inner.bytes, layout, visitor)?;
         self.off += 1;
-        Ok(Some((field, res)))
+        Ok(Some(((name, layout), res)))
     }
 
-    /// Skip the next field. Returns the layout of the field that was visited if there was one, or
-    /// `None` if there was none. Can return an error if there was a deserialization error.
-    pub fn skip_field(&mut self) -> Result<Option<&'l MoveFieldLayout>, Error> {
+    /// Skip the next field.
+    pub fn skip_field(
+        &mut self,
+    ) -> Result<Option<(&'l Identifier, MoveTypeLayoutRef<'l>)>, Error> {
         self.next_field(&mut NullTraversal)
             .map(|res| res.map(|(f, _)| f))
     }
 }
 
 /// Visit a serialized Move value with the provided `layout`, held in `bytes`, using the provided
-/// visitor to build a value out of it. See `annoted_value::MoveValue::visit_deserialize` for
-/// details.
+/// visitor to build a value out of it.
 pub(crate) fn visit_value<'c, 'b, 'l, V: Visitor<'b, 'l> + ?Sized>(
     bytes: &'c mut Cursor<&'b [u8]>,
-    layout: &'l MoveTypeLayout,
+    layout: MoveTypeLayoutRef<'l>,
     visitor: &mut V,
 ) -> Result<V::Value, V::Error> {
-    use MoveTypeLayout as L;
-
     let mut driver = ValueDriver::new(bytes, Some(layout));
-    match layout {
-        L::Bool => match driver.read_exact()? {
+    match layout.as_view() {
+        MoveLayoutView::Bool => match driver.read_exact()? {
             [0] => visitor.visit_bool(&driver, false),
             [1] => visitor.visit_bool(&driver, true),
             [b] => Err(Error::UnexpectedByte(b).into()),
         },
 
-        L::U8 => {
+        MoveLayoutView::U8 => {
             let v = u8::from_le_bytes(driver.read_exact()?);
             visitor.visit_u8(&driver, v)
         }
 
-        L::U16 => {
+        MoveLayoutView::U16 => {
             let v = u16::from_le_bytes(driver.read_exact()?);
             visitor.visit_u16(&driver, v)
         }
 
-        L::U32 => {
+        MoveLayoutView::U32 => {
             let v = u32::from_le_bytes(driver.read_exact()?);
             visitor.visit_u32(&driver, v)
         }
 
-        L::U64 => {
+        MoveLayoutView::U64 => {
             let v = u64::from_le_bytes(driver.read_exact()?);
             visitor.visit_u64(&driver, v)
         }
 
-        L::U128 => {
+        MoveLayoutView::U128 => {
             let v = u128::from_le_bytes(driver.read_exact()?);
             visitor.visit_u128(&driver, v)
         }
 
-        L::U256 => {
+        MoveLayoutView::U256 => {
             let v = U256::from_le_bytes(&driver.read_exact()?);
             visitor.visit_u256(&driver, v)
         }
 
-        L::Address => {
+        MoveLayoutView::Address => {
             let v = AccountAddress::new(driver.read_exact()?);
             visitor.visit_address(&driver, v)
         }
 
-        L::Signer => {
+        MoveLayoutView::Signer => {
             let v = AccountAddress::new(driver.read_exact()?);
             visitor.visit_signer(&driver, v)
         }
 
-        L::Vector(l) => visit_vector(driver, l.as_ref(), visitor),
-        L::Struct(l) => visit_struct(driver, l, visitor),
-        L::Enum(e) => visit_variant(driver, e, visitor),
+        MoveLayoutView::Vector(inner) => visit_vector(driver, inner, visitor),
+        MoveLayoutView::Struct(s) => visit_struct(driver, s, visitor),
+        MoveLayoutView::Enum(e) => visit_variant(driver, e, visitor),
     }
 }
 
@@ -901,11 +894,11 @@ pub(crate) fn visit_value<'c, 'b, 'l, V: Visitor<'b, 'l> + ?Sized>(
 /// serialized move vector), and the layout is the vector's element's layout.
 fn visit_vector<'c, 'b, 'l, V: Visitor<'b, 'l> + ?Sized>(
     mut inner: ValueDriver<'c, 'b, 'l>,
-    layout: &'l MoveTypeLayout,
+    elem_layout: MoveTypeLayoutRef<'l>,
     visitor: &mut V,
 ) -> Result<V::Value, V::Error> {
     let len = inner.read_leb128()?;
-    let mut driver = VecDriver::new(inner, layout, len);
+    let mut driver = VecDriver::new(inner, elem_layout, len);
     let res = visitor.visit_vector(&mut driver)?;
     while driver.skip_element()? {}
     Ok(res)
@@ -915,7 +908,7 @@ fn visit_vector<'c, 'b, 'l, V: Visitor<'b, 'l> + ?Sized>(
 /// serialized move struct), and the layout is a struct layout.
 pub(crate) fn visit_struct<'c, 'b, 'l, V: Visitor<'b, 'l> + ?Sized>(
     inner: ValueDriver<'c, 'b, 'l>,
-    layout: &'l MoveStructLayout,
+    layout: MoveStructLayout<'l>,
     visitor: &mut V,
 ) -> Result<V::Value, V::Error> {
     let mut driver = StructDriver::new(inner, layout);
@@ -928,7 +921,7 @@ pub(crate) fn visit_struct<'c, 'b, 'l, V: Visitor<'b, 'l> + ?Sized>(
 /// serialized move variant), and the layout is an enum layout.
 fn visit_variant<'c, 'b, 'l, V: Visitor<'b, 'l> + ?Sized>(
     mut inner: ValueDriver<'c, 'b, 'l>,
-    layout: &'l MoveEnumLayout,
+    layout: MoveEnumLayout<'l>,
     visitor: &mut V,
 ) -> Result<V::Value, V::Error> {
     // Since variants are bounded at 127, we can read the tag as a single byte.
@@ -938,19 +931,20 @@ fn visit_variant<'c, 'b, 'l, V: Visitor<'b, 'l> + ?Sized>(
     if tag > VARIANT_TAG_MAX_VALUE as u8 {
         return Err(Error::UnexpectedVariantTag(tag as usize).into());
     }
-    let variant_layout = layout
-        .variants
-        .iter()
-        .find(|((_, vtag), _)| *vtag == tag as u16)
-        .ok_or(Error::UnexpectedVariantTag(tag as usize))?;
+    let tag = tag as u16;
+    let (variant_name, variant_fields) = match layout
+        .variant(tag)
+        .ok_or(Error::UnexpectedVariantTag(tag as usize))?
+    {
+        VariantLayout::Known {
+            name,
+            tag: _,
+            fields,
+        } => (name, fields),
+        VariantLayout::Unknown { .. } => return Err(Error::UnknownVariantLayout(tag).into()),
+    };
 
-    let mut driver = VariantDriver::new(
-        inner,
-        layout,
-        variant_layout.1,
-        &variant_layout.0.0,
-        tag as u16,
-    );
+    let mut driver = VariantDriver::new(inner, layout, variant_fields, variant_name, tag);
     let res = visitor.visit_variant(&mut driver)?;
     while driver.skip_field()?.is_some() {}
     Ok(res)
