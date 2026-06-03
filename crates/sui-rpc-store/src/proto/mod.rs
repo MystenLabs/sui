@@ -26,5 +26,8 @@ pub use sui::rpc_store::v1alpha::StoredEffects;
 pub use sui::rpc_store::v1alpha::StoredEpoch;
 pub use sui::rpc_store::v1alpha::StoredEvents;
 pub use sui::rpc_store::v1alpha::StoredObject;
+pub use sui::rpc_store::v1alpha::StoredObjectTombstone;
+pub use sui::rpc_store::v1alpha::StoredObjectTombstoneKind;
 pub use sui::rpc_store::v1alpha::StoredTransaction;
 pub use sui::rpc_store::v1alpha::TxMetadata;
+pub use sui::rpc_store::v1alpha::stored_object;

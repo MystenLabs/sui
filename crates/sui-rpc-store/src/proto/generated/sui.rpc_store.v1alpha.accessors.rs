@@ -404,23 +404,124 @@ mod _accessor_impls {
     }
     impl super::StoredObject {
         pub const fn const_default() -> Self {
-            Self {
-                bcs: ::prost::bytes::Bytes::new(),
-            }
+            Self { kind: None }
         }
         #[doc(hidden)]
         pub fn default_instance() -> &'static Self {
             static DEFAULT: super::StoredObject = super::StoredObject::const_default();
             &DEFAULT
         }
-        ///Sets `bcs` with the provided value.
-        pub fn set_bcs<T: Into<::prost::bytes::Bytes>>(&mut self, field: T) {
-            self.bcs = field.into().into();
+        ///Returns the value of `bcs`, or the default value if `bcs` is unset.
+        pub fn bcs(&self) -> &[u8] {
+            if let Some(super::stored_object::Kind::Bcs(field)) = &self.kind {
+                field as _
+            } else {
+                &[]
+            }
+        }
+        ///If `bcs` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn bcs_opt(&self) -> Option<&[u8]> {
+            if let Some(super::stored_object::Kind::Bcs(field)) = &self.kind {
+                Some(field as _)
+            } else {
+                None
+            }
+        }
+        ///If `bcs` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn bcs_opt_mut(&mut self) -> Option<&mut ::prost::bytes::Bytes> {
+            if let Some(super::stored_object::Kind::Bcs(field)) = &mut self.kind {
+                Some(field as _)
+            } else {
+                None
+            }
+        }
+        ///Returns a mutable reference to `bcs`.
+        ///If the field is unset, it is first initialized with the default value.
+        ///If any other oneof field in the same oneof is set, it will be cleared.
+        pub fn bcs_mut(&mut self) -> &mut ::prost::bytes::Bytes {
+            if self.bcs_opt_mut().is_none() {
+                self.kind = Some(
+                    super::stored_object::Kind::Bcs(::prost::bytes::Bytes::default()),
+                );
+            }
+            self.bcs_opt_mut().unwrap()
         }
         ///Sets `bcs` with the provided value.
+        ///If any other oneof field in the same oneof is set, it will be cleared.
+        pub fn set_bcs<T: Into<::prost::bytes::Bytes>>(&mut self, field: T) {
+            self.kind = Some(super::stored_object::Kind::Bcs(field.into().into()));
+        }
+        ///Sets `bcs` with the provided value.
+        ///If any other oneof field in the same oneof is set, it will be cleared.
         pub fn with_bcs<T: Into<::prost::bytes::Bytes>>(mut self, field: T) -> Self {
             self.set_bcs(field.into());
             self
+        }
+        ///Returns the value of `tombstone`, or the default value if `tombstone` is unset.
+        pub fn tombstone(&self) -> &super::StoredObjectTombstone {
+            if let Some(super::stored_object::Kind::Tombstone(field)) = &self.kind {
+                field as _
+            } else {
+                super::StoredObjectTombstone::default_instance() as _
+            }
+        }
+        ///If `tombstone` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn tombstone_opt(&self) -> Option<&super::StoredObjectTombstone> {
+            if let Some(super::stored_object::Kind::Tombstone(field)) = &self.kind {
+                Some(field as _)
+            } else {
+                None
+            }
+        }
+        ///If `tombstone` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn tombstone_opt_mut(
+            &mut self,
+        ) -> Option<&mut super::StoredObjectTombstone> {
+            if let Some(super::stored_object::Kind::Tombstone(field)) = &mut self.kind {
+                Some(field as _)
+            } else {
+                None
+            }
+        }
+        ///Returns a mutable reference to `tombstone`.
+        ///If the field is unset, it is first initialized with the default value.
+        ///If any other oneof field in the same oneof is set, it will be cleared.
+        pub fn tombstone_mut(&mut self) -> &mut super::StoredObjectTombstone {
+            if self.tombstone_opt_mut().is_none() {
+                self.kind = Some(
+                    super::stored_object::Kind::Tombstone(
+                        super::StoredObjectTombstone::default(),
+                    ),
+                );
+            }
+            self.tombstone_opt_mut().unwrap()
+        }
+        ///Sets `tombstone` with the provided value.
+        ///If any other oneof field in the same oneof is set, it will be cleared.
+        pub fn set_tombstone<T: Into<super::StoredObjectTombstone>>(
+            &mut self,
+            field: T,
+        ) {
+            self.kind = Some(super::stored_object::Kind::Tombstone(field.into().into()));
+        }
+        ///Sets `tombstone` with the provided value.
+        ///If any other oneof field in the same oneof is set, it will be cleared.
+        pub fn with_tombstone<T: Into<super::StoredObjectTombstone>>(
+            mut self,
+            field: T,
+        ) -> Self {
+            self.set_tombstone(field.into());
+            self
+        }
+    }
+    impl super::StoredObjectTombstone {
+        pub const fn const_default() -> Self {
+            Self { kind: 0 }
+        }
+        #[doc(hidden)]
+        pub fn default_instance() -> &'static Self {
+            static DEFAULT: super::StoredObjectTombstone = super::StoredObjectTombstone::const_default();
+            &DEFAULT
         }
     }
     impl super::StoredTransaction {

@@ -19,13 +19,41 @@ package sui.rpc_store.v1alpha;
 
 // === Raw chain data ============================================
 
-// A specific version of an on-chain object.
-//
-// Value type for the `objects` column family, keyed by
+// A row in the `objects` column family, keyed by
 // `(ObjectID, version)`.
+//
+// Either a live version of an on-chain object (the BCS-encoded
+// `Object`) or a tombstone written at the lamport version of the
+// transaction that removed it from the live set. Tombstones let
+// version-bounded reads distinguish "object did not exist at this
+// version" (no row) from "object was deleted or wrapped at this
+// version" (tombstone row).
 message StoredObject {
-  // BCS-encoded `sui_types::object::Object`.
-  bytes bcs = 1;
+  oneof kind {
+    // BCS-encoded `sui_types::object::Object`.
+    bytes bcs = 1;
+    // The object was deleted or wrapped at this version.
+    StoredObjectTombstone tombstone = 2;
+  }
+}
+
+// Marker carried by a tombstone row in the `objects` CF.
+message StoredObjectTombstone {
+  // How the object was removed from the live set.
+  StoredObjectTombstoneKind kind = 1;
+}
+
+// Why a tombstone was written.
+//
+// `DELETED` covers both an explicit object deletion and the
+// `unwrapped_then_deleted` shape (object unwrapped and discarded
+// within a single transaction). `WRAPPED` marks the object as
+// nested inside another and removed from the live set — a future
+// unwrap can revive the id at a higher version.
+enum StoredObjectTombstoneKind {
+  STORED_OBJECT_TOMBSTONE_KIND_UNSPECIFIED = 0;
+  STORED_OBJECT_TOMBSTONE_KIND_DELETED = 1;
+  STORED_OBJECT_TOMBSTONE_KIND_WRAPPED = 2;
 }
 
 // A signed transaction, keyed by its assigned `tx_seq`.
