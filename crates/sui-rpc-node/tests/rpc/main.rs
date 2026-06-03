@@ -59,6 +59,7 @@
 //!   paths see what the upstream effects builder produces
 //!   either way, so the bug doesn't surface here.
 
+mod client;
 mod cluster;
 mod v1alpha;
 mod v2;
