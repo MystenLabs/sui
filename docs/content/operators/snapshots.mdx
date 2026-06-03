@@ -44,13 +44,16 @@ You can restore a full node using either RocksDB snapshots or formal snapshots.
 
 To restore from a RocksDB snapshot, follow these steps:
 
-1. Download the snapshot for the epoch you want to restore to your local disk. There is one snapshot per epoch in s3 bucket.
-1. Place the snapshot into the directory that the `db-path` value points to in your fullnode.yaml file. For example, if the `db-path` value points to `/opt/sui/db/authorities_db/full_node_db` and you want to restore from epoch 10, then copy the snapshot to the directory with this command:
+1. Choose the snapshot source for the epoch you want to restore. Mysten Labs managed DB snapshots are available in GCS for Testnet and in GCS or S3 for Mainnet, with one snapshot per epoch.
+1. Download the snapshot to a temporary directory. For example, if the `db-path` value points to `/opt/sui/db/authorities_db/full_node_db` and you want to restore from epoch 10, use one of these commands:
 
-   You can use the AWS CLI (provided you have credentials to associate with the download):
-   `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /opt/sui/db/authorities_db/full_node_db/live --recursive --request-payer requester`.
+   Use the AWS CLI for S3 buckets (provided you have credentials to associate with the download):
+   `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /tmp/epoch_10 --recursive --request-payer requester`.
 
-1. When using `aws s3 cp` (or `gsutil cp`) the database is copied to the location you pass to `--path`, in a directory named `epoch_[NUM]`. Rename the `epoch_[NUM]` directory to `live/` under your node's `db_path`, for example `cp -r /tmp/epoch_[NUM] /opt/sui/db/authorities_db/full_node_db/live`.
+   Use `gsutil` for GCS buckets (provided you have a billing project for Requester Pays):
+   `gsutil -u <BILLING_PROJECT> -m cp -r gs://<BUCKET_NAME>/epoch_10 /tmp/epoch_10`.
+
+1. Place the downloaded `epoch_[NUM]` directory at `live/` under your node's `db_path`, for example `cp -r /tmp/epoch_[NUM] /opt/sui/db/authorities_db/full_node_db/live`.
 1. Make sure you update the ownership of the downloaded directory to the sui user (whichever linux user you run `sui-node` as)
    `sudo chown -R sui:sui  /opt/sui/db/authorities_db/full_node_db/live`.
 1. Start the Sui node.
@@ -81,7 +84,7 @@ To restore a node from a formal snapshot, complete the following steps:
    - `--network`: Network to download snapshot for. Defaults to `mainnet`.
    - `--path`: Path to snapshot directory on local filesystem.
    - `--no-sign-request`: If set, `--snapshot-bucket` and `--snapshot-bucket-type` are ignored, and Cloudflare R2 is used.
-   - `--snapshot-bucket`: Source snapshot bucket name, for example `mysten-mainnet-snapshots`. This cannot be used with `--no-sign-request`.
+   - `--snapshot-bucket`: Source snapshot bucket name, for example `mysten-mainnet-formal`. This cannot be used with `--no-sign-request`.
    - `--snapshot-bucket-type`: Snapshot bucket type. GCS and S3 currently supported. This cannot be used with `--no-sign-request`.
 
    The following environment variables are used if `--no-sign-request` is not set:
@@ -95,9 +98,9 @@ To restore a node from a formal snapshot, complete the following steps:
 Mysten Labs hosts two tiers of snapshot storage access: high throughput, Requester Pays enabled buckets, and free, permissionless buckets.
 
 **High throughput, Requester Pays enabled buckets:**
-* GCS and S3 are both set up with requester pays. You need to provide a set of valid AWS or GCP credentials when downloading from these buckets.
+* GCS and S3 buckets are set up with requester pays. You need to provide a set of valid AWS or GCP credentials when downloading from these buckets.
 [Requester Pays](https://cloud.google.com/storage/docs/requester-pays) means you are charged for the egress costs of pulling the snapshot data.
-* For the best download speeds, use the S3 buckets with [transfer acceleration](https://aws.amazon.com/s3/transfer-acceleration/) enabled.
+* For the best download speeds, use the S3 buckets with [transfer acceleration](https://aws.amazon.com/s3/transfer-acceleration/) enabled when an S3 bucket is available for the snapshot type and network.
 
 **Free, permissionless buckets:**
 * These are currently hosted on Cloudflare R2, currently only in North America.
@@ -108,15 +111,15 @@ Mysten Labs hosts two tiers of snapshot storage access: high throughput, Request
 
 **S3**
 
-Testnet: `s3://mysten-testnet-snapshots/`, `s3://mysten-testnet-formal/`
+Testnet: DB snapshots are not hosted in S3. Formal snapshots: `s3://mysten-testnet-formal/`
 
-Mainnet: `s3://mysten-mainnet-snapshots/`,  `s3://mysten-mainnet-formal/`
+Mainnet: DB snapshots: `s3://mysten-mainnet-snapshots/`; formal snapshots: `s3://mysten-mainnet-formal/`
 
 **GCS**
 
-Testnet: `gs://mysten-testnet-snapshots/`, `gs://mysten-testnet-formal/`
+Testnet: DB snapshots: `gs://mysten-testnet-snapshots/`; formal snapshots: `gs://mysten-testnet-formal/`
 
-Mainnet: `gs://mysten-mainnet-snapshots/`,  `gs://mysten-mainnet-formal/`
+Mainnet: DB snapshots: `gs://mysten-mainnet-snapshots/`; formal snapshots: `gs://mysten-mainnet-formal/`
 
 ![Mysten Managed Snapshots](./images/managed-snapshots_opreator-guides_v1.png "A diagram that shows the current architecture of Mysten snapshot availability")
 
@@ -165,4 +168,3 @@ Add an entry to the config file for `db-checkpoint-config`. Using Amazon's S3 se
        object-store-connection-limit: 200
    ```
    The configuration settings shown in the example are specific to AWS S3, but GCS, Azure Storage, and Cloudflare R2 are all supported.
-
