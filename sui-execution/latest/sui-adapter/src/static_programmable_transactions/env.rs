@@ -20,11 +20,11 @@ use move_binary_format::{
     file_format::{Ability, AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
-    annotated_value,
+    compressed::annotated as CA,
+    compressed::runtime as CR,
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
     resolver::IntraPackageName,
-    runtime_value::{self, MoveTypeLayout},
     vm_status::StatusCode,
 };
 use move_vm_runtime::{
@@ -148,10 +148,7 @@ where
         }
     }
 
-    pub fn fully_annotated_layout(
-        &self,
-        ty: &Type,
-    ) -> Result<annotated_value::MoveTypeLayout, Mode::Error> {
+    pub fn fully_annotated_layout(&self, ty: &Type) -> Result<CA::MoveTypeLayout, Mode::Error> {
         let tag: TypeTag = ty.clone().try_into().map_err(|s| {
             Mode::Error::new_with_source(ExecutionErrorKind::VMInvariantViolation, s)
         })?;
@@ -166,7 +163,7 @@ where
             .map_err(|e| self.convert_linked_vm_error(e, &tag_linkage))
     }
 
-    pub fn runtime_layout(&self, ty: &Type) -> Result<runtime_value::MoveTypeLayout, Mode::Error> {
+    pub fn runtime_layout(&self, ty: &Type) -> Result<CR::MoveTypeLayout, Mode::Error> {
         let tag: TypeTag = ty.clone().try_into().map_err(|s| {
             Mode::Error::new_with_source(ExecutionErrorKind::VMInvariantViolation, s)
         })?;
@@ -299,7 +296,10 @@ where
         self.adapter_type_from_vm_type(self.input_type_resolution_vm, &vm_type)
     }
 
-    pub fn type_layout_for_struct(&self, tag: &StructTag) -> Result<MoveTypeLayout, Mode::Error> {
+    pub fn type_layout_for_struct(
+        &self,
+        tag: &StructTag,
+    ) -> Result<CR::MoveTypeLayout, Mode::Error> {
         let ty: Type = self.load_type_from_struct(tag)?;
         self.runtime_layout(&ty)
     }

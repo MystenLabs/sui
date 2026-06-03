@@ -13,7 +13,11 @@ use crate::{
     shared::views::*,
 };
 use move_binary_format::{errors::*, file_format::VariantTag};
-use move_core_types::{account_address::AccountAddress, runtime_value, u256::U256};
+use move_core_types::{
+    account_address::AccountAddress,
+    compressed::runtime::{BackendBuilder as _, MoveTypeLayout, MoveTypeLayoutBuilder},
+    u256::U256,
+};
 
 #[cfg(test)]
 const SIZE_CONFIG: SizeConfig = SizeConfig {
@@ -339,16 +343,20 @@ fn signer_equivalence() -> PartialVMResult<()> {
     let addr = AccountAddress::TWO;
     let signer = Value::signer(addr);
 
+    let signer_layout = MoveTypeLayout::signer();
     assert_eq!(
         signer.serialize(),
-        signer.typed_serialize(&runtime_value::MoveTypeLayout::Signer)
+        signer.typed_serialize(signer_layout.as_ref())
     );
 
+    let struct_with_addr = MoveTypeLayoutBuilder::with_builder(|builder| {
+        let address = builder.address();
+        builder.struct_layout(&[address])
+    })
+    .unwrap();
     assert_eq!(
         signer.serialize(),
-        signer.typed_serialize(&runtime_value::MoveTypeLayout::Struct(Box::new(
-            runtime_value::MoveStructLayout(Box::new(vec![runtime_value::MoveTypeLayout::Address]))
-        )))
+        signer.typed_serialize(struct_with_addr.as_ref())
     );
 
     Ok(())

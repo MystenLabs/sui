@@ -25,7 +25,11 @@ use move_compiler::{
         program_info::{ModuleInfo, TypingProgramInfo},
     },
 };
-use move_core_types::{account_address::AccountAddress, runtime_value};
+use move_core_types::{
+    account_address::AccountAddress,
+    compressed::runtime::{self as CR, BackendBuilder as _, LayoutHandle},
+    runtime_value,
+};
 use move_ir_types::ast as IR;
 use move_ir_types::location::Spanned;
 use move_symbol_pool::Symbol;
@@ -1146,30 +1150,46 @@ fn make_map<I: Ord + Copy, T>(
 impl ConstantData {
     fn value(&self, compiled: &normalized::Constant) -> &runtime_value::MoveValue {
         self.value.get_or_init(|| {
-            let constant_layout = annotated_constant_layout(&compiled.type_);
-            runtime_value::MoveValue::simple_deserialize(&compiled.data, &constant_layout).unwrap()
+            let constant_layout = constant_layout(&compiled.type_);
+            runtime_value::MoveValue::simple_deserialize_compressed(
+                &compiled.data,
+                &constant_layout,
+            )
+            .unwrap()
         })
     }
 }
 
-fn annotated_constant_layout(ty: &normalized::Type) -> runtime_value::MoveTypeLayout {
-    use normalized::Type as T;
-    use runtime_value::MoveTypeLayout as L;
-    match ty {
-        T::Bool => L::Bool,
-        T::U8 => L::U8,
-        T::U16 => L::U16,
-        T::U32 => L::U32,
-        T::U64 => L::U64,
-        T::U128 => L::U128,
-        T::U256 => L::U256,
-        T::Address => L::Address,
-        T::Vector(inner) => L::Vector(Box::new(annotated_constant_layout(inner))),
+fn constant_layout(ty: &normalized::Type) -> CR::MoveTypeLayout {
+    fn constant_layout_(
+        builder: &mut CR::MoveTypeLayoutBuilder,
+        ty: &normalized::Type,
+    ) -> LayoutHandle {
+        use normalized::Type as T;
+        match ty {
+            T::Bool => builder.bool(),
+            T::U8 => builder.u8(),
+            T::U16 => builder.u16(),
+            T::U32 => builder.u32(),
+            T::U64 => builder.u64(),
+            T::U128 => builder.u128(),
+            T::U256 => builder.u256(),
+            T::Address => builder.address(),
+            T::Vector(inner) => {
+                let inner = constant_layout_(builder, inner);
+                builder
+                    .vector(inner)
+                    .expect("Building a vector layout for a const should never fail")
+            }
 
-        T::Datatype(_) | T::Reference(_, _) | T::TypeParameter(_) | T::Signer => {
-            unreachable!("{ty:?} is not supported in constants")
+            T::Datatype(_) | T::Reference(_, _) | T::TypeParameter(_) | T::Signer => {
+                unreachable!("{ty:?} is not supported in constants")
+            }
         }
     }
+    let mut builder = CR::MoveTypeLayoutBuilder::new();
+    let handle = constant_layout_(&mut builder, ty);
+    builder.build(handle)
 }
 
 //**************************************************************************************************

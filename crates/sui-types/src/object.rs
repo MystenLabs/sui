@@ -336,11 +336,11 @@ impl MoveObject {
         resolver: &impl GetModule,
     ) -> Result<MoveStructLayout, SuiError> {
         let type_ = TypeTag::Struct(Box::new(struct_tag));
-        let layout = TypeLayoutBuilder::build_with_types(&type_, resolver).map_err(|e| {
-            SuiErrorKind::ObjectSerializationError {
+        let layout = TypeLayoutBuilder::build_with_types(&type_, resolver)
+            .and_then(|compressed| compressed.inflate())
+            .map_err(|e| SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
-            }
-        })?;
+            })?;
         match layout {
             MoveTypeLayout::Struct(l) => Ok(*l),
             _ => unreachable!(

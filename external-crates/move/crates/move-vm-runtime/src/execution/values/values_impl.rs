@@ -12,14 +12,18 @@ use crate::{
 };
 use move_binary_format::{
     checked_as,
+    constant::constant_sig_token_to_layout,
     errors::*,
-    file_format::{Constant, SignatureToken, VariantTag},
-    partial_vm_error,
+    file_format::{Constant, VariantTag},
+    partial_vm_error, safe_unwrap,
 };
 use move_core_types::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
-    runtime_value::{MoveEnumLayout, MoveStructLayout, MoveTypeLayout},
+    compressed::runtime::{
+        MoveEnumLayout, MoveFieldsLayout, MoveLayoutView, MoveStructLayout, MoveTypeLayout,
+        MoveTypeLayoutRef, VariantLayout,
+    },
     u256,
     vm_status::sub_status::NFE_VECTOR_ERROR_BASE,
 };
@@ -2738,12 +2742,21 @@ use serde::{
 };
 
 impl Value {
-    pub fn simple_deserialize(blob: &[u8], layout: &MoveTypeLayout) -> Option<Value> {
-        bcs::from_bytes_seed(SeedWrapper { layout }, blob).ok()
+    pub fn simple_deserialize(blob: &[u8], layout: MoveTypeLayoutRef<'_>) -> Option<Value> {
+        bcs::from_bytes_seed(
+            SeedWrapper {
+                layout: &layout,
+            },
+            blob,
+        )
+        .ok()
     }
 
-    pub fn typed_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
-        match bcs::to_bytes(&AnnotatedValue { layout, val: self }) {
+    pub fn typed_serialize(&self, layout: MoveTypeLayoutRef<'_>) -> Option<Vec<u8>> {
+        match bcs::to_bytes(&AnnotatedValue {
+            layout: &layout,
+            val: self,
+        }) {
             Ok(bytes) => Some(bytes),
             Err(e) => {
                 debug_assert!(
@@ -2848,67 +2861,69 @@ fn invariant_violation<S: serde::Serializer>(message: String) -> S::Error {
     S::Error::custom(partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(message))
 }
 
-impl serde::Serialize for AnnotatedValue<'_, '_, MoveTypeLayout, Value> {
+impl serde::Serialize for AnnotatedValue<'_, '_, MoveTypeLayoutRef<'_>, Value> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match (self.layout, self.val) {
-            (MoveTypeLayout::U8, Value::U8(x)) => serializer.serialize_u8(*x),
-            (MoveTypeLayout::U16, Value::U16(x)) => serializer.serialize_u16(*x),
-            (MoveTypeLayout::U32, Value::U32(x)) => serializer.serialize_u32(*x),
-            (MoveTypeLayout::U64, Value::U64(x)) => serializer.serialize_u64(*x),
-            (MoveTypeLayout::U128, Value::U128(x)) => serializer.serialize_u128(**x),
-            (MoveTypeLayout::U256, Value::U256(x)) => x.serialize(serializer),
-            (MoveTypeLayout::Bool, Value::Bool(x)) => serializer.serialize_bool(*x),
-            (MoveTypeLayout::Address, Value::Address(x)) => x.serialize(serializer),
+        use MoveLayoutView as L;
+        match (self.layout.as_view(), self.val) {
+            (L::U8, Value::U8(x)) => serializer.serialize_u8(*x),
+            (L::U16, Value::U16(x)) => serializer.serialize_u16(*x),
+            (L::U32, Value::U32(x)) => serializer.serialize_u32(*x),
+            (L::U64, Value::U64(x)) => serializer.serialize_u64(*x),
+            (L::U128, Value::U128(x)) => serializer.serialize_u128(**x),
+            (L::U256, Value::U256(x)) => x.serialize(serializer),
+            (L::Bool, Value::Bool(x)) => serializer.serialize_bool(*x),
+            (L::Address, Value::Address(x)) => x.serialize(serializer),
 
-            (MoveTypeLayout::Struct(struct_layout), Value::Struct(struct_)) => (AnnotatedValue {
-                layout: struct_layout.as_ref(),
+            (L::Struct(struct_layout), Value::Struct(struct_)) => (AnnotatedValue {
+                layout: &struct_layout,
                 val: &struct_.0,
             })
             .serialize(serializer),
 
-            (MoveTypeLayout::Enum(enum_layout), Value::Variant(entry)) => (AnnotatedValue {
-                layout: enum_layout.as_ref(),
+            (L::Enum(enum_layout), Value::Variant(entry)) => (AnnotatedValue {
+                layout: &enum_layout,
                 val: entry.0.as_ref(),
             })
             .serialize(serializer),
 
-            (MoveTypeLayout::Vector(layout), Value::PrimVec(prim_vec)) => {
-                let layout = layout.as_ref();
-                match (layout, prim_vec) {
-                    (MoveTypeLayout::U8, PrimVec::VecU8(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::U16, PrimVec::VecU16(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::U32, PrimVec::VecU32(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::U64, PrimVec::VecU64(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::U128, PrimVec::VecU128(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::U256, PrimVec::VecU256(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::Bool, PrimVec::VecBool(r)) => r.serialize(serializer),
-                    (MoveTypeLayout::Address, PrimVec::VecAddress(r)) => r.serialize(serializer),
-                    (layout, container) => Err(invariant_violation::<S>(format!(
-                        "cannot serialize container {:?} as {:?}",
-                        container, layout
-                    ))),
-                }
-            }
-            (MoveTypeLayout::Vector(layout), Value::Vec(r)) => {
-                let layout = layout.as_ref();
+            (L::Vector(layout), Value::PrimVec(prim_vec)) => match (layout.as_view(), prim_vec) {
+                (L::U8, PrimVec::VecU8(r)) => r.serialize(serializer),
+                (L::U16, PrimVec::VecU16(r)) => r.serialize(serializer),
+                (L::U32, PrimVec::VecU32(r)) => r.serialize(serializer),
+                (L::U64, PrimVec::VecU64(r)) => r.serialize(serializer),
+                (L::U128, PrimVec::VecU128(r)) => r.serialize(serializer),
+                (L::U256, PrimVec::VecU256(r)) => r.serialize(serializer),
+                (L::Bool, PrimVec::VecBool(r)) => r.serialize(serializer),
+                (L::Address, PrimVec::VecAddress(r)) => r.serialize(serializer),
+                (layout, container) => Err(invariant_violation::<S>(format!(
+                    "cannot serialize container {:?} as {:?}",
+                    container, layout
+                ))),
+            },
+            (L::Vector(layout), Value::Vec(r)) => {
                 let v = r;
                 let mut t = serializer.serialize_seq(Some(v.len()))?;
                 for val in v.iter() {
                     let val = &*val.borrow();
-                    t.serialize_element(&AnnotatedValue { layout, val })?;
+                    t.serialize_element(&AnnotatedValue {
+                        layout: &layout,
+                        val,
+                    })?;
                 }
                 t.end()
             }
 
-            (MoveTypeLayout::Signer, Value::Struct(struct_)) => {
+            (L::Signer, Value::Struct(struct_)) => {
                 if struct_.len() != 1 {
                     return Err(invariant_violation::<S>(format!(
                         "cannot serialize container as a signer -- expected 1 field got {}",
                         struct_.len()
                     )));
                 }
+                let addr_layout = MoveTypeLayout::address();
+                let addr_ref = addr_layout.as_ref();
                 (AnnotatedValue {
-                    layout: &MoveTypeLayout::Address,
+                    layout: &addr_ref,
                     val: &*struct_
                         .safe_get(0)
                         .map_err(|e| invariant_violation::<S>(e.to_string()))?
@@ -2925,7 +2940,7 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveTypeLayout, Value> {
     }
 }
 
-impl serde::Serialize for AnnotatedValue<'_, '_, MoveStructLayout, FixedSizeVec> {
+impl serde::Serialize for AnnotatedValue<'_, '_, MoveStructLayout<'_>, FixedSizeVec> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let values = &self.val;
         let fields = self.layout.fields();
@@ -2936,10 +2951,10 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveStructLayout, FixedSizeVec>
             )));
         }
         let mut t = serializer.serialize_tuple(values.len())?;
-        for (field_layout, val) in fields.iter().zip(values.iter()) {
+        for (field_layout, val) in fields.zip(values.iter()) {
             let val = &*val.borrow();
             t.serialize_element(&AnnotatedValue {
-                layout: field_layout,
+                layout: &field_layout,
                 val,
             })?;
         }
@@ -2947,7 +2962,7 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveStructLayout, FixedSizeVec>
     }
 }
 
-impl serde::Serialize for AnnotatedValue<'_, '_, MoveEnumLayout, (VariantTag, FixedSizeVec)> {
+impl serde::Serialize for AnnotatedValue<'_, '_, MoveEnumLayout<'_>, (VariantTag, FixedSizeVec)> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let (tag, values) = &self.val;
         let tag = if *tag as u64 > VARIANT_TAG_MAX_VALUE {
@@ -2964,12 +2979,15 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveEnumLayout, (VariantTag, Fi
             })?
         };
 
-        let fields = &self
-            .layout
-            .0
-            .safe_get(tag as usize)
-            .map_err(|e| invariant_violation::<S>(e.to_string()))?;
-        if fields.len() != values.len() {
+        let fields = &self.layout.variant(tag as u16).ok_or_else(|| {
+            invariant_violation::<S>("Invalid variant tag for serialization".to_string())
+        })?;
+        let VariantLayout::Known(fields) = fields else {
+            return Err(invariant_violation::<S>(
+                "Cannot serialize variant with unknown layout".to_string(),
+            ));
+        };
+        if fields.field_count() != values.len() {
             return Err(invariant_violation::<S>(format!(
                 "cannot serialize variant value {:?} as {:?} -- number of fields mismatch",
                 self.val, self.layout
@@ -2988,23 +3006,23 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveEnumLayout, (VariantTag, Fi
     }
 }
 
-struct VariantFields<'a>(&'a [MoveTypeLayout]);
+struct VariantFields<'a>(&'a MoveFieldsLayout<'a>);
 
 impl<'a> serde::Serialize for AnnotatedValue<'a, '_, VariantFields<'a>, FixedSizeVec> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let values = self.val;
         let types = self.layout.0;
-        if types.len() != values.len() {
+        if types.field_count() != values.len() {
             return Err(invariant_violation::<S>(format!(
                 "cannot serialize variant value {:?} as {:?} -- number of fields mismatch",
                 self.val, self.layout.0
             )));
         }
         let mut t = serializer.serialize_tuple(values.len())?;
-        for (field_layout, val) in types.iter().zip(values.iter()) {
+        for (field_layout, val) in types.fields().zip(values.iter()) {
             let val = &*val.borrow();
             t.serialize_element(&AnnotatedValue {
-                layout: field_layout,
+                layout: &field_layout,
                 val,
             })?;
         }
@@ -3017,18 +3035,18 @@ struct SeedWrapper<L> {
     layout: L,
 }
 
-impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
+impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayoutRef<'_>> {
     type Value = Value;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(
         self,
         deserializer: D,
     ) -> Result<Self::Value, D::Error> {
-        use MoveTypeLayout as L;
+        use MoveLayoutView as L;
         use PrimVec as PV;
         use Value as V;
 
-        match self.layout {
+        match self.layout.as_view() {
             L::Bool => bool::deserialize(deserializer).map(Value::bool),
             L::U8 => u8::deserialize(deserializer).map(Value::u8),
             L::U16 => u16::deserialize(deserializer).map(Value::u16),
@@ -3040,17 +3058,17 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
             L::Signer => AccountAddress::deserialize(deserializer).map(Value::signer),
 
             L::Struct(struct_layout) => Ok(SeedWrapper {
-                layout: struct_layout.as_ref(),
+                layout: &struct_layout,
             }
             .deserialize(deserializer)?),
 
             L::Enum(enum_layout) => Ok(SeedWrapper {
-                layout: enum_layout.as_ref(),
+                layout: &enum_layout,
             }
             .deserialize(deserializer)?),
 
-            L::Vector(layout) => {
-                let value = match layout.as_ref() {
+            L::Vector(inner_layout) => {
+                let value = match inner_layout.as_view() {
                     L::U8 => V::PrimVec(PV::VecU8(Vec::deserialize(deserializer)?)),
                     L::U16 => V::PrimVec(PV::VecU16(Vec::deserialize(deserializer)?)),
                     L::U32 => V::PrimVec(PV::VecU32(Vec::deserialize(deserializer)?)),
@@ -3059,10 +3077,12 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
                     L::U256 => V::PrimVec(PV::VecU256(Vec::deserialize(deserializer)?)),
                     L::Bool => V::PrimVec(PV::VecBool(Vec::deserialize(deserializer)?)),
                     L::Address => V::PrimVec(PV::VecAddress(Vec::deserialize(deserializer)?)),
-                    layout => {
+                    _ => {
                         // TODO: Box this as part of deserialization to avoid the second iteration?
                         let v = deserializer
-                            .deserialize_seq(VectorElementVisitor(SeedWrapper { layout }))?
+                            .deserialize_seq(VectorElementVisitor(SeedWrapper {
+                                layout: &inner_layout,
+                            }))?
                             .into_iter()
                             .map(MemBox::new)
                             .collect();
@@ -3075,32 +3095,35 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveTypeLayout> {
     }
 }
 
-impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveStructLayout> {
+impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveStructLayout<'_>> {
     type Value = Value;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(
         self,
         deserializer: D,
     ) -> Result<Self::Value, D::Error> {
-        let fields = deserializer
-            .deserialize_tuple(self.layout.0.len(), StructFieldVisitor(&self.layout.0))?;
+        let fields_layout = self.layout.fields_layout();
+        let fields = deserializer.deserialize_tuple(
+            fields_layout.field_count(),
+            StructFieldVisitor(&fields_layout),
+        )?;
         Ok(Value::make_struct(fields))
     }
 }
 
-impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveEnumLayout> {
+impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveEnumLayout<'_>> {
     type Value = Value;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(
         self,
         deserializer: D,
     ) -> Result<Self::Value, D::Error> {
-        let variant = deserializer.deserialize_tuple(2, EnumFieldVisitor(&self.layout.0))?;
+        let variant = deserializer.deserialize_tuple(2, EnumFieldVisitor(self.layout))?;
         Ok(Value::Variant(variant))
     }
 }
 
-struct VectorElementVisitor<'a>(SeedWrapper<&'a MoveTypeLayout>);
+struct VectorElementVisitor<'a>(SeedWrapper<&'a MoveTypeLayoutRef<'a>>);
 
 impl<'d> serde::de::Visitor<'d> for VectorElementVisitor<'_> {
     type Value = Vec<Value>;
@@ -3121,7 +3144,7 @@ impl<'d> serde::de::Visitor<'d> for VectorElementVisitor<'_> {
     }
 }
 
-struct StructFieldVisitor<'a>(&'a [MoveTypeLayout]);
+struct StructFieldVisitor<'a>(&'a MoveFieldsLayout<'a>);
 
 impl<'d> serde::de::Visitor<'d> for StructFieldVisitor<'_> {
     type Value = Vec<Value>;
@@ -3135,9 +3158,9 @@ impl<'d> serde::de::Visitor<'d> for StructFieldVisitor<'_> {
         A: serde::de::SeqAccess<'d>,
     {
         let mut val = Vec::new();
-        for (i, field_layout) in self.0.iter().enumerate() {
+        for (i, field_layout) in self.0.fields().enumerate() {
             if let Some(elem) = seq.next_element_seed(SeedWrapper {
-                layout: field_layout,
+                layout: &field_layout,
             })? {
                 val.push(elem)
             } else {
@@ -3148,7 +3171,7 @@ impl<'d> serde::de::Visitor<'d> for StructFieldVisitor<'_> {
     }
 }
 
-struct EnumFieldVisitor<'a>(&'a Vec<Vec<MoveTypeLayout>>);
+struct EnumFieldVisitor<'a>(&'a MoveEnumLayout<'a>);
 
 impl<'d> serde::de::Visitor<'d> for EnumFieldVisitor<'_> {
     type Value = Variant;
@@ -3161,7 +3184,7 @@ impl<'d> serde::de::Visitor<'d> for EnumFieldVisitor<'_> {
     where
         A: serde::de::SeqAccess<'d>,
     {
-        let tag = match seq.next_element_seed(&MoveTypeLayout::U8)? {
+        let tag = match seq.next_element_seed(&MoveTypeLayout::u8())? {
             Some(RuntimeValue::U8(tag)) if tag as u64 <= VARIANT_TAG_MAX_VALUE => tag as u16,
             Some(RuntimeValue::U8(tag)) => {
                 return Err(A::Error::invalid_length(tag as usize, &self));
@@ -3175,11 +3198,18 @@ impl<'d> serde::de::Visitor<'d> for EnumFieldVisitor<'_> {
             None => return Err(A::Error::invalid_length(0, &self)),
         };
 
-        let Some(variant_layout) = self.0.get(tag as usize) else {
+        let Some(variant_layout) = self.0.variant(tag) else {
             return Err(A::Error::invalid_length(tag as usize, &self));
         };
 
-        let Some(fields) = seq.next_element_seed(&MoveRuntimeVariantFieldLayout(variant_layout))?
+        let VariantLayout::Known(variant_layout) = variant_layout else {
+            return Err(A::Error::custom(format!(
+                "Cannot deserialize variant with unknown layout for tag {tag}"
+            )));
+        };
+
+        let Some(fields) =
+            seq.next_element_seed(&MoveRuntimeVariantFieldLayout(&variant_layout))?
         else {
             return Err(A::Error::invalid_length(1, &self));
         };
@@ -3188,7 +3218,7 @@ impl<'d> serde::de::Visitor<'d> for EnumFieldVisitor<'_> {
     }
 }
 
-struct MoveRuntimeVariantFieldLayout<'a>(&'a Vec<MoveTypeLayout>);
+struct MoveRuntimeVariantFieldLayout<'a>(&'a MoveFieldsLayout<'a>);
 
 impl<'d> serde::de::DeserializeSeed<'d> for &MoveRuntimeVariantFieldLayout<'_> {
     type Value = Vec<Value>;
@@ -3197,7 +3227,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveRuntimeVariantFieldLayout<'_> {
         self,
         deserializer: D,
     ) -> Result<Self::Value, D::Error> {
-        deserializer.deserialize_tuple(self.0.len(), StructFieldVisitor(self.0))
+        deserializer.deserialize_tuple(self.0.field_count(), StructFieldVisitor(self.0))
     }
 }
 
@@ -3210,31 +3240,9 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveRuntimeVariantFieldLayout<'_> {
 **************************************************************************************/
 
 impl Value {
-    fn constant_sig_token_to_layout(constant_signature: &SignatureToken) -> Option<MoveTypeLayout> {
-        use MoveTypeLayout as L;
-        use SignatureToken as S;
-
-        Some(match constant_signature {
-            S::Bool => L::Bool,
-            S::U8 => L::U8,
-            S::U16 => L::U16,
-            S::U32 => L::U32,
-            S::U64 => L::U64,
-            S::U128 => L::U128,
-            S::U256 => L::U256,
-            S::Address => L::Address,
-            S::Signer => return None,
-            S::Vector(inner) => L::Vector(Box::new(Self::constant_sig_token_to_layout(inner)?)),
-            // Not yet supported
-            S::Datatype(_) | S::DatatypeInstantiation(_) => return None,
-            // Not allowed/Not meaningful
-            S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) => return None,
-        })
-    }
-
     pub fn deserialize_constant(constant: &Constant) -> Option<Value> {
-        let layout = Self::constant_sig_token_to_layout(&constant.type_)?;
-        Value::simple_deserialize(&constant.data, &layout)
+        let layout = constant_sig_token_to_layout(&constant.type_)?;
+        Value::simple_deserialize(&constant.data, layout.as_ref())
     }
 }
 
@@ -3631,11 +3639,11 @@ use move_core_types::runtime_value::{
 };
 
 impl Value {
-    pub fn as_move_value(&self, layout: &MoveTypeLayout) -> PartialVMResult<RuntimeValue> {
-        use MoveTypeLayout as L;
+    pub fn as_move_value(&self, layout: MoveTypeLayoutRef<'_>) -> PartialVMResult<RuntimeValue> {
+        use MoveLayoutView as L;
         use PrimVec as PV;
 
-        Ok(match (layout, self) {
+        Ok(match (layout.as_view(), self) {
             (L::U8, Value::U8(x)) => RuntimeValue::U8(*x),
             (L::U16, Value::U16(x)) => RuntimeValue::U16(*x),
             (L::U32, Value::U32(x)) => RuntimeValue::U32(*x),
@@ -3647,12 +3655,19 @@ impl Value {
 
             // Enum variant case with dereferencing the Box.
             (L::Enum(enum_layout), Value::Variant(entry)) => {
-                let MoveEnumLayout(variants) = &**enum_layout;
                 let (tag, values) = entry.as_ref();
                 let tag = *tag; // Simply copy the u16 value, no need for dereferencing
-                let field_layouts = variants.safe_get(tag as usize)?;
+                let VariantLayout::Known(field_layouts) = safe_unwrap!(enum_layout.variant(tag))
+                else {
+                    return Err(partial_vm_error!(
+                        UNREACHABLE,
+                        "Variant layout not know for tag {} for enum layout {:?}",
+                        tag,
+                        enum_layout
+                    ));
+                };
                 let mut fields = vec![];
-                for (v, field_layout) in values.iter().zip(field_layouts) {
+                for (v, field_layout) in values.iter().zip(field_layouts.fields()) {
                     fields.push(v.try_borrow()?.as_move_value(field_layout)?);
                 }
                 RuntimeValue::Variant(RuntimeVariant { tag, fields })
@@ -3661,7 +3676,7 @@ impl Value {
             // Struct case with direct access to Box
             (L::Struct(struct_layout), Value::Struct(values)) => {
                 let mut fields = vec![];
-                for (v, field_layout) in values.iter().zip(struct_layout.fields().iter()) {
+                for (v, field_layout) in values.iter().zip(struct_layout.fields()) {
                     fields.push(v.try_borrow()?.as_move_value(field_layout)?);
                 }
                 RuntimeValue::Struct(RuntimeStruct::new(fields))
@@ -3671,7 +3686,7 @@ impl Value {
             (L::Vector(inner_layout), Value::Vec(values)) => RuntimeValue::Vector(
                 values
                     .iter()
-                    .map(|v| v.try_borrow()?.as_move_value(inner_layout.as_ref()))
+                    .map(|v| v.try_borrow()?.as_move_value(inner_layout))
                     .collect::<PartialVMResult<_>>()?,
             ),
             (L::Vector(inner_layout), Value::PrimVec(values)) => {
@@ -3681,7 +3696,7 @@ impl Value {
                         MV::Vector($xs.iter().map(|x| MV::$ctor(*x)).collect())
                     };
                 }
-                match (inner_layout.as_ref(), values) {
+                match (inner_layout.as_view(), values) {
                     (L::U8, PV::VecU8(xs)) => make_vec!(xs, U8),
                     (L::U16, PV::VecU16(xs)) => make_vec!(xs, U16),
                     (L::U32, PV::VecU32(xs)) => make_vec!(xs, U32),
@@ -3712,7 +3727,7 @@ impl Value {
                         return Err(partial_vm_error!(
                             UNREACHABLE,
                             "Expected a primitive type for the primitive vector, got {:?}",
-                            inner_layout.as_ref()
+                            inner_layout
                         ));
                     }
                 }
@@ -3751,18 +3766,21 @@ impl Value {
     }
 }
 
-use move_core_types::annotated_value::{
-    MoveEnumLayout as AnnEnumLayout, MoveStruct as AnnStruct, MoveTypeLayout as AnnTypeLayout,
-    MoveValue as AnnValue, MoveVariant as AnnVariant,
+use move_core_types::{
+    annotated_value::{MoveStruct as AnnStruct, MoveValue as AnnValue, MoveVariant as AnnVariant},
+    compressed::annotated as CA,
 };
 
 impl Value {
     /// Converts the value to an annotated move value. This is only needed for tracing and care
     /// should be taken when using this function as it can possibly inflate the size of the value.
-    pub fn as_annotated_move_value(&self, layout: &AnnTypeLayout) -> Option<AnnValue> {
-        use AnnTypeLayout as L;
+    pub fn as_annotated_move_value(
+        &self,
+        layout: CA::MoveTypeLayoutRef<'_>,
+    ) -> Option<AnnValue> {
         use AnnValue as AV;
-        match (layout, self) {
+        use CA::MoveLayoutView as L;
+        match (layout.as_view(), self) {
             (L::U8, Value::U8(x)) => Some(AnnValue::U8(*x)),
             (L::U16, Value::U16(x)) => Some(AnnValue::U16(*x)),
             (L::U32, Value::U32(x)) => Some(AnnValue::U32(*x)),
@@ -3772,34 +3790,41 @@ impl Value {
             (L::Bool, Value::Bool(x)) => Some(AnnValue::Bool(*x)),
             (L::Address, Value::Address(x)) => Some(AnnValue::Address(**x)),
             (L::Enum(e_layout), Value::Variant(var_box)) => {
-                let AnnEnumLayout { type_, variants } = e_layout.as_ref();
                 let (tag, values) = var_box.as_ref();
                 let tag = *tag;
-                let ((name, _), field_layouts) = variants.iter().find(|((_, t), _)| *t == tag)?;
+                let CA::VariantLayout::Known {
+                    name,
+                    tag: _v_tag,
+                    fields: field_layouts,
+                } = e_layout.variant(tag)?
+                else {
+                    return None;
+                };
+                debug_assert_eq!(_v_tag, tag);
                 let mut fields = vec![];
-                for (v, field_layout) in values.iter().zip(field_layouts) {
+                for (v, (field_name, field_layout)) in values.iter().zip(field_layouts.fields()) {
                     fields.push((
-                        field_layout.name.clone(),
-                        v.borrow().as_annotated_move_value(&field_layout.layout)?,
+                        field_name.clone(),
+                        v.borrow().as_annotated_move_value(field_layout)?,
                     ));
                 }
                 Some(AV::Variant(AnnVariant {
                     tag,
                     fields,
-                    type_: type_.clone(),
+                    type_: e_layout.type_().clone(),
                     variant_name: name.clone(),
                 }))
             }
             (L::Struct(struct_layout), Value::Struct(values)) => {
                 let mut fields = vec![];
-                for (v, field_layout) in values.iter().zip(struct_layout.fields.iter()) {
+                for (v, (field_name, field_layout)) in values.iter().zip(struct_layout.fields()) {
                     fields.push((
-                        field_layout.name.clone(),
-                        v.borrow().as_annotated_move_value(&field_layout.layout)?,
+                        field_name.clone(),
+                        v.borrow().as_annotated_move_value(field_layout)?,
                     ));
                 }
                 Some(AV::Struct(AnnStruct::new(
-                    struct_layout.type_.clone(),
+                    struct_layout.type_().clone(),
                     fields,
                 )))
             }
@@ -3816,7 +3841,7 @@ impl Value {
                         Some(AV::Vector($xs.iter().map(|x| AV::$ctor(*x)).collect()))
                     };
                 }
-                match (inner_layout.as_ref(), values) {
+                match (inner_layout.as_view(), values) {
                     (L::U8, PrimVec::VecU8(xs)) => make_vec!(xs, U8),
                     (L::U16, PrimVec::VecU16(xs)) => make_vec!(xs, U16),
                     (L::U32, PrimVec::VecU32(xs)) => make_vec!(xs, U32),
@@ -3837,16 +3862,19 @@ impl Value {
                     _ => None,
                 }
             }
-            (layout, Value::Reference(ref_)) => ref_.as_annotated_move_value(layout),
+            (_layout_view, Value::Reference(ref_)) => ref_.as_annotated_move_value(layout),
             (_, _) => None,
         }
     }
 }
 
 impl Reference {
-    pub fn as_annotated_move_value(&self, layout: &AnnTypeLayout) -> Option<AnnValue> {
+    pub fn as_annotated_move_value(
+        &self,
+        layout: CA::MoveTypeLayoutRef<'_>,
+    ) -> Option<AnnValue> {
         use AnnValue as AV;
-        use move_core_types::annotated_value::MoveTypeLayout as L;
+        use CA::MoveLayoutView as L;
         match self {
             // If the reference is a direct reference, delegate to the inner Value.
             Reference::Value(mem_box) => mem_box.borrow().as_annotated_move_value(layout),
@@ -3864,8 +3892,8 @@ impl Reference {
                     Value::PrimVec(prim_vec) => {
                         // We require that the layout is for a vector; then we inspect
                         // the inner layout and the PrimVec variant.
-                        match layout {
-                            L::Vector(inner_layout) => match (inner_layout.as_ref(), prim_vec) {
+                        match layout.as_view() {
+                            L::Vector(inner_layout) => match (inner_layout.as_view(), prim_vec) {
                                 (L::U8, PrimVec::VecU8(xs)) => {
                                     Some(AV::Vector(xs.iter().map(|u| AV::U8(*u)).collect()))
                                 }

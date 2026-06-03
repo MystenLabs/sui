@@ -25,7 +25,7 @@ use crate::{
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMError, VMResult};
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value::MoveTypeLayout as AnnotatedTypeLayout,
+    compressed::annotated::{self as CA, MoveTypeLayout as AnnotatedTypeLayout},
     language_storage::{ModuleId, TypeTag},
 };
 use move_trace_format::{
@@ -1146,14 +1146,14 @@ impl VMTracer<'_> {
             | B::LdTrue
             | B::LdConst(_)) => {
                 let layout = match i {
-                    B::LdU8(_) => AnnotatedTypeLayout::U8,
-                    B::LdU16(_) => AnnotatedTypeLayout::U16,
-                    B::LdU32(_) => AnnotatedTypeLayout::U32,
-                    B::LdU64(_) => AnnotatedTypeLayout::U64,
-                    B::LdU128(_) => AnnotatedTypeLayout::U128,
-                    B::LdU256(_) => AnnotatedTypeLayout::U256,
-                    B::LdTrue => AnnotatedTypeLayout::Bool,
-                    B::LdFalse => AnnotatedTypeLayout::Bool,
+                    B::LdU8(_) => AnnotatedTypeLayout::u8(),
+                    B::LdU16(_) => AnnotatedTypeLayout::u16(),
+                    B::LdU32(_) => AnnotatedTypeLayout::u32(),
+                    B::LdU64(_) => AnnotatedTypeLayout::u64(),
+                    B::LdU128(_) => AnnotatedTypeLayout::u128(),
+                    B::LdU256(_) => AnnotatedTypeLayout::u256(),
+                    B::LdTrue => AnnotatedTypeLayout::bool(),
+                    B::LdFalse => AnnotatedTypeLayout::bool(),
                     B::LdConst(const_ptr) => vtables
                         .arena_type_to_fully_annotated_layout(&const_ptr.type_)
                         .ok()?,
@@ -1187,12 +1187,12 @@ impl VMTracer<'_> {
             }
             i @ (B::CastU8 | B::CastU16 | B::CastU32 | B::CastU64 | B::CastU128 | B::CastU256) => {
                 let layout = match i {
-                    B::CastU8 => AnnotatedTypeLayout::U8,
-                    B::CastU16 => AnnotatedTypeLayout::U16,
-                    B::CastU32 => AnnotatedTypeLayout::U32,
-                    B::CastU64 => AnnotatedTypeLayout::U64,
-                    B::CastU128 => AnnotatedTypeLayout::U128,
-                    B::CastU256 => AnnotatedTypeLayout::U256,
+                    B::CastU8 => AnnotatedTypeLayout::u8(),
+                    B::CastU16 => AnnotatedTypeLayout::u16(),
+                    B::CastU32 => AnnotatedTypeLayout::u32(),
+                    B::CastU64 => AnnotatedTypeLayout::u64(),
+                    B::CastU128 => AnnotatedTypeLayout::u128(),
+                    B::CastU256 => AnnotatedTypeLayout::u256(),
                     _ => unreachable!(),
                 };
                 self.type_stack.pop()?;
@@ -1242,7 +1242,7 @@ impl VMTracer<'_> {
                 self.type_stack.pop()?;
                 self.type_stack.pop()?;
                 self.type_stack.push(StackType {
-                    layout: AnnotatedTypeLayout::Bool,
+                    layout: AnnotatedTypeLayout::bool(),
                     ref_type: None,
                 });
                 let effects = emit_effects!(vec![EF::Push(
@@ -1303,19 +1303,19 @@ impl VMTracer<'_> {
             }
             B::Unpack(_) | B::UnpackGeneric(_) => {
                 let ty = self.type_stack.pop()?;
-                let AnnotatedTypeLayout::Struct(s) = ty.layout else {
+                let CA::MoveLayoutView::Struct(s) = ty.layout.as_view() else {
                     self.report_error(&format!("Expected struct, got {:#?}", ty));
                     return None;
                 };
-                for field in &s.fields {
+                for (_, field) in s.fields() {
                     self.type_stack.push(StackType {
-                        layout: field.layout.clone(),
+                        layout: field.to_owned(),
                         ref_type: None,
                     });
                 }
                 let effects = emit_effects! {
                     let mut effects = vec![];
-                    for i in (0..s.fields.len()).rev() {
+                    for i in (0..s.field_count()).rev() {
                         let value = self.resolve_stack_value(vtables, machine, i)?;
                         effects.push(EF::Push(value));
                     }
@@ -1328,7 +1328,7 @@ impl VMTracer<'_> {
                 self.type_stack.pop()?;
                 self.type_stack.pop()?;
                 self.type_stack.push(StackType {
-                    layout: AnnotatedTypeLayout::Bool,
+                    layout: AnnotatedTypeLayout::bool(),
                     ref_type: None,
                 });
                 let effects = emit_effects!(vec![EF::Push(
@@ -1341,7 +1341,7 @@ impl VMTracer<'_> {
                 self.type_stack.pop()?;
                 self.type_stack.pop()?;
                 self.type_stack.push(StackType {
-                    layout: AnnotatedTypeLayout::Bool,
+                    layout: AnnotatedTypeLayout::bool(),
                     ref_type: None,
                 });
                 let effects = emit_effects!(vec![EF::Push(
@@ -1429,12 +1429,12 @@ impl VMTracer<'_> {
             }
             i @ (B::MutBorrowField(fh_ptr) | B::ImmBorrowField(fh_ptr)) => {
                 let value_ty = self.type_stack.pop()?;
-                let AnnotatedTypeLayout::Struct(slayout) = &value_ty.layout else {
+                let CA::MoveLayoutView::Struct(slayout) = value_ty.layout.as_view() else {
                     self.report_error(&format!("Expected struct, got {:#?}", value_ty.layout));
                     return None;
                 };
                 let field_offset = fh_ptr.offset;
-                let field_layout = slayout.fields.get(field_offset)?.layout.clone();
+                let field_layout = slayout.field(field_offset as u16)?.1;
                 let location = value_ty.ref_type.as_ref()?.1.clone();
                 let field_location =
                     RuntimeLocation::Indexed(Box::new(location.clone()), field_offset);
@@ -1444,7 +1444,7 @@ impl VMTracer<'_> {
                     _ => unreachable!(),
                 };
                 self.type_stack.push(StackType {
-                    layout: field_layout,
+                    layout: field_layout.to_owned(),
                     ref_type: Some((ref_type, field_location)),
                 });
                 let effects = emit_effects!(vec![EF::Push(
@@ -1455,12 +1455,12 @@ impl VMTracer<'_> {
             }
             i @ (B::MutBorrowFieldGeneric(fh_ptr) | B::ImmBorrowFieldGeneric(fh_ptr)) => {
                 let value_ty = self.type_stack.pop()?;
-                let AnnotatedTypeLayout::Struct(slayout) = &value_ty.layout else {
+                let CA::MoveLayoutView::Struct(slayout) = value_ty.layout.as_view() else {
                     self.report_error(&format!("Expected struct, got {:#?}", value_ty.layout));
                     return None;
                 };
                 let field_offset = fh_ptr.offset;
-                let field_layout = slayout.fields.get(field_offset)?.layout.clone();
+                let field_layout = slayout.field(field_offset as u16)?.1;
                 let location = value_ty.ref_type.as_ref()?.1.clone();
                 let field_location =
                     RuntimeLocation::Indexed(Box::new(location.clone()), field_offset);
@@ -1470,10 +1470,10 @@ impl VMTracer<'_> {
                     _ => unreachable!(),
                 };
                 self.type_stack.push(StackType {
-                    layout: field_layout,
+                    layout: field_layout.to_owned(),
                     ref_type: Some((ref_type, field_location)),
                 });
-                let ty_args = slayout.type_.type_params.clone();
+                let ty_args = slayout.type_().type_params.clone();
                 let effects = emit_effects!(vec![EF::Push(
                     self.resolve_stack_value(vtables, machine, 0)?
                 )]);
@@ -1481,14 +1481,15 @@ impl VMTracer<'_> {
                     .instruction(instruction, ty_args, effects, *remaining_gas, pc);
             }
             B::VecPack(ty_ptr, n) => {
-                let ty = instantiate_single_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
-                    .ok()?;
-                let ty = vtables.type_to_fully_annotated_layout(&ty).ok()?;
-                let ty = AnnotatedTypeLayout::Vector(Box::new(ty));
+                let inner_ty =
+                    instantiate_single_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
+                        .ok()?;
+                let vec_ty = Type::Vector(Box::new(inner_ty));
+                let vec_ty = vtables.type_to_fully_annotated_layout(&vec_ty).ok()?;
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - *n as usize);
                 self.type_stack.push(StackType {
-                    layout: ty,
+                    layout: vec_ty,
                     ref_type: None,
                 });
                 let effects = emit_effects!(vec![EF::Push(
@@ -1505,7 +1506,7 @@ impl VMTracer<'_> {
                 };
                 self.type_stack.pop()?;
                 let ref_ty = self.type_stack.pop()?;
-                let AnnotatedTypeLayout::Vector(ty) = ref_ty.layout else {
+                let CA::MoveLayoutView::Vector(ty) = ref_ty.layout.as_view() else {
                     self.report_error(&format!("Expected vector, got {:#?}", ref_ty.layout));
                     return None;
                 };
@@ -1527,7 +1528,7 @@ impl VMTracer<'_> {
                 let location =
                     RuntimeLocation::Indexed(Box::new(ref_ty.ref_type?.1.clone()), i as usize);
                 self.type_stack.push(StackType {
-                    layout: (*ty).clone(),
+                    layout: ty.to_owned(),
                     ref_type: Some((ref_type, location)),
                 });
                 let effects = emit_effects!(vec![EF::Push(
@@ -1539,7 +1540,7 @@ impl VMTracer<'_> {
             B::VecLen(_) => {
                 self.type_stack.pop()?;
                 self.type_stack.push(StackType {
-                    layout: AnnotatedTypeLayout::U64,
+                    layout: AnnotatedTypeLayout::u64(),
                     ref_type: None,
                 });
                 let effects = emit_effects!(vec![EF::Push(
@@ -1571,12 +1572,12 @@ impl VMTracer<'_> {
             }
             B::VecPopBack(_) => {
                 let ref_ty = self.type_stack.pop()?;
-                let AnnotatedTypeLayout::Vector(ty) = ref_ty.layout else {
+                let CA::MoveLayoutView::Vector(ty) = ref_ty.layout.as_view() else {
                     self.report_error(&format!("Expected vector, got {:#?}", ref_ty.layout));
                     return None;
                 };
                 self.type_stack.push(StackType {
-                    layout: (*ty).clone(),
+                    layout: ty.to_owned(),
                     ref_type: None,
                 });
                 let effects = emit_effects!(vec![EF::Push(
@@ -1587,13 +1588,13 @@ impl VMTracer<'_> {
             }
             B::VecUnpack(_, n) => {
                 let ty = self.type_stack.pop()?;
-                let AnnotatedTypeLayout::Vector(ty) = ty.layout else {
+                let CA::MoveLayoutView::Vector(ty) = ty.layout.as_view() else {
                     self.report_error(&format!("Expected vector, got {:#?}", ty.layout));
                     return None;
                 };
                 for _ in 0..*n {
                     self.type_stack.push(StackType {
-                        layout: (*ty).clone(),
+                        layout: ty.to_owned(),
                         ref_type: None,
                     });
                 }
@@ -1672,14 +1673,20 @@ impl VMTracer<'_> {
                     }
                     _ => unreachable!(),
                 };
-                let AnnotatedTypeLayout::Enum(e) = ty.layout else {
+                let CA::MoveLayoutView::Enum(e) = ty.layout.as_view() else {
                     self.report_error(&format!("Expected enum, got {:#?}", ty.layout));
                     return None;
                 };
-                let variant_layout = e.variants.iter().find(|v| v.0.1 == tag)?;
-                for f_layout in variant_layout.1.iter() {
+                let CA::VariantLayout::Known { fields, .. } = e.variant(tag)? else {
+                    self.report_error(&format!(
+                        "Layout not known for enum variant tag = {} enum_layout = {:#?}",
+                        tag, ty.layout
+                    ));
+                    return None;
+                };
+                for (_, f_layout) in fields.fields() {
                     self.type_stack.push(StackType {
-                        layout: f_layout.layout.clone(),
+                        layout: f_layout.to_owned(),
                         ref_type: None,
                     });
                 }
@@ -1718,16 +1725,22 @@ impl VMTracer<'_> {
                     ),
                     _ => unreachable!(),
                 };
-                let AnnotatedTypeLayout::Enum(e) = ty.layout else {
+                let CA::MoveLayoutView::Enum(e) = ty.layout.as_view() else {
                     self.report_error(&format!("Expected enum, got {:#?}", ty.layout));
                     return None;
                 };
-                let variant_layout = e.variants.iter().find(|v| v.0.1 == tag)?;
+                let CA::VariantLayout::Known { fields, .. } = e.variant(tag)? else {
+                    self.report_error(&format!(
+                        "Layout not known for enum variant tag = {} enum_layout = {:#?}",
+                        tag, ty.layout
+                    ));
+                    return None;
+                };
                 let location = ty.ref_type.as_ref()?.1.clone();
-                for (i, f_layout) in variant_layout.1.iter().enumerate() {
+                for (i, (_, f_layout)) in fields.fields().enumerate() {
                     let location = RuntimeLocation::Indexed(Box::new(location.clone()), i);
                     self.type_stack.push(StackType {
-                        layout: f_layout.layout.clone(),
+                        layout: f_layout.to_owned(),
                         ref_type: Some((ref_type.clone(), location)),
                     });
                 }
@@ -1941,7 +1954,7 @@ fn into_annotated_move_value(
     value: &RuntimeValue,
     type_: &AnnotatedTypeLayout,
 ) -> Option<SerializableMoveValue> {
-    Some(value.as_annotated_move_value(type_)?.into())
+    Some(value.as_annotated_move_value(type_.as_ref())?.into())
 }
 
 fn get_version_id(

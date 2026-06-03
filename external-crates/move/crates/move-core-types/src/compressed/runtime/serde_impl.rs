@@ -123,7 +123,7 @@ impl<'a, 'd, T: TypeLayout> serde::de::Visitor<'d> for CompressedEnumFieldVisito
             None => return Err(A::Error::invalid_length(0, &self)),
         };
 
-        let variant_fv = match self.0.variant(tag as usize) {
+        let variant_fv = match self.0.variant(tag) {
             Some(VariantLayout::Known(fv)) => fv,
             Some(VariantLayout::Unknown) => {
                 return Err(A::Error::custom(format!(

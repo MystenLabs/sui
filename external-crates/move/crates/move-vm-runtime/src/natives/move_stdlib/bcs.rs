@@ -67,7 +67,7 @@ fn native_to_bytes(
     };
     // serialize value
     let val = ref_to_val.read_ref()?;
-    let serialized_value = match val.typed_serialize(&layout) {
+    let serialized_value = match val.typed_serialize(layout.as_ref()) {
         Some(serialized_value) => serialized_value,
         None => {
             // If we run out of gas when charging for failure, we don't want the `OUT_OF_GAS` error

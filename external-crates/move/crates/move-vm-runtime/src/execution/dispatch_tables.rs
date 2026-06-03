@@ -29,10 +29,12 @@ use move_binary_format::{
     partial_vm_error,
 };
 use move_core_types::{
-    annotated_value,
+    compressed::{
+        annotated::{self as CA, BackendBuilder as _},
+        runtime::{self as CR, BackendBuilder as _},
+    },
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
-    runtime_value,
 };
 use move_vm_config::runtime::VMConfig;
 
@@ -708,13 +710,14 @@ impl VMDispatchTables {
         &self,
         datatype_name: &VirtualTableKey,
         ty_args: &[Type],
+        builder: &mut CR::MoveTypeLayoutBuilder,
         type_size: &mut TypeSize,
-    ) -> PartialVMResult<runtime_value::MoveDatatypeLayout> {
+    ) -> PartialVMResult<CR::LayoutHandle> {
         type_size.check()?;
         let ty = self.resolve_type(datatype_name)?.to_ref();
         let type_layout = match ty.datatype_info.inner_ref() {
             Datatype::Enum(einfo) => {
-                let mut variant_layouts = vec![];
+                let mut variant_layouts: Vec<Vec<CR::LayoutHandle>> = vec![];
                 for variant in einfo.variants.iter() {
                     type_size.incr_node_count()?;
                     let field_tys = variant
@@ -724,13 +727,19 @@ impl VMDispatchTables {
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     let field_layouts = field_tys
                         .iter()
-                        .map(|ty| self.type_to_type_layout_impl(ty, type_size))
+                        .map(|ty| self.type_to_type_layout_impl(ty, builder, type_size))
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     variant_layouts.push(field_layouts);
                 }
-                runtime_value::MoveDatatypeLayout::Enum(Box::new(runtime_value::MoveEnumLayout(
-                    Box::new(variant_layouts),
-                )))
+                let variant_refs: Vec<Option<&[CR::LayoutHandle]>> =
+                    variant_layouts.iter().map(|v| Some(v.as_slice())).collect();
+                builder.enum_layout(&variant_refs).map_err(|e| {
+                    partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "failed to create enum layout for type {}: {e}",
+                        datatype_name.to_string(&self.interner)
+                    )
+                })?
             }
             Datatype::Struct(sinfo) => {
                 let field_tys = sinfo
@@ -740,12 +749,16 @@ impl VMDispatchTables {
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 let field_layouts = field_tys
                     .iter()
-                    .map(|ty| self.type_to_type_layout_impl(ty, type_size))
+                    .map(|ty| self.type_to_type_layout_impl(ty, builder, type_size))
                     .collect::<PartialVMResult<Vec<_>>>()?;
 
-                runtime_value::MoveDatatypeLayout::Struct(Box::new(
-                    runtime_value::MoveStructLayout::new(field_layouts),
-                ))
+                builder.struct_layout(&field_layouts).map_err(|e| {
+                    partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "failed to create struct layout for type {}: {e}",
+                        datatype_name.to_string(&self.interner)
+                    )
+                })?
             }
         };
         type_size.check()?;
@@ -755,29 +768,35 @@ impl VMDispatchTables {
     fn type_to_type_layout_impl(
         &self,
         ty: &Type,
+        builder: &mut CR::MoveTypeLayoutBuilder,
         type_size: &mut TypeSize,
-    ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
+    ) -> PartialVMResult<CR::LayoutHandle> {
         type_size.enter_type(|type_size| {
             let result = match ty {
-                Type::Bool => runtime_value::MoveTypeLayout::Bool,
-                Type::U8 => runtime_value::MoveTypeLayout::U8,
-                Type::U16 => runtime_value::MoveTypeLayout::U16,
-                Type::U32 => runtime_value::MoveTypeLayout::U32,
-                Type::U64 => runtime_value::MoveTypeLayout::U64,
-                Type::U128 => runtime_value::MoveTypeLayout::U128,
-                Type::U256 => runtime_value::MoveTypeLayout::U256,
-                Type::Address => runtime_value::MoveTypeLayout::Address,
-                Type::Signer => runtime_value::MoveTypeLayout::Signer,
-                Type::Vector(ty) => runtime_value::MoveTypeLayout::Vector(Box::new(
-                    self.type_to_type_layout_impl(ty, type_size)?,
-                )),
-                Type::Datatype(gidx) => self
-                    .datatype_to_type_layout(gidx, &[], type_size)?
-                    .into_layout(),
+                Type::Bool => builder.bool(),
+                Type::U8 => builder.u8(),
+                Type::U16 => builder.u16(),
+                Type::U32 => builder.u32(),
+                Type::U64 => builder.u64(),
+                Type::U128 => builder.u128(),
+                Type::U256 => builder.u256(),
+                Type::Address => builder.address(),
+                Type::Signer => builder.signer(),
+                Type::Vector(ty) => {
+                    let inner = self.type_to_type_layout_impl(ty, builder, type_size)?;
+                    builder.vector(inner).map_err(|e| {
+                        partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "failed to create vector layout for type {ty:?}: {e}",
+                        )
+                    })?
+                }
+                Type::Datatype(gidx) => {
+                    self.datatype_to_type_layout(gidx, &[], builder, type_size)?
+                }
                 Type::DatatypeInstantiation(inst) => {
                     let (gidx, ty_args) = &**inst;
-                    self.datatype_to_type_layout(gidx, ty_args, type_size)?
-                        .into_layout()
+                    self.datatype_to_type_layout(gidx, ty_args, builder, type_size)?
                 }
                 Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                     return Err(partial_vm_error!(
@@ -795,8 +814,9 @@ impl VMDispatchTables {
         &self,
         datatype_name: &VirtualTableKey,
         ty_args: &[Type],
+        builder: &mut CA::MoveTypeLayoutBuilder,
         type_size: &mut TypeSize,
-    ) -> PartialVMResult<annotated_value::MoveDatatypeLayout> {
+    ) -> PartialVMResult<CA::LayoutHandle> {
         type_size.check()?;
         let ty = self.resolve_type(datatype_name)?.to_ref();
         let struct_tag = self.datatype_to_type_tag_impl(
@@ -808,7 +828,8 @@ impl VMDispatchTables {
 
         let type_layout = match ty.datatype_info.inner_ref() {
             Datatype::Enum(enum_type) => {
-                let mut variant_layouts = BTreeMap::new();
+                let mut variant_layouts: Vec<(Identifier, u16, Vec<(Identifier, CA::LayoutHandle)>)> =
+                    vec![];
                 for variant in enum_type.variants.iter() {
                     type_size.incr_node_count()?;
                     if variant.fields.len() != variant.field_names.len() {
@@ -824,25 +845,37 @@ impl VMDispatchTables {
                         .map(|(n, ty)| {
                             let n = self.interner.resolve_ident(n, "field name");
                             let ty = ty.subst(ty_args)?;
-                            let l = self.type_to_fully_annotated_layout_impl(&ty, type_size)?;
-                            Ok(annotated_value::MoveFieldLayout::new(n, l))
+                            let l =
+                                self.type_to_fully_annotated_layout_impl(&ty, builder, type_size)?;
+                            Ok((n, l))
                         })
                         .collect::<PartialVMResult<Vec<_>>>()?;
-                    variant_layouts.insert(
-                        (
-                            self.interner
-                                .resolve_ident(&variant.variant_name, "variant name"),
-                            variant.variant_tag,
-                        ),
+                    variant_layouts.push((
+                        self.interner
+                            .resolve_ident(&variant.variant_name, "variant name"),
+                        variant.variant_tag,
                         field_layouts,
-                    );
+                    ));
                 }
-                annotated_value::MoveDatatypeLayout::Enum(Box::new(
-                    annotated_value::MoveEnumLayout {
-                        type_: struct_tag.clone(),
-                        variants: variant_layouts,
-                    },
-                ))
+                let variant_field_refs: Vec<Vec<(&Identifier, CA::LayoutHandle)>> = variant_layouts
+                    .iter()
+                    .map(|(_, _, fields)| fields.iter().map(|(n, h)| (n, *h)).collect())
+                    .collect();
+                let variant_refs: Vec<(&Identifier, u16, Option<&[(&Identifier, CA::LayoutHandle)]>)> =
+                    variant_layouts
+                        .iter()
+                        .zip(variant_field_refs.iter())
+                        .map(|((name, tag, _), fields)| (name, *tag, Some(fields.as_slice())))
+                        .collect();
+                builder
+                    .enum_layout(&struct_tag, &variant_refs)
+                    .map_err(|e| {
+                        partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "failed to create fully annotated enum layout for type {}: {e}",
+                            datatype_name.to_string(&self.interner)
+                        )
+                    })?
             }
             Datatype::Struct(struct_type) => {
                 if struct_type.fields.len() != struct_type.field_names.len() {
@@ -851,20 +884,31 @@ impl VMDispatchTables {
                         "Field types did not match the length of field names in loaded struct"
                     ));
                 }
-                let field_layouts = struct_type
+                let field_layouts: Vec<(Identifier, CA::LayoutHandle)> = struct_type
                     .field_names
                     .iter()
                     .zip(struct_type.fields.iter())
                     .map(|(n, ty)| {
                         let n = self.interner.resolve_ident(n, "field name");
                         let ty = ty.subst(ty_args)?;
-                        let l = self.type_to_fully_annotated_layout_impl(&ty, type_size)?;
-                        Ok(annotated_value::MoveFieldLayout::new(n, l))
+                        let l =
+                            self.type_to_fully_annotated_layout_impl(&ty, builder, type_size)?;
+                        Ok((n, l))
                     })
                     .collect::<PartialVMResult<Vec<_>>>()?;
-                annotated_value::MoveDatatypeLayout::Struct(Box::new(
-                    annotated_value::MoveStructLayout::new(struct_tag, field_layouts),
-                ))
+                let field_refs: Vec<(&Identifier, CA::LayoutHandle)> = field_layouts
+                    .iter()
+                    .map(|(n, h)| (n, *h))
+                    .collect();
+                builder
+                    .struct_layout(&struct_tag, &field_refs)
+                    .map_err(|e| {
+                        partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "failed to create fully annotated struct layout for type {}: {e}",
+                            datatype_name.to_string(&self.interner)
+                        )
+                    })?
             }
         };
         type_size.check()?;
@@ -874,29 +918,35 @@ impl VMDispatchTables {
     fn type_to_fully_annotated_layout_impl(
         &self,
         ty: &Type,
+        builder: &mut CA::MoveTypeLayoutBuilder,
         type_size: &mut TypeSize,
-    ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
+    ) -> PartialVMResult<CA::LayoutHandle> {
         type_size.enter_type(|type_size| {
             let result = match ty {
-                Type::Bool => annotated_value::MoveTypeLayout::Bool,
-                Type::U8 => annotated_value::MoveTypeLayout::U8,
-                Type::U16 => annotated_value::MoveTypeLayout::U16,
-                Type::U32 => annotated_value::MoveTypeLayout::U32,
-                Type::U64 => annotated_value::MoveTypeLayout::U64,
-                Type::U128 => annotated_value::MoveTypeLayout::U128,
-                Type::U256 => annotated_value::MoveTypeLayout::U256,
-                Type::Address => annotated_value::MoveTypeLayout::Address,
-                Type::Signer => annotated_value::MoveTypeLayout::Signer,
-                Type::Vector(ty) => annotated_value::MoveTypeLayout::Vector(Box::new(
-                    self.type_to_fully_annotated_layout_impl(ty, type_size)?,
-                )),
-                Type::Datatype(gidx) => self
-                    .datatype_to_fully_annotated_layout_impl(gidx, &[], type_size)?
-                    .into_layout(),
+                Type::Bool => builder.bool(),
+                Type::U8 => builder.u8(),
+                Type::U16 => builder.u16(),
+                Type::U32 => builder.u32(),
+                Type::U64 => builder.u64(),
+                Type::U128 => builder.u128(),
+                Type::U256 => builder.u256(),
+                Type::Address => builder.address(),
+                Type::Signer => builder.signer(),
+                Type::Vector(ty) => {
+                    let inner = self.type_to_fully_annotated_layout_impl(ty, builder, type_size)?;
+                    builder.vector(inner).map_err(|e| {
+                        partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "failed to create vector layout for type {ty:?}: {e}",
+                        )
+                    })?
+                }
+                Type::Datatype(gidx) => {
+                    self.datatype_to_fully_annotated_layout_impl(gidx, &[], builder, type_size)?
+                }
                 Type::DatatypeInstantiation(inst) => {
                     let (gidx, ty_args) = &**inst;
-                    self.datatype_to_fully_annotated_layout_impl(gidx, ty_args, type_size)?
-                        .into_layout()
+                    self.datatype_to_fully_annotated_layout_impl(gidx, ty_args, builder, type_size)?
                 }
                 Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                     return Err(partial_vm_error!(
@@ -926,41 +976,41 @@ impl VMDispatchTables {
         )
     }
 
-    pub(crate) fn type_to_type_layout(
-        &self,
-        ty: &Type,
-    ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
-        self.type_to_type_layout_impl(
+    pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<CR::MoveTypeLayout> {
+        let mut builder = CR::MoveTypeLayoutBuilder::new();
+        let root_handle = self.type_to_type_layout_impl(
             ty,
+            &mut builder,
             &mut TypeSize::from_vm_config_for_value_depth(&self.vm_config),
-        )
+        )?;
+        Ok(builder.build(root_handle))
     }
 
     pub(crate) fn arena_type_to_fully_annotated_layout(
         &self,
         ty: &ArenaType,
-    ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
+    ) -> PartialVMResult<CA::MoveTypeLayout> {
         self.type_to_fully_annotated_layout(&ty.to_type()?)
     }
 
     pub(crate) fn type_to_fully_annotated_layout(
         &self,
         ty: &Type,
-    ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
-        self.type_to_fully_annotated_layout_impl(
+    ) -> PartialVMResult<CA::MoveTypeLayout> {
+        let mut builder = CA::MoveTypeLayoutBuilder::new();
+        let root_handle = self.type_to_fully_annotated_layout_impl(
             ty,
+            &mut builder,
             &mut TypeSize::from_vm_config_for_value_depth(&self.vm_config),
-        )
+        )?;
+        Ok(builder.build(root_handle))
     }
 
     // -------------------------------------------
     // Public APIs for type layout retrieval.
     // -------------------------------------------
 
-    pub(crate) fn get_type_layout(
-        &self,
-        type_tag: &TypeTag,
-    ) -> VMResult<runtime_value::MoveTypeLayout> {
+    pub(crate) fn get_type_layout(&self, type_tag: &TypeTag) -> VMResult<CR::MoveTypeLayout> {
         let ty = self.load_type(type_tag)?;
         self.type_to_type_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))
@@ -969,7 +1019,7 @@ impl VMDispatchTables {
     pub(crate) fn get_fully_annotated_type_layout(
         &self,
         type_tag: &TypeTag,
-    ) -> VMResult<annotated_value::MoveTypeLayout> {
+    ) -> VMResult<CA::MoveTypeLayout> {
         let ty = self.load_type(type_tag)?;
         self.type_to_fully_annotated_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))

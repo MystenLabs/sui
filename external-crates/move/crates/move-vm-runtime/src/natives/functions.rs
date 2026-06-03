@@ -28,8 +28,9 @@ pub use move_binary_format::errors::PartialVMError;
 use move_binary_format::{errors::PartialVMResult, file_format::AbilitySet, partial_vm_error};
 pub use move_core_types::vm_status::StatusCode;
 use move_core_types::{
-    account_address::AccountAddress, annotated_value as A, gas_algebra::InternalGas,
-    identifier::Identifier, language_storage::TypeTag, runtime_value as R, vm_status::StatusType,
+    account_address::AccountAddress, compressed::annotated as A, compressed::runtime as R,
+    gas_algebra::InternalGas, identifier::Identifier, language_storage::TypeTag,
+    vm_status::StatusType,
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
 use smallvec::{SmallVec, smallvec};

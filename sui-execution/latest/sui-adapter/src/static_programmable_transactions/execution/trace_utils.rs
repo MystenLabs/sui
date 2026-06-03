@@ -13,7 +13,7 @@ use crate::{
         typing::ast::{Command__, Commands, Type},
     },
 };
-use move_core_types::{annotated_value as A, language_storage::TypeTag};
+use move_core_types::{compressed::annotated as CA, language_storage::TypeTag};
 use move_trace_format::{
     format::{Effect, MoveTraceBuilder, RefType, TraceEvent, TypeTagWithRefs},
     value::{SerializableMoveValue, SimplifiedMoveStruct},
@@ -354,7 +354,7 @@ fn move_value_info_from_ctx_value<Mode: ExecutionMode>(
 fn annotated_type_layout_for_adapter_ty<Mode: ExecutionMode>(
     context: &mut Context<Mode>,
     type_: &Type,
-) -> Result<A::MoveTypeLayout, Mode::Error> {
+) -> Result<CA::MoveTypeLayout, Mode::Error> {
     Ok(context.env.fully_annotated_layout(type_).map_err(|e| {
         make_invariant_violation!(
             "Failed to get annotated type layout for adapter type: {}",
@@ -367,11 +367,11 @@ fn annotated_type_layout_for_adapter_ty<Mode: ExecutionMode>(
 /// provided annotated layout for that value.
 fn serializable_move_value_from_ctx_value(
     value: &CtxValue,
-    annotated_layout: &A::MoveTypeLayout,
+    annotated_layout: &CA::MoveTypeLayout,
 ) -> Result<SerializableMoveValue, ExecutionError> {
     VMValue::as_annotated_move_value(
         value.inner_for_tracing().inner_for_tracing(),
-        annotated_layout,
+        annotated_layout.as_ref(),
     )
     .ok_or_else(|| {
         make_invariant_violation!(

@@ -25,10 +25,9 @@ use move_binary_format::{
     partial_vm_error,
 };
 use move_core_types::{
-    annotated_value,
+    compressed as C,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
-    runtime_value,
     vm_status::StatusType,
 };
 use move_trace_format::format::MoveTraceBuilder;
@@ -272,7 +271,7 @@ impl<'extensions> MoveVM<'extensions> {
     /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
     /// IDs) are not correct here.
     #[instrument(level = "trace", skip_all)]
-    pub fn runtime_type_layout(&self, ty: &TypeTag) -> VMResult<runtime_value::MoveTypeLayout> {
+    pub fn runtime_type_layout(&self, ty: &TypeTag) -> VMResult<C::runtime::MoveTypeLayout> {
         tracing::trace!(type_tag = %ty, "Getting runtime layout");
         self.virtual_tables.get_type_layout(ty).map_err(|e| {
             Self::convert_to_external_resolution_error(
@@ -289,7 +288,7 @@ impl<'extensions> MoveVM<'extensions> {
     /// Additionally, the type tag _must_ use defining type IDs. Original/runtime IDs (or package
     /// IDs) are not correct here.
     #[instrument(level = "trace", skip_all)]
-    pub fn annotated_type_layout(&self, ty: &TypeTag) -> VMResult<annotated_value::MoveTypeLayout> {
+    pub fn annotated_type_layout(&self, ty: &TypeTag) -> VMResult<C::annotated::MoveTypeLayout> {
         tracing::trace!(type_tag = %ty, "Getting annotated layout");
         self.virtual_tables
             .get_fully_annotated_type_layout(ty)

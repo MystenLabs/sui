@@ -668,7 +668,7 @@ pub fn allocate_receiving_ticket_for_object(
     }
 
     let obj_value = safe_unwrap!(inventories.objects.remove(&id));
-    let Some(bytes) = obj_value.typed_serialize(&layout) else {
+    let Some(bytes) = obj_value.typed_serialize(layout.as_ref()) else {
         return Ok(NativeResult::err(
             context.gas_used(),
             E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET,
@@ -1019,10 +1019,11 @@ fn find_all_wrapped_objects<'a, 'i>(
             continue;
         };
 
-        let blob = safe_unwrap!(value.borrow().typed_serialize(&layout));
+        let blob = safe_unwrap!(value.borrow().typed_serialize(layout.as_ref()));
+        let annotated_layout_inflated = safe_unwrap!(annotated_layout.inflate());
         safe_unwrap!(MoveValue::visit_deserialize(
             &blob,
-            &annotated_layout,
+            &annotated_layout_inflated,
             &mut Traversal {
                 state: LookingFor::Wrapped,
                 ids,

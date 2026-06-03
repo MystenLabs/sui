@@ -137,4 +137,9 @@ impl<Node: Eq + std::hash::Hash> PoolBuilder<Node> {
     pub fn into_vec(self) -> Vec<Node> {
         self.nodes.into_iter().collect()
     }
+
+    /// Look up a previously-interned node by its index.
+    pub(crate) fn get(&self, idx: usize) -> Option<&Node> {
+        self.nodes.get_index(idx)
+    }
 }

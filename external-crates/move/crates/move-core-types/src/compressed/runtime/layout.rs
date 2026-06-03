@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::compressed::VariantTag;
 use crate::compressed::backend::DefaultRuntime;
 use crate::runtime_value as RV;
 use anyhow::Result as AResult;
@@ -13,6 +14,11 @@ use std::fmt;
 /// To use a different backend, name its concrete builder type directly (e.g.
 /// `RuntimeBoxPoolBuilder`) — call sites are otherwise identical.
 pub use crate::compressed::backend::DefaultRuntimeBuilder as MoveTypeLayoutBuilder;
+
+/// Handle returned by [`MoveTypeLayoutBuilder`] for nodes interned into the
+/// default backend. Type alias over the builder's `Root` so consumers can
+/// traffic in a single name without naming the backend's internal ref type.
+pub type LayoutHandle = <MoveTypeLayoutBuilder as BackendBuilder>::Root;
 
 // =============================================================================
 // Trait: TypeLayout
@@ -220,6 +226,18 @@ pub trait BackendBuilder: Sized {
         let pool = self.finalize(root.clone());
         MoveTypeLayout::from_parts(pool, root)
     }
+
+    /// Construct a [`MoveTypeLayout`] by running a closure that builds up a
+    /// root handle. Returns the closure's error verbatim.
+    fn with_builder<F>(f: F) -> Result<MoveTypeLayout<Self::Output>, Self::Error>
+    where
+        Self: Default,
+        F: FnOnce(&mut Self) -> Result<Self::Root, Self::Error>,
+    {
+        let mut b = Self::default();
+        let root = f(&mut b)?;
+        Ok(b.build(root))
+    }
 }
 
 // =============================================================================
@@ -411,8 +429,8 @@ impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
 
     /// Access a field by index.
     #[inline]
-    pub fn field(self, i: usize) -> Option<MoveTypeLayoutRef<'a, T>> {
-        self.fields.get(i).map(|f| MoveTypeLayoutRef {
+    pub fn field(self, i: u16) -> Option<MoveTypeLayoutRef<'a, T>> {
+        self.fields.get(i as usize).map(|f| MoveTypeLayoutRef {
             pool: self.pool,
             root: f,
         })
@@ -445,7 +463,7 @@ impl<'a, T: TypeLayout> MoveStructLayout<'a, T> {
 
     /// Access a field by index.
     #[inline]
-    pub fn field(self, i: usize) -> Option<MoveTypeLayoutRef<'a, T>> {
+    pub fn field(self, i: u16) -> Option<MoveTypeLayoutRef<'a, T>> {
         self.fields.field(i)
     }
 
@@ -489,10 +507,12 @@ impl<'a, T: TypeLayout> MoveEnumLayout<'a, T> {
         self.variants.len()
     }
 
-    /// Access a variant by index.
+    /// Access a variant by tag.
     #[inline]
-    pub fn variant(self, i: usize) -> Option<VariantLayout<'a, T>> {
-        self.variants.get(i).map(|v| make_variant(self.pool, v))
+    pub fn variant(self, tag: VariantTag) -> Option<VariantLayout<'a, T>> {
+        self.variants
+            .get(tag as usize)
+            .map(|v| make_variant(self.pool, v))
     }
 
     /// Iterate over all variants.

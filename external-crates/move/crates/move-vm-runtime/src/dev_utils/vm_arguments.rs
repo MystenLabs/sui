@@ -147,7 +147,8 @@ fn deserialize_value(
     ty: &Type,
     arg: impl Borrow<[u8]>,
 ) -> PartialVMResult<Value> {
-    let layout = match vtables.type_to_type_layout(ty) {
+    let layout = vtables.type_to_type_layout(ty);
+    let layout = match layout {
         Ok(layout) => layout,
         Err(_err) => {
             warn!("[VM] failed to get layout from type");
@@ -155,7 +156,7 @@ fn deserialize_value(
         }
     };
 
-    match Value::simple_deserialize(arg.borrow(), &layout) {
+    match Value::simple_deserialize(arg.borrow(), layout.as_ref()) {
         Some(val) => Ok(val),
         None => {
             warn!("[VM] failed to deserialize argument");

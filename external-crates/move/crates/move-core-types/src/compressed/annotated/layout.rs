@@ -18,6 +18,11 @@ use std::fmt;
 /// `AnnotatedBoxPoolBuilder`) — call sites are otherwise identical.
 pub use crate::compressed::backend::DefaultAnnotatedBuilder as MoveTypeLayoutBuilder;
 
+/// Handle returned by [`MoveTypeLayoutBuilder`] for nodes interned into the
+/// default backend. Type alias over the builder's `Root` so consumers can
+/// traffic in a single name without naming the backend's internal ref type.
+pub type LayoutHandle = <MoveTypeLayoutBuilder as BackendBuilder>::Root;
+
 // =============================================================================
 // Trait: TypeLayout
 // =============================================================================
@@ -254,6 +259,18 @@ pub trait BackendBuilder: Sized {
     fn build(self, root: Self::Root) -> MoveTypeLayout<Self::Output> {
         let pool = self.finalize(root.clone());
         MoveTypeLayout::from_parts(pool, root)
+    }
+
+    /// Construct a [`MoveTypeLayout`] by running a closure that builds up a
+    /// root handle. Returns the closure's error verbatim.
+    fn with_builder<F>(f: F) -> Result<MoveTypeLayout<Self::Output>, Self::Error>
+    where
+        Self: Default,
+        F: FnOnce(&mut Self) -> Result<Self::Root, Self::Error>,
+    {
+        let mut b = Self::default();
+        let root = f(&mut b)?;
+        Ok(b.build(root))
     }
 }
 
@@ -559,8 +576,8 @@ impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
 
     /// Access a field by index, returning `(name, layout)`.
     #[inline]
-    pub fn field(self, i: usize) -> Option<(&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
-        self.fields.get(i).map(|entry| {
+    pub fn field(self, i: u16) -> Option<(&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
+        self.fields.get(i as usize).map(|entry| {
             (
                 &entry.name,
                 MoveTypeLayoutRef {
@@ -630,7 +647,7 @@ impl<'a, T: TypeLayout> MoveStructLayout<'a, T> {
 
     /// Access a field by index, returning `(name, layout)`.
     #[inline]
-    pub fn field(self, i: usize) -> Option<(&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
+    pub fn field(self, i: u16) -> Option<(&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
         self.fields.field(i)
     }
 
@@ -712,15 +729,9 @@ impl<'a, T: TypeLayout> MoveEnumLayout<'a, T> {
         self.variants.len()
     }
 
-    /// Access a variant by position index.
+    /// Access a variant by its tag.
     #[inline]
-    pub fn variant(self, i: usize) -> Option<VariantLayout<'a, T>> {
-        self.variants.get(i).map(|v| variant_view(self.pool, v))
-    }
-
-    /// Find a variant by its tag value.
-    #[inline]
-    pub fn variant_by_tag(self, tag: VariantTag) -> Option<VariantLayout<'a, T>> {
+    pub fn variant(self, tag: VariantTag) -> Option<VariantLayout<'a, T>> {
         self.variants
             .iter()
             .find(|v| v.tag == tag)

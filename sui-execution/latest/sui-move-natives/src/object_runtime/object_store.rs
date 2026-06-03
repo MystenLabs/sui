@@ -3,7 +3,9 @@
 
 use crate::object_runtime::{fingerprint::ObjectFingerprint, get_all_uids};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{annotated_value as A, runtime_value as R, vm_status::StatusCode};
+use move_core_types::{
+    compressed::annotated as CA, compressed::runtime as CR, vm_status::StatusCode,
+};
 use move_vm_runtime::execution::values::{GlobalValue, StructRef, Value};
 use std::{
     collections::{BTreeMap, btree_map},
@@ -312,8 +314,8 @@ impl Inner<'_> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-        child_ty_layout: &R::MoveTypeLayout,
-        child_ty_fully_annotated_layout: &A::MoveTypeLayout,
+        child_ty_layout: &CR::MoveTypeLayout,
+        child_ty_fully_annotated_layout: &CA::MoveTypeLayout,
         child_move_type: &MoveObjectType,
     ) -> PartialVMResult<
         ObjectResult<CacheMetadata<(MoveObjectType, GlobalValue, ObjectFingerprint)>>,
@@ -336,7 +338,7 @@ impl Inner<'_> {
         }
         // deserialize the value
         let obj_contents = obj.contents();
-        let v = match Value::simple_deserialize(obj_contents, child_ty_layout) {
+        let v = match Value::simple_deserialize(obj_contents, child_ty_layout.as_ref()) {
             Some(v) => v,
             None => return Err(
                 PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE).with_message(
@@ -387,7 +389,7 @@ impl Inner<'_> {
 
 fn deserialize_move_object(
     obj: &MoveObject,
-    child_ty_layout: &R::MoveTypeLayout,
+    child_ty_layout: &CR::MoveTypeLayout,
     child_move_type: MoveObjectType,
 ) -> PartialVMResult<ObjectResult<(MoveObjectType, Value)>> {
     let child_id = obj.id();
@@ -395,7 +397,7 @@ fn deserialize_move_object(
     if obj.type_() != &child_move_type {
         return Ok(ObjectResult::MismatchedType);
     }
-    let value = match Value::simple_deserialize(obj.contents(), child_ty_layout) {
+    let value = match Value::simple_deserialize(obj.contents(), child_ty_layout.as_ref()) {
         Some(v) => v,
         None => {
             return Err(
@@ -440,8 +442,8 @@ impl<'a> ChildObjectStore<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_version: SequenceNumber,
-        child_layout: &R::MoveTypeLayout,
-        child_fully_annotated_layout: &A::MoveTypeLayout,
+        child_layout: &CR::MoveTypeLayout,
+        child_fully_annotated_layout: &CA::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<LoadedWithMetadataResult<ObjectResult<CacheMetadata<Value>>>> {
         let (cache_info, Some((obj, obj_meta))) =
@@ -517,8 +519,8 @@ impl<'a> ChildObjectStore<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-        child_layout: &R::MoveTypeLayout,
-        child_fully_annotated_layout: &A::MoveTypeLayout,
+        child_layout: &CR::MoveTypeLayout,
+        child_fully_annotated_layout: &CA::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<CacheMetadata<&mut ChildObject>>> {
         let store_entries_count = self.store.len() as u64;
@@ -659,7 +661,7 @@ impl<'a> ChildObjectStore<'a> {
         &mut self,
         config_id: ObjectID,
         name_df_id: ObjectID,
-        field_setting_layout: &R::MoveTypeLayout,
+        field_setting_layout: &CR::MoveTypeLayout,
         field_setting_object_type: &MoveObjectType,
     ) -> PartialVMResult<ObjectResult<Option<Value>>> {
         let parent = config_id;
@@ -676,7 +678,7 @@ impl<'a> ChildObjectStore<'a> {
                     return Ok(ObjectResult::Loaded(None));
                 };
                 let Some(value) =
-                    Value::simple_deserialize(move_obj.contents(), field_setting_layout)
+                    Value::simple_deserialize(move_obj.contents(), field_setting_layout.as_ref())
                 else {
                     return Err(
                         PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE)
