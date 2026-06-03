@@ -1604,17 +1604,17 @@ impl SuiNode {
         );
 
         let checkpoint_output: Box<dyn CheckpointOutput> = if node_role.is_validator() {
-            Box::new(SubmitCheckpointToConsensus {
-                sender: consensus_adapter,
-                signer: state.secret.clone(),
-                authority: config.protocol_public_key(),
-                next_reconfiguration_timestamp_ms: epoch_start_timestamp_ms
+            Box::new(SubmitCheckpointToConsensus::new(
+                consensus_adapter,
+                state.secret.clone(),
+                config.protocol_public_key(),
+                epoch_start_timestamp_ms
                     .checked_add(epoch_duration_ms)
                     .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
-                metrics: checkpoint_metrics.clone(),
-            })
+                checkpoint_metrics.clone(),
+            ))
         } else {
-            LogCheckpointOutput::boxed()
+            Box::new(LogCheckpointOutput::new(checkpoint_metrics.clone()))
         };
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
