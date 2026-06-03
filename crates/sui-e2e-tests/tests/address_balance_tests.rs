@@ -436,7 +436,14 @@ async fn test_deposit_and_withdraw_with_larger_reservation() {
 
 #[sim_test]
 async fn test_withdraw_non_existent_balance() {
-    let mut test_env = TestEnvBuilder::new().build().await;
+    // This test exercises the signing-phase rejection, so keep that check on.
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_skip_signing_phase_withdraw_balance_check_for_testing(false);
+            cfg
+        }))
+        .build()
+        .await;
 
     let sender = test_env.get_sender(0);
 
@@ -455,7 +462,15 @@ async fn test_withdraw_non_existent_balance() {
 
 #[sim_test]
 async fn test_withdraw_insufficient_balance() {
-    let mut test_env = TestEnvBuilder::new().build().await;
+    // The first half of this test exercises the signing-phase rejection, so keep that
+    // check on. The soft-bundle half then still exposes the execution-time failure.
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_skip_signing_phase_withdraw_balance_check_for_testing(false);
+            cfg
+        }))
+        .build()
+        .await;
 
     let (sender, gas) = test_env.get_sender_and_all_gas(0);
     let gas1 = gas[0];
@@ -3849,7 +3864,14 @@ fn create_redeem_and_transfer_transaction(
 /// the total funds required by a transaction.
 #[sim_test]
 async fn test_explicit_withdrawal_plus_implicit_gas_exceeds_balance() {
-    let mut test_env = TestEnvBuilder::new().build().await;
+    // This test exercises the signing-phase rejection, so keep that check on.
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_skip_signing_phase_withdraw_balance_check_for_testing(false);
+            cfg
+        }))
+        .build()
+        .await;
 
     let (sender, gas_coin) = test_env.get_sender_and_gas(0);
     let receiver = SuiAddress::random_for_testing_only();

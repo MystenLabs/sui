@@ -26,6 +26,8 @@ async fn test_coin_reservation_validation() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
+            // This test exercises the signing-phase rejection, so keep that check on.
+            cfg.set_skip_signing_phase_withdraw_balance_check_for_testing(false);
             cfg
         }))
         .build()
@@ -659,6 +661,8 @@ async fn test_coin_reservation_enforced_when_not_used() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_coin_reservation_for_testing();
+            // This test exercises the signing-phase rejection, so keep that check on.
+            cfg.set_skip_signing_phase_withdraw_balance_check_for_testing(false);
             cfg
         }))
         .build()

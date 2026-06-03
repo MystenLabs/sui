@@ -7,9 +7,7 @@ use std::sync::Arc;
 
 use super::*;
 
-use crate::authority::authority_test_utils::{
-    init_state_validator_with_fullnode, submit_and_execute,
-};
+use crate::authority::authority_test_utils::submit_and_execute;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
@@ -92,7 +90,22 @@ struct TestEnv {
 
 // Makes a validator, a full node and the data to work with
 async fn setup_test_env() -> TestEnv {
-    let (validator, fullnode) = init_state_validator_with_fullnode().await;
+    // Several of these tests assert that gas paid from an empty/insufficient address
+    // balance is rejected at signing time with InvalidWithdrawReservation. That check is
+    // skipped by default in non-production environments, so keep it on here.
+    let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    protocol_config.set_skip_signing_phase_withdraw_balance_check_for_testing(false);
+
+    let validator = TestAuthorityBuilder::new()
+        .with_protocol_config(protocol_config.clone())
+        .build()
+        .await;
+    let fullnode_key_pair = get_authority_key_pair().1;
+    let fullnode = TestAuthorityBuilder::new()
+        .with_keypair(&fullnode_key_pair)
+        .with_protocol_config(protocol_config)
+        .build()
+        .await;
 
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
 
