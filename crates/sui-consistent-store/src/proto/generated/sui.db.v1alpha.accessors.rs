@@ -155,7 +155,7 @@ mod _accessor_impls {
         pub const fn const_default() -> Self {
             Self {
                 target_checkpoint: 0,
-                partitions_complete: Vec::new(),
+                shards: std::collections::BTreeMap::new(),
             }
         }
         #[doc(hidden)]
@@ -177,26 +177,184 @@ mod _accessor_impls {
             self.set_target_checkpoint(field);
             self
         }
-        ///Returns the value of `partitions_complete`, or the default value if `partitions_complete` is unset.
-        pub fn partitions_complete(&self) -> &[::prost::bytes::Bytes] {
-            &self.partitions_complete
+        ///Returns the value of `shards`, or the default value if `shards` is unset.
+        pub fn shards(
+            &self,
+        ) -> &::std::collections::BTreeMap<u32, super::restore_state::ShardProgress> {
+            &self.shards
         }
-        ///Returns a mutable reference to `partitions_complete`.
+        ///Returns a mutable reference to `shards`.
         ///If the field is unset, it is first initialized with the default value.
-        pub fn partitions_complete_mut(&mut self) -> &mut Vec<::prost::bytes::Bytes> {
-            &mut self.partitions_complete
+        pub fn shards_mut(
+            &mut self,
+        ) -> &mut ::std::collections::BTreeMap<
+            u32,
+            super::restore_state::ShardProgress,
+        > {
+            &mut self.shards
         }
-        ///Sets `partitions_complete` with the provided value.
-        pub fn set_partitions_complete(&mut self, field: Vec<::prost::bytes::Bytes>) {
-            self.partitions_complete = field;
+        ///Sets `shards` with the provided value.
+        pub fn set_shards(
+            &mut self,
+            field: ::std::collections::BTreeMap<u32, super::restore_state::ShardProgress>,
+        ) {
+            self.shards = field;
         }
-        ///Sets `partitions_complete` with the provided value.
-        pub fn with_partitions_complete(
+        ///Sets `shards` with the provided value.
+        pub fn with_shards(
             mut self,
-            field: Vec<::prost::bytes::Bytes>,
+            field: ::std::collections::BTreeMap<u32, super::restore_state::ShardProgress>,
         ) -> Self {
-            self.set_partitions_complete(field);
+            self.set_shards(field);
             self
+        }
+    }
+    impl super::restore_state::ShardProgress {
+        pub const fn const_default() -> Self {
+            Self { state: None }
+        }
+        #[doc(hidden)]
+        pub fn default_instance() -> &'static Self {
+            static DEFAULT: super::restore_state::ShardProgress = super::restore_state::ShardProgress::const_default();
+            &DEFAULT
+        }
+        ///Returns the value of `in_progress`, or the default value if `in_progress` is unset.
+        pub fn in_progress(&self) -> &[u8] {
+            if let Some(
+                super::restore_state::shard_progress::State::InProgress(field),
+            ) = &self.state
+            {
+                field as _
+            } else {
+                &[]
+            }
+        }
+        ///If `in_progress` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn in_progress_opt(&self) -> Option<&[u8]> {
+            if let Some(
+                super::restore_state::shard_progress::State::InProgress(field),
+            ) = &self.state
+            {
+                Some(field as _)
+            } else {
+                None
+            }
+        }
+        ///If `in_progress` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn in_progress_opt_mut(&mut self) -> Option<&mut ::prost::bytes::Bytes> {
+            if let Some(
+                super::restore_state::shard_progress::State::InProgress(field),
+            ) = &mut self.state
+            {
+                Some(field as _)
+            } else {
+                None
+            }
+        }
+        ///Returns a mutable reference to `in_progress`.
+        ///If the field is unset, it is first initialized with the default value.
+        ///If any other oneof field in the same oneof is set, it will be cleared.
+        pub fn in_progress_mut(&mut self) -> &mut ::prost::bytes::Bytes {
+            if self.in_progress_opt_mut().is_none() {
+                self.state = Some(
+                    super::restore_state::shard_progress::State::InProgress(
+                        ::prost::bytes::Bytes::default(),
+                    ),
+                );
+            }
+            self.in_progress_opt_mut().unwrap()
+        }
+        ///Sets `in_progress` with the provided value.
+        ///If any other oneof field in the same oneof is set, it will be cleared.
+        pub fn set_in_progress<T: Into<::prost::bytes::Bytes>>(&mut self, field: T) {
+            self.state = Some(
+                super::restore_state::shard_progress::State::InProgress(
+                    field.into().into(),
+                ),
+            );
+        }
+        ///Sets `in_progress` with the provided value.
+        ///If any other oneof field in the same oneof is set, it will be cleared.
+        pub fn with_in_progress<T: Into<::prost::bytes::Bytes>>(
+            mut self,
+            field: T,
+        ) -> Self {
+            self.set_in_progress(field.into());
+            self
+        }
+        ///Returns the value of `done`, or the default value if `done` is unset.
+        pub fn done(&self) -> &super::restore_state::shard_progress::Done {
+            if let Some(super::restore_state::shard_progress::State::Done(field)) = &self
+                .state
+            {
+                field as _
+            } else {
+                super::restore_state::shard_progress::Done::default_instance() as _
+            }
+        }
+        ///If `done` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn done_opt(&self) -> Option<&super::restore_state::shard_progress::Done> {
+            if let Some(super::restore_state::shard_progress::State::Done(field)) = &self
+                .state
+            {
+                Some(field as _)
+            } else {
+                None
+            }
+        }
+        ///If `done` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn done_opt_mut(
+            &mut self,
+        ) -> Option<&mut super::restore_state::shard_progress::Done> {
+            if let Some(super::restore_state::shard_progress::State::Done(field)) = &mut self
+                .state
+            {
+                Some(field as _)
+            } else {
+                None
+            }
+        }
+        ///Returns a mutable reference to `done`.
+        ///If the field is unset, it is first initialized with the default value.
+        ///If any other oneof field in the same oneof is set, it will be cleared.
+        pub fn done_mut(&mut self) -> &mut super::restore_state::shard_progress::Done {
+            if self.done_opt_mut().is_none() {
+                self.state = Some(
+                    super::restore_state::shard_progress::State::Done(
+                        super::restore_state::shard_progress::Done::default(),
+                    ),
+                );
+            }
+            self.done_opt_mut().unwrap()
+        }
+        ///Sets `done` with the provided value.
+        ///If any other oneof field in the same oneof is set, it will be cleared.
+        pub fn set_done<T: Into<super::restore_state::shard_progress::Done>>(
+            &mut self,
+            field: T,
+        ) {
+            self.state = Some(
+                super::restore_state::shard_progress::State::Done(field.into().into()),
+            );
+        }
+        ///Sets `done` with the provided value.
+        ///If any other oneof field in the same oneof is set, it will be cleared.
+        pub fn with_done<T: Into<super::restore_state::shard_progress::Done>>(
+            mut self,
+            field: T,
+        ) -> Self {
+            self.set_done(field.into());
+            self
+        }
+    }
+    impl super::restore_state::shard_progress::Done {
+        pub const fn const_default() -> Self {
+            Self {}
+        }
+        #[doc(hidden)]
+        pub fn default_instance() -> &'static Self {
+            static DEFAULT: super::restore_state::shard_progress::Done = super::restore_state::shard_progress::Done::const_default();
+            &DEFAULT
         }
     }
     impl super::Watermark {

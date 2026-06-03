@@ -11,7 +11,7 @@
 //!
 //! - `__restore` (`PipelineTaskKey → RestoreState`) — per-pipeline
 //!   restore progress; consumed by external restore drivers to
-//!   skip already-ingested partitions on resume.
+//!   resume from the last-committed per-shard cursor.
 //! - `__watermark` (`PipelineTaskKey → Watermark`) — per-pipeline
 //!   committer watermark; used by tip-mode drivers to learn what
 //!   checkpoint each pipeline resumes from.
@@ -100,10 +100,10 @@ impl Decode for PipelineTaskKey {
 /// Re-export of the generated protobuf message. Drivers transition
 /// a pipeline:
 /// 1. `None` (no entry) → `InProgress` when restore begins.
-/// 2. `InProgress` → `InProgress` with one more partition marked
-///    complete, atomically with each shard's data writes.
-/// 3. `InProgress` → `Complete` when every partition has been
-///    committed.
+/// 2. `InProgress` → `InProgress` with per-shard cursors advanced
+///    atomically with each chunk's data writes.
+/// 3. `InProgress` → `Complete` when every shard's stream has
+///    been fully consumed.
 ///
 /// Tip indexing for a pipeline must wait until its state reaches
 /// `Complete`. Drivers check this on startup.
@@ -425,20 +425,29 @@ mod tests {
     fn restore_state_round_trip_in_progress_empty() {
         let s = RestoreState::default().with_in_progress(restore_state::InProgress {
             target_checkpoint: 999,
-            partitions_complete: vec![],
+            shards: std::collections::BTreeMap::new(),
         });
         assert_eq!(round_trip(&s), s);
     }
 
     #[test]
-    fn restore_state_round_trip_in_progress_with_partitions() {
+    fn restore_state_round_trip_in_progress_with_shards() {
         let s = RestoreState::default().with_in_progress(restore_state::InProgress {
             target_checkpoint: 1,
-            partitions_complete: vec![
-                bytes::Bytes::from_static(&[]),
-                bytes::Bytes::from_static(&[0u8, 1, 2, 3]),
-                bytes::Bytes::from_static(b"shard-7"),
-            ],
+            shards: [
+                (
+                    0u32,
+                    restore_state::ShardProgress::default()
+                        .with_in_progress(bytes::Bytes::from_static(b"cursor-0")),
+                ),
+                (
+                    7u32,
+                    restore_state::ShardProgress::default()
+                        .with_done(restore_state::shard_progress::Done {}),
+                ),
+            ]
+            .into_iter()
+            .collect(),
         });
         assert_eq!(round_trip(&s), s);
     }

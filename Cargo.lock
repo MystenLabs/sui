@@ -14457,6 +14457,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
+ "futures",
  "parking_lot 0.12.3",
  "prometheus",
  "prost 0.14.1",
@@ -14469,6 +14470,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-stream",
  "tracing",
 ]
 

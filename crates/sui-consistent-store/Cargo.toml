@@ -10,6 +10,7 @@ edition = "2024"
 anyhow.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
+futures.workspace = true
 parking_lot.workspace = true
 prometheus.workspace = true
 prost.workspace = true
@@ -21,6 +22,7 @@ sui-indexer-alt-framework-store-traits.workspace = true
 sui-types.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "sync"] }
+tokio-stream.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]

@@ -29,14 +29,14 @@ pub struct Watermark {
 /// Drivers transition a pipeline:
 ///
 /// 1. `None` → `InProgress` when restore begins.
-/// 1. `InProgress` → `InProgress` with one more partition marked
-///    complete, atomically with each shard's data writes.
-/// 1. `InProgress` → `Complete` when every partition has been
-///    committed.
+/// 1. `InProgress` → `InProgress` with per-shard cursors advanced
+///    atomically with each shard's data writes.
+/// 1. `InProgress` → `Complete` when every shard has been fully
+///    consumed.
 ///
 /// Tip indexing for a pipeline must wait until its state reaches
 /// `Complete`. Drivers check this on startup.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RestoreState {
     /// Which lifecycle state the pipeline is currently in. The
     /// `RestoreState` message itself is never empty in storage; an
@@ -48,7 +48,7 @@ pub struct RestoreState {
 /// Nested message and enum types in `RestoreState`.
 pub mod restore_state {
     /// Restore has started for this pipeline but is not yet finished.
-    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct InProgress {
         /// The checkpoint number the restore is aimed at. The restore
         /// source dictates this value (the formal snapshot's anchor
@@ -57,11 +57,45 @@ pub mod restore_state {
         /// pipeline reaches `Complete`.
         #[prost(uint64, tag = "1")]
         pub target_checkpoint: u64,
-        /// Opaque partition identifiers the driver has atomically
-        /// ingested so far. Order on the wire is not significant;
-        /// drivers append per-shard as restore progresses.
-        #[prost(bytes = "bytes", repeated, tag = "2")]
-        pub partitions_complete: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
+        /// Per-shard restore progress for the source the driver was
+        /// run against. The key is the shard identifier the source
+        /// declared (`shard_id` argument to `RestoreSource::stream`).
+        ///
+        /// * An entry missing from the map means the shard has not
+        ///   been touched yet; the driver will open its stream with
+        ///   no cursor.
+        /// * `ShardProgress::in_progress` carries the opaque cursor
+        ///   the source produced; the driver hands it back to
+        ///   `RestoreSource::stream` to resume.
+        /// * `ShardProgress::done` records that the source's stream
+        ///   for this shard was exhausted; the driver skips it.
+        ///
+        /// The pipeline transitions to `Complete` once every shard
+        /// declared by the source is marked `done`.
+        #[prost(btree_map = "uint32, message", tag = "2")]
+        pub shards: ::prost::alloc::collections::BTreeMap<u32, ShardProgress>,
+    }
+    /// Per-shard progress for a pipeline mid-restore.
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct ShardProgress {
+        #[prost(oneof = "shard_progress::State", tags = "1, 2")]
+        pub state: ::core::option::Option<shard_progress::State>,
+    }
+    /// Nested message and enum types in `ShardProgress`.
+    pub mod shard_progress {
+        #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+        pub struct Done {}
+        #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+        pub enum State {
+            /// Opaque resume cursor: the driver will pass this back to
+            /// `RestoreSource::stream` to resume the shard from
+            /// immediately after the last committed chunk.
+            #[prost(bytes, tag = "1")]
+            InProgress(::prost::bytes::Bytes),
+            /// The source's stream for this shard was fully consumed.
+            #[prost(message, tag = "2")]
+            Done(Done),
+        }
     }
     /// Restore has finished for this pipeline.
     #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -75,7 +109,7 @@ pub mod restore_state {
     /// `RestoreState` message itself is never empty in storage; an
     /// absent column-family entry means "no restore has been
     /// started", which is distinct from any of these variants.
-    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum State {
         #[prost(message, tag = "1")]
         InProgress(InProgress),

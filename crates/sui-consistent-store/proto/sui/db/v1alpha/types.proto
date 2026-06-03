@@ -44,10 +44,10 @@ message Watermark {
 //
 // Drivers transition a pipeline:
 // 1. `None` → `InProgress` when restore begins.
-// 2. `InProgress` → `InProgress` with one more partition marked
-//    complete, atomically with each shard's data writes.
-// 3. `InProgress` → `Complete` when every partition has been
-//    committed.
+// 2. `InProgress` → `InProgress` with per-shard cursors advanced
+//    atomically with each shard's data writes.
+// 3. `InProgress` → `Complete` when every shard has been fully
+//    consumed.
 //
 // Tip indexing for a pipeline must wait until its state reaches
 // `Complete`. Drivers check this on startup.
@@ -70,10 +70,37 @@ message RestoreState {
     // pipeline reaches `Complete`.
     uint64 target_checkpoint = 1;
 
-    // Opaque partition identifiers the driver has atomically
-    // ingested so far. Order on the wire is not significant;
-    // drivers append per-shard as restore progresses.
-    repeated bytes partitions_complete = 2;
+    // Per-shard restore progress for the source the driver was
+    // run against. The key is the shard identifier the source
+    // declared (`shard_id` argument to `RestoreSource::stream`).
+    //
+    // - An entry missing from the map means the shard has not
+    //   been touched yet; the driver will open its stream with
+    //   no cursor.
+    // - `ShardProgress::in_progress` carries the opaque cursor
+    //   the source produced; the driver hands it back to
+    //   `RestoreSource::stream` to resume.
+    // - `ShardProgress::done` records that the source's stream
+    //   for this shard was exhausted; the driver skips it.
+    //
+    // The pipeline transitions to `Complete` once every shard
+    // declared by the source is marked `done`.
+    map<uint32, ShardProgress> shards = 2;
+  }
+
+  // Per-shard progress for a pipeline mid-restore.
+  message ShardProgress {
+    oneof state {
+      // Opaque resume cursor: the driver will pass this back to
+      // `RestoreSource::stream` to resume the shard from
+      // immediately after the last committed chunk.
+      bytes in_progress = 1;
+
+      // The source's stream for this shard was fully consumed.
+      Done done = 2;
+    }
+
+    message Done {}
   }
 
   // Restore has finished for this pipeline.
