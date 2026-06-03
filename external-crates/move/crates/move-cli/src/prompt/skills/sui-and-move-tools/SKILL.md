@@ -1,7 +1,7 @@
 ---
 name: sui-and-move-tools
 description: >
-  Tools for working with Sui Move: the **`suiup`-managed `sui` CLI** for fetching on-chain
+  Tools for working with Move on Sui: the **`suiup`-managed `sui` CLI** for fetching on-chain
   packages and disassembling their bytecode (`sui move disassemble`), and the **`move decompile`**
   binary built from a pinned Sui clone for rendering bytecode as readable Move source. Use at
   the START of any session that needs on-chain bytecode in hand — auditing a deployed package,

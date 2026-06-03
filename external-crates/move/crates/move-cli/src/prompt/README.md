@@ -51,7 +51,7 @@ Output:
 
 ```
 Embedded categories (2):
-  audit — Auditing compiled Sui Move packages for security vulnerabilities.
+  audit — Auditing compiled Move packages on Sui for security vulnerabilities.
   bytecode — Understanding compiled Move bytecode — disassembly, decompilation, and what survives compilation.
 
 Commands:

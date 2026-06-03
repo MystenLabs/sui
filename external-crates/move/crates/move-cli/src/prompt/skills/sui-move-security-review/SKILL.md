@@ -1,7 +1,7 @@
 ---
 name: sui-move-security-review
 description: >
-  Use when auditing, reviewing, or hunting for vulnerabilities in Sui Move code — including
+  Use when auditing, reviewing, or hunting for vulnerabilities in Move code on Sui — including
   deployed/decompiled packages. A checklist of invariants whose VIOLATION causes exploitable
   bugs: access control & capabilities, struct abilities & type safety, object lifecycle &
   ownership, shared-object and PTB attack surface, dynamic fields & collections, arithmetic &
@@ -12,7 +12,7 @@ description: >
   be abused.
 ---
 
-# Sui Move Security Review
+# Move Security Review (on Sui)
 
 > **Self-bootstrap (any AI agent):** this skill is bundled inside the `move` binary. **For
 > comprehensive audits, enumerate every reference file in this bundle (`move prompt skill
@@ -24,7 +24,7 @@ description: >
 > and `move prompt category <name>` to read the category's workflow. No filesystem install
 > is required — the binary is self-contained.
 
-> Offensive counterpart to the constructive Sui Move skills. Each constructive "must / never /
+> Offensive counterpart to the constructive Move skills. Each constructive "must / never /
 > always" rule implies a vulnerability when violated. This skill is the violation catalog: every
 > rule has a **detection heuristic**, a **severity**, and an **exploit sketch** so findings are
 > actionable against concrete code.

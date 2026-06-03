@@ -64,6 +64,6 @@ The `Bytecode` enum is a stack machine (see `reading-disassembly.md`). Categorie
 - **Vectors:** `VecPack, VecLen, VecImmBorrow, VecMutBorrow, VecPushBack, VecPopBack, VecUnpack,
   VecSwap`.
 
-What you will NOT find in Sui Move: `MoveTo/MoveFrom/Exists` global-storage ops — Sui uses the
+What you will NOT find here: `MoveTo/MoveFrom/Exists` global-storage ops — Sui uses the
 object model + framework calls (`object::new`, `transfer::*`, `dynamic_field::*`) instead, which
 appear as ordinary `Call`s.

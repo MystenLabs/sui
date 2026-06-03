@@ -1,16 +1,16 @@
 ---
 name: audit
-description: Reviewing a deployed Sui Move package for vulnerabilities, exploitable bugs, suspicious behavior, or anything suspected wrong on chain. Reach for this on "is this package safe?", "what's wrong with this?", "I suspect there's a bug in X", "find vulnerabilities", "security review", or a direct "audit this".
+description: Reviewing a deployed Move package on Sui for vulnerabilities, exploitable bugs, suspicious behavior, or anything suspected wrong on chain. Reach for this on "is this package safe?", "what's wrong with this?", "I suspect there's a bug in X", "find vulnerabilities", "security review", or a direct "audit this".
 skills:
   - sui-move-security-review
   - sui-and-move-tools
   - move-bytecode-comprehension
 ---
 
-# Auditing Sui Move packages
+# Auditing Move packages on Sui
 
-Auditing here means finding security vulnerabilities in deployed (compiled) Sui Move
-packages: applying a catalog of invariant-violation rules against bytecode that's already
+Auditing here means finding security vulnerabilities in deployed (compiled) Move packages
+on Sui: applying a catalog of invariant-violation rules against bytecode that's already
 on chain, with a disciplined evidence chain from disassembly to finding.
 
 ## Skills

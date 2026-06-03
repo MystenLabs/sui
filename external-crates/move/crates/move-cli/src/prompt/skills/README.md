@@ -15,7 +15,7 @@ skills live here in one canonical location.
   disassembly detection signal, a severity, and an exploit sketch. Includes
   `auditing-bytecode.md` (per-rule disassembly signals + the report format that pairs
   assembly evidence with a human view).
-- **`sui-and-move-tools`** — tools for working with Sui Move: standing up the
+- **`sui-and-move-tools`** — tools for working with Move on Sui: standing up the
   `suiup`-managed `sui` CLI for fetching and disassembling on-chain bytecode, and the
   `move decompile` binary for human-readable rendering. Includes the confirm-`SUI_REF`
   gate and the isolation rule that forbids local Sui checkouts.
@@ -39,7 +39,7 @@ available when the category context isn't needed.
 ## Lineage
 
 The SM-* catalog in `sui-move-security-review/` was derived from the constructive
-`MystenLabs/skills` "how to write correct Sui Move" guidance. See
+`MystenLabs/skills` "how to write correct Move" guidance. See
 `../maintenance/sui-move-security-review/LINEAGE.md` for the pinned upstream ref and the
 refresh protocol — kept out of the embedded surface so the agent's context doesn't carry
 provenance metadata.
