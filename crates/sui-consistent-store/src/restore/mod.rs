@@ -38,13 +38,19 @@ use sui_types::object::Object;
 use crate::Batch;
 
 pub mod driver;
+pub mod formal_snapshot;
+mod format;
+pub mod metrics;
+mod storage;
 
 #[cfg(test)]
 pub(crate) mod test_pipeline;
 
+pub use crate::restore::driver::RestoreChunk;
 pub use crate::restore::driver::RestoreDriver;
 pub use crate::restore::driver::RestoreDriverConfig;
 pub use crate::restore::driver::RestoreSource;
+pub use crate::restore::storage::StorageConnectionArgs;
 
 /// A pipeline that can be bulk-loaded from a stream of live
 /// objects.
