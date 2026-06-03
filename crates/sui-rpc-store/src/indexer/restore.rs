@@ -6,11 +6,12 @@
 //!
 //! Registers the five live-object-derivable pipelines
 //! ([`LiveObjects`], [`ObjectByOwner`], [`ObjectByType`],
-//! [`Balance`], [`PackageVersions`]) against a single
-//! [`RestoreDriver`] and returns a [`Service`] driving the
-//! restore through to completion. Once finished, every pipeline's
-//! `__restore` row is `Complete` and its `__watermark` row is set
-//! to the source's target, so the regular
+//! [`Balance`], [`PackageVersions`]) — and, when the caller's
+//! [`RestoreLayer`] opts in, the raw [`Objects`] CF — against a
+//! single [`RestoreDriver`] and returns a [`Service`] driving the
+//! restore through to completion. Once finished, every registered
+//! pipeline's `__restore` row is `Complete` and its `__watermark`
+//! row is set to the source's target, so the regular
 //! [`Indexer::add_pipelines`] path will accept them for tip
 //! indexing.
 //!
@@ -30,19 +31,23 @@ use sui_consistent_store::restore::RestoreDriverConfig;
 use sui_consistent_store::restore::RestoreSource;
 use sui_futures::service::Service;
 
+use crate::RestoreLayer;
 use crate::RpcStoreSchema;
 use crate::indexer::balance::Balance;
 use crate::indexer::live_objects::LiveObjects;
 use crate::indexer::object_by_owner::ObjectByOwner;
 use crate::indexer::object_by_type::ObjectByType;
+use crate::indexer::objects::Objects;
 use crate::indexer::package_versions::PackageVersions;
 
-/// Register every [`Restore`]-implementing pipeline on a
-/// [`RestoreDriver`] bound to `db` / `schema` and `source`, then
-/// run the resulting [`Service`].
+/// Register every [`Restore`]-implementing pipeline opted in by
+/// `layer` on a [`RestoreDriver`] bound to `db` / `schema` and
+/// `source`, then run the resulting [`Service`].
 ///
-/// The returned `Service`'s primary task completes once every
-/// pipeline transitions to [`RestoreState::Complete`].
+/// The five derived-index pipelines are always registered; the raw
+/// [`Objects`] pipeline is only registered when `layer.objects` is
+/// set. The returned `Service`'s primary task completes once every
+/// registered pipeline transitions to [`RestoreState::Complete`].
 ///
 /// [`Restore`]: sui_consistent_store::Restore
 /// [`RestoreState::Complete`]: sui_consistent_store::restore_state::Complete
@@ -51,6 +56,7 @@ pub fn restore_indexes<Src: RestoreSource>(
     schema: Arc<RpcStoreSchema>,
     source: Src,
     config: RestoreDriverConfig,
+    layer: RestoreLayer,
 ) -> anyhow::Result<Service> {
     let mut driver = RestoreDriver::new(db, schema, source, config);
     driver.register(LiveObjects)?;
@@ -58,6 +64,9 @@ pub fn restore_indexes<Src: RestoreSource>(
     driver.register(ObjectByType)?;
     driver.register(Balance)?;
     driver.register(PackageVersions)?;
+    if layer.objects {
+        driver.register(Objects)?;
+    }
     driver.run()
 }
 
@@ -82,6 +91,7 @@ mod tests {
 
     use super::*;
     use crate::RpcStoreSchema;
+    use crate::indexer::objects::Objects;
     use crate::schema::object_by_owner::OwnerKind;
 
     /// Minimal [`RestoreSource`] that wraps a `Vec<RestoreChunk>`
@@ -184,6 +194,7 @@ mod tests {
             schema.clone(),
             source,
             RestoreDriverConfig::default(),
+            RestoreLayer::indexes_only(),
         )
         .unwrap()
         .shutdown()
@@ -215,8 +226,19 @@ mod tests {
             assert!(matches!(kind, OwnerKind::AddressOwner(addr) if *addr == owner));
         }
 
-        // Every pipeline finished and has __restore Complete,
-        // __watermark, and __chain_id all set.
+        // `indexes_only` did not register `objects`, so the
+        // `(id, version)` CF stays empty.
+        for o in &objects {
+            assert_eq!(
+                schema.get_object_by_key(o.id(), o.version()).unwrap(),
+                None,
+            );
+        }
+
+        // Every registered pipeline finished and has __restore
+        // Complete, __watermark, and __chain_id all set. `objects`
+        // was not registered with `indexes_only`, so it has no
+        // __restore row at all.
         for name in [
             LiveObjects::NAME,
             ObjectByOwner::NAME,
@@ -235,5 +257,70 @@ mod tests {
             let pinned_chain_id = db.framework().chain_ids.get(&key).unwrap().unwrap();
             assert_eq!(pinned_chain_id, chain_id);
         }
+        let objects_key = PipelineTaskKey::new(Objects::NAME);
+        assert!(
+            db.framework()
+                .restore
+                .get(&objects_key)
+                .unwrap()
+                .is_none(),
+            "indexes_only should leave the objects pipeline unregistered",
+        );
+    }
+
+    /// `RestoreLayer::all` additionally registers the `objects`
+    /// pipeline, so every restored live object lands in the
+    /// `(id, version)` CF and the pipeline itself transitions to
+    /// `Complete`.
+    #[tokio::test]
+    async fn restore_indexes_with_objects_layer_populates_objects_cf() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let schema = Arc::new(schema);
+
+        let owner = SuiAddress::random_for_testing_only();
+        let objects: Vec<Object> = (1..=4u8)
+            .map(|i| Object::with_id_owner_for_testing(ObjectID::from_single_byte(i), owner))
+            .collect();
+
+        let chain_id = ChainId([9u8; 32]);
+        let source = VecSource::from_objects(123, chain_id, vec![objects.clone()]);
+
+        restore_indexes(
+            db.clone(),
+            schema.clone(),
+            source,
+            RestoreDriverConfig::default(),
+            RestoreLayer::all(),
+        )
+        .unwrap()
+        .shutdown()
+        .await
+        .unwrap();
+
+        // Every object lands at its current version in `objects`.
+        for o in &objects {
+            assert_eq!(
+                schema.get_object_by_key(o.id(), o.version()).unwrap(),
+                Some(o.clone()),
+            );
+        }
+
+        // The `objects` pipeline's __restore / __watermark /
+        // __chain_id rows all match the source target.
+        let key = PipelineTaskKey::new(Objects::NAME);
+        let state = db.framework().restore.get(&key).unwrap().unwrap();
+        match state.state.unwrap() {
+            restore_state::State::Complete(c) => assert_eq!(c.restored_at, 123),
+            other => panic!("expected Complete, got {other:?}"),
+        }
+        assert_eq!(
+            db.framework().watermarks.get(&key).unwrap().unwrap(),
+            Watermark::for_checkpoint(123),
+        );
+        assert_eq!(
+            db.framework().chain_ids.get(&key).unwrap().unwrap(),
+            chain_id,
+        );
     }
 }

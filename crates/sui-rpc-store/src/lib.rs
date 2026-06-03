@@ -40,6 +40,7 @@ use sui_indexer_alt_framework::service::Service;
 pub use crate::config::CommitterLayer;
 pub use crate::config::ConsistencyConfig;
 pub use crate::config::PipelineLayer;
+pub use crate::config::RestoreLayer;
 pub use crate::config::ServiceConfig;
 pub use crate::indexer::Indexer;
 pub use crate::indexer::METRICS_PREFIX;

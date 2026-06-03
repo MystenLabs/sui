@@ -179,6 +179,41 @@ impl PipelineLayer {
     }
 }
 
+/// Per-pipeline registration toggles for
+/// [`restore_indexes`](crate::restore_indexes).
+///
+/// The derived-index pipelines (`live_objects`, `object_by_owner`,
+/// `object_by_type`, `balance`, `package_versions`) are always
+/// restored — they cannot be reconstructed from anywhere else. The
+/// raw `objects` CF is conditional: the standalone deployment
+/// needs it so version-keyed reads are served by the restored
+/// snapshot, while the embedded-fullnode deployment already has
+/// every object version in the validator's perpetual store and
+/// can skip the duplicate write.
+#[derive(Default, Clone, Debug)]
+pub struct RestoreLayer {
+    /// If true, register the `objects` pipeline with the restore
+    /// driver so each live object lands as an
+    /// `(ObjectID, version) → StoredObject` row.
+    pub objects: bool,
+}
+
+impl RestoreLayer {
+    /// Restore every pipeline, including the raw `objects` CF.
+    /// The standalone-binary default.
+    pub fn all() -> Self {
+        Self { objects: true }
+    }
+
+    /// Restore only the derived-index pipelines. The embedded-
+    /// fullnode default — the fullnode's perpetual store already
+    /// holds every object version, so the `objects` CF is left
+    /// untouched here.
+    pub fn indexes_only() -> Self {
+        Self { objects: false }
+    }
+}
+
 impl CommitterLayer {
     /// Fold the override layer onto a shared default
     /// [`CommitterConfig`]. Unset fields inherit from `base`.
