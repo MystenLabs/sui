@@ -37,10 +37,19 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_
 impl ConsistentService for State {
     async fn available_range(
         &self,
-        _request: tonic::Request<grpc::AvailableRangeRequest>,
+        request: tonic::Request<grpc::AvailableRangeRequest>,
     ) -> Result<tonic::Response<grpc::AvailableRangeResponse>, tonic::Status> {
+        // Validate the request's checkpoint header even though
+        // we don't use the resolved value to compute the
+        // response — a malformed or out-of-range header should
+        // fail loudly here (with the bounds still stamped on
+        // the error metadata via `checkpointed_response`)
+        // rather than silently being ignored. Matches
+        // alt-consistent-store behaviour.
         self.checkpointed_response(
-            available_range::available_range(self).map_err(tonic::Status::from),
+            self.checkpoint(&request)
+                .map_err(tonic::Status::from)
+                .and_then(|_| Ok(available_range::available_range(self)?)),
         )
     }
 

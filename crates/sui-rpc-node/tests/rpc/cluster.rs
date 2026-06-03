@@ -300,6 +300,18 @@ impl LocalCluster {
         self.simulacrum.lock().await.funded_account(amount)
     }
 
+    /// Request `amount` SUI from Simulacrum's faucet, sent to
+    /// `address`. Returns the effects of the gas-grant
+    /// transaction (which created the new gas coin owned by
+    /// `address`). Mirrors [`Simulacrum::request_gas`].
+    pub async fn request_gas(
+        &self,
+        address: SuiAddress,
+        amount: u64,
+    ) -> anyhow::Result<TransactionEffects> {
+        self.simulacrum.lock().await.request_gas(address, amount)
+    }
+
     /// Submit a fully signed transaction to Simulacrum. Returns
     /// the effects + any execution error. The transaction is *not*
     /// committed to a checkpoint until [`Self::create_checkpoint`]

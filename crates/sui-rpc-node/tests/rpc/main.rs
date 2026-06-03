@@ -45,6 +45,43 @@
 //!   gap as `transaction_execution_service`, plus the artifact
 //!   tests need post-`apply_overrides_for_testing` protocol
 //!   features.
+//!
+//! # Tests intentionally not ported from `sui-indexer-alt-e2e-tests`
+//!
+//! These cover the v1alpha `ConsistentService` surface and
+//! mirror what's in `consistent_store_*_tests.rs` over there.
+//!
+//! - `consistent_store_address_balance_tests.rs` (every test in
+//!   the file) — needs
+//!   `ProtocolConfig::apply_overrides_for_testing` to enable
+//!   the address-balance accumulator. Same process-global
+//!   `ProtocolConfig` gap as `state_service::balance::test_address_balance*`
+//!   above; deferred behind the same fix.
+//! - `consistent_store_balance_tests::test_multiple_coin_types`
+//!   — publishes a custom coin Move package from
+//!   `sui-indexer-alt-e2e-tests/packages/coin`, which needs
+//!   in-process `sui-move-build` plumbing we don't wire up.
+//! - `consistent_store_list_owned_objects_tests::test_address_owner`
+//!   — covers the full ordering / cross-checkpoint scenario
+//!   (coins sorted by balance, transferring everything to a
+//!   third account, paginating C's resulting holdings). The
+//!   shape is exercised by the smoke test
+//!   `list_owned_objects_returns_funded_gas_coin` plus the
+//!   filter / pagination tests under
+//!   `list_objects_by_type_filter`; a deeper port can come if
+//!   the integration tests miss a regression.
+//! - `consistent_store_list_owned_objects_tests::test_coin_balance_change_cleanup`
+//!   — pins `Simulacrum::new_with_protocol_version(rng, 27)` to
+//!   reproduce an Effects V1 indexing bug. Our `LocalCluster`
+//!   doesn't expose protocol-version pinning, and the bug
+//!   itself is upstream of `sui-rpc-store` — the regression
+//!   lives in transaction_outputs.rs, not in our reader paths.
+//! - `consistent_store_list_owned_objects_tests::test_type_filters`
+//!   — a more elaborate type-filter sweep against an
+//!   address-owned set. Subsumed by
+//!   `list_objects_by_type_filter::list_objects_by_type_filter_sweep`,
+//!   which covers the same `TypeFilter` variants and the
+//!   pagination shape.
 
 mod cluster;
 mod v1alpha;

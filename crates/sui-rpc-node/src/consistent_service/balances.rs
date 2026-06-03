@@ -127,12 +127,15 @@ pub(super) fn list_balances(
         &schema.balance,
         &balance::OwnerPrefix(owner),
         |_token, _key: &balance::Key, value: &balance::Value| {
-            // `Protobuf<T>` derefs to `T`; check the bytes payloads
-            // directly so a row whose merge filters collapsed both
-            // halves to zero (but the compaction filter hasn't yet
-            // removed it) is skipped from the response.
+            // Skip rows whose merge collapsed both halves to
+            // zero. The compaction filter will eventually drop
+            // them but until then they look like a "live row
+            // with a balance of zero" — which the caller would
+            // see as an empty-but-nonzero `Balance` entry.
+            // Mirrors the alt-consistent-store's
+            // `*balance > 0` filter.
             let stored: &BalanceDelta = value;
-            !stored.coin.is_empty() || !stored.address.is_empty()
+            read_i128(&stored.coin) != 0 || read_i128(&stored.address) != 0
         },
     )?;
 

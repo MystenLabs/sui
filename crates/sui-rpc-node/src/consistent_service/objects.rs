@@ -188,6 +188,7 @@ fn parse_owner(owner: &grpc::Owner) -> Result<OwnerSelector, Error> {
             let s = owner
                 .address
                 .as_deref()
+                .filter(|s| !s.is_empty())
                 .ok_or_else(|| Error::InvalidOwner(String::new()))?;
             Ok(OwnerSelector::Address(parse_address(s)?))
         }
@@ -195,11 +196,26 @@ fn parse_owner(owner: &grpc::Owner) -> Result<OwnerSelector, Error> {
             let s = owner
                 .address
                 .as_deref()
+                .filter(|s| !s.is_empty())
                 .ok_or_else(|| Error::InvalidOwner(String::new()))?;
             Ok(OwnerSelector::Object(parse_address(s)?))
         }
-        ProtoOwnerKind::Shared => Ok(OwnerSelector::Shared),
-        ProtoOwnerKind::Immutable => Ok(OwnerSelector::Immutable),
+        ProtoOwnerKind::Shared => {
+            // `Shared` doesn't carry an address; mirror the
+            // alt-consistent-store and reject a request that
+            // tries to attach one rather than silently
+            // ignoring it.
+            if owner.address.as_deref().is_some_and(|s| !s.is_empty()) {
+                return Err(Error::InvalidOwnerKind);
+            }
+            Ok(OwnerSelector::Shared)
+        }
+        ProtoOwnerKind::Immutable => {
+            if owner.address.as_deref().is_some_and(|s| !s.is_empty()) {
+                return Err(Error::InvalidOwnerKind);
+            }
+            Ok(OwnerSelector::Immutable)
+        }
         ProtoOwnerKind::Unknown => Err(Error::InvalidOwnerKind),
     }
 }

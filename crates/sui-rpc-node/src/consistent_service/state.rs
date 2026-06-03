@@ -89,9 +89,8 @@ pub(crate) enum Error {
 impl From<Error> for tonic::Status {
     fn from(e: Error) -> Self {
         match &e {
-            Error::BadCheckpoint(_) | Error::NotInRange { .. } => {
-                tonic::Status::invalid_argument(e.to_string())
-            }
+            Error::BadCheckpoint(_) => tonic::Status::invalid_argument(e.to_string()),
+            Error::NotInRange { .. } => tonic::Status::out_of_range(e.to_string()),
             Error::NoSnapshots => tonic::Status::unavailable(e.to_string()),
             Error::SnapshotMissing(_) => tonic::Status::aborted(e.to_string()),
         }
