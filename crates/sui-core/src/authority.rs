@@ -1465,6 +1465,10 @@ impl AuthorityState {
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
 
         let tx_digest = certificate.digest();
+        // Register the digest in TLS so that a panic hook can identify which transaction caused
+        // the crash. The guard clears the slot on drop and is !Sync to prevent accidental use
+        // across threads in an async context.
+        let _crash_guard = crate::crash_recovery::register_executing_transaction(*tx_digest);
 
         if let Some(fork_recovery) = &self.fork_recovery_state
             && let Some(override_digest) = fork_recovery.get_transaction_override(tx_digest)
