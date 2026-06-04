@@ -5423,6 +5423,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_multi_epoch_transaction_expiration = true;
     }
 
+    pub fn set_defer_owned_object_double_spend_for_testing(&mut self, val: bool) {
+        self.feature_flags.defer_owned_object_double_spend = val;
+    }
+
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
         self.enable_accumulators_for_testing();
         self.feature_flags.enable_authenticated_event_streams = true;
