@@ -930,10 +930,7 @@ impl<C> ConsensusHandler<C> {
 
     /// Replace the set of transactions known to have caused a crash in a previous run.
     /// Called once at startup, before any commits are processed.
-    pub(crate) fn set_crashed_transactions(
-        &mut self,
-        crashed: HashSet<TransactionDigest>,
-    ) {
+    pub(crate) fn set_crashed_transactions(&mut self, crashed: HashSet<TransactionDigest>) {
         self.crashed_transactions = crashed;
     }
 
@@ -2547,10 +2544,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             ?digest,
                             "Dropping transaction that caused a crash in a previous run"
                         );
-                        self.epoch_store.set_consensus_tx_status(
-                            position,
-                            ConsensusTxStatus::Dropped,
-                        );
+                        self.epoch_store
+                            .set_consensus_tx_status(position, ConsensusTxStatus::Dropped);
                         continue;
                     }
                 }

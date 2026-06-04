@@ -41,7 +41,7 @@ use sui_types::digests::TransactionDigest;
 use tracing::{error, info, warn};
 
 /// File name within the node's db_path where panicking-transaction digests are persisted.
-const PANIC_TX_LOG_FILE: &str = "panic-tx.log";
+pub const PANIC_TX_LOG_FILE: &str = "panic-tx.log";
 
 // ---------------------------------------------------------------------------
 // Thread-local slot
@@ -139,7 +139,7 @@ pub fn install_panic_hook(db_path: PathBuf) {
     }));
 }
 
-fn append_digest_to_log(path: &Path, digest: TransactionDigest) -> std::io::Result<()> {
+pub fn append_digest_to_log(path: &Path, digest: TransactionDigest) -> std::io::Result<()> {
     let mut file = OpenOptions::new().create(true).append(true).open(path)?;
     writeln!(file, "{}", digest)?;
     file.flush()
@@ -180,7 +180,9 @@ pub fn load_crashed_transactions(db_path: &Path) -> HashSet<TransactionDigest> {
                         }
                         match s.parse::<TransactionDigest>() {
                             Ok(d) => {
-                                info!("Crash-recovery: will drop previously-crashing transaction {d}");
+                                info!(
+                                    "Crash-recovery: will drop previously-crashing transaction {d}"
+                                );
                                 digests.insert(d);
                             }
                             Err(e) => {
