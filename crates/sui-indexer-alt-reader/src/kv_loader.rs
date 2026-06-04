@@ -30,6 +30,7 @@ use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use tonic::transport::Uri;
 
+use crate::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use crate::bigtable_reader::BigtableArgs;
 use crate::bigtable_reader::BigtableReader;
 use crate::checkpoints::CheckpointDigestKey;
@@ -81,6 +82,11 @@ pub struct KvArgs {
     /// gRPC endpoint URL for the ledger service (e.g., archive.mainnet.sui.io)
     #[arg(long, group = "kv_source")]
     pub ledger_grpc_url: Option<Uri>,
+
+    /// Whether the configured ledger gRPC service also has alpha experimental query APIs enabled
+    /// (e.g. bitmap-backed transaction pagination). When unset, treated as `false`.
+    #[arg(long)]
+    pub enable_experimental_query_apis: Option<bool>,
 
     /// Time spent waiting for a request to the kv store to complete, in milliseconds.
     #[arg(long, alias = "bigtable-statement-timeout-ms")]
@@ -174,6 +180,32 @@ impl KvArgs {
 
         Ok(Some(
             LedgerGrpcReader::new(
+                ledger_grpc_url.clone(),
+                self.ledger_grpc_args(),
+                prefix,
+                registry,
+            )
+            .await?,
+        ))
+    }
+
+    /// Construct a v2alpha streaming reader when the operator has opted in via
+    /// `enable_experimental_query_apis` AND a ledger gRPC URL is configured. Returns `None`
+    /// otherwise. Reuses the same channel settings as the v2 `ledger_grpc_reader`.
+    pub async fn alpha_ledger_grpc_reader(
+        &self,
+        prefix: Option<&str>,
+        registry: &Registry,
+    ) -> anyhow::Result<Option<AlphaLedgerGrpcReader>> {
+        if !self.enable_experimental_query_apis.unwrap_or(false) {
+            return Ok(None);
+        }
+        let Some(ledger_grpc_url) = self.ledger_grpc_url.as_ref() else {
+            return Ok(None);
+        };
+
+        Ok(Some(
+            AlphaLedgerGrpcReader::new(
                 ledger_grpc_url.clone(),
                 self.ledger_grpc_args(),
                 prefix,
