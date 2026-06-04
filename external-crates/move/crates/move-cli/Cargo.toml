@@ -53,6 +53,10 @@ path-clean.workspace = true
 [dev-dependencies]
 datatest-stable.workspace = true
 
+[build-dependencies]
+serde.workspace = true
+serde_yaml.workspace = true
+
 [[bin]]
 name = "move"
 path = "src/main.rs"

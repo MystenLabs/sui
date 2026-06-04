@@ -1,9 +1,18 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use serde::Deserialize;
+use std::collections::BTreeSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+#[derive(Deserialize)]
+struct CategoryFrontmatter {
+    name: String,
+    description: String,
+    skills: Vec<String>,
+}
 
 fn main() {
     // Embed every skill markdown file under `src/prompt/skills/` and every category
@@ -15,8 +24,8 @@ fn main() {
     // directives ensure a rebuild whenever the underlying content changes.
     //
     // Both skills and categories are embedded raw — frontmatter is part of the content
-    // an agent reads. The only build-time parse is a one-line peek for `description:` so
-    // `move prompt categories` can show a short summary alongside each category name.
+    // an agent reads. Build-time frontmatter parsing exists only to validate the prompt
+    // graph and extract category descriptions for `move prompt categories`.
 
     let manifest = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set by cargo");
     let skills_dir = PathBuf::from(&manifest).join("src/prompt/skills");
@@ -35,6 +44,7 @@ fn main() {
     //    content is read at build time — each file is `include_str!`'d at compile time
     //    by the generated `embedded.rs`.
     let mut skill_entries: Vec<(String, String, PathBuf)> = Vec::new();
+    let mut skill_bundles: BTreeSet<String> = BTreeSet::new();
     if skills_dir.exists() {
         for bundle_entry in fs::read_dir(&skills_dir)
             .expect("read src/prompt/skills/")
@@ -49,17 +59,25 @@ fn main() {
                 .and_then(|s| s.to_str())
                 .expect("bundle name is valid UTF-8")
                 .to_owned();
+            let skill_md = bundle_path.join("SKILL.md");
+            if !skill_md.is_file() {
+                panic!(
+                    "skill bundle '{}' is missing required {}",
+                    bundle,
+                    skill_md.display()
+                );
+            }
+            skill_bundles.insert(bundle.clone());
             collect_md(&bundle, &bundle_path, &bundle_path, &mut skill_entries);
         }
     }
 
     // 2. Collect categories. Each `src/prompt/categories/<name>/CATEGORY.md` becomes one
     //    `CATEGORIES` entry. The category `name` is taken from the directory; the
-    //    `description` is peeked from a single frontmatter line (see
-    //    `read_category_description`) so `move prompt categories` can show it alongside
-    //    the name. Everything else in
-    //    `CATEGORY.md` — the whole file, frontmatter included — is embedded raw and
-    //    served verbatim by `move prompt category <name>`, the same convention as skills.
+    //    frontmatter is parsed once to validate its name, description, and skill bundle
+    //    references. Everything else in `CATEGORY.md` — the whole file, frontmatter
+    //    included — is embedded raw and served verbatim by `move prompt category <name>`,
+    //    the same convention as skills.
     let mut category_entries: Vec<(String, String, PathBuf)> = Vec::new();
     if categories_dir.exists() {
         for entry in fs::read_dir(&categories_dir)
@@ -77,22 +95,49 @@ fn main() {
                 .to_owned();
             let category_md = dir.join("CATEGORY.md");
             if !category_md.is_file() {
-                continue;
-            }
-            let description = read_category_description(&category_md).unwrap_or_else(|| {
                 panic!(
-                    "{} is missing a `description: <one-line>` line in its frontmatter",
+                    "category directory '{}' is missing required CATEGORY.md",
+                    dir.display()
+                );
+            }
+            let frontmatter = read_category_frontmatter(&category_md);
+            if frontmatter.name != name {
+                panic!(
+                    "{} has frontmatter name '{}' but directory name is '{}'",
+                    category_md.display(),
+                    frontmatter.name,
+                    name
+                );
+            }
+            if frontmatter.description.trim().is_empty() {
+                panic!(
+                    "{} has an empty `description` in its frontmatter",
                     category_md.display()
-                )
-            });
-            category_entries.push((name, description, category_md));
+                );
+            }
+            if frontmatter.skills.is_empty() {
+                panic!(
+                    "{} must list at least one skill bundle in frontmatter `skills`",
+                    category_md.display()
+                );
+            }
+            for skill in &frontmatter.skills {
+                if !skill_bundles.contains(skill) {
+                    panic!(
+                        "{} references unknown skill bundle '{}'",
+                        category_md.display(),
+                        skill
+                    );
+                }
+            }
+            category_entries.push((name, frontmatter.description, category_md));
         }
     }
 
     // 3. Emit `embedded.rs` with the two static slices, side by side. Both use
     //    `include_str!(r"<abs path>")` so the actual file content is pulled in by rustc
     //    at compile time — `build.rs` never sees the bytes itself for skills, and only
-    //    sees them once (the `description:` peek) for categories.
+    //    sees category bytes once for frontmatter validation.
     let mut src = String::new();
     src.push_str("// Auto-generated by build.rs. Do not edit by hand.\n\n");
 
@@ -144,28 +189,37 @@ fn collect_md(bundle: &str, root: &Path, dir: &Path, out: &mut Vec<(String, Stri
     }
 }
 
-/// Scan a `CATEGORY.md` for its `description:` line and return the trimmed value.
-///
-/// Only the single-line form `description: <text>` is recognized; this is intentional —
-/// adding YAML breadth (folded `>` form, multi-line, anchors) is preemptive complexity
-/// until something needs it. If a future `CATEGORY.md` needs a longer description, put
-/// it in the body and keep the frontmatter line short.
-fn read_category_description(path: &Path) -> Option<String> {
-    let content = fs::read_to_string(path).ok()?;
-    for line in content.lines() {
-        if let Some(rest) = line.strip_prefix("description:") {
-            let value = rest.trim();
-            if !value.is_empty() {
-                return Some(value.to_string());
-            }
+/// Parse `CATEGORY.md` frontmatter. YAML parsing is delegated to `serde_yaml`; the only
+/// manual work here is finding the conventional leading `---` frontmatter block.
+fn read_category_frontmatter(path: &Path) -> CategoryFrontmatter {
+    let content = fs::read_to_string(path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
+    let yaml = frontmatter_block(&content)
+        .unwrap_or_else(|| panic!("{} is missing leading YAML frontmatter", path.display()));
+    serde_yaml::from_str(yaml)
+        .unwrap_or_else(|err| panic!("failed to parse frontmatter in {}: {err}", path.display()))
+}
+
+/// Return the leading YAML frontmatter block, excluding the `---` delimiters.
+fn frontmatter_block(content: &str) -> Option<&str> {
+    let mut lines = content.split_inclusive('\n');
+    let first = lines.next()?;
+    if first.trim_end_matches(['\r', '\n']) != "---" {
+        return None;
+    }
+    let start = first.len();
+    let mut offset = start;
+    for line in lines {
+        if line.trim_end_matches(['\r', '\n']) == "---" {
+            return Some(&content[start..offset]);
         }
+        offset += line.len();
     }
     None
 }
 
 /// Escape a string for embedding inside a Rust double-quoted string literal in the
-/// generated `embedded.rs` (`\` and `"` are the only characters that need escaping
-/// inside the static-data fields).
+/// generated `embedded.rs`.
 fn escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
+    s.escape_default().to_string()
 }
