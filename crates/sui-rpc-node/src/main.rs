@@ -14,6 +14,7 @@ use sui_rpc_node::args::Args;
 use sui_rpc_node::args::Command;
 use sui_rpc_node::config::ServiceConfig;
 use sui_rpc_node::start_restorer;
+use sui_rpc_node::start_serve;
 use sui_rpc_node::start_service;
 use tokio::fs;
 
@@ -121,6 +122,30 @@ async fn main() -> anyhow::Result<()> {
                 // guarantee, so we exit nonzero rather than
                 // claim success.
                 Err(Error::Terminated | Error::Aborted) => std::process::exit(1),
+                Err(Error::Task(_)) => std::process::exit(2),
+            }
+        }
+
+        Command::Serve {
+            database_path,
+            metrics_args,
+            config,
+        } => {
+            let config = read_config(config).await?;
+            let registry = build_registry()?;
+            let metrics = MetricsService::new(metrics_args, registry);
+            metrics
+                .registry()
+                .register(uptime(VERSION)?)
+                .context("Failed to register uptime metric")?;
+
+            let s_service =
+                start_serve(database_path, BIN_NAME, VERSION, config, metrics.registry()).await?;
+            let s_metrics = metrics.run().await?;
+
+            match s_service.attach(s_metrics).main().await {
+                Ok(()) | Err(Error::Terminated) => {}
+                Err(Error::Aborted) => std::process::exit(1),
                 Err(Error::Task(_)) => std::process::exit(2),
             }
         }

@@ -19,12 +19,15 @@
 //! here first. There is no execution path — the binary serves
 //! reads from the indexed state.
 //!
-//! Two entry points:
+//! Three entry points:
 //!
 //! - [`start_service`] opens the database, builds the
 //!   [`sui_rpc_store::Indexer`] with every pipeline enabled, mounts
 //!   the [`sui_rpc_api`] HTTP server, and returns a composed
 //!   [`sui_futures::Service`] driving both.
+//! - [`start_serve`] opens an existing database and mounts only the
+//!   [`sui_rpc_api`] server — no indexer, no ingestion source — so
+//!   the database can be queried exactly as it is on disk.
 //! - [`start_restorer`] restores from a Sui formal snapshot via
 //!   [`sui_rpc_store::restore_indexes`] and floors the unrestored
 //!   pipelines' watermarks via
@@ -173,6 +176,70 @@ pub async fn start_service(
 
     let s_indexer = indexer.run().await?;
     Ok(s_indexer.merge(rpc_service))
+}
+
+/// `Serve` entry point. Opens the existing database at
+/// `database_path` and mounts the `sui-rpc-api` server over an
+/// [`RpcStoreReader`] **without** building or running the indexer —
+/// no ingestion source is needed and nothing advances the watermarks
+/// while the server runs. Reads reflect the database exactly as it is
+/// on disk.
+///
+/// The composed [`Service`] is just the RPC server (and its HTTPS
+/// listener if configured). Because no [`Synchronizer`] is running,
+/// no new cross-pipeline snapshots are taken, so the snapshot-backed
+/// v1alpha `ConsistentService` reads see only snapshots already
+/// present; the v2 read APIs serve tip reads directly and are
+/// unaffected.
+///
+/// [`Synchronizer`]: sui_consistent_store::Synchronizer
+pub async fn start_serve(
+    database_path: impl AsRef<Path>,
+    bin_name: &'static str,
+    version: &'static str,
+    config: ServiceConfig,
+    registry: &Registry,
+) -> anyhow::Result<Service> {
+    let ServiceConfig {
+        consistency,
+        rpc,
+        db,
+        // The indexer is not run when serving, so its ingestion,
+        // committer, and restore settings are irrelevant here.
+        ingestion: _,
+        committer: _,
+        restore: _,
+    } = config;
+
+    let (database, schema) = Db::open::<RpcStoreSchema>(database_path, db.to_db_options())
+        .context("Failed to open rpc-store database")?;
+    let schema = Arc::new(schema);
+
+    // Resume the bitmap CFs' compaction filters against the persisted
+    // pruning floor, matching the indexer's open path.
+    schema
+        .refresh_pruning_atomics()
+        .context("Failed to refresh pruning watermarks")?;
+
+    // Expose per-CF RocksDB stats, same as the run / restore paths.
+    registry
+        .register(Box::new(ColumnFamilyStatsCollector::new(
+            Some(METRICS_PREFIX),
+            &database,
+        )))
+        .context("Failed to register RocksDB column-family stats collector")?;
+
+    build_rpc_service(
+        database.clone(),
+        schema,
+        consistency,
+        rpc,
+        bin_name,
+        version,
+        registry,
+    )
+    .await
+    .context("Failed to start RPC HTTP server")
 }
 
 /// `Restore` entry point. Opens (or creates) the database at

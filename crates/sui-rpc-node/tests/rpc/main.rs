@@ -71,5 +71,6 @@
 mod client;
 mod cluster;
 mod metrics;
+mod serve;
 mod v1alpha;
 mod v2;
