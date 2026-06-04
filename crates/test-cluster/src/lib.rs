@@ -266,7 +266,7 @@ impl TestCluster {
     pub async fn get_object_from_fullnode_store(&self, object_id: &ObjectID) -> Option<Object> {
         self.fullnode_handle
             .sui_node
-            .with_async(|node| async { node.state().get_object(object_id).await })
+            .with_async(|node| async { node.state().get_object(object_id) })
             .await
     }
 

@@ -1455,7 +1455,7 @@ impl AuthorityState {
     ///
     /// Should only be called within sui-core.
     #[instrument(level = "trace", skip_all)]
-    pub async fn try_execute_immediately(
+    pub fn try_execute_immediately(
         &self,
         certificate: &VerifiedExecutableTransaction,
         mut execution_env: ExecutionEnv,
@@ -1647,7 +1647,6 @@ impl AuthorityState {
                 execution_env,
                 &epoch_store,
             )
-            .await
             .unwrap();
         let signed_effects = self.sign_effects(effects, &epoch_store).unwrap();
         (signed_effects, execution_error_opt)
@@ -1661,7 +1660,6 @@ impl AuthorityState {
         let epoch_store = self.epoch_store_for_testing();
         let (effects, execution_error_opt) = self
             .try_execute_immediately(executable, execution_env, &epoch_store)
-            .await
             .unwrap();
         self.flush_post_processing(executable.digest()).await;
         let signed_effects = self.sign_effects(effects, &epoch_store).unwrap();
@@ -3394,15 +3392,14 @@ impl AuthorityState {
 
         let requested_object_seq = match request.request_kind {
             ObjectInfoRequestKind::LatestObjectInfo => {
-                let (_, seq, _) = self
-                    .get_object_or_tombstone(request.object_id)
-                    .await
-                    .ok_or_else(|| {
-                        SuiError::from(UserInputError::ObjectNotFound {
-                            object_id: request.object_id,
-                            version: None,
-                        })
-                    })?;
+                let (_, seq, _) =
+                    self.get_object_or_tombstone(request.object_id)
+                        .ok_or_else(|| {
+                            SuiError::from(UserInputError::ObjectNotFound {
+                                object_id: request.object_id,
+                                version: None,
+                            })
+                        })?;
                 seq
             }
             ObjectInfoRequestKind::PastObjectInfoDebug(seq) => seq,
@@ -3439,8 +3436,7 @@ impl AuthorityState {
             // Only address owned objects have locks.
             None
         } else {
-            self.get_transaction_lock(&object.compute_object_reference(), &epoch_store)
-                .await?
+            self.get_transaction_lock(&object.compute_object_reference(), &epoch_store)?
                 .map(|s| s.into_inner())
         };
 
@@ -3698,15 +3694,12 @@ impl AuthorityState {
             && epoch_store.protocol_config().enable_object_funds_withdraw()
         {
             if self.object_funds_checker.load().is_none() {
-                let inner = self
-                    .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-                    .await
-                    .map(|o| {
-                        Arc::new(ObjectFundsChecker::new(
-                            o.version(),
-                            self.object_funds_checker_metrics.clone(),
-                        ))
-                    });
+                let inner = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).map(|o| {
+                    Arc::new(ObjectFundsChecker::new(
+                        o.version(),
+                        self.object_funds_checker_metrics.clone(),
+                    ))
+                });
                 self.object_funds_checker.store(inner);
             }
         } else {
@@ -4037,7 +4030,6 @@ impl AuthorityState {
     ) -> Vec<(VerifiedExecutableTransaction, ExecutionEnv)> {
         let accumulator_version = self
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-            .await
             .unwrap()
             .version();
         // Use provided checkpoint sequence, or fall back to accumulator version.
@@ -4088,7 +4080,6 @@ impl AuthorityState {
             let env = ExecutionEnv::new().with_assigned_versions(assigned);
             let (effects, _) = self
                 .try_execute_immediately(&tx.clone(), env.clone(), &epoch_store)
-                .await
                 .unwrap();
             assert!(effects.status().is_ok());
             replay_txns.push((tx, env));
@@ -4118,7 +4109,6 @@ impl AuthorityState {
         let env = ExecutionEnv::new().with_assigned_versions(barrier_assigned);
         let (effects, _) = self
             .try_execute_immediately(&barrier.clone(), env.clone(), &epoch_store)
-            .await
             .unwrap();
         assert!(effects.status().is_ok());
         replay_txns.push((barrier, env));
@@ -4144,7 +4134,6 @@ impl AuthorityState {
         for (tx, env) in txns {
             let (effects, _) = self
                 .try_execute_immediately(tx, env.clone(), &epoch_store)
-                .await
                 .unwrap();
             assert!(effects.status().is_ok());
         }
@@ -4392,14 +4381,13 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+    pub fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         self.get_object_store().get_object(object_id)
     }
 
-    pub async fn get_sui_system_package_object_ref(&self) -> SuiResult<ObjectRef> {
+    pub fn get_sui_system_package_object_ref(&self) -> SuiResult<ObjectRef> {
         Ok(self
             .get_object(&SUI_SYSTEM_ADDRESS.into())
-            .await
             .expect("framework object should always exist")
             .compute_object_reference())
     }
@@ -4729,11 +4717,7 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn get_move_objects<T>(
-        &self,
-        owner: SuiAddress,
-        type_: MoveObjectType,
-    ) -> SuiResult<Vec<T>>
+    pub fn get_move_objects<T>(&self, owner: SuiAddress, type_: MoveObjectType) -> SuiResult<Vec<T>>
     where
         T: DeserializeOwned,
     {
@@ -5211,17 +5195,14 @@ impl AuthorityState {
         Ok(events)
     }
 
-    pub async fn insert_genesis_object(&self, object: Object) {
+    pub fn insert_genesis_object(&self, object: Object) {
         self.get_reconfig_api().insert_genesis_object(object);
     }
 
-    pub async fn insert_genesis_objects(&self, objects: &[Object]) {
-        futures::future::join_all(
-            objects
-                .iter()
-                .map(|o| self.insert_genesis_object(o.clone())),
-        )
-        .await;
+    pub fn insert_genesis_objects(&self, objects: &[Object]) {
+        for o in objects {
+            self.insert_genesis_object(o.clone());
+        }
     }
 
     /// Make a status response for a transaction
@@ -5412,7 +5393,7 @@ impl AuthorityState {
     /// Returns None if a lock record is initialized for the given ObjectRef but not yet locked by any transaction,
     ///     or cannot find the transaction in transaction table, because of data race etc.
     #[instrument(level = "trace", skip_all)]
-    pub async fn get_transaction_lock(
+    pub fn get_transaction_lock(
         &self,
         object_ref: &ObjectRef,
         epoch_store: &AuthorityPerEpochStore,
@@ -5437,11 +5418,11 @@ impl AuthorityState {
         epoch_store.get_signed_transaction(&lock_info.tx_digest)
     }
 
-    pub async fn get_objects(&self, objects: &[ObjectID]) -> Vec<Option<Object>> {
+    pub fn get_objects(&self, objects: &[ObjectID]) -> Vec<Option<Object>> {
         self.get_object_cache_reader().get_objects(objects)
     }
 
-    pub async fn get_object_or_tombstone(&self, object_id: ObjectID) -> Option<ObjectRef> {
+    pub fn get_object_or_tombstone(&self, object_id: ObjectID) -> Option<ObjectRef> {
         self.get_object_cache_reader()
             .get_latest_object_ref_or_tombstone(object_id)
     }
@@ -5552,7 +5533,7 @@ impl AuthorityState {
         binary_config: &BinaryConfig,
     ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>> {
         let ids: Vec<_> = system_packages.iter().map(|(id, _, _)| *id).collect();
-        let objects = self.get_objects(&ids).await;
+        let objects = self.get_objects(&ids);
 
         let mut res = Vec::with_capacity(system_packages.len());
         for (system_package_ref, object) in system_packages.into_iter().zip_debug_eq(objects.iter())
