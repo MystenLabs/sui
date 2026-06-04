@@ -561,69 +561,47 @@ impl CheckpointExecutor {
                 .unwrap()
         };
 
-        // Observer full nodes - that sync state via consensus as well - can verify checkpoints locally as they execute transactions
-        // out of the consensus commit path. This will require some special handling here to match the behaviour when checkpoints
-        // get executed out of the sync path:
-        // 1. populate the full checkpoint data (transactions)
-        // 2. Commit the index batches
-        // 3. Update the congestion tracker
+        // Observer fullnodes have already executed these transactions through consensus,
+        // but still need the fullnode side effects that the synced path normally performs.
         if self.epoch_store.node_role().is_fullnode() {
             pipeline_handle
                 .skip_to(PipelineStage::FinalizeTransactions)
                 .await;
 
-            let (mut state, tx_data) =
+            let (state, tx_data) =
                 self.load_checkpoint_transactions(checkpoint, Some(state_hasher));
 
-            self.commit_post_processing_index_batches(&state.data.tx_digests)
+            return self
+                .finalize_executed_checkpoint_transactions(state, &tx_data, pipeline_handle)
                 .await;
+        }
 
-            // Records the transaction-to-checkpoint mapping and, crucially, notifies subscribers
-            // waiting on executed transactions from a verified checkpoint. This is more important for the
-            // full nodes syncing via consensus as existing components might already waiting for the signal.
-            self.insert_finalized_transactions(&state.data.tx_digests, sequence_number);
+        let checkpoint_contents = self
+            .checkpoint_store
+            .get_checkpoint_contents(&checkpoint.content_digest)
+            .expect("db error")
+            .expect("checkpoint contents not found");
 
-            finish_stage!(pipeline_handle, FinalizeTransactions);
+        let (tx_digests, fx_digests): (Vec<_>, Vec<_>) = checkpoint_contents
+            .iter()
+            .map(|digests| (digests.transaction, digests.effects))
+            .unzip();
 
-            self.state.congestion_tracker.process_checkpoint_effects(
-                &*self.transaction_cache_reader,
-                &state.data.checkpoint,
-                &tx_data.effects,
-            );
+        pipeline_handle
+            .skip_to(PipelineStage::FinalizeTransactions)
+            .await;
 
-            state.full_data = self.process_checkpoint_data(&state.data, &tx_data);
+        self.insert_finalized_transactions(&tx_digests, sequence_number);
 
-            finish_stage!(pipeline_handle, ProcessCheckpointData);
+        pipeline_handle.skip_to(PipelineStage::BuildDbBatch).await;
 
-            return state;
-        } else {
-            let checkpoint_contents = self
-                .checkpoint_store
-                .get_checkpoint_contents(&checkpoint.content_digest)
-                .expect("db error")
-                .expect("checkpoint contents not found");
-
-            let (tx_digests, fx_digests): (Vec<_>, Vec<_>) = checkpoint_contents
-                .iter()
-                .map(|digests| (digests.transaction, digests.effects))
-                .unzip();
-
-            pipeline_handle
-                .skip_to(PipelineStage::FinalizeTransactions)
-                .await;
-
-            self.insert_finalized_transactions(&tx_digests, sequence_number);
-
-            pipeline_handle.skip_to(PipelineStage::BuildDbBatch).await;
-
-            let ckpt_data = CheckpointExecutionData {
-                checkpoint,
-                checkpoint_contents,
-                tx_digests,
-                fx_digests,
-            };
-            return CheckpointExecutionState::new_with_global_state_hasher(ckpt_data, state_hasher);
+        let ckpt_data = CheckpointExecutionData {
+            checkpoint,
+            checkpoint_contents,
+            tx_digests,
+            fx_digests,
         };
+        CheckpointExecutionState::new_with_global_state_hasher(ckpt_data, state_hasher)
     }
 
     #[instrument(level = "info", skip_all)]
