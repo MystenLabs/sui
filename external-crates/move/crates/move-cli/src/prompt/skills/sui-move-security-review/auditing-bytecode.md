@@ -156,5 +156,5 @@ For every audit, record alongside the findings:
 - GraphQL endpoint used (e.g. `https://graphql.mainnet.sui.io/graphql`)
 - `move --version` (the binary that ran `move prompt`)
 
-`move disassemble` output is byte-for-byte stable across patch versions of the binary, so
-this metadata is enough to re-derive the same findings against the same package.
+Recording the tool version matters because textual disassembly and decompilation can
+change across `move` versions even when the underlying package bytecode is the same.

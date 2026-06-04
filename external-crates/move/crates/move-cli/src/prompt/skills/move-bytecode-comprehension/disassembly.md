@@ -25,10 +25,11 @@ section of `sui-and-move-tools/fetch-and-decompile.md`.
 - **Basic blocks:** `B0:`, `B1:` … each a straight-line run; control flow between them is via
   `Branch/BrTrue/BrFalse` to a block, ending with `Ret`/`Abort`.
 - **Instructions:** numbered, operate on the operand stack.
-- **Abort sites:** an `Abort` instruction pops an abort code from the stack; the code's
-  value is whatever was just pushed by the immediately preceding `LdConst`/`LdU64`.
-  Source names (e.g. `EUnauthorized`) don't survive — reason from the integer + the
-  condition that branched here.
+- **Abort sites:** an `Abort` instruction pops the abort code from the top of the stack.
+  In simple cases the value is loaded immediately before the abort (`LdConst`, `LdU64`,
+  etc.); otherwise follow the local stack/dataflow into the abort site. Source names
+  (e.g. `EUnauthorized`) don't survive — reason from the integer value and the guarded
+  condition.
 
 ## The opcodes you'll actually read
 
@@ -49,4 +50,3 @@ section of `sui-and-move-tools/fetch-and-decompile.md`.
 | `Branch/BrTrue/BrFalse b` | jump to block `b` |
 | `Abort` | pop abort code and abort (the code is the constant just loaded) |
 | `Ret` | return |
-
