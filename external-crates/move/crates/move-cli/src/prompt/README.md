@@ -12,8 +12,9 @@ embedded into the binary at build time via `include_str!`.
 
 ## What this subcommand is
 
-- **Contract:** out = markdown (categories, skills, overview). Read-only — never builds,
-  fetches, or writes artifacts.
+- **Contract:** out = markdown (categories, skills, overview). `move prompt` itself only
+  prints embedded markdown; it never builds, fetches, or writes artifacts. Some workflows
+  may instruct follow-up commands when the task requires them.
 - **Self-contained.** All category and skill markdown is embedded in the binary at build
   time. No external install needed.
 - **Agent-agnostic.** Works for any AI agent that can shell out.

@@ -9,7 +9,9 @@ that workflow.
 ## Contract
 
 - **Out:** markdown only (categories, skills, overview).
-- **Read-only:** never builds, fetches, or writes artifacts.
+- **Read-only command:** `move prompt` only prints embedded markdown; it never builds,
+  fetches, or writes artifacts. Some workflows may instruct follow-up commands when the
+  task requires them.
 - **Self-contained:** every category and skill is embedded in this binary at build time.
   No external install needed.
 - **Agent-agnostic:** works for any AI agent that can shell out.
