@@ -37,11 +37,13 @@ plus the tools to turn `.mv` files into something a human can read.
    move prompt skill sui-and-move-tools --file <ref>
    ```
 
-## Disassembly vs decompilation — a single rule
+## Decompilation vs disassembly — a single rule
 
-Disassembly is 1:1 with executed bytecode. Decompiled `.move` is a heuristic
-reconstruction that can mis-render on edge cases. Reason from disassembly; render
-decompiled source only as a presentation layer for an already-confirmed observation.
+Use decompiled `.move` as the working view. It is compact and readable, while still
+preserving the bytecode properties most analyses rely on. Use disassembly as the
+verification view only for a specific question: it is 1:1 with executed bytecode, and it
+wins when a checked decompiled excerpt is ambiguous, visibly broken, or inconsistent with
+the bytecode.
 
 ## External references
 

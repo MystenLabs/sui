@@ -11,7 +11,7 @@ skills:
 
 Auditing here means finding security vulnerabilities in deployed (compiled) Move packages
 on Sui: applying a catalog of invariant-violation rules against bytecode that's already
-on chain, with a disciplined evidence chain from disassembly to finding.
+on chain, with a disciplined evidence chain from bytecode-derived evidence to finding.
 
 ## Skills
 
