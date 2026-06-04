@@ -73,8 +73,8 @@ impl Decode for Key {
     }
 }
 
-pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
-    base_options.clone()
+pub fn options(resolver: &sui_consistent_store::CfOptionsResolver) -> rocksdb::Options {
+    resolver.options(NAME)
 }
 
 /// Why a tombstone row was written: the object was either

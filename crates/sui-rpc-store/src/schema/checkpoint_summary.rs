@@ -26,8 +26,8 @@ pub const NAME: &str = "checkpoint_summary";
 pub type Key = U64Be;
 pub type Value = Protobuf<StoredCheckpointSummary>;
 
-pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
-    base_options.clone()
+pub fn options(resolver: &sui_consistent_store::CfOptionsResolver) -> rocksdb::Options {
+    resolver.options(NAME)
 }
 
 /// Build a `StoredCheckpointSummary` row from a checkpoint

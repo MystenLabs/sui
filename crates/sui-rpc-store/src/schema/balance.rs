@@ -70,8 +70,8 @@ impl Decode for Key {
 
 /// CF options: install the field-wise i128 merge operator and the
 /// drop-when-zero compaction filter.
-pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
-    let mut opts = base_options.clone();
+pub fn options(resolver: &sui_consistent_store::CfOptionsResolver) -> rocksdb::Options {
+    let mut opts = resolver.options(NAME);
     opts.set_merge_operator_associative("balance_merge", merge);
     opts.set_compaction_filter("balance_compact_zero", compact);
     opts

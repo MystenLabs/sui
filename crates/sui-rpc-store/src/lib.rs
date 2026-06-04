@@ -48,6 +48,7 @@ pub use crate::indexer::restore::floor_unrestored_pipelines;
 pub use crate::indexer::restore::restore_indexes;
 pub use crate::reader::RpcStoreReader;
 pub use crate::schema::RpcStoreSchema;
+pub use crate::schema::default_rocksdb_config;
 
 //TODO
 // we may want to introduce a way for some pipelines to be able to be implemented using a

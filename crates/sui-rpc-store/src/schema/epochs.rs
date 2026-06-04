@@ -29,8 +29,8 @@ pub type Key = U64Be;
 pub type Value = Protobuf<StoredEpoch>;
 
 /// CF options: install the field-wise merge operator.
-pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
-    let mut opts = base_options.clone();
+pub fn options(resolver: &sui_consistent_store::CfOptionsResolver) -> rocksdb::Options {
+    let mut opts = resolver.options(NAME);
     opts.set_merge_operator_associative("epochs_merge", merge);
     opts
 }

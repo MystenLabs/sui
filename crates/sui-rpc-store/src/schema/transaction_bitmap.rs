@@ -83,8 +83,8 @@ impl Decode for Key {
 /// CF options: install the bitmap-union merge operator and a
 /// per-bucket compaction filter that drops buckets whose entire
 /// `tx_seq` range sits below the pruning floor.
-pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
-    let mut opts = base_options.clone();
+pub fn options(resolver: &sui_consistent_store::CfOptionsResolver) -> rocksdb::Options {
+    let mut opts = resolver.options(NAME);
     opts.set_merge_operator_associative("transaction_bitmap_merge", merge);
     let floor = tx_seq_floor().clone();
     opts.set_compaction_filter("transaction_bitmap_pruning", move |_level, key, _value| {

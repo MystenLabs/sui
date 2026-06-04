@@ -17,8 +17,8 @@ pub const NAME: &str = "events";
 pub type Key = U64Be;
 pub type Value = Protobuf<StoredEvents>;
 
-pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
-    base_options.clone()
+pub fn options(resolver: &sui_consistent_store::CfOptionsResolver) -> rocksdb::Options {
+    resolver.options(NAME)
 }
 
 /// Build a `StoredEvents` row from a transaction's events.

@@ -40,8 +40,8 @@ pub const NAME: &str = "pruning_watermark";
 pub type Key = UnitKey;
 pub type Value = Protobuf<PruningWatermarks>;
 
-pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
-    base_options.clone()
+pub fn options(resolver: &sui_consistent_store::CfOptionsResolver) -> rocksdb::Options {
+    resolver.options(NAME)
 }
 
 /// Caller-facing view of the pruning watermarks.

@@ -193,8 +193,8 @@ fn read_address<B: Buf>(buf: &mut B) -> Result<SuiAddress, DecodeError> {
     SuiAddress::from_bytes(bytes).map_err(|e| DecodeError::with_source("decode SuiAddress", e))
 }
 
-pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
-    base_options.clone()
+pub fn options(resolver: &sui_consistent_store::CfOptionsResolver) -> rocksdb::Options {
+    resolver.options(NAME)
 }
 
 /// Build the `(Key, Value)` pair indexing a Move object by owner.

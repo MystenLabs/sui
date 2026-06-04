@@ -23,8 +23,8 @@ pub const NAME: &str = "tx_metadata_by_seq";
 pub type Key = U64Be;
 pub type Value = Protobuf<StoredTxMetadata>;
 
-pub fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
-    base_options.clone()
+pub fn options(resolver: &sui_consistent_store::CfOptionsResolver) -> rocksdb::Options {
+    resolver.options(NAME)
 }
 
 /// Caller-facing view of one row, with the digest decoded back to
