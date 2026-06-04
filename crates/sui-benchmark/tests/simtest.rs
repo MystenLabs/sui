@@ -499,6 +499,11 @@ mod test {
         register_fail_point_async("consensus-delay", || delay_failpoint(10..20, 0.001));
         register_fail_point_async("randomness-delay", || delay_failpoint(10..1000, 0.5));
 
+        // Cause DKG to fail ~5% of the time by skipping DKG share submission in ~10% of
+        // individual send attempts. With 4 validators, 3+ validators skipping causes DKG
+        // failure; P(3+ skip) ≈ 5% when each validator skips independently with 10% probability.
+        register_fail_point_if("rb-dkg", || thread_rng().gen_bool(0.1));
+
         test_simulated_load(test_cluster, 120).await;
     }
 
