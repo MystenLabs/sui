@@ -24,24 +24,24 @@ two ways: **disassembly** (stack-machine assembly, via `move disassemble`) and
 **decompilation** (reconstructed Move source, via `move decompile`). This skill is the mental model
 for both: the binary format, what survives, and how to read each output.
 
-The single most important fact for an auditor: **abilities, visibility, the `entry` flag,
-signatures (incl. generics/phantom), and all on-chain identifiers — module/struct/field/function
-names — are preserved in bytecode.** What is *lost* is human intent metadata: constant/error
-names, `#[error]` messages, local variable names, comments, and macro structure. Tune detection
-accordingly.
+The single most important fact when reading Move bytecode: **abilities, visibility, the
+`entry` flag, signatures (incl. generics/phantom), and all on-chain identifiers —
+module/struct/field/function names — are preserved.** What is *lost* is human intent
+metadata: constant/error names, `#[error]` messages, local variable names, comments, and
+macro structure. Tune reasoning accordingly.
 
 ## What survives compilation — the survival table
 
-| Source construct | In bytecode? | Disassembly | Decompiled | Audit implication |
+| Source construct | In bytecode? | Disassembly | Decompiled | Implication |
 |---|---|---|---|---|
 | Module address + name | ✓ | `module <addr>.<name>` | `module <addr>::<name>;` | Identity is exact |
-| Struct names | ✓ | `struct Name ...` | `public struct Name ...` | Type-name rules hold |
+| Struct names | ✓ | `struct Name ...` | `public struct Name ...` | Type-name reasoning is reliable |
 | Field names + types | ✓ | listed | listed | Field-level reasoning holds |
-| **Abilities** (key/store/copy/drop) | ✓ | `has store, key` | `has store, key` | **SM-A1/B1/B2/J1 reliable** |
-| **Visibility** (private/public/friend) | ✓ | keyword on fn | keyword on fn | **SM-A2/J2 reliable** |
-| **`entry` flag** | ✓ | `entry` shown | `entry` shown | **SM-L2/K1 reliable** |
+| **Abilities** (key/store/copy/drop) | ✓ | `has store, key` | `has store, key` | **Capability / soulbound / hot-potato reasoning is reliable** |
+| **Visibility** (private/public/friend) | ✓ | keyword on fn | keyword on fn | **Call-surface reasoning is reliable** |
+| **`entry` flag** | ✓ | `entry` shown | `entry` shown | **Tx-entry reasoning is reliable** |
 | Function signatures | ✓ | full | full | Param/return reasoning holds |
-| Generics + phantom type params | ✓ | `<T>` / phantom | `<T>` | SM-B4 type reasoning holds |
+| Generics + phantom type params | ✓ | `<T>` / phantom | `<T>` | Type-identity reasoning holds |
 | Constant **values** | ✓ | `LdConst[i](..)` | `const C0: ... = ...;` | Values readable... |
 | Constant / error **names** | ✗ | `LdConst[i]` index | `C0, C1, ...` | **names gone → use abort *codes*/positions** |
 | `#[error]` messages | ✗ | — | — | Error intent lost; reason from the abort site |
@@ -60,8 +60,8 @@ accordingly.
 
 ## Practical stance
 
-- **Decompilation is the working view.** Apply analyses (including SM-* audit rules) to
-  the decompiled `.move` files produced by `sui-and-move-tools/fetch-and-decompile.md`.
+- **Decompilation is the working view.** Apply analyses to the decompiled `.move` files
+  produced by `sui-and-move-tools/fetch-and-decompile.md`.
   Abilities, visibility, the `entry` flag, function signatures, control flow, struct /
   field shapes, and call patterns are byte-for-byte faithful — see `decompilation.md`'s
   "What is faithful" list. Decompiler artifacts (renamed constants `C0/C1...`, invented

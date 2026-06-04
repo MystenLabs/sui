@@ -4,7 +4,7 @@ A `.mv` file is a serialized `CompiledModule`. You rarely read the raw bytes —
 disassembly/decompilation — but knowing the structure explains *why* certain things survive and
 others don't.
 
-Reference (public, at the pinned `SUI_REF`):
+Reference (public):
 `external-crates/move/crates/move-binary-format/src/file_format.rs`. Key definitions (line numbers
 approximate; they drift between refs — grep the enum name):
 `Visibility` ~L492 · `Ability` ~L651 · `AbilitySet` ~L802 · `SignatureToken` ~L1019 ·
@@ -35,7 +35,7 @@ A module is a set of pools/tables referenced by index:
 `Ability` = `Copy | Drop | Store | Key`. An `AbilitySet` is a bitset (`struct AbilitySet(u8)`).
 Both struct declarations and each type parameter carry an `AbilitySet`, fully preserved. So
 "`AdminCap has key, store`", "no `copy`/`drop`", phantom-ness, and ability *constraints* on
-generics are all recoverable — the backbone of the capability/soulbound/hot-potato rules.
+generics are all recoverable — the backbone of the capability/soulbound/hot-potato patterns.
 
 ## Visibility & entry
 
@@ -59,7 +59,7 @@ The `Bytecode` enum is a stack machine (see `disassembly.md`). Categories:
 - **Calls/structs:** `Call, CallGeneric, Pack, Unpack` (and generic variants).
 - **Arithmetic/logic:** `Add, Sub, Mul, Div, Mod, BitOr/And/Xor, Shl/Shr, Or, And, Not, Eq, Neq,
   Lt, Gt, Le, Ge`.
-- **Casts:** `CastU8 .. CastU256` ← these are the silent-truncation sites (rule SM-F1).
+- **Casts:** `CastU8 .. CastU256` ← silent-truncation sites.
 - **Control flow:** `Branch, BrTrue, BrFalse, Ret, Abort` (`Abort` pops the abort *code*).
 - **Vectors:** `VecPack, VecLen, VecImmBorrow, VecMutBorrow, VecPushBack, VecPopBack, VecUnpack,
   VecSwap`.

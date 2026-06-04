@@ -21,5 +21,4 @@ files. One Sui GraphQL call returns bytes + disassembly for every module; `move 
 install needed.
 
 For what each output is for, see `move-bytecode-comprehension`. The end-to-end procedure
-is in `fetch-and-decompile.md`. For audits, also see the Reproducibility section in
-`sui-move-security-review/auditing-bytecode.md`.
+is in `fetch-and-decompile.md`.

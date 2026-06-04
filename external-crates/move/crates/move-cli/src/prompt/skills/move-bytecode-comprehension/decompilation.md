@@ -2,11 +2,11 @@
 
 Decompilation reconstructs readable Move source — structs with abilities, function
 signatures, control flow, expressions — from `.mv` bytecode. **It's the working view for
-analysis in this skill's workflow**: most reasoning (including SM-* audit rule signals)
-is determinable from decompiled output — see "What is faithful" below. The view is a
-**heuristic reconstruction**: structurally faithful in the common case, with
-mis-renderings on edge cases. When the decompiled view disagrees with the disassembly
-(the rare verification case), the disassembly wins.
+analysis in this skill's workflow**: most reasoning is determinable from decompiled
+output — see "What is faithful" below. The view is a **heuristic reconstruction**:
+structurally faithful in the common case, with mis-renderings on edge cases. When the
+decompiled view disagrees with the disassembly (the rare verification case), the
+disassembly wins.
 
 ## Producing decompiled `.move` files
 
