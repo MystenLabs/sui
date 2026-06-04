@@ -1,6 +1,6 @@
 ---
 name: bytecode
-description: Understanding what a compiled Move package actually does — its disassembly, decompiled source, and what survives compilation. Reach for this on "what does this package do?", "read / decompile this", "show me what's in this .mv", or any analysis of deployed code that doesn't need a security checklist.
+description: Bytecode-comprehension entry point for deployed code; choose to read, decompile, inspect `.mv`, or understand what a package does without security framing.
 skills:
   - move-bytecode-comprehension
   - sui-and-move-tools
