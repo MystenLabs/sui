@@ -2632,9 +2632,8 @@ async fn test_address_balance_paid_budget_above_i64_max_succeeds() {
 
 // Gas-payment coin reservations must be for SUI. A reservation for a custom coin type
 // (even one with an oversized balance) must be rejected before reaching smash_gas.
-// validity_check_no_gas_check now enforces the SUI-type constraint on all paths
-// including simulate/dry-run, so the error is consistent regardless of whether
-// the total also exceeds the i64::MAX bound.
+// check_gas enforces the SUI-type constraint on all paths including simulate/dry-run,
+// so the error is consistent regardless of whether the total also exceeds i64::MAX.
 #[sim_test]
 async fn dryrun_rejects_non_sui_gas_coin_reservation() {
     if has_mainnet_protocol_config_override() {

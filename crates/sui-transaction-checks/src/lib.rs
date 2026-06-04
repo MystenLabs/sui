@@ -455,7 +455,7 @@ mod checked {
                         }
                         .into());
                     }
-                    if gas_ownership_checks && !object.is_address_owned() {
+                    if !object.is_address_owned() {
                         return Err(UserInputError::GasObjectNotOwnedObject {
                             owner: object.owner.clone(),
                         }
