@@ -241,7 +241,8 @@ pub use simulator::set_jwk_injector;
 use simulator::*;
 use sui_core::authority::authority_store_pruner::PrunerWatermarks;
 use sui_core::{
-    consensus_handler::ConsensusHandlerInitializer, safe_client::SafeClientMetricsBase,
+    consensus_handler::ConsensusHandlerInitializer, crash_recovery,
+    safe_client::SafeClientMetricsBase,
 };
 
 const DEFAULT_GRPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(60);
@@ -488,6 +489,12 @@ impl SuiNode {
         // Unsupported (because of the use of static variable) and unnecessary in simtests.
         #[cfg(not(msim))]
         mysten_metrics::thread_stall_monitor::start_thread_stall_monitor();
+
+        // Install the crash-recovery panic hook and load any transactions that caused a crash in
+        // a previous run. These are installed early so the hook is active for the rest of startup.
+        #[cfg(not(msim))]
+        crash_recovery::install_panic_hook(config.db_path.clone());
+        let crashed_transactions = crash_recovery::load_crashed_transactions(&config.db_path);
 
         let genesis = config.genesis()?.clone();
 
@@ -885,6 +892,7 @@ impl SuiNode {
                 checkpoint_metrics.clone(),
                 node_role,
                 randomness_receiver_handle.clone(),
+                crashed_transactions,
             )
             .await?;
 
@@ -1286,6 +1294,7 @@ impl SuiNode {
         checkpoint_metrics: Arc<CheckpointMetrics>,
         node_role: NodeRole,
         randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
+        crashed_transactions: std::collections::HashSet<sui_types::digests::TransactionDigest>,
     ) -> Result<ValidatorComponents> {
         let mut config_clone = config.clone();
         let consensus_config = config_clone
@@ -1378,6 +1387,7 @@ impl SuiNode {
             sui_tx_validator_metrics,
             admission_queue,
             node_role,
+            crashed_transactions,
         )
         .await
     }
@@ -1402,6 +1412,7 @@ impl SuiNode {
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
         admission_queue: Option<AdmissionQueueContext>,
         node_role: NodeRole,
+        crashed_transactions: std::collections::HashSet<sui_types::digests::TransactionDigest>,
     ) -> Result<ValidatorComponents> {
         let checkpoint_service = Self::build_checkpoint_service(
             config,
@@ -1464,7 +1475,8 @@ impl SuiNode {
             throughput_calculator,
             backpressure_manager,
             config.congestion_log.clone(),
-        );
+        )
+        .with_crashed_transactions(crashed_transactions);
 
         info!("Starting consensus manager asynchronously");
 
@@ -1956,6 +1968,7 @@ impl SuiNode {
                             sui_tx_validator_metrics,
                             admission_queue,
                             new_role,
+                            std::collections::HashSet::new(),
                         )
                         .await?,
                     )
@@ -1996,6 +2009,9 @@ impl SuiNode {
                         self.checkpoint_metrics.clone(),
                         new_role,
                         self.randomness_receiver_handle.clone(),
+                        // Crashed transactions are only relevant on the initial startup
+                        // after a crash; clear the denylist when reconfiguring for a new epoch.
+                        std::collections::HashSet::new(),
                     )
                     .await?;
 

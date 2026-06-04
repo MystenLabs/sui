@@ -110,6 +110,8 @@ pub struct ConsensusHandlerInitializer {
     backpressure_manager: Arc<BackpressureManager>,
     congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
     consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
+    /// Transactions known to have caused a process panic in a previous run.
+    crashed_transactions: HashSet<TransactionDigest>,
 }
 
 impl ConsensusHandlerInitializer {
@@ -140,7 +142,15 @@ impl ConsensusHandlerInitializer {
             backpressure_manager,
             congestion_logger,
             consensus_gasless_counter,
+            crashed_transactions: HashSet::new(),
         }
+    }
+
+    /// Provide the set of transactions that caused a process crash in a previous run. These will
+    /// be dropped by the consensus handler before they reach execution.
+    pub fn with_crashed_transactions(mut self, crashed: HashSet<TransactionDigest>) -> Self {
+        self.crashed_transactions = crashed;
+        self
     }
 
     #[cfg(test)]
@@ -167,6 +177,7 @@ impl ConsensusHandlerInitializer {
             backpressure_manager,
             congestion_logger: None,
             consensus_gasless_counter,
+            crashed_transactions: HashSet::new(),
         }
     }
 
@@ -179,7 +190,7 @@ impl ConsensusHandlerInitializer {
             self.state.get_transaction_cache_reader().clone(),
             self.state.metrics.clone(),
         );
-        ConsensusHandler::new(
+        let mut handler = ConsensusHandler::new(
             self.epoch_store.clone(),
             self.checkpoint_service.clone(),
             settlement_scheduler,
@@ -192,7 +203,9 @@ impl ConsensusHandlerInitializer {
             self.state.traffic_controller.clone(),
             self.congestion_logger.clone(),
             self.consensus_gasless_counter.clone(),
-        )
+        );
+        handler.set_crashed_transactions(self.crashed_transactions.clone());
+        handler
     }
 }
 
@@ -820,6 +833,10 @@ pub struct ConsensusHandler<C> {
     consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
 
     checkpoint_queue: Mutex<CheckpointQueue>,
+
+    /// Transactions that caused a process panic during a previous run. These are dropped before
+    /// reaching execution to prevent the node from crashing on the same input again.
+    crashed_transactions: HashSet<TransactionDigest>,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -907,7 +924,17 @@ impl<C> ConsensusHandler<C> {
                 min_checkpoint_interval_ms,
                 execution_scheduler_sender,
             )),
+            crashed_transactions: HashSet::new(),
         }
+    }
+
+    /// Replace the set of transactions known to have caused a crash in a previous run.
+    /// Called once at startup, before any commits are processed.
+    pub(crate) fn set_crashed_transactions(
+        &mut self,
+        crashed: HashSet<TransactionDigest>,
+    ) {
+        self.crashed_transactions = crashed;
     }
 
     /// Returns the last subdag index processed by the handler.
@@ -967,6 +994,7 @@ impl<C> ConsensusHandler<C> {
                 min_checkpoint_interval_ms,
                 execution_scheduler_sender,
             )),
+            crashed_transactions: HashSet::new(),
         }
     }
 }
@@ -2507,6 +2535,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                     // Skip processing rejected transactions.
                     continue;
+                }
+
+                // Drop transactions that caused a panic in a previous run so they cannot crash
+                // the node again. We record a Dropped status so callers waiting on effects will
+                // get a definitive response rather than hanging indefinitely.
+                if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
+                    let digest = tx.digest();
+                    if self.crashed_transactions.contains(digest) {
+                        warn!(
+                            ?digest,
+                            "Dropping transaction that caused a crash in a previous run"
+                        );
+                        self.epoch_store.set_consensus_tx_status(
+                            position,
+                            ConsensusTxStatus::Dropped,
+                        );
+                        continue;
+                    }
                 }
 
                 let kind = classify(&parsed.transaction);
