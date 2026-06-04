@@ -127,19 +127,23 @@ impl Prompt {
 fn print_skills() {
     let bundles: BTreeSet<&str> = SKILL_FILES.iter().map(|s| s.bundle).collect();
     if bundles.is_empty() {
+        println!("# Embedded skill bundles");
+        println!();
         println!("No skill bundles are embedded in this binary.");
         return;
     }
-    println!("Embedded skill bundles ({}):", bundles.len());
+    println!("# Embedded skill bundles ({})", bundles.len());
+    println!();
     for b in &bundles {
         let n = SKILL_FILES.iter().filter(|s| s.bundle == *b).count();
-        println!("  {}  ({} file{})", b, n, if n == 1 { "" } else { "s" });
+        println!("- `{}` — {} file{}", b, n, if n == 1 { "" } else { "s" });
     }
     println!();
-    println!("Commands:");
-    println!("  move prompt skill <bundle>            — read SKILL.md");
-    println!("  move prompt skill <bundle> --list     — list reference files");
-    println!("  move prompt skill <bundle> --file <r> — read a specific reference file");
+    println!("## Commands");
+    println!();
+    println!("- `move prompt skill <bundle>` — read `SKILL.md`");
+    println!("- `move prompt skill <bundle> --list` — list reference files");
+    println!("- `move prompt skill <bundle> --file <r>` — read a specific reference file");
 }
 
 /// Read from a named skill bundle. Behaviour depends on the flags:
@@ -212,18 +216,22 @@ fn print_categories() {
     let mut entries: Vec<&PromptCategory> = CATEGORIES.iter().collect();
     entries.sort_by_key(|c| c.name);
     if entries.is_empty() {
+        println!("# Embedded categories");
+        println!();
         println!("No categories are embedded in this binary.");
         return;
     }
-    println!("Embedded categories ({}):", entries.len());
+    println!("# Embedded categories ({})", entries.len());
+    println!();
     for c in &entries {
-        println!("  {} — {}", c.name, c.description);
+        println!("- `{}` — {}", c.name, c.description);
     }
     println!();
-    println!("Commands:");
-    println!("  move prompt category <name>   — read the category's content");
-    println!("  move prompt skills            — list all skill bundles (flat)");
-    println!("  move prompt skill <bundle>    — read a skill bundle's SKILL.md");
+    println!("## Commands");
+    println!();
+    println!("- `move prompt category <name>` — read the category's content");
+    println!("- `move prompt skills` — list all skill bundles (flat)");
+    println!("- `move prompt skill <bundle>` — read a skill bundle's `SKILL.md`");
 }
 
 /// Print the named category's content (frontmatter + body) verbatim — the same convention
