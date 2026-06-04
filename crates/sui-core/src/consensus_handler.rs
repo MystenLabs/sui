@@ -99,6 +99,9 @@ use crate::{
 struct FilteredConsensusOutput {
     transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
     owned_object_locks: HashMap<ObjectRef, TransactionDigest>,
+    // When multiple transactions in the same commit try to lock the same owned object, the transaction
+    // that managed to lock it first is tracked here with the number of conflicting transactions.
+    contested_transaction_digests: HashMap<TransactionDigest, u64>,
 }
 
 pub struct ConsensusHandlerInitializer {
@@ -1000,6 +1003,9 @@ struct CommitHandlerState {
     initial_reconfig_state: ReconfigState,
     // Occurrence counts for user transactions, used for unpaid amplification detection.
     occurrence_counts: HashMap<TransactionDigest, u32>,
+    // Transactions involved in same commit owned object lock contention (double-spend),
+    // mapped to the number of conflicting transactions.
+    contested_transaction_digests: HashMap<TransactionDigest, u64>,
 }
 
 impl CommitHandlerState {
@@ -1166,16 +1172,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .get_reconfig_state_read_lock_guard()
                 .clone(),
             occurrence_counts: HashMap::new(),
+            contested_transaction_digests: HashMap::new(),
         };
 
         let FilteredConsensusOutput {
             transactions,
             owned_object_locks,
+            contested_transaction_digests,
         } = self.filter_consensus_txns(
             state.initial_reconfig_state.clone(),
             &commit_info,
             &consensus_commit,
         );
+        state.contested_transaction_digests = contested_transaction_digests;
         // Buffer owned object locks for batch write.
         if !owned_object_locks.is_empty() {
             state.output.set_owned_object_locks(owned_object_locks);
@@ -2111,6 +2120,43 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
+        // Check for owned object double-spend: if this transaction won an owned object
+        // lock while another transaction in the same commit tried to lock the same object,
+        // defer it as a penalty.
+        if protocol_config.defer_owned_object_double_spend()
+            && let Some(&conflict_count) = state
+                .contested_transaction_digests
+                .get(transaction.tx().digest())
+        {
+            self.metrics.consensus_handler_double_spend_deferrals.inc();
+            self.metrics
+                .consensus_handler_double_spend_conflict_count
+                .observe(conflict_count as f64);
+
+            let deferred_from_round = previously_deferred_tx_digests
+                .get(transaction.tx().digest())
+                .map(|k| k.deferred_from_round())
+                .unwrap_or(commit_info.round);
+
+            let deferral_key =
+                DeferralKey::new_for_consensus_round(commit_info.round + 1, deferred_from_round);
+
+            if transaction_deferral_within_limit(
+                &deferral_key,
+                protocol_config.max_deferral_rounds_for_congestion_control(),
+            ) {
+                debug!(
+                    "Deferring transaction {:?} due to owned object double-spend contention",
+                    transaction.tx().digest(),
+                );
+                deferred_txns
+                    .entry(deferral_key)
+                    .or_default()
+                    .push(transaction);
+                return;
+            }
+        }
+
         let tx_cost = shared_object_congestion_tracker.get_tx_cost(
             execution_time_estimator,
             transaction.tx(),
@@ -2695,6 +2741,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     ) -> FilteredConsensusOutput {
         let mut transactions = Vec::new();
         let mut owned_object_locks = HashMap::new();
+        let mut contested_transaction_digests: HashMap<TransactionDigest, u64> = HashMap::new();
         let epoch = self.epoch_store.epoch();
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
@@ -2896,6 +2943,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             num_finalized_user_transactions[author] += 1;
                         }
                         Err(e) => {
+                            // Flag intra-commit double-spend: if the conflict is with
+                            // a transaction in this commit (in owned_object_locks), the
+                            // holder should be deferred as penalty.
+                            for obj_ref in &owned_object_refs {
+                                if let Some(holder_digest) = owned_object_locks.get(obj_ref) {
+                                    *contested_transaction_digests
+                                        .entry(*holder_digest)
+                                        .or_default() += 1;
+                                }
+                            }
                             debug!("Dropping transaction {}: {}", tx.digest(), e);
                             self.epoch_store
                                 .set_consensus_tx_status(position, ConsensusTxStatus::Dropped);
@@ -2937,6 +2994,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         FilteredConsensusOutput {
             transactions,
             owned_object_locks,
+            contested_transaction_digests,
         }
     }
 

@@ -1076,6 +1076,11 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     defer_unpaid_amplification: bool,
 
+    // If true, defer transactions that won an owned object lock when other transactions
+    // in the same commit attempted to lock the same object (double-spend attempt).
+    #[serde(skip_serializing_if = "is_false")]
+    defer_owned_object_double_spend: bool,
+
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
 
@@ -2801,6 +2806,10 @@ impl ProtocolConfig {
 
     pub fn defer_unpaid_amplification(&self) -> bool {
         self.feature_flags.defer_unpaid_amplification
+    }
+
+    pub fn defer_owned_object_double_spend(&self) -> bool {
+        self.feature_flags.defer_owned_object_double_spend
     }
 
     pub fn gasless_transaction_drop_safety(&self) -> bool {
