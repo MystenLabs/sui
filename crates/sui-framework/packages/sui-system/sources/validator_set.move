@@ -222,11 +222,7 @@ public(package) fun request_add_validator(self: &mut ValidatorSet, ctx: &TxConte
     let validator_address = ctx.sender();
     assert!(self.validator_candidates.contains(validator_address), ENotValidatorCandidate);
     let validator = self.validator_candidates.remove(validator_address).destroy();
-    assert!(
-        !self.is_duplicate_with_active_validator(&validator)
-            && !self.is_duplicate_with_pending_validator(&validator),
-        EDuplicateValidator,
-    );
+    self.assert_no_pending_or_active_duplicates(&validator);
     assert!(validator.is_preactive(), EValidatorNotCandidate);
     assert!(self.can_join(validator.total_stake(), ctx), EMinJoiningStakeNotReached);
 

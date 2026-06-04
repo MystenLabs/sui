@@ -816,11 +816,7 @@ Aborts if the validator contains duplicate metadata values with an active or pen
     <b>let</b> validator_address = ctx.sender();
     <b>assert</b>!(self.validator_candidates.contains(validator_address), <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validator_candidates.remove(validator_address).destroy();
-    <b>assert</b>!(
-        !self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>)
-            && !self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>),
-        <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>,
-    );
+    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_assert_no_pending_or_active_duplicates">assert_no_pending_or_active_duplicates</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
     <b>assert</b>!(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.is_preactive(), <a href="../sui_system/validator_set.md#sui_system_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
     <b>assert</b>!(self.<a href="../sui_system/validator_set.md#sui_system_validator_set_can_join">can_join</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>(), ctx), <a href="../sui_system/validator_set.md#sui_system_validator_set_EMinJoiningStakeNotReached">EMinJoiningStakeNotReached</a>);
     self.pending_active_validators.push_back(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
