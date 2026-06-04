@@ -52,7 +52,7 @@ explicit — important for `_mut` getter and type-confusion reasoning even witho
 
 ## Bytecode (instructions)
 
-The `Bytecode` enum is a stack machine (see `reading-disassembly.md`). Categories:
+The `Bytecode` enum is a stack machine (see `disassembly.md`). Categories:
 - **Stack/locals:** `LdU8..LdU256, LdConst, LdTrue/False, CopyLoc, MoveLoc, StLoc, Pop`.
 - **References:** `[Mut]BorrowLoc, [Mut]BorrowField, [Mut]BorrowGlobal*` (note: global storage ops
   are largely unused in Sui's object model), `ReadRef, WriteRef, FreezeRef`.

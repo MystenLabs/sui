@@ -26,8 +26,7 @@ The response, under `data.object.asMovePackage.modules.nodes[]`, has one entry p
 with `{name, bytes, disassembly}`:
 
 - `bytes` — Base64-encoded raw bytecode (decoded into `.mv` for the optional decompile step)
-- `disassembly` — text of the module's disassembly (byte-for-byte equivalent to what
-  `move disassemble <file>.mv` would produce locally)
+- `disassembly` — text of the module's disassembly
 
 ## 3. Write per-module .mv + .asm files
 
@@ -51,7 +50,7 @@ move decompile --input "$OUT/mv" --output "$OUT/decompiled"
 ```
 
 The decompiled `.move` is a heuristic reconstruction; see
-`move-bytecode-comprehension/reading-decompiled.md` for the artifacts to recognize when
+`move-bytecode-comprehension/decompilation.md` for the artifacts to recognize when
 presenting findings to humans.
 
 ## Output paths

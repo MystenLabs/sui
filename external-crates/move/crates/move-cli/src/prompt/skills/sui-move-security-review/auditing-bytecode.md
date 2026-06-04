@@ -34,9 +34,14 @@ Each entry below names the concrete assembly pattern to look for. Pair with the 
   or `drop` is the bug. Disassembly prints `has <abilities>` verbatim.
 - **SM-B1 object shape.** `struct T has ... key ...` with no `id: UID` field, OR an
   authority/value type with `drop`. Both visible on the struct header line.
-- **SM-B2 broken soulbound via `store`.** `struct T has ... store ...` on a type intended to be
-  non-transferable. **Confirm transfer variant** at the call site: `Call transfer::transfer<T>`
-  (module-restricted) vs `Call transfer::public_transfer<T>` (anyone, requires `store`).
+- **SM-B2 broken soulbound via `store`.** A type marked `store` can be passed to any of
+  the four `0x2::transfer` `public_*` variants from any module: `public_transfer` (move),
+  `public_share_object` (share globally), `public_freeze_object` (freeze immutably),
+  `public_receive` (accept from `Receiving<T>`). The bare variants (`transfer::transfer`,
+  `share_object`, `freeze_object`, `receive`) are module-internal and don't require `store`.
+  Disassembly check: any `Call transfer::public_X<T>` from a foreign module confirms `T`
+  has `store` — verify that was intentional. Soulbound (intended-non-transferable) is the
+  most common motivation, but `store` similarly opens shared / frozen / receive misuse.
 - **SM-G1 mint/treasury custody.** Function signatures taking `&mut TreasuryCap<T>` /
   `&mut DenyCap<T>`, and the `Call coin::mint<T>(...)` / `Call coin::burn<T>(...)` sites; trace
   where the cap argument was obtained (signature + initializer disassembly).

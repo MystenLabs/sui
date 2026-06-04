@@ -55,8 +55,8 @@ accordingly.
 | File | Use for |
 |------|---------|
 | `format.md` | The binary format: tables, abilities, visibility, signatures, opcode categories. Read once. |
-| `reading-disassembly.md` | Interpreting `move disassemble` (stack machine, locals, the opcodes you'll actually see). |
-| `reading-decompiled.md` | Use to translate **already-confirmed** findings into readable Move for human explanation; understand the decompiler's artifacts so you don't misread them when presenting. |
+| `disassembly.md` | Reading the disassembly view (stack machine, locals, the opcodes you'll actually see). |
+| `decompilation.md` | Reading the decompiled view (what's faithful, what's a decompiler artifact). |
 
 ## Practical stance
 
