@@ -86,7 +86,7 @@ pub enum PromptCommand {
         bundle: String,
 
         /// List reference files in the bundle instead of printing content.
-        #[clap(long)]
+        #[clap(long, conflicts_with = "file")]
         list: bool,
 
         /// Print a specific reference file in the bundle. The `.md` extension is optional.
@@ -175,13 +175,7 @@ fn print_skill(bundle: &str, list: bool, file: Option<&str>) -> anyhow::Result<(
         return Ok(());
     }
     let target_file = match file {
-        Some(name) => {
-            let mut n = name.to_string();
-            if !n.ends_with(".md") {
-                n.push_str(".md");
-            }
-            n
-        }
+        Some(name) => normalize_skill_file(name),
         None => "SKILL.md".to_string(),
     };
     match SKILL_FILES
@@ -198,6 +192,16 @@ fn print_skill(bundle: &str, list: bool, file: Option<&str>) -> anyhow::Result<(
             bundle,
             bundle
         ),
+    }
+}
+
+/// Normalize the `--file` value to the embedded markdown filename. The list command
+/// displays references without `.md`, so direct reads accept either form.
+fn normalize_skill_file(name: &str) -> String {
+    if name.ends_with(".md") {
+        name.to_string()
+    } else {
+        format!("{name}.md")
     }
 }
 
@@ -239,5 +243,78 @@ fn print_category(name: &str) -> anyhow::Result<()> {
                 .join(", ");
             anyhow::bail!("no embedded category named '{name}'. Valid categories: {valid}")
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_adds_md() {
+        // `--list` prints refs without `.md`; direct reads accept that printed form.
+        assert_eq!(normalize_skill_file("access-control"), "access-control.md");
+    }
+
+    #[test]
+    fn normalize_keeps_md() {
+        // Passing the full embedded filename should not append a duplicate extension.
+        assert_eq!(
+            normalize_skill_file("access-control.md"),
+            "access-control.md"
+        );
+    }
+
+    #[test]
+    fn normalize_nested_path() {
+        // build.rs supports nested skill references; normalization should preserve paths.
+        assert_eq!(normalize_skill_file("refs/foo"), "refs/foo.md");
+        assert_eq!(normalize_skill_file("refs/foo.md"), "refs/foo.md");
+    }
+
+    #[test]
+    fn list_file_conflict() {
+        // Clap should reject ambiguous intent before execution, independent of bundle content.
+        let result = Prompt::try_parse_from([
+            "prompt",
+            "skill",
+            "any-bundle",
+            "--list",
+            "--file",
+            "any-ref",
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn file_parses() {
+        // A lone `--file` flag is valid; only combining it with `--list` is rejected.
+        let result = Prompt::try_parse_from(["prompt", "skill", "any-bundle", "--file", "any-ref"]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn list_parses() {
+        // A lone `--list` flag is valid; only combining it with `--file` is rejected.
+        let result = Prompt::try_parse_from(["prompt", "skill", "any-bundle", "--list"]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn missing_skill_error() {
+        // Unknown bundles should tell agents how to recover without guessing command syntax.
+        let err = print_skill("__missing_skill_for_prompt_test__", false, None)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("move prompt skills"));
+    }
+
+    #[test]
+    fn missing_category_error() {
+        // Unknown categories should include the valid-category hint for a single retry.
+        let err = print_category("__missing_category_for_prompt_test__")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("Valid categories:"));
     }
 }
