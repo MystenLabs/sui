@@ -9,7 +9,6 @@
 
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
-use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::FullObjectRef;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -156,7 +155,10 @@ impl AdminClient {
 
 // ─── test ─────────────────────────────────────────────────────────────────────
 
-#[sim_test]
+// Not a sim_test: this test uses reqwest::Client to call the validator's admin
+// HTTP server on 127.0.0.1, which doesn't work in simtest where each simulated
+// node has its own loopback namespace.
+#[tokio::test]
 async fn test_db_shell_proxy_all_commands() {
     let mut cluster = TestClusterBuilder::new().build().await;
 
