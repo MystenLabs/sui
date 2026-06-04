@@ -1632,6 +1632,16 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             ) => Self::WriteAccumulatorStorageCost {
                 storage_cost: storage_cost.storage_cost,
             },
+            // TEMPORARY: the external sui_sdk_types::EndOfEpochTransactionKind (pinned via
+            // Cargo.toml `rev`) has no ForwardingAddressRegistryCreate variant and, unlike the
+            // proto enum, no Unknown fallback to map to. This panics if the conversion is ever
+            // hit; replace once the pinned rev is bumped to a sui-rust-sdk that defines the
+            // variant.
+            crate::transaction::EndOfEpochTransactionKind::ForwardingAddressRegistryCreate => {
+                todo!(
+                    "ForwardingAddressRegistryCreate: pending sui-rust-sdk variant + Cargo.toml rev bump"
+                )
+            }
         }
     }
 }
