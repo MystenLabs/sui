@@ -803,10 +803,9 @@ impl SuiNode {
                         sui_types::executable_transaction::CertificateProof::Checkpoint(0, 0),
                     ),
                 );
+            let _enter = span.enter();
             state
                 .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
-                .instrument(span)
-                .await
                 .unwrap();
         }
 

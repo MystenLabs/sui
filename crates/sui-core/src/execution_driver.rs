@@ -121,7 +121,7 @@ pub async fn execution_process(
                 &certificate,
                 execution_env,
                 &epoch_store_clone,
-            ).await {
+            ) {
                 ExecutionOutput::Success(_) => {
                     authority
                         .metrics

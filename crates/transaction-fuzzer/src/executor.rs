@@ -110,11 +110,11 @@ impl Executor {
     }
 
     pub fn add_object(&mut self, object: Object) {
-        self.rt.block_on(self.state.insert_genesis_object(object));
+        self.state.insert_genesis_object(object);
     }
 
     pub fn add_objects(&mut self, objects: &[Object]) {
-        self.rt.block_on(self.state.insert_genesis_objects(objects));
+        self.state.insert_genesis_objects(objects);
     }
 
     pub fn execute_transaction(&mut self, txn: Transaction) -> ExecutionResult {

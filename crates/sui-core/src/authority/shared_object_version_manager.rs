@@ -1171,7 +1171,6 @@ mod tests {
         let acc_version = ctx
             .authority
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-            .await
             .unwrap()
             .version();
 
@@ -1217,7 +1216,6 @@ mod tests {
         let acc_version = ctx
             .authority
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-            .await
             .unwrap()
             .version();
 
@@ -1310,7 +1308,6 @@ mod tests {
         let acc_version = ctx
             .authority
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-            .await
             .unwrap()
             .version();
 

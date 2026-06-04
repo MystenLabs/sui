@@ -2599,9 +2599,7 @@ async fn publish_and_mint_trusted_coin(test_env: &mut TestEnv, sender: SuiAddres
                     .cluster
                     .fullnode_handle
                     .sui_node
-                    .with_async(
-                        |node| async move { node.state().get_object(&obj_ref.0).await.unwrap() },
-                    )
+                    .with_async(|node| async move { node.state().get_object(&obj_ref.0).unwrap() })
                     .await;
                 if object.type_().unwrap().name().as_str() == "TreasuryCap" {
                     treasury_cap = Some(obj_ref);
