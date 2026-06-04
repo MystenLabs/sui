@@ -267,7 +267,10 @@ jobs:
         run: |
           sui_tag="${{ env.TAG_NAME }}"
           sui_version=$(echo "${sui_tag}" | sed -e 's|^refs/tags/||' -e 's/^mainnet-v//' -e 's/^testnet-v//' -e 's/^devnet-v//')
-          echo "cache_family=releases/sui-v${sui_version}-release" >> "$GITHUB_OUTPUT"
+          # Release branches are cut per minor version at patch .0; patches (e.g. v1.73.1)
+          # land as commits on that branch, so bucket the cache by the .0 branch that exists.
+          release_branch_version=$(echo "${sui_version}" | awk -F. '{print $1"."$2".0"}')
+          echo "cache_family=releases/sui-v${release_branch_version}-release" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
         uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
@@ -289,7 +292,10 @@ jobs:
         run: |
           sui_tag="${{ env.TAG_NAME }}"
           sui_version=$(echo "${sui_tag}" | sed -e 's|^refs/tags/||' -e 's/^mainnet-v//' -e 's/^testnet-v//' -e 's/^devnet-v//')
-          echo "cache_family=releases/sui-v${sui_version}-release" >> "$GITHUB_OUTPUT"
+          # Release branches are cut per minor version at patch .0; patches (e.g. v1.73.1)
+          # land as commits on that branch, so bucket the cache by the .0 branch that exists.
+          release_branch_version=$(echo "${sui_version}" | awk -F. '{print $1"."$2".0"}')
+          echo "cache_family=releases/sui-v${release_branch_version}-release" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch ensure-sui-binaries in MystenLabs/sui-operations
         uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
