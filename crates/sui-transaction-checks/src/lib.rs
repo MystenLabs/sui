@@ -421,8 +421,6 @@ mod checked {
         // load all gas coins (skip coin reservations - they're not loaded as input objects)
         let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();
 
-        let gas_owner = transaction.gas_owner();
-
         // Total of coin balances + reservation amounts. Limit to i64::MAX so smash_gas's
         // i64 conversion doesn't overflow. (Not summed for address-balance-paid gas; that
         // path never converts the budget to i64.)
@@ -457,7 +455,7 @@ mod checked {
                         }
                         .into());
                     }
-                    if gas_ownership_checks && object.owner != Owner::AddressOwner(gas_owner) {
+                    if gas_ownership_checks && !object.is_address_owned() {
                         return Err(UserInputError::GasObjectNotOwnedObject {
                             owner: object.owner.clone(),
                         }
