@@ -74,7 +74,8 @@ pub enum Command {
         /// Path to the service's TOML configuration file. If
         /// omitted, the defaults from
         /// [`crate::config::ServiceConfig::default`] are used.
-        /// Only the `db` section is consulted during a restore.
+        /// Only the `db` and `restore` sections are consulted during
+        /// a restore.
         #[arg(long)]
         config: Option<PathBuf>,
     },
@@ -89,9 +90,10 @@ pub enum Command {
 /// [`StorageConnectionArgs`] (which says how to connect).
 #[derive(clap::Args, Clone, Debug, Default)]
 pub struct RestoreArgs {
-    /// Maximum number of buckets (shards) processed concurrently
-    /// during restoration. `None` uses the snapshot's natural
-    /// shard count, i.e. every bucket runs in parallel.
+    /// Number of snapshot partitions fetched concurrently during a
+    /// restore. Overrides `restore.shard_concurrency` from the
+    /// config file; when omitted, the config value (default 8) is
+    /// used.
     #[arg(long)]
     pub shard_concurrency: Option<usize>,
 }

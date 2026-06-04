@@ -28,7 +28,6 @@
 //! supplied `remote_store_url` to anchor the snapshot at the
 //! correct sequence number.
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
@@ -160,14 +159,16 @@ pub struct FormalSnapshot {
     /// different chain.
     target_chain_id: ChainId,
 
-    /// Dense `shard_id -> bucket_id` mapping. The number of
-    /// shards is `shard_buckets.len()`.
-    shard_buckets: Vec<u32>,
-
-    /// Per-shard list of `.obj` partitions, sorted by partition
-    /// index. `shard_partitions[shard_id]` is the partitions for
-    /// `shard_buckets[shard_id]`.
-    shard_partitions: Vec<Vec<FileMetadata>>,
+    /// Every `.obj` partition across all buckets, flattened and
+    /// sorted by `(bucket, partition)`. Each entry is one driver
+    /// shard, so `shard_id` indexes directly into this vector and
+    /// the shard count equals the partition count. Exposing one
+    /// shard per partition (rather than one per bucket) lets the
+    /// driver fetch partitions concurrently and makes its
+    /// `restore_shards_done` gauge track partition-level progress —
+    /// snapshots commonly ship a single bucket, which would
+    /// otherwise be one giant sequential shard.
+    partitions: Vec<FileMetadata>,
 
     metrics: Arc<FormalSnapshotMetrics>,
 }
@@ -200,30 +201,24 @@ impl FormalSnapshot {
             .context("Failed to fetch epoch manifest")?;
         let manifest = EpochManifest::read(&manifest_bytes)?;
 
-        // Group `.obj` files by bucket, dropping `.ref` entries
-        // (those carry historical-version metadata, not live
-        // objects).
-        let mut by_bucket: BTreeMap<u32, Vec<FileMetadata>> = BTreeMap::new();
-        let mut total_partitions = 0u64;
-        for meta in manifest.metadata() {
-            if !matches!(meta.file_type, FileType::Object) {
-                continue;
-            }
-            by_bucket.entry(meta.bucket).or_default().push(meta.clone());
-            total_partitions += 1;
-        }
-        for parts in by_bucket.values_mut() {
-            parts.sort_by_key(|m| m.partition);
-        }
+        // Collect every `.obj` file (one partition each), dropping
+        // `.ref` entries (those carry historical-version metadata,
+        // not live objects). Sort by `(bucket, partition)` so the
+        // shard ordering is deterministic across runs, which keeps
+        // resume cursors stable.
+        let mut partitions: Vec<FileMetadata> = manifest
+            .metadata()
+            .iter()
+            .filter(|m| matches!(m.file_type, FileType::Object))
+            .cloned()
+            .collect();
+        partitions.sort_by_key(|m| (m.bucket, m.partition));
 
-        let shard_buckets: Vec<u32> = by_bucket.keys().copied().collect();
-        let shard_partitions: Vec<Vec<FileMetadata>> = by_bucket.into_values().collect();
-
-        metrics.total_partitions.set(total_partitions as i64);
+        metrics.total_partitions.set(partitions.len() as i64);
         info!(
-            shards = shard_buckets.len(),
-            partitions = total_partitions,
-            "Discovered formal-snapshot buckets",
+            shards = partitions.len(),
+            partitions = partitions.len(),
+            "Discovered formal-snapshot partitions",
         );
 
         Ok(Self {
@@ -231,33 +226,18 @@ impl FormalSnapshot {
             epoch_dir,
             target_watermark,
             target_chain_id,
-            shard_buckets,
-            shard_partitions,
+            partitions,
             metrics,
         })
     }
 
-    /// Encode a partition index as a 4-byte big-endian cursor.
+    /// Encode a partition index as a 4-byte big-endian cursor. Each
+    /// shard is a single partition, so the cursor is only ever
+    /// present (the partition's chunk committed) or absent (not yet);
+    /// the encoded value is recorded for debugging the `__restore`
+    /// state rather than for resuming mid-partition.
     fn encode_cursor(partition: u32) -> Bytes {
         Bytes::copy_from_slice(&partition.to_be_bytes())
-    }
-
-    /// Decode a cursor previously produced by
-    /// [`encode_cursor`](Self::encode_cursor). Returns `None`
-    /// for an empty / missing cursor and an error for malformed
-    /// bytes.
-    fn decode_cursor(cursor: Option<&Bytes>) -> anyhow::Result<Option<u32>> {
-        let Some(cursor) = cursor else {
-            return Ok(None);
-        };
-        ensure!(
-            cursor.len() == 4,
-            "formal-snapshot cursor must be 4 bytes, got {}",
-            cursor.len(),
-        );
-        let mut buf = [0u8; 4];
-        buf.copy_from_slice(cursor);
-        Ok(Some(u32::from_be_bytes(buf)))
     }
 }
 
@@ -276,7 +256,7 @@ impl RestoreSource for FormalSnapshot {
     }
 
     fn shards(&self) -> u32 {
-        self.shard_buckets.len() as u32
+        self.partitions.len() as u32
     }
 
     fn stream(
@@ -284,15 +264,10 @@ impl RestoreSource for FormalSnapshot {
         shard_id: u32,
         cursor: Option<Bytes>,
     ) -> BoxStream<'_, anyhow::Result<RestoreChunk>> {
-        let resume_after = match Self::decode_cursor(cursor.as_ref()) {
-            Ok(c) => c,
-            Err(e) => return stream::once(async move { Err(e) }).boxed(),
-        };
-
         let idx = shard_id as usize;
-        if idx >= self.shard_partitions.len() {
+        if idx >= self.partitions.len() {
             let shard_id_for_msg = shard_id;
-            let shards = self.shard_buckets.len();
+            let shards = self.partitions.len();
             return stream::once(async move {
                 bail!(
                     "formal-snapshot shard_id {shard_id_for_msg} out of range \
@@ -302,31 +277,29 @@ impl RestoreSource for FormalSnapshot {
             .boxed();
         }
 
-        let bucket = self.shard_buckets[idx];
-        let partitions = self.shard_partitions[idx].clone();
+        // A shard is a single partition fetched and committed as one
+        // chunk. A non-empty cursor means that chunk was already
+        // committed (the driver persists the cursor atomically with
+        // the data), so there is nothing left to stream — re-yielding
+        // would double-apply additive index writes such as `balance`.
+        if cursor.is_some() {
+            return stream::empty().boxed();
+        }
+
+        let meta = self.partitions[idx].clone();
         let metrics = self.metrics.clone();
         let source = self.source.clone();
         let epoch_dir = self.epoch_dir.clone();
 
-        let chunks = stream::iter(
-            partitions
-                .into_iter()
-                .filter(move |m| resume_after.is_none_or(|after| m.partition > after)),
-        )
-        .then(move |meta| {
-            let metrics = metrics.clone();
-            let source = source.clone();
+        stream::once(async move {
             let path = format!("{}/{}_{}.obj", epoch_dir, meta.bucket, meta.partition);
-            let _ = bucket; // captured only for tracing context in callers
-            async move {
-                let live = fetch_objects(source.as_ref(), &path, &meta, metrics.as_ref()).await?;
-                Ok(RestoreChunk {
-                    objects: live.objects,
-                    cursor: FormalSnapshot::encode_cursor(meta.partition),
-                })
-            }
-        });
-        chunks.boxed()
+            let live = fetch_objects(source.as_ref(), &path, &meta, metrics.as_ref()).await?;
+            Ok(RestoreChunk {
+                objects: live.objects,
+                cursor: FormalSnapshot::encode_cursor(meta.partition),
+            })
+        })
+        .boxed()
     }
 }
 
@@ -549,26 +522,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cursor_roundtrip() {
+    fn cursor_encodes_partition_as_4_byte_be() {
         for partition in [0u32, 1, 42, 1_000_000, u32::MAX - 1, u32::MAX] {
             let encoded = FormalSnapshot::encode_cursor(partition);
-            let decoded = FormalSnapshot::decode_cursor(Some(&encoded)).unwrap();
-            assert_eq!(decoded, Some(partition), "round-trip for {partition}");
+            assert_eq!(encoded.len(), 4, "cursor for {partition} must be 4 bytes");
+            assert_eq!(
+                encoded.as_ref(),
+                partition.to_be_bytes(),
+                "cursor for {partition} must be big-endian",
+            );
         }
-    }
-
-    #[test]
-    fn cursor_none_decodes_to_none() {
-        assert_eq!(FormalSnapshot::decode_cursor(None).unwrap(), None);
-    }
-
-    #[test]
-    fn cursor_wrong_length_errors() {
-        let bad = Bytes::from_static(&[0u8, 1, 2]);
-        let err = FormalSnapshot::decode_cursor(Some(&bad)).unwrap_err();
-        assert!(
-            format!("{err:#}").contains("must be 4 bytes"),
-            "expected length error, got: {err:#}",
-        );
     }
 }

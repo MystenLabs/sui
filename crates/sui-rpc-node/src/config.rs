@@ -49,9 +49,32 @@ pub struct ServiceConfig {
     pub rpc: RpcConfig,
 
     /// Backing RocksDB tuning. Anything left unset falls back to
-    /// [`sui_rpc_store::default_rocksdb_config`]. This is the only
-    /// section consulted by the `restore` subcommand.
+    /// [`sui_rpc_store::default_rocksdb_config`].
     pub db: DbConfig,
+
+    /// Restore-driver tuning. Consulted, together with `db`, by the
+    /// `restore` subcommand.
+    pub restore: RestoreConfig,
+}
+
+/// Tuning for the formal-snapshot restore driver.
+#[DefaultConfig]
+#[serde(deny_unknown_fields)]
+pub struct RestoreConfig {
+    /// Number of snapshot partitions fetched concurrently during a
+    /// restore. Each partition is one `.obj` file decoded and held
+    /// in memory while it is committed, so this trades restore
+    /// throughput against peak memory. The `--shard-concurrency` CLI
+    /// flag overrides it.
+    pub shard_concurrency: usize,
+}
+
+impl Default for RestoreConfig {
+    fn default() -> Self {
+        Self {
+            shard_concurrency: 8,
+        }
+    }
 }
 
 /// RocksDB-related configuration for the backing database.
@@ -179,6 +202,7 @@ impl ServiceConfig {
             committer: CommitterConfig::default().into(),
             rpc: RpcConfig::default(),
             db: DbConfig::example(),
+            restore: RestoreConfig::default(),
         }
     }
 
@@ -255,6 +279,19 @@ mod tests {
         assert_eq!(opts.snapshot_capacity, 8);
         // ...while unspecified ones fall back to the crate defaults.
         assert_eq!(opts.rocksdb.db.block_cache_size_mb, Some(1024));
+    }
+
+    #[test]
+    fn restore_shard_concurrency_defaults_to_eight_and_overrides() {
+        assert_eq!(RestoreConfig::default().shard_concurrency, 8);
+        let cfg: ServiceConfig = toml::from_str(
+            r#"
+            [restore]
+            shard-concurrency = 4
+            "#,
+        )
+        .expect("partial restore config parses");
+        assert_eq!(cfg.restore.shard_concurrency, 4);
     }
 
     #[test]

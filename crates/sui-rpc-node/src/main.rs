@@ -82,9 +82,14 @@ async fn main() -> anyhow::Result<()> {
             metrics_args,
             config,
         } => {
-            // Only the `db` section is consulted during a restore;
-            // the rest of the service config is irrelevant to it.
+            // Only the `db` and `restore` sections are consulted
+            // during a restore; the rest of the service config is
+            // irrelevant to it.
             let config = read_config(config).await?;
+            // The `--shard-concurrency` CLI flag overrides the config.
+            let shard_concurrency = restore_args
+                .shard_concurrency
+                .unwrap_or(config.restore.shard_concurrency);
             let registry = build_registry()?;
             let metrics = MetricsService::new(metrics_args, registry);
             metrics
@@ -96,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
                 database_path,
                 formal_snapshot_args,
                 storage_connection_args,
-                restore_args,
+                shard_concurrency,
                 config.db.to_db_options(),
                 metrics.registry(),
             )

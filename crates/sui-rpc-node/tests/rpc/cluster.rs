@@ -203,6 +203,7 @@ impl LocalCluster {
             committer,
             rpc,
             db: db_config,
+            restore: _,
         } = config;
 
         // Open the database explicitly so the cluster can hold a

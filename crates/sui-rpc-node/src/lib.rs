@@ -73,7 +73,6 @@ use sui_rpc_store::RpcStoreSchema;
 use sui_rpc_store::floor_unrestored_pipelines;
 use sui_rpc_store::restore_indexes;
 
-use crate::args::RestoreArgs;
 use crate::config::ServiceConfig;
 use crate::rpc::build_rpc_service;
 
@@ -104,6 +103,8 @@ pub async fn start_service(
         committer,
         rpc,
         db,
+        // Only the `restore` subcommand consults this section.
+        restore: _,
     } = config;
 
     // Build the ingestion + (optional) streaming clients first so
@@ -188,7 +189,7 @@ pub async fn start_restorer(
     database_path: impl AsRef<Path>,
     formal_snapshot_args: FormalSnapshotArgs,
     storage_connection_args: StorageConnectionArgs,
-    restore_args: RestoreArgs,
+    shard_concurrency: usize,
     db_options: DbOptions,
     registry: &Registry,
 ) -> anyhow::Result<(Service, RestoreFinalizer)> {
@@ -223,7 +224,9 @@ pub async fn start_restorer(
     let target_chain_id = source.target_chain_id();
 
     let driver_config = RestoreDriverConfig {
-        shard_concurrency: restore_args.shard_concurrency,
+        // Clamp to at least one so a misconfigured `0` does not stall
+        // the driver, which would otherwise spawn no shard tasks.
+        shard_concurrency: Some(shard_concurrency.max(1)),
     };
     let layer = RestoreLayer::all();
 
