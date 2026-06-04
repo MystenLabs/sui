@@ -56,6 +56,7 @@ use sui_consistent_store::restore::StorageConnectionArgs;
 use sui_consistent_store::restore::formal_snapshot::FormalSnapshot;
 use sui_consistent_store::restore::formal_snapshot::FormalSnapshotArgs;
 use sui_consistent_store::restore::metrics::FormalSnapshotMetrics;
+use sui_consistent_store::restore::metrics::RestoreMetrics;
 use sui_futures::service::Service;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::BoxedStreamingClient;
@@ -205,7 +206,15 @@ pub async fn start_restorer(
     };
     let layer = RestoreLayer::all();
 
-    let primary = restore_indexes(db.clone(), schema, source, driver_config, layer.clone())?;
+    let restore_metrics = RestoreMetrics::new(Some(METRICS_PREFIX), registry);
+    let primary = restore_indexes(
+        db.clone(),
+        schema,
+        source,
+        driver_config,
+        layer.clone(),
+        restore_metrics,
+    )?;
 
     Ok((
         primary,

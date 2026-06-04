@@ -35,6 +35,7 @@ use sui_consistent_store::Watermark;
 use sui_consistent_store::restore::RestoreDriver;
 use sui_consistent_store::restore::RestoreDriverConfig;
 use sui_consistent_store::restore::RestoreSource;
+use sui_consistent_store::restore::metrics::RestoreMetrics;
 use sui_futures::service::Service;
 use sui_indexer_alt_framework::pipeline::Processor;
 
@@ -76,8 +77,9 @@ pub fn restore_indexes<Src: RestoreSource>(
     source: Src,
     config: RestoreDriverConfig,
     layer: RestoreLayer,
+    metrics: Arc<RestoreMetrics>,
 ) -> anyhow::Result<Service> {
-    let mut driver = RestoreDriver::new(db, schema, source, config);
+    let mut driver = RestoreDriver::new(db, schema, source, config, metrics);
     driver.register(LiveObjects)?;
     driver.register(ObjectByOwner)?;
     driver.register(ObjectByType)?;
@@ -330,6 +332,7 @@ mod tests {
             source,
             RestoreDriverConfig::default(),
             RestoreLayer::indexes_only(),
+            RestoreMetrics::new(None, &prometheus::Registry::new()),
         )
         .unwrap()
         .shutdown()
@@ -522,6 +525,7 @@ mod tests {
             source,
             RestoreDriverConfig::default(),
             RestoreLayer::all(),
+            RestoreMetrics::new(None, &prometheus::Registry::new()),
         )
         .unwrap()
         .shutdown()

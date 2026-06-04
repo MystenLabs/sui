@@ -52,6 +52,7 @@ use crate::PipelineTaskKey;
 use crate::RestoreState;
 use crate::Watermark;
 use crate::restore::Restore;
+use crate::restore::metrics::RestoreMetrics;
 use crate::restore_state;
 use crate::restore_state::ShardProgress;
 use crate::restore_state::shard_progress;
@@ -198,6 +199,7 @@ pub struct RestoreDriver<S: Send + Sync + 'static, Src: RestoreSource> {
     schema: Arc<S>,
     source: Arc<Src>,
     config: RestoreDriverConfig,
+    metrics: Arc<RestoreMetrics>,
     /// Pipelines registered so far, in registration order. Order
     /// determines the parallel `Vec` index used in `initial_states`.
     pipelines: Vec<PipelineEntry<S>>,
@@ -212,12 +214,19 @@ impl<S: Send + Sync + 'static, Src: RestoreSource> RestoreDriver<S, Src> {
     /// Build a driver bound to `db` / `schema` and `source`. The
     /// returned driver has no pipelines yet — call
     /// [`register`](Self::register) before [`run`](Self::run).
-    pub fn new(db: Db, schema: Arc<S>, source: Src, config: RestoreDriverConfig) -> Self {
+    pub fn new(
+        db: Db,
+        schema: Arc<S>,
+        source: Src,
+        config: RestoreDriverConfig,
+        metrics: Arc<RestoreMetrics>,
+    ) -> Self {
         Self {
             db,
             schema,
             source: Arc::new(source),
             config,
+            metrics,
             pipelines: Vec::new(),
             initial_states: Vec::new(),
         }
@@ -309,6 +318,7 @@ impl<S: Send + Sync + 'static, Src: RestoreSource> RestoreDriver<S, Src> {
             schema,
             source,
             config,
+            metrics,
             pipelines,
             initial_states,
         } = self;
@@ -323,6 +333,13 @@ impl<S: Send + Sync + 'static, Src: RestoreSource> RestoreDriver<S, Src> {
         let pipelines = Arc::new(pipelines);
         let states = Arc::new(Mutex::new(initial_states));
 
+        // `restore_shards_done` is incremented by each shard task as it
+        // confirms its shard is `Done` (including shards already
+        // complete on resume), so it climbs from 0 to `shard_count`
+        // and reflects cumulative cross-resume progress.
+        metrics.restore_shards_total.set(shard_count as i64);
+        metrics.restore_shards_done.set(0);
+
         let svc = Service::new().spawn(async move {
             stream::iter(0..shard_count)
                 .try_for_each_spawned(shard_concurrency, |shard_id| {
@@ -331,8 +348,9 @@ impl<S: Send + Sync + 'static, Src: RestoreSource> RestoreDriver<S, Src> {
                     let states = states.clone();
                     let db = db.clone();
                     let schema = schema.clone();
+                    let metrics = metrics.clone();
                     async move {
-                        run_shard(shard_id, source, pipelines, states, db, schema)
+                        run_shard(shard_id, source, pipelines, states, db, schema, metrics)
                             .await
                             .with_context(|| format!("shard {shard_id} restore failed"))
                     }
@@ -368,6 +386,7 @@ async fn run_shard<S, Src>(
     states: Arc<Mutex<Vec<RestoreState>>>,
     db: Db,
     schema: Arc<S>,
+    metrics: Arc<RestoreMetrics>,
 ) -> anyhow::Result<()>
 where
     S: Send + Sync + 'static,
@@ -387,6 +406,9 @@ where
                     shard_id,
                     "shard already complete for every pipeline; skipping",
                 );
+                // Count shards finished by a prior run so the gauge
+                // reflects cumulative progress, not just this session.
+                metrics.restore_shards_done.inc();
                 return Ok(());
             }
             ShardStatus::Fresh => None,
@@ -452,6 +474,7 @@ where
     }
     batch.commit()?;
 
+    metrics.restore_shards_done.inc();
     info!(shard_id, chunks, objects, "shard done");
     Ok(())
 }
@@ -762,6 +785,7 @@ mod tests {
             schema.clone(),
             source,
             RestoreDriverConfig::default(),
+            RestoreMetrics::new(None, &prometheus::Registry::new()),
         );
         driver.register(ObjectVersionPipeline).unwrap();
         driver.run().unwrap().shutdown().await.unwrap();
@@ -804,6 +828,7 @@ mod tests {
             schema.clone(),
             source,
             RestoreDriverConfig::default(),
+            RestoreMetrics::new(None, &prometheus::Registry::new()),
         );
         driver.register(ObjectVersionPipeline).unwrap();
         driver.run().unwrap().shutdown().await.unwrap();
@@ -872,14 +897,23 @@ mod tests {
         );
         let yielded_handle = source.yielded.clone();
 
+        let metrics = RestoreMetrics::new(None, &prometheus::Registry::new());
         let mut driver = RestoreDriver::new(
             db.clone(),
             schema.clone(),
             source,
             RestoreDriverConfig::default(),
+            metrics.clone(),
         );
         driver.register(ObjectVersionPipeline).unwrap();
         driver.run().unwrap().shutdown().await.unwrap();
+
+        // The shards-done gauge counts both the shard finished this
+        // session (shard 0) and the one already Done on resume (shard
+        // 1), so it reaches the shard total — i.e. it reflects
+        // cumulative progress, not just this session's work.
+        assert_eq!(metrics.restore_shards_total.get(), 2);
+        assert_eq!(metrics.restore_shards_done.get(), 2);
 
         // Shard 0: one chunk (chunk 1) actually yielded; shard
         // 1 either wasn't streamed at all or yielded zero
