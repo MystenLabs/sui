@@ -289,6 +289,8 @@ public(package) fun convert_to_fungible_staked_sui(
     );
 
     let pool_token_amount = exchange_rate_at_staking_epoch.get_token_amount(principal.value());
+    assert!(pool_token_amount > 0, EStakedSuiBelowThreshold);
+
     let key = FungibleStakedSuiDataKey {};
 
     if (!pool.extra_fields.contains(key)) {

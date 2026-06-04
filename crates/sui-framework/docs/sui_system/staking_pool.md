@@ -863,6 +863,7 @@ Convert the given staked SUI to an FungibleStakedSui object
         <a href="../sui_system/staking_pool.md#sui_system_staking_pool_stake_activation_epoch">stake_activation_epoch</a>,
     );
     <b>let</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_pool_token_amount">pool_token_amount</a> = exchange_rate_at_staking_epoch.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_get_token_amount">get_token_amount</a>(principal.value());
+    <b>assert</b>!(<a href="../sui_system/staking_pool.md#sui_system_staking_pool_pool_token_amount">pool_token_amount</a> &gt; 0, <a href="../sui_system/staking_pool.md#sui_system_staking_pool_EStakedSuiBelowThreshold">EStakedSuiBelowThreshold</a>);
     <b>let</b> key = <a href="../sui_system/staking_pool.md#sui_system_staking_pool_FungibleStakedSuiDataKey">FungibleStakedSuiDataKey</a> {};
     <b>if</b> (!pool.extra_fields.contains(key)) {
         pool
