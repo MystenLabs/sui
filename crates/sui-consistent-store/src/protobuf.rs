@@ -169,8 +169,8 @@ mod tests {
     }
 
     impl Schema for PbSchema {
-        fn cfs(base_options: &rocksdb::Options) -> Vec<CfDescriptor> {
-            vec![CfDescriptor::new("items", base_options.clone())]
+        fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
+            vec![CfDescriptor::new("items", opts.options("items"))]
         }
 
         fn open(db: &Db) -> Result<Self, OpenError> {

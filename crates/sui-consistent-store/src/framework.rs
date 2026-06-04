@@ -242,7 +242,7 @@ mod tests {
     struct EmptySchema;
 
     impl Schema for EmptySchema {
-        fn cfs(_: &rocksdb::Options) -> Vec<crate::CfDescriptor> {
+        fn cfs(_: &crate::options::CfOptionsResolver) -> Vec<crate::CfDescriptor> {
             vec![]
         }
 

@@ -84,8 +84,8 @@ pub(crate) struct ObjectVersionSchema {
 }
 
 impl Schema for ObjectVersionSchema {
-    fn cfs(base_options: &rocksdb::Options) -> Vec<CfDescriptor> {
-        vec![CfDescriptor::new("versions", base_options.clone())]
+    fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
+        vec![CfDescriptor::new("versions", opts.options("versions"))]
     }
 
     fn open(db: &Db) -> Result<Self, OpenError> {

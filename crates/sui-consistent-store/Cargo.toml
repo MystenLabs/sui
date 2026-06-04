@@ -40,3 +40,4 @@ zstd.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt"] }
+toml.workspace = true

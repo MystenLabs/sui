@@ -64,8 +64,8 @@
 //! }
 //!
 //! impl Schema for MySchema {
-//!     fn cfs(base_options: &rocksdb::Options) -> Vec<sui_consistent_store::CfDescriptor> {
-//!         vec![sui_consistent_store::CfDescriptor::new("items", base_options.clone())]
+//!     fn cfs(opts: &sui_consistent_store::CfOptionsResolver) -> Vec<sui_consistent_store::CfDescriptor> {
+//!         vec![sui_consistent_store::CfDescriptor::new("items", opts.options("items"))]
 //!     }
 //!
 //!     fn open(db: &Db) -> Result<Self, OpenError> {
@@ -325,10 +325,10 @@ mod tests {
     }
 
     impl Schema for TestSchema {
-        fn cfs(base_options: &rocksdb::Options) -> Vec<crate::CfDescriptor> {
+        fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<crate::CfDescriptor> {
             vec![
-                crate::CfDescriptor::new("items", base_options.clone()),
-                crate::CfDescriptor::new("other", base_options.clone()),
+                crate::CfDescriptor::new("items", opts.options("items")),
+                crate::CfDescriptor::new("other", opts.options("other")),
             ]
         }
 
@@ -501,8 +501,8 @@ mod tests {
     }
 
     impl Schema for MergeSchema {
-        fn cfs(base_options: &rocksdb::Options) -> Vec<crate::CfDescriptor> {
-            let mut counter_opts = base_options.clone();
+        fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<crate::CfDescriptor> {
+            let mut counter_opts = opts.options("counters");
             counter_opts.set_merge_operator_associative("u64-add", add_u64_merge_op);
             vec![crate::CfDescriptor::new("counters", counter_opts)]
         }

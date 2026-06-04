@@ -22,7 +22,7 @@
 //! struct EmptySchema;
 //!
 //! impl Schema for EmptySchema {
-//!     fn cfs(_: &rocksdb::Options) -> Vec<sui_consistent_store::CfDescriptor> {
+//!     fn cfs(_: &sui_consistent_store::CfOptionsResolver) -> Vec<sui_consistent_store::CfDescriptor> {
 //!         vec![]
 //!     }
 //!     fn open(_: &Db) -> Result<Self, sui_consistent_store::error::OpenError> {
@@ -398,10 +398,10 @@ mod tests {
     struct TwoCfSchema;
 
     impl Schema for TwoCfSchema {
-        fn cfs(base_options: &rocksdb::Options) -> Vec<CfDescriptor> {
+        fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
             vec![
-                CfDescriptor::new("alpha", base_options.clone()),
-                CfDescriptor::new("beta", base_options.clone()),
+                CfDescriptor::new("alpha", opts.options("alpha")),
+                CfDescriptor::new("beta", opts.options("beta")),
             ]
         }
 

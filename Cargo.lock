@@ -14481,6 +14481,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
+ "toml 0.7.4",
  "tracing",
  "url",
  "zstd 0.12.3+zstd.1.5.2",

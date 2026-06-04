@@ -41,8 +41,8 @@
 //! }
 //!
 //! impl Schema for MySchema {
-//!     fn cfs(base_options: &rocksdb::Options) -> Vec<CfDescriptor> {
-//!         vec![CfDescriptor::new("my_cf", base_options.clone())]
+//!     fn cfs(opts: &sui_consistent_store::CfOptionsResolver) -> Vec<CfDescriptor> {
+//!         vec![CfDescriptor::new("my_cf", opts.options("my_cf"))]
 //!     }
 //!
 //!     fn open(db: &Db) -> Result<Self, OpenError> {
@@ -69,6 +69,7 @@
 
 use crate::db::Db;
 use crate::error::OpenError;
+use crate::options::CfOptionsResolver;
 use crate::snapshot::Snapshot;
 
 /// Declares the column families a database needs and constructs the
@@ -84,7 +85,7 @@ use crate::snapshot::Snapshot;
 ///
 /// - [`cfs`](Self::cfs) returns the column families this schema
 ///   requires, with per-CF [`rocksdb::Options`]. It is called once at
-///   open time, with the database-level base options as input. The
+///   open time, with a [`CfOptionsResolver`] as input. The
 ///   order of entries does not matter.
 /// - [`open`](Self::open) constructs the schema struct against an
 ///   already-opened database. Each column family named by `cfs()` is
@@ -95,17 +96,17 @@ pub trait Schema: Sized {
     /// Each entry is a [`CfDescriptor`] carrying a column-family
     /// name (a `&'static str` so the schema's CF set is fixed at
     /// compile time) and its [`rocksdb::Options`] applied at create
-    /// time. `base_options` is supplied by [`Db::open`] and is the
-    /// database-level options configured on
-    /// [`DbOptions::db_options`](crate::DbOptions::db_options);
-    /// implementations typically clone it as the starting point for
-    /// each CF and layer per-CF tweaks (merge operators, compaction
-    /// filters, custom block sizes) on top.
+    /// time. Implementations obtain the resolved per-CF options from
+    /// `opts` via [`CfOptionsResolver::options`] and layer only
+    /// correctness-bearing per-CF tweaks (merge operators, compaction
+    /// filters) on top — performance knobs such as compression, write
+    /// buffers, and write-stall thresholds are resolved from
+    /// configuration inside the resolver.
     ///
     /// The default column family (`"default"`) is registered
     /// automatically by [`Db::open`] and need not be included here,
     /// though including it is harmless.
-    fn cfs(base_options: &rocksdb::Options) -> Vec<CfDescriptor>;
+    fn cfs(opts: &CfOptionsResolver) -> Vec<CfDescriptor>;
 
     /// Construct the schema struct against `db`.
     ///

@@ -38,16 +38,19 @@ use crate::framework::FrameworkSchema;
 use crate::framework::RESTORE_CF;
 use crate::framework::WATERMARK_CF;
 use crate::framework::Watermark;
+use crate::options::CfOptionsResolver;
+use crate::options::RocksDbConfig;
 use crate::schema::CfDescriptor;
 use crate::schema::Schema;
 use crate::snapshot::Snapshot;
 
 /// Configuration for opening a [`Db`].
 ///
-/// The default value enables `create_if_missing` and
-/// `create_missing_column_families`, which is the configuration most
-/// callers want; tweak [`db_options`](Self::db_options) to override
-/// individual settings.
+/// The default value leaves every RocksDB knob at its native default
+/// (besides `create_if_missing` / `create_missing_column_families`,
+/// which [`Db::open`] always sets). Populate [`rocksdb`](Self::rocksdb)
+/// to tune database-wide and per-column-family options; see
+/// [`RocksDbConfig`].
 ///
 /// # Examples
 ///
@@ -55,12 +58,13 @@ use crate::snapshot::Snapshot;
 /// use sui_consistent_store::DbOptions;
 ///
 /// let mut opts = DbOptions::default();
-/// // Refuse to create a new database if the path is empty.
-/// opts.db_options.create_if_missing(false);
+/// // More background threads for compactions and flushes.
+/// opts.rocksdb.db.parallelism = Some(8);
 /// ```
 pub struct DbOptions {
-    /// Underlying RocksDB options applied to the database itself.
-    pub db_options: rocksdb::Options,
+    /// Tunable RocksDB options applied database-wide and per column
+    /// family when the database is opened.
+    pub rocksdb: RocksDbConfig,
 
     /// Maximum number of in-memory snapshots retained on the database
     /// at any one time. When [`Db::take_snapshot`] is called and the
@@ -97,8 +101,8 @@ pub struct DbOptions {
 /// }
 ///
 /// impl Schema for MySchema {
-///     fn cfs(base_options: &rocksdb::Options) -> Vec<CfDescriptor> {
-///         vec![CfDescriptor::new("my_cf", base_options.clone())]
+///     fn cfs(opts: &sui_consistent_store::CfOptionsResolver) -> Vec<CfDescriptor> {
+///         vec![CfDescriptor::new("my_cf", opts.options("my_cf"))]
 ///     }
 ///
 ///     fn open(db: &Db) -> Result<Self, OpenError> {
@@ -201,11 +205,8 @@ impl SnapshotEntry {
 
 impl Default for DbOptions {
     fn default() -> Self {
-        let mut db_options = rocksdb::Options::default();
-        db_options.create_if_missing(true);
-        db_options.create_missing_column_families(true);
         Self {
-            db_options,
+            rocksdb: RocksDbConfig::default(),
             snapshot_capacity: 32,
         }
     }
@@ -232,9 +233,13 @@ impl Db {
     ///
     /// The default column family is registered automatically (RocksDB
     /// requires it). Column families named by [`Schema::cfs`] that do
-    /// not yet exist on disk are created when
-    /// [`DbOptions::db_options`] has `create_missing_column_families`
-    /// enabled, which is the default.
+    /// not yet exist on disk are created — [`Db::open`] always sets
+    /// `create_if_missing` and `create_missing_column_families`.
+    ///
+    /// Per-CF and database-wide RocksDB options come from
+    /// [`DbOptions::rocksdb`]; they are validated before the database
+    /// is opened, and a per-CF override naming a column family the
+    /// schema does not declare is rejected.
     ///
     /// On success, returns the database handle (cheap to clone via
     /// the inner [`Arc`], so it can be shared with column-family
@@ -244,32 +249,49 @@ impl Db {
         opts: DbOptions,
     ) -> Result<(Self, S), OpenError> {
         let DbOptions {
-            db_options,
+            rocksdb,
             snapshot_capacity,
         } = opts;
 
-        let mut cfs = S::cfs(&db_options);
+        let resolver = CfOptionsResolver::new(rocksdb)?;
+        let db_options = resolver.db_options();
+
+        let mut cfs = S::cfs(&resolver);
         // RocksDB requires the default column family to be declared
         // when opening with `open_cf_descriptors`. Register it
         // automatically so schemas don't have to.
         if !cfs.iter().any(|cf| cf.name == "default") {
-            cfs.push(CfDescriptor::new("default", db_options.clone()));
+            cfs.push(CfDescriptor::new("default", resolver.options("default")));
         }
         // The framework's bookkeeping CFs (restore, watermark,
         // chain-id) are auto-registered alongside the schema's CFs
         // so [`FrameworkSchema`] is always available via
         // [`Db::framework`] without the user having to declare it.
         if !cfs.iter().any(|cf| cf.name == RESTORE_CF) {
-            cfs.push(CfDescriptor::new(RESTORE_CF, db_options.clone()));
+            cfs.push(CfDescriptor::new(RESTORE_CF, resolver.options(RESTORE_CF)));
         }
         if !cfs.iter().any(|cf| cf.name == WATERMARK_CF) {
-            cfs.push(CfDescriptor::new(WATERMARK_CF, db_options.clone()));
+            cfs.push(CfDescriptor::new(
+                WATERMARK_CF,
+                resolver.options(WATERMARK_CF),
+            ));
         }
         if !cfs.iter().any(|cf| cf.name == CHAIN_ID_CF) {
-            cfs.push(CfDescriptor::new(CHAIN_ID_CF, db_options.clone()));
+            cfs.push(CfDescriptor::new(CHAIN_ID_CF, resolver.options(CHAIN_ID_CF)));
         }
 
         let cf_names: Vec<&'static str> = cfs.iter().map(|cf| cf.name).collect();
+
+        // Reject per-CF overrides that name a column family this schema
+        // does not declare — almost always a typo in configuration.
+        for configured in resolver.configured_cf_names() {
+            if !cf_names.contains(&configured) {
+                return Err(OpenError::msg(format!(
+                    "rocksdb config names unknown column family `{configured}`"
+                )));
+            }
+        }
+
         let descriptors = cfs
             .into_iter()
             .map(|cf| rocksdb::ColumnFamilyDescriptor::new(cf.name, cf.options));
@@ -782,10 +804,10 @@ mod tests {
     }
 
     impl Schema for TestSchema {
-        fn cfs(base_options: &rocksdb::Options) -> Vec<CfDescriptor> {
+        fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
             vec![
-                CfDescriptor::new("foo", base_options.clone()),
-                CfDescriptor::new("bar", base_options.clone()),
+                CfDescriptor::new("foo", opts.options("foo")),
+                CfDescriptor::new("bar", opts.options("bar")),
             ]
         }
 
@@ -829,13 +851,17 @@ mod tests {
     }
 
     #[test]
-    fn open_without_create_if_missing_errors_on_missing_path() {
+    fn open_on_non_directory_path_errors_with_source() {
+        // `Db::open` always enables `create_if_missing`, so a missing
+        // path is created rather than rejected. To exercise the
+        // error path we point it at a regular file, which RocksDB
+        // cannot open as a database; the resulting `OpenError` must
+        // carry the underlying RocksDB error as its source.
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("nonexistent");
-        let mut opts = DbOptions::default();
-        opts.db_options.create_if_missing(false);
-        let result = Db::open::<TestSchema>(&path, opts);
-        let err = result.expect_err("open should fail when path is missing");
+        let path = dir.path().join("a_regular_file");
+        std::fs::write(&path, b"not a database").unwrap();
+        let result = Db::open::<TestSchema>(&path, DbOptions::default());
+        let err = result.expect_err("open should fail when the path is a regular file");
         assert!(std::error::Error::source(&err).is_some());
     }
 
@@ -972,8 +998,8 @@ mod tests {
         }
 
         impl Schema for PersistSchema {
-            fn cfs(base_options: &rocksdb::Options) -> Vec<CfDescriptor> {
-                vec![CfDescriptor::new("items", base_options.clone())]
+            fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
+                vec![CfDescriptor::new("items", opts.options("items"))]
             }
 
             fn open(db: &Db) -> Result<Self, OpenError> {
@@ -1061,8 +1087,8 @@ mod tests {
         }
 
         impl Schema for ItemsSchema {
-            fn cfs(base_options: &rocksdb::Options) -> Vec<CfDescriptor> {
-                vec![CfDescriptor::new("items", base_options.clone())]
+            fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
+                vec![CfDescriptor::new("items", opts.options("items"))]
             }
 
             fn open(db: &Db) -> Result<Self, OpenError> {
@@ -1189,10 +1215,10 @@ mod tests {
             }
 
             impl Schema for TwoCfSchema {
-                fn cfs(base_options: &rocksdb::Options) -> Vec<CfDescriptor> {
+                fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
                     vec![
-                        CfDescriptor::new("a", base_options.clone()),
-                        CfDescriptor::new("b", base_options.clone()),
+                        CfDescriptor::new("a", opts.options("a")),
+                        CfDescriptor::new("b", opts.options("b")),
                     ]
                 }
 
