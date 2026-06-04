@@ -1030,6 +1030,12 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     create_forwarding_address_registry: bool,
 
+    // If true, enable the forwarding address resolution mechanism (every transaction takes an
+    // implicit read-only dependency on the forwarding address registry, and deposits to
+    // forwarding-format addresses are resolved to their master). Not yet implemented; testing only.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_forwarding_addresses: bool,
+
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // TODO: remove old code and deprecate once in mainnet.
     #[serde(skip_serializing_if = "is_false")]
@@ -2762,6 +2768,10 @@ impl ProtocolConfig {
 
     pub fn create_forwarding_address_registry(&self) -> bool {
         self.feature_flags.create_forwarding_address_registry
+    }
+
+    pub fn enable_forwarding_addresses(&self) -> bool {
+        self.feature_flags.enable_forwarding_addresses
     }
 
     pub fn enable_object_funds_withdraw(&self) -> bool {
@@ -5333,6 +5343,10 @@ impl ProtocolConfig {
 
     pub fn set_create_forwarding_address_registry_for_testing(&mut self, val: bool) {
         self.feature_flags.create_forwarding_address_registry = val;
+    }
+
+    pub fn set_enable_forwarding_addresses_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_forwarding_addresses = val;
     }
 
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {
