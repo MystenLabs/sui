@@ -303,10 +303,16 @@ pub fn default_rocksdb_config() -> RocksDbConfig {
         db: DbWideConfig {
             parallelism: Some(8),
             max_background_jobs: None,
-            // One database per process (unlike the validator, which
-            // runs many), so we do not bound open files: the RocksDB
-            // default keeps every SST open for best read performance.
-            max_open_files: None,
+            // RocksDB's default (`-1`) keeps every SST open, which
+            // exhausts the process file-descriptor budget on a
+            // large DB (a formal-snapshot restore writes thousands
+            // of SSTs and fails with "Too many open files"). Mirror
+            // `typed_store::default_db_options`: raise the fd limit
+            // toward the hard cap and bound the table cache to an
+            // eighth of it. `None` on platforms without the syscall
+            // (e.g. Windows), leaving the RocksDB default.
+            max_open_files: fdlimit::raise_fd_limit()
+                .map(|limit| (limit / 8).try_into().unwrap_or(i32::MAX)),
             db_write_buffer_size_mb: Some(1024),
             max_total_wal_size_mb: Some(1024),
             enable_pipelined_write: Some(true),
