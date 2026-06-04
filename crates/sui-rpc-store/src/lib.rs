@@ -46,6 +46,7 @@ pub use crate::indexer::Indexer;
 pub use crate::indexer::METRICS_PREFIX;
 pub use crate::indexer::restore::floor_unrestored_pipelines;
 pub use crate::indexer::restore::restore_indexes;
+pub use crate::indexer::restore::seed_current_epoch_start;
 pub use crate::reader::RpcStoreReader;
 pub use crate::schema::RpcStoreSchema;
 pub use crate::schema::default_rocksdb_config;

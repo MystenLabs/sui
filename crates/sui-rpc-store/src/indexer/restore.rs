@@ -26,6 +26,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
+use sui_consistent_store::Batch;
 use sui_consistent_store::ChainId;
 use sui_consistent_store::Db;
 use sui_consistent_store::FrameworkSchema;
@@ -38,9 +39,17 @@ use sui_consistent_store::restore::RestoreSource;
 use sui_consistent_store::restore::metrics::RestoreMetrics;
 use sui_futures::service::Service;
 use sui_indexer_alt_framework::pipeline::Processor;
+use sui_types::storage::ObjectStore;
+use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::get_sui_system_state;
+use tracing::info;
+use tracing::warn;
 
 use crate::RestoreLayer;
+use crate::RpcStoreReader;
 use crate::RpcStoreSchema;
+use crate::schema::epochs;
+use crate::schema::keys::U64Be;
 use crate::indexer::balance::Balance;
 use crate::indexer::checkpoint_contents::CheckpointContents;
 use crate::indexer::checkpoint_seq_by_digest::CheckpointSeqByDigest;
@@ -195,6 +204,30 @@ pub fn floor_unrestored_pipelines(
         .put(&schema.pruning_watermark, &k, &v)
         .context("stage pruning_watermark row")?;
 
+    // Seed the `epochs` row for the epoch the snapshot lands in. The
+    // chain advanced to it at the anchor's end-of-epoch checkpoint,
+    // but the `epochs` pipeline only emits a start record while
+    // processing such a checkpoint, which tip indexing skips on
+    // resume (it starts at anchor + 1). Without this seed, the
+    // current epoch's row would never get its protocol version, gas
+    // price, start timestamp, start checkpoint, or system state.
+    // Requires the raw objects to read the on-chain `SuiSystemState`,
+    // so it only runs when the `objects` CF was restored; failure to
+    // read it is logged and skipped rather than failing the restore.
+    if layer.objects {
+        let reader = RpcStoreReader::new(db.clone(), schema.clone());
+        let start_checkpoint = target_watermark.checkpoint_hi_inclusive.saturating_add(1);
+        match seed_current_epoch_start(&schema, &reader, start_checkpoint, &mut batch) {
+            Ok(epoch) => info!(epoch, start_checkpoint, "seeded start record for restore epoch"),
+            Err(e) => warn!(
+                error = %e,
+                "could not seed the restore epoch's start record; get_epoch / \
+                 get_committee / Move type-layout resolution for the current epoch \
+                 will be unavailable until the next epoch boundary",
+            ),
+        }
+    }
+
     batch.commit().context("commit floor batch")?;
 
     // Mirror the on-disk floor into the process-wide atomic so any
@@ -205,6 +238,48 @@ pub fn floor_unrestored_pipelines(
     schema.set_pruning_floor(target_watermark.tx_hi);
 
     Ok(())
+}
+
+/// Stage a start record for the epoch reflected by the on-chain
+/// `SuiSystemState` in `objects`, keyed by that epoch.
+///
+/// The `epochs` pipeline derives a start record only from an
+/// end-of-epoch checkpoint's `epoch_info`, which a restore-then-tip
+/// flow never processes (tip indexing resumes at `anchor + 1`), so a
+/// freshly restored database has no start record for the epoch it
+/// landed in. This reconstructs that record straight from the
+/// restored object set: protocol version, reference gas price, and
+/// epoch-start timestamp come from the `SuiSystemState`, the BCS of
+/// which is stored so `get_committee` and Move type-layout resolution
+/// work too; `start_checkpoint` is supplied by the caller (the
+/// restore anchor's checkpoint + 1).
+///
+/// Stages a merge into `batch`; the caller commits. Returns the epoch
+/// that was seeded.
+pub fn seed_current_epoch_start(
+    schema: &RpcStoreSchema,
+    objects: &dyn ObjectStore,
+    start_checkpoint: u64,
+    batch: &mut Batch,
+) -> anyhow::Result<u64> {
+    let system_state =
+        get_sui_system_state(objects).context("read SuiSystemState from restored objects")?;
+    let epoch = system_state.epoch();
+    let system_state_bcs = bcs::to_bytes(&system_state).context("bcs encode SuiSystemState")?;
+    batch
+        .merge(
+            &schema.epochs,
+            &U64Be(epoch),
+            &epochs::start(
+                system_state.protocol_version(),
+                system_state.reference_gas_price(),
+                system_state.epoch_start_timestamp_ms(),
+                start_checkpoint,
+                Some(system_state_bcs),
+            ),
+        )
+        .context("stage epoch start seed")?;
+    Ok(epoch)
 }
 
 #[cfg(test)]

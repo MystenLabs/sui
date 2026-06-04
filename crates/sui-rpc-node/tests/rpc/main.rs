@@ -71,6 +71,7 @@
 mod client;
 mod cluster;
 mod metrics;
+mod restore_seed;
 mod serve;
 mod v1alpha;
 mod v2;
