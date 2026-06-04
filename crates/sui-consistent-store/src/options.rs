@@ -84,27 +84,38 @@ impl From<Compression> for rocksdb::DBCompressionType {
 pub struct WriteStallConfig {
     /// Soft limit on estimated pending-compaction bytes before writes
     /// slow down, in MiB. `0` disables the soft pending-bytes stall.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub soft_pending_compaction_bytes_limit_mb: Option<u64>,
 
     /// Hard limit on estimated pending-compaction bytes before writes
     /// stop, in MiB. `0` disables the hard pending-bytes stall.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hard_pending_compaction_bytes_limit_mb: Option<u64>,
 
     /// Number of L0 files that triggers a compaction. Forms the floor
     /// of the L0 trigger chain; must not exceed the slowdown trigger.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub level0_file_num_compaction_trigger: Option<i32>,
 
     /// Number of L0 files at which writes are slowed. Must be greater
     /// than or equal to the compaction trigger and less than or equal
     /// to the stop trigger.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub level0_slowdown_writes_trigger: Option<i32>,
 
     /// Number of L0 files at which writes are stopped. Top of the L0
     /// trigger chain.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub level0_stop_writes_trigger: Option<i32>,
 }
 
 impl WriteStallConfig {
+    /// Whether every threshold is unset. Used to skip serializing an
+    /// otherwise-empty `[...write-stall]` table.
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
     /// Field-wise overlay: every field set on `self` wins; otherwise
     /// fall back to `base`.
     pub fn merge_over(&self, base: &Self) -> Self {
@@ -221,32 +232,41 @@ impl WriteStallConfig {
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
 pub struct CfTuning {
     /// Per-memtable size, in MiB.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub write_buffer_size_mb: Option<usize>,
 
     /// Maximum number of memtables before writes are throttled by
     /// flush back-pressure.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_write_buffer_number: Option<i32>,
 
     /// Compression for all but the bottommost level.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub compression: Option<Compression>,
 
     /// Compression for the bottommost level (where most data settles).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bottommost_compression: Option<Compression>,
 
     /// Block size, in KiB.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub block_size_kb: Option<usize>,
 
     /// Bits per key for a full (non-block-based) bloom filter. Set on
     /// point-lookup-heavy CFs; leave unset on range-scanned CFs.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bloom_filter_bits: Option<f64>,
 
     /// Memtable prefix-bloom size as a fraction of the memtable.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub memtable_prefix_bloom_ratio: Option<f64>,
 
     /// Target SST file size at level base, in MiB.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub target_file_size_mb: Option<u64>,
 
     /// Write-stall thresholds.
+    #[serde(default, skip_serializing_if = "WriteStallConfig::is_empty")]
     pub write_stall: WriteStallConfig,
 }
 
@@ -328,29 +348,37 @@ impl CfTuning {
 pub struct DbWideConfig {
     /// Total number of background threads for compactions and flushes
     /// (`increase_parallelism`).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub parallelism: Option<i32>,
 
     /// Maximum number of concurrent background jobs.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_background_jobs: Option<i32>,
 
     /// Maximum number of open files (`-1` for unlimited).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_open_files: Option<i32>,
 
     /// Total write-buffer budget across all CFs, in MiB.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub db_write_buffer_size_mb: Option<usize>,
 
     /// Maximum total WAL size before a flush is forced, in MiB.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_total_wal_size_mb: Option<u64>,
 
     /// Enable pipelined writes (separate WAL and memtable write
     /// threads).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_pipelined_write: Option<bool>,
 
     /// Number of shards (`2^bits`) for the table cache lock.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub table_cache_num_shard_bits: Option<i32>,
 
     /// Size of the single LRU block cache shared by every CF, in MiB.
     /// When unset, each CF uses its own RocksDB-default cache.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub block_cache_size_mb: Option<usize>,
 }
 
