@@ -30,6 +30,7 @@ use crate::api::types::epoch::Epoch;
 use crate::api::types::gas::GasCostSummary;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::validator_aggregated_signature::ValidatorAggregatedSignature;
@@ -221,7 +222,7 @@ impl CheckpointContents {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         async {
             let Some((summary, _, _)) = &self.contents else {
                 return Ok(None);
@@ -235,7 +236,7 @@ impl CheckpointContents {
                 at_checkpoint: Some(UInt53::from(summary.sequence_number)),
                 ..Default::default()
             }) else {
-                return Ok(Some(Connection::new(false, false)));
+                return Ok(Some(Connection::new(false, false).into()));
             };
 
             if let Some(streamed) = &self.streamed_data {

@@ -8,6 +8,9 @@ use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
+use async_graphql::connection::Edge;
+use async_graphql::connection::EmptyFields;
+use async_graphql::connection::PageInfo;
 use async_graphql::dataloader::DataLoader;
 use diesel::QueryableByName;
 use diesel::sql_types::BigInt;
@@ -66,6 +69,29 @@ pub(crate) struct TransactionContents {
 }
 
 pub(crate) type CTransaction = JsonCursor<u64>;
+
+pub(crate) struct TransactionConnection {
+    pub edges: Vec<Edge<String, Transaction, EmptyFields>>,
+    pub page_info: PageInfo,
+}
+
+#[Object]
+impl TransactionConnection {
+    /// Information to aid in pagination.
+    async fn page_info(&self) -> &PageInfo {
+        &self.page_info
+    }
+
+    /// A list of edges.
+    async fn edges(&self) -> &[Edge<String, Transaction, EmptyFields>] {
+        &self.edges
+    }
+
+    /// A list of nodes.
+    async fn nodes(&self) -> Vec<&Transaction> {
+        self.edges.iter().map(|e| &e.node).collect()
+    }
+}
 
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
@@ -253,7 +279,7 @@ impl Transaction {
         transactions: &[ProcessedTransaction],
         page: &Page<CTransaction>,
         filter: TransactionFilter,
-    ) -> Result<Connection<String, Transaction>, RpcError> {
+    ) -> Result<TransactionConnection, RpcError> {
         let after = page.after().map(|c| **c);
         let before = page.before().map(|c| **c);
 
@@ -270,6 +296,7 @@ impl Transaction {
             |tx| JsonCursor::new(tx.tx_sequence_number),
             |tx| Transaction::with_contents(scope.clone(), tx.contents.clone()),
         )
+        .map(Into::into)
     }
 
     /// Load the transaction from the store, and return it fully inflated (with contents already
@@ -299,7 +326,7 @@ impl Transaction {
         scope: Scope,
         page: Page<CTransaction>,
         filter: TransactionFilter,
-    ) -> Result<Connection<String, Transaction>, RpcError> {
+    ) -> Result<TransactionConnection, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
@@ -309,7 +336,7 @@ impl Transaction {
         let reader_lo = available_range_key.reader_lo(watermarks)?;
 
         let Some(query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
-            return Ok(Connection::new(false, false));
+            return Ok(Connection::new(false, false).into());
         };
 
         let TransactionFilter {
@@ -342,6 +369,7 @@ impl Transaction {
             |(s, _)| JsonCursor::new(*s),
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
+        .map(Into::into)
     }
 }
 
@@ -415,6 +443,25 @@ impl From<TransactionEffects> for Transaction {
         Self {
             digest: fx.digest,
             contents: TransactionContents { scope, contents },
+        }
+    }
+}
+
+impl From<Connection<String, Transaction>> for TransactionConnection {
+    /// Convert a stock async-graphql `Connection` (as produced by the PG path's
+    /// `Page::paginate_results`) into the custom shape. Cursors are derived from edges, matching
+    /// stock semantics.
+    fn from(conn: Connection<String, Transaction>) -> Self {
+        let start_cursor = conn.edges.first().map(|e| e.cursor.clone());
+        let end_cursor = conn.edges.last().map(|e| e.cursor.clone());
+        Self {
+            edges: conn.edges,
+            page_info: PageInfo {
+                has_previous_page: conn.has_previous_page,
+                has_next_page: conn.has_next_page,
+                start_cursor,
+                end_cursor,
+            },
         }
     }
 }
