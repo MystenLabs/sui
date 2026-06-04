@@ -331,12 +331,9 @@ async fn test_db_shell_proxy_all_commands() {
     // ── /checkpoints/seq/<seq>/contents-short ────────────────────────────────
     {
         let short_path = format!("{seq_path}/contents-short");
-        let text = api.read_debug(&short_path).await;
-        // Genesis checkpoint may have no user txs; just check it doesn't error.
-        assert!(
-            text.is_empty() || text.contains("tx=") || text.len() > 0,
-            "contents-short returned unexpected content"
-        );
+        // Genesis checkpoint may have no user txs; read_debug already asserts
+        // HTTP success, so we just verify the endpoint responds without error.
+        let _ = api.read_debug(&short_path).await;
     }
 
     // ── /checkpoints/digest/<digest>/summary ─────────────────────────────────
