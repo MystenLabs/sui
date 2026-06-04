@@ -22,21 +22,14 @@ The following SDKs are developed and maintained by Mysten Labs.
 | [TypeScript SDK](https://sdk.mystenlabs.com/typescript) | TypeScript / JavaScript | Mysten Labs | General-purpose client for building apps, scripts, and services | gRPC (recommended), GraphQL, JSON-RPC (deprecated, do not use) | Stable |
 | [dApp Kit](https://sdk.mystenlabs.com/dapp-kit) | TypeScript / React | Mysten Labs | Web frontends: wallet connection, hooks, and UI components | Builds on TypeScript SDK | Stable |
 | [Rust SDK](https://github.com/MystenLabs/sui-rust-sdk) | Rust | Mysten Labs | Backend services and high-performance clients | gRPC | Active development |
-| [Legacy Rust SDK](./rust-sdk.mdx) | Rust | Mysten Labs | Rust clients that require JSON-RPC access | JSON-RPC | Maintenance |
 | [zkSend SDK](https://sdk.mystenlabs.com/zksend) | TypeScript | Mysten Labs | Creating and claiming zkSend links and Stashed functionality | Builds on TypeScript SDK | Stable |
 | [DeepBookV3 SDK](../onchain-finance/deepbookv3-sdk/deepbookv3-sdk.mdx) | TypeScript | Mysten Labs | Interacting with the DeepBook on-chain order book | Builds on TypeScript SDK | Stable |
-
-:::caution
-
-`sui-rust-sdk` does not support JSON RPC. If you need JSON RPC access, use the [legacy Rust SDK](./rust-sdk.mdx). It is forward and backward compatible.
-
-:::
 
 ## Choosing an SDK
 
 - **Building a web app or wallet integration?** Start with the [dApp Kit](https://sdk.mystenlabs.com/dapp-kit), which builds on the TypeScript SDK and adds React hooks and components for wallet connection.
 - **Writing scripts, services, or a Node.js backend in TypeScript?** Use the [TypeScript SDK](https://sdk.mystenlabs.com/typescript) directly. Prefer its gRPC client (`SuiGrpcClient`) for new projects; the JSON-RPC client is deprecated.
-- **Building a performance-sensitive backend in Rust?** Use the [Rust SDK](https://github.com/MystenLabs/sui-rust-sdk) (gRPC). Choose the [legacy Rust SDK](./rust-sdk.mdx) only if you still need JSON-RPC.
+- **Building a performance-sensitive backend in Rust?** Use the [Rust SDK](https://github.com/MystenLabs/sui-rust-sdk) (gRPC).
 - **Working with DeepBook or zkSend?** Use the purpose-built [DeepBookV3 SDK](../onchain-finance/deepbookv3-sdk/deepbookv3-sdk.mdx) or [zkSend SDK](https://sdk.mystenlabs.com/zksend), which layer on top of the TypeScript SDK.
 - **Need another language (Python, Go, Kotlin, Swift, Dart, Vue)?** See the community SDKs on the [Sui and Community SDKs](./sui-sdks.mdx#community-sdks) page.
 
@@ -59,6 +52,6 @@ For guidance on contributing to Sui documentation, see [Contribute to Sui](./con
 
 :::info
 
-While community projects are expertly developed, their maintenance and community support vary. Research a project's history and support level before committing to using its utilities.
+Maintenance and community support vary. Research a project's history and support level before committing to using its utilities.
 
 :::
