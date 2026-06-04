@@ -178,6 +178,38 @@ pub enum CheckpointError {
 
 pub type CheckpointResult = Result<Checkpoint, CheckpointError>;
 
+/// Tries `primary` first and falls back to `secondary` for checkpoints the primary doesn't have.
+/// Used to back a local-file ingestion source with a fullnode RPC source so a resumed fullnode
+/// (which only re-writes new checkpoint files) can still serve already-executed checkpoints.
+struct FallbackIngestionClient {
+    primary: Arc<dyn IngestionClientTrait>,
+    secondary: Arc<dyn IngestionClientTrait>,
+}
+
+#[async_trait]
+impl IngestionClientTrait for FallbackIngestionClient {
+    async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
+        match self.primary.chain_id().await {
+            Ok(chain_id) => Ok(chain_id),
+            Err(_) => self.secondary.chain_id().await,
+        }
+    }
+
+    async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
+        match self.primary.checkpoint(checkpoint).await {
+            Err(CheckpointError::NotFound) => self.secondary.checkpoint(checkpoint).await,
+            result => result,
+        }
+    }
+
+    async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+        match self.primary.latest_checkpoint_number().await {
+            Ok(number) => Ok(number),
+            Err(_) => self.secondary.latest_checkpoint_number().await,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct IngestionClient {
     client: Arc<dyn IngestionClientTrait>,
@@ -194,61 +226,107 @@ pub struct CheckpointEnvelope {
 }
 
 impl IngestionClient {
-    /// Construct a new ingestion client. Its source is determined by `args`.
+    /// Construct a new ingestion client. Its source(s) are determined by `args`. When both an
+    /// object-store source (the first of `remote_store_url`/`remote_store_s3`/`remote_store_gcs`/
+    /// `remote_store_azure`/`local_ingestion_path` that is set) and `rpc_api_url` are provided, the
+    /// store is the primary and the gRPC source backfills checkpoints the store does not have (see
+    /// `FallbackIngestionClient`).
     pub fn new(args: IngestionClientArgs, metrics: Arc<IngestionMetrics>) -> IngestionResult<Self> {
-        // TODO: Support stacking multiple ingestion clients for redundancy/failover.
+        let store_client = Self::store_client(&args, &metrics)?;
+        let grpc_client = match args.rpc_api_url.as_ref() {
+            Some(url) => Some(Self::grpc_client(
+                url.clone(),
+                args.rpc_username,
+                args.rpc_password,
+                &metrics,
+            )?),
+            None => None,
+        };
+
+        let client: Arc<dyn IngestionClientTrait> = match (store_client, grpc_client) {
+            (Some(primary), Some(secondary)) => {
+                Arc::new(FallbackIngestionClient { primary, secondary })
+            }
+            (Some(store), None) => store,
+            (None, Some(grpc)) => grpc,
+            (None, None) => panic!(
+                "One of remote_store_url, remote_store_s3, remote_store_gcs, remote_store_azure, \
+                local_ingestion_path or rpc_api_url must be provided"
+            ),
+        };
+
+        Ok(Self::from_trait(client, metrics))
+    }
+
+    /// Build an object-store-backed ingestion client trait object from the first store source set
+    /// in `args`, if any.
+    fn store_client(
+        args: &IngestionClientArgs,
+        metrics: &Arc<IngestionMetrics>,
+    ) -> IngestionResult<Option<Arc<dyn IngestionClientTrait>>> {
         let retry = super::store_client::retry_config();
-        let client = if let Some(url) = args.remote_store_url.as_ref() {
-            let store = HttpBuilder::new()
+        let store: Arc<dyn ObjectStore> = if let Some(url) = args.remote_store_url.as_ref() {
+            HttpBuilder::new()
                 .with_url(url.to_string())
                 .with_client_options(args.client_options().with_allow_http(true))
                 .with_retry(retry)
                 .build()
-                .map(Arc::new)?;
-            IngestionClient::with_store(store, metrics.clone())?
+                .map(Arc::new)?
         } else if let Some(bucket) = args.remote_store_s3.as_ref() {
-            let store = AmazonS3Builder::from_env()
+            AmazonS3Builder::from_env()
                 .with_client_options(args.client_options())
                 .with_retry(retry)
                 .with_imdsv1_fallback()
                 .with_bucket_name(bucket)
                 .build()
-                .map(Arc::new)?;
-            IngestionClient::with_store(store, metrics.clone())?
+                .map(Arc::new)?
         } else if let Some(bucket) = args.remote_store_gcs.as_ref() {
-            let store = GoogleCloudStorageBuilder::from_env()
+            GoogleCloudStorageBuilder::from_env()
                 .with_client_options(args.client_options())
                 .with_retry(retry)
                 .with_bucket_name(bucket)
                 .build()
-                .map(Arc::new)?;
-            IngestionClient::with_store(store, metrics.clone())?
+                .map(Arc::new)?
         } else if let Some(container) = args.remote_store_azure.as_ref() {
-            let store = MicrosoftAzureBuilder::from_env()
+            MicrosoftAzureBuilder::from_env()
                 .with_client_options(args.client_options())
                 .with_retry(retry)
                 .with_container_name(container)
                 .build()
-                .map(Arc::new)?;
-            IngestionClient::with_store(store, metrics.clone())?
+                .map(Arc::new)?
         } else if let Some(path) = args.local_ingestion_path.as_ref() {
-            let store = LocalFileSystem::new_with_prefix(path).map(Arc::new)?;
-            IngestionClient::with_store(store, metrics.clone())?
-        } else if let Some(rpc_api_url) = args.rpc_api_url.as_ref() {
-            IngestionClient::with_grpc(
-                rpc_api_url.clone(),
-                args.rpc_username,
-                args.rpc_password,
-                metrics.clone(),
-            )?
+            LocalFileSystem::new_with_prefix(path).map(Arc::new)?
         } else {
-            panic!(
-                "One of remote_store_url, remote_store_s3, remote_store_gcs, remote_store_azure, \
-                local_ingestion_path or rpc_api_url must be provided"
-            );
+            return Ok(None);
         };
 
-        Ok(client)
+        Ok(Some(Arc::new(StoreIngestionClient::new(
+            store,
+            Some(metrics.total_ingested_bytes.clone()),
+        ))))
+    }
+
+    /// Build a gRPC fullnode-backed ingestion client trait object.
+    fn grpc_client(
+        url: Url,
+        username: Option<String>,
+        password: Option<String>,
+        metrics: &Arc<IngestionMetrics>,
+    ) -> IngestionResult<Arc<dyn IngestionClientTrait>> {
+        let byte_count_layer = CallbackLayer::new(ByteCountMakeCallbackHandler::new(
+            metrics.total_ingested_bytes.clone(),
+        ));
+        let client = Client::new(url.to_string())?
+            .with_max_decoding_message_size(MAX_GRPC_MESSAGE_SIZE_BYTES)
+            .request_layer(byte_count_layer);
+        let client = if let Some(username) = username {
+            let mut headers = HeadersInterceptor::new();
+            headers.basic_auth(username, password);
+            client.with_headers(headers)
+        } else {
+            client
+        };
+        Ok(Arc::new(client))
     }
 
     /// An ingestion client that fetches checkpoints from a remote object store.
@@ -270,20 +348,8 @@ impl IngestionClient {
         password: Option<String>,
         metrics: Arc<IngestionMetrics>,
     ) -> IngestionResult<Self> {
-        let byte_count_layer = CallbackLayer::new(ByteCountMakeCallbackHandler::new(
-            metrics.total_ingested_bytes.clone(),
-        ));
-        let client = Client::new(url.to_string())?
-            .with_max_decoding_message_size(MAX_GRPC_MESSAGE_SIZE_BYTES)
-            .request_layer(byte_count_layer);
-        let client = if let Some(username) = username {
-            let mut headers = HeadersInterceptor::new();
-            headers.basic_auth(username, password);
-            client.with_headers(headers)
-        } else {
-            client
-        };
-        Ok(Self::from_trait(Arc::new(client), metrics))
+        let client = Self::grpc_client(url, username, password, &metrics)?;
+        Ok(Self::from_trait(client, metrics))
     }
 
     /// The metrics handle this client reports against. Callers constructing peer services (e.g. an
@@ -838,6 +904,42 @@ pub(crate) mod tests {
         assert_eq!(client.metrics.total_ingested_transactions.get(), 0);
         assert_eq!(client.metrics.total_ingested_events.get(), 0);
         assert_eq!(client.metrics.total_ingested_objects.get(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_fallback_serves_missing_from_secondary() {
+        let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
+        let metrics = IngestionMetrics::new(None, &registry);
+
+        // Primary lacks checkpoint 0, secondary has it.
+        let primary = Arc::new(MockIngestionClient::default());
+        let secondary = Arc::new(MockIngestionClient::default());
+        secondary.insert_checkpoints([0]);
+
+        let fallback = FallbackIngestionClient { primary, secondary };
+        let client = IngestionClient::from_trait(Arc::new(fallback), metrics);
+
+        let result = client.checkpoint(0).await.unwrap();
+        assert_eq!(result.checkpoint.summary.sequence_number(), &0);
+        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_fallback_serves_present_from_primary() {
+        let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
+        let metrics = IngestionMetrics::new(None, &registry);
+
+        // Primary has checkpoint 5; secondary is empty.
+        let primary = Arc::new(MockIngestionClient::default());
+        primary.insert_checkpoints([5]);
+        let secondary = Arc::new(MockIngestionClient::default());
+
+        let fallback = FallbackIngestionClient { primary, secondary };
+        let client = IngestionClient::from_trait(Arc::new(fallback), metrics);
+
+        let result = client.checkpoint(5).await.unwrap();
+        assert_eq!(result.checkpoint.summary.sequence_number(), &5);
+        assert_eq!(client.metrics.total_ingested_checkpoints.get(), 1);
     }
 
     #[tokio::test]

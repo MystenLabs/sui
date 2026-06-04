@@ -33,7 +33,7 @@ use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::node::Genesis;
 use sui_config::p2p::SeedPeer;
 use sui_config::{
-    Config, FULL_NODE_DB_PATH, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
+    Config, FULL_NODE_DB_PATH, NodeConfig, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
     SUI_NETWORK_CONFIG, genesis_blob_exists, sui_config_dir,
 };
 use sui_config::{
@@ -1024,8 +1024,13 @@ async fn start(
     // the indexer and consistent store require the fullnode's data ingestion directory
     // note that this overrides the default configuration that is set when running the genesis
     // command, which sets data_ingestion_dir to None.
+    // a resumed fullnode only writes new checkpoints, so use a stable dir under config_dir: a
+    // per-run tempdir would drop checkpoints the persisted indexer/consistent-store have not yet
+    // consumed. under --force-regenesis config_dir is itself a tempdir, so this stays ephemeral.
     if (with_indexer.is_some() || with_consistent_store.is_some()) && data_ingestion_dir.is_none() {
-        data_ingestion_dir = Some(mysten_common::tempdir()?.keep())
+        let dir = config_dir.join("ingestion");
+        std::fs::create_dir_all(&dir)?;
+        data_ingestion_dir = Some(dir);
     }
 
     if let Some(ref dir) = data_ingestion_dir {
@@ -1046,7 +1051,40 @@ async fn start(
         swarm_builder = swarm_builder
             .with_fullnode_count(1)
             .with_fullnode_rpc_addr(fullnode_rpc_address)
-            .with_fullnode_rpc_config(rpc_config);
+            .with_fullnode_rpc_config(rpc_config.clone());
+
+        let fullnode_config_path = config_dir.join(SUI_FULLNODE_CONFIG);
+        if fullnode_config_path.exists() {
+            let mut fullnode_config: NodeConfig = PersistedConfig::read(&fullnode_config_path)
+                .map_err(|err| {
+                    err.context(format!(
+                        "Cannot open Sui fullnode config file at {:?}",
+                        fullnode_config_path
+                    ))
+                })?;
+            fullnode_config.json_rpc_address = fullnode_rpc_address;
+            fullnode_config.rpc = Some(rpc_config);
+            // reassign the non-RPC bind addresses to free ports; the genesis-time ports may now be
+            // occupied. mirrors how FullnodeConfigBuilder assigns them. json_rpc_address, db_path,
+            // key-pairs and genesis stay as persisted.
+            let localhost = sui_config::local_ip_utils::localhost_for_testing();
+            fullnode_config.metrics_address =
+                sui_config::local_ip_utils::new_local_tcp_socket_for_testing();
+            fullnode_config.admin_interface_port =
+                sui_config::local_ip_utils::get_available_port(&localhost);
+            fullnode_config.network_address =
+                sui_config::local_ip_utils::new_tcp_address_for_testing(&localhost);
+            fullnode_config.p2p_config.listen_address =
+                sui_config::local_ip_utils::new_udp_address_for_testing(&localhost)
+                    .udp_multiaddr_to_listen_address()
+                    .unwrap();
+            if let Some(ref dir) = data_ingestion_dir {
+                fullnode_config
+                    .checkpoint_executor_config
+                    .data_ingestion_dir = Some(dir.clone());
+            }
+            swarm_builder = swarm_builder.with_fullnode_config(fullnode_config);
+        }
     }
 
     let mut swarm = swarm_builder.build();
@@ -1097,6 +1135,9 @@ async fn start(
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {
                 local_ingestion_path: data_ingestion_dir.clone(),
+                // Back the local ingestion dir with the embedded fullnode's gRPC so checkpoints a
+                // resumed fullnode did not re-write to disk are still served.
+                rpc_api_url: Some(socket_addr_to_url(fullnode_rpc_address)?),
                 ..Default::default()
             },
             ..Default::default()
@@ -1130,6 +1171,9 @@ async fn start(
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {
                 local_ingestion_path: data_ingestion_dir.clone(),
+                // Back the local ingestion dir with the embedded fullnode's gRPC so checkpoints a
+                // resumed fullnode did not re-write to disk are still served.
+                rpc_api_url: Some(socket_addr_to_url(fullnode_rpc_address)?),
                 ..Default::default()
             },
             ..Default::default()
@@ -1469,7 +1513,7 @@ async fn genesis(
     info!("Client keystore is stored in {:?}.", keystore_path);
 
     let fullnode_config = FullnodeConfigBuilder::new()
-        .with_config_directory(FULL_NODE_DB_PATH.into())
+        .with_config_directory(sui_config_dir.to_path_buf())
         .with_rpc_addr(sui_config::node::default_json_rpc_address())
         .build(&mut OsRng, &network_config);
 
