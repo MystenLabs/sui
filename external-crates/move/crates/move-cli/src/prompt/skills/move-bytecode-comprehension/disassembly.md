@@ -18,9 +18,10 @@ section of `sui-and-move-tools/fetch-and-decompile.md`.
   named `MODULE_NAME`) is represented with a synthetic `dummy_field: bool` — expected, not
   a bug.
 - **Functions:** signature line shows `name(Arg0: T, Arg1: U): Ret`, with `public` / `entry`
-  prefixes when present (this `init` is the special initializer, shown without them). Parameters
-  are `Arg0, Arg1, ...`; declared locals are `loc0, loc1, ...` with `Ln:` slot labels — **these
-  names are invented**, not from source.
+  prefixes when present. The module initializer `init(..., &mut TxContext)` has no
+  visibility/`entry` prefix — it's the special initializer the framework calls once at
+  publish. Parameters are `Arg0, Arg1, ...`; declared locals are `loc0, loc1, ...` with
+  `Ln:` slot labels — **these names are invented**, not from source.
 - **Basic blocks:** `B0:`, `B1:` … each a straight-line run; control flow between them is via
   `Branch/BrTrue/BrFalse` to a block, ending with `Ret`/`Abort`.
 - **Instructions:** numbered, operate on the operand stack.
