@@ -1,12 +1,14 @@
 # Move bytecode disassembly
 
-Disassembly is 1:1 with the executed bytecode — no heuristic reconstruction. Use it
-whenever you need to reason about what a `.mv` module actually does at the bytecode
-level. Decompiled `.move` is a separate human-explanation layer (see `decompilation.md`).
+Disassembly is 1:1 with the executed bytecode — no heuristic reconstruction. In this
+skill's workflow it's the **verification view**: open it on demand for a specific question
+that the decompiled view (the working substrate; see `decompilation.md`) can't answer —
+looking up an abort code's numeric value, confirming an ambiguous instruction sequence,
+or when decompilation broke for a particular module.
 
 Disassembly is faithful but low-level: a stack machine with numbered locals and basic
-blocks. `.asm` files come from the workflow in
-`sui-and-move-tools/fetch-and-decompile.md`.
+blocks. `.asm` files are fetched per-module via the "Fetching disassembly on demand"
+section of `sui-and-move-tools/fetch-and-decompile.md`.
 
 ## How to read it
 

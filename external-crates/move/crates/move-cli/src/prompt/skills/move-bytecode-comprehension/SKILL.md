@@ -60,14 +60,28 @@ accordingly.
 
 ## Practical stance
 
-- **Analyze on disassembly** — it is faithful to the executed bytecode (1:1 with what the validator
-  runs). Every `SM-*` finding's evidence must be an assembly excerpt; cite as
-  `<module>.asm:B<block>@i<index>`.
-- **Use decompiled source only to *explain* confirmed findings to humans**, never to derive them.
-  The decompiler is a heuristic reconstructor: structurally faithful in the common case but with
-  mis-renderings on edge cases. A pattern that appears in the decompiled `.move` but is absent or
-  different in the assembly is NOT a finding.
-- If decompiled view and assembly disagree at a confirmed site, the **assembly wins** — record the
-  discrepancy as decompiler imprecision, not as a re-opening of the finding.
-- Bytecode version is shown as `// Move bytecode vN`; note it — opcode availability varies by
-  version.
+- **Decompilation is the working view.** Apply analyses (including SM-* audit rules) to
+  the decompiled `.move` files produced by `sui-and-move-tools/fetch-and-decompile.md`.
+  Abilities, visibility, the `entry` flag, function signatures, control flow, struct /
+  field shapes, and call patterns are byte-for-byte faithful — see `decompilation.md`'s
+  "What is faithful" list. Decompiler artifacts (renamed constants `C0/C1...`, invented
+  locals, expanded macros, synthetic `dummy_field` on empty structs) are recognized and
+  reasoned through, not treated as reasons to drop to disassembly.
+- **Drop to disassembly only when:**
+  - A determination needs the **numeric value** of an abort code (decompiled shows `C7`,
+    not the integer).
+  - Decompilation **visibly failed** for a specific module (broken output, parse errors).
+  - A specific question is **ambiguous** in decompiled and verification is required.
+- **Critical: never load both views for the same module simultaneously.** The default
+  workflow produces only `.move` files. When you need disassembly for a single module,
+  fetch it on demand per `sui-and-move-tools/fetch-and-decompile.md` ("Fetching
+  disassembly on demand") and read it surgically (`grep` / `sed` for the specific
+  function or basic block) rather than dumping the full `.asm` into context.
+- **Citation.** Decompiled-derived findings cite `<module>.move:<line>`. Disassembly-
+  derived findings (the rare verification cases) cite `<module>.asm:B<block>@i<index>`.
+  Pick whichever view supports the determination.
+- **Disagreement.** When both views are inspected for the same site and disagree, the
+  disassembly wins — it reflects the executed bytecode. Record the discrepancy as
+  decompiler imprecision, not as a re-opening of the finding.
+- Bytecode version is shown as `// Move bytecode vN`; note it — opcode availability
+  varies by version.
