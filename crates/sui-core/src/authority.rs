@@ -1470,6 +1470,34 @@ impl AuthorityState {
         // across threads in an async context.
         let _crash_guard = crate::crash_recovery::register_executing_transaction(*tx_digest);
 
+        // Simtest-only: simulate a deterministic transaction-induced crash.
+        //
+        // `deterministic_probability` returns the same answer for a given (seed, digest) pair on
+        // every call, so each validator that would crash for a given digest will always crash for
+        // it. This mirrors a real bug: without crash-recovery, the node would crash again on every
+        // restart when it re-encounters the same transaction.
+        //
+        // We write to the crash log here rather than relying on the panic hook because the msim
+        // runtime intercepts `PanicWrapper` panics (the mechanism used by `kill_current_node`)
+        // before they reach user-installed panic hooks. In production the hook fires normally.
+        // Only poison user (programmable) transactions. System transactions (epoch change,
+        // randomness, consensus prologue, etc.) must always succeed or the cluster stalls.
+        #[cfg(msim)]
+        if !certificate.data().transaction_data().kind().is_system_tx() {
+            sui_macros::fail_point_if!("crash-with-tx-logging", || {
+                if sui_simulator::random::deterministic_probability(tx_digest, 0.002) {
+                    let log_path = self
+                        .config
+                        .db_path
+                        .join(crate::crash_recovery::PANIC_TX_LOG_FILE);
+                    let _ = crate::crash_recovery::append_digest_to_log(&log_path, *tx_digest);
+                    sui_simulator::task::kill_current_node(Some(std::time::Duration::from_secs(
+                        20,
+                    )));
+                }
+            });
+        }
+
         if let Some(fork_recovery) = &self.fork_recovery_state
             && let Some(override_digest) = fork_recovery.get_transaction_override(tx_digest)
         {
