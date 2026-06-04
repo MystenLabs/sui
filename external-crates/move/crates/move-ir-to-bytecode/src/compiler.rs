@@ -152,7 +152,7 @@ struct FunctionFrame {
     local_types: Signature,
     // i64 to allow the bytecode verifier to catch errors of
     // - negative stack sizes
-    // - excessivley large stack sizes
+    // - excessively large stack sizes
     // The max stack depth of the file_format is set as u16.
     // Theoretically, we could use a BigInt here, but that is probably overkill for any testing
     max_stack_depth: i64,
@@ -1169,6 +1169,22 @@ fn compile_statement(
                 push_instr!(field_.loc, st_loc);
             }
         }
+        Statement_::VecUnpack(ty, num, lvalues, e) => {
+            // Evaluate the vector expression first (pushes the vector).
+            compile_expression(context, function_frame, code, *e)?;
+
+            let tokens = compile_types(context, function_frame.type_parameters(), &[ty])?;
+            let type_actuals_id = context.signature_index(Signature(tokens))?;
+            push_instr!(statement.loc, Bytecode::VecUnpack(type_actuals_id, num));
+
+            function_frame.pop()?; // pop the vector
+            for _ in 0..num {
+                function_frame.push()?; // each unpacked element
+            }
+
+            // Bind each unpacked value to its LValue (LIFO via compile_lvalues).
+            compile_lvalues(context, function_frame, code, lvalues)?;
+        }
         Statement_::UnpackVariant(name, variant_name, tys, bindings, e, unpack_type) => {
             let tokens = Signature(compile_types(
                 context,
@@ -1394,6 +1410,21 @@ fn compile_expression(
             }
             function_frame.push()?;
         }
+        Exp_::VecPack(ty, num, args) => {
+            // Evaluate the args expression first; the args are expected to
+            // push exactly `num` values onto the stack (typically an
+            // ExprList of `num` expressions).
+            compile_expression(context, function_frame, code, *args)?;
+
+            let tokens = compile_types(context, function_frame.type_parameters(), &[ty])?;
+            let type_actuals_id = context.signature_index(Signature(tokens))?;
+            push_instr!(exp.loc, Bytecode::VecPack(type_actuals_id, num));
+
+            for _ in 0..num {
+                function_frame.pop()?;
+            }
+            function_frame.push()?; // push the resulting vector
+        }
         Exp_::UnaryExp(op, e) => {
             compile_expression(context, function_frame, code, *e)?;
             match op {
@@ -1579,16 +1610,6 @@ fn compile_call(
     match call.value {
         FunctionCall_::Builtin(function) => {
             match function {
-                Builtin::VecPack(tys, num) => {
-                    let tokens = compile_types(context, function_frame.type_parameters(), &tys)?;
-                    let type_actuals_id = context.signature_index(Signature(tokens))?;
-                    push_instr!(call.loc, Bytecode::VecPack(type_actuals_id, num));
-
-                    for _ in 0..num {
-                        function_frame.pop()?;
-                    }
-                    function_frame.push()?; // push the return value
-                }
                 Builtin::VecLen(tys) => {
                     let tokens = compile_types(context, function_frame.type_parameters(), &tys)?;
                     let type_actuals_id = context.signature_index(Signature(tokens))?;
@@ -1630,16 +1651,6 @@ fn compile_call(
 
                     function_frame.pop()?; // pop the vector ref
                     function_frame.push()?; // push the value
-                }
-                Builtin::VecUnpack(tys, num) => {
-                    let tokens = compile_types(context, function_frame.type_parameters(), &tys)?;
-                    let type_actuals_id = context.signature_index(Signature(tokens))?;
-                    push_instr!(call.loc, Bytecode::VecUnpack(type_actuals_id, num));
-
-                    function_frame.pop()?; // pop the vector ref
-                    for _ in 0..num {
-                        function_frame.push()?;
-                    }
                 }
                 Builtin::VecSwap(tys) => {
                     let tokens = compile_types(context, function_frame.type_parameters(), &tys)?;

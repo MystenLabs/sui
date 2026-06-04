@@ -626,6 +626,7 @@ pub struct AuthorityEpochTables {
         DBMap<DeferralKey, Vec<DeprecatedWithAliases<TrustedExecutableTransaction>>>,
     deferred_transactions_with_aliases_v3:
         DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
+    pub(crate) dkg_output_v2: DBMap<u64, Option<dkg_v1::Output<PkG, EncG>>>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -891,6 +892,10 @@ impl AuthorityEpochTables {
             (
                 "execution_time_observations".to_string(),
                 ThConfig::new(8 + 4, mutexes, uniform_key),
+            ),
+            (
+                "dkg_output_v2".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
         ];
         Self::open_tables_read_write(

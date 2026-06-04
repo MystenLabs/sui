@@ -354,6 +354,7 @@ const MAINNET_USDB: &str =
 //              Enable timestamp_based_epoch_close on testnet.
 // Version 126: Enable early_exit_on_iffw (gates the gas-underflow fix
 //              shipped to mainnet out-of-band in #26816).
+//              Enable always_advance_dkg_to_resolution.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -951,6 +952,10 @@ struct FeatureFlags {
     // If true, cancel randomness-using txns when DKG has failed *before* doing other congestion checks.
     #[serde(skip_serializing_if = "is_false")]
     cancel_for_failed_dkg_early: bool,
+
+    // If true, keep advancing the DKG state machine while DKG is pending.
+    #[serde(skip_serializing_if = "is_false")]
+    always_advance_dkg_to_resolution: bool,
 
     // Enable coin registry protocol
     #[serde(skip_serializing_if = "is_false")]
@@ -2665,6 +2670,10 @@ impl ProtocolConfig {
 
     pub fn cancel_for_failed_dkg_early(&self) -> bool {
         self.feature_flags.cancel_for_failed_dkg_early
+    }
+
+    pub fn always_advance_dkg_to_resolution(&self) -> bool {
+        self.feature_flags.always_advance_dkg_to_resolution
     }
 
     pub fn abstract_size_in_object_runtime(&self) -> bool {
@@ -4992,6 +5001,7 @@ impl ProtocolConfig {
                 }
                 126 => {
                     cfg.feature_flags.early_exit_on_iffw = true;
+                    cfg.feature_flags.always_advance_dkg_to_resolution = true;
                 }
                 // Use this template when making changes:
                 //
@@ -5446,6 +5456,10 @@ impl ProtocolConfig {
 
     pub fn set_cancel_for_failed_dkg_early_for_testing(&mut self, val: bool) {
         self.feature_flags.cancel_for_failed_dkg_early = val;
+    }
+
+    pub fn set_always_advance_dkg_to_resolution_for_testing(&mut self, val: bool) {
+        self.feature_flags.always_advance_dkg_to_resolution = val;
     }
 
     pub fn set_use_mfp_txns_in_load_initial_object_debts_for_testing(&mut self, val: bool) {
