@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use consensus_config::{NetworkPublicKey, ObserverParameters, PeerRecord};
 use sui_macros::sim_test;
@@ -107,43 +107,62 @@ async fn test_observer_uses_verify_checkpoint_path() {
         tx_digests.push(digest);
     }
 
-    // Wait for the observer to execute some checkpoints.
-    tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
-
     let checkpoint_store = observer_state.get_checkpoint_store();
-    let highest_executed = checkpoint_store
-        .get_highest_executed_checkpoint_seq_number()
-        .expect("db error")
-        .expect("observer should have executed at least one checkpoint");
 
-    info!("Observer highest executed checkpoint: {}", highest_executed);
+    let checkpoint_seqs = tokio::time::timeout(Duration::from_secs(30), async {
+        let checkpoint_seqs = observer_state
+            .epoch_store_for_testing()
+            .transactions_executed_in_checkpoint_notify(tx_digests.clone())
+            .await
+            .expect("observer should finalize submitted transactions");
+        let max_checkpoint_seq = checkpoint_seqs
+            .iter()
+            .copied()
+            .max()
+            .expect("submitted transactions should have checkpoints");
+        checkpoint_store
+            .notify_read_executed_checkpoint(max_checkpoint_seq)
+            .await;
+        checkpoint_seqs
+    })
+    .await
+    .expect("timed out waiting for observer to execute submitted transactions in checkpoints");
+
+    let checkpoint_seq_set = checkpoint_seqs.iter().copied().collect::<BTreeSet<_>>();
+    let max_checkpoint_seq = *checkpoint_seq_set
+        .iter()
+        .next_back()
+        .expect("submitted transactions should have checkpoints");
+
+    info!(
+        "Observer executed submitted transactions in checkpoints {:?}",
+        checkpoint_seq_set
+    );
     assert!(
-        highest_executed > 0,
-        "Observer should have executed checkpoints"
+        max_checkpoint_seq > 0,
+        "Observer should execute submitted transactions after the genesis checkpoint"
     );
 
-    // Verify that the observer built at least some checkpoints locally.
+    // Verify that the observer built the transaction checkpoints locally.
     // Locally computed checkpoints are produced by the checkpoint builder when the
     // node processes consensus commits. Their presence proves the observer entered
     // verify_locally_built_checkpoint (which looks them up) rather than always
     // falling back to the synced execution path.
-    let locally_built_count = (1..=highest_executed)
+    let missing_local_checkpoints = checkpoint_seq_set
+        .iter()
+        .copied()
         .filter(|seq| {
             checkpoint_store
                 .get_locally_computed_checkpoint(*seq)
                 .expect("db error")
-                .is_some()
+                .is_none()
         })
-        .count();
+        .collect::<Vec<_>>();
 
-    info!(
-        "Observer locally built {} out of {} executed checkpoints",
-        locally_built_count, highest_executed
-    );
     assert!(
-        locally_built_count > 0,
-        "Observer should have built at least some checkpoints locally, \
-         proving it uses the verify path"
+        missing_local_checkpoints.is_empty(),
+        "Observer should have locally built every checkpoint containing submitted transactions, missing {:?}",
+        missing_local_checkpoints,
     );
 
     // Verify that the RPC index is being populated on the observer.
@@ -161,8 +180,9 @@ async fn test_observer_uses_verify_checkpoint_path() {
 
     info!("Observer highest indexed checkpoint: {}", highest_indexed);
     assert!(
-        highest_indexed > 0,
-        "Observer RPC index should have indexed at least one checkpoint"
+        highest_indexed >= max_checkpoint_seq,
+        "Observer RPC index should have indexed through checkpoint {}",
+        max_checkpoint_seq
     );
 
     // Verify the legacy IndexStore post-processing pipeline works.
@@ -173,24 +193,24 @@ async fn test_observer_uses_verify_checkpoint_path() {
         .indexes
         .as_ref()
         .expect("observer should have an IndexStore");
-    let indexed_count = tx_digests
+    let missing_indexed_txs = tx_digests
         .iter()
+        .copied()
         .filter(|digest| {
             index_store
                 .get_transaction_seq(digest)
                 .expect("db error")
-                .is_some()
+                .is_none()
         })
-        .count();
+        .collect::<Vec<_>>();
 
     info!(
-        "Observer IndexStore indexed {} out of {} submitted transactions",
-        indexed_count,
-        tx_digests.len()
+        "Observer IndexStore indexed {} submitted transactions",
+        tx_digests.len() - missing_indexed_txs.len(),
     );
     assert!(
-        indexed_count > 0,
-        "Observer IndexStore should have indexed at least some transactions, \
-         proving commit_post_processing_index_batches works"
+        missing_indexed_txs.is_empty(),
+        "Observer IndexStore should have indexed every submitted transaction, missing {:?}",
+        missing_indexed_txs,
     );
 }
