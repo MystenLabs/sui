@@ -48,6 +48,7 @@ use sui_consistent_store::Db;
 use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::PipelineTaskKey;
 use sui_consistent_store::Store;
+use sui_consistent_store::metrics::ColumnFamilyStatsCollector;
 use sui_futures::service::Service;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ingestion_client::CheckpointError;
@@ -158,6 +159,11 @@ pub struct LocalCluster {
 
     grpc_listen_address: SocketAddr,
 
+    /// Prometheus registry the indexer, RPC server, and RocksDB
+    /// column-family stats collector all register into. Exposed so
+    /// tests can scrape it.
+    registry: Registry,
+
     /// Composite [`Service`] for the indexer + RPC server. Held
     /// to keep the spawned tasks alive; dropped on cluster
     /// teardown which signals graceful shutdown.
@@ -208,6 +214,15 @@ impl LocalCluster {
             .context("Failed to open rpc-store database")?;
         let schema = Arc::new(schema);
         let store = Store::new(db.clone(), schema.clone());
+
+        // Mirror the production paths (`start_service` / `start_restorer`)
+        // and expose per-CF RocksDB stats on the shared registry.
+        registry
+            .register(Box::new(ColumnFamilyStatsCollector::new(
+                Some(METRICS_PREFIX),
+                &db,
+            )))
+            .context("Failed to register RocksDB column-family stats collector")?;
 
         let consistency_for_rpc = consistency.clone();
 
@@ -281,9 +296,16 @@ impl LocalCluster {
             db,
             pipelines,
             grpc_listen_address,
+            registry,
             services,
             db_dir,
         })
+    }
+
+    /// Gather the current Prometheus metric families from the
+    /// cluster's registry.
+    pub fn gather_metrics(&self) -> Vec<prometheus::proto::MetricFamily> {
+        self.registry.gather()
     }
 
     /// The gRPC URL clients should connect to.

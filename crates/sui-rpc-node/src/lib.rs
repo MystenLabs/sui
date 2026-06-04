@@ -50,6 +50,7 @@ use sui_consistent_store::Db;
 use sui_consistent_store::DbOptions;
 use sui_consistent_store::Schema as _;
 use sui_consistent_store::Watermark;
+use sui_consistent_store::metrics::ColumnFamilyStatsCollector;
 use sui_consistent_store::restore::RestoreDriverConfig;
 use sui_consistent_store::restore::RestoreSource;
 use sui_consistent_store::restore::StorageConnectionArgs;
@@ -147,6 +148,16 @@ pub async fn start_service(
     // CF) and is owned by the reader rather than the indexer's
     // store.
     let db = indexer.store().db().clone();
+
+    // Expose per-CF RocksDB stats (sizes, compaction backlog, write-stall
+    // state). The collector holds only a weak handle to the database.
+    registry
+        .register(Box::new(ColumnFamilyStatsCollector::new(
+            Some(METRICS_PREFIX),
+            &db,
+        )))
+        .context("Failed to register RocksDB column-family stats collector")?;
+
     let rpc_service = build_rpc_service(
         db.clone(),
         Arc::new(RpcStoreSchema::open(&db).context("Failed to bind RpcStoreSchema for reads")?),
@@ -184,6 +195,16 @@ pub async fn start_restorer(
     let (db, schema) = Db::open::<RpcStoreSchema>(database_path, db_options)
         .context("Failed to open rpc-store database")?;
     let schema = Arc::new(schema);
+
+    // Expose per-CF RocksDB stats (sizes, compaction backlog, write-stall
+    // state) for the duration of the restore. The collector holds only a
+    // weak handle, so it does not keep the database open.
+    registry
+        .register(Box::new(ColumnFamilyStatsCollector::new(
+            Some(METRICS_PREFIX),
+            &db,
+        )))
+        .context("Failed to register RocksDB column-family stats collector")?;
 
     let formal_snapshot_metrics = FormalSnapshotMetrics::new(Some(METRICS_PREFIX), registry);
     let source = FormalSnapshot::new(
