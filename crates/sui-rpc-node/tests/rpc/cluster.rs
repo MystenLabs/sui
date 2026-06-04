@@ -45,7 +45,6 @@ use async_trait::async_trait;
 use prometheus::Registry;
 use simulacrum::Simulacrum;
 use sui_consistent_store::Db;
-use sui_consistent_store::DbOptions;
 use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::PipelineTaskKey;
 use sui_consistent_store::Store;
@@ -189,15 +188,6 @@ impl LocalCluster {
         let db_dir = tempfile::tempdir().context("Failed to create temp database directory")?;
         let db_path: PathBuf = db_dir.path().join("rpc-store");
 
-        // Open the database explicitly so the cluster can hold a
-        // Db handle for watermark reads. `Db` is Arc-backed, so
-        // this clone is cheap; the indexer's `Store` shares the
-        // same underlying database.
-        let (db, schema) = Db::open::<RpcStoreSchema>(&db_path, DbOptions::default())
-            .context("Failed to open rpc-store database")?;
-        let schema = Arc::new(schema);
-        let store = Store::new(db.clone(), schema.clone());
-
         let grpc_port = pick_available_port()?;
         let grpc_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), grpc_port);
         let config = ServiceConfig::for_test(grpc_listen_address);
@@ -206,7 +196,19 @@ impl LocalCluster {
             consistency,
             committer,
             rpc,
+            db: db_config,
         } = config;
+
+        // Open the database explicitly so the cluster can hold a
+        // Db handle for watermark reads, using the same resolved
+        // RocksDB options the production path would. `Db` is
+        // Arc-backed, so this clone is cheap; the indexer's `Store`
+        // shares the same underlying database.
+        let (db, schema) = Db::open::<RpcStoreSchema>(&db_path, db_config.to_db_options())
+            .context("Failed to open rpc-store database")?;
+        let schema = Arc::new(schema);
+        let store = Store::new(db.clone(), schema.clone());
+
         let consistency_for_rpc = consistency.clone();
 
         // Stand up the ingestion client over Simulacrum. The

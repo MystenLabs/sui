@@ -12,12 +12,15 @@
 
 use std::net::SocketAddr;
 
+use sui_consistent_store::DbOptions;
+use sui_consistent_store::RocksDbConfig;
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_rpc_store::CommitterLayer;
 use sui_rpc_store::ConsistencyConfig;
+use sui_rpc_store::default_rocksdb_config;
 
 /// Top-level configuration for the `sui-rpc-node` service.
 ///
@@ -44,6 +47,52 @@ pub struct ServiceConfig {
     /// `sui-rpc-api` policy knobs (TLS, JSON budgets, ledger-history
     /// tunables, …).
     pub rpc: RpcConfig,
+
+    /// Backing RocksDB tuning. Anything left unset falls back to
+    /// [`sui_rpc_store::default_rocksdb_config`]. This is the only
+    /// section consulted by the `restore` subcommand.
+    pub db: DbConfig,
+}
+
+/// RocksDB-related configuration for the backing database.
+///
+/// `snapshot_capacity` is declared before `rocksdb` because TOML
+/// requires a struct's scalar fields to be serialized ahead of its
+/// tables.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
+pub struct DbConfig {
+    /// Number of in-memory snapshots retained for consistent reads.
+    /// Defaults to [`DEFAULT_SNAPSHOT_CAPACITY`] when unset.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot_capacity: Option<usize>,
+
+    /// Tunable RocksDB options, layered over the crate defaults.
+    pub rocksdb: RocksDbConfig,
+}
+
+/// Default number of retained in-memory snapshots, matching
+/// [`sui_consistent_store::DbOptions::default`].
+const DEFAULT_SNAPSHOT_CAPACITY: usize = 32;
+
+impl DbConfig {
+    /// A fully populated example mirroring the shipped defaults, so
+    /// `generate-config` surfaces the real values an operator can edit.
+    pub fn example() -> Self {
+        Self {
+            snapshot_capacity: Some(DEFAULT_SNAPSHOT_CAPACITY),
+            rocksdb: default_rocksdb_config(),
+        }
+    }
+
+    /// Resolve the effective [`DbOptions`] by layering this config
+    /// over the crate's tuned defaults.
+    pub fn to_db_options(&self) -> DbOptions {
+        DbOptions {
+            rocksdb: self.rocksdb.merge_over(&default_rocksdb_config()),
+            snapshot_capacity: self.snapshot_capacity.unwrap_or(DEFAULT_SNAPSHOT_CAPACITY),
+        }
+    }
 }
 
 /// HTTP / HTTPS RPC server configuration.
@@ -129,6 +178,7 @@ impl ServiceConfig {
             consistency: ConsistencyConfig::default(),
             committer: CommitterConfig::default().into(),
             rpc: RpcConfig::default(),
+            db: DbConfig::example(),
         }
     }
 
@@ -157,5 +207,67 @@ impl ServiceConfig {
         cfg.rpc.config.enable_indexing = Some(true);
         cfg.rpc.config.ledger_history_indexing = Some(true);
         cfg
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn example_config_serializes_with_db_section() {
+        // Also guards the TOML scalar-before-table ordering: the
+        // `toml` serializer errors if a table is emitted before a
+        // scalar at the same nesting level.
+        let rendered = toml::to_string_pretty(&ServiceConfig::example())
+            .expect("example config must serialize to TOML");
+        assert!(rendered.contains("[db."), "missing db section:\n{rendered}");
+        assert!(
+            rendered.contains("parallelism"),
+            "missing db-wide knobs:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn empty_db_config_resolves_to_tuned_defaults() {
+        let opts = DbConfig::default().to_db_options();
+        // Falls back to the crate defaults, not the RocksDB natives.
+        assert_eq!(opts.rocksdb.db.parallelism, Some(8));
+        assert_eq!(opts.snapshot_capacity, DEFAULT_SNAPSHOT_CAPACITY);
+        opts.rocksdb.validate().expect("defaults validate");
+    }
+
+    #[test]
+    fn partial_db_toml_overrides_defaults() {
+        let cfg: ServiceConfig = toml::from_str(
+            r#"
+            [db]
+            snapshot-capacity = 8
+
+            [db.rocksdb.db]
+            parallelism = 2
+            "#,
+        )
+        .expect("partial config parses");
+        let opts = cfg.db.to_db_options();
+        // Overridden values win...
+        assert_eq!(opts.rocksdb.db.parallelism, Some(2));
+        assert_eq!(opts.snapshot_capacity, 8);
+        // ...while unspecified ones fall back to the crate defaults.
+        assert_eq!(opts.rocksdb.db.block_cache_size_mb, Some(1024));
+    }
+
+    #[test]
+    fn bad_write_stall_ordering_is_rejected_after_merge() {
+        // The default profile sets slowdown = 512; overriding only the
+        // stop trigger to 100 yields the inconsistent (512, 100) pair.
+        let cfg: ServiceConfig = toml::from_str(
+            r#"
+            [db.rocksdb.default-cf.write-stall]
+            level0-stop-writes-trigger = 100
+            "#,
+        )
+        .expect("config parses");
+        assert!(cfg.db.to_db_options().rocksdb.validate().is_err());
     }
 }

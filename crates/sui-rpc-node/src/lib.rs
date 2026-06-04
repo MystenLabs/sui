@@ -101,6 +101,7 @@ pub async fn start_service(
         consistency,
         committer,
         rpc,
+        db,
     } = config;
 
     // Build the ingestion + (optional) streaming clients first so
@@ -126,7 +127,7 @@ pub async fn start_service(
         streaming_client,
         consistency.clone(),
         ingestion,
-        DbOptions::default(),
+        db.to_db_options(),
         registry,
     )
     .await
@@ -176,9 +177,10 @@ pub async fn start_restorer(
     formal_snapshot_args: FormalSnapshotArgs,
     storage_connection_args: StorageConnectionArgs,
     restore_args: RestoreArgs,
+    db_options: DbOptions,
     registry: &Registry,
 ) -> anyhow::Result<(Service, RestoreFinalizer)> {
-    let (db, schema) = Db::open::<RpcStoreSchema>(database_path, DbOptions::default())
+    let (db, schema) = Db::open::<RpcStoreSchema>(database_path, db_options)
         .context("Failed to open rpc-store database")?;
     let schema = Arc::new(schema);
 

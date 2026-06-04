@@ -80,8 +80,11 @@ async fn main() -> anyhow::Result<()> {
             storage_connection_args,
             restore_args,
             metrics_args,
-            config: _,
+            config,
         } => {
+            // Only the `db` section is consulted during a restore;
+            // the rest of the service config is irrelevant to it.
+            let config = read_config(config).await?;
             let registry = build_registry()?;
             let metrics = MetricsService::new(metrics_args, registry);
             metrics
@@ -94,6 +97,7 @@ async fn main() -> anyhow::Result<()> {
                 formal_snapshot_args,
                 storage_connection_args,
                 restore_args,
+                config.db.to_db_options(),
                 metrics.registry(),
             )
             .await?;
