@@ -44,14 +44,13 @@ fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
         .enable_verify_bulletproofs_ristretto255())
 }
 
-pub fn verify_bulletproofs_ristretto255(
+pub fn verify_bulletproofs_with_dst_ristretto255(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
-
+    debug_assert!(args.len() == 4);
     if !is_supported(context)? {
         return Ok(NativeResult::err(context.gas_used(), NOT_SUPPORTED));
     }
@@ -71,6 +70,9 @@ pub fn verify_bulletproofs_ristretto255(
                 "verify_bulletproofs_ristretto255_base_cost not available",
             ))?
     );
+
+    // The domain separation tag is the last argument, so it is popped first.
+    let dst = pop_arg!(args, VectorRef).as_bytes_ref()?.to_vec();
 
     let commitments = pop_arg!(args, VectorRef);
     let range_bits = pop_arg!(args, u8);
@@ -128,7 +130,7 @@ pub fn verify_bulletproofs_ristretto255(
         })
         .collect::<PartialVMResult<Vec<PedersenCommitment>>>()?;
 
-    let result = proof.verify_batch(&commitments, &range, &mut thread_rng());
+    let result = proof.verify_batch(&commitments, &range, &dst, &mut thread_rng());
 
     Ok(NativeResult::ok(
         context.gas_used(),

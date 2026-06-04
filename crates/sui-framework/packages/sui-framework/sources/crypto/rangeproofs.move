@@ -28,25 +28,43 @@ const EUnsupportedVersion: u64 = 4;
 /// The number of commitments must be a power of two, but if needed, the input to the prover can be padded with trivial commitments to zero.
 /// The number of commitments times `bits` can be at most 512.
 ///
+/// The `dst` is a domain separation tag that is bound into the proof transcript. Provers and
+/// verifiers must agree on the same `dst` for verification to succeed.
+///
 /// Enabled only on devnet.
+public fun verify_bulletproofs_with_dst_ristretto255(
+    proof: &vector<u8>,
+    bits: u8,
+    commitments: &vector<Element<ristretto255::G>>,
+    dst: &vector<u8>,
+    version: u8,
+): bool {
+    match (version) {
+        0 => verify_bulletproofs_with_dst_ristretto255_internal(
+            proof,
+            bits,
+            &commitments.map_ref!(|c| *c.bytes()),
+            dst,
+        ),
+        _ => abort EUnsupportedVersion,
+    }
+}
+
+#[deprecated(note = b"Use `verify_bulletproofs_with_dst_ristretto255` instead.")]
+/// Verify a range proof with a trivial (empty) domain separation tag. Retained for backwards
+/// compatibility; new callers should use `verify_bulletproofs_with_dst_ristretto255`.
 public fun verify_bulletproofs_ristretto255(
     proof: &vector<u8>,
     bits: u8,
     commitments: &vector<Element<ristretto255::G>>,
     version: u8,
 ): bool {
-    match (version) {
-        0 => verify_bulletproofs_ristretto255_internal(
-            proof,
-            bits,
-            &commitments.map_ref!(|c| *c.bytes()),
-        ),
-        _ => abort EUnsupportedVersion,
-    }
+    verify_bulletproofs_with_dst_ristretto255(proof, bits, commitments, &vector[], version)
 }
 
-native fun verify_bulletproofs_ristretto255_internal(
+native fun verify_bulletproofs_with_dst_ristretto255_internal(
     proof: &vector<u8>,
     bits: u8,
     commitments: &vector<vector<u8>>,
+    dst: &vector<u8>,
 ): bool;
