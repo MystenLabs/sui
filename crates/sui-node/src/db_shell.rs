@@ -22,6 +22,7 @@ use consensus_core::{
     BlockAPI as _, CommitAPI as _, CommitRange, CommitRef,
     storage::{Store as ConsensusStore, rocksdb_store::RocksDBStore},
 };
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value as JsonValue;
 use std::sync::Arc;
@@ -585,7 +586,7 @@ fn render_consensus_commit_summary(
 
     let mut tx_keys: Vec<String> = Vec::new();
     let mut missing_blocks: Vec<String> = Vec::new();
-    for (block_ref, block_opt) in block_refs.iter().zip(blocks) {
+    for (block_ref, block_opt) in block_refs.iter().zip_eq(blocks) {
         let block = match block_opt {
             Some(b) => b,
             // Missing block indicates storage corruption or a bug; note the ref explicitly.
