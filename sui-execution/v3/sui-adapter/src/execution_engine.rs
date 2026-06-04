@@ -771,6 +771,11 @@ mod checked {
                             assert!(protocol_config.address_aliases());
                             builder = setup_address_alias_state_create(builder);
                         }
+                        EndOfEpochTransactionKind::ForwardingAddressRegistryCreate => {
+                            panic!(
+                                "EndOfEpochTransactionKind::ForwardingAddressRegistryCreate should not exist in v3"
+                            );
+                        }
                     }
                 }
                 unreachable!(

@@ -56,6 +56,7 @@ pub mod executable_transaction;
 pub mod execution;
 pub mod execution_params;
 pub mod execution_status;
+pub mod forwarding_address_registry;
 pub mod full_checkpoint_content;
 pub mod funds_accumulator;
 pub mod gas;
@@ -143,6 +144,7 @@ built_in_ids! {
     SUI_DENY_LIST_ADDRESS / SUI_DENY_LIST_OBJECT_ID = 0x403;
     SUI_ACCUMULATOR_ROOT_ADDRESS / SUI_ACCUMULATOR_ROOT_OBJECT_ID = 0xacc;
     SUI_ADDRESS_ALIAS_STATE_ADDRESS / SUI_ADDRESS_ALIAS_STATE_OBJECT_ID = 0xa;
+    SUI_FORWARDING_ADDRESS_REGISTRY_ADDRESS / SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID = 0xfa;
 }
 
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;

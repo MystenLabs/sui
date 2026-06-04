@@ -1095,6 +1095,10 @@ mod checked {
                             assert!(protocol_config.address_aliases());
                             builder = setup_address_alias_state_create(builder);
                         }
+                        EndOfEpochTransactionKind::ForwardingAddressRegistryCreate => {
+                            assert!(protocol_config.create_forwarding_address_registry());
+                            builder = setup_forwarding_address_registry_create(builder);
+                        }
                     }
                 }
                 unreachable!(
@@ -1816,6 +1820,21 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate address_alias_state_create transaction!");
+        builder
+    }
+
+    fn setup_forwarding_address_registry_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("forwarding_address").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate forwarding_address_registry_create transaction!");
         builder
     }
 
