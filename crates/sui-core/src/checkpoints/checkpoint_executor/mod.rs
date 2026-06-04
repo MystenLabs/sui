@@ -622,8 +622,7 @@ impl CheckpointExecutor {
         checkpoint: VerifiedCheckpoint,
         pipeline_handle: &mut PipelineHandle,
     ) -> CheckpointExecutionState {
-        let sequence_number = checkpoint.sequence_number;
-        let (mut ckpt_state, tx_data, unexecuted_tx_digests) = {
+        let (ckpt_state, tx_data, unexecuted_tx_digests) = {
             let _scope =
                 mysten_metrics::monitored_scope("CheckpointExecutor::execute_transactions");
             let (ckpt_state, tx_data) = self.load_checkpoint_transactions(checkpoint, None);
@@ -648,6 +647,18 @@ impl CheckpointExecutor {
             self.execute_change_epoch_tx(&tx_data).await;
         }
 
+        self.finalize_executed_checkpoint_transactions(ckpt_state, &tx_data, pipeline_handle)
+            .await
+    }
+
+    async fn finalize_executed_checkpoint_transactions(
+        &self,
+        mut ckpt_state: CheckpointExecutionState,
+        tx_data: &CheckpointTransactionData,
+        pipeline_handle: &mut PipelineHandle,
+    ) -> CheckpointExecutionState {
+        let sequence_number = ckpt_state.data.checkpoint.sequence_number;
+
         self.commit_post_processing_index_batches(&ckpt_state.data.tx_digests)
             .await;
 
@@ -666,15 +677,17 @@ impl CheckpointExecutor {
         // The early versions of the hasher (prior to effectsv2) rely on db
         // state, so we must wait until all transactions have been executed
         // before accumulating the checkpoint.
-        ckpt_state.state_hasher = Some(
-            self.global_state_hasher
-                .accumulate_checkpoint(&tx_data.effects, sequence_number, &self.epoch_store)
-                .expect("epoch cannot have ended"),
-        );
+        if ckpt_state.state_hasher.is_none() {
+            ckpt_state.state_hasher = Some(
+                self.global_state_hasher
+                    .accumulate_checkpoint(&tx_data.effects, sequence_number, &self.epoch_store)
+                    .expect("epoch cannot have ended"),
+            );
+        }
 
         finish_stage!(pipeline_handle, FinalizeTransactions);
 
-        ckpt_state.full_data = self.process_checkpoint_data(&ckpt_state.data, &tx_data);
+        ckpt_state.full_data = self.process_checkpoint_data(&ckpt_state.data, tx_data);
 
         finish_stage!(pipeline_handle, ProcessCheckpointData);
 
