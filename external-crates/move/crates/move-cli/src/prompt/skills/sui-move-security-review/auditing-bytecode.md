@@ -1,28 +1,36 @@
 # Auditing on-chain (bytecode) targets
 
-The `SM-*` rules are written against source, but on-chain packages are compiled bytecode. **The
-disassembly is the analysis substrate** — `move disassemble` output is faithful, 1:1 with the
-executed bytecode, and that is what every `SM-*` finding must be derived from. Decompiled `.move`
-is a *heuristic* reconstruction; reach for it only to render an *already-confirmed* finding for a
-human reader. A pattern visible only in decompiled source — but absent or different in the
-disassembly — is not a finding.
+The `SM-*` rules are written against source, but on-chain packages are compiled bytecode.
+**The decompiled view (`move decompile` output) is the working substrate for SM-* rule
+application** — abilities, visibility, the `entry` flag, signatures, struct shapes, control
+flow, and call patterns are byte-for-byte faithful (see
+`move-bytecode-comprehension/decompilation.md`). Disassembly is reserved for **post-finding
+verification** when a determination needs an exact abort code value, when decompilation
+visibly failed for a module, or when a specific question is ambiguous in decompiled output.
+
+The per-rule signals below are written in decompiled-source terms — the patterns you'll see
+when reading `.move` files.
 
 ## Workflow
 
 1. **Stand up tools** — invoke `sui-and-move-tools` to fetch the package's `.mv` modules
-   and produce the disassembly + decompiled views.
-2. **Disassemble every module** — this is the analysis substrate. The toolchain runbook also
-   decompiles every module, but those `.move` files are for *later* finding-explanation only; do
-   not read them as analysis input.
-3. **Comprehend** — consult `move-bytecode-comprehension` for what survives compilation. Headline:
-   abilities, visibility, `entry`, and signatures survive exactly; constant/error **names**, local
-   names, comments, and macro sugar do not; empty structs (OTWs) show `dummy_field: bool`.
-4. **Apply `SM-*` rules to the disassembly** using the per-rule signals below. Cite findings as
-   `<SM-ID> · <module>.asm:B<block>@i<index>` (basic block + instruction index). Once a finding is
-   confirmed, render the matching decompiled snippet alongside as **Human view** (see Reporting).
-5. **Decompiled disagreement is a tell, not a finding.** If the decompiled `.move` for a confirmed
-   site reads differently from the assembly, the **assembly wins** — note the discrepancy as
-   decompiler imprecision, do not re-open the finding.
+   and decompile them. The default workflow writes only `.mv` + `.move` files; disassembly
+   is not produced unless explicitly requested.
+2. **Read the decompiled `.move` files** as the analysis substrate.
+3. **Comprehend** — consult `move-bytecode-comprehension` for what survives compilation.
+   Headline: abilities, visibility, `entry`, and signatures survive exactly; constant /
+   error **names** become `C0/C1/...`, local names are invented, macros are expanded, empty
+   structs (OTWs) show synthetic `dummy_field: bool`. These are decompiler **artifacts**
+   recognized and reasoned through — they are not reasons to drop to disassembly.
+4. **Apply `SM-*` rules to the decompiled view** using the per-rule signals below. Cite
+   findings as `<SM-ID> · <module>.move:<line>` by default. For the rare verification
+   cases (abort code value lookup, decompilation broke for the module, ambiguous decompiled
+   output), fetch that module's disassembly per-module per `sui-and-move-tools/fetch-and-decompile.md`
+   ("Fetching disassembly on demand") and cite as `<SM-ID> · <module>.asm:B<block>@i<index>`.
+   Never load both views for the same module simultaneously.
+5. **Disagreement.** If both views are inspected for the same site and disagree, the
+   disassembly wins — record the discrepancy as decompiler imprecision, not as a re-opening
+   of the finding.
 
 ## Per-rule disassembly signals
 
@@ -123,19 +131,14 @@ Each entry below names the concrete assembly pattern to look for. Pair with the 
 
 ## Reporting
 
-For each finding, present **both** views — disassembly as ground-truth evidence, decompiled snippet
-as the human view. Use this shape:
+For each finding, present the **decompiled excerpt as evidence** (the default working view).
+If the determination required disassembly verification, add the disassembly excerpt too;
+otherwise omit it. Use this shape:
 
 ```
-SM-A3 [Critical] · pool.asm:B3@i17  (human view: pool.move:42)
+SM-A3 [Critical] · pool.move:42
 
-Disassembly evidence (ground truth):
-    14: CopyLoc[1](Arg1: &Pool)
-    15: ImmBorrowField[2](Pool.id)
-    16: Call object::id<Pool>(&Pool): ID
-    17: Call <withdraw>(...): ...        # <- privileged op WITHOUT prior cap.pool_id == id check
-
-Human view (decompiled):
+Evidence (decompiled):
     public fun withdraw(cap: &AdminCap, pool: &mut Pool, amount: u64, ctx: &mut TxContext) {
         // no assertion comparing cap.pool_id to object::id(pool)
         ...

@@ -36,13 +36,15 @@ description: >
 > [docs.sui.io](https://docs.sui.io), [move-book.com](https://move-book.com), and the Sui framework
 > source.
 
-> **Auditing on-chain bytecode?** If the target is a deployed package (not source): first stand up
-> tools with the `sui-and-move-tools` skill (clone Sui, fetch the package, **disassemble** every
-> module — and build `move decompile` for the explanation step). **Apply the `SM-*` rules to the
-> disassembly** (`move disassemble` output): it is faithful, 1:1 with the executed bytecode.
-> Once a finding is confirmed on the assembly, render the matching decompiled `.move` snippet
-> alongside as a *Human view* — but never derive a finding from decompiled source. See
-> `auditing-bytecode.md` for the workflow + per-rule disassembly signals, and
+> **Auditing on-chain bytecode?** If the target is a deployed package (not source): first
+> stand up tools with the `sui-and-move-tools` skill (fetch the package, decompile every
+> module). **Apply the `SM-*` rules to the decompiled `.move` files** — abilities,
+> visibility, the `entry` flag, signatures, struct shapes, control flow, and call patterns
+> are byte-for-byte faithful (see `move-bytecode-comprehension/decompilation.md`).
+> Disassembly is reserved for verification when a determination needs an exact abort code
+> value, when decompilation visibly failed for a module, or when a specific decompiled
+> excerpt is ambiguous — fetch per-module on demand and read it surgically. See
+> `auditing-bytecode.md` for the workflow + per-rule signals, and
 > `move-bytecode-comprehension` for what survives compilation.
 
 ## How to audit with this skill
@@ -78,7 +80,7 @@ description: >
 | `composability-and-ptb.md` | J, K | hot-potato weakening, internal-transfer/leaky `_mut`, attacker-orchestrated PTB, gas-coin/sponsor |
 | `time-and-randomness.md` | L | `Clock` vs epoch time, **randomness test-and-abort** |
 | `test-and-offchain.md` | M + appendix | `#[test_only]` leakage; off-chain appendix (non-blocking) |
-| `auditing-bytecode.md` | all (on-chain) | applying the rules to **disassembly** (analysis substrate); per-rule disassembly signals; rendering decompiled snippets as *Human view* for confirmed findings |
+| `auditing-bytecode.md` | all (on-chain) | applying the rules to the decompiled view (working substrate); per-rule signals in decompiled-source terms; disassembly fetched per-module on demand for specific verification cases |
 
 ## Known system addresses (sanity references)
 
