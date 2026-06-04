@@ -16,9 +16,9 @@ skills live here in one canonical location.
   `auditing-bytecode.md` (per-rule disassembly signals + the report format that pairs
   assembly evidence with a human view).
 - **`sui-and-move-tools`** — obtain bytecode + readable views for a deployed Sui package.
-  One Sui GraphQL call returns every module's bytes and disassembly; `move decompile`
-  (already on the system, running `move prompt`) produces the optional decompiled-source
-  view. No `sui` CLI install needed.
+  One Sui GraphQL call returns every module's raw bytes; `move decompile` produces the
+  decompiled-source working view. Disassembly is fetched per-module only for specific
+  verification questions.
 - **`move-bytecode-comprehension`** — Move binary format essentials + the survival table
   (what survives compilation), plus how to read disassembly and decompiled output soundly.
 
