@@ -124,11 +124,11 @@ of work (e.g. *"audit Sui mainnet package `0x<id>` for security vulnerabilities;
 4. For each skill the category names, the agent calls `move prompt skill <bundle>`,
    `move prompt skill <bundle> --list`, then `move prompt skill <bundle> --file <ref>`
    for every reference file before applying the skill's rules.
-5. Agent follows the workflow against the target package — fetch + disassemble via one
-   Sui GraphQL call, walk the SM-* rules, etc.
+5. Agent follows the workflow against the target package — fetch via one Sui GraphQL
+   call, decompile, walk the SM-* rules over the decompiled `.move` files.
 6. Agent produces findings in the format the audit category prescribes:
-   `SM-ID · module.asm:B<block>@i<index>` with paired disassembly evidence + a decompiled
-   "Human view" excerpt.
+   `SM-ID · module.move:<line>` with a decompiled excerpt as evidence (disassembly
+   added only when verification required it).
 
 The same shape applies to other categories: read the category's body, walk the skills it
 names, do the work.
