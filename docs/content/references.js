@@ -119,6 +119,7 @@ const references = [
 			id: 'references/sui-sdks',
 		},
 		items: [
+			'references/sdk-comparison',
 			{
 				type: 'link',
 				label: 'dApp Kit',
