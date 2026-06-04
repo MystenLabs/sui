@@ -2668,6 +2668,10 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             K::CoinRegistryCreate => message.with_kind(Kind::CoinRegistryCreate),
             K::DisplayRegistryCreate => message.with_kind(Kind::DisplayRegistryCreate),
             K::AddressAliasStateCreate => message.with_kind(Kind::AddressAliasStateCreate),
+            // TEMPORARY: the external sui-rpc proto (pinned via Cargo.toml `rev`) has no
+            // ForwardingAddressRegistryCreate variant yet. Map to Unknown until the pinned rev is
+            // bumped to a sui-rust-sdk that defines the variant, then replace this arm.
+            K::ForwardingAddressRegistryCreate => message.with_kind(Kind::Unknown),
             K::WriteAccumulatorStorageCost(storage_cost) => message
                 .with_kind(Kind::WriteAccumulatorStorageCost)
                 .with_storage_cost(storage_cost.storage_cost),

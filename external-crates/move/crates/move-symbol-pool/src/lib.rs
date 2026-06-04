@@ -108,6 +108,7 @@ static_symbols!(
     "internal",
     "permit",
     "address_alias",
+    "forwarding_address",
     "00000000000000000000000000000000",
 );
 

@@ -1337,6 +1337,7 @@
                 "convert_type_argument_error": false,
                 "convert_withdrawal_compatibility_ptb_arguments": false,
                 "correct_gas_payment_limit_check": false,
+                "create_forwarding_address_registry": false,
                 "create_root_accumulator_object": false,
                 "debug_fatal_on_move_invariant_violation": false,
                 "defer_unpaid_amplification": false,
@@ -2172,6 +2173,7 @@
                 "convert_type_argument_error": false,
                 "convert_withdrawal_compatibility_ptb_arguments": false,
                 "correct_gas_payment_limit_check": false,
+                "create_forwarding_address_registry": false,
                 "create_root_accumulator_object": false,
                 "crypto_invalid_arguments_cost": "100",
                 "debug_fatal_on_move_invariant_violation": false,
@@ -9498,7 +9500,8 @@
               "CoinRegistryCreate",
               "DisplayRegistryCreate",
               "AddressAliasStateCreate",
-              "WriteAccumulatorStorageCost"
+              "WriteAccumulatorStorageCost",
+              "ForwardingAddressRegistryCreate"
             ]
           },
           {

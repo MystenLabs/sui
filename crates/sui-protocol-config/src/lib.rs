@@ -1058,6 +1058,10 @@ struct FeatureFlags {
     #[skip_protocol_config_accessor]
     address_aliases: bool,
 
+    // If true, create the forwarding address registry object in the change epoch transaction.
+    #[serde(skip_serializing_if = "is_false")]
+    create_forwarding_address_registry: bool,
+
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
@@ -4527,6 +4531,7 @@ impl ProtocolConfig {
                     // Verify with the v2 then v1 for devnet.
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.zklogin_circuit_mode = 1;
+                        cfg.feature_flags.create_forwarding_address_registry = true;
                     }
                 }
                 // Use this template when making changes:
