@@ -9,6 +9,7 @@ use consensus_core::{
     BlockAPI, CommitAPI, CommitIndex, CommitRange, CommitRef,
     storage::{Store as ConsensusStore, rocksdb_store::RocksDBStore},
 };
+use itertools::Itertools;
 use std::sync::Arc;
 use sui_core::{
     authority::authority_store_tables::AuthorityPerpetualTables, checkpoints::CheckpointStore,
@@ -243,7 +244,7 @@ impl DirectBackend {
 
         let mut tx_keys = Vec::new();
         let mut missing_blocks = Vec::new();
-        for (block_ref, block_opt) in block_refs.iter().zip(blocks) {
+        for (block_ref, block_opt) in block_refs.iter().zip_eq(blocks) {
             let block = match block_opt {
                 Some(b) => b,
                 // Missing block indicates storage corruption or a bug; note the ref explicitly.
