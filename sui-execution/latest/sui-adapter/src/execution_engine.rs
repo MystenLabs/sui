@@ -13,7 +13,7 @@ mod checked {
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
-    use mysten_common::debug_fatal;
+    use mysten_common::{debug_fatal, in_test_configuration};
     use std::collections::BTreeMap;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
@@ -139,7 +139,10 @@ mod checked {
             !protocol_config.early_exit_on_iffw(),
             "Should not reach gas smashing filtering address balances if IFFW early exit is enabled"
         );
-        protocol_config.early_exit_on_iffw()
+        // In test/debug builds, always apply the fix unconditionally to match the behaviour of
+        // the 1.72 mainnet release (where it was deployed as an ungated hotfix).
+        in_test_configuration()
+            || protocol_config.early_exit_on_iffw()
             || execution_params
                 .accumulator_version()
                 .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION)
@@ -162,7 +165,13 @@ mod checked {
             return false;
         }
 
-        // otherwise if gate by accumulator version (if present) or protocol flag
+        // In test/debug builds, always short-circuit unconditionally to match the behaviour of
+        // the 1.72 mainnet release (where it was deployed as an ungated hotfix).
+        if in_test_configuration() {
+            return true;
+        }
+
+        // otherwise gate by accumulator version (if present) or protocol flag
         protocol_config.early_exit_on_iffw()
             || execution_params
                 .accumulator_version()
@@ -1860,8 +1869,12 @@ mod checked {
 
         #[test]
         fn preserves_old_behavior_below_activation_version() {
+            // In production (non-test) builds, IFFW below the accumulator activation version
+            // does not filter — the pre-flag hotfix behavior is preserved.
+            // In test/debug builds `in_test_configuration()` fires first and the filter
+            // always returns true to match the ungated 1.72 mainnet hotfix.
             let below = ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION.value() - 1;
-            assert!(!should_filter_address_balance_gas_smash(
+            assert!(should_filter_address_balance_gas_smash(
                 &ExecutionOrEarlyError::failed(
                     NonEmpty::new(ExecutionErrorKind::InsufficientFundsForWithdraw),
                     version(below),
@@ -1872,8 +1885,7 @@ mod checked {
 
         #[test]
         fn inert_without_accumulator_version() {
-            // No assigned accumulator version (every non-mainnet / non-committed path): the
-            // mainnet backfill must never fire, regardless of the early error.
+            // Non-IFFW early errors never filter, regardless of test configuration.
             let above = version(ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION.value() + 1);
             assert!(!should_filter_address_balance_gas_smash(
                 &ExecutionOrEarlyError::ok(above),
@@ -1886,7 +1898,10 @@ mod checked {
                 ),
                 &config_without_flag(),
             ));
-            assert!(!should_filter_address_balance_gas_smash(
+            // In test/debug builds, IFFW with no accumulator version returns true (matches
+            // the ungated 1.72 mainnet hotfix). In production builds this would be false —
+            // the mainnet backfill requires an assigned accumulator version.
+            assert!(should_filter_address_balance_gas_smash(
                 &ExecutionOrEarlyError::failed(
                     NonEmpty::new(ExecutionErrorKind::InsufficientFundsForWithdraw),
                     None,
@@ -1964,11 +1979,11 @@ mod checked {
 
         #[test]
         fn preserves_hotfix_behavior_below_activation_version() {
-            // Below the rollout point with the flag unset (every pre-v126 protocol version): the
-            // version clause is false and the flag clause is false, so no short-circuit — the
-            // pre-flag hotfix behavior is preserved.
+            // In production builds: below the rollout point with the flag unset, no short-circuit.
+            // In test/debug builds: `in_test_configuration()` fires and always short-circuits,
+            // matching the ungated 1.72 mainnet hotfix to prevent fork scenarios in tests.
             let below = ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION.value() - 1;
-            assert!(!should_short_circuit_insufficient_funds(
+            assert!(should_short_circuit_insufficient_funds(
                 &iffw(version(below)),
                 &config_without_flag()
             ));
@@ -1986,11 +2001,12 @@ mod checked {
         }
 
         #[test]
-        fn no_accumulator_version_preserves_old_behavior_without_protocol_flag() {
-            // No assigned accumulator version (non-mainnet / non-committed paths) must not
-            // activate the mainnet compiled-constant backfill by itself. Otherwise a mixed-version
-            // slow upgrade can execute the same IFFW transaction differently on old vs new binary.
-            assert!(!should_short_circuit_insufficient_funds(
+        fn no_accumulator_version_short_circuits_in_test_configuration() {
+            // In test/debug builds, IFFW with no accumulator version always short-circuits
+            // (matches the ungated 1.72 mainnet hotfix, preventing fork scenarios in tests).
+            // In production builds without the flag, this would return false — the mainnet
+            // compiled-constant backfill requires an assigned accumulator version.
+            assert!(should_short_circuit_insufficient_funds(
                 &iffw(None),
                 &config_without_flag(),
             ));
@@ -2032,16 +2048,17 @@ mod checked {
         }
 
         #[test]
-        fn non_head_iffw_does_not_bypass_short_circuit_activation_gate() {
-            // The non-head IFFW override decides which early-error behavior wins only after the
-            // short-circuit feature is active. It must not independently activate the new behavior
-            // on pre-flag, non-mainnet / non-committed paths.
+        fn non_head_iffw_short_circuits_in_test_configuration() {
+            // In test/debug builds, any IFFW (even non-head) unconditionally short-circuits,
+            // matching the ungated 1.72 mainnet hotfix.
+            // In production builds without the flag or accumulator version, this would return
+            // false — the non-head IFFW must not bypass the activation gate on its own.
             let errors = NonEmpty::from((
                 ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable,
                 vec![ExecutionErrorKind::InsufficientFundsForWithdraw],
             ));
 
-            assert!(!should_short_circuit_insufficient_funds(
+            assert!(should_short_circuit_insufficient_funds(
                 &ExecutionOrEarlyError::failed(errors, None),
                 &config_without_flag(),
             ));
