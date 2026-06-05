@@ -5022,6 +5022,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.always_advance_dkg_to_resolution = true;
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.create_forwarding_address_registry = true;
+                        cfg.feature_flags.enable_forwarding_addresses = true;
                     }
                 }
                 // Use this template when making changes:
