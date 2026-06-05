@@ -21,10 +21,13 @@ address** — verify each one either (a) takes a capability parameter, (b) asser
 the code/comments label it as such**. Read-only getters are exempt.
 Detect: `public`/`entry` fns that mutate shared/global state with no `&\w*Cap` parameter and no
 `sender()`/address assertion. Pay particular attention to functions that mint, withdraw, set
-fees/config, pause, change ownership, or modify a deny list. In decompiled output, look for
-a function signature with a `&mut <SharedT>` argument that lacks both a `&*Cap` argument and
-an earlier `tx_context::sender(...)` assertion before state mutation. See
-`auditing-bytecode.md` SM-A2 for the structured per-rule signal.
+fees/config, pause, change ownership, or modify a deny list. In decompiled output: a function
+header with a `&mut <SharedT>` arg lacking either a `&<Name>Cap` arg in the signature or an
+`if (tx_context::sender(ctx) == <addr>) abort <code>` / `assert!(tx_context::sender(ctx) == <addr>, ...)`
+gate before the first state-mutating expression. See `auditing-bytecode.md` SM-A2 for the
+structured per-rule signal.
+_Absence rule:_ walk every `public`/`entry` fn touching shared state; a `&*Cap` or
+`tx_context::sender(...)` gate *elsewhere* in the module does not clear an unguarded fn.
 Exploit: any address calls the privileged path directly via a PTB.
 Source: `MystenLabs/skills → sui-move/move.md` ("Every `public` or `entry` function that takes a
 `&mut SharedObject` is callable by any address. Verify that each one either (a) checks a capability,
@@ -37,6 +40,8 @@ object's `ID` and the privileged fn asserts `cap.<id_field> == object::id(target
 `&AdminCap` that gates actions on *any* instance of a type is a confused-deputy bug.
 Detect: cap-gated fn taking `&SomeCap` + a target object, where `SomeCap` has no `ID`/`address`
 field, or has one but it is never compared to the target.
+_Absence rule:_ walk every fn taking `&*Cap` + target object; a
+`cap.<id> == object::id(target)` comparison *elsewhere* does not clear an unchecked fn.
 Exploit: obtain (or legitimately own) one cap for your own object, then pass someone else's
 object to the same function — operate on / drain a resource you don't control.
 Source: [+domain] (classic cross-pool / cross-vault authority bug).
@@ -69,13 +74,16 @@ the relevant **object-state invariant** (`unlocked`, `expired_at < now`, `paid >
 object being acted on. Forgetting it means the gate exists in the type system but not in the
 runtime check.
 Detect: the privileged operation (`transfer::transfer<T>(...)`, `balance::join(...)`,
-`coin::take(...)`, `balance::split(...)`, internal state mutator) is reached on a path where
-the controlling field (`obj.unlocked`, `obj.expiry`, `obj.paid_back`, …) is read but never
-compared+gated, OR not read at all. In decompiled output, the guard should be visible as an
-`if (...) abort <code>` or `assert!(...)` over the relevant object-state field before the
-privileged operation. See `auditing-bytecode.md` SM-A6 for the structured per-rule signal,
-including the high-severity "no controlling field exists on the type" cross-check
-(the privileged path is then unconditional).
+`coin::take(...)`, `balance::split(...)`, internal state mutator) is reached on a path
+where the controlling field (`obj.unlocked`, `obj.expiry`, `obj.paid_back`, …) is read
+but never compared+gated, OR not read at all. In decompiled output: the privileged call
+site's preceding code contains no read of `self.<state>` / `&self.<state>` /
+`&mut self.<state>` followed by an `==` / `<` / `>` comparison and an `if (...) abort <code>`
+/ `assert!(...)` guard. (Cross-check: if the type has no controlling field at all, the
+privileged path is unconditional — the high-severity shape.)
+_Absence rule:_ an `assert!`/`abort` *elsewhere* in the module does not clear the rule —
+verify the guard reaches *this* privileged op on the path.
+See `auditing-bytecode.md` SM-A6 for the structured per-rule signal.
 Exploit: caller invokes the release path while the object's state still forbids it — transfer a
 locked NFT, redeem before expiry, withdraw without the loan being marked repaid.
 Source: `MystenLabs/skills → object-model/transfers.md` (`transfer_if_unlocked` example:

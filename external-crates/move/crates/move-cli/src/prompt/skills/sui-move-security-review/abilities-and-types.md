@@ -41,6 +41,9 @@ or even the attacker can create another value of the same type.
 Detect: protocol-type parameters used to read reserves/balances/permissions without an
 identity/canonicity check; generic transfer/store over caller-chosen `T`; functions trusting the
 *contents* of a passed-in object that the caller could have minted.
+_Absence rule:_ walk every fn taking a protocol-type parameter (`&T`/`&mut T`/`Coin<T>`/
+`&Pool`/`&Vault`) whose body reads its state; an `object::id(...)`/allow-list check
+*elsewhere* does not clear an unchecked fn.
 Exploit: pass a self-created `Pool` with fake reserves to satisfy a price/solvency check, or to
 redirect a withdrawal that reads state from the attacker's object.
 Source: [+domain] (object/type-confusion; the constructive skills assume the canonical object).

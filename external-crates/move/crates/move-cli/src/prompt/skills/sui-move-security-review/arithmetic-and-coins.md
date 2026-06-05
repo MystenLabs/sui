@@ -18,6 +18,9 @@ divide to preserve precision; reject zero/empty amounts (`assert!(amount > 0)`),
 `SplitCoins`/vector inputs.
 Detect: `a / b * c` ordering (precision loss); fee/share math with no rounding rationale; mint /
 deposit / swap entrypoints lacking a non-zero amount check.
+_Absence rule (zero-check shape):_ walk every mint/deposit/withdraw/swap/transfer-amount
+entrypoint that takes an amount parameter; an `assert!` over a *different* parameter does
+not clear the zero-check on this one.
 Exploit: round-to-zero to extract fees or mint value for free; zero-amount calls that create
 something-for-nothing or divide-by-zero abort as griefing.
 Source: [+domain]; `MystenLabs/skills → ptbs/commands.md` (empty `SplitCoins` fails pre-execution).
@@ -28,6 +31,8 @@ checks; `coin::mint` / `coin::burn` are only reachable through an authorized pat
 Detect: `coin::mint` / `coin::burn` reachable from a `public`/`entry` fn whose `TreasuryCap`
 argument is obtainable without authorization; caps `public_transfer`'d to a caller-supplied
 address; a shared object wrapping a `TreasuryCap` with an ungated mint fn.
+_Absence rule:_ walk every `coin::mint`/`coin::burn` site; trace the `TreasuryCap` source —
+wrapping it in a shared object is not a gate without an explicit check before the call.
 Exploit: unlimited inflation (mint to self) or supply seizure → token value destroyed.
 Source: `MystenLabs/skills → sui-move/events-coins.md`, `MystenLabs/skills → sui-move/move.md`. See SM-G1-custody.
 
@@ -37,5 +42,8 @@ Invariant: regulated coins use `coin::create_regulated_currency` and the system 
 checked in every entrypoint it should gate.
 Detect: a deny/allow structure that is written to (add/remove) but never read in transfer/action
 paths; regulated-token logic that bypasses the deny check.
+_Absence rule:_ if a `Table<address,bool>`/`VecSet<address>` exists as a field, the
+gated fns must *read* it (`contains`/`borrow`); writes (`add`/`remove`/`insert`) alone
+are not gating.
 Exploit: a denied/sanctioned address transacts anyway — compliance bypass / unauthorized action.
 Source: `MystenLabs/skills → sui-move/move.md`.

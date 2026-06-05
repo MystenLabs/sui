@@ -7,6 +7,10 @@ lives in a `#[test_only]` module) so it is compiled out of published bytecode.
 Detect: functions named `*_for_testing` / `test_*` / `init_for_testing` / debug mint/setters that
 lack `#[test_only]` and are `public`/`entry`; `#[test_only]` placed on the module-use but not the
 helper, or vice-versa.
+_Absence rule:_ `#[test_only]` does NOT survive into bytecode — walk every `public`/`entry`
+fn whose name pattern (`*_for_testing`, `test_*`, debug setters) or unauthorized privileged
+body suggests test scaffolding. The shape (public + unauthorized + privileged body) is the
+signal, not the missing annotation.
 Exploit: the helper ships on-chain as an unauthenticated mint / admin-bypass / object-spawn
 function → unlimited mint or authority seizure in production.
 Source: `MystenLabs/skills → move-unit-testing/SKILL.md`.

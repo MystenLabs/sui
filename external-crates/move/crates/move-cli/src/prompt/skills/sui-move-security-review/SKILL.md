@@ -53,8 +53,27 @@ description: >
    externally reachable entrypoints), every `*Cap`/witness/OTW type, every shared object, and
    every struct's ability set. PTB callers control argument order and supply arbitrary inputs —
    treat all entrypoints as adversarial.
-2. **Walk the catalog by category** (A–M). For each rule, run the `Detect` heuristic against the
-   code. A grep hit is a *candidate*, not a finding — confirm the invariant is actually broken.
+2. **Walk the catalog by category** (A–M). For each rule, run the `Detect` heuristic
+   against the code.
+   - **A grep hit is a *candidate*, not a finding.** Confirm the invariant is actually
+     broken before reporting.
+   - **A grep miss is NOT proof of absence.** Many rules in this catalog detect the
+     *absence* of a guard, check, or invariant assertion — either purely (SM-A2, SM-A3,
+     SM-A6, SM-B4, SM-D1, SM-E4, SM-G2) or as the confirmation step on top of a
+     candidate-presence check (SM-C1, SM-C3, SM-C4, SM-F2, SM-G1, SM-M1). For these the
+     bug shape is "X is missing where it should be" — so a grep returning no hits often
+     means *"X is missing everywhere"*, not *"the rule doesn't apply"*. Do not skip an
+     absence-detection rule because the grep was empty; that's the exact failure mode
+     the rule is designed to catch. Each such rule has a **Discipline (absence
+     detection)** line in its `Detect:` paragraph spelling out the candidate set and
+     the anti-skip check.
+   - **Absence-detection rules require walking the candidate set explicitly.** First
+     identify what the rule is *about* (the privileged call sites for SM-A6; every
+     `&mut SharedT`-mutating `public`/`entry` fn for SM-A2; every cap-gated fn for
+     SM-A3; every `dynamic_field::borrow*`/`bag::borrow*`/`table::borrow*` site for
+     SM-E4; every `object::delete` site for SM-C1; etc.). For each candidate, check
+     whether the required guard/check/invariant is present — reason about the dataflow,
+     not just the textual presence of `assert!` or `abort` somewhere in the file.
 3. **Report findings keyed to the rule ID** (e.g. `SM-A3`) with: severity, the offending
    location (`file:line`), why the invariant is violated, and the concrete exploit. Distinguish
    *exploitable* from *defense-in-depth*.

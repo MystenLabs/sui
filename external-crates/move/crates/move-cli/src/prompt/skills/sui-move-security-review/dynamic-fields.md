@@ -43,10 +43,13 @@ can influence — an attacker can `remove`, an unrelated path may not have `add`
 path must first call `*::exists*` / `*::contains` and either branch to a safe path or abort with
 a clear, named error code.
 Detect: `dynamic_field::borrow*`/`remove*` / `bag::borrow*` / `table::borrow*` access with no
-preceding existence check that gates the access. In decompiled output, look for the matching
-`dynamic_field::exists*` / `bag::contains` / `table::contains` result in an `if (...)` or
-`assert!(...)` before the aborting access. See `auditing-bytecode.md` SM-E4 for the
-structured per-rule signal.
+preceding existence check that gates the access. In decompiled output: the bug is the absence
+of a matching `dynamic_field::exists*(...)` / `bag::contains(...)` / `table::contains(...)`
+inside an `if (...)` guard or `assert!(...)` that reaches the specific access. The guard
+must precede the access on the path — an `exists*` / `contains` elsewhere in the function
+doesn't qualify. See `auditing-bytecode.md` SM-E4 for the structured per-rule signal.
+_Absence rule:_ walk every `dynamic_field::borrow*`/`bag::*`/`table::*` access; an
+`exists*`/`contains` *elsewhere* does not clear it — the guard must reach *this* access.
 Exploit: an attacker triggers the missing-field path to abort honest users' transactions (DoS
 against an entrypoint), or exploits the absence-induced abort to take a different code path the
 author did not anticipate (e.g. a fallback branch that bypasses an accumulator that was supposed
