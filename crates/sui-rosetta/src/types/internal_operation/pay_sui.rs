@@ -21,7 +21,7 @@ use super::{
     simulate_transaction, withdraw_coin_from_address_balance,
 };
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct PaySui {
     pub sender: SuiAddress,
     pub recipients: Vec<SuiAddress>,
