@@ -2123,37 +2123,44 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // Check for owned object double-spend: if this transaction won an owned object
         // lock while another transaction in the same commit tried to lock the same object,
         // defer it as a penalty.
-        if protocol_config.defer_owned_object_double_spend()
-            && let Some(&conflict_count) = state
-                .contested_transaction_digests
-                .get(transaction.tx().digest())
+        if let Some(&conflict_count) = state
+            .contested_transaction_digests
+            .get(transaction.tx().digest())
         {
             self.metrics.consensus_handler_double_spend_deferrals.inc();
             self.metrics
                 .consensus_handler_double_spend_conflict_count
                 .observe(conflict_count as f64);
 
-            let deferred_from_round = previously_deferred_tx_digests
-                .get(transaction.tx().digest())
-                .map(|k| k.deferred_from_round())
-                .unwrap_or(commit_info.round);
+            if protocol_config.defer_owned_object_double_spend() {
+                let deferred_from_round = previously_deferred_tx_digests
+                    .get(transaction.tx().digest())
+                    .map(|k| k.deferred_from_round())
+                    .unwrap_or(commit_info.round);
 
-            let deferral_key =
-                DeferralKey::new_for_consensus_round(commit_info.round + 1, deferred_from_round);
-
-            if transaction_deferral_within_limit(
-                &deferral_key,
-                protocol_config.max_deferral_rounds_for_congestion_control(),
-            ) {
-                debug!(
-                    "Deferring transaction {:?} due to owned object double-spend contention",
-                    transaction.tx().digest(),
+                let deferral_key = DeferralKey::new_for_consensus_round(
+                    commit_info.round + 1,
+                    deferred_from_round,
                 );
-                deferred_txns
-                    .entry(deferral_key)
-                    .or_default()
-                    .push(transaction);
-                return;
+
+                if transaction_deferral_within_limit(
+                    &deferral_key,
+                    protocol_config.max_deferral_rounds_for_congestion_control(),
+                ) {
+                    debug!(
+                        "Deferring transaction {:?} due to owned object double-spend contention with {} conflicts",
+                        transaction.tx().digest(),
+                        conflict_count
+                    );
+                    assert_reachable!(
+                        "Successfully deferred transaction attempting to double spend owned object."
+                    );
+                    deferred_txns
+                        .entry(deferral_key)
+                        .or_default()
+                        .push(transaction);
+                    return;
+                }
             }
         }
 
