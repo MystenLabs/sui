@@ -1,6 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// In simtests the crash-recovery fail point poisons a fixed fraction of
+// transactions. The load generator needs to know the same probability so
+// it can tolerate failures for those transactions instead of retrying them.
+// We encode the probability as an integer (prob * 1e6) in an atomic so it
+// can be set once from test setup without threading it through every function.
+#[cfg(msim)]
+static CRASH_RECOVERY_PROBABILITY_1E6: std::sync::atomic::AtomicU32 =
+    std::sync::atomic::AtomicU32::new(0);
+
+/// Set the probability used by the crash-with-tx-logging fail point. Call
+/// this before starting the benchmark. The value must match the probability
+/// passed to `deterministic_probability` in the fail point.
+#[cfg(msim)]
+pub fn set_crash_recovery_probability(prob: f32) {
+    CRASH_RECOVERY_PROBABILITY_1E6.store(
+        (prob * 1_000_000.0) as u32,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+#[cfg(msim)]
+fn crash_recovery_probability() -> Option<f32> {
+    let v = CRASH_RECOVERY_PROBABILITY_1E6.load(std::sync::atomic::Ordering::Relaxed);
+    if v == 0 {
+        None
+    } else {
+        Some(v as f32 / 1_000_000.0)
+    }
+}
+
 use anyhow::Context;
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
@@ -878,6 +908,15 @@ async fn run_bench_worker(
                     err,
                     transaction.digest()
                 );
+                // Poison transactions — those deterministically crashing a validator — will
+                // never succeed. Recycle the gas and move on rather than retrying forever.
+                #[cfg(msim)]
+                if let Some(prob) = crash_recovery_probability() {
+                    if sui_simulator::random::deterministic_probability(transaction.digest(), prob)
+                    {
+                        return NextOp::Failure { payload };
+                    }
+                }
                 match payload.get_failure_type() {
                     Some(ExpectedFailureType::NoFailure) => {
                         panic!(
