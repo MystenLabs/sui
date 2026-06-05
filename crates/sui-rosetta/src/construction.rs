@@ -353,6 +353,18 @@ pub async fn metadata(
         InternalOperation::PaySui(_) | InternalOperation::Stake(_)
     );
 
+    let needed_objects = option
+        .internal_operation
+        .try_fetch_needed_objects(&mut context.client.clone(), Some(gas_price), budget)
+        .await?;
+
+    // Gasless ("free tier") PayCoin: zero the gas price so the downstream tx is recognized as
+    // gasless (`is_gasless_transaction` requires `price == 0`). Priced address-balance gas keeps
+    // `gas_price > 0`.
+    if needed_objects.is_gasless() {
+        gas_price = 0;
+    }
+
     let TransactionObjectData {
         gas_coins,
         objects,
@@ -364,10 +376,7 @@ pub async fn metadata(
         redeem_token_amount,
         redeem_plan,
         bind_epoch,
-    } = option
-        .internal_operation
-        .try_fetch_needed_objects(&mut context.client.clone(), Some(gas_price), budget)
-        .await?;
+    } = needed_objects;
 
     // For backwards compatibility during rolling deployments, populate extra_gas_coins.
     // Old clients expect this field to be present.
