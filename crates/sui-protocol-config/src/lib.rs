@@ -4783,6 +4783,10 @@ impl ProtocolConfig {
         self.feature_flags.mysticeti_num_leaders_per_round = val;
     }
 
+    pub fn set_create_forwarding_address_registry_for_testing(&mut self, val: bool) {
+        self.feature_flags.create_forwarding_address_registry = val;
+    }
+
     pub fn disable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = false;
         self.feature_flags.enable_address_balance_gas_payments = false;

@@ -14,6 +14,9 @@ async fn test_create_coin_registry_object() {
             config.set_execution_version_for_testing(3);
             // set up config values that would otherwise be incompatible with the execution version
             config.set_gas_model_version_for_testing(11);
+            // The forwarding address registry is an execution-version-4 object; it must not be
+            // created under execution version 3 (its hardcoded UID can't be shared there).
+            config.set_create_forwarding_address_registry_for_testing(false);
             // The new consensus handler requires these flags, and they are irrelevant to the test
             config.set_ignore_execution_time_observations_after_certs_closed_for_testing(true);
             config.set_record_time_estimate_processed_for_testing(true);
