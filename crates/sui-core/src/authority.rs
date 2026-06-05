@@ -1491,23 +1491,11 @@ impl AuthorityState {
         #[cfg(msim)]
         if !certificate.data().transaction_data().kind().is_system_tx() {
             sui_macros::fail_point_if!("crash-with-tx-logging", || {
-                // OnceLock ensures a single seed value is shared across all OS threads in the
-                // process. Thread-local seeds (as used by deterministic_probability) differ
-                // between blocking-pool workers, causing cross-validator inconsistency.
-                static CRASH_SEED: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
-                let seed = *CRASH_SEED.get_or_init(|| {
-                    use rand::Rng;
-                    rand::thread_rng().r#gen::<u64>()
-                });
-                let should_crash = {
-                    use std::hash::{Hash, Hasher};
-                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                    seed.hash(&mut hasher);
-                    tx_digest.hash(&mut hasher);
-                    // ~0.2% of the u64 range maps to a crash
-                    hasher.finish() < u64::MAX / 500
-                };
-                if should_crash {
+                if crate::crash_recovery::should_poison_transaction(&tx_digest, 0.002) {
+                    // Arm the crash-cause signal so the guard knows to write the crash log
+                    // for this transaction. Without this, random node kills from unrelated
+                    // fail points could also trigger the guard and record innocent transactions.
+                    crate::crash_recovery::arm_tx_crash_signal();
                     // The first panic invokes the crash-detection hook (which reads the TLS
                     // digest and writes it to the crash log) before being caught here.
                     // The second panic (PanicWrapper via kill_current_node) is intercepted by

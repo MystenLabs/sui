@@ -912,8 +912,10 @@ async fn run_bench_worker(
                 // never succeed. Recycle the gas and move on rather than retrying forever.
                 #[cfg(msim)]
                 if let Some(prob) = crash_recovery_probability() {
-                    if sui_simulator::random::deterministic_probability(transaction.digest(), prob)
-                    {
+                    if sui_core::crash_recovery::should_poison_transaction(
+                        transaction.digest(),
+                        prob as f64,
+                    ) {
                         return NextOp::Failure { payload };
                     }
                 }

@@ -46,6 +46,80 @@ use std::{
 use sui_types::digests::TransactionDigest;
 use tracing::{error, info, warn};
 
+// ---------------------------------------------------------------------------
+// Simtest-only: crash-cause signal
+// ---------------------------------------------------------------------------
+//
+// In simtests there are two kinds of node kills:
+//   1. crash-with-tx-logging: the executing transaction is the *cause* of the crash
+//      (a deterministic bug). All validators crash for the same transaction → safe to drop.
+//   2. All other fail points (batch-write-before, crash, etc.): the kill is random, not
+//      caused by the transaction. Only one validator is killed. Writing the executing
+//      transaction to the crash log would be wrong — other validators have already
+//      committed it, so dropping it on restart causes a fork.
+//
+// In production builds this module does not exist and the guard writes on any panic,
+// which is correct: production crashes are either deterministic (all validators hit the
+// same bug) or hardware failures (which also affect all validators or are recovered by
+// state sync).
+
+#[cfg(msim)]
+mod tx_crash_signal {
+    use std::cell::Cell;
+    thread_local! {
+        /// Set by the crash-simulation fail point before triggering kill_current_node.
+        /// Cleared and checked by the guard's Drop and panic hook.
+        static ARMED: Cell<bool> = const { Cell::new(false) };
+    }
+    pub(super) fn arm() {
+        ARMED.with(|c| c.set(true));
+    }
+    pub(super) fn disarm_and_check() -> bool {
+        ARMED.with(|c| c.replace(false))
+    }
+}
+
+/// Called by the crash-simulation fail point immediately before triggering
+/// `kill_current_node`. Must be called on the same OS thread that holds the
+/// `ExecutingTransactionGuard` so that the TLS flag is visible in the guard's Drop.
+///
+/// Without this signal, random node kills (from batch-write-before and similar fail
+/// points) would record innocent transactions in the crash log, causing forks.
+#[cfg(msim)]
+pub fn arm_tx_crash_signal() {
+    tx_crash_signal::arm();
+}
+
+// ---------------------------------------------------------------------------
+// Simtest-only: deterministic crash decision
+// ---------------------------------------------------------------------------
+
+/// Return `true` if `digest` should be treated as a poison transaction in a simtest run.
+///
+/// Uses a process-global seed (initialised once from OS entropy via `OnceLock`) so that all
+/// validators — regardless of which OS thread they run on — reach the same decision for a given
+/// digest. This is necessary because the blocking thread-pool workers used by msim each have
+/// distinct thread-local seeds, which would produce divergent crash decisions and checkpoint forks.
+///
+/// `prob` is the desired crash probability in the range `[0.0, 1.0]`.  Passing `0.002` means
+/// approximately 0.2 % of user transactions are poisoned.
+#[cfg(msim)]
+pub fn should_poison_transaction(digest: &TransactionDigest, prob: f64) -> bool {
+    use std::hash::{Hash, Hasher};
+
+    static CRASH_SEED: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    let seed = *CRASH_SEED.get_or_init(|| {
+        use rand::Rng;
+        rand::thread_rng().r#gen::<u64>()
+    });
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    seed.hash(&mut hasher);
+    digest.hash(&mut hasher);
+    let threshold = (prob.clamp(0.0, 1.0) * u64::MAX as f64) as u64;
+    hasher.finish() < threshold
+}
+
 /// File name within the node's db_path where panicking-transaction digests are persisted.
 const PANIC_TX_LOG_FILE: &str = "panic-tx.log";
 
@@ -99,6 +173,15 @@ impl Drop for ExecutingTransactionGuard {
         // digest and we write the log now as a fallback.
         if let Some(digest) = digest {
             if std::thread::panicking() {
+                // In simtests, only write when the crash-simulation fail point set the arm
+                // signal. Random node kills from unrelated fail points (batch-write-before etc.)
+                // also unwind the execution stack with thread::panicking() == true, but recording
+                // the executing transaction in those cases is wrong: other validators have already
+                // committed the transaction, so dropping it on restart causes a fork.
+                #[cfg(msim)]
+                if !tx_crash_signal::disarm_and_check() {
+                    return;
+                }
                 let log_path = self.db_path.join(PANIC_TX_LOG_FILE);
                 match append_digest_to_log(&log_path, digest) {
                     Ok(()) => eprintln!(
@@ -182,6 +265,12 @@ pub fn install_panic_hook(db_path: PathBuf) {
         // (which runs later during unwind) sees an empty slot and skips the duplicate write.
         let digest = EXECUTING_TX.with(|slot| slot.get());
         if let Some(digest) = digest {
+            // In simtests, mirror the same arm-signal check used by the guard's Drop.
+            #[cfg(msim)]
+            if !tx_crash_signal::disarm_and_check() {
+                prev_hook(info);
+                return;
+            }
             EXECUTING_TX.with(|slot| slot.set(None));
             let log_path = db_path.join(PANIC_TX_LOG_FILE);
             match append_digest_to_log(&log_path, digest) {
