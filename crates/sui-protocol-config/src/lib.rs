@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 126;
+const MAX_PROTOCOL_VERSION: u64 = 127;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -354,7 +354,7 @@ const MAINNET_USDB: &str =
 //              Enable timestamp_based_epoch_close on testnet.
 // Version 126: Enable early_exit_on_iffw (gates the gas-underflow fix
 //              shipped to mainnet out-of-band in #26816).
-//              Enable always_advance_dkg_to_resolution.
+// Version 127: Enable always_advance_dkg_to_resolution.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5001,6 +5001,8 @@ impl ProtocolConfig {
                 }
                 126 => {
                     cfg.feature_flags.early_exit_on_iffw = true;
+                }
+                127 => {
                     cfg.feature_flags.always_advance_dkg_to_resolution = true;
                 }
                 // Use this template when making changes:

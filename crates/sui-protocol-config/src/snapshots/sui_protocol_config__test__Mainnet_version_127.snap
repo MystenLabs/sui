@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 126
+version: 127
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -130,6 +130,7 @@ feature_flags:
   include_checkpoint_artifacts_digest_in_summary: true
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
+  always_advance_dkg_to_resolution: true
   enable_coin_registry: true
   abstract_size_in_object_runtime: true
   object_runtime_charge_cache_load_gas: true
