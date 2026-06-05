@@ -109,8 +109,26 @@ pub fn register_executing_transaction(digest: TransactionDigest) -> ExecutingTra
 /// `db_path` should be the node's base database directory; the log file is written at
 /// `{db_path}/panic-tx.log`.
 pub fn install_panic_hook(db_path: PathBuf) {
+    // In simtests, all simulated nodes share the same OS process and panic hook chain. Each
+    // node installs its own hook, prepending to the chain. When any panic fires, all hooks run
+    // in reverse-install order. Without a node ID guard, the first hook in the chain would
+    // consume the TLS digest and write it to the WRONG validator's log file, leaving the
+    // actually-crashing validator with nothing in its log.
+    //
+    // Capturing the node ID at install time and gating on it at panic time ensures each hook
+    // only claims panics that originated in its own node's execution context.
+    #[cfg(msim)]
+    let installing_node_id = sui_simulator::current_simnode_id();
+
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
+        // In simtests, skip this hook if the panic is firing in a different node's context.
+        #[cfg(msim)]
+        if sui_simulator::current_simnode_id() != installing_node_id {
+            prev_hook(info);
+            return;
+        }
+
         // Write the crash log BEFORE calling the previous hook. Some previous hooks call
         // `process::exit` (e.g. the telemetry hook when crash_on_panic=true), and we must
         // not lose the digest in that race. In simtests this hook is triggered via
