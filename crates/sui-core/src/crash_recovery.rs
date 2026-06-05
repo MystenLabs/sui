@@ -17,6 +17,12 @@
 //!    but this marker prevents any future change from accidentally moving the guard (and therefore
 //!    the registration) across threads inside an async context, which would corrupt TLS.
 //!
+//!    The guard also carries the node's `db_path` and writes the crash log from its `Drop`
+//!    implementation when it detects it is being dropped during a panic and TLS still holds the
+//!    digest (meaning the process-level hook did not already write the log).  This makes the
+//!    mechanism resilient to environments — such as simtests — where the panic hook chain may not
+//!    be intact at the time of the crash.
+//!
 //! 3. On the next startup, `load_crashed_transactions` reads the log file and returns the set of
 //!    digests that were active during a past crash.  The consensus handler uses this set to drop
 //!    those transactions before they reach execution again.
@@ -37,9 +43,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[cfg(msim)]
-use std::{cell::RefCell, collections::HashMap};
-
 use sui_types::digests::TransactionDigest;
 use tracing::{error, info, warn};
 
@@ -56,19 +59,6 @@ thread_local! {
     /// We use `Cell<Option<TransactionDigest>>` so that the panic hook (which takes `&PanicInfo`)
     /// can read it without needing `&mut` access or a `RefCell` borrow.
     static EXECUTING_TX: Cell<Option<TransactionDigest>> = const { Cell::new(None) };
-
-    /// In simtests, msim's `run_all_ready` calls `take_hook()` at the start of every iteration,
-    /// which wipes the process-level panic hook chain.  By the time a validator processes a
-    /// transaction that was previously seen to crash the node, the hooks installed during startup
-    /// are gone, so the "crash-simulation" panic never triggers log-writing.
-    ///
-    /// As a fallback, we store each simulated node's db_path in this TLS map.  Thread-local
-    /// storage is unaffected by msim's hook management.  `ExecutingTransactionGuard::drop` consults
-    /// this map when it detects that it is being dropped during a panic and TLS still holds a
-    /// digest (meaning the process-level hook did not fire).
-    #[cfg(msim)]
-    static SIM_NODE_DB_PATHS: RefCell<HashMap<msim::task::NodeId, PathBuf>> =
-        RefCell::new(HashMap::new());
 }
 
 // ---------------------------------------------------------------------------
@@ -81,13 +71,17 @@ thread_local! {
 /// The `PhantomData<*mut ()>` makes the guard `!Send + !Sync`, ensuring it is never moved to a
 /// different thread (which would corrupt TLS) or shared across threads.
 pub struct ExecutingTransactionGuard {
+    /// The node's database directory, used to locate the crash log in case the process-level
+    /// panic hook is not present at the time of the crash (e.g. in simtests).
+    db_path: PathBuf,
     _not_send_sync: PhantomData<*mut ()>,
 }
 
 impl ExecutingTransactionGuard {
-    fn new(digest: TransactionDigest) -> Self {
+    fn new(digest: TransactionDigest, db_path: PathBuf) -> Self {
         EXECUTING_TX.with(|slot| slot.set(Some(digest)));
         Self {
+            db_path,
             _not_send_sync: PhantomData,
         }
     }
@@ -95,39 +89,31 @@ impl ExecutingTransactionGuard {
 
 impl Drop for ExecutingTransactionGuard {
     fn drop(&mut self) {
-        // In msim, the process-level panic hook is wiped by msim's `run_all_ready` at the start
-        // of each iteration, so it may not fire for the "crash-simulation" panic.  If we are
-        // being dropped during a panic and TLS still holds a digest (meaning the hook did not
-        // clear it), write the crash log now using the per-node path registered in
-        // SIM_NODE_DB_PATHS (TLS, unaffected by msim's hook management).
-        #[cfg(msim)]
-        if std::thread::panicking() {
-            if let Some(digest) = EXECUTING_TX.with(|slot| slot.get()) {
-                EXECUTING_TX.with(|slot| slot.set(None));
-                let node_id = sui_simulator::current_simnode_id();
-                let log_path = SIM_NODE_DB_PATHS.with(|map| {
-                    map.borrow()
-                        .get(&node_id)
-                        .map(|p| p.join(PANIC_TX_LOG_FILE))
-                });
-                if let Some(log_path) = log_path {
-                    match append_digest_to_log(&log_path, digest) {
-                        Ok(()) => eprintln!(
-                            "[crash-recovery] Panic while executing transaction {digest}; \
-                             recorded to {}",
-                            log_path.display()
-                        ),
-                        Err(e) => eprintln!(
-                            "[crash-recovery] Failed to write crashed transaction {digest} to \
-                             {}: {e}",
-                            log_path.display()
-                        ),
-                    }
+        // Read and clear TLS.  In the normal (non-panicking) path this is all we need to do.
+        let digest = EXECUTING_TX.with(|slot| slot.get());
+        EXECUTING_TX.with(|slot| slot.set(None));
+
+        // If the process-level hook already wrote the log it will have cleared TLS, so `digest`
+        // is None here and we are done.  If the hook was not in the chain (e.g. in msim, where
+        // run_all_ready takes and replaces the hook chain at every iteration), TLS still has the
+        // digest and we write the log now as a fallback.
+        if let Some(digest) = digest {
+            if std::thread::panicking() {
+                let log_path = self.db_path.join(PANIC_TX_LOG_FILE);
+                match append_digest_to_log(&log_path, digest) {
+                    Ok(()) => eprintln!(
+                        "[crash-recovery] Panic while executing transaction {digest}; \
+                         recorded to {}",
+                        log_path.display()
+                    ),
+                    Err(e) => eprintln!(
+                        "[crash-recovery] Failed to write crashed transaction {digest} to \
+                         {}: {e}",
+                        log_path.display()
+                    ),
                 }
             }
         }
-
-        EXECUTING_TX.with(|slot| slot.set(None));
     }
 }
 
@@ -136,13 +122,20 @@ impl Drop for ExecutingTransactionGuard {
 /// Returns a guard whose `Drop` implementation removes the registration. The registration lives
 /// exactly as long as the guard, which should be kept in a local variable at the call site.
 ///
+/// `db_path` is the node's database directory.  It is stored in the guard so that the crash log
+/// can be written from the guard's `Drop` implementation if the process-level panic hook is not
+/// in the hook chain at the time of the crash.
+///
 /// ```ignore
-/// let _guard = register_executing_transaction(digest);
+/// let _guard = register_executing_transaction(digest, db_path);
 /// // ... execute the transaction ...
 /// // guard is dropped here, clearing the TLS slot
 /// ```
-pub fn register_executing_transaction(digest: TransactionDigest) -> ExecutingTransactionGuard {
-    ExecutingTransactionGuard::new(digest)
+pub fn register_executing_transaction(
+    digest: TransactionDigest,
+    db_path: PathBuf,
+) -> ExecutingTransactionGuard {
+    ExecutingTransactionGuard::new(digest, db_path)
 }
 
 // ---------------------------------------------------------------------------
@@ -166,20 +159,11 @@ pub fn install_panic_hook(db_path: PathBuf) {
     // Capturing the node ID at install time and gating on it at panic time ensures each hook
     // only claims panics that originated in its own node's execution context.
     //
-    // IMPORTANT: the process-level hook is only a best-effort mechanism in simtests.  msim's
-    // `run_all_ready` calls `take_hook()` at the start of each iteration, wiping the entire hook
-    // chain.  Hooks installed during one iteration are gone in subsequent iterations.  As a
-    // result the process-level hook may not fire when the crash happens.  The real safety net is
-    // `ExecutingTransactionGuard::drop`, which consults `SIM_NODE_DB_PATHS` (TLS, unaffected by
-    // msim) when it detects it is being dropped during a panic.
+    // NOTE: in simtests, msim's run_all_ready replaces the hook chain on every iteration, so
+    // this hook is not guaranteed to fire.  The fallback is ExecutingTransactionGuard::drop,
+    // which always has access to db_path and writes the log when dropped during a panic.
     #[cfg(msim)]
-    let installing_node_id = {
-        let id = sui_simulator::current_simnode_id();
-        SIM_NODE_DB_PATHS.with(|map| {
-            map.borrow_mut().insert(id, db_path.clone());
-        });
-        id
-    };
+    let installing_node_id = sui_simulator::current_simnode_id();
 
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -192,11 +176,10 @@ pub fn install_panic_hook(db_path: PathBuf) {
 
         // Write the crash log BEFORE calling the previous hook. Some previous hooks call
         // `process::exit` (e.g. the telemetry hook when crash_on_panic=true), and we must
-        // not lose the digest in that race. In simtests this hook is triggered via
-        // `catch_unwind` from the fail point; the previous hook just logs and returns.
+        // not lose the digest in that race.
         //
-        // We also clear the TLS slot after writing so that a second invocation of this hook
-        // (e.g. from `kill_current_node`'s PanicWrapper panic) is a no-op.
+        // We also clear the TLS slot after writing so that ExecutingTransactionGuard::drop
+        // (which runs later during unwind) sees an empty slot and skips the duplicate write.
         let digest = EXECUTING_TX.with(|slot| slot.get());
         if let Some(digest) = digest {
             EXECUTING_TX.with(|slot| slot.set(None));
