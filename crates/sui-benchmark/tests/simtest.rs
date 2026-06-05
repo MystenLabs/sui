@@ -419,13 +419,6 @@ mod test {
 
         register_fail_point_if("select-random-cache", || true);
 
-        // Simulate deterministic per-transaction crashes to exercise crash-recovery. The
-        // same probability is registered with the load generator so it can identify poison
-        // transactions and recycle their gas instead of retrying indefinitely.
-        const CRASH_PROB: f32 = 0.002;
-        register_fail_point_if("crash-with-tx-logging", || true);
-        set_crash_recovery_probability(CRASH_PROB);
-
         let test_cluster = Arc::new(
             init_test_cluster_builder(4, 10000)
                 .with_num_unpruned_validators(4)
@@ -522,7 +515,24 @@ mod test {
         // quorum, empirically ~6% per-validator skip rate produces ~5% DKG failure per epoch.
         register_fail_point_if("rb-dkg", || thread_rng().gen_bool(0.06));
 
-        test_simulated_load(test_cluster, 120).await;
+        // crash-with-tx-logging is deferred to pre_load_setup so it doesn't fire during
+        // workload initialization. Setup transactions that crash and get logged would
+        // otherwise stall initialization because the init code retries the same digest.
+        const CRASH_PROB: f32 = 0.002;
+        test_simulated_load_with_test_config(
+            test_cluster,
+            120,
+            SimulatedLoadConfig::default(),
+            None,
+            None,
+            Some(|_cluster: Arc<TestCluster>| {
+                register_fail_point_if("crash-with-tx-logging", || true);
+                set_crash_recovery_probability(CRASH_PROB);
+                std::future::ready(())
+            }),
+            true,
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]
