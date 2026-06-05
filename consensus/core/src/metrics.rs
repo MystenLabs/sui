@@ -148,6 +148,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) rejected_blocks: IntCounterVec,
     pub(crate) subscribed_blocks: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
+    pub(crate) observer_stream_quorum_delay_timeouts: IntCounter,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
     pub(crate) last_committed_authority_round: IntGaugeVec,
@@ -516,6 +517,11 @@ impl NodeMetrics {
                 "observer_subscribed_blocks_batch_size",
                 "The number of blocks received from a peer before verification in a single batch",
                 NUM_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            observer_stream_quorum_delay_timeouts: register_int_counter_with_registry!(
+                "observer_stream_quorum_delay_timeouts",
+                "Number of times the quorum delay timed out and released blocks without reaching quorum",
                 registry,
             ).unwrap(),
             verified_blocks: register_int_counter_vec_with_registry!(

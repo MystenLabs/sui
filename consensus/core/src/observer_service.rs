@@ -1,7 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    pin::Pin,
+    sync::Arc,
+    task,
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -27,8 +33,160 @@ use crate::{
         NodeId, ObserverBlockStream, ObserverNetworkService, ObserverStreamItem, PeerId,
         observer::AuxiliaryData,
     },
+    stake_aggregator::{QuorumThreshold, StakeAggregator},
     synchronizer::SynchronizerHandle,
 };
+
+const QUORUM_DELAY_TIMEOUT: Duration = Duration::from_secs(1);
+
+/// A stream adapter that buffers blocks per round and only releases round R blocks once
+/// 2f+1 stake worth of blocks have been accepted for that round. This mitigates front-running
+/// by ensuring that by the time a subscriber sees round R blocks, the R+1 leader has likely
+/// frozen its parent set.
+///
+/// When round R reaches quorum, all buffered blocks from rounds <= R are released together.
+/// If quorum is not reached within [`QUORUM_DELAY_TIMEOUT`], all pending blocks are flushed
+/// as a safety valve to prevent the stream from stalling during partitions.
+struct QuorumDelayedStream<S> {
+    inner: S,
+    context: Arc<Context>,
+    pending: BTreeMap<Round, RoundPendingState>,
+    ready: VecDeque<Vec<VerifiedBlock>>,
+    /// Fires when pending blocks have been waiting too long without reaching quorum.
+    /// Reset to `None` when the pending map is empty.
+    timeout: Option<Pin<Box<tokio::time::Sleep>>>,
+}
+
+struct RoundPendingState {
+    stake_aggregator: StakeAggregator<QuorumThreshold>,
+    blocks: Vec<VerifiedBlock>,
+}
+
+impl<S: futures::Stream<Item = Vec<VerifiedBlock>> + Unpin> QuorumDelayedStream<S> {
+    fn new(inner: S, context: Arc<Context>) -> Self {
+        Self {
+            inner,
+            context,
+            pending: BTreeMap::new(),
+            ready: VecDeque::new(),
+            timeout: None,
+        }
+    }
+
+    fn buffer_block(&mut self, block: VerifiedBlock) {
+        let round = block.round();
+        let author = block.author();
+
+        // Start the timeout when the first block enters the pending buffer.
+        if self.pending.is_empty() {
+            self.timeout = Some(Box::pin(tokio::time::sleep(QUORUM_DELAY_TIMEOUT)));
+        }
+
+        let state = self
+            .pending
+            .entry(round)
+            .or_insert_with(|| RoundPendingState {
+                stake_aggregator: StakeAggregator::new(),
+                blocks: Vec::new(),
+            });
+        state.stake_aggregator.add(author, &self.context.committee);
+        state.blocks.push(block);
+    }
+
+    /// Checks all pending rounds for quorum. When any round reaches quorum, releases all
+    /// blocks from that round and any earlier rounds.
+    fn flush_ready_rounds(&mut self) {
+        let committee = &self.context.committee;
+        let max_quorum_round = self
+            .pending
+            .iter()
+            .filter(|(_, state)| state.stake_aggregator.reached_threshold(committee))
+            .map(|(&round, _)| round)
+            .max();
+
+        if let Some(cutoff) = max_quorum_round {
+            self.release_rounds_up_to(cutoff);
+        }
+    }
+
+    /// Drains all pending rounds regardless of quorum status.
+    fn flush_all_pending(&mut self) {
+        let all = std::mem::take(&mut self.pending);
+        for (_round, state) in all {
+            self.ready.push_back(state.blocks);
+        }
+        self.timeout = None;
+    }
+
+    /// Releases all pending rounds up to and including `cutoff`.
+    fn release_rounds_up_to(&mut self, cutoff: Round) {
+        let remaining = self.pending.split_off(&(cutoff + 1));
+        let released = std::mem::replace(&mut self.pending, remaining);
+        for (_round, state) in released {
+            self.ready.push_back(state.blocks);
+        }
+        if self.pending.is_empty() {
+            self.timeout = None;
+        }
+    }
+}
+
+impl<S: futures::Stream<Item = Vec<VerifiedBlock>> + Unpin> futures::Stream
+    for QuorumDelayedStream<S>
+{
+    type Item = Vec<VerifiedBlock>;
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut task::Context<'_>,
+    ) -> task::Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+
+        // Yield any already-ready blocks first.
+        if let Some(blocks) = this.ready.pop_front() {
+            return task::Poll::Ready(Some(blocks));
+        }
+
+        // Poll the inner stream for new blocks.
+        loop {
+            // Check the timeout before going to sleep: if it has fired, flush everything.
+            if let Some(timeout) = this.timeout.as_mut()
+                && timeout.as_mut().poll(cx).is_ready()
+            {
+                this.context
+                    .metrics
+                    .node_metrics
+                    .observer_stream_quorum_delay_timeouts
+                    .inc();
+                tracing::warn!(
+                    pending_rounds = this.pending.len(),
+                    "Quorum delay timeout fired, releasing all pending blocks"
+                );
+                this.flush_all_pending();
+                if let Some(blocks) = this.ready.pop_front() {
+                    return task::Poll::Ready(Some(blocks));
+                }
+            }
+
+            match Pin::new(&mut this.inner).poll_next(cx) {
+                task::Poll::Ready(Some(blocks)) => {
+                    for block in blocks {
+                        this.buffer_block(block);
+                    }
+                    this.flush_ready_rounds();
+
+                    if let Some(blocks) = this.ready.pop_front() {
+                        return task::Poll::Ready(Some(blocks));
+                    }
+                    // No quorum reached yet — keep polling in case more blocks are buffered.
+                    continue;
+                }
+                task::Poll::Ready(None) => return task::Poll::Ready(None),
+                task::Poll::Pending => return task::Poll::Pending,
+            }
+        }
+    }
+}
 
 /// Serves observer requests from observer or validator peers. It is the server-side
 /// counterpart to `ObserverNetworkClient`.
@@ -256,19 +414,20 @@ impl ObserverNetworkService for ObserverService {
             );
 
         const MAX_BLOCKS_PER_POLL: usize = 20;
-        let live_block_stream = BroadcastStream::<VerifiedBlock>::new(
+        let raw_live_stream = BroadcastStream::<VerifiedBlock>::new(
             PeerId::Observer(Box::new(peer)),
             self.rx_accepted_block_broadcast.resubscribe(),
             MAX_BLOCKS_PER_POLL,
             self.subscription_counter.clone(),
-        )
-        .map(|blocks| ObserverStreamItem {
-            blocks: blocks
-                .into_iter()
-                .map(|block| block.serialized().clone())
-                .collect(),
-            auxiliary_data: Default::default(),
-        });
+        );
+        let live_block_stream = QuorumDelayedStream::new(raw_live_stream, self.context.clone())
+            .map(|blocks| ObserverStreamItem {
+                blocks: blocks
+                    .into_iter()
+                    .map(|block| block.serialized().clone())
+                    .collect(),
+                auxiliary_data: Default::default(),
+            });
 
         let block_stream = past_stream.chain(live_block_stream);
 
@@ -342,7 +501,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_observer_stream_receives_broadcast_blocks() {
+    async fn test_observer_stream_releases_on_quorum() {
         telemetry_subscribers::init_for_testing();
         let (context, keys) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -386,17 +545,17 @@ mod tests {
             .await
             .unwrap();
 
-        // Broadcast three blocks
+        // With 4 authorities (f=1), quorum requires 2f+1 = 3 blocks from distinct authorities.
+        // Send 3 blocks at round 5 from authorities 0, 1, 2 to reach quorum.
         let block1 = VerifiedBlock::new_for_test(TestBlock::new(5, 0).build());
-        let block2 = VerifiedBlock::new_for_test(TestBlock::new(10, 1).build());
-        let block3 = VerifiedBlock::new_for_test(TestBlock::new(15, 2).build());
+        let block2 = VerifiedBlock::new_for_test(TestBlock::new(5, 1).build());
+        let block3 = VerifiedBlock::new_for_test(TestBlock::new(5, 2).build());
 
         tx_accepted_block.send(block1.clone()).unwrap();
         tx_accepted_block.send(block2.clone()).unwrap();
         tx_accepted_block.send(block3.clone()).unwrap();
 
-        // Verify observer receives all three blocks in order.
-        // Collect all blocks from the batched stream.
+        // All 3 blocks should be released once quorum is reached.
         let mut received_blocks = Vec::new();
         while received_blocks.len() < 3 {
             let item = stream.next().await.unwrap();
@@ -405,12 +564,132 @@ mod tests {
                 received_blocks.push(VerifiedBlock::new_verified(signed, block_bytes));
             }
         }
+        assert_eq!(received_blocks.len(), 3);
+        for block in &received_blocks {
+            assert_eq!(block.round(), 5);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_observer_stream_quorum_releases_earlier_rounds() {
+        telemetry_subscribers::init_for_testing();
+        let (context, keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let (tx_accepted_block, rx_accepted_block) = broadcast::channel::<VerifiedBlock>(100);
+
+        let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let block_verifier = Arc::new(NoopBlockVerifier);
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+
+        let block_sync_service = Arc::new(BlockSyncService::new(
+            context.clone(),
+            dag_state.clone(),
+            store.clone(),
+        ));
+        let observer_service = ObserverService::new(
+            context.clone(),
+            core_dispatcher,
+            dag_state,
+            rx_accepted_block,
+            block_verifier,
+            commit_vote_monitor,
+            transaction_vote_tracker,
+            create_mock_synchronizer(),
+            block_sync_service,
+            None,
+        );
+
+        let highest_round_per_authority = vec![0u64; context.committee.size()];
+        let peer = keys[0].0.public().clone();
+
+        let mut stream = observer_service
+            .handle_stream_blocks(peer, highest_round_per_authority)
+            .await
+            .unwrap();
+
+        // Send 1 block at round 5 (below quorum), then 3 blocks at round 10.
+        // When round 10 reaches quorum, the round 5 block should also be released.
+        let early_block = VerifiedBlock::new_for_test(TestBlock::new(5, 0).build());
+        let block_r10_a = VerifiedBlock::new_for_test(TestBlock::new(10, 0).build());
+        let block_r10_b = VerifiedBlock::new_for_test(TestBlock::new(10, 1).build());
+        let block_r10_c = VerifiedBlock::new_for_test(TestBlock::new(10, 2).build());
+
+        tx_accepted_block.send(early_block.clone()).unwrap();
+        tx_accepted_block.send(block_r10_a.clone()).unwrap();
+        tx_accepted_block.send(block_r10_b.clone()).unwrap();
+        tx_accepted_block.send(block_r10_c.clone()).unwrap();
+
+        // Should receive 4 blocks total: 1 from round 5 + 3 from round 10.
+        // Round 5 should come first (lower round released before higher round).
+        let mut received_blocks = Vec::new();
+        while received_blocks.len() < 4 {
+            let item = stream.next().await.unwrap();
+            for block_bytes in item.blocks {
+                let signed: SignedBlock = bcs::from_bytes(&block_bytes).unwrap();
+                received_blocks.push(VerifiedBlock::new_verified(signed, block_bytes));
+            }
+        }
+        assert_eq!(received_blocks.len(), 4);
         assert_eq!(received_blocks[0].round(), 5);
-        assert_eq!(received_blocks[0].author().value(), 0);
-        assert_eq!(received_blocks[1].round(), 10);
-        assert_eq!(received_blocks[1].author().value(), 1);
-        assert_eq!(received_blocks[2].round(), 15);
-        assert_eq!(received_blocks[2].author().value(), 2);
+        // Remaining blocks are from round 10
+        for block in &received_blocks[1..] {
+            assert_eq!(block.round(), 10);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_observer_stream_quorum_delay_timeout() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+
+        // Use a channel-backed stream to have manual control over block delivery.
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Vec<VerifiedBlock>>();
+        let inner_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
+
+        let mut stream = QuorumDelayedStream::new(inner_stream, context.clone());
+
+        // Send a single block — not enough for quorum (needs 3 out of 4).
+        let block = VerifiedBlock::new_for_test(TestBlock::new(5, 0).build());
+        tx.send(vec![block]).unwrap();
+
+        // Poll the stream: it should buffer the block but not yield it.
+        // Use a short timeout to confirm the stream returns Pending.
+        let poll_result =
+            tokio::time::timeout(Duration::from_millis(100), StreamExt::next(&mut stream)).await;
+        assert!(
+            poll_result.is_err(),
+            "Stream should not yield before quorum or timeout"
+        );
+
+        // Advance time past the quorum delay timeout.
+        tokio::time::pause();
+        tokio::time::advance(QUORUM_DELAY_TIMEOUT).await;
+        tokio::time::resume();
+
+        // Now the stream should yield the buffered block via timeout.
+        let item = tokio::time::timeout(Duration::from_millis(100), StreamExt::next(&mut stream))
+            .await
+            .expect("Stream should yield after timeout")
+            .expect("Stream should not be closed");
+        assert_eq!(item.len(), 1);
+        assert_eq!(item[0].round(), 5);
+
+        // Verify the timeout metric was incremented.
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .observer_stream_quorum_delay_timeouts
+                .get(),
+            1
+        );
     }
 
     #[tokio::test]
