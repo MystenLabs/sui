@@ -16442,6 +16442,7 @@ dependencies = [
  "move-cli",
  "move-core-types",
  "once_cell",
+ "prost 0.14.1",
  "prost-types 0.14.1",
  "quick-js",
  "rand 0.8.5",
