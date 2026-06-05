@@ -253,6 +253,10 @@ function readDebugInfo(
     let fileInfo = filesMap.get(fileHash);
     if (!fileInfo) {
         if (failOnNoSourceFile) {
+            // This will never trigger when trace is generated from Move unit tests,
+            // and failOnNoSourceFile is false when processing source code in the
+            // other case of trace generation. We could still add more graceful
+            // handling here but it does come at a cost of additional code complexity.
             throw new Error('Could not find file with hash: '
                 + fileHash
                 + ' when processing debug info at: '
