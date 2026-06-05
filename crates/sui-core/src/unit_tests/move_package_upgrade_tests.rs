@@ -738,7 +738,7 @@ async fn publish_package_cyclic_direct_cross_package1() {
             let mut b = vec![];
             m.serialize_with_version(VERSION_MAX, &mut b).unwrap();
             let modules = vec![b];
-            // include B, but don't inlude the original ID of `A` in the deps
+            // include B, but don't include the original ID of `A` in the deps
             let deps = vec![b_oid];
             let digest = MovePackage::compute_digest_for_modules_and_deps(&modules, &deps, true);
             (modules, deps, digest)
@@ -1164,8 +1164,11 @@ async fn test_upgrade_package_add_new_module_in_dep_only_mode_pre_v68() {
         config.set_gas_model_version_for_testing(11);
         config.set_disallow_new_modules_in_deps_only_packages_for_testing(false);
         // The forwarding address registry is an execution-version-4 object; it must not be
-        // created under execution version 3 (its hardcoded UID can't be shared there).
+        // created under execution version 3 (its hardcoded UID can't be shared there). With the
+        // registry absent, forwarding addresses must also stay disabled or version assignment
+        // would look up a registry version that does not exist.
         config.set_create_forwarding_address_registry_for_testing(false);
+        config.set_enable_forwarding_addresses_for_testing(false);
         config
     });
 

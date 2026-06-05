@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use mysten_common::ZipDebugEqIteratorExt;
+use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
 
 use crate::authority::AuthorityPerEpochStore;
 use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
@@ -45,6 +46,12 @@ pub struct AssignedVersions {
     /// - the transaction is an end-of-epoch / change-epoch tx, which does not
     ///   read or write the accumulator root.
     pub accumulator_version: Option<SequenceNumber>,
+    /// Consensus-assigned version of the forwarding address registry for this transaction.
+    ///
+    /// `None` unless forwarding addresses are enabled for this epoch. Surfaced to execution via
+    /// `ExecutionEnv` (analogous to `accumulator_version`) so resolution can read the registry at
+    /// a deterministic version without the registry being a declared input or appearing in effects.
+    pub forwarding_address_registry_version: Option<SequenceNumber>,
 }
 
 impl AssignedVersions {
@@ -55,7 +62,16 @@ impl AssignedVersions {
         Self {
             shared_object_versions,
             accumulator_version,
+            forwarding_address_registry_version: None,
         }
+    }
+
+    pub fn with_forwarding_address_registry_version(
+        mut self,
+        forwarding_address_registry_version: Option<SequenceNumber>,
+    ) -> Self {
+        self.forwarding_address_registry_version = forwarding_address_registry_version;
+        self
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &(ConsensusObjectSequenceKey, SequenceNumber)> {
@@ -386,9 +402,26 @@ impl SharedObjVerManager {
             None
         };
 
+        let forwarding_address_registry_version = if epoch_store
+            .protocol_config()
+            .enable_forwarding_addresses()
+        {
+            let init_version = epoch_store
+                .epoch_start_config()
+                .forwarding_address_registry_obj_initial_shared_version()
+                .expect("forwarding address registry obj initial shared version should be set when forwarding addresses are enabled");
+            let version = *shared_input_next_versions
+                    .get(&(SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, init_version))
+                    .expect("forwarding address registry object must be in shared_input_next_versions when forwarding addresses are enabled");
+            Some(version)
+        } else {
+            None
+        };
+
         if shared_input_objects.is_empty() {
             // No shared object used by this transaction. No need to assign versions.
-            return AssignedVersions::new(vec![], accumulator_version);
+            return AssignedVersions::new(vec![], accumulator_version)
+                .with_forwarding_address_registry_version(forwarding_address_registry_version);
         }
 
         let tx_key = assignable.key();
@@ -508,6 +541,7 @@ impl SharedObjVerManager {
         );
 
         AssignedVersions::new(assigned_versions, accumulator_version)
+            .with_forwarding_address_registry_version(forwarding_address_registry_version)
     }
 }
 
@@ -527,6 +561,15 @@ fn get_or_init_versions<'a>(
                 .epoch_start_config()
                 .accumulator_root_obj_initial_shared_version()
                 .expect("accumulator root obj initial shared version should be set"),
+        ));
+    }
+    if epoch_store.protocol_config().enable_forwarding_addresses() {
+        shared_input_objects.push((
+            SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+            epoch_store
+                .epoch_start_config()
+                .forwarding_address_registry_obj_initial_shared_version()
+                .expect("forwarding address registry obj initial shared version should be set"),
         ));
     }
 
@@ -615,6 +658,9 @@ mod tests {
         // using lamport version, hence the next transaction will use the same version number.
         // In the following case, certs[2] has the same assignment as certs[1] for this reason.
         let expected_accumulator_version = SequenceNumber::from_u64(1);
+        let fwd = epoch_store
+            .epoch_start_config()
+            .forwarding_address_registry_obj_initial_shared_version();
         assert_eq!(
             assigned_versions.0,
             vec![
@@ -624,6 +670,7 @@ mod tests {
                         vec![((id, init_shared_version), init_shared_version)],
                         Some(expected_accumulator_version)
                     )
+                    .with_forwarding_address_registry_version(fwd)
                 ),
                 (
                     certs[1].key(),
@@ -631,6 +678,7 @@ mod tests {
                         vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
                         Some(expected_accumulator_version)
                     )
+                    .with_forwarding_address_registry_version(fwd)
                 ),
                 (
                     certs[2].key(),
@@ -638,6 +686,7 @@ mod tests {
                         vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
                         Some(expected_accumulator_version)
                     )
+                    .with_forwarding_address_registry_version(fwd)
                 ),
                 (
                     certs[3].key(),
@@ -645,6 +694,7 @@ mod tests {
                         vec![((id, init_shared_version), SequenceNumber::from_u64(10))],
                         Some(expected_accumulator_version)
                     )
+                    .with_forwarding_address_registry_version(fwd)
                 ),
             ]
         );
@@ -716,6 +766,9 @@ mod tests {
             next_randomness_obj_version
         );
         let expected_accumulator_version = SequenceNumber::from_u64(1);
+        let fwd = epoch_store
+            .epoch_start_config()
+            .forwarding_address_registry_obj_initial_shared_version();
         assert_eq!(
             assigned_versions.0,
             vec![
@@ -728,6 +781,7 @@ mod tests {
                         )],
                         Some(expected_accumulator_version)
                     )
+                    .with_forwarding_address_registry_version(fwd)
                 ),
                 (
                     certs[1].key(),
@@ -739,6 +793,7 @@ mod tests {
                         )],
                         Some(expected_accumulator_version)
                     )
+                    .with_forwarding_address_registry_version(fwd)
                 ),
                 (
                     certs[2].key(),
@@ -750,6 +805,7 @@ mod tests {
                         )],
                         Some(expected_accumulator_version)
                     )
+                    .with_forwarding_address_registry_version(fwd)
                 ),
             ]
         );
@@ -862,8 +918,15 @@ mod tests {
 
         // Check that the final version of the shared object is the lamport version of the last
         // transaction.
+        let fwd = epoch_store
+            .epoch_start_config()
+            .forwarding_address_registry_obj_initial_shared_version();
         shared_input_next_versions
             .remove(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, SequenceNumber::from_u64(1)));
+        shared_input_next_versions.remove(&(
+            SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+            SequenceNumber::from_u64(1),
+        ));
         assert_eq!(
             shared_input_next_versions,
             HashMap::from([
@@ -890,6 +953,7 @@ mod tests {
                         ],
                         Some(expected_accumulator_version)
                     )
+                    .with_forwarding_address_registry_version(fwd)
                 ),
                 (
                     certs[1].key(),
@@ -900,6 +964,7 @@ mod tests {
                         ],
                         Some(expected_accumulator_version)
                     )
+                    .with_forwarding_address_registry_version(fwd)
                 ),
                 (
                     certs[2].key(),
@@ -907,6 +972,7 @@ mod tests {
                         vec![((id1, init_shared_version_1), SequenceNumber::from_u64(4))],
                         Some(expected_accumulator_version)
                     )
+                    .with_forwarding_address_registry_version(fwd)
                 ),
                 (
                     certs[3].key(),
@@ -917,6 +983,7 @@ mod tests {
                         ],
                         Some(expected_accumulator_version)
                     )
+                    .with_forwarding_address_registry_version(fwd)
                 ),
                 (
                     certs[4].key(),
@@ -930,6 +997,7 @@ mod tests {
                         ],
                         Some(expected_accumulator_version)
                     )
+                    .with_forwarding_address_registry_version(fwd)
                 ),
             ]
         );
@@ -1188,6 +1256,7 @@ mod tests {
                         AssignedVersions {
                             shared_object_versions: vec![],
                             accumulator_version: Some(acc_version),
+                            forwarding_address_registry_version: Some(SequenceNumber::from_u64(1)),
                         }
                     ),
                     (
@@ -1198,13 +1267,23 @@ mod tests {
                                 acc_version
                             )],
                             accumulator_version: Some(acc_version),
+                            forwarding_address_registry_version: Some(SequenceNumber::from_u64(1)),
                         }
                     ),
                 ]),
-                shared_input_next_versions: HashMap::from([(
-                    (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
-                    acc_version.next()
-                )]),
+                shared_input_next_versions: HashMap::from([
+                    (
+                        (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
+                        acc_version.next()
+                    ),
+                    (
+                        (
+                            SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                            SequenceNumber::from_u64(1)
+                        ),
+                        SequenceNumber::from_u64(1)
+                    ),
+                ]),
             }
         );
     }
@@ -1243,6 +1322,7 @@ mod tests {
                         AssignedVersions {
                             shared_object_versions: vec![],
                             accumulator_version: Some(acc_version),
+                            forwarding_address_registry_version: Some(SequenceNumber::from_u64(1)),
                         }
                     ),
                     (
@@ -1253,6 +1333,7 @@ mod tests {
                                 acc_version
                             )],
                             accumulator_version: Some(acc_version),
+                            forwarding_address_registry_version: Some(SequenceNumber::from_u64(1)),
                         }
                     ),
                     (
@@ -1260,6 +1341,7 @@ mod tests {
                         AssignedVersions {
                             shared_object_versions: vec![],
                             accumulator_version: Some(acc_version.next()),
+                            forwarding_address_registry_version: Some(SequenceNumber::from_u64(1)),
                         }
                     ),
                     (
@@ -1270,6 +1352,7 @@ mod tests {
                                 acc_version.next()
                             )],
                             accumulator_version: Some(acc_version.next()),
+                            forwarding_address_registry_version: Some(SequenceNumber::from_u64(1)),
                         }
                     ),
                     (
@@ -1277,6 +1360,7 @@ mod tests {
                         AssignedVersions {
                             shared_object_versions: vec![],
                             accumulator_version: Some(acc_version.next().next()),
+                            forwarding_address_registry_version: Some(SequenceNumber::from_u64(1)),
                         }
                     ),
                     (
@@ -1287,13 +1371,23 @@ mod tests {
                                 acc_version.next().next()
                             )],
                             accumulator_version: Some(acc_version.next().next()),
+                            forwarding_address_registry_version: Some(SequenceNumber::from_u64(1)),
                         }
                     ),
                 ]),
-                shared_input_next_versions: HashMap::from([(
-                    (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
-                    acc_version.next().next().next()
-                )]),
+                shared_input_next_versions: HashMap::from([
+                    (
+                        (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
+                        acc_version.next().next().next()
+                    ),
+                    (
+                        (
+                            SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                            SequenceNumber::from_u64(1)
+                        ),
+                        SequenceNumber::from_u64(1)
+                    ),
+                ]),
             }
         );
     }
@@ -1330,6 +1424,7 @@ mod tests {
                                 shared_obj_version
                             )],
                             accumulator_version: Some(acc_version),
+                            forwarding_address_registry_version: Some(SequenceNumber::from_u64(1)),
                         }
                     ),
                     (
@@ -1340,6 +1435,7 @@ mod tests {
                                 acc_version
                             )],
                             accumulator_version: Some(acc_version),
+                            forwarding_address_registry_version: Some(SequenceNumber::from_u64(1)),
                         }
                     ),
                 ]),
@@ -1351,6 +1447,13 @@ mod tests {
                     (
                         (shared_obj_id, shared_obj_version),
                         shared_obj_version.next()
+                    ),
+                    (
+                        (
+                            SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                            SequenceNumber::from_u64(1)
+                        ),
+                        SequenceNumber::from_u64(1)
                     ),
                 ]),
             }

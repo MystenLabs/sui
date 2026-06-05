@@ -617,8 +617,11 @@ async fn test_address_balance_gas_v3_accumulator_sign() {
             // set up config values that would otherwise be incompatible with the execution version
             cfg.set_gas_model_version_for_testing(11);
             // The forwarding address registry is an execution-version-4 object; it must not be
-            // created under execution version 3 (its hardcoded UID can't be shared there).
+            // created under execution version 3 (its hardcoded UID can't be shared there). With the
+            // registry absent, forwarding addresses must also stay disabled or version assignment
+            // would look up a registry version that does not exist.
             cfg.set_create_forwarding_address_registry_for_testing(false);
+            cfg.set_enable_forwarding_addresses_for_testing(false);
             cfg
         }))
         .build()
