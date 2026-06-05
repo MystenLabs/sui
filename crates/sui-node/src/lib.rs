@@ -1967,7 +1967,7 @@ impl SuiNode {
                             sui_tx_validator_metrics,
                             admission_queue,
                             new_role,
-                            std::collections::HashSet::new(),
+                            crash_recovery::load_crashed_transactions(&self.config.db_path),
                         )
                         .await?,
                     )
