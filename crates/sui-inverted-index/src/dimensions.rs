@@ -53,8 +53,9 @@ pub enum IndexDimension {
     /// position is occupied. Event-space only — it gives the read side a
     /// concrete universe of real events to subtract from when evaluating
     /// unanchored negation (`NOT D` == `E \ D`), since the packed `event_seq`
-    /// namespace is far too sparse to synthesize a dense complement. Carries no
-    /// value payload, so its encoded key is just the tag byte.
+    /// namespace is far too sparse to synthesize a dense complement. Every real
+    /// event maps to the same singleton key; it carries a single placeholder
+    /// value byte so the encoded key keeps the standard `[tag, value...]` shape.
     EventExtant = 0x08,
 }
 
@@ -81,9 +82,12 @@ impl IndexDimension {
 const COMPOUND_VALUE_SEPARATOR: u8 = 0x00;
 
 /// Singleton value for the internal [`IndexDimension::EventExtant`] marker:
-/// every real event maps to the same key, so it carries no payload and its
-/// encoded row key is just the tag byte.
-const EVENT_EXTANT_VALUE: &[u8] = &[];
+/// every real event maps to the same key. It carries a single placeholder byte
+/// so the encoded row key has the standard `[tag, value...]` shape and passes
+/// `BitmapKey::new`'s length invariant (dimension keys must be at least two
+/// bytes) without a per-tag carve-out. The marker is a singleton — one row per
+/// bucket, not per event — so the extra byte costs ~1 byte per bucket-row.
+const EVENT_EXTANT_VALUE: &[u8] = &[0x00];
 
 /// Visit all tx-space dimensions for a transaction.
 ///
@@ -177,7 +181,8 @@ pub fn for_each_transaction_dimension(
 /// buffer while the caller consumes each value synchronously.
 ///
 /// Every real event also yields one [`IndexDimension::EventExtant`] candidate
-/// (an empty-keyed existence marker) at its own `event_idx`.
+/// (a singleton existence marker keyed by a placeholder byte) at its own
+/// `event_idx`.
 pub fn for_each_event_dimension(
     sender: SuiAddress,
     effects: &TransactionEffects,
@@ -534,7 +539,10 @@ mod tests {
             tx.events.as_ref(),
             |event_idx, dim, value| {
                 if dim == IndexDimension::EventExtant {
-                    assert!(value.is_empty(), "existence marker carries no payload");
+                    assert_eq!(
+                        value, EVENT_EXTANT_VALUE,
+                        "existence marker carries the singleton placeholder value"
+                    );
                     extant_idxs.push(event_idx);
                 }
             },
@@ -542,10 +550,10 @@ mod tests {
 
         // Exactly one existence bit per real event, at each event's own index.
         assert_eq!(extant_idxs, vec![0, 1, 2]);
-        // The encoded key is just the tag byte (empty value).
+        // The encoded key is the tag byte followed by the placeholder value byte.
         assert_eq!(
             encode_dimension_key(IndexDimension::EventExtant, EVENT_EXTANT_VALUE),
-            vec![IndexDimension::EventExtant.tag_byte()]
+            vec![IndexDimension::EventExtant.tag_byte(), 0x00]
         );
     }
 
