@@ -327,6 +327,8 @@ pub struct AuthorityMetrics {
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
     pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
+    pub consensus_handler_double_spend_deferrals: IntCounter,
+    pub consensus_handler_double_spend_conflict_count: HistogramVec,
     pub consensus_handler_cancelled_transactions: IntCounter,
     pub consensus_handler_max_object_costs: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
@@ -662,6 +664,18 @@ impl AuthorityMetrics {
             consensus_handler_unpaid_amplification_deferrals: register_int_counter_with_registry!(
                 "consensus_handler_unpaid_amplification_deferrals",
                 "Number of transactions deferred due to unpaid consensus amplification",
+                registry,
+            ).unwrap(),
+            consensus_handler_double_spend_deferrals: register_int_counter_with_registry!(
+                "consensus_handler_double_spend_deferrals",
+                "Number of transactions deferred due to owned object double-spend contention",
+                registry,
+            ).unwrap(),
+            consensus_handler_double_spend_conflict_count: register_histogram_vec_with_registry!(
+                "consensus_handler_double_spend_conflict_count",
+                "Number of conflicting transactions per double-spend winner, by object type",
+                &["object_type"],
+                POSITIVE_INT_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             consensus_handler_cancelled_transactions: register_int_counter_with_registry!(
