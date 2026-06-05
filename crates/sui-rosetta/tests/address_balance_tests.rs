@@ -15,7 +15,7 @@ use serde_json::json;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::CoinMetadataCache;
 use sui_rosetta::operations::Operations;
-use sui_rosetta::types::TransactionIdentifierResponse;
+use sui_rosetta::types::{PreprocessMetadata, TransactionIdentifierResponse};
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{GetBalanceRequest, GetEpochRequest, GetTransactionRequest};
@@ -153,6 +153,23 @@ async fn get_total_balance(client: &mut GrpcClient, address: SuiAddress, coin_ty
         .into_inner()
         .balance()
         .balance()
+}
+
+/// Return only the address-balance portion of an account's holdings (excludes coin objects),
+/// so a test can assert a recipient was credited to address balance rather than a coin object.
+async fn get_address_balance(client: &mut GrpcClient, address: SuiAddress, coin_type: &str) -> u64 {
+    let request = GetBalanceRequest::default()
+        .with_owner(address.to_string())
+        .with_coin_type(coin_type.to_string());
+
+    client
+        .state_client()
+        .get_balance(request)
+        .await
+        .unwrap()
+        .into_inner()
+        .balance()
+        .address_balance()
 }
 
 /// Deposit coins to address balance via `coin::send_funds<T>`.
@@ -368,6 +385,97 @@ fn pay_coin_ops(
         }
     ]))
     .unwrap()
+}
+
+/// Multi-recipient PayCoin operations: one positive op per recipient and a single negative op on
+/// the sender for the total.
+fn pay_coin_ops_multi(
+    sender: SuiAddress,
+    recipients: &[(SuiAddress, u64)],
+    coin_type: &str,
+) -> Operations {
+    let mut ops = Vec::new();
+    let mut total: i128 = 0;
+    for (i, (recipient, amount)) in recipients.iter().enumerate() {
+        let amount_i128 = *amount as i128;
+        total += amount_i128;
+        ops.push(json!({
+            "operation_identifier": {"index": i},
+            "type": "PayCoin",
+            "account": {"address": recipient.to_string()},
+            "amount": {
+                "value": amount_i128.to_string(),
+                "currency": {
+                    "symbol": "TEST_COIN",
+                    "decimals": TEST_COIN_DECIMALS,
+                    "metadata": {"coin_type": coin_type}
+                }
+            }
+        }));
+    }
+    ops.push(json!({
+        "operation_identifier": {"index": recipients.len()},
+        "type": "PayCoin",
+        "account": {"address": sender.to_string()},
+        "amount": {
+            "value": (-total).to_string(),
+            "currency": {
+                "symbol": "TEST_COIN",
+                "decimals": TEST_COIN_DECIMALS,
+                "metadata": {"coin_type": coin_type}
+            }
+        }
+    }));
+    serde_json::from_value(json!(ops)).unwrap()
+}
+
+/// Publish the test custom coin, mint `mint_amount` to `sender`, register it as a gasless
+/// (free-tier) token with `min_transfer`, and move the entire minted amount into the sender's
+/// address balance. Returns the coin type's canonical string. `GASLESS_TOKENS_FOR_TESTING` is
+/// process-global and additive; package IDs are unique per test so registrations don't collide.
+async fn setup_gasless_coin_in_ab(
+    test_cluster: &test_cluster::TestCluster,
+    client: &mut GrpcClient,
+    keystore: &sui_keys::keystore::Keystore,
+    sender: SuiAddress,
+    mint_amount: u64,
+    min_transfer: u64,
+) -> String {
+    let init_ret = init_package(
+        test_cluster,
+        client,
+        keystore,
+        sender,
+        Path::new("tests/custom_coins/test_coin"),
+    )
+    .await
+    .unwrap();
+    let coin_type = init_ret.coin_tag.to_canonical_string(true);
+
+    mint(
+        test_cluster,
+        client,
+        keystore,
+        init_ret,
+        vec![(mint_amount, sender)],
+    )
+    .await
+    .unwrap();
+
+    sui_types::transaction::add_gasless_token_for_testing(coin_type.clone(), min_transfer);
+
+    // Move the whole minted amount into the sender's address balance — gasless pays entirely from AB.
+    deposit_to_address_balance(
+        test_cluster,
+        client,
+        keystore,
+        sender,
+        mint_amount,
+        Some(&coin_type),
+    )
+    .await;
+
+    coin_type
 }
 
 /// Path A: sender has address balance (from send_funds deposit), so gas comes from AB.
@@ -1561,6 +1669,456 @@ async fn test_pay_coin_entirely_from_ab() {
     assert_eq!(
         recipient_balance, 400_000,
         "Recipient should have received 400K"
+    );
+}
+
+/// Single-recipient gasless ("free tier") PayCoin: the custom coin is registered as a gasless
+/// token and the sender's whole balance sits in their address balance, so the payment routes
+/// through the AB-only gasless PTB at zero gas and credits the recipient's address balance.
+#[tokio::test]
+async fn test_pay_coin_gasless_single_recipient() {
+    const AMOUNT: u64 = 150_000_000_000_000;
+    let accounts = (0..5)
+        .map(|_| AccountConfig {
+            address: None,
+            gas_amounts: vec![AMOUNT, AMOUNT],
+        })
+        .collect();
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .with_accounts(accounts)
+        .with_epoch_duration_ms(36000000)
+        .build()
+        .await;
+    let sender = test_cluster.get_address_0();
+    let recipient = test_cluster.get_address_1();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+
+    let pay = 400_000u64;
+    let coin_type =
+        setup_gasless_coin_in_ab(&test_cluster, &mut client, keystore, sender, 500_000, 0).await;
+
+    // Capture the sender's SUI total *after* setup (the deposit txs already spent SUI gas), so the
+    // post-flow comparison isolates the rosetta payment's gas impact.
+    let sender_sui_before = get_total_balance(&mut client, sender, SUI_COIN_TYPE).await;
+
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let ops = pay_coin_ops(sender, recipient, pay, &coin_type);
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+
+    if let Some(Err(e)) = &flow.preprocess {
+        panic!("Preprocess failed: {:?}", e);
+    }
+    let metadata = flow
+        .metadata
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .expect("Metadata failed");
+    assert!(
+        metadata.metadata.gas_coins.is_empty(),
+        "gasless: gas_coins should be empty, got {:?}",
+        metadata.metadata.gas_coins
+    );
+    assert_eq!(
+        metadata.metadata.gas_price, 0,
+        "gasless: gas_price should be 0"
+    );
+    assert_eq!(metadata.metadata.budget, 0, "gasless: budget should be 0");
+    assert_eq!(
+        metadata.metadata.address_balance_withdrawal, pay,
+        "gasless: withdrawal should equal the payment"
+    );
+
+    if let Some(Err(e)) = &flow.payloads {
+        panic!("Payloads failed: {:?}", e);
+    }
+    if let Some(Err(e)) = &flow.combine {
+        panic!("Combine failed: {:?}", e);
+    }
+
+    let r: TransactionIdentifierResponse = flow.submit.unwrap().unwrap();
+    wait_for_transaction(&mut client, &r.transaction_identifier.hash.to_string())
+        .await
+        .unwrap();
+
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(r.transaction_identifier.hash.to_string())
+        .with_read_mask(FieldMask::from_paths(["effects"]));
+    let tx = client
+        .ledger_client()
+        .get_transaction(grpc_request)
+        .await
+        .unwrap()
+        .into_inner()
+        .transaction
+        .unwrap();
+    assert!(
+        tx.effects().status().success(),
+        "gasless PayCoin failed: {:?}",
+        tx.effects().status().error()
+    );
+
+    // Free tier: the on-chain gas cost summary is fully zero.
+    let gas = tx.effects().gas_used();
+    assert_eq!(
+        gas.computation_cost_opt().unwrap_or(0),
+        0,
+        "gasless: computation_cost must be 0"
+    );
+    assert_eq!(
+        gas.storage_cost_opt().unwrap_or(0),
+        0,
+        "gasless: storage_cost must be 0"
+    );
+    assert_eq!(
+        gas.storage_rebate_opt().unwrap_or(0),
+        0,
+        "gasless: storage_rebate must be 0"
+    );
+
+    let recipient_ab = get_address_balance(&mut client, recipient, &coin_type).await;
+    assert_eq!(
+        recipient_ab, pay,
+        "recipient should be credited {pay} to address balance"
+    );
+
+    let sender_total = get_total_balance(&mut client, sender, &coin_type).await;
+    assert_eq!(
+        sender_total,
+        500_000 - pay,
+        "sender coin balance should be debited by the payment"
+    );
+
+    // Strongest gaslessness assertion: the sender's SUI is untouched by the payment.
+    let sender_sui_after = get_total_balance(&mut client, sender, SUI_COIN_TYPE).await;
+    assert_eq!(
+        sender_sui_after, sender_sui_before,
+        "gasless: sender SUI balance must be unchanged"
+    );
+}
+
+/// Multi-recipient gasless PayCoin: each recipient is credited its own amount in address balance
+/// and the withdrawal equals the sum.
+#[tokio::test]
+async fn test_pay_coin_gasless_multi_recipient() {
+    const AMOUNT: u64 = 150_000_000_000_000;
+    let accounts = (0..5)
+        .map(|_| AccountConfig {
+            address: None,
+            gas_amounts: vec![AMOUNT, AMOUNT],
+        })
+        .collect();
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .with_accounts(accounts)
+        .with_epoch_duration_ms(36000000)
+        .build()
+        .await;
+    let sender = test_cluster.get_address_0();
+    let recipient_1 = test_cluster.get_address_1();
+    let recipient_2 = test_cluster.get_address_2();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+
+    let pay_1 = 300_000u64;
+    let pay_2 = 150_000u64;
+    let total = pay_1 + pay_2;
+    let coin_type =
+        setup_gasless_coin_in_ab(&test_cluster, &mut client, keystore, sender, 500_000, 0).await;
+
+    let sender_sui_before = get_total_balance(&mut client, sender, SUI_COIN_TYPE).await;
+
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let ops = pay_coin_ops_multi(
+        sender,
+        &[(recipient_1, pay_1), (recipient_2, pay_2)],
+        &coin_type,
+    );
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+
+    if let Some(Err(e)) = &flow.preprocess {
+        panic!("Preprocess failed: {:?}", e);
+    }
+    let metadata = flow
+        .metadata
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .expect("Metadata failed");
+    assert!(
+        metadata.metadata.gas_coins.is_empty(),
+        "gasless: gas_coins should be empty"
+    );
+    assert_eq!(
+        metadata.metadata.gas_price, 0,
+        "gasless: gas_price should be 0"
+    );
+    assert_eq!(metadata.metadata.budget, 0, "gasless: budget should be 0");
+    assert_eq!(
+        metadata.metadata.address_balance_withdrawal, total,
+        "gasless: withdrawal should equal the sum of payments"
+    );
+
+    if let Some(Err(e)) = &flow.payloads {
+        panic!("Payloads failed: {:?}", e);
+    }
+    if let Some(Err(e)) = &flow.combine {
+        panic!("Combine failed: {:?}", e);
+    }
+
+    let r: TransactionIdentifierResponse = flow.submit.unwrap().unwrap();
+    wait_for_transaction(&mut client, &r.transaction_identifier.hash.to_string())
+        .await
+        .unwrap();
+
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(r.transaction_identifier.hash.to_string())
+        .with_read_mask(FieldMask::from_paths(["effects"]));
+    let tx = client
+        .ledger_client()
+        .get_transaction(grpc_request)
+        .await
+        .unwrap()
+        .into_inner()
+        .transaction
+        .unwrap();
+    assert!(
+        tx.effects().status().success(),
+        "gasless multi-recipient PayCoin failed: {:?}",
+        tx.effects().status().error()
+    );
+
+    let recipient_1_ab = get_address_balance(&mut client, recipient_1, &coin_type).await;
+    let recipient_2_ab = get_address_balance(&mut client, recipient_2, &coin_type).await;
+    assert_eq!(recipient_1_ab, pay_1, "recipient_1 AB should equal pay_1");
+    assert_eq!(recipient_2_ab, pay_2, "recipient_2 AB should equal pay_2");
+
+    let sender_total = get_total_balance(&mut client, sender, &coin_type).await;
+    assert_eq!(
+        sender_total,
+        500_000 - total,
+        "sender coin balance should be debited by the total"
+    );
+
+    let sender_sui_after = get_total_balance(&mut client, sender, SUI_COIN_TYPE).await;
+    assert_eq!(
+        sender_sui_after, sender_sui_before,
+        "gasless: sender SUI balance must be unchanged"
+    );
+}
+
+/// Below-min fallback: the coin is registered with a per-token minimum the payment doesn't meet,
+/// so the node's gasless auto-switch declines and the payment falls back to the priced smash path.
+/// The recipient receives a coin object (address balance stays 0), and a gas price is charged.
+#[tokio::test]
+async fn test_pay_coin_gasless_below_min_falls_back() {
+    const AMOUNT: u64 = 150_000_000_000_000;
+    let accounts = (0..5)
+        .map(|_| AccountConfig {
+            address: None,
+            gas_amounts: vec![AMOUNT, AMOUNT],
+        })
+        .collect();
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .with_accounts(accounts)
+        .with_epoch_duration_ms(36000000)
+        .build()
+        .await;
+    let sender = test_cluster.get_address_0();
+    let recipient = test_cluster.get_address_1();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+
+    let pay = 5_000u64;
+    // Register with a minimum the 5_000 payment can't meet → gasless declines, priced fallback.
+    let coin_type = setup_gasless_coin_in_ab(
+        &test_cluster,
+        &mut client,
+        keystore,
+        sender,
+        500_000,
+        10_000,
+    )
+    .await;
+
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let ops = pay_coin_ops(sender, recipient, pay, &coin_type);
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+
+    if let Some(Err(e)) = &flow.preprocess {
+        panic!("Preprocess failed: {:?}", e);
+    }
+    let metadata = flow
+        .metadata
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .expect("Metadata failed");
+    assert!(
+        metadata.metadata.gas_price > 0,
+        "below-min: should use the priced smash path (gas_price > 0)"
+    );
+
+    if let Some(Err(e)) = &flow.payloads {
+        panic!("Payloads failed: {:?}", e);
+    }
+    if let Some(Err(e)) = &flow.combine {
+        panic!("Combine failed: {:?}", e);
+    }
+
+    let r: TransactionIdentifierResponse = flow.submit.unwrap().unwrap();
+    wait_for_transaction(&mut client, &r.transaction_identifier.hash.to_string())
+        .await
+        .unwrap();
+
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(r.transaction_identifier.hash.to_string())
+        .with_read_mask(FieldMask::from_paths(["effects"]));
+    let tx = client
+        .ledger_client()
+        .get_transaction(grpc_request)
+        .await
+        .unwrap()
+        .into_inner()
+        .transaction
+        .unwrap();
+    assert!(
+        tx.effects().status().success(),
+        "below-min smash PayCoin failed: {:?}",
+        tx.effects().status().error()
+    );
+
+    // Recipient got a coin object via the smash path, not an address-balance credit.
+    let recipient_ab = get_address_balance(&mut client, recipient, &coin_type).await;
+    assert_eq!(
+        recipient_ab, 0,
+        "below-min: recipient should receive a coin object, not an AB credit"
+    );
+    let recipient_total = get_total_balance(&mut client, recipient, &coin_type).await;
+    assert_eq!(
+        recipient_total, pay,
+        "below-min: recipient total should equal the payment"
+    );
+}
+
+/// A client-supplied gas budget must NOT make a free-tier payment ineligible — budget is a ceiling
+/// for the priced path, and the gasless path ignores it (and the node force-zeroes budget for the
+/// gasless variant). Same as the single-recipient success case, but the request carries an explicit
+/// non-zero budget; the result must still be gasless (price 0, budget 0, zero on-chain gas).
+#[tokio::test]
+async fn test_pay_coin_gasless_ignores_request_budget() {
+    const AMOUNT: u64 = 150_000_000_000_000;
+    let accounts = (0..5)
+        .map(|_| AccountConfig {
+            address: None,
+            gas_amounts: vec![AMOUNT, AMOUNT],
+        })
+        .collect();
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .with_accounts(accounts)
+        .with_epoch_duration_ms(36000000)
+        .build()
+        .await;
+    let sender = test_cluster.get_address_0();
+    let recipient = test_cluster.get_address_1();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+
+    let pay = 400_000u64;
+    let coin_type =
+        setup_gasless_coin_in_ab(&test_cluster, &mut client, keystore, sender, 500_000, 0).await;
+
+    let sender_sui_before = get_total_balance(&mut client, sender, SUI_COIN_TYPE).await;
+
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let ops = pay_coin_ops(sender, recipient, pay, &coin_type);
+    // Explicit non-zero request budget — should be ignored for the free tier.
+    let flow = rosetta_client
+        .rosetta_flow(
+            &ops,
+            keystore,
+            Some(PreprocessMetadata {
+                budget: Some(50_000_000),
+            }),
+        )
+        .await;
+
+    if let Some(Err(e)) = &flow.preprocess {
+        panic!("Preprocess failed: {:?}", e);
+    }
+    let metadata = flow
+        .metadata
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .expect("Metadata failed");
+    assert!(
+        metadata.metadata.gas_coins.is_empty(),
+        "gasless: gas_coins should be empty despite a request budget"
+    );
+    assert_eq!(
+        metadata.metadata.gas_price, 0,
+        "gasless: gas_price should be 0 despite a request budget"
+    );
+    assert_eq!(
+        metadata.metadata.budget, 0,
+        "gasless: response budget should be 0, not the requested 50_000_000"
+    );
+
+    if let Some(Err(e)) = &flow.payloads {
+        panic!("Payloads failed: {:?}", e);
+    }
+    if let Some(Err(e)) = &flow.combine {
+        panic!("Combine failed: {:?}", e);
+    }
+
+    let r: TransactionIdentifierResponse = flow.submit.unwrap().unwrap();
+    wait_for_transaction(&mut client, &r.transaction_identifier.hash.to_string())
+        .await
+        .unwrap();
+
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(r.transaction_identifier.hash.to_string())
+        .with_read_mask(FieldMask::from_paths(["effects"]));
+    let tx = client
+        .ledger_client()
+        .get_transaction(grpc_request)
+        .await
+        .unwrap()
+        .into_inner()
+        .transaction
+        .unwrap();
+    assert!(
+        tx.effects().status().success(),
+        "gasless PayCoin (with request budget) failed: {:?}",
+        tx.effects().status().error()
+    );
+
+    // Still actually free: zero on-chain gas and the recipient credited to address balance.
+    let gas = tx.effects().gas_used();
+    assert_eq!(
+        gas.computation_cost_opt().unwrap_or(0),
+        0,
+        "gasless: computation_cost must be 0 despite a request budget"
+    );
+    let recipient_ab = get_address_balance(&mut client, recipient, &coin_type).await;
+    assert_eq!(
+        recipient_ab, pay,
+        "recipient should be credited {pay} to AB"
+    );
+
+    let sender_sui_after = get_total_balance(&mut client, sender, SUI_COIN_TYPE).await;
+    assert_eq!(
+        sender_sui_after, sender_sui_before,
+        "gasless: sender SUI must be unchanged despite a request budget"
     );
 }
 

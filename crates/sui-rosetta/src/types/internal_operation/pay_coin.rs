@@ -5,9 +5,11 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
+use move_core_types::identifier::Identifier;
 use sui_rpc::client::Client;
 use sui_rpc::proto::sui::rpc::v2::{GetBalanceRequest, Object, owner::OwnerKind};
 use sui_sdk_types::{Address, TypeTag as SdkTypeTag};
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::rpc_proto_conversions::ObjectReferenceExt;
@@ -98,6 +100,46 @@ impl TryConstructTransaction for PayCoin {
                 "Insufficient funds: need {} but only have {} in coins + {} in address balance",
                 total_payment, coins_total, address_balance
             )));
+        }
+
+        // Free-tier attempt: if the sender's address balance fully covers the payment, try a
+        // gasless AB-only PTB. The node's SimulateTransaction auto-switches to gasless only for
+        // actually-whitelisted coins meeting the per-token minimum and gasless limits, so a
+        // simulate with the price left unset is a definitive eligibility oracle. On confirmation
+        // (resolved price 0 + no gas objects), signal gasless downstream via `budget == 0`.
+        // Otherwise fall through to the priced smash path below.
+        //
+        // On fallback we rebuild and re-simulate a *different* PTB rather than reusing this one:
+        // the gasless PTB credits each recipient's address balance (`coin::send_funds`), whereas
+        // the smash path delivers a coin object (`TransferObjects`). We intentionally keep emitting
+        // coin objects for non-free-tier payments for ecosystem compatibility — recipients/tooling
+        // that don't yet understand address balances still get a plain coin. This dual path (and
+        // the one extra simulate it costs in the narrow "AB covers a non-eligible coin" case) is a
+        // short-term measure: once address-balance adoption saturates, PayCoin can move to
+        // AB-deposit semantics unconditionally and the smash path (and its simulate) goes away.
+        if address_balance >= total_payment {
+            let gasless_pt =
+                pay_coin_gasless_pt(sender, recipients.clone(), amounts.clone(), &currency)?;
+            match simulate_transaction(client, gasless_pt, sender, vec![], None, None).await {
+                Ok((0, gas_coin_objs)) if gas_coin_objs.is_empty() => {
+                    return Ok(TransactionObjectData {
+                        gas_coins: vec![],
+                        objects: vec![],
+                        party_objects: vec![],
+                        total_sui_balance: 0,
+                        budget: 0,
+                        address_balance_withdrawal: total_payment,
+                        fss_object_count: None,
+                        redeem_token_amount: None,
+                        redeem_plan: None,
+                        bind_epoch: None,
+                    });
+                }
+                // Priced fallback (gasless ineligible) or an unexpected dry-run failure: fall
+                // through to the smash path. Only transport errors propagate.
+                Ok(_) | Err(Error::TransactionDryRunError(_)) => {}
+                Err(e) => return Err(e),
+            }
         }
 
         // Merge coins directly, optionally withdraw deficit from address balance,
@@ -267,6 +309,64 @@ pub fn pay_coin_pt(
     if source_is_command_result {
         builder.transfer_arg(sender, source);
     }
+
+    Ok(builder.finish())
+}
+
+/// Build a gasless ("free tier") PTB that pays `amounts` to `recipients` entirely from the
+/// sender's address balance, crediting each recipient's address balance. Uses only commands
+/// permitted in gasless transactions.
+pub fn pay_coin_gasless_pt(
+    sender: SuiAddress,
+    recipients: Vec<SuiAddress>,
+    amounts: Vec<u64>,
+    currency: &Currency,
+) -> anyhow::Result<ProgrammableTransaction> {
+    let sdk_type = SdkTypeTag::from_str(&currency.metadata.coin_type)?;
+    let core_type = type_tag_sdk_to_core(sdk_type)?;
+
+    let total: u64 = amounts.iter().sum();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    // Withdraw the full payment from the sender's address balance → Coin<T>.
+    let source = withdraw_coin_from_address_balance(&mut builder, total, core_type.clone())?;
+
+    // Split every amount off the source. `redeem_funds` tracks the source as value 0 in `/parse`,
+    // so splitting each amount (rather than leaving a remainder) is what gives every recipient a
+    // correctly-tracked nested result; the source coin is left at value 0.
+    let amount_args: Vec<Argument> = amounts
+        .iter()
+        .map(|&v| builder.pure(v))
+        .collect::<Result<Vec<_>, _>>()?;
+    let split_result = builder.command(Command::SplitCoins(source, amount_args));
+    let Argument::Result(split_idx) = split_result else {
+        anyhow::bail!("Expected Result argument from SplitCoins");
+    };
+
+    // Deposit each split piece into the recipient's address balance via coin::send_funds<T>.
+    for (i, recipient) in recipients.into_iter().enumerate() {
+        let recipient_arg = builder.pure(recipient)?;
+        builder.command(Command::move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin")?,
+            Identifier::new("send_funds")?,
+            vec![core_type.clone()],
+            vec![Argument::NestedResult(split_idx, i as u16), recipient_arg],
+        ));
+    }
+
+    // The source coin now has value 0; consume it by sending it back to the sender. `/parse`
+    // ignores `addr == sender`, and the post-execution gasless check skips net-zero transfers, so
+    // this neither pollutes parsed operations nor trips the per-token minimum.
+    let sender_arg = builder.pure(sender)?;
+    builder.command(Command::move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("coin")?,
+        Identifier::new("send_funds")?,
+        vec![core_type],
+        vec![source, sender_arg],
+    ));
 
     Ok(builder.finish())
 }
