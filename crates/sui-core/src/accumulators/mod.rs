@@ -576,10 +576,10 @@ mod barrier_settlement_key_tests {
 /// paths derive that offset by completely separate arithmetic:
 ///
 /// * Scheduler (`execution_scheduler/settlement_scheduler.rs::run_queue`):
-///     `running_tx_offset += batch_info.tx_keys.len() + (build_tx.len() + 1)` per batch.
+///   `running_tx_offset += batch_info.tx_keys.len() + (build_tx.len() + 1)` per batch.
 /// * Builder (`checkpoints/mod.rs::resolve_checkpoint_transactions_v2`):
-///     `tx_index_offset = all_effects.len()`, where `all_effects` is extended with
-///     `sorted_root_effects ++ settlement_effects ++ barrier_effect` per chunk.
+///   `tx_index_offset = all_effects.len()`, where `all_effects` is extended with
+///   `sorted_root_effects ++ settlement_effects ++ barrier_effect` per chunk.
 ///
 /// They match today only by algebraic coincidence (`tx_keys.len() == sorted_root_effects.len()`,
 /// `build_tx.len()` is identical, `+1 barrier == +1 barrier_effect`). For pure-numeric
