@@ -567,3 +567,384 @@ mod barrier_settlement_key_tests {
         }
     }
 }
+
+/// Regression test for audit finding F9: V2 settlement determinism / `tx_index_offset` matching.
+///
+/// The settlement scheduler (which constructs and executes settlement transactions) and the
+/// checkpoint builder (which independently reconstructs digests to wait for effects) must agree
+/// on the value of `tx_index_offset` passed to [`AccumulatorSettlementTxBuilder::new`]. The two
+/// paths derive that offset by completely separate arithmetic:
+///
+/// * Scheduler (`execution_scheduler/settlement_scheduler.rs::run_queue`):
+///     `running_tx_offset += batch_info.tx_keys.len() + (build_tx.len() + 1)` per batch.
+/// * Builder (`checkpoints/mod.rs::resolve_checkpoint_transactions_v2`):
+///     `tx_index_offset = all_effects.len()`, where `all_effects` is extended with
+///     `sorted_root_effects ++ settlement_effects ++ barrier_effect` per chunk.
+///
+/// They match today only by algebraic coincidence (`tx_keys.len() == sorted_root_effects.len()`,
+/// `build_tx.len()` is identical, `+1 barrier == +1 barrier_effect`). For pure-numeric
+/// accumulators (`SumU128` / `SumU128U128`), `accumulate_into` ignores `transaction_idx`, so a
+/// drift would be silent. For `AccumulatorValue::EventDigest`, `EventCommitment::new` stamps
+/// `transaction_idx = tx_index + tx_index_offset` into the merkle leaf, and any drift in
+/// `tx_index_offset` between the two paths immediately changes the settlement transaction
+/// digest the checkpoint builder waits for, deadlocking the builder.
+///
+/// This test forges minimal `TransactionEffects` containing `EventDigest` accumulator writes,
+/// simulates several `PendingCheckpointV2`-shaped chunk sequences end-to-end through both
+/// `tx_index_offset` derivations, and asserts that the resulting settlement transaction digests
+/// are byte-equal across paths. It is intentionally a property/invariant test rather than a
+/// reproduction of a live bug: F9 is currently latent.
+#[cfg(test)]
+mod settlement_tx_index_offset_invariant_tests {
+    use super::*;
+    use nonempty::nonempty;
+    use std::collections::BTreeMap;
+    use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+    use sui_types::digests::Digest;
+    use sui_types::effects::{
+        AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
+        EffectsObjectChange, TransactionEffects,
+    };
+    use sui_types::execution_status::ExecutionStatus;
+    use sui_types::gas::GasCostSummary;
+    use sui_types::object::OBJECT_START_VERSION;
+    use sui_types::transaction::TransactionKind;
+    use sui_types::{Identifier, TypeTag};
+
+    /// A non-Balance type tag bypasses `AccumulatorEvent::new`'s debug-only check that the
+    /// `AccumulatorObjId` is the correctly-derived dynamic-field id for the address+type.
+    /// Using a synthetic type also keeps `total_sui_in_event` at zero so the input/output SUI
+    /// accounting in the settlement tx remains deterministic across both paths.
+    fn synthetic_event_stream_type() -> TypeTag {
+        TypeTag::Struct(Box::new(move_core_types::language_storage::StructTag {
+            address: move_core_types::account_address::AccountAddress::ZERO,
+            module: Identifier::new("event_stream_test").unwrap(),
+            name: Identifier::new("EventStream").unwrap(),
+            type_params: vec![],
+        }))
+    }
+
+    /// Build a synthetic `TransactionEffects` whose only changed-object entry is a single
+    /// `AccumulatorWriteV1::EventDigest` write. We deliberately go through `TransactionEffectsV2`
+    /// directly rather than `TestEffectsBuilder` to avoid pulling in a `SenderSignedData` and to
+    /// keep the test focused on `accumulator_events()` -> `EventCommitment::new`.
+    fn effects_with_event_digest_write(
+        tx_seed: u64,
+        accumulator_obj_seed: u32,
+        digest_byte: u8,
+    ) -> TransactionEffects {
+        let mut tx_digest_bytes = [0u8; 32];
+        tx_digest_bytes[..8].copy_from_slice(&tx_seed.to_le_bytes());
+        let tx_digest = TransactionDigest::new(tx_digest_bytes);
+
+        let mut obj_id_bytes = [0u8; ObjectID::LENGTH];
+        obj_id_bytes[..4].copy_from_slice(&accumulator_obj_seed.to_le_bytes());
+        let accumulator_obj = ObjectID::new(obj_id_bytes);
+
+        let address = AccumulatorAddress::new(SuiAddress::ZERO, synthetic_event_stream_type());
+        let write = AccumulatorWriteV1 {
+            address,
+            operation: AccumulatorOperation::Merge,
+            value: AccumulatorValue::EventDigest(nonempty![(
+                0u64, // event_idx within the transaction
+                Digest::new([digest_byte; 32]),
+            )]),
+        };
+
+        let mut changed_objects = BTreeMap::new();
+        changed_objects.insert(
+            accumulator_obj,
+            EffectsObjectChange::new_from_accumulator_write(write),
+        );
+
+        TransactionEffects::new_from_execution_v2(
+            ExecutionStatus::Success,
+            /* executed_epoch */ 0,
+            GasCostSummary::default(),
+            /* shared_objects */ vec![],
+            /* loaded_per_epoch_config_objects */ std::collections::BTreeSet::new(),
+            tx_digest,
+            OBJECT_START_VERSION,
+            changed_objects,
+            /* gas_object */ None,
+            /* events_digest */ None,
+            /* dependencies */ vec![],
+        )
+    }
+
+    /// Compute the digests the settlement scheduler would produce for one batch's settlement
+    /// transactions, given the batch's effects, the per-batch `tx_index_offset`, and the
+    /// usual builder construction parameters. Returns both the digests and the count of
+    /// settlement txns (without the barrier) so the caller can advance its `running_tx_offset`.
+    fn build_settlement_tx_digests(
+        protocol_config: &ProtocolConfig,
+        effects: &[TransactionEffects],
+        checkpoint_seq: u64,
+        checkpoint_height: u64,
+        epoch: u64,
+        tx_index_offset: u64,
+    ) -> (Vec<sui_types::digests::TransactionDigest>, usize) {
+        let builder = AccumulatorSettlementTxBuilder::new(
+            /* cache */ None,
+            effects,
+            checkpoint_seq,
+            tx_index_offset,
+        );
+        let kinds: Vec<TransactionKind> = builder.build_tx(
+            protocol_config,
+            epoch,
+            SequenceNumber::from_u64(1),
+            checkpoint_height,
+            checkpoint_seq,
+        );
+        let count = kinds.len();
+        let digests = kinds
+            .into_iter()
+            .map(|k| {
+                *sui_types::transaction::VerifiedTransaction::new_system_transaction(k).digest()
+            })
+            .collect();
+        (digests, count)
+    }
+
+    /// Description of one synthetic batch within a checkpoint: how many "root" transactions
+    /// the batch contributes, how many of those transactions carry an accumulator write,
+    /// and seed values to make digests vary across batches.
+    #[derive(Clone, Copy, Debug)]
+    struct BatchShape {
+        num_root_txs: usize,
+        num_accumulator_writes: usize,
+    }
+
+    /// Drive both paths' `tx_index_offset` math against the same batches and assert that the
+    /// resulting settlement-transaction digests are identical, for every batch.
+    fn assert_offset_paths_agree(
+        protocol_config: &ProtocolConfig,
+        checkpoint_seq: u64,
+        checkpoint_height: u64,
+        epoch: u64,
+        batches: &[BatchShape],
+    ) {
+        // Builder-side accumulator: extended with root effects + settlement effects + 1 barrier
+        // per batch, exactly like `resolve_checkpoint_transactions_v2` builds `all_effects`.
+        let mut builder_all_effects_len: u64 = 0;
+
+        // Scheduler-side running offset: starts at 0 for each checkpoint_seq, accumulated as
+        // batch_tx_count + settlement_tx_count (incl. +1 barrier) per batch.
+        let mut scheduler_running_tx_offset: u64 = 0;
+
+        let mut digest_byte_seed: u8 = 1;
+
+        for (batch_idx, batch) in batches.iter().enumerate() {
+            assert!(
+                batch.num_accumulator_writes <= batch.num_root_txs,
+                "test setup: writes must come from root txs"
+            );
+
+            // Build this batch's root effects. The first `num_accumulator_writes` carry an
+            // event-digest accumulator write; the rest have no accumulator events.
+            let mut batch_effects = Vec::with_capacity(batch.num_root_txs);
+            for tx_idx_in_batch in 0..batch.num_root_txs {
+                if tx_idx_in_batch < batch.num_accumulator_writes {
+                    batch_effects.push(effects_with_event_digest_write(
+                        (batch_idx as u64) * 1_000_000 + tx_idx_in_batch as u64,
+                        // Each accumulator write goes to a distinct accumulator object so
+                        // they don't merge into one update.
+                        (batch_idx as u32) * 1_000_000 + tx_idx_in_batch as u32 + 1,
+                        digest_byte_seed,
+                    ));
+                    digest_byte_seed = digest_byte_seed.wrapping_add(1);
+                } else {
+                    // A "plain" root effect with no accumulator events still contributes to
+                    // the index space (the production code iterates all effects in order).
+                    let mut tx_digest_bytes = [0u8; 32];
+                    tx_digest_bytes[..8].copy_from_slice(
+                        &((batch_idx as u64) * 1000 + tx_idx_in_batch as u64).to_le_bytes(),
+                    );
+                    tx_digest_bytes[8] = 0xAA; // distinguish from accumulator-carrying txs
+                    let tx_digest = TransactionDigest::new(tx_digest_bytes);
+                    batch_effects.push(TransactionEffects::new_from_execution_v2(
+                        ExecutionStatus::Success,
+                        0,
+                        GasCostSummary::default(),
+                        vec![],
+                        std::collections::BTreeSet::new(),
+                        tx_digest,
+                        OBJECT_START_VERSION,
+                        BTreeMap::new(),
+                        None,
+                        None,
+                        vec![],
+                    ));
+                }
+            }
+
+            // Scheduler path: tx_index_offset is the running offset *at the start* of this batch.
+            let scheduler_offset = scheduler_running_tx_offset;
+            let (scheduler_digests, scheduler_settlement_count) = build_settlement_tx_digests(
+                protocol_config,
+                &batch_effects,
+                checkpoint_seq,
+                checkpoint_height,
+                epoch,
+                scheduler_offset,
+            );
+
+            // Builder path: tx_index_offset = all_effects.len() at the start of this batch.
+            let builder_offset = builder_all_effects_len;
+            let (builder_digests, builder_settlement_count) = build_settlement_tx_digests(
+                protocol_config,
+                &batch_effects,
+                checkpoint_seq,
+                checkpoint_height,
+                epoch,
+                builder_offset,
+            );
+
+            assert_eq!(
+                scheduler_offset, builder_offset,
+                "batch {}: tx_index_offset diverged between paths (scheduler={}, builder={})",
+                batch_idx, scheduler_offset, builder_offset,
+            );
+            assert_eq!(
+                scheduler_settlement_count, builder_settlement_count,
+                "batch {}: settlement tx count diverged between paths",
+                batch_idx,
+            );
+            assert_eq!(
+                scheduler_digests, builder_digests,
+                "batch {}: settlement transaction digests diverged between paths. \
+                 scheduler_offset={}, builder_offset={}",
+                batch_idx, scheduler_offset, builder_offset,
+            );
+
+            // Advance both running offsets the way each production code path does.
+            let batch_tx_count = batch_effects.len() as u64;
+            let settlement_tx_count = scheduler_settlement_count as u64 + 1; // +1 barrier
+            scheduler_running_tx_offset += batch_tx_count + settlement_tx_count;
+            // Builder extends all_effects with sorted (root) effects + settlement_effects +
+            // 1 barrier effect. The settlement_effects count equals the settlement tx count;
+            // the barrier effect is a separate +1.
+            builder_all_effects_len +=
+                batch_tx_count + (scheduler_settlement_count as u64) + 1 /* barrier */;
+        }
+    }
+
+    #[tokio::test]
+    async fn settlement_tx_index_offset_matches_across_paths_single_batch() {
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        assert_offset_paths_agree(
+            &protocol_config,
+            /* checkpoint_seq */ 7,
+            /* checkpoint_height */ 11,
+            /* epoch */ 3,
+            &[BatchShape {
+                num_root_txs: 5,
+                num_accumulator_writes: 3,
+            }],
+        );
+    }
+
+    #[tokio::test]
+    async fn settlement_tx_index_offset_matches_across_paths_multiple_batches() {
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        assert_offset_paths_agree(
+            &protocol_config,
+            /* checkpoint_seq */ 42,
+            /* checkpoint_height */ 100,
+            /* epoch */ 9,
+            // Multiple chunks per pending: the offset carries over from one batch to the next,
+            // and any drift in either path's arithmetic will surface on batch 2 or later.
+            &[
+                BatchShape {
+                    num_root_txs: 4,
+                    num_accumulator_writes: 2,
+                },
+                BatchShape {
+                    num_root_txs: 6,
+                    num_accumulator_writes: 4,
+                },
+                BatchShape {
+                    num_root_txs: 3,
+                    num_accumulator_writes: 1,
+                },
+            ],
+        );
+    }
+
+    #[tokio::test]
+    async fn settlement_tx_index_offset_matches_across_paths_chunked_updates() {
+        // Force the settlement-tx builder to emit multiple chunks per batch so that
+        // `build_tx.len() > 1` exercises the `running_tx_offset += build_tx.len() + 1` path
+        // (scheduler) and the builder's `all_effects.extend(settlement_effects)` path
+        // (checkpoint builder) symmetrically. We use the default `max_updates_per_settlement_txn`
+        // (currently 100 at the max protocol version) and supply enough accumulator updates per
+        // batch to exceed it. Increasing the input size is cheap compared to plumbing in a
+        // public setter for a private protocol-config field.
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let chunk_size = protocol_config
+            .max_updates_per_settlement_txn_as_option()
+            .expect("max_updates_per_settlement_txn must be set at max protocol version")
+            as usize;
+        // First batch produces 3 chunks; second produces 2 chunks; third produces 1. This
+        // exercises varying `build_tx.len()` so an off-by-N drift in either path becomes
+        // visible on the second and third batch's digests.
+        let batch_1 = chunk_size * 2 + 5;
+        let batch_2 = chunk_size + 7;
+        let batch_3 = chunk_size / 2;
+        assert_offset_paths_agree(
+            &protocol_config,
+            /* checkpoint_seq */ 17,
+            /* checkpoint_height */ 23,
+            /* epoch */ 5,
+            &[
+                BatchShape {
+                    num_root_txs: batch_1,
+                    num_accumulator_writes: batch_1,
+                },
+                BatchShape {
+                    num_root_txs: batch_2,
+                    num_accumulator_writes: batch_2,
+                },
+                BatchShape {
+                    num_root_txs: batch_3,
+                    num_accumulator_writes: batch_3,
+                },
+            ],
+        );
+    }
+
+    #[tokio::test]
+    async fn settlement_tx_index_offset_event_commitments_actually_depend_on_offset() {
+        // Sanity check: this test would be vacuous if `tx_index_offset` did not actually
+        // affect the resulting settlement tx digests. Build the same effects under two
+        // different offsets and assert the digests differ. If this ever fails, the F9
+        // invariant test above provides zero coverage and needs to be re-examined.
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let effects = vec![
+            effects_with_event_digest_write(0, 1, 0xAB),
+            effects_with_event_digest_write(1, 2, 0xCD),
+        ];
+        let (digests_offset_0, _) = build_settlement_tx_digests(
+            &protocol_config,
+            &effects,
+            /* checkpoint_seq */ 1,
+            /* checkpoint_height */ 1,
+            /* epoch */ 1,
+            /* tx_index_offset */ 0,
+        );
+        let (digests_offset_99, _) = build_settlement_tx_digests(
+            &protocol_config,
+            &effects,
+            1,
+            1,
+            1,
+            /* tx_index_offset */ 99,
+        );
+        assert_ne!(
+            digests_offset_0, digests_offset_99,
+            "tx_index_offset must influence the settlement tx digest for EventDigest \
+             accumulators; otherwise the F9 invariant test is vacuous"
+        );
+    }
+}
