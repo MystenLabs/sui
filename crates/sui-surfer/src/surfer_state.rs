@@ -22,7 +22,7 @@ use sui_types::transaction::{CallArg, ObjectArg, TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
 use sui_types::{Identifier, SUI_FRAMEWORK_ADDRESS};
 use test_cluster::TestCluster;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 type Type = normalized::Type<normalized::ArcIdentifier>;
 
@@ -174,6 +174,13 @@ impl SurferState {
         )
         .unwrap();
         let tx = self.cluster.wallet.sign_transaction(&tx_data).await;
+        // Bound retries so that permanently-unexecutable transactions (e.g. those
+        // dropped by crash-recovery on every validator) don't consume the whole
+        // test duration.  Three attempts covers a 20-second validator restart with
+        // margin; if all three fail we record a failure and let the surfer pick a
+        // new transaction.
+        const MAX_TX_RETRIES: u32 = 3;
+        let mut retry_count = 0u32;
         let response = loop {
             debug!("Executing transaction {:?}", tx.digest());
             match self
@@ -184,6 +191,22 @@ impl SurferState {
             {
                 Ok(effects) => break effects,
                 Err(e) => {
+                    retry_count += 1;
+                    if retry_count >= MAX_TX_RETRIES {
+                        warn!(
+                            "Giving up on transaction {:?} after {} retries: {e:?}",
+                            tx.digest(),
+                            retry_count
+                        );
+                        self.stats.record_transaction(
+                            use_shared_object,
+                            false,
+                            package,
+                            module,
+                            function,
+                        );
+                        return;
+                    }
                     error!("Error executing transaction {:?}: {e:?}", tx.digest());
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
