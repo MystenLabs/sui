@@ -28,7 +28,10 @@ async fn build_transfer_sui_tx(
 
 #[sim_test]
 async fn test_dry_run_gas_budget_too_low() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let client = cluster.sui_client();
     let sender = cluster.get_address_0();
     let rgp = cluster.get_reference_gas_price().await;
@@ -48,7 +51,10 @@ async fn test_dry_run_gas_budget_too_low() {
 
 #[sim_test]
 async fn test_dry_run_gas_budget_too_high() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let client = cluster.sui_client();
     let sender = cluster.get_address_0();
     let rgp = cluster.get_reference_gas_price().await;
@@ -69,7 +75,10 @@ async fn test_dry_run_gas_budget_too_high() {
 
 #[sim_test]
 async fn test_dry_run_gas_price_too_low() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let client = cluster.sui_client();
     let sender = cluster.get_address_0();
     let max_budget = ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas();
@@ -92,7 +101,10 @@ async fn test_dry_run_gas_price_too_low() {
 
 #[sim_test]
 async fn test_dry_run_gas_price_too_high() {
-    let cluster = TestClusterBuilder::new().build().await;
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let client = cluster.sui_client();
     let sender = cluster.get_address_0();
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
