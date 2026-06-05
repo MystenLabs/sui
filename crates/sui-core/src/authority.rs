@@ -1475,9 +1475,10 @@ impl AuthorityState {
 
         // Simtest-only: simulate a deterministic transaction-induced crash.
         //
-        // `deterministic_probability` returns the same answer for a given (seed, digest) pair on
-        // every call, so each validator that would crash for a given digest always crashes for it.
-        // This mirrors a real bug: without crash-recovery the node would crash again on every
+        // A process-global seed is used so that all validators — including those running on
+        // different blocking-thread-pool workers — reach the same crash decision for a given
+        // digest. This mirrors a real production bug: the same transaction causes every validator
+        // that executes it to panic. Without crash-recovery the node would crash again on every
         // restart when it re-encounters the same transaction.
         //
         // We use catch_unwind to fire a plain panic (triggering the crash-recovery hook, which
@@ -1490,7 +1491,23 @@ impl AuthorityState {
         #[cfg(msim)]
         if !certificate.data().transaction_data().kind().is_system_tx() {
             sui_macros::fail_point_if!("crash-with-tx-logging", || {
-                if sui_simulator::random::deterministic_probability(tx_digest, 0.002) {
+                // OnceLock ensures a single seed value is shared across all OS threads in the
+                // process. Thread-local seeds (as used by deterministic_probability) differ
+                // between blocking-pool workers, causing cross-validator inconsistency.
+                static CRASH_SEED: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+                let seed = *CRASH_SEED.get_or_init(|| {
+                    use rand::Rng;
+                    rand::thread_rng().r#gen::<u64>()
+                });
+                let should_crash = {
+                    use std::hash::{Hash, Hasher};
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    seed.hash(&mut hasher);
+                    tx_digest.hash(&mut hasher);
+                    // ~0.2% of the u64 range maps to a crash
+                    hasher.finish() < u64::MAX / 500
+                };
+                if should_crash {
                     // The first panic invokes the crash-detection hook (which reads the TLS
                     // digest and writes it to the crash log) before being caught here.
                     // The second panic (PanicWrapper via kill_current_node) is intercepted by
