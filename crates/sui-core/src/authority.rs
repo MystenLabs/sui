@@ -1490,16 +1490,14 @@ impl AuthorityState {
         if !certificate.data().transaction_data().kind().is_system_tx() {
             sui_macros::fail_point_if!("crash-with-tx-logging", || {
                 if crate::crash_recovery::should_poison_transaction(&tx_digest, 0.002) {
-                    // Arm the crash-cause signal so the guard knows to write the crash log
-                    // for this transaction. Without this, random node kills from unrelated
-                    // fail points could also trigger the guard and record innocent transactions.
-                    crate::crash_recovery::arm_tx_crash_signal();
-                    // The first panic invokes the crash-detection hook (which reads the TLS
-                    // digest and writes it to the crash log) before being caught here.
-                    // The second panic (PanicWrapper via kill_current_node) is intercepted by
-                    // msim to kill and restart this node without panicking the test process.
+                    // Panic with the crash-simulation marker so the panic hook can identify this
+                    // as an intentional crash and write the crash log. The hook distinguishes this
+                    // from random node kills (which panic with a PanicWrapper, not a &str).
+                    // catch_unwind lets the hook fire and write the log before we call
+                    // kill_current_node, whose own PanicWrapper panic would not be identified as
+                    // a crash-simulation by the hook.
                     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        panic!("crash-simulation");
+                        std::panic::panic_any(crate::crash_recovery::CRASH_SIM_PANIC_MSG);
                     }));
                     sui_simulator::task::kill_current_node(Some(std::time::Duration::from_secs(
                         20,
