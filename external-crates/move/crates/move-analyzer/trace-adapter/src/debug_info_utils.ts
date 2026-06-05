@@ -142,6 +142,10 @@ export interface IDebugInfo {
     modInfo: ModuleInfo,
     functions: Map<string, IDebugInfoFunction>,
     /**
+     * Functions skipped because their code map references a missing source file.
+     */
+    functionsWithMissingCodeMapSourceFiles: Set<string>,
+    /**
      * Lines that are not present in debug info's source map portion.
      */
     optimizedLines: number[]
@@ -282,6 +286,7 @@ function readDebugInfo(
         name,
     };
     const functions = new Map<string, IDebugInfoFunction>();
+    const functionsWithMissingCodeMapSourceFiles = new Set<string>();
     const debugInfoLines = debugInfoLinesMap.get(fileHash) ?? new Set<number>;
     prePopulateDebugInfoLines(debugInfoJSON, fileInfo, debugInfoLines);
     debugInfoLinesMap.set(fileHash, debugInfoLines);
@@ -302,15 +307,14 @@ function readDebugInfo(
         };
         // create a list of locations for each PC, even those not explicitly listed
         // in the source map
+        let missingCodeMapSourceFile = false;
         for (const [pc, defLocation] of Object.entries(funEntry.code_map)) {
             const currentPC = parseInt(pc);
             const defLocFileHash = fileHashFromJSON(defLocation.file_hash);
             const fileInfo = filesMap.get(defLocFileHash);
             if (!fileInfo) {
-                throw new Error('Could not find file with hash: '
-                    + fileHash
-                    + ' when processing debug info at: '
-                    + debugInfoPath);
+                missingCodeMapSourceFile = true;
+                break;
             }
             const currentStartLoc = byteOffsetToLineColumn(fileInfo, defLocation.start);
             const currentFileStartLoc: IFileLoc = {
@@ -329,6 +333,10 @@ function readDebugInfo(
             pcLocs.push(currentFileStartLoc);
             prevPC = currentPC;
             prevLoc = currentFileStartLoc;
+        }
+        if (missingCodeMapSourceFile) {
+            functionsWithMissingCodeMapSourceFiles.add(funName);
+            continue;
         }
 
         const localsNames: ILocalInfo[] = [];
@@ -352,7 +360,14 @@ function readDebugInfo(
         const endLoc = byteOffsetToLineColumn(fileInfo, funEntry.location.end);
         functions.set(funName, { pcLocs, localsInfo: localsNames, startLoc, endLoc });
     }
-    return { filePath: fileInfo.path, fileHash, modInfo, functions, optimizedLines: [] };
+    return {
+        filePath: fileInfo.path,
+        fileHash,
+        modInfo,
+        functions,
+        functionsWithMissingCodeMapSourceFiles,
+        optimizedLines: []
+    };
 }
 
 /**

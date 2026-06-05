@@ -43,7 +43,7 @@ import {
     IFileLoc,
     IFileInfo,
     ILoc,
-    IDebugInfoFunction
+    IDebugInfoFunction,
 } from './debug_info_utils';
 import { logger } from "@vscode/debugadapter"
 
@@ -288,8 +288,9 @@ export enum TraceEventKind {
 /**
  * Kinds of non-fatal trace/source debug-info mismatches.
  */
-export enum TraceDiagnosticKind {
+enum TraceDiagnosticKind {
     MissingSourceFunction = 'MissingSourceFunction',
+    MissingCodeMapSourceFile = 'MissingCodeMapSourceFile',
 }
 
 /**
@@ -298,7 +299,6 @@ export enum TraceDiagnosticKind {
  * during debugging session.
  */
 export interface TraceDiagnostic {
-    kind: TraceDiagnosticKind;
     /**
      * Opaque UI de-duplication key chosen by each diagnostic kind.
      */
@@ -307,10 +307,6 @@ export interface TraceDiagnostic {
      * User-facing warning text.
      */
     message: string;
-    /**
-     * Whether to force disassembly view for this frame.
-     */
-    forceDisassembly: boolean;
 }
 
 /**
@@ -933,7 +929,7 @@ function translateOpenFrame(
     }
 
     let forceDisassembly = false;
-    let diagnostics = undefined;
+    let diagnostics: TraceDiagnostic[] | undefined = undefined;
     if (!srcFunEntry) {
         if (!bcodeMap || !bcodeFunEntry) {
             // if we have neither source nor bytecode debug info for the function,
@@ -956,18 +952,10 @@ function translateOpenFrame(
         optimizedBcodeLines = undefined;
         bcodeFilePath = undefined;
         forceDisassembly = true;
-        diagnostics = [{
-            kind: TraceDiagnosticKind.MissingSourceFunction,
-            key: missingSourceFunctionDiagnosticKey(modInfo, frame.function_name, previousEvent, callerFrame),
-            forceDisassembly: true,
-            message: 'Source debug info for '
-                + modInfo.addr
-                + '::'
-                + modInfo.name
-                + '::'
-                + frame.function_name
-                + ' does not match the trace; showing disassembly for this frame.'
-        }];
+        const diagnosticKind = debugInfo.functionsWithMissingCodeMapSourceFiles.has(frame.function_name)
+            ? TraceDiagnosticKind.MissingCodeMapSourceFile
+            : TraceDiagnosticKind.MissingSourceFunction;
+        diagnostics = [openFrameDiagnostic(diagnosticKind, modInfo, frame.function_name, previousEvent, callerFrame)];
     }
 
     if (!currentSrcFile) {
@@ -1006,15 +994,54 @@ function translateOpenFrame(
 }
 
 /**
- * Builds a de-duplication key for missing-source-function warnings.
+ * Builds a warning attached to an OpenFrame event.
  */
-function missingSourceFunctionDiagnosticKey(
+function openFrameDiagnostic(
+    kind: TraceDiagnosticKind,
+    modInfo: ModuleInfo,
+    functionName: string,
+    previousEvent: TraceEvent | undefined,
+    callerFrame: ITraceGenFrameInfo | undefined,
+): TraceDiagnostic {
+    return {
+        key: openFrameDiagnosticKey(kind, modInfo, functionName, previousEvent, callerFrame),
+        message: openFrameDiagnosticMessage(kind, modInfo, functionName),
+    };
+}
+
+/**
+ * Builds user-facing warning text for an OpenFrame diagnostic.
+ */
+function openFrameDiagnosticMessage(
+    kind: TraceDiagnosticKind,
+    modInfo: ModuleInfo,
+    functionName: string,
+): string {
+    const functionID = modInfo.addr + '::' + modInfo.name + '::' + functionName;
+    switch (kind) {
+        case TraceDiagnosticKind.MissingCodeMapSourceFile:
+            return 'Source debug info for '
+                + functionID
+                + ' references a source file that is unavailable; showing disassembly for this frame.';
+        case TraceDiagnosticKind.MissingSourceFunction:
+            return 'Source debug info for '
+                + functionID
+                + ' does not match the trace; showing disassembly for this frame.';
+    }
+}
+
+/**
+ * Builds a de-duplication key for OpenFrame warnings.
+ */
+function openFrameDiagnosticKey(
+    kind: TraceDiagnosticKind,
     modInfo: ModuleInfo,
     functionName: string,
     previousEvent: TraceEvent | undefined,
     callerFrame: ITraceGenFrameInfo | undefined,
 ): string {
-    const baseKey = 'MissingSourceFunction:'
+    const baseKey = kind
+        + ':'
         + modInfo.addr
         + '::'
         + modInfo.name
