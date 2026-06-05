@@ -27,7 +27,11 @@ mod test {
     };
     use sui_benchmark::{
         FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
-        drivers::{Interval, bench_driver::BenchDriver, driver::Driver},
+        drivers::{
+            Interval,
+            bench_driver::{BenchDriver, set_crash_recovery_probability},
+            driver::Driver,
+        },
         util::get_ed25519_keypair_from_keystore,
     };
     use sui_config::ExecutionCacheConfig;
@@ -514,26 +518,28 @@ mod test {
         test_simulated_load(test_cluster, 120).await;
     }
 
-    /// Verifies that transactions which caused a process panic in a previous run are:
-    /// 1. Recorded in the crash log (via the fail point that simulates what the panic hook does).
-    /// 2. Dropped by the consensus handler on the next startup instead of being re-executed.
-    /// 3. Do not prevent the cluster from maintaining liveness (reconfiguring on schedule).
+    /// Extends `test_simulated_load_reconfig_with_crashes_and_delays` with crash-recovery:
+    /// a small fraction of transactions deterministically poison a validator (causing it to
+    /// crash and record the digest in the crash log). On restart the consensus handler drops
+    /// those transactions instead of re-executing them, keeping the cluster live.
     ///
-    /// `deterministic_probability` (keyed on the transaction digest) is used so that the same
-    /// transaction always crashes the same validator — mirroring a real deterministic bug.
-    /// Without crash-recovery the node would crash again every time that transaction is replayed.
-    /// The crash log causes it to be dropped instead, keeping the cluster live.
-    ///
-    /// Note: transactions that are poisoned for a validator can never be certified (the affected
-    /// validators crash before signing effects), so they never reach a checkpoint and the fullnode
-    /// never executes them. Liveness is verified by waiting for the cluster to advance through
-    /// multiple epochs — which requires consensus to keep making progress despite per-transaction
-    /// crashes.
+    /// `deterministic_probability` gives the same answer for a given (seed, digest) pair on
+    /// every call, so the same transaction always poisons the same validator — exactly mirroring
+    /// a real deterministic bug. The load generator uses the same probability to recognise
+    /// poison transactions and treat their failures as expected rather than retrying forever.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_with_crashes_and_delays_crash_recovery() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
+        // Must match the probability in the crash-with-tx-logging fail point handler.
+        const CRASH_PROB: f32 = 0.002;
+
         register_fail_point_if("select-random-cache", || true);
+        register_fail_point_if("crash-with-tx-logging", || true);
+
+        // Tell the load generator which transactions are poison so it recycles their gas
+        // instead of retrying them indefinitely.
+        set_crash_recovery_probability(CRASH_PROB);
 
         let test_cluster = Arc::new(
             init_test_cluster_builder(4, 10_000)
@@ -542,16 +548,6 @@ mod test {
                 .await,
         );
 
-        // Enable the crash-with-tx-logging fail point. The handler in try_execute_immediately
-        // uses deterministic_probability keyed on the transaction digest: for a given (seed,
-        // digest) pair the result is fixed, so a transaction that would crash a validator will
-        // always crash it. Writing the digest to the crash log before killing the node means the
-        // transaction is dropped on the next restart rather than re-crashing the node.
-        register_fail_point_if("crash-with-tx-logging", || true);
-
-        // Also exercise the standard DB-level crash fail points from
-        // test_simulated_load_reconfig_with_crashes_and_delays to ensure crash-recovery interacts
-        // correctly with the broader crash landscape.
         let dead_validator_orig: Arc<Mutex<Option<DeadValidator>>> = Default::default();
         let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
         let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
@@ -592,21 +588,7 @@ mod test {
             );
         });
 
-        // Wait for multiple epoch transitions rather than running the full benchmark load.
-        // Poisoned transactions are permanently unexecutable (all validators crash for them),
-        // so a benchmark driver that asserts on transaction success would always fail. Instead
-        // we verify liveness directly: the cluster must advance through several epochs, which
-        // requires consensus to keep processing despite per-transaction crashes and recoveries.
-        use sui_types::sui_system_state::SuiSystemStateTrait;
-        test_cluster
-            .wait_for_epoch_with_timeout(Some(3), Duration::from_secs(180))
-            .await;
-        let final_state = test_cluster.wait_for_epoch(None).await;
-        let final_epoch = final_state.epoch();
-        assert!(
-            final_epoch >= 3,
-            "Expected at least 3 epochs but only reached epoch {final_epoch}"
-        );
+        test_simulated_load(test_cluster, 120).await;
     }
 
     #[sim_test(config = "test_config()")]
