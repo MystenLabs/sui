@@ -289,6 +289,7 @@ export enum TraceEventKind {
  * Kinds of non-fatal trace/source debug-info mismatches.
  */
 enum TraceDiagnosticKind {
+    MissingSourceModule = 'MissingSourceModule',
     MissingSourceFunction = 'MissingSourceFunction',
     MissingCodeMapSourceFile = 'MissingCodeMapSourceFile',
 }
@@ -625,6 +626,7 @@ export async function readTrace(
                     + modInfo.addr
                     + ' not found');
             }
+            const sourceDebugInfoMissing = !srcDebugInfosHashMap.has(debugInfo.fileHash);
             const translatedFrame = translateOpenFrame(
                 frame,
                 modInfo,
@@ -633,6 +635,7 @@ export async function readTrace(
                 localsTypes,
                 paramValues,
                 filesMap,
+                sourceDebugInfoMissing,
                 events[events.length - 1],
                 frameInfoStack[frameInfoStack.length - 1]
             );
@@ -904,6 +907,7 @@ function translateOpenFrame(
     localsTypes: string[],
     paramValues: RuntimeValueType[],
     filesMap: Map<string, IFileInfo>,
+    sourceDebugInfoMissing: boolean,
     previousEvent: TraceEvent | undefined,
     callerFrame: ITraceGenFrameInfo | undefined,
 ): ITranslatedOpenFrame {
@@ -930,6 +934,15 @@ function translateOpenFrame(
 
     let forceDisassembly = false;
     let diagnostics: TraceDiagnostic[] | undefined = undefined;
+    if (sourceDebugInfoMissing) {
+        diagnostics = [openFrameDiagnostic(
+            TraceDiagnosticKind.MissingSourceModule,
+            modInfo,
+            frame.function_name,
+            previousEvent,
+            callerFrame,
+        )];
+    }
     if (!srcFunEntry) {
         if (!bcodeMap || !bcodeFunEntry) {
             // if we have neither source nor bytecode debug info for the function,
@@ -1017,8 +1030,13 @@ function openFrameDiagnosticMessage(
     modInfo: ModuleInfo,
     functionName: string,
 ): string {
-    const functionID = modInfo.addr + '::' + modInfo.name + '::' + functionName;
+    const modID = modInfo.addr + '::' + modInfo.name;
+    const functionID = modID + '::' + functionName;
     switch (kind) {
+        case TraceDiagnosticKind.MissingSourceModule:
+            return 'Source debug info for '
+                + modID
+                + ' is unavailable; showing disassembly for this module.';
         case TraceDiagnosticKind.MissingCodeMapSourceFile:
             return 'Source debug info for '
                 + functionID
@@ -1040,11 +1058,15 @@ function openFrameDiagnosticKey(
     previousEvent: TraceEvent | undefined,
     callerFrame: ITraceGenFrameInfo | undefined,
 ): string {
+    const modID = modInfo.addr + '::' + modInfo.name;
+    if (kind === TraceDiagnosticKind.MissingSourceModule) {
+        return kind
+            + ':'
+            + modID;
+    }
     const baseKey = kind
         + ':'
-        + modInfo.addr
-        + '::'
-        + modInfo.name
+        + modID
         + '::'
         + functionName;
     // Prefer callsite-specific keys so loops warn once, but distinct callsites still warn.
