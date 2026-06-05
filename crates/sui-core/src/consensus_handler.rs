@@ -2791,6 +2791,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
                     let digest = tx.digest();
                     if self.crashed_transactions.contains(digest) {
+                        assert_reachable!(
+                            "crash-recovery: dropping previously-crashing transaction"
+                        );
                         warn!(
                             ?digest,
                             "Dropping transaction that caused a crash in a previous run"
