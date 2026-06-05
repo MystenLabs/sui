@@ -972,6 +972,8 @@ function translateOpenFrame(
     }
 
     if (!currentSrcFile) {
+        // IDebugInfo is only created after its primary file hash is verified to be present in filesMap.
+        // Hitting this error means a real problem and not a recoverable source/bytecode mismatch.
         throw new Error(`Cannot find file with hash: ${srcFileHash}`);
     }
 
@@ -1095,6 +1097,8 @@ function recordTracedLine(
 ) {
     const file = filesMap.get(floc.fileHash);
     if (!file) {
+        // PC locations are built only from code-map entries whose files are verified to exist in filesMap.
+        // Hitting this error means a real problem and not a recoverable source/bytecode mismatch.
         throw new Error('Cannot find file with hash: '
             + floc.fileHash
             + ' when recording traced line');
