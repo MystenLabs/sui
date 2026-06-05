@@ -451,7 +451,7 @@ pub fn stack_satisfies_struct_instantiation(
     struct_index: StructDefInstantiationIndex,
     exact: bool,
 ) -> (bool, Subst) {
-    let struct_inst = state.module.module.struct_instantiation_at(struct_index);
+    let struct_inst = state.module.struct_instantiantiation_at(struct_index);
     if exact {
         stack_satisfies_struct_signature(state, struct_inst.def, Some(struct_inst.type_parameters))
     } else {
@@ -476,6 +476,13 @@ pub fn stack_satisfies_struct_signature(
         .datatype_handle_at(struct_def.struct_handle);
     // Get the type formals for the struct, and the kinds that they expect.
     let type_parameters = shandle.type_parameters.clone();
+    // A non-generic `Pack`/`Unpack` (no instantiation) can only be applied to a non-generic
+    // struct. A generic struct must go through `PackGeneric`/`UnpackGeneric`; constructing it
+    // without an instantiation would produce an ill-formed `Datatype` value whose generic fields
+    // have no type arguments.
+    if instantiation.is_none() && !type_parameters.is_empty() {
+        return (false, Subst::new());
+    }
     let field_tokens = struct_def
         .fields()
         .into_iter()
@@ -563,14 +570,20 @@ pub fn stack_has_struct(state: &AbstractState, struct_index: StructDefinitionInd
         match struct_value.token {
             SignatureToken::Datatype(struct_handle) => {
                 let struct_def = state.module.module.struct_def_at(struct_index);
-                return struct_handle == struct_def.struct_handle;
+                // Non-generic `Unpack` only applies to non-generic structs; a generic struct must
+                // be unpacked with `UnpackGeneric`.
+                let is_generic = !state
+                    .module
+                    .module
+                    .datatype_handle_at(struct_def.struct_handle)
+                    .type_parameters
+                    .is_empty();
+                return !is_generic && struct_handle == struct_def.struct_handle;
             }
-            SignatureToken::DatatypeInstantiation(struct_inst) => {
-                let (struct_handle, _) = *struct_inst;
-                let struct_def = state.module.module.struct_def_at(struct_index);
-                return struct_handle == struct_def.struct_handle;
-            }
-            SignatureToken::Bool
+            // A `DatatypeInstantiation` is a *generic* struct instance; it can only be unpacked
+            // with `UnpackGeneric`, not the non-generic `Unpack` this predicate guards.
+            SignatureToken::DatatypeInstantiation(_)
+            | SignatureToken::Bool
             | SignatureToken::U8
             | SignatureToken::U64
             | SignatureToken::U128
@@ -592,8 +605,19 @@ pub fn stack_has_struct_inst(
     state: &AbstractState,
     struct_index: StructDefInstantiationIndex,
 ) -> bool {
-    let struct_inst = state.module.module.struct_instantiation_at(struct_index);
-    stack_has_struct(state, struct_inst.def)
+    let struct_inst = state.module.struct_instantiantiation_at(struct_index);
+    let def = struct_inst.def;
+    // `UnpackGeneric` requires a generic struct *instance* on top of the stack (a
+    // `DatatypeInstantiation`); a plain `Datatype` cannot be unpacked generically.
+    if state.stack_len() > 0
+        && let Some(struct_value) = state.stack_peek(0)
+        && let SignatureToken::DatatypeInstantiation(inst) = &struct_value.token
+    {
+        let (struct_handle, _) = &**inst;
+        let struct_def = state.module.module.struct_def_at(def);
+        return *struct_handle == struct_def.struct_handle;
+    }
+    false
 }
 
 /// Determine if a struct at the given index is a resource
@@ -624,7 +648,7 @@ pub fn struct_inst_abilities(
     state: &AbstractState,
     struct_index: StructDefInstantiationIndex,
 ) -> AbilitySet {
-    let struct_inst = state.module.module.struct_instantiation_at(struct_index);
+    let struct_inst = state.module.struct_instantiantiation_at(struct_index);
     let type_args = state
         .module
         .module
@@ -636,7 +660,7 @@ pub fn stack_struct_has_field_inst(
     state: &AbstractState,
     field_index: FieldInstantiationIndex,
 ) -> bool {
-    let field_inst = state.module.module.field_instantiation_at(field_index);
+    let field_inst = state.module.field_instantiantiation_at(field_index);
     stack_struct_has_field(state, field_inst.handle)
 }
 
@@ -691,10 +715,7 @@ pub fn stack_struct_inst_popn(
     state: &AbstractState,
     struct_inst_index: StructDefInstantiationIndex,
 ) -> Result<AbstractState, VMError> {
-    let struct_inst = state
-        .module
-        .module
-        .struct_instantiation_at(struct_inst_index);
+    let struct_inst = state.module.struct_instantiantiation_at(struct_inst_index);
     stack_struct_popn(state, struct_inst.def)
 }
 
@@ -717,7 +738,7 @@ pub fn create_struct_from_inst(
     state: &AbstractState,
     struct_index: StructDefInstantiationIndex,
 ) -> Result<AbstractState, VMError> {
-    let struct_inst = state.module.module.struct_instantiation_at(struct_index);
+    let struct_inst = state.module.struct_instantiantiation_at(struct_index);
     create_struct(state, struct_inst.def, Some(struct_inst.type_parameters))
 }
 
@@ -793,7 +814,7 @@ pub fn stack_unpack_struct_inst(
     state: &AbstractState,
     struct_index: StructDefInstantiationIndex,
 ) -> Result<AbstractState, VMError> {
-    let struct_inst = state.module.module.struct_instantiation_at(struct_index);
+    let struct_inst = state.module.struct_instantiantiation_at(struct_index);
     stack_unpack_struct(state, struct_inst.def, Some(struct_inst.type_parameters))
 }
 
@@ -871,7 +892,7 @@ pub fn stack_struct_borrow_field_inst(
     state: &AbstractState,
     field_index: FieldInstantiationIndex,
 ) -> Result<AbstractState, VMError> {
-    let field_inst = state.module.module.field_instantiation_at(field_index);
+    let field_inst = state.module.field_instantiantiation_at(field_index);
     stack_struct_borrow_field(state, field_inst.handle)
 }
 
@@ -989,10 +1010,7 @@ pub fn stack_satisfies_function_inst_signature(
     state: &AbstractState,
     function_index: FunctionInstantiationIndex,
 ) -> (bool, Subst) {
-    let func_inst = state
-        .module
-        .module
-        .function_instantiation_at(function_index);
+    let func_inst = state.module.function_instantiantiation_at(function_index);
     stack_satisfies_function_signature(state, func_inst.handle)
 }
 
@@ -1030,10 +1048,7 @@ pub fn stack_function_inst_call(
     state: &AbstractState,
     function_index: FunctionInstantiationIndex,
 ) -> Result<AbstractState, VMError> {
-    let func_inst = state
-        .module
-        .module
-        .function_instantiation_at(function_index);
+    let func_inst = state.module.function_instantiantiation_at(function_index);
     stack_function_call(state, func_inst.handle, Some(func_inst.type_parameters))
 }
 
@@ -1041,10 +1056,7 @@ pub fn get_function_instantiation_for_state(
     state: &AbstractState,
     function_index: FunctionInstantiationIndex,
 ) -> (FunctionHandleIndex, Vec<SignatureToken>) {
-    let func_inst = state
-        .module
-        .module
-        .function_instantiation_at(function_index);
+    let func_inst = state.module.function_instantiantiation_at(function_index);
     let mut partial_instantiation = stack_satisfies_function_signature(state, func_inst.handle).1;
     let function_handle = state.module.module.function_handle_at(func_inst.handle);
     let typs = &function_handle.type_parameters;
@@ -1081,10 +1093,7 @@ pub fn stack_function_inst_popn(
     state: &AbstractState,
     function_index: FunctionInstantiationIndex,
 ) -> Result<AbstractState, VMError> {
-    let func_inst = state
-        .module
-        .module
-        .function_instantiation_at(function_index);
+    let func_inst = state.module.function_instantiantiation_at(function_index);
     stack_function_popn(state, func_inst.handle)
 }
 

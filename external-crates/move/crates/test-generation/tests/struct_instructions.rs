@@ -10,7 +10,7 @@ use move_binary_format::file_format::{
     TypeSignature, empty_module,
 };
 use move_core_types::identifier::Identifier;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use test_generation::{
     abilities,
     abstract_state::{AbstractState, AbstractValue, CallGraph},
@@ -96,7 +96,7 @@ fn get_field_signature<'a>(module: &'a CompiledModule, handle: &FieldHandle) -> 
 fn bytecode_pack_signature_not_satisfied() {
     let module = generate_module_with_struct(false);
     let state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
+        AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     common::run_instruction(Bytecode::Pack(StructDefinitionIndex::new(0)), state1);
 }
 
@@ -104,7 +104,7 @@ fn bytecode_pack_signature_not_satisfied() {
 fn bytecode_pack() {
     let module = generate_module_with_struct(false);
     let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
+        AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     let (struct_value1, tokens) = create_struct_value(&state1.module.module);
     for token in tokens {
         let abstract_value = AbstractValue {
@@ -127,7 +127,7 @@ fn bytecode_pack() {
 fn bytecode_unpack_signature_not_satisfied() {
     let module = generate_module_with_struct(false);
     let state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
+        AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     common::run_instruction(Bytecode::Unpack(StructDefinitionIndex::new(0)), state1);
 }
 
@@ -135,7 +135,7 @@ fn bytecode_unpack_signature_not_satisfied() {
 fn bytecode_unpack() {
     let module = generate_module_with_struct(false);
     let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
+        AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     let (struct_value, tokens) = create_struct_value(&state1.module.module);
     state1.stack_push(struct_value);
     let (state2, _) =
@@ -160,7 +160,7 @@ fn bytecode_mutborrowfield() {
         get_field_signature(&module, &module.field_handles[field_handle_idx.0 as usize]).clone();
 
     let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
+        AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     let struct_value = create_struct_value(&state1.module.module).0;
     state1.stack_push(AbstractValue {
         token: SignatureToken::MutableReference(Box::new(struct_value.token)),
@@ -190,7 +190,7 @@ fn bytecode_mutborrowfield_stack_has_no_reference() {
     let field_handle_idx = FieldHandleIndex((module.field_handles.len() - 1) as u16);
 
     let state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
+        AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     common::run_instruction(Bytecode::MutBorrowField(field_handle_idx), state1);
 }
 
@@ -206,7 +206,7 @@ fn bytecode_mutborrowfield_ref_is_immutable() {
     let field_handle_idx = FieldHandleIndex((module.field_handles.len() - 1) as u16);
 
     let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
+        AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     let struct_value = create_struct_value(&state1.module.module).0;
     state1.stack_push(AbstractValue {
         token: SignatureToken::Reference(Box::new(struct_value.token)),
@@ -228,7 +228,7 @@ fn bytecode_immborrowfield() {
         get_field_signature(&module, &module.field_handles[field_handle_idx.0 as usize]).clone();
 
     let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
+        AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     let struct_value = create_struct_value(&state1.module.module).0;
     state1.stack_push(AbstractValue {
         token: SignatureToken::Reference(Box::new(struct_value.token)),
@@ -258,7 +258,7 @@ fn bytecode_immborrowfield_stack_has_no_reference() {
     let field_handle_idx = FieldHandleIndex((module.field_handles.len() - 1) as u16);
 
     let state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
+        AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     common::run_instruction(Bytecode::ImmBorrowField(field_handle_idx), state1);
 }
 
@@ -274,7 +274,7 @@ fn bytecode_immborrowfield_ref_is_mutable() {
     let field_handle_idx = FieldHandleIndex((module.field_handles.len() - 1) as u16);
 
     let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
+        AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     let struct_value = create_struct_value(&state1.module.module).0;
     state1.stack_push(AbstractValue {
         token: SignatureToken::MutableReference(Box::new(struct_value.token)),

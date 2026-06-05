@@ -812,6 +812,26 @@ impl<'a> BytecodeGenerator<'a> {
                 } else {
                     state_f
                 };
+            } else if !matches!(bytecode.last(), Some(Bytecode::Abort)) {
+                // The state aborted during the local-availability fixup that runs after the main
+                // generation loop. Unlike the main loop, that phase does not emit a terminating
+                // `Abort`, so the block can end in an arbitrary instruction (e.g. `StLoc`). Append
+                // the abort terminator here so the block has a valid terminator regardless of how
+                // many CFG successors it has.
+                state_f = self.apply_instruction(
+                    fn_context,
+                    state_f,
+                    &mut bytecode,
+                    Bytecode::LdU64(0),
+                    true,
+                )?;
+                state_f = self.apply_instruction(
+                    fn_context,
+                    state_f,
+                    &mut bytecode,
+                    Bytecode::Abort,
+                    true,
+                )?;
             }
             block.set_instructions(bytecode);
             *module = state_f.module.instantiate();
@@ -858,7 +878,7 @@ impl<'a> BytecodeGenerator<'a> {
         token: &SignatureToken,
     ) -> Vec<Bytecode> {
         match token {
-            SignatureToken::Address => vec![Bytecode::LdConst(ConstantPoolIndex(0))],
+            SignatureToken::Address => vec![Bytecode::LdConst(module.add_address_constant())],
             SignatureToken::U64 => vec![Bytecode::LdU64(0)],
             SignatureToken::U8 => vec![Bytecode::LdU8(0)],
             SignatureToken::U128 => vec![Bytecode::LdU128(Box::new(0))],

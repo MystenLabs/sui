@@ -24,6 +24,7 @@ use move_binary_format::{
     file_format::{
         AbilitySet, CompiledModule, DatatypeHandleIndex, FunctionDefinitionIndex, SignatureToken,
     },
+    file_format_common::VERSION_MAX,
 };
 use move_bytecode_verifier::verify_module_unmetered;
 use move_compiler::Compiler;
@@ -82,32 +83,41 @@ fn run_vm(module: CompiledModule) -> Result<(), VMError> {
         let sig_idx = module.function_handle_at(handle).parameters;
         module.signature_at(sig_idx).clone()
     };
-    let main_args: Vec<Value> = function_signature
+    // Build a default argument value for each parameter of the entry function. Types we cannot
+    // synthesize a value for (references, datatypes, signers, type parameters, non-`u8` vectors)
+    // mean we cannot drive execution of this module, so we skip running it rather than aborting
+    // the whole generation run.
+    let main_args: Option<Vec<Value>> = function_signature
         .0
         .iter()
         .map(|sig_tok| match sig_tok {
-            SignatureToken::Address => Value::Address(Box::new(AccountAddress::ZERO)),
-            SignatureToken::U64 => Value::U64(0),
-            SignatureToken::Bool => Value::Bool(true),
+            SignatureToken::Address => Some(Value::address(AccountAddress::ZERO)),
+            SignatureToken::U8 => Some(Value::u8(0)),
+            SignatureToken::U16 => Some(Value::u16(0)),
+            SignatureToken::U32 => Some(Value::u32(0)),
+            SignatureToken::U64 => Some(Value::u64(0)),
+            SignatureToken::U128 => Some(Value::u128(0)),
+            SignatureToken::U256 => Some(Value::u256(move_core_types::u256::U256::zero())),
+            SignatureToken::Bool => Some(Value::bool(true)),
             SignatureToken::Vector(inner_tok) if **inner_tok == SignatureToken::U8 => Vector::pack(
                 move_vm_runtime::execution::values::VectorSpecialization::U8,
                 vec![],
             )
-            .unwrap(),
+            .ok(),
             SignatureToken::Vector(_)
-            | SignatureToken::U8
-            | SignatureToken::U128
             | SignatureToken::Signer
             | SignatureToken::Datatype(_)
             | SignatureToken::DatatypeInstantiation(_)
             | SignatureToken::Reference(_)
             | SignatureToken::MutableReference(_)
-            | SignatureToken::TypeParameter(_)
-            | SignatureToken::U16
-            | SignatureToken::U32
-            | SignatureToken::U256 => unimplemented!("Unsupported argument type: {:#?}", sig_tok),
+            | SignatureToken::TypeParameter(_) => None,
         })
         .collect();
+
+    let Some(main_args) = main_args else {
+        debug!("Skipping VM execution: entry function has non-synthesizable argument types");
+        return Ok(());
+    };
 
     execute_function_in_module(module, entry_idx, vec![], main_args)
 }
@@ -173,7 +183,7 @@ fn output_error_case(module: CompiledModule, output_path: Option<String>, case_i
         Some(path) => {
             let mut out = vec![];
             module
-                .serialize(&mut out)
+                .serialize_with_version(VERSION_MAX, &mut out)
                 .expect("Unable to serialize module");
             let output_file = format!("{}/case{}_{}.module", path, tid, case_id);
             let mut f = fs::File::create(output_file)
