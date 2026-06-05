@@ -419,6 +419,13 @@ mod test {
 
         register_fail_point_if("select-random-cache", || true);
 
+        // Simulate deterministic per-transaction crashes to exercise crash-recovery. The
+        // same probability is registered with the load generator so it can identify poison
+        // transactions and recycle their gas instead of retrying indefinitely.
+        const CRASH_PROB: f32 = 0.002;
+        register_fail_point_if("crash-with-tx-logging", || true);
+        set_crash_recovery_probability(CRASH_PROB);
+
         let test_cluster = Arc::new(
             init_test_cluster_builder(4, 10000)
                 .with_num_unpruned_validators(4)
@@ -514,79 +521,6 @@ mod test {
         // Cause DKG to fail ~5% of the time. With 4 validators and crashes reducing the active
         // quorum, empirically ~6% per-validator skip rate produces ~5% DKG failure per epoch.
         register_fail_point_if("rb-dkg", || thread_rng().gen_bool(0.06));
-
-        test_simulated_load(test_cluster, 120).await;
-    }
-
-    /// Extends `test_simulated_load_reconfig_with_crashes_and_delays` with crash-recovery:
-    /// a small fraction of transactions deterministically poison a validator (causing it to
-    /// crash and record the digest in the crash log). On restart the consensus handler drops
-    /// those transactions instead of re-executing them, keeping the cluster live.
-    ///
-    /// `deterministic_probability` gives the same answer for a given (seed, digest) pair on
-    /// every call, so the same transaction always poisons the same validator — exactly mirroring
-    /// a real deterministic bug. The load generator uses the same probability to recognise
-    /// poison transactions and treat their failures as expected rather than retrying forever.
-    #[sim_test(config = "test_config()")]
-    async fn test_simulated_load_reconfig_with_crashes_and_delays_crash_recovery() {
-        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-
-        // Must match the probability in the crash-with-tx-logging fail point handler.
-        const CRASH_PROB: f32 = 0.002;
-
-        register_fail_point_if("select-random-cache", || true);
-        register_fail_point_if("crash-with-tx-logging", || true);
-
-        // Tell the load generator which transactions are poison so it recycles their gas
-        // instead of retrying them indefinitely.
-        set_crash_recovery_probability(CRASH_PROB);
-
-        let test_cluster = Arc::new(
-            init_test_cluster_builder(4, 10_000)
-                .with_num_unpruned_validators(4)
-                .build()
-                .await,
-        );
-
-        let dead_validator_orig: Arc<Mutex<Option<DeadValidator>>> = Default::default();
-        let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
-        let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
-
-        let dead_validator = dead_validator_orig.clone();
-        let keep_alive_nodes_clone = keep_alive_nodes.clone();
-        let grace_period_clone = grace_period.clone();
-        register_fail_points(
-            &[
-                "batch-write-before",
-                "batch-write-after",
-                "put-cf-before",
-                "put-cf-after",
-                "delete-cf-before",
-                "delete-cf-after",
-                "transaction-commit",
-                "highest-executed-checkpoint",
-            ],
-            move || {
-                handle_failpoint(
-                    dead_validator.clone(),
-                    keep_alive_nodes_clone.clone(),
-                    grace_period_clone.clone(),
-                    0.02,
-                );
-            },
-        );
-
-        let dead_validator = dead_validator_orig.clone();
-        let keep_alive_nodes_clone = keep_alive_nodes.clone();
-        let grace_period_clone = grace_period.clone();
-        register_fail_point("crash", move || {
-            handle_failpoint(
-                dead_validator.clone(),
-                keep_alive_nodes_clone.clone(),
-                grace_period_clone.clone(),
-                0.01,
-            );
-        });
 
         test_simulated_load(test_cluster, 120).await;
     }
