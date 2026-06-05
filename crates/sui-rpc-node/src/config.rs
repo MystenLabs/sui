@@ -86,7 +86,12 @@ impl Default for RestoreConfig {
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
 pub struct DbConfig {
     /// Number of in-memory snapshots retained for consistent reads.
-    /// Defaults to [`DEFAULT_SNAPSHOT_CAPACITY`] when unset.
+    /// This is the sole retention knob for the consistent-read
+    /// window: combined with `[consistency] stride`, the window spans
+    /// roughly `stride * snapshot_capacity` checkpoints. Retention
+    /// lives here rather than under `[consistency]` because it is an
+    /// open-time property of the database. Defaults to
+    /// [`DEFAULT_SNAPSHOT_CAPACITY`] when unset.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snapshot_capacity: Option<usize>,
 

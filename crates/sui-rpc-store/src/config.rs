@@ -29,8 +29,7 @@ use sui_indexer_alt_framework::pipeline::CommitterConfig;
 #[serde(deny_unknown_fields)]
 pub struct ServiceConfig {
     /// Cross-pipeline consistency knobs: how often to take
-    /// snapshots, how many to keep, and how deep the per-pipeline
-    /// write buffer is.
+    /// snapshots and how deep the per-pipeline write buffer is.
     pub consistency: ConsistencyConfig,
 
     /// Default committer settings shared by all pipelines.
@@ -46,16 +45,18 @@ pub struct ServiceConfig {
 /// Cross-pipeline consistency knobs surfaced to operators. The
 /// indexer threads these into the [`Synchronizer`] at startup.
 ///
+/// Snapshot *retention* (how many in-memory snapshots are kept, and
+/// thus how far back consistent reads can reach) is not configured
+/// here: it is an open-time property of the database, set via
+/// [`DbOptions::snapshot_capacity`]. The effective consistent-read
+/// window is roughly `stride * snapshot_capacity` checkpoints.
+///
 /// [`Synchronizer`]: sui_consistent_store::Synchronizer
+/// [`DbOptions::snapshot_capacity`]: sui_consistent_store::DbOptions::snapshot_capacity
 #[DefaultConfig]
 #[derive(Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ConsistencyConfig {
-    /// Number of in-memory snapshots retained on the database. The
-    /// RPC read window is bounded by this — older snapshots are
-    /// evicted when the buffer is full.
-    pub snapshots: u64,
-
     /// Number of checkpoints between cross-pipeline snapshots. A
     /// stride of `1` snapshots after every checkpoint; higher
     /// strides reduce snapshot frequency (and the load it puts on
@@ -242,7 +243,6 @@ impl From<CommitterConfig> for CommitterLayer {
 impl Default for ConsistencyConfig {
     fn default() -> Self {
         Self {
-            snapshots: 15_000,
             stride: 1,
             buffer_size: 5_000,
         }
