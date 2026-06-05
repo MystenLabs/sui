@@ -28,6 +28,7 @@ sui-indexer-alt-framework-store-traits.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["time", "rt"] }
 tracing.workspace = true
 typed-store-error.workspace = true
 

@@ -204,6 +204,7 @@ impl LocalCluster {
             rpc,
             db: db_config,
             restore: _,
+            pruner: _,
         } = config;
 
         // Open the database explicitly so the cluster can hold a
@@ -246,6 +247,7 @@ impl LocalCluster {
             ingestion_client,
             None, // no streaming client for the in-memory harness.
             consistency,
+            None, // pruning disabled in the harness.
             ingestion,
             &registry,
         )

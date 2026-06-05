@@ -1,0 +1,855 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! Background pruner for the historical column families.
+//!
+//! Pruning is a standalone [`Service`] rather than a framework
+//! pipeline: it does not consume checkpoints from ingestion, it reads
+//! the already-committed state and deletes data below a retention
+//! floor. The shape mirrors the validator's perpetual-store pruner
+//! (a periodic background task) more than the indexer framework's
+//! per-pipeline `prune` hook — the deletions are data-driven (we walk
+//! transaction effects to retract superseded object versions) and the
+//! floor is a single value shared across every historical CF.
+//!
+//! # What gets pruned
+//!
+//! - **Per-transaction CFs** (`transactions`, `effects`, `events`,
+//!   `tx_metadata_by_seq`) — range-deleted over the pruned `tx_seq`
+//!   range; the keys are contiguous big-endian `tx_seq`, so one range
+//!   tombstone per CF clears the chunk.
+//! - **Per-checkpoint CFs** (`checkpoint_summary`,
+//!   `checkpoint_contents`) — range-deleted over the pruned
+//!   checkpoint range.
+//! - **Digest reverse indexes** (`tx_seq_by_digest`,
+//!   `checkpoint_seq_by_digest`) — point-deleted; their keys are
+//!   digests, so we collect them from the data being pruned (tx
+//!   digests from each effects row, checkpoint digests from each
+//!   summary) before deleting.
+//! - **`objects` history** — point-deleted, effects-driven: each
+//!   pruned transaction's `modified_at_versions` (superseded input
+//!   versions) and `all_tombstones` (deleted / wrapped markers) are
+//!   the exact `(ObjectID, version)` rows that are now dead. The
+//!   latest live version is never an input to a pruned transaction,
+//!   so it — and the `live_objects` pointer at it — is preserved.
+//! - **Ledger-history bitmaps** (`transaction_bitmap`,
+//!   `event_bitmap`) — not deleted directly; advancing the shared
+//!   [`tx_seq_floor`](crate::schema::pruning_watermark::tx_seq_floor)
+//!   lets their compaction filters drop fully-pruned buckets. We
+//!   force a compaction once the floor advances so the eviction is
+//!   prompt rather than waiting for a natural sweep.
+//!
+//! The live-set-bounded indexes (`live_objects`, `object_by_owner`,
+//! `object_by_type`, `balance`, `package_versions`) and the tiny
+//! `epochs` CF are never pruned.
+//!
+//! # Floor, retention, and safety
+//!
+//! Retention is epoch-based: the `retention_epochs` most-recent
+//! epochs are retained, and the target floor is the start checkpoint
+//! of the oldest retained epoch. The floor is then clamped so it
+//! never advances past the oldest in-memory snapshot's checkpoint:
+//! point and range deletes are already invisible to a snapshot
+//! (RocksDB pins the data a live snapshot references), but the bitmap
+//! compaction filter physically removes buckets irrespective of
+//! snapshots, so the clamp keeps every live snapshot's advertised
+//! available range valid even under an aggressively small retention.
+//!
+//! # Ordering and crash-safety
+//!
+//! Each chunk stages all of its deletes plus the new
+//! `PruningWatermarks` row into one atomic batch, commits, and only
+//! then advances the in-memory bitmap floor. Because the watermark
+//! row lives in the same batch as the deletes, a crash either loses
+//! the whole chunk (re-pruned next run) or commits it wholesale;
+//! there is no partial-delete-without-watermark state. Range and
+//! point deletes are idempotent, so a re-run is harmless.
+
+use std::sync::Arc;
+
+use anyhow::Context as _;
+use prometheus::IntCounter;
+use prometheus::IntGauge;
+use prometheus::Registry;
+use prometheus::register_int_counter_with_registry;
+use prometheus::register_int_gauge_with_registry;
+use sui_consistent_store::Db;
+use sui_consistent_store::FrameworkSchema;
+use sui_consistent_store::Schema;
+use sui_indexer_alt_framework::service::Service;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::message_envelope::Message;
+use tokio::time::MissedTickBehavior;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
+
+use crate::RpcStoreSchema;
+use crate::config::PrunerConfig;
+use crate::schema::checkpoint_seq_by_digest;
+use crate::schema::event_bitmap;
+use crate::schema::keys::U64Be;
+use crate::schema::objects;
+use crate::schema::pruning_watermark;
+use crate::schema::pruning_watermark::Watermarks;
+use crate::schema::transaction_bitmap;
+use crate::schema::tx_seq_by_digest;
+
+/// Prometheus metrics for the pruner.
+pub struct PrunerMetrics {
+    /// Lowest still-available checkpoint sequence number — the
+    /// persisted checkpoint floor.
+    pub checkpoint_lo: IntGauge,
+    /// Lowest still-available transaction sequence number — the
+    /// persisted `tx_seq` floor.
+    pub tx_seq_lo: IntGauge,
+    /// Total pruning chunks committed.
+    pub chunks_committed: IntCounter,
+    /// Total superseded object versions and tombstones deleted.
+    pub objects_deleted: IntCounter,
+}
+
+impl PrunerMetrics {
+    pub fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
+        let prefix = prefix.unwrap_or("rpc_store_pruner");
+        let name = |n| format!("{prefix}_{n}");
+
+        Arc::new(Self {
+            checkpoint_lo: register_int_gauge_with_registry!(
+                name("checkpoint_lo"),
+                "Lowest still-available checkpoint sequence number (pruning floor)",
+                registry,
+            )
+            .unwrap(),
+            tx_seq_lo: register_int_gauge_with_registry!(
+                name("tx_seq_lo"),
+                "Lowest still-available transaction sequence number (pruning floor)",
+                registry,
+            )
+            .unwrap(),
+            chunks_committed: register_int_counter_with_registry!(
+                name("chunks_committed"),
+                "Total pruning chunks committed",
+                registry,
+            )
+            .unwrap(),
+            objects_deleted: register_int_counter_with_registry!(
+                name("objects_deleted"),
+                "Total superseded object versions and tombstones deleted by the pruner",
+                registry,
+            )
+            .unwrap(),
+        })
+    }
+}
+
+/// Start the background pruner as a [`Service`].
+///
+/// Errors if `config.retention_epochs` is `0` (which would prune the
+/// current epoch). The returned service runs an infinite tick loop;
+/// it is aborted on graceful shutdown (each chunk is atomic, so an
+/// abort leaves the database consistent).
+pub fn start_pruner(
+    db: Db,
+    config: PrunerConfig,
+    metrics: Arc<PrunerMetrics>,
+) -> anyhow::Result<Service> {
+    anyhow::ensure!(
+        config.retention_epochs >= 1,
+        "PrunerConfig::retention_epochs must be >= 1; 0 would prune the current epoch",
+    );
+
+    // Reconstruct typed handles once; they are cheap views over the
+    // shared `Db` and are reused across every tick.
+    let schema = Arc::new(RpcStoreSchema::open(&db).context("Opening schema for pruner")?);
+
+    let service = Service::new().spawn_aborting(async move {
+        let mut ticker = tokio::time::interval(config.interval());
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
+        loop {
+            ticker.tick().await;
+
+            let db = db.clone();
+            let schema = schema.clone();
+            let config = config.clone();
+            let metrics = metrics.clone();
+
+            // The pruner does blocking RocksDB iteration and writes;
+            // keep it off the async runtime threads.
+            let res =
+                tokio::task::spawn_blocking(move || prune_once(&db, &schema, &config, &metrics))
+                    .await;
+
+            match res {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
+                    warn!("rpc-store pruner pass failed (will retry next interval): {e:#}")
+                }
+                Err(e) => warn!("rpc-store pruner task join error: {e}"),
+            }
+        }
+    });
+
+    Ok(service)
+}
+
+/// Run a single pruning pass: recompute the target floor and advance
+/// the persisted floor toward it one chunk at a time.
+fn prune_once(
+    db: &Db,
+    schema: &RpcStoreSchema,
+    config: &PrunerConfig,
+    metrics: &PrunerMetrics,
+) -> anyhow::Result<()> {
+    let Some(current_epoch) = current_committed_epoch(db)? else {
+        debug!("rpc-store pruner: no committed watermark yet; nothing to prune");
+        return Ok(());
+    };
+
+    let Some(retention_lo) =
+        retention_checkpoint_floor(schema, current_epoch, config.retention_epochs)?
+    else {
+        debug!(
+            current_epoch,
+            "rpc-store pruner: retention floor not yet reached; nothing to prune"
+        );
+        return Ok(());
+    };
+
+    // Never advance the floor past the oldest live snapshot.
+    let target_lo = clamp_to_snapshot(retention_lo, db.snapshot_range().map(|r| *r.start()));
+
+    let mut cursor = schema.get_pruning_watermarks()?.unwrap_or_default();
+    if target_lo <= cursor.checkpoint_lo {
+        debug!(
+            target_lo,
+            current_lo = cursor.checkpoint_lo,
+            "rpc-store pruner: floor already at or beyond target"
+        );
+        return Ok(());
+    }
+
+    info!(
+        from = cursor.checkpoint_lo,
+        to = target_lo,
+        current_epoch,
+        "rpc-store pruner: advancing floor"
+    );
+
+    while cursor.checkpoint_lo < target_lo {
+        let chunk_ckpt_hi = (cursor.checkpoint_lo + config.max_chunk_checkpoints).min(target_lo);
+        cursor = prune_chunk(db, schema, cursor, chunk_ckpt_hi, metrics)?;
+        metrics.checkpoint_lo.set(cursor.checkpoint_lo as i64);
+        metrics.tx_seq_lo.set(cursor.tx_seq_lo as i64);
+        metrics.chunks_committed.inc();
+    }
+
+    // The bitmap CFs' compaction filters only drop fully-pruned
+    // buckets on a compaction sweep; force one now that the floor has
+    // advanced so the eviction is prompt.
+    db.compact_range_cf(transaction_bitmap::NAME, None, None)
+        .context("Compacting transaction_bitmap after prune")?;
+    db.compact_range_cf(event_bitmap::NAME, None, None)
+        .context("Compacting event_bitmap after prune")?;
+
+    Ok(())
+}
+
+/// Prune one chunk of checkpoints `[cursor.checkpoint_lo,
+/// chunk_ckpt_hi)` and their transactions, returning the new floor.
+fn prune_chunk(
+    db: &Db,
+    schema: &RpcStoreSchema,
+    cursor: Watermarks,
+    chunk_ckpt_hi: u64,
+    metrics: &PrunerMetrics,
+) -> anyhow::Result<Watermarks> {
+    let ckpt_lo = cursor.checkpoint_lo;
+    let tx_lo = cursor.tx_seq_lo;
+
+    // The exclusive `tx_seq` upper bound for the chunk is the
+    // cumulative network tx count after the chunk's highest
+    // checkpoint, which is the first `tx_seq` of `chunk_ckpt_hi`.
+    // `chunk_ckpt_hi >= 1` by the caller's loop invariant, and
+    // `chunk_ckpt_hi - 1 >= ckpt_lo` is still retained (not yet
+    // pruned), so its summary is present.
+    let last_ckpt = chunk_ckpt_hi - 1;
+    let tx_hi = schema
+        .get_checkpoint_summary(last_ckpt)?
+        .with_context(|| format!("checkpoint_summary missing for checkpoint {last_ckpt}"))?
+        .data()
+        .network_total_transactions;
+
+    let mut batch = db.batch();
+    let mut objects_deleted: u64 = 0;
+
+    // Transaction side. Each effects row yields the object versions
+    // to retract and the transaction digest to unindex. A missing
+    // row means the range was already pruned (idempotent re-run).
+    for tx_seq in tx_lo..tx_hi {
+        let Some((effects, _unchanged)) = schema.get_effects(tx_seq)? else {
+            continue;
+        };
+        for (id, version) in effects.modified_at_versions() {
+            batch.delete(&schema.objects, &objects::Key { id, version })?;
+            objects_deleted += 1;
+        }
+        for (id, version) in effects.all_tombstones() {
+            batch.delete(&schema.objects, &objects::Key { id, version })?;
+            objects_deleted += 1;
+        }
+        batch.delete(
+            &schema.tx_seq_by_digest,
+            &tx_seq_by_digest::Key(*effects.transaction_digest()),
+        )?;
+    }
+
+    // The `tx_seq`-keyed CFs are contiguous, so one range delete each
+    // clears the whole chunk regardless of how many rows it spans.
+    batch.delete_range(&schema.transactions, &U64Be(tx_lo), &U64Be(tx_hi))?;
+    batch.delete_range(&schema.effects, &U64Be(tx_lo), &U64Be(tx_hi))?;
+    batch.delete_range(&schema.events, &U64Be(tx_lo), &U64Be(tx_hi))?;
+    batch.delete_range(&schema.tx_metadata_by_seq, &U64Be(tx_lo), &U64Be(tx_hi))?;
+
+    // Checkpoint side. Collect each checkpoint's digest for the
+    // reverse index, then range-delete the seq-keyed CFs.
+    for seq in ckpt_lo..chunk_ckpt_hi {
+        let Some(summary) = schema.get_checkpoint_summary(seq)? else {
+            continue;
+        };
+        batch.delete(
+            &schema.checkpoint_seq_by_digest,
+            &checkpoint_seq_by_digest::Key(summary.data().digest()),
+        )?;
+    }
+    batch.delete_range(
+        &schema.checkpoint_summary,
+        &U64Be(ckpt_lo),
+        &U64Be(chunk_ckpt_hi),
+    )?;
+    batch.delete_range(
+        &schema.checkpoint_contents,
+        &U64Be(ckpt_lo),
+        &U64Be(chunk_ckpt_hi),
+    )?;
+
+    // Advance the persisted floor atomically with the deletes.
+    let new = Watermarks {
+        tx_seq_lo: tx_hi,
+        checkpoint_lo: chunk_ckpt_hi,
+    };
+    let (k, v) = pruning_watermark::store(&new);
+    batch.put(&schema.pruning_watermark, &k, &v)?;
+
+    batch.commit()?;
+
+    // The commit is durable; advance the in-memory bitmap floor so
+    // the compaction filters drop buckets below `tx_hi`.
+    schema.set_pruning_floor(new.tx_seq_lo);
+    metrics.objects_deleted.inc_by(objects_deleted);
+
+    Ok(new)
+}
+
+/// The lowest epoch fully committed across every registered pipeline,
+/// or `None` if no pipeline has committed a watermark yet.
+///
+/// Taking the minimum is deliberately conservative: it lags the true
+/// tip epoch by at most one epoch while a pipeline catches up across
+/// a boundary, which only ever causes the pruner to retain slightly
+/// more.
+fn current_committed_epoch(db: &Db) -> anyhow::Result<Option<u64>> {
+    let framework = FrameworkSchema::new(db.clone());
+    let mut min_epoch: Option<u64> = None;
+    for entry in framework.watermarks.iter(..)? {
+        let (_, watermark) = entry?;
+        let epoch = watermark.epoch_hi_inclusive;
+        min_epoch = Some(min_epoch.map_or(epoch, |m| m.min(epoch)));
+    }
+    Ok(min_epoch)
+}
+
+/// The target checkpoint floor implied by epoch-based retention: the
+/// start checkpoint of the oldest epoch that is still retained.
+///
+/// Returns `None` when nothing is eligible yet — either the chain is
+/// younger than the retention window, or the oldest retained epoch's
+/// row (or its `start_checkpoint`) has not been observed.
+fn retention_checkpoint_floor(
+    schema: &RpcStoreSchema,
+    current_epoch: u64,
+    retention_epochs: u64,
+) -> anyhow::Result<Option<u64>> {
+    debug_assert!(retention_epochs >= 1, "validated in start_pruner");
+
+    // Retain epochs `[oldest_retained, current_epoch]`.
+    let oldest_retained = current_epoch.saturating_sub(retention_epochs - 1);
+    if oldest_retained == 0 {
+        // Epoch 0 is still retained, so no epoch has fully aged out.
+        return Ok(None);
+    }
+
+    let Some(info) = schema.get_epoch(oldest_retained)? else {
+        return Ok(None);
+    };
+    Ok(info.start_checkpoint)
+}
+
+/// Clamp the retention-derived floor so it never advances past the
+/// oldest in-memory snapshot's checkpoint. With no snapshots the
+/// retention floor stands; otherwise the floor is held at or below
+/// the oldest snapshot so that snapshot's advertised available range
+/// stays valid (and the bitmap compaction filter, which ignores
+/// snapshots, never drops a bucket the snapshot still serves).
+fn clamp_to_snapshot(retention_lo: u64, oldest_snapshot: Option<u64>) -> u64 {
+    match oldest_snapshot {
+        Some(snap) => retention_lo.min(snap),
+        None => retention_lo,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use prometheus::Registry;
+    use sui_consistent_store::Db;
+    use sui_consistent_store::DbOptions;
+    use sui_consistent_store::PipelineTaskKey;
+    use sui_consistent_store::Watermark;
+    use sui_indexer_alt_framework::pipeline::Processor;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+    use super::*;
+    use crate::schema::epochs;
+    use crate::schema::keys::U64Varint;
+
+    fn fresh_db() -> (tempfile::TempDir, Db, RpcStoreSchema) {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        (dir, db, schema)
+    }
+
+    /// Populate the CFs the pruner reads and deletes by running the
+    /// real pipelines' `process` over `checkpoint` and staging their
+    /// rows — `objects`, `effects`, `checkpoint_summary`, and the two
+    /// digest reverse indexes. These cover both deletion mechanisms
+    /// (range delete and point delete) plus the effects-driven object
+    /// retraction.
+    async fn seed(db: &Db, schema: &RpcStoreSchema, checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>) {
+        let mut batch = db.batch();
+        for row in crate::indexer::objects::Objects.process(checkpoint).await.unwrap() {
+            batch
+                .put(
+                    &schema.objects,
+                    &objects::Key {
+                        id: row.id,
+                        version: row.version,
+                    },
+                    &row.value,
+                )
+                .unwrap();
+        }
+        for row in crate::indexer::effects::Effects.process(checkpoint).await.unwrap() {
+            batch
+                .put(&schema.effects, &U64Be(row.tx_seq), &row.value)
+                .unwrap();
+        }
+        for row in crate::indexer::checkpoint_summary::CheckpointSummary
+            .process(checkpoint)
+            .await
+            .unwrap()
+        {
+            batch
+                .put(&schema.checkpoint_summary, &U64Be(row.seq), &row.value)
+                .unwrap();
+        }
+        for row in crate::indexer::tx_seq_by_digest::TxSeqByDigest
+            .process(checkpoint)
+            .await
+            .unwrap()
+        {
+            batch
+                .put(
+                    &schema.tx_seq_by_digest,
+                    &tx_seq_by_digest::Key(row.digest),
+                    &U64Varint(row.tx_seq),
+                )
+                .unwrap();
+        }
+        for row in crate::indexer::checkpoint_seq_by_digest::CheckpointSeqByDigest
+            .process(checkpoint)
+            .await
+            .unwrap()
+        {
+            batch
+                .put(
+                    &schema.checkpoint_seq_by_digest,
+                    &checkpoint_seq_by_digest::Key(row.digest),
+                    &U64Varint(row.seq),
+                )
+                .unwrap();
+        }
+        batch.commit().unwrap();
+    }
+
+    #[test]
+    fn clamp_to_snapshot_holds_floor_at_or_below_oldest_snapshot() {
+        // No snapshots: retention floor stands.
+        assert_eq!(clamp_to_snapshot(100, None), 100);
+        // Retention is well below the oldest snapshot: retention binds.
+        assert_eq!(clamp_to_snapshot(100, Some(250)), 100);
+        // Retention would overrun the oldest snapshot: clamp holds.
+        assert_eq!(clamp_to_snapshot(300, Some(250)), 250);
+        // Exactly at the oldest snapshot is allowed.
+        assert_eq!(clamp_to_snapshot(250, Some(250)), 250);
+    }
+
+    #[test]
+    fn retention_floor_none_when_chain_younger_than_window() {
+        let (_dir, _db, schema) = fresh_db();
+        // current_epoch=2, retention=5 => oldest_retained saturates to
+        // 0, so epoch 0 is still retained and nothing has aged out.
+        assert!(retention_checkpoint_floor(&schema, 2, 5).unwrap().is_none());
+    }
+
+    #[test]
+    fn retention_floor_is_start_checkpoint_of_oldest_retained_epoch() {
+        let (_dir, db, schema) = fresh_db();
+        // Seed epoch 3's start record at checkpoint 300.
+        let mut batch = db.batch();
+        batch
+            .merge(&schema.epochs, &U64Be(3), &epochs::start(1, 1, 0, 300, None))
+            .unwrap();
+        batch.commit().unwrap();
+        // current_epoch=5, retention=3 => retain [3, 5], oldest
+        // retained is epoch 3, whose start checkpoint is the floor.
+        assert_eq!(retention_checkpoint_floor(&schema, 5, 3).unwrap(), Some(300));
+    }
+
+    #[test]
+    fn retention_floor_none_when_oldest_epoch_row_missing() {
+        let (_dir, _db, schema) = fresh_db();
+        // Oldest retained epoch is 9, but no row has been observed.
+        assert!(
+            retention_checkpoint_floor(&schema, 10, 2)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn current_committed_epoch_takes_min_across_watermarks() {
+        let (_dir, db, _schema) = fresh_db();
+        let framework = FrameworkSchema::new(db.clone());
+        let mut batch = db.batch();
+        batch
+            .put(
+                &framework.watermarks,
+                &PipelineTaskKey::new("a"),
+                &Watermark {
+                    epoch_hi_inclusive: 7,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        batch
+            .put(
+                &framework.watermarks,
+                &PipelineTaskKey::new("b"),
+                &Watermark {
+                    epoch_hi_inclusive: 5,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        batch.commit().unwrap();
+        assert_eq!(current_committed_epoch(&db).unwrap(), Some(5));
+    }
+
+    #[test]
+    fn current_committed_epoch_none_when_no_watermarks() {
+        let (_dir, db, _schema) = fresh_db();
+        assert!(current_committed_epoch(&db).unwrap().is_none());
+    }
+
+    /// The bitmap eviction path end to end: with the floor advanced
+    /// past a bucket, a forced compaction runs the bucket's
+    /// compaction filter and drops it, while a bucket above the floor
+    /// survives. This is what `prune_once` relies on when it compacts
+    /// the bitmap CFs after a floor advance.
+    #[test]
+    fn bitmap_buckets_below_floor_are_evicted_by_compaction() {
+        use std::sync::atomic::Ordering;
+
+        use crate::schema::pruning_watermark::tx_seq_floor;
+        use crate::schema::transaction_bitmap;
+
+        // The floor is process-wide; snapshot and restore it so this
+        // test doesn't perturb others sharing the same atomic.
+        let baseline = tx_seq_floor().load(Ordering::Relaxed);
+        let (_dir, db, schema) = fresh_db();
+        let dim = b"sender:alice".to_vec();
+
+        // Materialize one bucket fully below the floor (bucket 0) and
+        // one above it (bucket 1). The compaction filter keys off the
+        // bucket id in the key, so the stored bitmap contents are
+        // immaterial here.
+        let mut bitmap0 = roaring::RoaringBitmap::new();
+        bitmap0.insert(transaction_bitmap::bit_of(5));
+        let mut bitmap1 = roaring::RoaringBitmap::new();
+        bitmap1.insert(transaction_bitmap::bit_of(transaction_bitmap::TX_BUCKET_SIZE + 5));
+        let (k0, v0) = transaction_bitmap::store_bitmap(dim.clone(), 0, bitmap0);
+        let (k1, v1) = transaction_bitmap::store_bitmap(dim.clone(), 1, bitmap1);
+
+        let mut batch = db.batch();
+        batch.put(&schema.transaction_bitmap, &k0, &v0).unwrap();
+        batch.put(&schema.transaction_bitmap, &k1, &v1).unwrap();
+        batch.commit().unwrap();
+        db.flush().unwrap();
+
+        // Advance the floor to the top of bucket 0, then force a
+        // compaction. Bucket 0's whole range is below the floor, so
+        // its filter returns Remove; bucket 1 straddles above it.
+        schema.set_pruning_floor(transaction_bitmap::TX_BUCKET_SIZE);
+        db.compact_range_cf(transaction_bitmap::NAME, None, None)
+            .unwrap();
+
+        assert!(
+            schema
+                .get_transaction_bitmap(dim.clone(), 0)
+                .unwrap()
+                .is_none(),
+            "fully-pruned bucket 0 should be evicted by compaction",
+        );
+        assert!(
+            schema.get_transaction_bitmap(dim, 1).unwrap().is_some(),
+            "bucket 1 above the floor must remain",
+        );
+
+        tx_seq_floor().store(baseline, Ordering::Relaxed);
+    }
+
+    /// A committed chunk advances the process-wide bitmap floor (the
+    /// value the bitmap CFs' compaction filters read) to the chunk's
+    /// new `tx_seq_lo`. The filter's own removal logic is covered by
+    /// `transaction_bitmap::should_remove_bucket`.
+    #[tokio::test]
+    async fn prune_chunk_advances_the_bitmap_floor_atomic() {
+        use std::sync::atomic::Ordering;
+
+        use crate::schema::pruning_watermark::tx_seq_floor;
+
+        // The floor is process-wide; snapshot and restore it so this
+        // test doesn't perturb others sharing the same atomic.
+        let baseline = tx_seq_floor().load(Ordering::Relaxed);
+
+        let (_dir, db, schema) = fresh_db();
+        let checkpoint = Arc::new(
+            TestCheckpointBuilder::new(0)
+                .start_transaction(0)
+                .create_owned_object(0)
+                .finish_transaction()
+                .start_transaction(0)
+                .transfer_object(0, 1)
+                .finish_transaction()
+                .build_checkpoint(),
+        );
+        seed(&db, &schema, &checkpoint).await;
+
+        let metrics = PrunerMetrics::new(None, &Registry::new());
+        let new = prune_chunk(&db, &schema, Watermarks::default(), 1, &metrics).unwrap();
+
+        assert_eq!(
+            tx_seq_floor().load(Ordering::Relaxed),
+            new.tx_seq_lo,
+            "the chunk must publish its new tx_seq floor to the bitmap atomic",
+        );
+
+        tx_seq_floor().store(baseline, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn start_pruner_rejects_zero_retention() {
+        let (_dir, db, _schema) = fresh_db();
+        let config = PrunerConfig {
+            retention_epochs: 0,
+            ..PrunerConfig::default()
+        };
+        let err = start_pruner(db, config, PrunerMetrics::new(None, &Registry::new())).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("retention_epochs"),
+            "expected a retention_epochs validation error, got: {err:#}",
+        );
+    }
+
+    /// End-to-end chunk prune: one checkpoint where tx0 creates an
+    /// object and tx1 transfers it (superseding the first version).
+    /// Pruning the chunk must range-delete the per-tx / per-checkpoint
+    /// CFs, point-delete the digest reverse indexes, retract the
+    /// superseded object version, preserve the live version, and
+    /// advance the persisted floor.
+    #[tokio::test]
+    async fn prune_chunk_deletes_history_and_preserves_live_object() {
+        let (_dir, db, schema) = fresh_db();
+
+        let checkpoint = Arc::new(
+            TestCheckpointBuilder::new(0)
+                .start_transaction(0)
+                .create_owned_object(0)
+                .finish_transaction()
+                .start_transaction(0)
+                .transfer_object(0, 1)
+                .finish_transaction()
+                .build_checkpoint(),
+        );
+
+        let obj0 = TestCheckpointBuilder::derive_object_id(0);
+        let v_a = checkpoint.transactions[0].effects.lamport_version();
+        let v_b = checkpoint.transactions[1].effects.lamport_version();
+        assert_ne!(v_a, v_b, "the transfer must bump the object's version");
+        let digest0 = *checkpoint.transactions[0].effects.transaction_digest();
+        let digest1 = *checkpoint.transactions[1].effects.transaction_digest();
+        let ckpt_digest = checkpoint.summary.data().digest();
+
+        seed(&db, &schema, &checkpoint).await;
+
+        // Preconditions: both versions present, history present.
+        assert!(schema.get_object_by_key(obj0, v_a).unwrap().is_some());
+        assert!(schema.get_object_by_key(obj0, v_b).unwrap().is_some());
+        assert!(schema.get_effects(0).unwrap().is_some());
+        assert!(schema.get_effects(1).unwrap().is_some());
+        assert!(schema.get_checkpoint_summary(0).unwrap().is_some());
+
+        // Prune the whole checkpoint: checkpoints [0, 1), tx [0, 2).
+        let metrics = PrunerMetrics::new(None, &Registry::new());
+        let new = prune_chunk(&db, &schema, Watermarks::default(), 1, &metrics).unwrap();
+        assert_eq!(
+            new,
+            Watermarks {
+                tx_seq_lo: 2,
+                checkpoint_lo: 1,
+            },
+        );
+
+        // Superseded version retracted; live version preserved.
+        assert!(
+            schema.get_object_by_key(obj0, v_a).unwrap().is_none(),
+            "superseded version v_a should be pruned",
+        );
+        assert!(
+            schema.get_object_by_key(obj0, v_b).unwrap().is_some(),
+            "live version v_b must be preserved",
+        );
+
+        // Range-deleted CFs are emptied over the pruned range.
+        assert!(schema.get_effects(0).unwrap().is_none());
+        assert!(schema.get_effects(1).unwrap().is_none());
+        assert!(schema.get_checkpoint_summary(0).unwrap().is_none());
+
+        // Point-deleted digest reverse indexes are gone.
+        assert!(
+            schema
+                .tx_seq_by_digest
+                .get(&tx_seq_by_digest::Key(digest0))
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            schema
+                .tx_seq_by_digest
+                .get(&tx_seq_by_digest::Key(digest1))
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            schema
+                .checkpoint_seq_by_digest
+                .get(&checkpoint_seq_by_digest::Key(ckpt_digest))
+                .unwrap()
+                .is_none()
+        );
+
+        // The persisted floor advanced.
+        assert_eq!(
+            schema.get_pruning_watermarks().unwrap().unwrap(),
+            Watermarks {
+                tx_seq_lo: 2,
+                checkpoint_lo: 1,
+            },
+        );
+    }
+
+    /// Advance the floor across two single-checkpoint chunks and
+    /// confirm a superseded object version is retracted only once the
+    /// chunk containing its *superseding* transaction is pruned.
+    ///
+    /// Checkpoint 0 creates `obj0@v_a`; checkpoint 1 transfers it to
+    /// `obj0@v_b`. Pruning checkpoint 0 alone must keep `v_a` (its
+    /// superseding transaction is still live); pruning checkpoint 1
+    /// then retracts `v_a` while preserving the live `v_b`.
+    #[tokio::test]
+    async fn prune_chunk_retracts_version_only_when_superseding_tx_is_pruned() {
+        let (_dir, db, schema) = fresh_db();
+
+        // One builder across two checkpoints so `network_total_transactions`
+        // accumulates and the shared live-object set carries obj0 forward.
+        let mut builder = TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        let cp0 = Arc::new(builder.build_checkpoint());
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .finish_transaction();
+        let cp1 = Arc::new(builder.build_checkpoint());
+
+        let obj0 = TestCheckpointBuilder::derive_object_id(0);
+        let v_a = cp0.transactions[0].effects.lamport_version();
+        let v_b = cp1.transactions[0].effects.lamport_version();
+        assert_ne!(v_a, v_b);
+
+        seed(&db, &schema, &cp0).await;
+        seed(&db, &schema, &cp1).await;
+        let metrics = PrunerMetrics::new(None, &Registry::new());
+
+        // Chunk 1: prune checkpoint 0 only (tx [0, 1)). obj0's
+        // superseding transaction is in checkpoint 1, so v_a stays.
+        let after_first = prune_chunk(&db, &schema, Watermarks::default(), 1, &metrics).unwrap();
+        assert_eq!(
+            after_first,
+            Watermarks {
+                tx_seq_lo: 1,
+                checkpoint_lo: 1,
+            },
+        );
+        assert!(schema.get_effects(0).unwrap().is_none());
+        assert!(schema.get_effects(1).unwrap().is_some());
+        assert!(
+            schema.get_object_by_key(obj0, v_a).unwrap().is_some(),
+            "v_a must survive while its superseding tx is still retained",
+        );
+
+        // Chunk 2: prune checkpoint 1 (tx [1, 2)). Now the superseding
+        // transaction is pruned, retracting v_a; v_b remains live.
+        let after_second = prune_chunk(&db, &schema, after_first, 2, &metrics).unwrap();
+        assert_eq!(
+            after_second,
+            Watermarks {
+                tx_seq_lo: 2,
+                checkpoint_lo: 2,
+            },
+        );
+        assert!(schema.get_effects(1).unwrap().is_none());
+        assert!(
+            schema.get_object_by_key(obj0, v_a).unwrap().is_none(),
+            "v_a must be retracted once its superseding tx is pruned",
+        );
+        assert!(
+            schema.get_object_by_key(obj0, v_b).unwrap().is_some(),
+            "live v_b must be preserved",
+        );
+    }
+}

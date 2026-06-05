@@ -108,6 +108,7 @@ pub async fn start_service(
         db,
         // Only the `restore` subcommand consults this section.
         restore: _,
+        pruner,
     } = config;
 
     // Build the ingestion + (optional) streaming clients first so
@@ -132,6 +133,7 @@ pub async fn start_service(
         ingestion_client,
         streaming_client,
         consistency.clone(),
+        pruner,
         ingestion,
         db.to_db_options(),
         registry,
@@ -205,10 +207,12 @@ pub async fn start_serve(
         rpc,
         db,
         // The indexer is not run when serving, so its ingestion,
-        // committer, and restore settings are irrelevant here.
+        // committer, restore, and pruner settings are irrelevant
+        // here.
         ingestion: _,
         committer: _,
         restore: _,
+        pruner: _,
     } = config;
 
     let (database, schema) = Db::open::<RpcStoreSchema>(database_path, db.to_db_options())

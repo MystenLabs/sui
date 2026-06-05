@@ -30,6 +30,7 @@ pub mod object_by_owner;
 pub mod object_by_type;
 pub mod objects;
 pub mod package_versions;
+pub mod pruner;
 pub mod restore;
 pub mod transaction_bitmap;
 pub mod transactions;
@@ -68,6 +69,8 @@ use sui_types::object::Object;
 
 use crate::RpcStoreSchema;
 use crate::config::PipelineLayer;
+use crate::config::PrunerConfig;
+use crate::indexer::pruner::PrunerMetrics;
 
 /// Metrics prefix used for both the framework indexer and the
 /// underlying ingestion service. Surfaced as a constant so the
@@ -224,6 +227,12 @@ pub struct Indexer {
     /// cross-pipeline snapshots. Owned here until [`Self::run`]
     /// hands it to [`sui_consistent_store::Store::install_sync`].
     sync: Synchronizer,
+
+    /// Pruning policy and its metrics, present when pruning is
+    /// enabled. [`Self::run`] starts the background pruner from
+    /// these and attaches it to the composed service. `None` leaves
+    /// pruning off (the embedded-fullnode and test defaults).
+    pruner: Option<(PrunerConfig, Arc<PrunerMetrics>)>,
 }
 
 impl Indexer {
@@ -250,6 +259,7 @@ impl Indexer {
         ingestion_client: IngestionClient,
         streaming_client: Option<BoxedStreamingClient>,
         consistency_config: crate::config::ConsistencyConfig,
+        pruner_config: Option<PrunerConfig>,
         ingestion_config: IngestionConfig,
         db_options: DbOptions,
         registry: &Registry,
@@ -263,6 +273,7 @@ impl Indexer {
             ingestion_client,
             streaming_client,
             consistency_config,
+            pruner_config,
             ingestion_config,
             registry,
         )
@@ -275,12 +286,14 @@ impl Indexer {
     /// a fullnode that reads through [`RpcStoreSchema`] directly,
     /// or writes to the raw-chain-data CFs through a separate
     /// path).
+    #[allow(clippy::too_many_arguments)]
     pub async fn from_store(
         store: Store,
         indexer_args: IndexerArgs,
         ingestion_client: IngestionClient,
         streaming_client: Option<BoxedStreamingClient>,
         consistency_config: crate::config::ConsistencyConfig,
+        pruner_config: Option<PrunerConfig>,
         ingestion_config: IngestionConfig,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
@@ -322,7 +335,16 @@ impl Indexer {
         .await
         .context("Failed to construct framework indexer")?;
 
-        Ok(Self { indexer, sync })
+        // Register the pruner's metrics under its own prefix when
+        // pruning is enabled; `run` starts the task from this.
+        let pruner = pruner_config
+            .map(|config| (config, PrunerMetrics::new(None, registry)));
+
+        Ok(Self {
+            indexer,
+            sync,
+            pruner,
+        })
     }
 
     /// Borrow the wrapped framework indexer's store. Useful for
@@ -491,10 +513,19 @@ impl Indexer {
     /// framework indexer. Returns a composed [`Service`] handle
     /// that drives both for the lifetime of the indexer.
     pub async fn run(self) -> anyhow::Result<Service> {
-        let mut sync_join_set = self
-            .indexer
+        let Self {
+            indexer,
+            sync,
+            pruner: pruner_setup,
+        } = self;
+
+        // Capture a `Db` handle for the pruner before `indexer.run`
+        // consumes the framework indexer (and with it the store).
+        let db = indexer.store().db().clone();
+
+        let mut sync_join_set = indexer
             .store()
-            .install_sync(self.sync)
+            .install_sync(sync)
             .context("Failed to install synchronizer onto store")?;
 
         // Wrap the synchronizer's JoinSet in a `Service` task so it
@@ -509,8 +540,19 @@ impl Indexer {
             Ok(())
         });
 
-        let s_indexer = self.indexer.run().await?;
-        Ok(s_indexer.attach(s_sync))
+        let s_indexer = indexer.run().await?;
+        let mut service = s_indexer.attach(s_sync);
+
+        // Attach the background pruner as a secondary task when
+        // configured: it advances the retention floor and deletes
+        // history without extending the indexer's lifetime.
+        if let Some((config, metrics)) = pruner_setup {
+            let s_pruner = pruner::start_pruner(db, config, metrics)
+                .context("Failed to start the rpc-store pruner")?;
+            service = service.attach(s_pruner);
+        }
+
+        Ok(service)
     }
 }
 
@@ -562,6 +604,7 @@ mod tests {
             ingestion_client,
             None,
             crate::config::ConsistencyConfig::default(),
+            None,
             IngestionConfig::default(),
             DbOptions::default(),
             &registry,
@@ -665,6 +708,7 @@ mod tests {
             ingestion_client,
             None,
             crate::config::ConsistencyConfig::default(),
+            None,
             IngestionConfig::default(),
             &registry,
         )

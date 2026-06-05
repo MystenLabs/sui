@@ -40,6 +40,7 @@ use sui_indexer_alt_framework::service::Service;
 pub use crate::config::CommitterLayer;
 pub use crate::config::ConsistencyConfig;
 pub use crate::config::PipelineLayer;
+pub use crate::config::PrunerConfig;
 pub use crate::config::RestoreLayer;
 pub use crate::config::ServiceConfig;
 pub use crate::indexer::Indexer;
@@ -105,6 +106,7 @@ pub async fn start_indexer(
         ingestion_client,
         streaming_client,
         config.consistency,
+        config.pruner,
         ingestion_config,
         db_options,
         registry,

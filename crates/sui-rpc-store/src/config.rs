@@ -17,6 +17,8 @@
 //! chain CFs (populated by the fullnode itself) are not double-
 //! written by this indexer.
 
+use std::time::Duration;
+
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 
@@ -40,6 +42,10 @@ pub struct ServiceConfig {
     /// Per-pipeline enable/disable plus optional committer
     /// overrides.
     pub pipeline: PipelineLayer,
+
+    /// Pruning policy for the historical CFs. Absent (the default)
+    /// disables pruning entirely — the store retains all history.
+    pub pruner: Option<PrunerConfig>,
 }
 
 /// Cross-pipeline consistency knobs surfaced to operators. The
@@ -68,6 +74,66 @@ pub struct ConsistencyConfig {
     /// progress; this buffer absorbs short bursts of slack between
     /// peer pipelines before back-pressure kicks in.
     pub buffer_size: usize,
+}
+
+/// Pruning policy for the historical column families.
+///
+/// Retention is expressed in epochs, mirroring the validator's
+/// perpetual-store pruner: the `retention_epochs` most-recent
+/// epochs (including the current one) are retained in full, and
+/// everything in older epochs becomes eligible for deletion. The
+/// resulting floor is additionally clamped so it never advances past
+/// the oldest in-memory snapshot, keeping point-in-time reads
+/// coherent even under an aggressively small retention.
+///
+/// The pruner advances the floor toward its target in chunks of at
+/// most `max_chunk_checkpoints` checkpoints, persisting the new
+/// watermark after each chunk so progress survives a restart.
+///
+/// Only the historical CFs are pruned: the per-transaction
+/// (`transactions`, `effects`, `events`, `tx_metadata_by_seq`),
+/// per-checkpoint (`checkpoint_summary`, `checkpoint_contents`),
+/// digest-reverse-index (`tx_seq_by_digest`,
+/// `checkpoint_seq_by_digest`), superseded-`objects`-version, and
+/// ledger-history bitmap CFs. The live-set-bounded indexes
+/// (`live_objects`, `object_by_owner`, `object_by_type`, `balance`,
+/// `package_versions`) and the tiny `epochs` CF are never pruned.
+#[DefaultConfig]
+#[derive(Clone)]
+#[serde(deny_unknown_fields)]
+pub struct PrunerConfig {
+    /// Number of most-recent epochs to retain in full. Data in
+    /// epochs older than this is eligible for pruning. Must be at
+    /// least `1`; the pruner refuses to start otherwise, since a
+    /// value of `0` would prune the current epoch.
+    pub retention_epochs: u64,
+
+    /// How often the pruner wakes to recompute the target floor and
+    /// advance toward it, in milliseconds.
+    pub interval_ms: u64,
+
+    /// Maximum number of checkpoints whose data is deleted in a
+    /// single write batch. Bounds the per-batch work (and the number
+    /// of effects rows scanned for object/digest deletes) when a
+    /// whole epoch ages out at once.
+    pub max_chunk_checkpoints: u64,
+}
+
+impl Default for PrunerConfig {
+    fn default() -> Self {
+        Self {
+            retention_epochs: 30,
+            interval_ms: 300_000,
+            max_chunk_checkpoints: 100,
+        }
+    }
+}
+
+impl PrunerConfig {
+    /// The pruner's wake interval as a [`Duration`].
+    pub fn interval(&self) -> Duration {
+        Duration::from_millis(self.interval_ms)
+    }
 }
 
 /// Per-pipeline registration + override map. Every pipeline that
@@ -132,6 +198,7 @@ impl ServiceConfig {
             consistency: ConsistencyConfig::default(),
             committer: CommitterConfig::default().into(),
             pipeline: PipelineLayer::all(),
+            pruner: Some(PrunerConfig::default()),
         }
     }
 }
@@ -288,6 +355,23 @@ mod tests {
         assert!(layer.object_by_owner.is_some());
         assert!(layer.balance.is_some());
         assert!(layer.event_bitmap.is_some());
+    }
+
+    #[test]
+    fn pruning_disabled_by_default() {
+        // A default ServiceConfig (the embedded-fullnode shape)
+        // leaves pruning off; `example()` surfaces it populated.
+        assert!(ServiceConfig::default().pruner.is_none());
+        assert!(ServiceConfig::example().pruner.is_some());
+    }
+
+    #[test]
+    fn pruner_config_interval_round_trips() {
+        let cfg = PrunerConfig {
+            interval_ms: 1_500,
+            ..PrunerConfig::default()
+        };
+        assert_eq!(cfg.interval(), std::time::Duration::from_millis(1_500));
     }
 
     #[test]

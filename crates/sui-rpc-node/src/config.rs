@@ -20,6 +20,7 @@ use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_rpc_store::CommitterLayer;
 use sui_rpc_store::ConsistencyConfig;
+use sui_rpc_store::PrunerConfig;
 use sui_rpc_store::default_rocksdb_config;
 
 /// Top-level configuration for the `sui-rpc-node` service.
@@ -55,6 +56,12 @@ pub struct ServiceConfig {
     /// Restore-driver tuning. Consulted, together with `db`, by the
     /// `restore` subcommand.
     pub restore: RestoreConfig,
+
+    /// Pruning policy for the historical CFs. Absent (the default)
+    /// disables pruning; the `run` subcommand starts the background
+    /// pruner when it is present. The `serve` and `restore`
+    /// subcommands ignore it.
+    pub pruner: Option<PrunerConfig>,
 }
 
 /// Tuning for the formal-snapshot restore driver.
@@ -208,6 +215,7 @@ impl ServiceConfig {
             rpc: RpcConfig::default(),
             db: DbConfig::example(),
             restore: RestoreConfig::default(),
+            pruner: Some(PrunerConfig::default()),
         }
     }
 
