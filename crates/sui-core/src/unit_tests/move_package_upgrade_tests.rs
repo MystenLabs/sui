@@ -1163,6 +1163,9 @@ async fn test_upgrade_package_add_new_module_in_dep_only_mode_pre_v68() {
         // set up config values that would otherwise be incompatible with the execution version
         config.set_gas_model_version_for_testing(11);
         config.set_disallow_new_modules_in_deps_only_packages_for_testing(false);
+        // The forwarding address registry is an execution-version-4 object; it must not be
+        // created under execution version 3 (its hardcoded UID can't be shared there).
+        config.set_create_forwarding_address_registry_for_testing(false);
         config
     });
 

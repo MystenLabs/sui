@@ -5331,6 +5331,10 @@ impl ProtocolConfig {
         self.feature_flags.address_aliases = val;
     }
 
+    pub fn set_create_forwarding_address_registry_for_testing(&mut self, val: bool) {
+        self.feature_flags.create_forwarding_address_registry = val;
+    }
+
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {
         self.feature_flags
             .consensus_round_prober_probe_accepted_rounds = val;
