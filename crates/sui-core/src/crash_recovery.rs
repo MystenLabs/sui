@@ -17,7 +17,7 @@
 //!    but this marker prevents any future change from accidentally moving the guard (and therefore
 //!    the registration) across threads inside an async context, which would corrupt TLS.
 //!
-//!    The guard also carries the node's `db_path` and writes the crash log from its `Drop`
+//!    The guard also carries the node's `AuthorityName` and writes the crash log from its `Drop`
 //!    implementation when it detects it is being dropped during a panic and TLS still holds the
 //!    digest (meaning the process-level hook did not already write the log).  This makes the
 //!    mechanism resilient to environments — such as simtests — where the panic hook chain may not
@@ -36,14 +36,15 @@
 
 use std::{
     cell::Cell,
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs::{self, OpenOptions},
     io::{BufRead, BufReader, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
+    sync::{Mutex, OnceLock},
 };
 
-use sui_types::digests::TransactionDigest;
+use sui_types::{base_types::AuthorityName, digests::TransactionDigest};
 use tracing::{error, info, warn};
 
 // ---------------------------------------------------------------------------
@@ -107,7 +108,7 @@ pub fn arm_tx_crash_signal() {
 pub fn should_poison_transaction(digest: &TransactionDigest, prob: f64) -> bool {
     use std::hash::{Hash, Hasher};
 
-    static CRASH_SEED: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    static CRASH_SEED: OnceLock<u64> = OnceLock::new();
     let seed = *CRASH_SEED.get_or_init(|| {
         use rand::Rng;
         rand::thread_rng().r#gen::<u64>()
@@ -124,15 +125,40 @@ pub fn should_poison_transaction(digest: &TransactionDigest, prob: f64) -> bool 
 const PANIC_TX_LOG_FILE: &str = "panic-tx.log";
 
 // ---------------------------------------------------------------------------
+// Global registry: AuthorityName → db_path
+// ---------------------------------------------------------------------------
+//
+// The panic hook and guard's Drop need to write to a specific log file. Rather than carrying
+// a PathBuf through TLS (which would require heap allocation on every transaction), we keep a
+// small process-wide map from AuthorityName to db_path that is populated once at startup by
+// `install_panic_hook`.
+
+static NODE_DB_PATHS: OnceLock<Mutex<HashMap<AuthorityName, PathBuf>>> = OnceLock::new();
+
+fn node_db_paths() -> &'static Mutex<HashMap<AuthorityName, PathBuf>> {
+    NODE_DB_PATHS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn get_db_path(authority_name: &AuthorityName) -> Option<PathBuf> {
+    node_db_paths().lock().ok()?.get(authority_name).cloned()
+}
+
+// ---------------------------------------------------------------------------
 // Thread-local slot
 // ---------------------------------------------------------------------------
 
 thread_local! {
-    /// The digest of the transaction currently executing on this thread, if any.
+    /// The authority and digest of the transaction currently executing on this thread, if any.
     ///
-    /// We use `Cell<Option<TransactionDigest>>` so that the panic hook (which takes `&PanicInfo`)
-    /// can read it without needing `&mut` access or a `RefCell` borrow.
-    static EXECUTING_TX: Cell<Option<TransactionDigest>> = const { Cell::new(None) };
+    /// We use `Cell<Option<(AuthorityName, TransactionDigest)>>` so that the panic hook (which
+    /// takes `&PanicInfo`) can read it without needing `&mut` access or a `RefCell` borrow.
+    /// Both `AuthorityName` and `TransactionDigest` are `Copy`, so `Cell` is appropriate.
+    ///
+    /// Storing the authority name alongside the digest lets each validator's panic hook
+    /// identify — purely from TLS — whether it is responsible for writing the crash log,
+    /// without relying on any external node-identity mechanism.
+    static EXECUTING_TX: Cell<Option<(AuthorityName, TransactionDigest)>> =
+        const { Cell::new(None) };
 }
 
 // ---------------------------------------------------------------------------
@@ -145,17 +171,17 @@ thread_local! {
 /// The `PhantomData<*mut ()>` makes the guard `!Send + !Sync`, ensuring it is never moved to a
 /// different thread (which would corrupt TLS) or shared across threads.
 pub struct ExecutingTransactionGuard {
-    /// The node's database directory, used to locate the crash log in case the process-level
-    /// panic hook is not present at the time of the crash (e.g. in simtests).
-    db_path: PathBuf,
+    /// The authority name of the node executing this transaction. Used to look up the
+    /// crash-log path from `NODE_DB_PATHS` and to verify the TLS entry in `Drop`.
+    authority_name: AuthorityName,
     _not_send_sync: PhantomData<*mut ()>,
 }
 
 impl ExecutingTransactionGuard {
-    fn new(digest: TransactionDigest, db_path: PathBuf) -> Self {
-        EXECUTING_TX.with(|slot| slot.set(Some(digest)));
+    fn new(digest: TransactionDigest, authority_name: AuthorityName) -> Self {
+        EXECUTING_TX.with(|slot| slot.set(Some((authority_name, digest))));
         Self {
-            db_path,
+            authority_name,
             _not_send_sync: PhantomData,
         }
     }
@@ -164,14 +190,18 @@ impl ExecutingTransactionGuard {
 impl Drop for ExecutingTransactionGuard {
     fn drop(&mut self) {
         // Read and clear TLS.  In the normal (non-panicking) path this is all we need to do.
-        let digest = EXECUTING_TX.with(|slot| slot.get());
+        let entry = EXECUTING_TX.with(|slot| slot.get());
         EXECUTING_TX.with(|slot| slot.set(None));
 
-        // If the process-level hook already wrote the log it will have cleared TLS, so `digest`
+        // If the process-level hook already wrote the log it will have cleared TLS, so `entry`
         // is None here and we are done.  If the hook was not in the chain (e.g. in msim, where
         // run_all_ready takes and replaces the hook chain at every iteration), TLS still has the
-        // digest and we write the log now as a fallback.
-        if let Some(digest) = digest {
+        // entry and we write the log now as a fallback.
+        if let Some((authority_name, digest)) = entry {
+            debug_assert_eq!(
+                authority_name, self.authority_name,
+                "TLS authority name mismatch in guard Drop"
+            );
             if std::thread::panicking() {
                 // In simtests, only write when the crash-simulation fail point set the arm
                 // signal. Random node kills from unrelated fail points (batch-write-before etc.)
@@ -182,18 +212,25 @@ impl Drop for ExecutingTransactionGuard {
                 if !tx_crash_signal::disarm_and_check() {
                     return;
                 }
-                let log_path = self.db_path.join(PANIC_TX_LOG_FILE);
-                match append_digest_to_log(&log_path, digest) {
-                    Ok(()) => eprintln!(
+                if let Some(db_path) = get_db_path(&authority_name) {
+                    let log_path = db_path.join(PANIC_TX_LOG_FILE);
+                    match append_digest_to_log(&log_path, digest) {
+                        Ok(()) => eprintln!(
+                            "[crash-recovery] Panic while executing transaction {digest}; \
+                             recorded to {}",
+                            log_path.display()
+                        ),
+                        Err(e) => eprintln!(
+                            "[crash-recovery] Failed to write crashed transaction {digest} to \
+                             {}: {e}",
+                            log_path.display()
+                        ),
+                    }
+                } else {
+                    eprintln!(
                         "[crash-recovery] Panic while executing transaction {digest}; \
-                         recorded to {}",
-                        log_path.display()
-                    ),
-                    Err(e) => eprintln!(
-                        "[crash-recovery] Failed to write crashed transaction {digest} to \
-                         {}: {e}",
-                        log_path.display()
-                    ),
+                         no db_path registered for authority {authority_name}"
+                    );
                 }
             }
         }
@@ -205,20 +242,20 @@ impl Drop for ExecutingTransactionGuard {
 /// Returns a guard whose `Drop` implementation removes the registration. The registration lives
 /// exactly as long as the guard, which should be kept in a local variable at the call site.
 ///
-/// `db_path` is the node's database directory.  It is stored in the guard so that the crash log
-/// can be written from the guard's `Drop` implementation if the process-level panic hook is not
-/// in the hook chain at the time of the crash.
+/// `authority_name` identifies the node. It is used to look up the crash-log path from the
+/// registry populated by `install_panic_hook`, and to ensure each validator's panic hook writes
+/// only to its own log.
 ///
 /// ```ignore
-/// let _guard = register_executing_transaction(digest, db_path);
+/// let _guard = register_executing_transaction(digest, authority_name);
 /// // ... execute the transaction ...
 /// // guard is dropped here, clearing the TLS slot
 /// ```
 pub fn register_executing_transaction(
     digest: TransactionDigest,
-    db_path: PathBuf,
+    authority_name: AuthorityName,
 ) -> ExecutingTransactionGuard {
-    ExecutingTransactionGuard::new(digest, db_path)
+    ExecutingTransactionGuard::new(digest, authority_name)
 }
 
 // ---------------------------------------------------------------------------
@@ -230,65 +267,69 @@ pub fn register_executing_transaction(
 /// This chains onto whatever panic hook is already installed (typically the tracing hook set up by
 /// `telemetry-subscribers`), so existing behaviour is preserved.
 ///
-/// `db_path` should be the node's base database directory; the log file is written at
+/// `authority_name` is this node's public key identity; it is used as the key in
+/// `NODE_DB_PATHS` and to gate the hook so that each validator only claims panics that
+/// originated in its own execution context.
+///
+/// `db_path` is the node's base database directory; the log file is written at
 /// `{db_path}/panic-tx.log`.
-pub fn install_panic_hook(db_path: PathBuf) {
+pub fn install_panic_hook(authority_name: AuthorityName, db_path: PathBuf) {
+    // Register the authority → db_path mapping so the hook and guard can locate the log file.
+    node_db_paths()
+        .lock()
+        .expect("NODE_DB_PATHS poisoned")
+        .insert(authority_name, db_path);
+
     // In simtests, all simulated nodes share the same OS process and panic hook chain. Each
     // node installs its own hook, prepending to the chain. When any panic fires, all hooks run
-    // in reverse-install order. Without a node ID guard, the first hook in the chain would
-    // consume the TLS digest and write it to the WRONG validator's log file, leaving the
-    // actually-crashing validator with nothing in its log.
+    // in reverse-install order.
     //
-    // Capturing the node ID at install time and gating on it at panic time ensures each hook
-    // only claims panics that originated in its own node's execution context.
+    // Each hook captures `this_authority` at install time and compares it to the authority name
+    // stored in TLS at panic time. Because `register_executing_transaction` writes the executing
+    // node's authority name into TLS, each hook correctly claims only panics that originated in
+    // its own node's execution context — without relying on any external node-identity API.
     //
     // NOTE: in simtests, msim's run_all_ready replaces the hook chain on every iteration, so
-    // this hook is not guaranteed to fire.  The fallback is ExecutingTransactionGuard::drop,
-    // which always has access to db_path and writes the log when dropped during a panic.
-    #[cfg(msim)]
-    let installing_node_id = sui_simulator::current_simnode_id();
-
+    // this hook is not guaranteed to fire. The fallback is ExecutingTransactionGuard::drop,
+    // which always has access to the authority name via the guard itself.
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        // In simtests, skip this hook if the panic is firing in a different node's context.
-        #[cfg(msim)]
-        if sui_simulator::current_simnode_id() != installing_node_id {
-            prev_hook(info);
-            return;
-        }
-
         // Write the crash log BEFORE calling the previous hook. Some previous hooks call
         // `process::exit` (e.g. the telemetry hook when crash_on_panic=true), and we must
         // not lose the digest in that race.
         //
         // We also clear the TLS slot after writing so that ExecutingTransactionGuard::drop
         // (which runs later during unwind) sees an empty slot and skips the duplicate write.
-        let digest = EXECUTING_TX.with(|slot| slot.get());
-        if let Some(digest) = digest {
-            // In simtests, mirror the same arm-signal check used by the guard's Drop.
-            #[cfg(msim)]
-            if !tx_crash_signal::disarm_and_check() {
-                prev_hook(info);
-                return;
-            }
-            EXECUTING_TX.with(|slot| slot.set(None));
-            let log_path = db_path.join(PANIC_TX_LOG_FILE);
-            match append_digest_to_log(&log_path, digest) {
-                Ok(()) => {
-                    // Use eprintln rather than tracing: the subscriber may be in a broken
-                    // state during a panic.
-                    eprintln!(
-                        "[crash-recovery] Panic while executing transaction {digest}; \
-                         recorded to {}",
-                        log_path.display()
-                    );
+        let entry = EXECUTING_TX.with(|slot| slot.get());
+        if let Some((tls_authority, digest)) = entry {
+            if tls_authority == authority_name {
+                // In simtests, mirror the same arm-signal check used by the guard's Drop.
+                #[cfg(msim)]
+                if !tx_crash_signal::disarm_and_check() {
+                    prev_hook(info);
+                    return;
                 }
-                Err(e) => {
-                    eprintln!(
-                        "[crash-recovery] Failed to write crashed transaction {digest} to \
-                         {}: {e}",
-                        log_path.display()
-                    );
+                EXECUTING_TX.with(|slot| slot.set(None));
+                if let Some(db_path) = get_db_path(&authority_name) {
+                    let log_path = db_path.join(PANIC_TX_LOG_FILE);
+                    match append_digest_to_log(&log_path, digest) {
+                        Ok(()) => {
+                            // Use eprintln rather than tracing: the subscriber may be in a broken
+                            // state during a panic.
+                            eprintln!(
+                                "[crash-recovery] Panic while executing transaction {digest}; \
+                                 recorded to {}",
+                                log_path.display()
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "[crash-recovery] Failed to write crashed transaction {digest} to \
+                                 {}: {e}",
+                                log_path.display()
+                            );
+                        }
+                    }
                 }
             }
         }
