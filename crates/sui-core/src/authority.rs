@@ -1488,8 +1488,12 @@ impl AuthorityState {
         if !certificate.data().transaction_data().kind().is_system_tx() {
             sui_macros::fail_point_if!("crash-with-tx-logging", || {
                 if sui_simulator::random::deterministic_probability(tx_digest, 0.002) {
+                    // The first panic invokes the crash-detection hook (which reads the TLS
+                    // digest and writes it to the crash log) before being caught here.
+                    // The second panic (PanicWrapper via kill_current_node) is intercepted by
+                    // msim to kill and restart this node without panicking the test process.
                     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        panic!("crash-simulation: caught by crash_recovery hook");
+                        panic!("crash-simulation");
                     }));
                     sui_simulator::task::kill_current_node(Some(std::time::Duration::from_secs(
                         20,
