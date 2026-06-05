@@ -608,6 +608,36 @@ impl Db {
         Ok(())
     }
 
+    /// Trigger a manual compaction over `[start, end]` of `cf_name`.
+    ///
+    /// Forces RocksDB to compact the given key range now, which runs
+    /// the column family's compaction filter (if one is configured)
+    /// over the data and applies any pending point or range
+    /// tombstones. Passing `None` for a bound compacts from the
+    /// beginning / to the end of the CF; `None, None` compacts the
+    /// whole CF.
+    ///
+    /// Routine writes do not need this — RocksDB compacts in the
+    /// background. It is useful to promptly evict rows that a
+    /// compaction filter would otherwise only drop on the next
+    /// natural sweep (for example, after advancing a pruning floor),
+    /// at the cost of the compaction work it forces.
+    ///
+    /// Unknown `cf_name` surfaces as
+    /// [`crate::error::Error::MissingColumnFamily`].
+    pub fn compact_range_cf(
+        &self,
+        cf_name: &str,
+        start: Option<&[u8]>,
+        end: Option<&[u8]>,
+    ) -> Result<(), Error> {
+        let cf = self
+            .cf_handle(cf_name)
+            .ok_or_else(|| Error::MissingColumnFamily(cf_name.to_string()))?;
+        self.inner.db.compact_range_cf(&cf, start, end);
+        Ok(())
+    }
+
     /// Drop the snapshot at `checkpoint`. Returns `true` if a
     /// snapshot was removed.
     ///
@@ -910,6 +940,36 @@ mod tests {
             "expected at least one L0 SST file after flush, got {}",
             l0(&cf),
         );
+    }
+
+    #[test]
+    fn compact_range_cf_succeeds_on_known_cf() {
+        let dir = TempDir::new().unwrap();
+        let (db, _schema) = Db::open::<TestSchema>(dir.path(), DbOptions::default()).unwrap();
+        let cf = db.cf_handle("foo").unwrap();
+        for i in 0..32u64 {
+            db.rocksdb()
+                .put_cf(&cf, i.to_be_bytes(), i.to_be_bytes())
+                .unwrap();
+        }
+        db.flush().unwrap();
+        // Whole-CF compaction (None, None) runs without error; the
+        // data survives since this CF has no compaction filter.
+        db.compact_range_cf("foo", None, None).unwrap();
+        assert_eq!(
+            db.rocksdb().get_cf(&cf, 5u64.to_be_bytes()).unwrap(),
+            Some(5u64.to_be_bytes().to_vec()),
+        );
+    }
+
+    #[test]
+    fn compact_range_cf_errors_for_unknown_cf() {
+        let dir = TempDir::new().unwrap();
+        let (db, _schema) = Db::open::<TestSchema>(dir.path(), DbOptions::default()).unwrap();
+        let err = db
+            .compact_range_cf("not_in_schema", None, None)
+            .unwrap_err();
+        assert!(matches!(err, Error::MissingColumnFamily(_)));
     }
 
     #[test]

@@ -174,6 +174,52 @@ impl Batch {
         Ok(self)
     }
 
+    /// Stage a range delete on the column family backing `map`,
+    /// removing every key in `[from, to_exclusive)`.
+    ///
+    /// Both bounds are encoded once into a thread-local scratch
+    /// buffer and forwarded to
+    /// [`rocksdb::WriteBatch::delete_range_cf`], which records a
+    /// single range tombstone rather than one tombstone per key —
+    /// cheap to stage regardless of how many keys fall in the range.
+    ///
+    /// The upper bound is *exclusive*: a key equal to `to_exclusive`
+    /// is retained. Reads honor the range tombstone immediately,
+    /// because this crate leaves RocksDB's `ignore_range_deletions`
+    /// at its default of `false`.
+    ///
+    /// The range is interpreted over the encoded byte ordering, so a
+    /// meaningful range delete requires `K`'s [`Encode`] to be
+    /// order-preserving (e.g. big-endian fixed-width integers). A
+    /// `from` that encodes to bytes greater than `to_exclusive`
+    /// deletes nothing.
+    ///
+    /// `map` is constrained to a [`Db`]-bound handle.
+    pub fn delete_range<K, V>(
+        &mut self,
+        map: &DbMap<K, V, Db>,
+        from: &K,
+        to_exclusive: &K,
+    ) -> Result<&mut Self, Error>
+    where
+        K: Encode,
+    {
+        let cf = map
+            .db()
+            .cf_handle(map.cf_name())
+            .ok_or_else(|| Error::MissingColumnFamily(map.cf_name().to_string()))?;
+        with_encode_buf(|buf| -> Result<(), Error> {
+            from.encode_into(buf)?;
+            let from_end = buf.len();
+            to_exclusive.encode_into(buf)?;
+            let bytes = buf.as_slice();
+            self.inner
+                .delete_range_cf(&cf, &bytes[..from_end], &bytes[from_end..]);
+            Ok(())
+        })?;
+        Ok(self)
+    }
+
     /// Stage a merge operand on the column family backing `map`.
     ///
     /// The encoded `operand` bytes are passed to the merge operator
@@ -375,6 +421,83 @@ mod tests {
         batch.delete(&schema.items, &U64Be(1)).unwrap();
         batch.commit().unwrap();
         assert!(schema.items.get(&U64Be(1)).unwrap().is_none());
+    }
+
+    #[test]
+    fn delete_range_removes_keys_in_half_open_range() {
+        let (_dir, db, schema) = open();
+        let mut batch = db.batch();
+        for k in 1..=5 {
+            batch.put(&schema.items, &U64Be(k), &U64Be(k * 10)).unwrap();
+        }
+        batch.commit().unwrap();
+
+        // Delete [2, 4): removes 2 and 3, keeps 1, 4, and 5. The
+        // upper bound is exclusive.
+        let mut batch = db.batch();
+        batch
+            .delete_range(&schema.items, &U64Be(2), &U64Be(4))
+            .unwrap();
+        batch.commit().unwrap();
+
+        assert_eq!(schema.items.get(&U64Be(1)).unwrap(), Some(U64Be(10)));
+        assert!(schema.items.get(&U64Be(2)).unwrap().is_none());
+        assert!(schema.items.get(&U64Be(3)).unwrap().is_none());
+        assert_eq!(schema.items.get(&U64Be(4)).unwrap(), Some(U64Be(40)));
+        assert_eq!(schema.items.get(&U64Be(5)).unwrap(), Some(U64Be(50)));
+    }
+
+    #[test]
+    fn delete_range_is_honored_by_iteration() {
+        // Range tombstones must be visible to scans immediately —
+        // this crate leaves `ignore_range_deletions` at false.
+        let (_dir, db, schema) = open();
+        let mut batch = db.batch();
+        for k in 0..10 {
+            batch.put(&schema.items, &U64Be(k), &U64Be(k)).unwrap();
+        }
+        batch.commit().unwrap();
+
+        let mut batch = db.batch();
+        batch
+            .delete_range(&schema.items, &U64Be(0), &U64Be(7))
+            .unwrap();
+        batch.commit().unwrap();
+
+        let remaining: Vec<u64> = schema
+            .items
+            .iter(..)
+            .unwrap()
+            .map(|res| res.unwrap().0.0)
+            .collect();
+        assert_eq!(remaining, vec![7, 8, 9]);
+    }
+
+    #[test]
+    fn delete_range_empty_range_is_a_no_op() {
+        let (_dir, db, schema) = open();
+        let mut batch = db.batch();
+        batch.put(&schema.items, &U64Be(3), &U64Be(30)).unwrap();
+        batch.commit().unwrap();
+
+        // from == to_exclusive deletes nothing.
+        let mut batch = db.batch();
+        batch
+            .delete_range(&schema.items, &U64Be(3), &U64Be(3))
+            .unwrap();
+        batch.commit().unwrap();
+        assert_eq!(schema.items.get(&U64Be(3)).unwrap(), Some(U64Be(30)));
+    }
+
+    #[test]
+    fn delete_range_propagates_encode_error_for_bound() {
+        let (_dir, db, _schema) = open();
+        let bad: DbMap<AlwaysFails, U64Be> = DbMap::new(db.clone(), "items").unwrap();
+        let mut batch = db.batch();
+        let err = batch
+            .delete_range(&bad, &AlwaysFails, &AlwaysFails)
+            .unwrap_err();
+        assert!(matches!(err, Error::Encode(_)));
     }
 
     #[test]
