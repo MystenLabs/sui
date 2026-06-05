@@ -1,6 +1,11 @@
 [package]
 name = "missing_code_map_source_file"
 version = "0.0.0"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../../move-stdlib" }
 
 [addresses]
-missing_code_map_source_file = "0x1"
+missing_code_map_source_file = "0x0"
+std = "0x1"
