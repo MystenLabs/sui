@@ -57,7 +57,6 @@ mod checked {
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         transaction: &TransactionData,
-        gas_ownership_checks: bool,
     ) -> SuiResult<SuiGasStatus> {
         if transaction.kind().is_system_tx() {
             Ok(SuiGasStatus::new_unmetered())
@@ -70,7 +69,6 @@ mod checked {
                 reference_gas_price,
                 gas,
                 transaction,
-                gas_ownership_checks,
                 is_gasless,
             )
         }
@@ -201,11 +199,10 @@ mod checked {
 
         let gas_status = get_gas_status(
             &input_objects,
-            &transaction.gas_data().payment, //gas,
+            &transaction.gas_data().payment,
             config,
             reference_gas_price,
             transaction,
-            false, // gas_ownership_checks - false means mostly transaction level checks
         )?;
 
         Ok((gas_status, input_objects.into_checked()))
@@ -232,7 +229,6 @@ mod checked {
             protocol_config,
             reference_gas_price,
             transaction,
-            true, // gas_ownership_checks
         )?;
         check_objects(transaction, input_objects, protocol_config)?;
         check_replay_protection(transaction, input_objects)?;
@@ -401,7 +397,6 @@ mod checked {
         reference_gas_price: u64,
         gas: &[ObjectRef],
         transaction: &TransactionData,
-        gas_ownership_checks: bool,
         is_gasless: bool,
     ) -> SuiResult<SuiGasStatus> {
         let gas_budget = transaction.gas_budget();
@@ -476,9 +471,6 @@ mod checked {
                 .into());
             }
 
-            if gas_ownership_checks {
-                gas_status.check_gas_objects(&gas_objects)?;
-            }
             gas_status.check_gas_balance(
                 &gas_objects,
                 gas_budget,
