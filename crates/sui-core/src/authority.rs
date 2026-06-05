@@ -1473,24 +1473,24 @@ impl AuthorityState {
         // Simtest-only: simulate a deterministic transaction-induced crash.
         //
         // `deterministic_probability` returns the same answer for a given (seed, digest) pair on
-        // every call, so each validator that would crash for a given digest will always crash for
-        // it. This mirrors a real bug: without crash-recovery, the node would crash again on every
+        // every call, so each validator that would crash for a given digest always crashes for it.
+        // This mirrors a real bug: without crash-recovery the node would crash again on every
         // restart when it re-encounters the same transaction.
         //
-        // We write to the crash log here rather than relying on the panic hook because the msim
-        // runtime intercepts `PanicWrapper` panics (the mechanism used by `kill_current_node`)
-        // before they reach user-installed panic hooks. In production the hook fires normally.
+        // We use catch_unwind to fire a plain panic (triggering the crash-recovery hook, which
+        // writes the crash log via TLS), then call kill_current_node once we are back in normal
+        // execution. We cannot call kill_current_node from inside the panic hook because
+        // kill_current_node itself panics (with PanicWrapper), which would be a double-panic.
+        //
         // Only poison user (programmable) transactions. System transactions (epoch change,
         // randomness, consensus prologue, etc.) must always succeed or the cluster stalls.
         #[cfg(msim)]
         if !certificate.data().transaction_data().kind().is_system_tx() {
             sui_macros::fail_point_if!("crash-with-tx-logging", || {
                 if sui_simulator::random::deterministic_probability(tx_digest, 0.002) {
-                    let log_path = self
-                        .config
-                        .db_path
-                        .join(crate::crash_recovery::PANIC_TX_LOG_FILE);
-                    let _ = crate::crash_recovery::append_digest_to_log(&log_path, *tx_digest);
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        panic!("crash-simulation: caught by crash_recovery hook");
+                    }));
                     sui_simulator::task::kill_current_node(Some(std::time::Duration::from_secs(
                         20,
                     )));

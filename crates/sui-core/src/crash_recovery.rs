@@ -41,7 +41,7 @@ use sui_types::digests::TransactionDigest;
 use tracing::{error, info, warn};
 
 /// File name within the node's db_path where panicking-transaction digests are persisted.
-pub const PANIC_TX_LOG_FILE: &str = "panic-tx.log";
+const PANIC_TX_LOG_FILE: &str = "panic-tx.log";
 
 // ---------------------------------------------------------------------------
 // Thread-local slot
@@ -111,15 +111,20 @@ pub fn register_executing_transaction(digest: TransactionDigest) -> ExecutingTra
 pub fn install_panic_hook(db_path: PathBuf) {
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        // Run the previous hook first so tracing/logging happens before we do file I/O.
-        prev_hook(info);
-
+        // Write the crash log BEFORE calling the previous hook. Some previous hooks call
+        // `process::exit` (e.g. the telemetry hook when crash_on_panic=true), and we must
+        // not lose the digest in that race. In simtests this hook is triggered via
+        // `catch_unwind` from the fail point; the previous hook just logs and returns.
+        //
+        // We also clear the TLS slot after writing so that a second invocation of this hook
+        // (e.g. from `kill_current_node`'s PanicWrapper panic) is a no-op.
         let digest = EXECUTING_TX.with(|slot| slot.get());
         if let Some(digest) = digest {
+            EXECUTING_TX.with(|slot| slot.set(None));
             let log_path = db_path.join(PANIC_TX_LOG_FILE);
             match append_digest_to_log(&log_path, digest) {
                 Ok(()) => {
-                    // Use eprintln rather than tracing here: the subscriber may be in a broken
+                    // Use eprintln rather than tracing: the subscriber may be in a broken
                     // state during a panic.
                     eprintln!(
                         "[crash-recovery] Panic while executing transaction {digest}; \
@@ -136,10 +141,12 @@ pub fn install_panic_hook(db_path: PathBuf) {
                 }
             }
         }
+
+        prev_hook(info);
     }));
 }
 
-pub fn append_digest_to_log(path: &Path, digest: TransactionDigest) -> std::io::Result<()> {
+fn append_digest_to_log(path: &Path, digest: TransactionDigest) -> std::io::Result<()> {
     let mut file = OpenOptions::new().create(true).append(true).open(path)?;
     writeln!(file, "{}", digest)?;
     file.flush()
