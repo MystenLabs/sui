@@ -44,8 +44,9 @@ every reference file in each bundle before walking its rules.
 
 3. **`sui-move-security-review`** — the `SM-*` rule catalog. The SKILL.md is a routing
    table; the per-category reference files (`access-control.md`, `abilities-and-types.md`,
-   `object-lifecycle.md`, …) contain the detection heuristics, severity ratings, exploit
-   sketches, and bytecode signals you actually apply.
+   `object-lifecycle.md`, …) contain the detection heuristics, severity ratings, and
+   exploit sketches; pair with `auditing-bytecode.md` for the structured per-rule
+   decompiled-source signals.
 
    ```sh
    move prompt skill sui-move-security-review

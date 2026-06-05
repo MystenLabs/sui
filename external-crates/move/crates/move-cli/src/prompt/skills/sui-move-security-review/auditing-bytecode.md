@@ -16,7 +16,7 @@ when reading `.move` files.
 1. **Stand up tools** — invoke `sui-and-move-tools` to fetch the package's `.mv` modules
    and decompile them. The default workflow writes only `.mv` + `.move` files; disassembly
    is not produced unless explicitly requested.
-2. **Read the decompiled `.move` files** as the analysis substrate.
+2. **Read the decompiled `.move` files** as the working view.
 3. **Comprehend** — consult `move-bytecode-comprehension` for what survives compilation.
    Headline: abilities, visibility, `entry`, and signatures survive exactly; constant /
    error **names** become `C0/C1/...`, local names are invented, macros are expanded, empty
@@ -32,14 +32,18 @@ when reading `.move` files.
    disassembly wins — record the discrepancy as decompiler imprecision, not as a re-opening
    of the finding.
 
-## Per-rule disassembly signals
+## Per-rule signals (decompiled-source terms)
 
-Each entry below names the concrete assembly pattern to look for. Pair with the rule definition
-(severity, exploit) in the category reference file.
+Each entry below names the concrete decompiled-source pattern to look for. Pair with the
+rule definition (severity, exploit) in the category reference file. Reminder on common
+decompiler renderings: `assert!(cond, code)` appears as `if (!cond) abort code;`; constant
+*names* are renamed to `C0/C1/...` (values are preserved); locals are renamed (`v0`, `arg0`);
+empty structs gain a synthetic `dummy_field: bool`.
 
 ### Structural — read off struct/function headers and abilities
-- **SM-A1 cap ability hygiene.** Struct header: `struct *Cap has ... { ... }` containing `copy`
-  or `drop` is the bug. Disassembly prints `has <abilities>` verbatim.
+- **SM-A1 cap ability hygiene.** Struct header: `struct *Cap has ... { ... }` (or
+  `public struct *Cap has ... { ... }`) containing `copy` or `drop` is the bug. The ability
+  set prints verbatim in decompiled output.
 - **SM-B1 object shape.** `struct T has ... key ...` with no `id: UID` field, OR an
   authority/value type with `drop`. Both visible on the struct header line.
 - **SM-B2 broken soulbound via `store`.** A type marked `store` can be passed to any of
@@ -47,12 +51,14 @@ Each entry below names the concrete assembly pattern to look for. Pair with the 
   `public_share_object` (share globally), `public_freeze_object` (freeze immutably),
   `public_receive` (accept from `Receiving<T>`). The bare variants (`transfer::transfer`,
   `share_object`, `freeze_object`, `receive`) are module-internal and don't require `store`.
-  Disassembly check: any `Call transfer::public_X<T>` from a foreign module confirms `T`
-  has `store` — verify that was intentional. Soulbound (intended-non-transferable) is the
-  most common motivation, but `store` similarly opens shared / frozen / receive misuse.
+  Detection: any `transfer::public_transfer<T>(...)` / `transfer::public_share_object<T>(...)` /
+  `transfer::public_freeze_object<T>(...)` / `transfer::public_receive<T>(...)` call site from
+  a foreign module confirms `T` has `store` — verify that was intentional. Soulbound
+  (intended-non-transferable) is the most common motivation, but `store` similarly opens
+  shared / frozen / receive misuse.
 - **SM-G1 mint/treasury custody.** Function signatures taking `&mut TreasuryCap<T>` /
-  `&mut DenyCap<T>`, and the `Call coin::mint<T>(...)` / `Call coin::burn<T>(...)` sites; trace
-  where the cap argument was obtained (signature + initializer disassembly).
+  `&mut DenyCap<T>`, and `coin::mint<T>(...)` / `coin::burn<T>(...)` call sites; trace
+  where the cap argument was obtained (signature + initializer body).
 - **SM-H1 OTW well-formedness.** Struct named `MODULE_NAME` (all caps) with `has drop` and a
   single synthetic `dummy_field: bool` (the "no fields" signal). Bug if it has other abilities or
   more fields; the synthetic field itself is **not** a finding.
@@ -61,47 +67,51 @@ Each entry below names the concrete assembly pattern to look for. Pair with the 
 
 ### Authorization — dataflow over the function body
 - **SM-A2 missing authorization.** A `public`/`entry` function header that mutates shared state
-  but has no `&*Cap`/`&mut *Cap` parameter in its signature AND no `Call tx_context::sender(...)`
-  followed by `Eq` + `Abort` (or equivalent gate) earlier in the body.
+  but has no `&*Cap`/`&mut *Cap` parameter in its signature AND no `tx_context::sender(...)`
+  followed by an `==` comparison guarded by `if (...) abort <code>` (or `assert!(...)`) earlier
+  in the body.
 - **SM-A3 cap not bound to its resource.** The cap struct's field list does NOT include an
-  `ID`/`address`; OR it does, but the privileged function body never `[Imm/Mut]BorrowField`s that
-  field and `Eq`-compares it to the target object's id before the privileged `Call`.
-- **SM-A4 one-step admin handoff.** `Call transfer::transfer<*Cap>` / `public_transfer<*Cap>` to
-  a caller-supplied `address` argument with no preceding `Eq` against a proposed-new-admin /
-  acceptance step.
+  `ID`/`address`; OR it does, but the privileged function body never reads `cap.<id_field>`
+  (or `&cap.<id_field>` / `&mut cap.<id_field>`) and `==`-compares it to `object::id(target)`
+  before the privileged call.
+- **SM-A4 one-step admin handoff.** `transfer::transfer<*Cap>(...)` /
+  `transfer::public_transfer<*Cap>(...)` to a caller-supplied `address` argument with no
+  preceding `==` against a proposed-new-admin / acceptance step.
 - **SM-A5 forgeable witness.** A witness-typed parameter (`W: drop`) whose declaring module makes
   it constructible — i.e. the struct header is publicly accessible (no module-private fields, no
   OTW invariant). Same struct + ability check as B1/H1 but applied to the auth-type.
-- **SM-A6 state-guard before privileged release/mutate.** Identify the privileged `Call` site
-  (e.g. `Call transfer::transfer<T>` / `Call balance::join` / `Call coin::take` / an internal
-  state mutator that releases an asset). In the basic blocks reaching it, look for a
-  `[Imm/Mut]BorrowField(Self.<state>)` (the controlling flag/deadline/amount on the object) +
-  `Eq`/`Lt`/`Gt` + `BrFalse`/`Abort` guard. If the field is never read, or read but never
-  compared+branched, that's the bug. (Cross-check: if no such field even exists on the type, the
-  invariant cannot be enforced — the privileged path is unconditional, which is the high-severity
-  shape of this bug.)
+- **SM-A6 state-guard before privileged release/mutate.** Identify the privileged call site
+  (e.g. `transfer::transfer<T>(...)` / `balance::join(...)` / `coin::take(...)` / an internal
+  state mutator that releases an asset). In the code reaching it, look for a read of
+  `self.<state>` / `&self.<state>` / `&mut self.<state>` (the controlling flag/deadline/amount
+  on the object) compared with `==` / `<` / `>` and guarded by `if (...) abort <code>` or
+  `assert!(...)`. If the field is never read, or read but never compared+branched, that's the
+  bug. (Cross-check: if no such field even exists on the type, the invariant cannot be
+  enforced — the privileged path is unconditional, which is the high-severity shape of this bug.)
 
 ### Type identity — generic / shared-object instantiation
 - **SM-B4 type confusion / fake-object.** A function takes `&T` / `&mut T` / `Coin<T>` etc. for a
-  shared protocol type or unconstrained generic, and the body never calls `Call object::id<T>` and
-  `Eq`-compares it to an allow-listed/registry address before the function trusts its contents
-  (e.g., reads reserves and `Call`s a transfer).
+  shared protocol type or unconstrained generic, and the body never calls `object::id<T>(...)` and
+  `==`-compares it to an allow-listed/registry address before the function trusts its contents
+  (e.g., reads reserves and calls a transfer).
 
 ### Collections / dynamic fields
-- **SM-E4 missing existence check before DF/collection access.** Any `Call dynamic_field::borrow*`
-  / `borrow_mut*` / `remove*` / `Call bag::borrow*` / `Call table::borrow*` / `Call object_bag::*`
-  / `Call object_table::*` access whose predecessor block contains no `Call
-  dynamic_field::exists*` (resp. `bag::contains`, `table::contains`, etc.) + `BrFalse` to a guarded
-  path. The aborting key access is the on-chain DoS / branch-bypass primitive.
+- **SM-E4 missing existence check before DF/collection access.** Any
+  `dynamic_field::borrow*(...)` / `borrow_mut*(...)` / `remove*(...)` / `bag::borrow*(...)` /
+  `table::borrow*(...)` / `object_bag::*(...)` / `object_table::*(...)` access not guarded by
+  an `if (...)` whose condition includes the matching `dynamic_field::exists*(...)`
+  (resp. `bag::contains(...)`, `table::contains(...)`, etc.). The aborting key access is the
+  on-chain DoS / branch-bypass primitive.
 
 ### Arithmetic & control flow
-- **SM-F1 silent truncation.** Any `CastU8` / `CastU16` / `CastU32` / `CastU64` / `CastU128` /
-  `CastU256` instruction on a value in the amount/price/index/supply dataflow.
-- **SM-F2 rounding / zero amounts.** `Div` followed by `Mul` (rounding loss) over a fee/share
-  computation; missing `LdU64(0)` + `Eq` + `Abort` guard at the entry of mint/deposit/swap.
-- **SM-D1 trusted invariants.** A caller-supplied `min_out`/price/amount used (read into stack)
-  and consumed by a `Call` to a transfer/swap **without** a preceding `Lt`/`Gt`/`Eq` + `Abort` bound
-  check against the on-chain state.
+- **SM-F1 silent truncation.** Any `as u8` / `as u16` / `as u32` / `as u64` / `as u128` /
+  `as u256` cast on a value in the amount/price/index/supply dataflow.
+- **SM-F2 rounding / zero amounts.** A `/` followed by a `*` (rounding loss) over a fee/share
+  computation; missing zero-check (`if (amount == 0) abort <code>` or `assert!(amount > 0, ...)`
+  / `assert!(amount != 0, ...)`) at the entry of mint/deposit/swap.
+- **SM-D1 trusted invariants.** A caller-supplied `min_out`/price/amount consumed by a
+  transfer/swap call **without** a preceding `<` / `>` / `==` bound check guarded by
+  `if (...) abort <code>` or `assert!(...)` against the on-chain state.
 
 ### Composition & PTB-surface (require reasoning over the function header set)
 - **SM-J2 internal transfer / leaky `_mut`.** A `public` (non-`entry`) function whose body calls
@@ -109,25 +119,25 @@ Each entry below names the concrete assembly pattern to look for. Pair with the 
   signature is `&mut T` exposing fields the module asserts invariants over.
 - **SM-K1 attacker-orchestrated PTB.** Pattern over the *set* of `public`/`entry` headers: a flow
   that depends on a fixed call order without an on-chain enforcer (no ability-less receipt being
-  consumed). Inferred from API surface, not a single instruction.
+  consumed). Inferred from API surface, not a single line.
 
 ### Time, randomness, deny lists
-- **SM-L1 imprecise time.** `Call tx_context::epoch_timestamp_ms` in a deadline-bearing function
-  (vs `Call clock::timestamp_ms` on `Clock`).
-- **SM-L2 randomness test-and-abort.** `Call random::new_generator` / `Call random::generate_*`
+- **SM-L1 imprecise time.** `tx_context::epoch_timestamp_ms(...)` in a deadline-bearing function
+  (vs `clock::timestamp_ms(...)` on `Clock`).
+- **SM-L2 randomness test-and-abort.** `random::new_generator(...)` / `random::generate_*(...)`
   inside a function header that is NOT `entry` is compiler-rejected (so usually absent in
-  bytecode). The realistic finding: an `entry` consumer whose random-derived value reaches a
-  `Ret` / `Pack` / `Call transfer::*<reward>` before the random effect is finalized in a way the
-  caller can observe and abort.
+  compiled output). The realistic finding: an `entry` consumer whose random-derived value
+  reaches a return, a struct constructor (`Reward { ... }`), or `transfer::*<reward>(...)`
+  before the random effect is finalized in a way the caller can observe and abort.
 - **SM-G2 deny list not enforced.** Module has a `Table<address,bool>`/`VecSet<address>` field
-  (visible on a struct definition) but the transfer/action functions never `Call ...contains(...)`
-  on it before performing the action.
+  (visible on a struct definition) but the transfer/action functions never call
+  `...contains(...)` on it before performing the action.
 
 ### On-chain test-helper leakage
-- **SM-M1 test helper leakage.** `#[test_only]` is gone in bytecode. Symptom: a `public`/`entry`
-  function reachable without authorization whose body contains framework calls that should be
-  gated (e.g. `Call coin::mint`, mint-equivalent helpers, capability synthesis). Often overlaps
-  SM-A2/G1 — flag as both when applicable.
+- **SM-M1 test helper leakage.** `#[test_only]` is gone in compiled output. Symptom: a
+  `public`/`entry` function reachable without authorization whose body contains framework
+  calls that should be gated (e.g. `coin::mint(...)`, mint-equivalent helpers, capability
+  synthesis). Often overlaps SM-A2/G1 — flag as both when applicable.
 
 ## Reporting
 

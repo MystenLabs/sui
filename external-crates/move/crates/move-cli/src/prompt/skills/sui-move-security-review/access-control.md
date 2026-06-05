@@ -21,10 +21,10 @@ address** — verify each one either (a) takes a capability parameter, (b) asser
 the code/comments label it as such**. Read-only getters are exempt.
 Detect: `public`/`entry` fns that mutate shared/global state with no `&\w*Cap` parameter and no
 `sender()`/address assertion. Pay particular attention to functions that mint, withdraw, set
-fees/config, pause, change ownership, or modify a deny list. (Disassembly tell:
-`auditing-bytecode.md` SM-A2 — function header with `&mut <SharedT>` arg lacking either a `&*Cap`
-arg in the signature or a `Call tx_context::sender` + `Eq`/`Abort` gate before the first
-state-mutating instruction.)
+fees/config, pause, change ownership, or modify a deny list. In decompiled output, look for
+a function signature with a `&mut <SharedT>` argument that lacks both a `&*Cap` argument and
+an earlier `tx_context::sender(...)` assertion before state mutation. See
+`auditing-bytecode.md` SM-A2 for the structured per-rule signal.
 Exploit: any address calls the privileged path directly via a PTB.
 Source: `MystenLabs/skills → sui-move/move.md` ("Every `public` or `entry` function that takes a
 `&mut SharedObject` is callable by any address. Verify that each one either (a) checks a capability,
@@ -68,11 +68,14 @@ the relevant **object-state invariant** (`unlocked`, `expired_at < now`, `paid >
 (caller-identity gate) and SM-D1 (caller-supplied bounds): it is a *self-state* guard on the
 object being acted on. Forgetting it means the gate exists in the type system but not in the
 runtime check.
-Detect: the privileged `Call` (`transfer::transfer<T>`, `balance::join`, `coin::take`,
-`balance::split`, internal state mutator) is reached on a path where the controlling field
-(`obj.unlocked`, `obj.expiry`, `obj.paid_back`, …) is read but never compared+gated, OR not read
-at all. (Disassembly tell in `auditing-bytecode.md` SM-A6: privileged `Call` whose predecessor
-block contains no `[Imm/Mut]BorrowField(Self.<state>)` + `Eq/Lt/Gt` + `BrFalse`/`Abort`.)
+Detect: the privileged operation (`transfer::transfer<T>(...)`, `balance::join(...)`,
+`coin::take(...)`, `balance::split(...)`, internal state mutator) is reached on a path where
+the controlling field (`obj.unlocked`, `obj.expiry`, `obj.paid_back`, …) is read but never
+compared+gated, OR not read at all. In decompiled output, the guard should be visible as an
+`if (...) abort <code>` or `assert!(...)` over the relevant object-state field before the
+privileged operation. See `auditing-bytecode.md` SM-A6 for the structured per-rule signal,
+including the high-severity "no controlling field exists on the type" cross-check
+(the privileged path is then unconditional).
 Exploit: caller invokes the release path while the object's state still forbids it — transfer a
 locked NFT, redeem before expiry, withdraw without the loan being marked repaid.
 Source: `MystenLabs/skills → object-model/transfers.md` (`transfer_if_unlocked` example:

@@ -32,7 +32,7 @@ left live in the single publishing EOA under the default Compatible policy.
 Detect: publish flow that retains the `UpgradeCap` in the deployer key with no restriction; no
 `make_immutable`/policy call; UpgradeCap discoverable as owned by an EOA. **Also (for governance /
 upgrade-wrapper modules):** verify any module that mediates upgrades commits the `UpgradeReceipt`
-via `Call package::commit_upgrade(...)` in the same flow as the `Upgrade` command — a wrapper that
+via `package::commit_upgrade(...)` in the same flow as the `Upgrade` command — a wrapper that
 authorizes/returns an `UpgradeReceipt` but never commits it leaves the upgrade un-finalized (and
 worse, the receipt is a hot potato, so the tx would abort — but a wrapper that *stores* the
 receipt or routes it improperly is a misuse worth flagging).

@@ -48,5 +48,5 @@ section of `sui-and-move-tools/fetch-and-decompile.md`.
 | `Add/Sub/Mul/Div/Mod`, `Eq/Lt/...` | arithmetic / comparison (over/underflow aborts natively) |
 | `VecPack(tok, n)` / `VecPushBack` / `VecMutBorrow` | vector build / mutate |
 | `Branch/BrTrue/BrFalse b` | jump to block `b` |
-| `Abort` | pop abort code and abort (the code is the constant just loaded) |
+| `Abort` | pop abort code from the top of the stack and abort |
 | `Ret` | return |

@@ -12,9 +12,9 @@ skills live here in one canonical location.
 ## Bundles
 
 - **`sui-move-security-review`** — the SM-* rule catalog. Each rule has an invariant, a
-  disassembly detection signal, a severity, and an exploit sketch. Includes
-  `auditing-bytecode.md` (per-rule disassembly signals + the report format that pairs
-  assembly evidence with a human view).
+  detection heuristic, a severity, and an exploit sketch. Includes `auditing-bytecode.md`
+  for applying the rules to decompiled `.move` files, with disassembly reserved for
+  targeted verification.
 - **`sui-and-move-tools`** — obtain bytecode + readable views for a deployed Sui package.
   One Sui GraphQL call returns every module's raw bytes; `move decompile` produces the
   decompiled-source working view. Disassembly is fetched per-module only for specific

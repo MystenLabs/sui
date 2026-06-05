@@ -43,9 +43,10 @@ can influence — an attacker can `remove`, an unrelated path may not have `add`
 path must first call `*::exists*` / `*::contains` and either branch to a safe path or abort with
 a clear, named error code.
 Detect: `dynamic_field::borrow*`/`remove*` / `bag::borrow*` / `table::borrow*` access with no
-preceding existence check that gates the access. (Disassembly tell in `auditing-bytecode.md`
-SM-E4: a `Call dynamic_field::borrow*` / `Call bag::*` / `Call table::*` access whose predecessor
-block contains no `Call *::exists*` / `*::contains` + `BrFalse`.)
+preceding existence check that gates the access. In decompiled output, look for the matching
+`dynamic_field::exists*` / `bag::contains` / `table::contains` result in an `if (...)` or
+`assert!(...)` before the aborting access. See `auditing-bytecode.md` SM-E4 for the
+structured per-rule signal.
 Exploit: an attacker triggers the missing-field path to abort honest users' transactions (DoS
 against an entrypoint), or exploits the absence-induced abort to take a different code path the
 author did not anticipate (e.g. a fallback branch that bypasses an accumulator that was supposed
