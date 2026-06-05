@@ -172,6 +172,29 @@ async fn get_address_balance(client: &mut GrpcClient, address: SuiAddress, coin_
         .address_balance()
 }
 
+/// Assert an executed transaction ran on the free tier: no gas payment objects, price 0, budget 0.
+/// This is the protocol's definition of gasless. We assert the `gas_payment` rather than the cost
+/// summary because, for gasless txs, the summary's `computation_cost`/`storage_rebate` carry the
+/// storage rebate absorbed from destroyed input coins (see `gas_charger.rs`) — a subsidized amount,
+/// not a charge — so they can be non-zero even though the sender pays nothing.
+fn assert_onchain_gasless(tx: &sui_rpc::proto::sui::rpc::v2::ExecutedTransaction) {
+    let gas_payment = tx.transaction().gas_payment();
+    assert_eq!(
+        gas_payment.price,
+        Some(0),
+        "gasless: on-chain gas price must be 0"
+    );
+    assert_eq!(
+        gas_payment.budget,
+        Some(0),
+        "gasless: on-chain gas budget must be 0"
+    );
+    assert!(
+        gas_payment.objects.is_empty(),
+        "gasless: there must be no gas payment objects"
+    );
+}
+
 /// Deposit coins to address balance via `coin::send_funds<T>`.
 /// When `coin_type` is `None`, deposits SUI (split from GasCoin).
 /// When `coin_type` is `Some(type_str)`, looks up a custom coin object to split from.
@@ -429,11 +452,11 @@ fn pay_coin_ops_multi(
     serde_json::from_value(json!(ops)).unwrap()
 }
 
-/// Publish the test custom coin, mint `mint_amount` to `sender`, register it as a gasless
-/// (free-tier) token with `min_transfer`, and move the entire minted amount into the sender's
-/// address balance. Returns the coin type's canonical string. `GASLESS_TOKENS_FOR_TESTING` is
-/// process-global and additive; package IDs are unique per test so registrations don't collide.
-async fn setup_gasless_coin_in_ab(
+/// Publish the test custom coin, mint `mint_amount` to `sender` as coin OBJECTS (no address-balance
+/// deposit), and register it as a gasless (free-tier) token with `min_transfer`. Returns the coin
+/// type's canonical string. `GASLESS_TOKENS_FOR_TESTING` is process-global and additive; package IDs
+/// are unique per test so registrations don't collide.
+async fn setup_gasless_coin_as_objects(
     test_cluster: &test_cluster::TestCluster,
     client: &mut GrpcClient,
     keystore: &sui_keys::keystore::Keystore,
@@ -464,7 +487,29 @@ async fn setup_gasless_coin_in_ab(
 
     sui_types::transaction::add_gasless_token_for_testing(coin_type.clone(), min_transfer);
 
-    // Move the whole minted amount into the sender's address balance — gasless pays entirely from AB.
+    coin_type
+}
+
+/// Like `setup_gasless_coin_as_objects`, but additionally moves the whole minted amount into the
+/// sender's address balance (so the payment is funded entirely from AB).
+async fn setup_gasless_coin_in_ab(
+    test_cluster: &test_cluster::TestCluster,
+    client: &mut GrpcClient,
+    keystore: &sui_keys::keystore::Keystore,
+    sender: SuiAddress,
+    mint_amount: u64,
+    min_transfer: u64,
+) -> String {
+    let coin_type = setup_gasless_coin_as_objects(
+        test_cluster,
+        client,
+        keystore,
+        sender,
+        mint_amount,
+        min_transfer,
+    )
+    .await;
+
     deposit_to_address_balance(
         test_cluster,
         client,
@@ -1746,7 +1791,7 @@ async fn test_pay_coin_gasless_single_recipient() {
 
     let grpc_request = GetTransactionRequest::default()
         .with_digest(r.transaction_identifier.hash.to_string())
-        .with_read_mask(FieldMask::from_paths(["effects"]));
+        .with_read_mask(FieldMask::from_paths(["effects", "transaction"]));
     let tx = client
         .ledger_client()
         .get_transaction(grpc_request)
@@ -1760,24 +1805,7 @@ async fn test_pay_coin_gasless_single_recipient() {
         "gasless PayCoin failed: {:?}",
         tx.effects().status().error()
     );
-
-    // Free tier: the on-chain gas cost summary is fully zero.
-    let gas = tx.effects().gas_used();
-    assert_eq!(
-        gas.computation_cost_opt().unwrap_or(0),
-        0,
-        "gasless: computation_cost must be 0"
-    );
-    assert_eq!(
-        gas.storage_cost_opt().unwrap_or(0),
-        0,
-        "gasless: storage_cost must be 0"
-    );
-    assert_eq!(
-        gas.storage_rebate_opt().unwrap_or(0),
-        0,
-        "gasless: storage_rebate must be 0"
-    );
+    assert_onchain_gasless(&tx);
 
     let recipient_ab = get_address_balance(&mut client, recipient, &coin_type).await;
     assert_eq!(
@@ -2087,7 +2115,7 @@ async fn test_pay_coin_gasless_ignores_request_budget() {
 
     let grpc_request = GetTransactionRequest::default()
         .with_digest(r.transaction_identifier.hash.to_string())
-        .with_read_mask(FieldMask::from_paths(["effects"]));
+        .with_read_mask(FieldMask::from_paths(["effects", "transaction"]));
     let tx = client
         .ledger_client()
         .get_transaction(grpc_request)
@@ -2102,13 +2130,8 @@ async fn test_pay_coin_gasless_ignores_request_budget() {
         tx.effects().status().error()
     );
 
-    // Still actually free: zero on-chain gas and the recipient credited to address balance.
-    let gas = tx.effects().gas_used();
-    assert_eq!(
-        gas.computation_cost_opt().unwrap_or(0),
-        0,
-        "gasless: computation_cost must be 0 despite a request budget"
-    );
+    // Still actually free despite the non-zero request budget: on-chain price/budget 0, no gas coins.
+    assert_onchain_gasless(&tx);
     let recipient_ab = get_address_balance(&mut client, recipient, &coin_type).await;
     assert_eq!(
         recipient_ab, pay,
@@ -2119,6 +2142,219 @@ async fn test_pay_coin_gasless_ignores_request_budget() {
     assert_eq!(
         sender_sui_after, sender_sui_before,
         "gasless: sender SUI must be unchanged despite a request budget"
+    );
+}
+
+/// Free-tier payment funded from coin OBJECTS (not address balance). The coins are smashed and
+/// consumed gaslessly: recipients are credited to their address balance and the change lands in the
+/// sender's address balance. Proves the gasless path no longer requires funds to already be in AB.
+#[tokio::test]
+async fn test_pay_coin_gasless_from_coin_objects() {
+    const AMOUNT: u64 = 150_000_000_000_000;
+    let accounts = (0..5)
+        .map(|_| AccountConfig {
+            address: None,
+            gas_amounts: vec![AMOUNT, AMOUNT],
+        })
+        .collect();
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .with_accounts(accounts)
+        .with_epoch_duration_ms(36000000)
+        .build()
+        .await;
+    let sender = test_cluster.get_address_0();
+    let recipient = test_cluster.get_address_1();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+
+    let pay = 400_000u64;
+    // Mint 500K as coin OBJECTS — left in the sender's wallet, NOT deposited to AB.
+    let coin_type =
+        setup_gasless_coin_as_objects(&test_cluster, &mut client, keystore, sender, 500_000, 0)
+            .await;
+
+    let sender_sui_before = get_total_balance(&mut client, sender, SUI_COIN_TYPE).await;
+
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let ops = pay_coin_ops(sender, recipient, pay, &coin_type);
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+
+    if let Some(Err(e)) = &flow.preprocess {
+        panic!("Preprocess failed: {:?}", e);
+    }
+    let metadata = flow
+        .metadata
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .expect("Metadata failed");
+    assert!(
+        metadata.metadata.gas_coins.is_empty(),
+        "gasless: gas_coins should be empty"
+    );
+    assert_eq!(
+        metadata.metadata.gas_price, 0,
+        "gasless: gas_price should be 0"
+    );
+    assert_eq!(metadata.metadata.budget, 0, "gasless: budget should be 0");
+    assert_eq!(
+        metadata.metadata.address_balance_withdrawal, 0,
+        "coin-funded gasless: nothing withdrawn from AB (funded entirely from coins)"
+    );
+
+    if let Some(Err(e)) = &flow.payloads {
+        panic!("Payloads failed: {:?}", e);
+    }
+    if let Some(Err(e)) = &flow.combine {
+        panic!("Combine failed: {:?}", e);
+    }
+
+    let r: TransactionIdentifierResponse = flow.submit.unwrap().unwrap();
+    wait_for_transaction(&mut client, &r.transaction_identifier.hash.to_string())
+        .await
+        .unwrap();
+
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(r.transaction_identifier.hash.to_string())
+        .with_read_mask(FieldMask::from_paths(["effects", "transaction"]));
+    let tx = client
+        .ledger_client()
+        .get_transaction(grpc_request)
+        .await
+        .unwrap()
+        .into_inner()
+        .transaction
+        .unwrap();
+    assert!(
+        tx.effects().status().success(),
+        "coin-funded gasless PayCoin failed: {:?}",
+        tx.effects().status().error()
+    );
+    assert_onchain_gasless(&tx);
+
+    // Recipient credited to AB; change (500K - 400K) lands in the SENDER's AB.
+    let recipient_ab = get_address_balance(&mut client, recipient, &coin_type).await;
+    assert_eq!(
+        recipient_ab, pay,
+        "recipient should be credited {pay} to AB"
+    );
+
+    let sender_ab = get_address_balance(&mut client, sender, &coin_type).await;
+    assert_eq!(
+        sender_ab,
+        500_000 - pay,
+        "sender's change should land in their address balance"
+    );
+    let sender_total = get_total_balance(&mut client, sender, &coin_type).await;
+    assert_eq!(
+        sender_total,
+        500_000 - pay,
+        "sender's coin objects are consumed; only the AB change remains"
+    );
+
+    let sender_sui_after = get_total_balance(&mut client, sender, SUI_COIN_TYPE).await;
+    assert_eq!(
+        sender_sui_after, sender_sui_before,
+        "gasless: sender SUI must be unchanged"
+    );
+}
+
+/// Coin-funded free tier where the *change* would fall below the per-token minimum. The protocol
+/// rejects the gasless variant (sub-min change deposited back to the sender), so rosetta falls back
+/// to the priced smash path and the recipient receives a coin object.
+#[tokio::test]
+async fn test_pay_coin_gasless_change_below_min_falls_back() {
+    const AMOUNT: u64 = 150_000_000_000_000;
+    let accounts = (0..5)
+        .map(|_| AccountConfig {
+            address: None,
+            gas_amounts: vec![AMOUNT, AMOUNT],
+        })
+        .collect();
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .with_accounts(accounts)
+        .with_epoch_duration_ms(36000000)
+        .build()
+        .await;
+    let sender = test_cluster.get_address_0();
+    let recipient = test_cluster.get_address_1();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+
+    let pay = 400_000u64;
+    // Coins total 405K, min 10K. Paying 400K leaves 5K change to the sender's AB — below the 10K
+    // minimum — so the node declines gasless and rosetta falls back to smash.
+    let coin_type = setup_gasless_coin_as_objects(
+        &test_cluster,
+        &mut client,
+        keystore,
+        sender,
+        405_000,
+        10_000,
+    )
+    .await;
+
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let ops = pay_coin_ops(sender, recipient, pay, &coin_type);
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+
+    if let Some(Err(e)) = &flow.preprocess {
+        panic!("Preprocess failed: {:?}", e);
+    }
+    let metadata = flow
+        .metadata
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .expect("Metadata failed");
+    assert!(
+        metadata.metadata.gas_price > 0,
+        "sub-min change: should fall back to the priced smash path (gas_price > 0)"
+    );
+
+    if let Some(Err(e)) = &flow.payloads {
+        panic!("Payloads failed: {:?}", e);
+    }
+    if let Some(Err(e)) = &flow.combine {
+        panic!("Combine failed: {:?}", e);
+    }
+
+    let r: TransactionIdentifierResponse = flow.submit.unwrap().unwrap();
+    wait_for_transaction(&mut client, &r.transaction_identifier.hash.to_string())
+        .await
+        .unwrap();
+
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(r.transaction_identifier.hash.to_string())
+        .with_read_mask(FieldMask::from_paths(["effects"]));
+    let tx = client
+        .ledger_client()
+        .get_transaction(grpc_request)
+        .await
+        .unwrap()
+        .into_inner()
+        .transaction
+        .unwrap();
+    assert!(
+        tx.effects().status().success(),
+        "smash fallback PayCoin failed: {:?}",
+        tx.effects().status().error()
+    );
+
+    // Recipient got a coin object via the smash path, not an AB credit.
+    let recipient_ab = get_address_balance(&mut client, recipient, &coin_type).await;
+    assert_eq!(
+        recipient_ab, 0,
+        "sub-min change fallback: recipient should receive a coin object, not an AB credit"
+    );
+    let recipient_total = get_total_balance(&mut client, recipient, &coin_type).await;
+    assert_eq!(
+        recipient_total, pay,
+        "sub-min change fallback: recipient total should equal the payment"
     );
 }
 

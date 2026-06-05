@@ -211,7 +211,15 @@ impl InternalOperation {
                     .currency
                     .ok_or(anyhow!("metadata.coin_type is needed to PayCoin"))?;
                 if is_gasless {
-                    pay_coin_gasless_pt(sender, recipients, amounts, currency)?
+                    pay_coin_gasless_pt(
+                        sender,
+                        recipients,
+                        amounts,
+                        &metadata.objects,
+                        &metadata.party_objects,
+                        withdrawal,
+                        currency,
+                    )?
                 } else {
                     pay_coin_pt(
                         sender,
