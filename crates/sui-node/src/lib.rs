@@ -492,7 +492,6 @@ impl SuiNode {
 
         // Install the crash-recovery panic hook and load any transactions that caused a crash in
         // a previous run. These are installed early so the hook is active for the rest of startup.
-        #[cfg(not(msim))]
         crash_recovery::install_panic_hook(config.db_path.clone());
         let crashed_transactions = crash_recovery::load_crashed_transactions(&config.db_path);
 
