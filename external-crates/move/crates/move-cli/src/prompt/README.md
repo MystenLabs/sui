@@ -48,18 +48,9 @@ explains how to navigate to them. An agent reads this first to learn the surface
 move prompt categories
 ```
 
-Output:
-
-```
-Embedded categories (2):
-  audit — Auditing compiled Move packages on Sui for security vulnerabilities.
-  bytecode — Understanding compiled Move bytecode — disassembly, decompilation, and what survives compilation.
-
-Commands:
-  move prompt category <name>   — read the category's content
-  move prompt skills            — list all skill bundles (flat)
-  move prompt skill <bundle>    — read a skill bundle's SKILL.md
-```
+Prints a Markdown list of embedded categories. Each entry includes the category name and
+the short frontmatter description used for routing. The list is followed by navigation
+commands for reading a category or switching to skill-bundle navigation.
 
 ### Example 3 — read a category
 
@@ -77,19 +68,9 @@ where an agent learns *how to do this kind of work*.
 move prompt skills
 ```
 
-Output:
-
-```
-Embedded skill bundles (3):
-  move-bytecode-comprehension  (4 files)
-  sui-and-move-tools  (2 files)
-  sui-move-security-review  (12 files)
-
-Commands:
-  move prompt skill <bundle>            — read SKILL.md
-  move prompt skill <bundle> --list     — list reference files
-  move prompt skill <bundle> --file <r> — read a specific reference file
-```
+Prints a Markdown list of embedded skill bundles. Each entry includes the bundle name and
+the number of embedded markdown files. The list is followed by commands for reading the
+bundle entry point, listing reference files, or reading a specific reference file.
 
 ### Example 5 — read a skill bundle's SKILL.md
 
