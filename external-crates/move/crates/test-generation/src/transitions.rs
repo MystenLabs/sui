@@ -661,16 +661,38 @@ pub fn stack_struct_has_field_inst(
     field_index: FieldInstantiationIndex,
 ) -> bool {
     let field_inst = state.module.field_instantiantiation_at(field_index);
-    stack_struct_has_field(state, field_inst.handle)
+    stack_struct_has_field_impl(state, field_inst.handle, true)
 }
 
 pub fn stack_struct_has_field(state: &AbstractState, field_index: FieldHandleIndex) -> bool {
+    stack_struct_has_field_impl(state, field_index, false)
+}
+
+/// Determine whether the reference on top of the stack is to a struct that owns the field at
+/// `field_index`. The `generic` flag selects which field-borrow opcode is being checked: the
+/// non-generic opcodes (`MutBorrowField`/`ImmBorrowField`) require a non-generic owner struct, and
+/// the generic opcodes (`*FieldGeneric`) require a generic owner. Mixing them up is rejected by the
+/// verifier with `GENERIC_MEMBER_OPCODE_MISMATCH`.
+fn stack_struct_has_field_impl(
+    state: &AbstractState,
+    field_index: FieldHandleIndex,
+    generic: bool,
+) -> bool {
     let field_handle = state.module.module.field_handle_at(field_index);
+    let struct_def = state.module.module.struct_def_at(field_handle.owner);
+    let owner_is_generic = !state
+        .module
+        .module
+        .datatype_handle_at(struct_def.struct_handle)
+        .type_parameters
+        .is_empty();
+    if owner_is_generic != generic {
+        return false;
+    }
     if let Some(struct_handle_index) = state
         .stack_peek(0)
         .and_then(|abstract_value| get_struct_handle_from_reference(&abstract_value.token))
     {
-        let struct_def = state.module.module.struct_def_at(field_handle.owner);
         return struct_handle_index == struct_def.struct_handle;
     }
     false
@@ -977,12 +999,11 @@ pub fn stack_satisfies_function_signature(
     state: &AbstractState,
     function_index: FunctionHandleIndex,
 ) -> (bool, Subst) {
-    let state_copy = state.clone();
-    let function_handle = state_copy.module.module.function_handle_at(function_index);
+    let function_handle = state.module.module.function_handle_at(function_index);
     let type_parameters = &function_handle.type_parameters;
     let mut satisfied = true;
     let mut substitution = Subst::new();
-    let parameters = &state_copy.module.module.signatures()[function_handle.parameters.0 as usize];
+    let parameters = &state.module.module.signatures()[function_handle.parameters.0 as usize];
     for (i, parameter) in parameters.0.iter().rev().enumerate() {
         let has = if let SignatureToken::TypeParameter(idx) = parameter {
             if stack_has_all_abilities(state, i, type_parameters[*idx as usize]) {
@@ -1012,6 +1033,27 @@ pub fn stack_satisfies_function_inst_signature(
 ) -> (bool, Subst) {
     let func_inst = state.module.function_instantiantiation_at(function_index);
     stack_satisfies_function_signature(state, func_inst.handle)
+}
+
+/// Whether the function at `function_index` is generic (declares type parameters). The non-generic
+/// `Call` opcode requires a non-generic function and `CallGeneric` requires a generic one;
+/// otherwise the verifier rejects with `GENERIC_MEMBER_OPCODE_MISMATCH`.
+pub fn function_is_generic(state: &AbstractState, function_index: FunctionHandleIndex) -> bool {
+    !state
+        .module
+        .module
+        .function_handle_at(function_index)
+        .type_parameters
+        .is_empty()
+}
+
+/// Whether the function referenced by the instantiation at `function_index` is generic.
+pub fn function_inst_is_generic(
+    state: &AbstractState,
+    function_index: FunctionInstantiationIndex,
+) -> bool {
+    let func_inst = state.module.function_instantiantiation_at(function_index);
+    function_is_generic(state, func_inst.handle)
 }
 
 /// Whether the function acquires any global resources or not
@@ -1445,6 +1487,20 @@ macro_rules! state_stack_satisfies_function_signature {
 macro_rules! state_stack_satisfies_function_inst_signature {
     ($e: expr) => {
         Box::new(move |state| stack_satisfies_function_inst_signature(state, $e).0)
+    };
+}
+
+#[macro_export]
+macro_rules! state_function_is_not_generic {
+    ($e: expr) => {
+        Box::new(move |state| !function_is_generic(state, $e))
+    };
+}
+
+#[macro_export]
+macro_rules! state_function_inst_is_generic {
+    ($e: expr) => {
+        Box::new(move |state| function_inst_is_generic(state, $e))
     };
 }
 

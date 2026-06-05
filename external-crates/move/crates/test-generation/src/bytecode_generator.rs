@@ -5,8 +5,8 @@
 use crate::{
     abstract_state::{AbstractState, BorrowState, CallGraph, InstantiableModule},
     config::{
-        CALL_STACK_LIMIT, INHABITATION_INSTRUCTION_LIMIT, MAX_CFG_BLOCKS, MUTATION_TOLERANCE,
-        NEGATE_PRECONDITIONS, NEGATION_PROBABILITY, VALUE_STACK_LIMIT,
+        BLOCK_INSTRUCTION_LIMIT, CALL_STACK_LIMIT, INHABITATION_INSTRUCTION_LIMIT, MAX_CFG_BLOCKS,
+        MUTATION_TOLERANCE, NEGATE_PRECONDITIONS, NEGATION_PROBABILITY, VALUE_STACK_LIMIT,
     },
     control_flow_graph::CFG,
     substitute, summaries,
@@ -332,8 +332,8 @@ impl<'a> BytecodeGenerator<'a> {
     fn candidate_instructions(
         &mut self,
         fn_context: &FunctionGenerationContext,
-        state: AbstractState,
-        module: CompiledModule,
+        state: &AbstractState,
+        module: &CompiledModule,
     ) -> Vec<(StackEffect, Bytecode)> {
         let mut matches: Vec<(StackEffect, Bytecode)> = Vec::new();
         let instructions = &self.instructions;
@@ -401,7 +401,7 @@ impl<'a> BytecodeGenerator<'a> {
                     Self::index_or_none(callable_fns, self.rng)
                         .and_then(|handle_idx| {
                             Self::call_stack_backpressure(
-                                &state,
+                                state,
                                 fn_context,
                                 callable_fns[handle_idx as usize],
                             )
@@ -429,7 +429,7 @@ impl<'a> BytecodeGenerator<'a> {
                 let unsatisfied_preconditions = summary
                     .preconditions
                     .iter()
-                    .filter(|precondition| !precondition(&state))
+                    .filter(|precondition| !precondition(state))
                     .count();
                 if (NEGATE_PRECONDITIONS
                     && !summary.preconditions.is_empty()
@@ -603,8 +603,18 @@ impl<'a> BytecodeGenerator<'a> {
         let mut bytecode: Vec<Bytecode> = Vec::new();
         let mut state = abstract_state_in.clone();
         // Generate block body
+        let mut instructions_generated = 0usize;
         loop {
-            let candidates = self.candidate_instructions(fn_context, state.clone(), module.clone());
+            // A block reaches its final state once the stack is empty. For some randomly generated
+            // (block, state) combinations the stack never drains within a reasonable number of
+            // steps (for example a non-droppable value gets stranded on the stack), and generation
+            // would otherwise grind toward the per-function instruction cap. Bound the block body
+            // and trigger a fresh module/bytecode generation when the bound is exceeded.
+            if instructions_generated >= BLOCK_INSTRUCTION_LIMIT {
+                return None;
+            }
+            instructions_generated += 1;
+            let candidates = self.candidate_instructions(fn_context, &state, module);
             if candidates.is_empty() {
                 warn!("No candidates found for state: [{:?}]", state);
                 break;
@@ -849,7 +859,17 @@ impl<'a> BytecodeGenerator<'a> {
         for fdef in fdefs.iter_mut() {
             if let Some(code) = &mut fdef.code {
                 let f_handle = &module.function_handles[fdef.function.0 as usize].clone();
-                let locals_sigs = module.signatures[code.locals.0 as usize].0.clone();
+                // In Move bytecode the local index space is `[parameters ++ declared locals]`:
+                // parameters occupy indices `0..params_len` and the declared locals (`code.locals`)
+                // follow. The abstract model must use the same combined list so that generated
+                // local indices and their types line up with what the verifier sees.
+                let params = module.signatures[f_handle.parameters.0 as usize].0.clone();
+                let declared_locals = module.signatures[code.locals.0 as usize].0.clone();
+                let locals_sigs: Vec<_> = params
+                    .iter()
+                    .chain(declared_locals.iter())
+                    .cloned()
+                    .collect();
                 let mut fn_context = FunctionGenerationContext::new(
                     fdef.function,
                     call_graph.max_calling_depth(fdef.function),

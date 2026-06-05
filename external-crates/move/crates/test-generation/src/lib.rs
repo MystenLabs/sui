@@ -223,13 +223,20 @@ pub enum Status {
     Valid,
 }
 
-fn bytecode_module(rng: &mut StdRng, module: CompiledModule) -> CompiledModule {
+/// Fill in the bodies of `module`'s functions. Generation can fail and be retried under certain
+/// circumstances; some skeletons cannot be filled at all, so retries are bounded and `None` is
+/// returned once the limit is reached so the caller can skip the skeleton.
+fn bytecode_module(rng: &mut StdRng, module: CompiledModule) -> Option<CompiledModule> {
     let mut generated_module = BytecodeGenerator::new(rng).generate_module(module.clone());
-    // Module generation can retry under certain circumstances
+    let mut retries = 0u64;
     while generated_module.is_none() {
+        if retries >= config::BYTECODE_GENERATION_RETRY_LIMIT {
+            return None;
+        }
+        retries += 1;
         generated_module = BytecodeGenerator::new(rng).generate_module(module.clone());
     }
-    generated_module.unwrap()
+    generated_module
 }
 
 pub fn module_frame_generation(
@@ -300,7 +307,13 @@ pub fn bytecode_generation(
     while let Ok(module) = receiver.recv() {
         let mut status = Status::VerificationFailure;
         debug!("Generating module");
-        let module = bytecode_module(&mut rng, module);
+        let Some(module) = bytecode_module(&mut rng, module) else {
+            // The skeleton could not be filled with a valid body within the retry budget; skip it.
+            // A status must still be sent so the stats collector accounts for every module sent.
+            debug!("Skipping module: could not generate a valid body");
+            stats.send(status).unwrap();
+            continue;
+        };
 
         debug!("Done...Running module on verifier...");
         let verified_module = match run_verifier(module.clone()) {
