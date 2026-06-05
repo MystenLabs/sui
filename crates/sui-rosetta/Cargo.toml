@@ -45,6 +45,7 @@ telemetry-subscribers.workspace = true
 enum_dispatch.workspace = true
 
 [dev-dependencies]
+sui-types = { workspace = true, features = ["testing"] }
 sui-swarm-config.workspace = true
 sui-sdk.workspace = true
 sui-move-build.workspace = true
