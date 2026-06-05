@@ -1468,7 +1468,10 @@ impl AuthorityState {
         // Register the digest in TLS so that a panic hook can identify which transaction caused
         // the crash. The guard clears the slot on drop and is !Sync to prevent accidental use
         // across threads in an async context.
-        let _crash_guard = crate::crash_recovery::register_executing_transaction(*tx_digest);
+        let _crash_guard = crate::crash_recovery::register_executing_transaction(
+            *tx_digest,
+            self.config.db_path.clone(),
+        );
 
         // Simtest-only: simulate a deterministic transaction-induced crash.
         //
