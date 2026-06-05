@@ -46,9 +46,7 @@ impl DoubleSpendTestSetup {
             .with_protocol_config(protocol_config)
             .build()
             .await;
-        authority_state
-            .insert_genesis_objects(&genesis_objects)
-            .await;
+        authority_state.insert_genesis_objects(&genesis_objects);
 
         let TestConsensusHandlerSetup {
             consensus_handler,
