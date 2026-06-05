@@ -37,6 +37,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[cfg(msim)]
+use std::{cell::RefCell, collections::HashMap};
+
 use sui_types::digests::TransactionDigest;
 use tracing::{error, info, warn};
 
@@ -53,6 +56,19 @@ thread_local! {
     /// We use `Cell<Option<TransactionDigest>>` so that the panic hook (which takes `&PanicInfo`)
     /// can read it without needing `&mut` access or a `RefCell` borrow.
     static EXECUTING_TX: Cell<Option<TransactionDigest>> = const { Cell::new(None) };
+
+    /// In simtests, msim's `run_all_ready` calls `take_hook()` at the start of every iteration,
+    /// which wipes the process-level panic hook chain.  By the time a validator processes a
+    /// transaction that was previously seen to crash the node, the hooks installed during startup
+    /// are gone, so the "crash-simulation" panic never triggers log-writing.
+    ///
+    /// As a fallback, we store each simulated node's db_path in this TLS map.  Thread-local
+    /// storage is unaffected by msim's hook management.  `ExecutingTransactionGuard::drop` consults
+    /// this map when it detects that it is being dropped during a panic and TLS still holds a
+    /// digest (meaning the process-level hook did not fire).
+    #[cfg(msim)]
+    static SIM_NODE_DB_PATHS: RefCell<HashMap<msim::task::NodeId, PathBuf>> =
+        RefCell::new(HashMap::new());
 }
 
 // ---------------------------------------------------------------------------
@@ -79,6 +95,38 @@ impl ExecutingTransactionGuard {
 
 impl Drop for ExecutingTransactionGuard {
     fn drop(&mut self) {
+        // In msim, the process-level panic hook is wiped by msim's `run_all_ready` at the start
+        // of each iteration, so it may not fire for the "crash-simulation" panic.  If we are
+        // being dropped during a panic and TLS still holds a digest (meaning the hook did not
+        // clear it), write the crash log now using the per-node path registered in
+        // SIM_NODE_DB_PATHS (TLS, unaffected by msim's hook management).
+        #[cfg(msim)]
+        if std::thread::panicking() {
+            if let Some(digest) = EXECUTING_TX.with(|slot| slot.get()) {
+                EXECUTING_TX.with(|slot| slot.set(None));
+                let node_id = sui_simulator::current_simnode_id();
+                let log_path = SIM_NODE_DB_PATHS.with(|map| {
+                    map.borrow()
+                        .get(&node_id)
+                        .map(|p| p.join(PANIC_TX_LOG_FILE))
+                });
+                if let Some(log_path) = log_path {
+                    match append_digest_to_log(&log_path, digest) {
+                        Ok(()) => eprintln!(
+                            "[crash-recovery] Panic while executing transaction {digest}; \
+                             recorded to {}",
+                            log_path.display()
+                        ),
+                        Err(e) => eprintln!(
+                            "[crash-recovery] Failed to write crashed transaction {digest} to \
+                             {}: {e}",
+                            log_path.display()
+                        ),
+                    }
+                }
+            }
+        }
+
         EXECUTING_TX.with(|slot| slot.set(None));
     }
 }
@@ -117,8 +165,21 @@ pub fn install_panic_hook(db_path: PathBuf) {
     //
     // Capturing the node ID at install time and gating on it at panic time ensures each hook
     // only claims panics that originated in its own node's execution context.
+    //
+    // IMPORTANT: the process-level hook is only a best-effort mechanism in simtests.  msim's
+    // `run_all_ready` calls `take_hook()` at the start of each iteration, wiping the entire hook
+    // chain.  Hooks installed during one iteration are gone in subsequent iterations.  As a
+    // result the process-level hook may not fire when the crash happens.  The real safety net is
+    // `ExecutingTransactionGuard::drop`, which consults `SIM_NODE_DB_PATHS` (TLS, unaffected by
+    // msim) when it detects it is being dropped during a panic.
     #[cfg(msim)]
-    let installing_node_id = sui_simulator::current_simnode_id();
+    let installing_node_id = {
+        let id = sui_simulator::current_simnode_id();
+        SIM_NODE_DB_PATHS.with(|map| {
+            map.borrow_mut().insert(id, db_path.clone());
+        });
+        id
+    };
 
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
