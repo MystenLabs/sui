@@ -1,6 +1,5 @@
 ---
 source: crates/sui/tests/shell_tests.rs
-assertion_line: 112
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
@@ -61,6 +60,7 @@ ecdsa_r1.json
 ecvrf.json
 ed25519.json
 event.json
+forwarding_address.json
 funds_accumulator.json
 groth16.json
 group_ops.json

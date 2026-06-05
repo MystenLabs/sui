@@ -7,6 +7,7 @@ use sui_config::NodeConfig;
 use sui_types::accumulator_root::get_accumulator_root_obj_initial_shared_version;
 use sui_types::address_alias::get_address_alias_state_obj_initial_shared_version;
 use sui_types::display_registry::get_display_registry_obj_initial_shared_version;
+use sui_types::forwarding_address_registry::get_forwarding_address_registry_obj_initial_shared_version;
 
 use std::fmt;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
@@ -37,6 +38,7 @@ pub trait EpochStartConfigTrait {
     fn coin_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
+    fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
 }
 
 // IMPORTANT: Assign explicit values to each variant to ensure that the values are stable.
@@ -159,6 +161,7 @@ pub enum EpochStartConfiguration {
     V8(EpochStartConfigurationV8),
     V9(EpochStartConfigurationV9),
     V10(EpochStartConfigurationV10),
+    V11(EpochStartConfigurationV11),
 }
 
 impl EpochStartConfiguration {
@@ -184,8 +187,10 @@ impl EpochStartConfiguration {
             get_display_registry_obj_initial_shared_version(object_store)?;
         let address_alias_state_obj_initial_shared_version =
             get_address_alias_state_obj_initial_shared_version(object_store)?;
+        let forwarding_address_registry_obj_initial_shared_version =
+            get_forwarding_address_registry_obj_initial_shared_version(object_store)?;
         let bridge_committee_initiated = is_bridge_committee_initiated(object_store)?;
-        Ok(Self::V10(EpochStartConfigurationV10 {
+        Ok(Self::V11(EpochStartConfigurationV11 {
             system_state,
             epoch_digest,
             flags: initial_epoch_flags,
@@ -198,6 +203,7 @@ impl EpochStartConfiguration {
             coin_registry_obj_initial_shared_version,
             display_registry_obj_initial_shared_version,
             address_alias_state_obj_initial_shared_version,
+            forwarding_address_registry_obj_initial_shared_version,
         }))
     }
 
@@ -205,7 +211,7 @@ impl EpochStartConfiguration {
         // We only need to implement this function for the latest version.
         // When a new version is introduced, this function should be updated.
         match self {
-            Self::V10(config) => Self::V10(EpochStartConfigurationV10 {
+            Self::V11(config) => Self::V11(EpochStartConfigurationV11 {
                 system_state: config.system_state.new_at_next_epoch_for_testing(),
                 epoch_digest: config.epoch_digest,
                 flags: config.flags.clone(),
@@ -224,6 +230,8 @@ impl EpochStartConfiguration {
                     .display_registry_obj_initial_shared_version,
                 address_alias_state_obj_initial_shared_version: config
                     .address_alias_state_obj_initial_shared_version,
+                forwarding_address_registry_obj_initial_shared_version: config
+                    .forwarding_address_registry_obj_initial_shared_version,
             }),
             _ => panic!(
                 "This function is only implemented for the latest version of EpochStartConfiguration"
@@ -366,6 +374,24 @@ pub struct EpochStartConfigurationV10 {
     address_alias_state_obj_initial_shared_version: Option<SequenceNumber>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct EpochStartConfigurationV11 {
+    system_state: EpochStartSystemState,
+    epoch_digest: CheckpointDigest,
+    flags: Vec<EpochFlag>,
+    /// Do the state objects exist at the beginning of the epoch?
+    authenticator_obj_initial_shared_version: Option<SequenceNumber>,
+    randomness_obj_initial_shared_version: Option<SequenceNumber>,
+    coin_deny_list_obj_initial_shared_version: Option<SequenceNumber>,
+    bridge_obj_initial_shared_version: Option<SequenceNumber>,
+    bridge_committee_initiated: bool,
+    accumulator_root_obj_initial_shared_version: Option<SequenceNumber>,
+    coin_registry_obj_initial_shared_version: Option<SequenceNumber>,
+    display_registry_obj_initial_shared_version: Option<SequenceNumber>,
+    address_alias_state_obj_initial_shared_version: Option<SequenceNumber>,
+    forwarding_address_registry_obj_initial_shared_version: Option<SequenceNumber>,
+}
+
 impl EpochStartConfigurationV1 {
     pub fn new(system_state: EpochStartSystemState, epoch_digest: CheckpointDigest) -> Self {
         Self {
@@ -423,6 +449,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV1 {
     fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
+
+    fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
 }
 
 impl EpochStartConfigTrait for EpochStartConfigurationV2 {
@@ -473,6 +503,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV2 {
     fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
+
+    fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
 }
 
 impl EpochStartConfigTrait for EpochStartConfigurationV3 {
@@ -520,6 +554,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV3 {
     }
 
     fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
+
+    fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -572,6 +610,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV4 {
     fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
+
+    fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
 }
 
 impl EpochStartConfigTrait for EpochStartConfigurationV5 {
@@ -619,6 +661,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV5 {
     }
 
     fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
+
+    fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -671,6 +717,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV6 {
     fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
+
+    fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
 }
 
 impl EpochStartConfigTrait for EpochStartConfigurationV7 {
@@ -719,6 +769,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV7 {
     }
 
     fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
+
+    fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -771,6 +825,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV8 {
     fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
+
+    fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
 }
 
 impl EpochStartConfigTrait for EpochStartConfigurationV9 {
@@ -819,6 +877,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV9 {
     }
 
     fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
+
+    fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -870,5 +932,63 @@ impl EpochStartConfigTrait for EpochStartConfigurationV10 {
 
     fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         self.address_alias_state_obj_initial_shared_version
+    }
+
+    fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
+}
+
+impl EpochStartConfigTrait for EpochStartConfigurationV11 {
+    fn epoch_digest(&self) -> CheckpointDigest {
+        self.epoch_digest
+    }
+
+    fn epoch_start_state(&self) -> &EpochStartSystemState {
+        &self.system_state
+    }
+
+    fn flags(&self) -> &[EpochFlag] {
+        &self.flags
+    }
+
+    fn authenticator_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.authenticator_obj_initial_shared_version
+    }
+
+    fn randomness_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.randomness_obj_initial_shared_version
+    }
+
+    fn coin_deny_list_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.coin_deny_list_obj_initial_shared_version
+    }
+
+    fn bridge_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.bridge_obj_initial_shared_version
+    }
+
+    fn bridge_committee_initiated(&self) -> bool {
+        self.bridge_committee_initiated
+    }
+
+    fn accumulator_root_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.accumulator_root_obj_initial_shared_version
+    }
+
+    fn coin_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.coin_registry_obj_initial_shared_version
+    }
+
+    fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.display_registry_obj_initial_shared_version
+    }
+
+    fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.address_alias_state_obj_initial_shared_version
+    }
+
+    fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.forwarding_address_registry_obj_initial_shared_version
     }
 }

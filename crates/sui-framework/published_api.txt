@@ -1363,6 +1363,9 @@ bridge
 address_alias_state
 	public(package) fun
 	0x2::object
+forwarding_address_registry
+	public(package) fun
+	0x2::object
 uid_as_inner
 	public fun
 	0x2::object
@@ -3019,6 +3022,12 @@ new_display
 create
 	fun
 	0x2::display_registry
+ForwardingAddressRegistry
+	public struct
+	0x2::forwarding_address
+create
+	fun
+	0x2::forwarding_address
 Curve
 	public struct
 	0x2::groth16

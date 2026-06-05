@@ -1026,6 +1026,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     address_aliases: bool,
 
+    // If true, create the forwarding address registry object in the change epoch transaction.
+    #[serde(skip_serializing_if = "is_false")]
+    create_forwarding_address_registry: bool,
+
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // TODO: remove old code and deprecate once in mainnet.
     #[serde(skip_serializing_if = "is_false")]
@@ -2754,6 +2758,10 @@ impl ProtocolConfig {
 
     pub fn fix_checkpoint_signature_mapping(&self) -> bool {
         self.feature_flags.fix_checkpoint_signature_mapping
+    }
+
+    pub fn create_forwarding_address_registry(&self) -> bool {
+        self.feature_flags.create_forwarding_address_registry
     }
 
     pub fn enable_object_funds_withdraw(&self) -> bool {
@@ -5002,6 +5010,9 @@ impl ProtocolConfig {
                 126 => {
                     cfg.feature_flags.early_exit_on_iffw = true;
                     cfg.feature_flags.always_advance_dkg_to_resolution = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.create_forwarding_address_registry = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -5318,6 +5329,10 @@ impl ProtocolConfig {
 
     pub fn set_address_aliases_for_testing(&mut self, val: bool) {
         self.feature_flags.address_aliases = val;
+    }
+
+    pub fn set_create_forwarding_address_registry_for_testing(&mut self, val: bool) {
+        self.feature_flags.create_forwarding_address_registry = val;
     }
 
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {

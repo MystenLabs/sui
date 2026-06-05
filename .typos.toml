@@ -1,7 +1,7 @@
 [default]
 extend-ignore-re = [
-  # Base58/64 encoded strings (44+ chars)
-  "[a-zA-Z0-9]{44,}",
+  # Base58/64 encoded strings (43+ chars; a base58-encoded 32-byte value is 43-44 chars)
+  "[a-zA-Z0-9]{43,}",
   # Hex strings that look like API keys or hashes (24+ hex chars)
   "[0-9a-f]{24,}",
   # Truncated object/address IDs like "0x4...dbe"
@@ -16,4 +16,6 @@ TGE = "TGE"
 TTO = "TTO"
 
 [files]
-extend-exclude = ["**/*.excalidraw"]
+# packages_compiled holds compiled Move bytecode blobs, which typos otherwise
+# mis-reads as text and flags random byte sequences as misspellings.
+extend-exclude = ["**/*.excalidraw", "**/packages_compiled/**"]
