@@ -50,6 +50,7 @@ ecdsa_r1.json
 ecvrf.json
 ed25519.json
 event.json
+forwarding_address.json
 funds_accumulator.json
 groth16.json
 group_ops.json
@@ -611,6 +612,11 @@ vector.json
       {
         "module_name": "display_registry",
         "datatype_name": "DisplayKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "forwarding_address",
+        "datatype_name": "ForwardingAddressRegistry",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
       {
