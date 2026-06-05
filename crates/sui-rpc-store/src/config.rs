@@ -88,7 +88,10 @@ pub struct ConsistencyConfig {
 ///
 /// The pruner advances the floor toward its target in chunks of at
 /// most `max_chunk_checkpoints` checkpoints, persisting the new
-/// watermark after each chunk so progress survives a restart.
+/// watermark after each chunk so progress survives a restart. Each
+/// tick advances the floor by at most `max_checkpoints_per_tick`
+/// checkpoints so a large backlog drains across many ticks rather
+/// than one long blocking pass.
 ///
 /// Only the historical CFs are pruned: the per-transaction
 /// (`transactions`, `effects`, `events`, `tx_metadata_by_seq`),
@@ -117,6 +120,17 @@ pub struct PrunerConfig {
     /// of effects rows scanned for object/digest deletes) when a
     /// whole epoch ages out at once.
     pub max_chunk_checkpoints: u64,
+
+    /// Maximum number of checkpoints whose history is pruned in a
+    /// single tick. Bounds the per-tick (blocking) work so that a
+    /// large backlog — for example when pruning is first enabled on
+    /// an old database — drains across many ticks rather than one
+    /// long pass that occupies a blocking thread for minutes. The
+    /// floor still converges to its retention target over subsequent
+    /// ticks; `interval_ms` and this bound together set the drain
+    /// rate. Must be at least `1`; the pruner refuses to start
+    /// otherwise, since a value of `0` would never make progress.
+    pub max_checkpoints_per_tick: u64,
 }
 
 impl Default for PrunerConfig {
@@ -125,6 +139,12 @@ impl Default for PrunerConfig {
             retention_epochs: 30,
             interval_ms: 300_000,
             max_chunk_checkpoints: 100,
+            // 100 chunks per tick at the default chunk size. Far above
+            // the steady-state rate at which a single epoch ages out,
+            // so retention is honored without intervention, while a
+            // first-run backlog on an old database is still bounded
+            // per tick rather than drained in one blocking pass.
+            max_checkpoints_per_tick: 10_000,
         }
     }
 }

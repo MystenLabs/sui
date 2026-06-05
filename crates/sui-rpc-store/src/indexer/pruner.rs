@@ -55,6 +55,13 @@
 //! snapshots, so the clamp keeps every live snapshot's advertised
 //! available range valid even under an aggressively small retention.
 //!
+//! Each tick advances the floor toward that target by at most
+//! `max_checkpoints_per_tick` checkpoints (in `max_chunk_checkpoints`
+//! atomic chunks), so a large backlog — for example when pruning is
+//! first enabled on an old database — drains across many ticks rather
+//! than one long blocking pass. The floor converges to the target
+//! over subsequent ticks.
+//!
 //! # Ordering and crash-safety
 //!
 //! Each chunk stages all of its deletes plus the new
@@ -158,6 +165,10 @@ pub fn start_pruner(
         config.retention_epochs >= 1,
         "PrunerConfig::retention_epochs must be >= 1; 0 would prune the current epoch",
     );
+    anyhow::ensure!(
+        config.max_checkpoints_per_tick >= 1,
+        "PrunerConfig::max_checkpoints_per_tick must be >= 1; 0 would never make progress",
+    );
 
     // Reconstruct typed handles once; they are cheap views over the
     // shared `Db` and are reused across every tick.
@@ -230,15 +241,22 @@ fn prune_once(
         return Ok(());
     }
 
+    // Bound the work done this tick: advance the floor by at most
+    // `max_checkpoints_per_tick` checkpoints so a large backlog drains
+    // across many ticks instead of one long blocking pass. The floor
+    // converges to `target_lo` over subsequent ticks.
+    let tick_target = target_lo.min(cursor.checkpoint_lo + config.max_checkpoints_per_tick);
+
     info!(
         from = cursor.checkpoint_lo,
-        to = target_lo,
+        to = tick_target,
+        target = target_lo,
         current_epoch,
         "rpc-store pruner: advancing floor"
     );
 
-    while cursor.checkpoint_lo < target_lo {
-        let chunk_ckpt_hi = (cursor.checkpoint_lo + config.max_chunk_checkpoints).min(target_lo);
+    while cursor.checkpoint_lo < tick_target {
+        let chunk_ckpt_hi = (cursor.checkpoint_lo + config.max_chunk_checkpoints).min(tick_target);
         cursor = prune_chunk(db, schema, cursor, chunk_ckpt_hi, metrics)?;
         metrics.checkpoint_lo.set(cursor.checkpoint_lo as i64);
         metrics.tx_seq_lo.set(cursor.tx_seq_lo as i64);
@@ -246,12 +264,19 @@ fn prune_once(
     }
 
     // The bitmap CFs' compaction filters only drop fully-pruned
-    // buckets on a compaction sweep; force one now that the floor has
-    // advanced so the eviction is prompt.
-    db.compact_range_cf(transaction_bitmap::NAME, None, None)
-        .context("Compacting transaction_bitmap after prune")?;
-    db.compact_range_cf(event_bitmap::NAME, None, None)
-        .context("Compacting event_bitmap after prune")?;
+    // buckets on a compaction sweep; force one once the floor has
+    // reached its retention target so the eviction is prompt. While a
+    // backlog is still draining over multiple ticks we skip the
+    // whole-CF compaction so it does not become the per-tick long
+    // pole; natural background compaction still applies the same
+    // filter opportunistically in the meantime, and the final
+    // catch-up tick forces a prompt sweep.
+    if cursor.checkpoint_lo >= target_lo {
+        db.compact_range_cf(transaction_bitmap::NAME, None, None)
+            .context("Compacting transaction_bitmap after prune")?;
+        db.compact_range_cf(event_bitmap::NAME, None, None)
+            .context("Compacting event_bitmap after prune")?;
+    }
 
     Ok(())
 }
@@ -682,6 +707,110 @@ mod tests {
             format!("{err:#}").contains("retention_epochs"),
             "expected a retention_epochs validation error, got: {err:#}",
         );
+    }
+
+    #[test]
+    fn start_pruner_rejects_zero_checkpoints_per_tick() {
+        let (_dir, db, _schema) = fresh_db();
+        let config = PrunerConfig {
+            max_checkpoints_per_tick: 0,
+            ..PrunerConfig::default()
+        };
+        let err = start_pruner(db, config, PrunerMetrics::new(None, &Registry::new())).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("max_checkpoints_per_tick"),
+            "expected a max_checkpoints_per_tick validation error, got: {err:#}",
+        );
+    }
+
+    /// A single `prune_once` pass advances the floor by at most
+    /// `max_checkpoints_per_tick` checkpoints, and successive passes
+    /// converge to the retention target. Five single-transaction
+    /// checkpoints are eligible (retention floor at checkpoint 5); a
+    /// per-tick budget of 2 must take three passes to drain them
+    /// (2, 4, 5), after which the floor sits at the target and further
+    /// passes are no-ops.
+    #[tokio::test]
+    async fn prune_once_advances_at_most_the_per_tick_budget() {
+        use std::sync::atomic::Ordering;
+
+        use crate::schema::pruning_watermark::tx_seq_floor;
+
+        // The floor is process-wide; snapshot and restore it so this
+        // test doesn't perturb others sharing the same atomic.
+        let baseline = tx_seq_floor().load(Ordering::Relaxed);
+
+        let (_dir, db, schema) = fresh_db();
+
+        // Five single-transaction checkpoints (seq 0..=4) from one
+        // accumulating builder, so `network_total_transactions` grows
+        // by one per checkpoint and the pruned tx range is contiguous.
+        let mut builder = TestCheckpointBuilder::new(0);
+        let mut checkpoints = Vec::new();
+        for i in 0..5u64 {
+            builder = builder
+                .start_transaction(0)
+                .create_owned_object(i)
+                .finish_transaction();
+            checkpoints.push(Arc::new(builder.build_checkpoint()));
+        }
+        for cp in &checkpoints {
+            seed(&db, &schema, cp).await;
+        }
+
+        // Drive the target floor: the committed epoch is 2, and with
+        // `retention_epochs = 1` the oldest retained epoch is 2, whose
+        // start checkpoint (5) is the target floor — so checkpoints
+        // [0, 5) are eligible.
+        let framework = FrameworkSchema::new(db.clone());
+        let mut batch = db.batch();
+        batch
+            .put(
+                &framework.watermarks,
+                &PipelineTaskKey::new("p"),
+                &Watermark {
+                    epoch_hi_inclusive: 2,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        batch
+            .merge(&schema.epochs, &U64Be(2), &epochs::start(1, 1, 0, 5, None))
+            .unwrap();
+        batch.commit().unwrap();
+
+        let config = PrunerConfig {
+            retention_epochs: 1,
+            interval_ms: 1,
+            max_chunk_checkpoints: 2,
+            max_checkpoints_per_tick: 2,
+        };
+        let metrics = PrunerMetrics::new(None, &Registry::new());
+
+        let floor = |schema: &RpcStoreSchema| {
+            schema
+                .get_pruning_watermarks()
+                .unwrap()
+                .unwrap_or_default()
+                .checkpoint_lo
+        };
+
+        // Each pass advances by at most the per-tick budget of 2.
+        prune_once(&db, &schema, &config, &metrics).unwrap();
+        assert_eq!(floor(&schema), 2, "first tick advances by the budget");
+        prune_once(&db, &schema, &config, &metrics).unwrap();
+        assert_eq!(floor(&schema), 4, "second tick advances by the budget");
+        prune_once(&db, &schema, &config, &metrics).unwrap();
+        assert_eq!(floor(&schema), 5, "third tick reaches the target");
+
+        // Caught up: history below the floor is gone, the live target
+        // boundary is retained, and another pass is a no-op.
+        assert!(schema.get_effects(4).unwrap().is_none());
+        assert!(schema.get_checkpoint_summary(4).unwrap().is_none());
+        prune_once(&db, &schema, &config, &metrics).unwrap();
+        assert_eq!(floor(&schema), 5, "a pass at the target is a no-op");
+
+        tx_seq_floor().store(baseline, Ordering::Relaxed);
     }
 
     /// End-to-end chunk prune: one checkpoint where tx0 creates an
