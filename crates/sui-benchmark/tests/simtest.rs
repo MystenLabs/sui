@@ -405,6 +405,14 @@ mod test {
     async fn test_simulated_load_reconfig_with_crashes_and_delays() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
+        // Use a short DKG timeout so that if DKG is prevented from completing (e.g. by the
+        // rb-dkg fail point below), DKG failure is declared quickly rather than at round 3000.
+        // This ensures the epoch transition completes within the surfer's 120s window.
+        let _dkg_timeout_guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_random_beacon_dkg_timeout_round_for_testing(50);
+            config
+        });
+
         register_fail_point_if("select-random-cache", || true);
 
         let test_cluster = Arc::new(
