@@ -781,6 +781,7 @@ impl SuiNode {
             committee_store.clone(),
             index_store.clone(),
             rpc_index,
+            None,
             checkpoint_store.clone(),
             &prometheus_registry,
             genesis.objects(),
