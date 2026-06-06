@@ -14569,6 +14569,7 @@ dependencies = [
  "sui-execution",
  "sui-framework",
  "sui-genesis-builder",
+ "sui-indexer-alt-framework",
  "sui-inverted-index",
  "sui-json-rpc-types",
  "sui-macros",
