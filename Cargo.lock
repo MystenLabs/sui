@@ -14578,6 +14578,7 @@ dependencies = [
  "sui-network",
  "sui-protocol-config",
  "sui-rpc",
+ "sui-rpc-store",
  "sui-simulator",
  "sui-storage",
  "sui-swarm-config",
