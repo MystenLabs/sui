@@ -644,6 +644,33 @@ mod tests {
         );
     }
 
+    /// `embedded` registers exactly the ten embedded-cohort
+    /// pipelines (five live + five history) and none of the
+    /// deactivated raw-chain-data ones, so the synchronizer's
+    /// snapshot cohort covers exactly those.
+    #[tokio::test]
+    async fn embedded_registers_only_cohort_pipelines() {
+        let indexer = build_indexer(PipelineLayer::embedded()).await;
+        let names: std::collections::BTreeSet<_> = indexer.pipelines().collect();
+        assert_eq!(
+            names,
+            std::collections::BTreeSet::from([
+                // Live cohort.
+                "live_objects",
+                "object_by_owner",
+                "object_by_type",
+                "balance",
+                "package_versions",
+                // History cohort.
+                "epochs",
+                "tx_seq_by_digest",
+                "tx_metadata_by_seq",
+                "transaction_bitmap",
+                "event_bitmap",
+            ])
+        );
+    }
+
     /// `all` registers every pipeline (raw chain data + indexes).
     #[tokio::test]
     async fn all_registers_every_pipeline() {

@@ -13,9 +13,9 @@
 //! registered (with the supplied committer overrides), `None` means
 //! it is skipped. The standalone binary populates the layer from
 //! its TOML config; the embedded-fullnode caller builds it
-//! programmatically via [`PipelineLayer::indexes_only`] so the raw
-//! chain CFs (populated by the fullnode itself) are not double-
-//! written by this indexer.
+//! programmatically via [`PipelineLayer::embedded`] so the raw
+//! chain CFs (served by the fullnode's perpetual store) are not
+//! double-written by this indexer.
 
 use std::time::Duration;
 
@@ -249,17 +249,61 @@ impl PipelineLayer {
         }
     }
 
-    /// Only the derived-index pipelines enabled. The raw chain CFs
-    /// (`epochs`, `checkpoint_*`, `transactions`, `effects`,
-    /// `events`, `objects`, `live_objects`, `tx_*`) are left `None`
-    /// because, in the embedded-fullnode case, the fullnode
-    /// populates those CFs through its own write path.
+    /// Only the live-object-derived index pipelines enabled
+    /// (`object_by_owner`, `object_by_type`, `balance`,
+    /// `package_versions`, and the two ledger-history bitmaps). The
+    /// raw chain CFs are left `None`. This is the minimal index set;
+    /// the embedded fullnode uses [`Self::embedded`], which also
+    /// enables the pipelines needed for full ledger-history parity.
     pub fn indexes_only() -> Self {
         Self {
             object_by_owner: Some(CommitterLayer::default()),
             object_by_type: Some(CommitterLayer::default()),
             balance: Some(CommitterLayer::default()),
             package_versions: Some(CommitterLayer::default()),
+            transaction_bitmap: Some(CommitterLayer::default()),
+            event_bitmap: Some(CommitterLayer::default()),
+            ..Self::default()
+        }
+    }
+
+    /// The embedded-fullnode cohort: every pipeline this indexer owns
+    /// when it runs inside a Sui fullnode beside the validator's
+    /// perpetual store.
+    ///
+    /// The raw chain-data CFs (`transactions`, `effects`, `events`,
+    /// `objects`, `checkpoint_summary`, `checkpoint_contents`,
+    /// `checkpoint_seq_by_digest`) are left `None`: the perpetual
+    /// store already holds that data and serves it directly, so this
+    /// indexer must not double-write it.
+    ///
+    /// The enabled pipelines form two cohorts. The
+    /// [`Synchronizer`](sui_consistent_store::Synchronizer)
+    /// distinguishes them by their persisted watermark at startup,
+    /// not by this layer, so both are simply registered here:
+    ///
+    /// - **Live cohort** — restored to the fullnode's tip and
+    ///   following live from there: `live_objects`, `object_by_owner`,
+    ///   `object_by_type`, `balance`, `package_versions`.
+    /// - **History cohort** — seeded to the lowest available
+    ///   checkpoint and backfilling upward: `epochs`,
+    ///   `tx_seq_by_digest`, `tx_metadata_by_seq`,
+    ///   `transaction_bitmap`, `event_bitmap`. These back the
+    ///   ledger-history list APIs (the bitmaps plus the `tx_seq` <->
+    ///   digest maps needed to interpret bitmap results) and the
+    ///   per-epoch protocol/committee reads (`epochs`).
+    pub fn embedded() -> Self {
+        Self {
+            // Live cohort: restored to the tip, follows live.
+            live_objects: Some(CommitterLayer::default()),
+            object_by_owner: Some(CommitterLayer::default()),
+            object_by_type: Some(CommitterLayer::default()),
+            balance: Some(CommitterLayer::default()),
+            package_versions: Some(CommitterLayer::default()),
+            // History cohort: seeded to L, backfills upward.
+            epochs: Some(CommitterLayer::default()),
+            tx_seq_by_digest: Some(CommitterLayer::default()),
+            tx_metadata_by_seq: Some(CommitterLayer::default()),
             transaction_bitmap: Some(CommitterLayer::default()),
             event_bitmap: Some(CommitterLayer::default()),
             ..Self::default()
@@ -362,6 +406,31 @@ mod tests {
         assert!(layer.events.is_none());
         assert!(layer.objects.is_none());
         assert!(layer.live_objects.is_none());
+    }
+
+    #[test]
+    fn embedded_enables_only_cohort_pipelines() {
+        let layer = PipelineLayer::embedded();
+        // Live cohort.
+        assert!(layer.live_objects.is_some());
+        assert!(layer.object_by_owner.is_some());
+        assert!(layer.object_by_type.is_some());
+        assert!(layer.balance.is_some());
+        assert!(layer.package_versions.is_some());
+        // History cohort.
+        assert!(layer.epochs.is_some());
+        assert!(layer.tx_seq_by_digest.is_some());
+        assert!(layer.tx_metadata_by_seq.is_some());
+        assert!(layer.transaction_bitmap.is_some());
+        assert!(layer.event_bitmap.is_some());
+        // Deactivated: served directly by the perpetual store.
+        assert!(layer.objects.is_none());
+        assert!(layer.transactions.is_none());
+        assert!(layer.effects.is_none());
+        assert!(layer.events.is_none());
+        assert!(layer.checkpoint_summary.is_none());
+        assert!(layer.checkpoint_contents.is_none());
+        assert!(layer.checkpoint_seq_by_digest.is_none());
     }
 
     #[test]
