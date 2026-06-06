@@ -18,9 +18,18 @@ Branch `embed-rpc-store`. Completed pieces and their commits (newest last):
 - `b273008626` 1B-ii broadcast streaming client.
 - `91c1920731` 1C-i `Db::clear_all`.
 - `106b35e882` 1C-iii Synchronizer dynamic-membership snapshot coordinator.
+- `0d96e830e2` 2A embedded cohort `PipelineLayer::embedded()` constructor.
 
 `git log --oneline main..HEAD` shows the series. Each commit is self-contained
 with tests + clippy + fmt green.
+
+The dynamic-membership coordinator was exercised live: a standalone
+`sui-rpc-node run` caught up at ~448 ckpt/s (range 247-639 over a 2-min
+window), with the coordinator keeping pace with ingestion (committed frontier
+~= ingested frontier; no barrier starvation). Scraper saved at
+`consistent-store-testbed/scrape_rate.py`. Note: standalone keeps every
+pipeline a cohort member, so late-join itself is only exercised once the
+embedded cohort split lands (2B watermark seeding).
 
 **Phase 1 is complete.** The two open questions were resolved: implement behind
 unit tests (not a spike), and the concurrency primitive is a `std::sync::Mutex`
@@ -30,10 +39,18 @@ frontier (single source of truth + lost-wakeup-free wakeup). The fixed-size
 the frontier; a member whose channel closes on shutdown departs so peers do not
 deadlock. See `SnapshotCoordinator` in `synchronizer.rs`.
 
-**Next up: Phase 2 (2A embedded cohort wiring, then 2B restore + watermark
-seeding).** Start at 2A: verify/extend `PipelineLayer` (`config.rs`) for the
-cohort split and confirm `Indexer::from_store` registers only the active cohort
-so the snapshot barrier covers exactly those pipelines.
+**Next up: 2B (embedded restore + watermark seeding).** 2A is done
+(`0d96e830e2`): `PipelineLayer::embedded()` enables the ten cohort pipelines,
+and the existing `add_pipelines` -> `register_pipeline` path already scopes the
+snapshot cohort to exactly the registered pipelines (verified by test). 2B
+needs, in `sui-rpc-store` (no `sui-core` dep): a restore entry point that takes
+a `RestoreSource` trait object (so `sui-node` can inject
+`PerpetualStoreRestoreSource`), bulk-loads the live cohort, writes the partial
+current-epoch seed, then seeds watermarks (live -> `T`, history -> `L`) via a
+direct `Batch` on `db.framework().watermarks` (1C-ii). Also audit the `epochs`
+proto/merge so an unset `start_checkpoint` is presence-tracked, not a `0`
+sentinel. Likely also add cohort-enumeration helpers (which pipelines are live
+vs history) so `sui-node` doesn't hardcode the split.
 
 **Workflow the user asked for:** one commit per sub-phase (1A, 1B, ...); ensure
 `cargo nextest run -p <crate> <filter>`, `cargo xclippy` (from the crate dir),
@@ -196,13 +213,21 @@ store; `live_objects` is kept in sync but not on the read hot path.
 
 ### Phase 2 -- indexer embedding glue (`sui-rpc-store`)
 
-- [ ] **2A. Embedded cohort wiring.** Verify/extend `PipelineLayer`
-  (`config.rs`) to express the cohort split (live + history active; raw chain
-  data deactivated); confirm `indexes_only()` covers bitmaps + `tx_seq` maps +
-  `epochs`, or add an `embedded()` constructor. Ensure `Indexer::from_store`
-  (`indexer/mod.rs`) registers only the active cohort so the snapshot barrier
-  covers exactly those pipelines, and accepts the 1A ingestion client + 1B
-  streaming client.
+- [x] **2A. Embedded cohort wiring** (`0d96e830e2`). Added
+  `PipelineLayer::embedded()` (`config.rs`) enabling exactly the ten cohort
+  pipelines -- live: `live_objects`, `object_by_owner`, `object_by_type`,
+  `balance`, `package_versions`; history: `epochs`, `tx_seq_by_digest`,
+  `tx_metadata_by_seq`, `transaction_bitmap`, `event_bitmap` -- and leaving the
+  seven raw-chain-data CFs `None`. `indexes_only()` (six pipelines) was too
+  narrow (no `live_objects`, `epochs`, or `tx_seq`/`tx_metadata` maps), so a new
+  constructor was the right call rather than widening it. No change needed to
+  `Indexer::from_store` / `add_pipelines`: they already register only `Some(_)`
+  pipelines with both the framework indexer and the synchronizer
+  (`register_pipeline`), and `from_store` already accepts the 1A `IngestionClient`
+  (via `from_trait`) + optional 1B `BoxedStreamingClient`. The live/history
+  split is made by the coordinator from each pipeline's watermark at startup, not
+  by the layer. 2 tests added (constructor set; `add_pipelines` registers exactly
+  the ten); all 176 crate tests + clippy + fmt green.
 
 - [ ] **2B. Embedded restore + watermark seeding.** Restore entry over
   `PerpetualStoreRestoreSource` (`sui-core`, exists) to bulk-load the live
