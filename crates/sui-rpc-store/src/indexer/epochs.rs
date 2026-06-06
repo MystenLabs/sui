@@ -141,7 +141,7 @@ impl sequential::Handler for Epochs {
                             *protocol_version,
                             *reference_gas_price,
                             *start_timestamp_ms,
-                            *start_checkpoint,
+                            Some(*start_checkpoint),
                             system_state_bcs.clone(),
                         ),
                     )?;

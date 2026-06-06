@@ -23,7 +23,7 @@ fn seed_reconstructs_epoch_row_from_system_state() {
     // The restore anchor's checkpoint + 1 is the seeded epoch's first
     // checkpoint; use an arbitrary value to assert it round-trips.
     let mut batch = db.batch();
-    let epoch = seed_current_epoch_start(&schema, sim.store(), 42, &mut batch)
+    let epoch = seed_current_epoch_start(&schema, sim.store(), Some(42), &mut batch)
         .expect("seed from the genesis system state");
     batch.commit().unwrap();
 

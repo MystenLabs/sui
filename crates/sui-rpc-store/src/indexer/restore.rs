@@ -217,7 +217,7 @@ pub fn floor_unrestored_pipelines(
     if layer.objects {
         let reader = RpcStoreReader::new(db.clone(), schema.clone());
         let start_checkpoint = target_watermark.checkpoint_hi_inclusive.saturating_add(1);
-        match seed_current_epoch_start(&schema, &reader, start_checkpoint, &mut batch) {
+        match seed_current_epoch_start(&schema, &reader, Some(start_checkpoint), &mut batch) {
             Ok(epoch) => info!(
                 epoch,
                 start_checkpoint, "seeded start record for restore epoch"
@@ -254,15 +254,21 @@ pub fn floor_unrestored_pipelines(
 /// restored object set: protocol version, reference gas price, and
 /// epoch-start timestamp come from the `SuiSystemState`, the BCS of
 /// which is stored so `get_committee` and Move type-layout resolution
-/// work too; `start_checkpoint` is supplied by the caller (the
-/// restore anchor's checkpoint + 1).
+/// work too.
+///
+/// `start_checkpoint` is supplied by the caller and may be `None`.
+/// The formal-snapshot restore lands at an epoch boundary, so it
+/// passes `Some(anchor + 1)`. The embedded-fullnode restore lands at
+/// a *mid-epoch* tip, so the epoch's first checkpoint is unknown and
+/// it passes `None`; the upward backfill fills `start_checkpoint` in
+/// later if that boundary falls within the available range.
 ///
 /// Stages a merge into `batch`; the caller commits. Returns the epoch
 /// that was seeded.
 pub fn seed_current_epoch_start(
     schema: &RpcStoreSchema,
     objects: &dyn ObjectStore,
-    start_checkpoint: u64,
+    start_checkpoint: Option<u64>,
     batch: &mut Batch,
 ) -> anyhow::Result<u64> {
     let system_state =

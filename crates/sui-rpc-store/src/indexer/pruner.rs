@@ -560,7 +560,7 @@ mod tests {
             .merge(
                 &schema.epochs,
                 &U64Be(3),
-                &epochs::start(1, 1, 0, 300, None),
+                &epochs::start(1, 1, 0, Some(300), None),
             )
             .unwrap();
         batch.commit().unwrap();
@@ -796,7 +796,11 @@ mod tests {
             )
             .unwrap();
         batch
-            .merge(&schema.epochs, &U64Be(2), &epochs::start(1, 1, 0, 5, None))
+            .merge(
+                &schema.epochs,
+                &U64Be(2),
+                &epochs::start(1, 1, 0, Some(5), None),
+            )
             .unwrap();
         batch.commit().unwrap();
 

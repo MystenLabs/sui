@@ -39,18 +39,26 @@ pub fn options(resolver: &sui_consistent_store::CfOptionsResolver) -> rocksdb::O
 /// fields. Indexer pipelines that observe an epoch's first
 /// checkpoint stage this as a merge operand against the epoch's
 /// key.
+///
+/// `start_checkpoint` is itself optional: the embedded fullnode
+/// seeds the current epoch's row from a *mid-epoch* `SuiSystemState`
+/// at restore time and cannot know the epoch's first checkpoint
+/// (it precedes the restore tip). Passing `None` leaves the field
+/// unset, and because the merge operator only copies fields that
+/// are present, a later full start record from the upward backfill
+/// fills it in without either operand clobbering the other.
 pub fn start(
     protocol_version: u64,
     reference_gas_price: u64,
     start_timestamp_ms: u64,
-    start_checkpoint: u64,
+    start_checkpoint: Option<u64>,
     system_state_bcs: Option<Vec<u8>>,
 ) -> Value {
     Protobuf(StoredEpoch {
         protocol_version: Some(protocol_version),
         reference_gas_price: Some(reference_gas_price),
         start_timestamp_ms: Some(start_timestamp_ms),
-        start_checkpoint: Some(start_checkpoint),
+        start_checkpoint,
         system_state_bcs: system_state_bcs.map(Into::into),
         ..StoredEpoch::default()
     })
@@ -191,7 +199,11 @@ mod tests {
         let (_dir, db, schema) = fresh_db();
         let mut batch = db.batch();
         batch
-            .merge(&schema.epochs, &U64Be(42), &start(73, 1000, 111, 500, None))
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &start(73, 1000, 111, Some(500), None),
+            )
             .unwrap();
         batch
             .merge(&schema.epochs, &U64Be(42), &end(999, 600))
@@ -222,7 +234,11 @@ mod tests {
             .merge(&schema.epochs, &U64Be(42), &end(999, 600))
             .unwrap();
         batch
-            .merge(&schema.epochs, &U64Be(42), &start(73, 1000, 111, 500, None))
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &start(73, 1000, 111, Some(500), None),
+            )
             .unwrap();
         batch.commit().unwrap();
 
@@ -238,10 +254,18 @@ mod tests {
         let (_dir, db, schema) = fresh_db();
         let mut batch = db.batch();
         batch
-            .merge(&schema.epochs, &U64Be(42), &start(73, 1000, 111, 500, None))
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &start(73, 1000, 111, Some(500), None),
+            )
             .unwrap();
         batch
-            .merge(&schema.epochs, &U64Be(42), &start(74, 1500, 222, 501, None))
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &start(74, 1500, 222, Some(501), None),
+            )
             .unwrap();
         batch.commit().unwrap();
 
@@ -278,12 +302,73 @@ mod tests {
         let (_dir, db, schema) = fresh_db();
         let mut batch = db.batch();
         batch
-            .merge(&schema.epochs, &U64Be(42), &start(73, 1000, 111, 500, None))
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &start(73, 1000, 111, Some(500), None),
+            )
             .unwrap();
         batch.commit().unwrap();
 
         let info = schema.get_epoch(42).unwrap().expect("epoch present");
         assert_eq!(info.end_timestamp_ms, None);
         assert_eq!(info.end_checkpoint, None);
+    }
+
+    #[test]
+    fn partial_seed_then_backfill_fills_start_checkpoint() {
+        // The embedded restore seeds a partial start record from the
+        // mid-epoch system state with no `start_checkpoint`; a later
+        // full start record from the upward backfill supplies it. The
+        // merge must combine them rather than clobber.
+        let (_dir, db, schema) = fresh_db();
+        let mut batch = db.batch();
+        batch
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &start(73, 1000, 111, None, None),
+            )
+            .unwrap();
+        batch
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &start(73, 1000, 111, Some(500), None),
+            )
+            .unwrap();
+        batch.commit().unwrap();
+
+        let info = schema.get_epoch(42).unwrap().expect("epoch present");
+        assert_eq!(info.start_checkpoint, Some(500));
+        assert_eq!(info.protocol_version, Some(73));
+    }
+
+    #[test]
+    fn partial_seed_does_not_clobber_known_start_checkpoint() {
+        // Reverse order: a full start record then a partial re-seed
+        // (no `start_checkpoint`) must NOT erase the known value. This
+        // is the crux of the presence-tracked merge — a `None` operand
+        // leaves the field untouched.
+        let (_dir, db, schema) = fresh_db();
+        let mut batch = db.batch();
+        batch
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &start(73, 1000, 111, Some(500), None),
+            )
+            .unwrap();
+        batch
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &start(73, 1000, 111, None, None),
+            )
+            .unwrap();
+        batch.commit().unwrap();
+
+        let info = schema.get_epoch(42).unwrap().expect("epoch present");
+        assert_eq!(info.start_checkpoint, Some(500));
     }
 }
