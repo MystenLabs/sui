@@ -277,7 +277,10 @@ impl Db {
             ));
         }
         if !cfs.iter().any(|cf| cf.name == CHAIN_ID_CF) {
-            cfs.push(CfDescriptor::new(CHAIN_ID_CF, resolver.options(CHAIN_ID_CF)));
+            cfs.push(CfDescriptor::new(
+                CHAIN_ID_CF,
+                resolver.options(CHAIN_ID_CF),
+            ));
         }
 
         let cf_names: Vec<&'static str> = cfs.iter().map(|cf| cf.name).collect();

@@ -390,7 +390,9 @@ impl DbWideConfig {
             parallelism: self.parallelism.or(base.parallelism),
             max_background_jobs: self.max_background_jobs.or(base.max_background_jobs),
             max_open_files: self.max_open_files.or(base.max_open_files),
-            db_write_buffer_size_mb: self.db_write_buffer_size_mb.or(base.db_write_buffer_size_mb),
+            db_write_buffer_size_mb: self
+                .db_write_buffer_size_mb
+                .or(base.db_write_buffer_size_mb),
             max_total_wal_size_mb: self.max_total_wal_size_mb.or(base.max_total_wal_size_mb),
             enable_pipelined_write: self.enable_pipelined_write.or(base.enable_pipelined_write),
             table_cache_num_shard_bits: self
