@@ -42,31 +42,30 @@ frontier (single source of truth + lost-wakeup-free wakeup). The fixed-size
 the frontier; a member whose channel closes on shutdown departs so peers do not
 deadlock. See `SnapshotCoordinator` in `synchronizer.rs`.
 
-**Next up: Phase 3B (startup orchestration in `sui-node` / `sui-core`).** Phase
-2 and Phase 3A (config flag), 3C (read-path wrapper), and 3D (pruner
-integration) are done; 3B is the only remaining Phase 3 piece. The
-`sui-rpc-store` building blocks the embedded path needs all exist and stay free
-of any `sui-core` dependency:
+**Next up: Phase 4 (tests).** Phase 3 is complete -- 3A (config flag), 3C
+(read-path wrapper), 3D (pruner integration), and 3B (startup orchestration) are
+all done and committed (compile + clippy + fmt + unit tests green). The embedded
+path is wired end to end behind `use_experimental_rpc_store`, but has NOT been
+exercised at runtime yet. Phase 4 wires the flag into `TestClusterBuilder` /
+`FullnodeConfigBuilder` so the existing e2e RPC suites run against the new
+backend (4A), plus focused tests (4B). That is the first real validation of the
+3B orchestration (restore / seed / tip indexing / read path) on a live cluster.
 
-- `restore_indexes(db, schema, source, config, RestoreLayer::indexes_only(),
-  metrics)` -- generic over `RestoreSource`, so `sui-node` injects
-  `PerpetualStoreRestoreSource`. Bulk-loads the live cohort to `T`.
-- `seed_history_cohort(db, schema, Watermark::for_checkpoint(L), chain_id,
-  Some(&perpetual_store as &dyn ObjectStore))` -- seeds the history cohort to
-  `L` + the partial epoch start record.
-- `PipelineLayer::embedded()` + `Indexer::from_store(...)` +
-  `add_pipelines(PipelineLayer::embedded(), committer)` + `run()`.
-
-Phase 3 order (per landing order): 3A (config flag, trivial) -> 3C (read-path
-wrapper) -> 3D (pruner integration) -> 3B (the startup orchestration that wires
-restore_indexes + seed_history_cohort + the 1A/1B clients together). Note on the
-history seed point: `seed_history_cohort` treats the seed watermark as
-"committed through", so the backfill resumes at -- and the pruning floor sits at
--- `seed.checkpoint_hi_inclusive + 1`. To make checkpoint `L` the lowest
-available, `sui-node` passes the watermark for `L - 1` (with `tx_hi` = tx count
-through `L - 1`, read from the perpetual store's checkpoint `L - 1`). Still
-deferred to Phase 5: advertising the *upper* bound of ledger-history
-availability while the backfill is mid-flight.
+The 3B orchestrator lives in `sui-core::rpc_store_embed` (not `sui-node`, which
+lacks the rpc-store / consistent-store / framework deps). It composes the
+already-landed building blocks: `restore_indexes(.., RestoreLayer::indexes_only(),
+..)` (live cohort -> `T`), `seed_history_cohort(.., Watermark for L-1, ..,
+Some(&perpetual as &dyn ObjectStore))` (history cohort -> `L-1`, partial epoch
+seed), and `Indexer::from_store(..)` + `add_pipelines(PipelineLayer::embedded(),
+..)` + `run()` wired to the 1A ingestion + 1B broadcast clients. Note on the
+history seed point: `seed_history_cohort` treats the seed watermark as "committed
+through", so the backfill resumes at -- and the pruning floor sits at --
+`seed.checkpoint_hi_inclusive + 1`. To make checkpoint `L` the lowest available,
+`sui-node` passes the watermark for `L - 1` (with `tx_hi` = tx count through
+`L - 1`, read from checkpoint `L - 1`'s summary). When `L == 0` the history
+cohort is left unseeded so it backfills from genesis. Still deferred to Phase 5:
+advertising the *upper* bound of ledger-history availability while the backfill
+is mid-flight.
 
 **Workflow the user asked for:** one commit per sub-phase (1A, 1B, ...); ensure
 `cargo nextest run -p <crate> <filter>`, `cargo xclippy` (from the crate dir),
@@ -286,17 +285,39 @@ store; `live_objects` is kept in sync but not on the read hot path.
   with accessor, default `false`. Selecting it builds the new backend and
   skips the old `rpc_index`.
 
-- [ ] **3B. Startup orchestration** (`sui-node/src/lib.rs`, near the rpc_index
-  creation ~679-696). When the flag is on:
-  1. Open the rpc-store `Db` under `db_path()`.
-  2. Compute the perpetual range: `L = max(checkpoint_store_pruned,
-     object_store_pruned) + 1`, `T = highest_executed`.
-  3. Read rpc-store per-pipeline watermarks and the `__chain_id`.
-  4. Branch: **in range** -> open, no blocking, catch up forward;
-     **uninitialized / behind** -> blocking restore + seed; **initialized but
-     out of range** -> `clear_user_data` then restore + seed.
-  5. Build `Indexer::from_store(...)` wired to 1A + 1B; spawn its `Service`.
-  6. Do not build the old `rpc_index` when on.
+- [x] **3B. Startup orchestration** (`c351846a01`, `6dfed12216`, `d0e1117b37`).
+  The orchestrator lives in `sui-core` (`rpc_store_embed::EmbeddedRpcStore`), not
+  `sui-node`, because `sui-node` lacks the `sui-rpc-store` /
+  `sui-consistent-store` / framework deps that `sui-core` already has; `sui-node`
+  only handles `sui-core` types (no new deps). `EmbeddedRpcStore::bootstrap`:
+  1. Opens the rpc-store `Db` under `db_path()/rpc_store`.
+  2. Computes `L = max(object_pruned, checkpoint_pruned) + 1` (0 if nothing
+     pruned) and `T = highest_executed` (`None` on a fresh node's first boot --
+     genesis is executed later in startup).
+  3. Reads the per-pipeline watermarks (per cohort) and the `__chain_id`.
+  4. The pure `decide` helper branches: **resume** when both cohorts resume `>=
+     L`; **seed history only** when live is in range but history is below `L`;
+     **restore** (clear first on wrong-chain or live-out-of-range) otherwise.
+     Live cohort restores to `T` (`restore_indexes` + blocking `Service::join`);
+     history seeds to `L - 1` (`seed_history_cohort`), or is left unseeded when
+     `L == 0` so it backfills from genesis (an unwatermarked pipeline resumes at
+     `first_checkpoint = 0`); a fresh node (`T == None`) skips the bulk-load and
+     builds both cohorts from genesis. `decide` has unit-test coverage of the
+     in-range / uninitialized / out-of-range / wrong-chain / genesis /
+     history-behind-floor matrix (the 4B startup-decision-matrix test).
+  5. `spawn_indexer` builds `Indexer::from_store(...)` wired to the 1A ingestion
+     client + 1B broadcast streaming client (when the executor's broadcast
+     sender exists) and retains the resulting `Service` on the handle.
+  6. `sui-node` wiring (`d0e1117b37`): `start_async` bootstraps the embedded
+     store in place of `rpc_index` (mutually exclusive), passes its store handle
+     to `AuthorityState::new` (-> pruner, flipping the 3D `None` to `Some`), its
+     reader to `build_http_servers` (-> `RpcStoreReadStore` read path), and spawns
+     the tip indexer after `build_http_servers` returns (so the broadcast sender
+     exists), holding the handle on `SuiNode` for the node's lifetime.
+
+  Compiles + clippy + fmt clean; `decide` unit tests green. NOT yet validated at
+  runtime end to end -- that is Phase 4 (test wiring + e2e suites against the new
+  backend).
 
 - [x] **3C. Read-path wrapper** (`3141224969`). Added `RpcStoreReadStore`
   (`sui-core`, sibling to `RestReadStore`) that serves objects / raw data /
