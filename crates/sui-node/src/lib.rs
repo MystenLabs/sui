@@ -2652,8 +2652,12 @@ async fn build_http_servers(
 
     router = router.merge(json_rpc_router);
 
+    // When the embedded rpc-store is active, gate checkpoint delivery on the
+    // index so a client that waits for a checkpoint can immediately read its
+    // indexed state (matching the legacy synchronously-committed index).
+    let indexed_checkpoint = embedded_rpc_store.map(|embedded| embedded.indexed_checkpoint_fn());
     let (subscription_service_checkpoint_sender, subscription_service_handle) =
-        SubscriptionService::build(prometheus_registry);
+        SubscriptionService::build(prometheus_registry, indexed_checkpoint);
     let rpc_router = {
         // Serve the index read paths from the embedded rpc-store when it
         // is enabled, otherwise from the legacy `rpc-index`. Raw chain

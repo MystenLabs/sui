@@ -318,6 +318,22 @@ impl EmbeddedRpcStore {
         self.reader.clone()
     }
 
+    /// A callback reading the highest checkpoint the live cohort has
+    /// committed, for the subscription service's index gate (so a
+    /// checkpoint is not delivered to clients until its indexed state is
+    /// readable).
+    ///
+    /// Reads only the live cohort: the history cohort backfills
+    /// independently from the lowest available checkpoint, so gating on it
+    /// would hold back delivery on a restored node for the duration of the
+    /// backfill. On a node indexing from genesis the synchronizer keeps the
+    /// cohorts in lockstep, so the live cohort's progress implies the
+    /// history cohort's.
+    pub fn indexed_checkpoint_fn(&self) -> Arc<dyn Fn() -> Option<u64> + Send + Sync> {
+        let db = self.store.db().clone();
+        Arc::new(move || cohort_committed(&db, LIVE_COHORT).ok().flatten())
+    }
+
     /// Spawn a background task that builds and runs the tip-following
     /// indexer over the embedded store.
     ///
@@ -447,10 +463,10 @@ fn lowest_available_checkpoint(
         .unwrap_or(0))
 }
 
-/// The lowest checkpoint tip indexing would resume from across a
-/// cohort: `min(checkpoint_hi_inclusive) + 1`. `None` if any pipeline
-/// in the cohort has no committed watermark.
-fn cohort_resume(db: &Db, cohort: &[&str]) -> anyhow::Result<Option<u64>> {
+/// The highest checkpoint every pipeline in `cohort` has committed
+/// (`min(checkpoint_hi_inclusive)`). `None` if any pipeline in the
+/// cohort has no committed watermark.
+fn cohort_committed(db: &Db, cohort: &[&str]) -> anyhow::Result<Option<u64>> {
     let framework = db.framework();
     let mut min_hi: Option<u64> = None;
     for name in cohort {
@@ -467,7 +483,14 @@ fn cohort_resume(db: &Db, cohort: &[&str]) -> anyhow::Result<Option<u64>> {
             None => watermark.checkpoint_hi_inclusive,
         });
     }
-    Ok(min_hi.map(|hi| hi + 1))
+    Ok(min_hi)
+}
+
+/// The lowest checkpoint tip indexing would resume from across a
+/// cohort: `min(checkpoint_hi_inclusive) + 1`. `None` if any pipeline
+/// in the cohort has no committed watermark.
+fn cohort_resume(db: &Db, cohort: &[&str]) -> anyhow::Result<Option<u64>> {
+    Ok(cohort_committed(db, cohort)?.map(|hi| hi + 1))
 }
 
 /// The chain id the database is bound to, read from the first pipeline
