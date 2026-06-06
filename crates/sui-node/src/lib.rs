@@ -114,8 +114,10 @@ use sui_core::jsonrpc_index::IndexStore;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::overload_monitor::overload_monitor;
 use sui_core::rpc_index::RpcIndexStore;
+use sui_core::rpc_store_embed::EmbeddedRpcStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
+use sui_core::storage::RpcStoreReadStore;
 use sui_core::transaction_orchestrator::TransactionOrchestrator;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
@@ -148,6 +150,7 @@ use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::{ConsensusTransaction, check_total_jwk_size};
+use sui_types::storage::RpcStateReader;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -293,6 +296,11 @@ pub struct SuiNode {
     auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
 
     subscription_service_checkpoint_sender: Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
+
+    /// The embedded `sui-rpc-store`, present when the node is configured
+    /// with `use_experimental_rpc_store`. Held for the node's lifetime
+    /// so its tip indexer keeps running (dropping it aborts the indexer).
+    _embedded_rpc_store: Option<EmbeddedRpcStore>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -676,7 +684,43 @@ impl SuiNode {
                 None
             };
 
-        let rpc_index = if node_role.should_enable_index_processing()
+        let chain_identifier = epoch_store.get_chain_identifier();
+
+        // The embedded `sui-rpc-store` and the legacy `rpc-index` are
+        // mutually exclusive index backends; selecting the experimental
+        // store skips building the old index and serves the index read
+        // paths from the embedded store instead.
+        let should_index = node_role.should_enable_index_processing();
+        let use_experimental_rpc_store = config
+            .rpc()
+            .is_some_and(|rpc| rpc.use_experimental_rpc_store());
+
+        let mut embedded_rpc_store = if should_index && use_experimental_rpc_store {
+            info!("creating embedded rpc-store");
+            // The tip indexer pulls checkpoints from the node's local
+            // checkpoint / perpetual stores via a dedicated read handle.
+            let ingestion_source = RocksDbStore::new(
+                cache_traits.clone(),
+                committee_store.clone(),
+                checkpoint_store.clone(),
+            );
+            Some(
+                EmbeddedRpcStore::bootstrap(
+                    &config,
+                    &store,
+                    &checkpoint_store,
+                    ingestion_source,
+                    chain_identifier,
+                    &prometheus_registry,
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
+
+        let rpc_index = if should_index
+            && !use_experimental_rpc_store
             && config.rpc().is_some_and(|rpc| rpc.enable_indexing())
         {
             info!("creating rpc index store");
@@ -694,8 +738,6 @@ impl SuiNode {
         } else {
             None
         };
-
-        let chain_identifier = epoch_store.get_chain_identifier();
 
         info!("creating archive reader");
         // Create network
@@ -781,7 +823,7 @@ impl SuiNode {
             committee_store.clone(),
             index_store.clone(),
             rpc_index,
-            None,
+            embedded_rpc_store.as_ref().map(|embedded| embedded.store()),
             checkpoint_store.clone(),
             &prometheus_registry,
             genesis.objects(),
@@ -840,8 +882,23 @@ impl SuiNode {
             &prometheus_registry,
             server_version,
             node_role,
+            embedded_rpc_store.as_ref(),
         )
         .await?;
+
+        // Start the embedded rpc-store's tip indexer now that the
+        // checkpoint executor's broadcast stream exists; it follows the
+        // tip via that stream and backfills any gap from the perpetual
+        // store. The returned `Service` is retained inside the handle so
+        // the node keeps it running.
+        if let Some(embedded) = embedded_rpc_store.as_mut() {
+            embedded
+                .spawn_indexer(
+                    subscription_service_checkpoint_sender.clone(),
+                    &prometheus_registry,
+                )
+                .await?;
+        }
 
         let global_state_hasher = Arc::new(GlobalStateHasher::new(
             cache_traits.global_state_hash_store.clone(),
@@ -950,6 +1007,7 @@ impl SuiNode {
 
             auth_agg,
             subscription_service_checkpoint_sender,
+            _embedded_rpc_store: embedded_rpc_store,
         };
 
         info!("SuiNode started!");
@@ -2506,6 +2564,7 @@ async fn build_http_servers(
     prometheus_registry: &Registry,
     server_version: ServerVersion,
     node_role: NodeRole,
+    embedded_rpc_store: Option<&EmbeddedRpcStore>,
 ) -> Result<(
     HttpServers,
     Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
@@ -2597,8 +2656,18 @@ async fn build_http_servers(
     let (subscription_service_checkpoint_sender, subscription_service_handle) =
         SubscriptionService::build(prometheus_registry);
     let rpc_router = {
-        let mut rpc_service =
-            sui_rpc_api::RpcService::new(Arc::new(RestReadStore::new(state.clone(), store)));
+        // Serve the index read paths from the embedded rpc-store when it
+        // is enabled, otherwise from the legacy `rpc-index`. Raw chain
+        // data comes from the perpetual / checkpoint stores either way.
+        let reader: Arc<dyn RpcStateReader> = match embedded_rpc_store {
+            Some(embedded) => Arc::new(RpcStoreReadStore::new(
+                state.clone(),
+                store,
+                embedded.reader(),
+            )),
+            None => Arc::new(RestReadStore::new(state.clone(), store)),
+        };
+        let mut rpc_service = sui_rpc_api::RpcService::new(reader);
         rpc_service.with_server_version(server_version);
 
         if let Some(config) = config.rpc.clone() {

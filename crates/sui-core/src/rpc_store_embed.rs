@@ -69,6 +69,7 @@ use sui_types::storage::ObjectStore;
 use tokio::sync::broadcast;
 use tracing::info;
 
+use crate::authority::authority_store::AuthorityStore;
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::checkpoints::CheckpointStore;
 use crate::rpc_store_ingestion_client::PerpetualStoreIngestionClient;
@@ -187,12 +188,13 @@ impl EmbeddedRpcStore {
     /// stable for the duration of the restore.
     pub async fn bootstrap(
         config: &NodeConfig,
-        perpetual: Arc<AuthorityPerpetualTables>,
+        authority_store: &Arc<AuthorityStore>,
         checkpoint_store: &Arc<CheckpointStore>,
         ingestion_source: RocksDbStore,
         chain_identifier: ChainIdentifier,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
+        let perpetual = authority_store.perpetual_tables.clone();
         let path = config.db_path().join(RPC_STORE_DIR);
         let db_options = DbOptions {
             rocksdb: default_rocksdb_config(),
