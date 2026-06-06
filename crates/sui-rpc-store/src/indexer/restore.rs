@@ -69,6 +69,41 @@ use crate::schema::epochs;
 use crate::schema::keys::U64Be;
 use crate::schema::pruning_watermark;
 
+/// The embedded fullnode's **live cohort**: the pipelines that
+/// [`restore_indexes`] bulk-loads and that are restored to the
+/// perpetual store's tip `T`, then follow live from there. They are
+/// bounded by the live object set, so a snapshot restore reproduces
+/// them exactly.
+///
+/// Matches the live half of
+/// [`PipelineLayer::embedded`](crate::config::PipelineLayer::embedded);
+/// the `embedded_registers_only_cohort_pipelines` test pins the two
+/// together.
+pub const LIVE_COHORT: &[&str] = &[
+    LiveObjects::NAME,
+    ObjectByOwner::NAME,
+    ObjectByType::NAME,
+    Balance::NAME,
+    PackageVersions::NAME,
+];
+
+/// The embedded fullnode's **history cohort**: the pipelines that are
+/// *not* restored but seeded to the lowest available checkpoint `L`
+/// and backfilled upward from the perpetual store (then followed
+/// live). They cannot be reconstructed from a live-object snapshot —
+/// they record ledger history (`tx_seq` <-> digest maps, the
+/// transaction and event bitmaps) and per-epoch metadata (`epochs`).
+///
+/// Matches the history half of
+/// [`PipelineLayer::embedded`](crate::config::PipelineLayer::embedded).
+pub const HISTORY_COHORT: &[&str] = &[
+    Epochs::NAME,
+    TxSeqByDigest::NAME,
+    TxMetadataBySeq::NAME,
+    TransactionBitmap::NAME,
+    EventBitmap::NAME,
+];
+
 /// Register every [`Restore`]-implementing pipeline opted in by
 /// `layer` on a [`RestoreDriver`] bound to `db` / `schema` and
 /// `source`, then run the resulting [`Service`].
@@ -289,6 +324,79 @@ pub fn seed_current_epoch_start(
         )
         .context("stage epoch start seed")?;
     Ok(epoch)
+}
+
+/// Seed the framework state for the embedded fullnode's
+/// [`HISTORY_COHORT`] after [`restore_indexes`] has bulk-loaded the
+/// [`LIVE_COHORT`].
+///
+/// The live cohort resumes from the restore target `T` (written by
+/// the restore driver's finalize step). The history cohort is *not*
+/// restored; instead each of its pipelines is seeded to
+/// `history_watermark` — the lowest available checkpoint `L` in the
+/// perpetual store — so tip indexing backfills `(L, T]` from the
+/// perpetual store and then follows live. For each history pipeline
+/// this writes:
+///
+/// - `__watermark = history_watermark` — the framework resumes at
+///   `history_watermark.checkpoint_hi_inclusive + 1`.
+/// - `__chain_id = chain_id` — pins the chain, matching what the
+///   restore driver wrote for the live cohort.
+///
+/// When `objects` is supplied, also seeds the current epoch's
+/// `epochs` row from its on-chain `SuiSystemState` — a *partial*
+/// start record without `start_checkpoint` (see
+/// [`seed_current_epoch_start`]) — so `get_epoch` / `get_committee`
+/// and Move type-layout resolution work immediately after restore
+/// rather than only once the backfill reaches the epoch's boundary.
+/// `objects` is read through the [`ObjectStore`] trait, so the
+/// embedded caller passes the validator's perpetual store directly
+/// (this crate stays free of any `sui-core` dependency).
+///
+/// Deliberately does *not* write a `pruning_watermark`: the history
+/// backfill starts empty and fills upward, so the bitmap compaction
+/// floor is left at zero to keep freshly backfilled buckets from
+/// being dropped. Advertising the true ledger-history availability
+/// range during backfill is handled separately.
+///
+/// Idempotent: re-running overwrites the same rows. Does not touch
+/// the live cohort or the deactivated (perpetual-store-served) CFs.
+pub fn seed_history_cohort(
+    db: &Db,
+    schema: &RpcStoreSchema,
+    history_watermark: Watermark,
+    chain_id: ChainId,
+    objects: Option<&dyn ObjectStore>,
+) -> anyhow::Result<()> {
+    let framework = FrameworkSchema::new(db.clone());
+    let mut batch = db.batch();
+
+    for name in HISTORY_COHORT {
+        let key = PipelineTaskKey::new(*name);
+        batch
+            .put(&framework.watermarks, &key, &history_watermark)
+            .with_context(|| format!("stage __watermark for {name:?}"))?;
+        batch
+            .put(&framework.chain_ids, &key, &chain_id)
+            .with_context(|| format!("stage __chain_id for {name:?}"))?;
+    }
+
+    if let Some(objects) = objects {
+        // Mid-epoch restore: the epoch's first checkpoint precedes the
+        // tip, so seed a partial start record (no `start_checkpoint`).
+        match seed_current_epoch_start(schema, objects, None, &mut batch) {
+            Ok(epoch) => info!(epoch, "seeded partial start record for the current epoch"),
+            Err(e) => warn!(
+                error = %e,
+                "could not seed the current epoch's start record; get_epoch / \
+                 get_committee / Move type-layout resolution for the current epoch \
+                 will be unavailable until the backfill reaches its boundary",
+            ),
+        }
+    }
+
+    batch.commit().context("commit history-cohort seed batch")?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -640,5 +748,61 @@ mod tests {
             db.framework().chain_ids.get(&key).unwrap().unwrap(),
             chain_id,
         );
+    }
+
+    /// `seed_history_cohort` primes every history-cohort pipeline with
+    /// the lowest-available watermark `L` and the chain id, leaves the
+    /// live cohort untouched (the restore driver owns it), and does
+    /// not stamp a pruning watermark (so backfilled bitmap buckets
+    /// survive).
+    #[test]
+    fn seed_history_cohort_seeds_only_history_watermarks() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+
+        let chain_id = ChainId([5u8; 32]);
+        let l = Watermark::for_checkpoint(1_000);
+        seed_history_cohort(&db, &schema, l, chain_id, None).unwrap();
+
+        // History cohort resumes from L, pinned to the chain.
+        for name in HISTORY_COHORT {
+            let key = PipelineTaskKey::new(*name);
+            assert_eq!(
+                db.framework().watermarks.get(&key).unwrap(),
+                Some(l),
+                "{name} should resume from L",
+            );
+            assert_eq!(
+                db.framework().chain_ids.get(&key).unwrap(),
+                Some(chain_id),
+                "{name} should pin the chain id",
+            );
+        }
+
+        // Live cohort is the restore driver's responsibility — the
+        // history seed must not touch it.
+        for name in LIVE_COHORT {
+            let key = PipelineTaskKey::new(*name);
+            assert!(
+                db.framework().watermarks.get(&key).unwrap().is_none(),
+                "{name} watermark must be untouched by the history seed",
+            );
+        }
+
+        // No pruning watermark: the bitmap compaction floor stays at
+        // zero so freshly backfilled buckets are not dropped.
+        assert!(schema.get_pruning_watermarks().unwrap().is_none());
+    }
+
+    /// The live and history cohorts are disjoint and each has the
+    /// expected size. (Their union being exactly the embedded layer's
+    /// enabled set is pinned by `embedded_registers_only_cohort_pipelines`.)
+    #[test]
+    fn cohorts_are_disjoint() {
+        let live: std::collections::BTreeSet<_> = LIVE_COHORT.iter().collect();
+        let history: std::collections::BTreeSet<_> = HISTORY_COHORT.iter().collect();
+        assert!(live.is_disjoint(&history), "cohorts must not overlap");
+        assert_eq!(live.len(), 5);
+        assert_eq!(history.len(), 5);
     }
 }

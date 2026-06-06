@@ -647,28 +647,23 @@ mod tests {
     /// `embedded` registers exactly the ten embedded-cohort
     /// pipelines (five live + five history) and none of the
     /// deactivated raw-chain-data ones, so the synchronizer's
-    /// snapshot cohort covers exactly those.
+    /// snapshot cohort covers exactly those. Pinned to the
+    /// [`LIVE_COHORT`] / [`HISTORY_COHORT`] constants (via the real
+    /// `Processor::NAME`s the indexer registers) so the layer and the
+    /// restore/seed cohorts cannot drift apart.
+    ///
+    /// [`LIVE_COHORT`]: crate::indexer::restore::LIVE_COHORT
+    /// [`HISTORY_COHORT`]: crate::indexer::restore::HISTORY_COHORT
     #[tokio::test]
     async fn embedded_registers_only_cohort_pipelines() {
         let indexer = build_indexer(PipelineLayer::embedded()).await;
         let names: std::collections::BTreeSet<_> = indexer.pipelines().collect();
-        assert_eq!(
-            names,
-            std::collections::BTreeSet::from([
-                // Live cohort.
-                "live_objects",
-                "object_by_owner",
-                "object_by_type",
-                "balance",
-                "package_versions",
-                // History cohort.
-                "epochs",
-                "tx_seq_by_digest",
-                "tx_metadata_by_seq",
-                "transaction_bitmap",
-                "event_bitmap",
-            ])
-        );
+        let expected: std::collections::BTreeSet<_> = crate::indexer::restore::LIVE_COHORT
+            .iter()
+            .chain(crate::indexer::restore::HISTORY_COHORT)
+            .copied()
+            .collect();
+        assert_eq!(names, expected);
     }
 
     /// `all` registers every pipeline (raw chain data + indexes).
