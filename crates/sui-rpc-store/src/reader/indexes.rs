@@ -199,12 +199,12 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
             .schema()
             .get_balance(*owner, coin_type.clone().into())
             .map_err(sui_types::storage::error::Error::custom)?;
+        // Report the coin and address halves independently (each clamped to
+        // non-negative); the caller sums them for the total. Reporting the
+        // total as `coin_balance` would double-count the address half once
+        // the caller adds them back together.
         Ok(balance.map(|b| BalanceInfo {
-            coin_balance: b.total().clamp(0, u64::MAX as i128) as u64,
-            // Split across coin / address halves for callers that
-            // want both. The `BalanceInfo` struct in `sui-types`
-            // exposes the two independently; we report each half
-            // clamped to non-negative.
+            coin_balance: b.coin.clamp(0, u64::MAX as i128) as u64,
             address_balance: b.address.clamp(0, u64::MAX as i128) as u64,
         }))
     }
@@ -231,9 +231,11 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
             let inner = value.into_inner();
             let coin = i128::from_le_bytes((&inner.coin[..]).try_into().unwrap_or_default());
             let address = i128::from_le_bytes((&inner.address[..]).try_into().unwrap_or_default());
-            let total = coin.saturating_add(address);
+            // Report the coin and address halves independently; the caller
+            // sums them for the total (reporting the total here would
+            // double-count the address half).
             let info = BalanceInfo {
-                coin_balance: total.clamp(0, u64::MAX as i128) as u64,
+                coin_balance: coin.clamp(0, u64::MAX as i128) as u64,
                 address_balance: address.clamp(0, u64::MAX as i128) as u64,
             };
             // Skip-past-cursor.
