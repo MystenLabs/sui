@@ -42,9 +42,11 @@ frontier (single source of truth + lost-wakeup-free wakeup). The fixed-size
 the frontier; a member whose channel closes on shutdown departs so peers do not
 deadlock. See `SnapshotCoordinator` in `synchronizer.rs`.
 
-**Next up: Phase 3 (fullnode integration in `sui-node` / `sui-core`).** Phase 2
-is done. The `sui-rpc-store` building blocks the embedded path needs now all
-exist and stay free of any `sui-core` dependency:
+**Next up: Phase 3B (startup orchestration in `sui-node` / `sui-core`).** Phase
+2 and Phase 3A (config flag), 3C (read-path wrapper), and 3D (pruner
+integration) are done; 3B is the only remaining Phase 3 piece. The
+`sui-rpc-store` building blocks the embedded path needs all exist and stay free
+of any `sui-core` dependency:
 
 - `restore_indexes(db, schema, source, config, RestoreLayer::indexes_only(),
   metrics)` -- generic over `RestoreSource`, so `sui-node` injects
@@ -279,9 +281,9 @@ store; `live_objects` is kept in sync but not on the read hot path.
 
 ### Phase 3 -- fullnode integration (`sui-node` / `sui-core`)
 
-- [ ] **3A. Config flag** (`sui-config`). Add `use_experimental_rpc_store:
-  Option<bool>` to `RpcConfig` (`rpc_config.rs` ~9; next to `enable_indexing`
-  ~20) with accessor, default `false`. Selecting it builds the new backend and
+- [x] **3A. Config flag** (`009c5e2ab5`). Added `use_experimental_rpc_store:
+  Option<bool>` to `RpcConfig` (`rpc_config.rs`; next to `enable_indexing`)
+  with accessor, default `false`. Selecting it builds the new backend and
   skips the old `rpc_index`.
 
 - [ ] **3B. Startup orchestration** (`sui-node/src/lib.rs`, near the rpc_index
@@ -296,22 +298,25 @@ store; `live_objects` is kept in sync but not on the read hot path.
   5. Build `Indexer::from_store(...)` wired to 1A + 1B; spawn its `Service`.
   6. Do not build the old `rpc_index` when on.
 
-- [ ] **3C. Read-path wrapper** (`sui-core`, sibling to `RestReadStore`,
-  `storage.rs` ~405; instantiated `sui-node/src/lib.rs` ~2597). New type that
-  serves objects / raw data / child resolution from the perpetual store and
-  the `RpcIndexes` surface from the rpc-store reader (`reader/indexes.rs`
-  already implements `RpcIndexes`). Implements `ObjectStore`, `ReadStore`,
-  `ChildObjectResolver`, `RpcStateReader`, `RpcIndexes`. Object/state
-  available-range = `max(perpetual_low, rpc_store_low)`
-  (`reader.rs` ~245; `storage.rs` ~130 / ~578). Swap in at ~2597 when the flag
-  is on. (Ledger-history-specific availability is handled in Phase 5.)
+- [x] **3C. Read-path wrapper** (`3141224969`). Added `RpcStoreReadStore`
+  (`sui-core`, sibling to `RestReadStore`) that serves objects / raw data /
+  child resolution from the perpetual store and the `RpcIndexes` surface from
+  the rpc-store reader (`reader/indexes.rs` implements `RpcIndexes`).
+  Implements `ObjectStore`, `ReadStore`, `ChildObjectResolver`,
+  `RpcStateReader`, `RpcIndexes`. Object/state available-range =
+  `max(perpetual_low, rpc_store_low)`. Swapped in at the rpc-api wiring site
+  when the flag is on. (Ledger-history-specific availability is Phase 5.)
 
-- [ ] **3D. Pruner integration** (`sui-core`). Expose an rpc-store
-  `prune(floor)` that prunes the HISTORY cohort only (live cohort is never
-  pruned); wire it into `AuthorityStorePruner` next to `rpc_index.prune`
-  (`authority_store_pruner.rs` ~140; constructed `authority.rs` ~3580) on the
-  shared retention floor. We cannot use the rpc-store's standalone pruner
-  Service -- there is no raw chain data here to drive it.
+- [x] **3D. Pruner integration** (`4b1be8bfef`, `2fbfc1bdbb`). rpc-store side
+  (`4b1be8bfef`): `sui_rpc_store::prune_history_cohort(db, schema,
+  pruned_checkpoint_watermark, pruned_tx_seq_exclusive)` prunes the HISTORY
+  cohort only (live cohort and `epochs` are never pruned), idempotent on a
+  re-run with the same or a lower floor. sui-core side (`2fbfc1bdbb`): threaded
+  an `rpc_store: Option<RpcStore>` through the whole `AuthorityStorePruner`
+  call chain and call it next to `rpc_index.prune` in both the `Objects` and
+  `Checkpoints` passes on the shared retention floor. All call sites pass
+  `None` until 3B builds the embedded store. We cannot use the rpc-store's
+  standalone pruner Service -- there is no raw chain data here to drive it.
 
 ### Phase 4 -- tests
 
