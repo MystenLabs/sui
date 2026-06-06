@@ -128,8 +128,7 @@ impl TestEnv {
             AccumulatorValue::get_field_id(self.vault_obj.into(), &Balance::type_tag(type_tag))
                 .unwrap();
         let balance_read = self.authority.get_account_funds_read();
-        let (balance, _version) = balance_read.get_latest_account_amount(&account_id);
-        balance
+        balance_read.get_latest_account_amount(&account_id)
     }
 }
 

@@ -206,12 +206,14 @@ scheduler's point of view, this lifecycle is mostly invisible — it sees deposi
 as `funds_changes: BTreeMap<AccumulatorObjId, i128>` deltas — but it is reflected in the
 storage-version reads:
 
-- For an account that doesn't exist yet, `get_latest_account_amount` returns
+- For an account that doesn't exist yet, `get_consistent_latest_account_amount_and_version` returns
   `(0, current_root_version)`.
 - After deletion, the same call returns `(0, current_root_version)`.
-- Between creation and deletion, it returns `(balance, account_object_version)`.
+- Between creation and deletion, it returns `(balance_at_or_before_root, current_root_version)`.
+  If the account object has advanced ahead of the root, this may be older than the latest account
+  object amount.
 
-This shape — "balance plus the version it was read at" — is what lets the scheduler detect when
+This shape — "balance plus the root version it is consistent with" — is what lets the scheduler detect when
 storage has advanced past a request even without an in-process settlement notification (see
 [`address_funds_scheduling.md`](./address_funds_scheduling.md) §3).
 
