@@ -42,7 +42,7 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 use tap::{TapFallible, TapOptional};
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, instrument};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::backpressure::BackpressureManager;
@@ -192,7 +192,7 @@ pub struct CheckpointExecutor {
     config: CheckpointExecutorConfig,
     metrics: Arc<CheckpointExecutorMetrics>,
     tps_estimator: Mutex<TPSEstimator>,
-    subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<Checkpoint>>,
+    subscription_service_checkpoint_sender: Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
 }
 
 impl CheckpointExecutor {
@@ -204,7 +204,9 @@ impl CheckpointExecutor {
         backpressure_manager: Arc<BackpressureManager>,
         config: CheckpointExecutorConfig,
         metrics: Arc<CheckpointExecutorMetrics>,
-        subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<Checkpoint>>,
+        subscription_service_checkpoint_sender: Option<
+            tokio::sync::broadcast::Sender<Arc<Checkpoint>>,
+        >,
     ) -> Self {
         Self {
             epoch_store,
@@ -462,8 +464,7 @@ impl CheckpointExecutor {
         finish_stage!(pipeline_handle, FinalizeCheckpoint);
 
         if let Some(checkpoint_data) = ckpt_state.full_data.take() {
-            self.commit_index_updates_and_enqueue_to_subscription_service(checkpoint_data)
-                .await;
+            self.commit_index_updates_and_enqueue_to_subscription_service(checkpoint_data);
         }
 
         finish_stage!(pipeline_handle, UpdateRpcIndex);
@@ -1052,20 +1053,20 @@ impl CheckpointExecutor {
     /// If configured, commit the pending index updates for the provided checkpoint as well as
     /// enqueuing the checkpoint to the subscription service
     #[instrument(level = "info", skip_all)]
-    async fn commit_index_updates_and_enqueue_to_subscription_service(
-        &self,
-        checkpoint: Checkpoint,
-    ) {
+    fn commit_index_updates_and_enqueue_to_subscription_service(&self, checkpoint: Checkpoint) {
         if let Some(rpc_index) = &self.state.rpc_index {
             rpc_index
                 .commit_update_for_checkpoint(checkpoint.summary.sequence_number)
                 .expect("failed to update rpc_indexes");
         }
 
-        if let Some(sender) = &self.subscription_service_checkpoint_sender
-            && let Err(e) = sender.send(checkpoint).await
-        {
-            warn!("unable to send checkpoint to subscription service: {e}");
+        // Best-effort, non-blocking publish to the broadcast stream. A send
+        // error just means there are no live subscribers right now, which is
+        // fine: subscribers (the RPC subscription service and the embedded
+        // rpc-store indexer) recover any checkpoints they miss by fetching from
+        // the local stores.
+        if let Some(sender) = &self.subscription_service_checkpoint_sender {
+            let _ = sender.send(Arc::new(checkpoint));
         }
     }
 

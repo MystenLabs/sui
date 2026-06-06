@@ -292,7 +292,7 @@ pub struct SuiNode {
     // update will automatically propagate to other uses.
     auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
 
-    subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<Checkpoint>>,
+    subscription_service_checkpoint_sender: Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -2505,7 +2505,10 @@ async fn build_http_servers(
     prometheus_registry: &Registry,
     server_version: ServerVersion,
     node_role: NodeRole,
-) -> Result<(HttpServers, Option<tokio::sync::mpsc::Sender<Checkpoint>>)> {
+) -> Result<(
+    HttpServers,
+    Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
+)> {
     // Validators do not expose these APIs
     if !node_role.should_run_rpc_servers() {
         return Ok((HttpServers::default(), None));
