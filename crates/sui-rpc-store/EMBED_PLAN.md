@@ -19,6 +19,9 @@ Branch `embed-rpc-store`. Completed pieces and their commits (newest last):
 - `91c1920731` 1C-i `Db::clear_all`.
 - `106b35e882` 1C-iii Synchronizer dynamic-membership snapshot coordinator.
 - `0d96e830e2` 2A embedded cohort `PipelineLayer::embedded()` constructor.
+- `aa5801e39b` 2B-i `epochs::start` / `seed_current_epoch_start` optional
+  `start_checkpoint` (merge audit; proto/merge already presence-tracked).
+- `6bf04f0987` 2B-ii `seed_history_cohort` + `LIVE_COHORT`/`HISTORY_COHORT`.
 
 `git log --oneline main..HEAD` shows the series. Each commit is self-contained
 with tests + clippy + fmt green.
@@ -39,18 +42,26 @@ frontier (single source of truth + lost-wakeup-free wakeup). The fixed-size
 the frontier; a member whose channel closes on shutdown departs so peers do not
 deadlock. See `SnapshotCoordinator` in `synchronizer.rs`.
 
-**Next up: 2B (embedded restore + watermark seeding).** 2A is done
-(`0d96e830e2`): `PipelineLayer::embedded()` enables the ten cohort pipelines,
-and the existing `add_pipelines` -> `register_pipeline` path already scopes the
-snapshot cohort to exactly the registered pipelines (verified by test). 2B
-needs, in `sui-rpc-store` (no `sui-core` dep): a restore entry point that takes
-a `RestoreSource` trait object (so `sui-node` can inject
-`PerpetualStoreRestoreSource`), bulk-loads the live cohort, writes the partial
-current-epoch seed, then seeds watermarks (live -> `T`, history -> `L`) via a
-direct `Batch` on `db.framework().watermarks` (1C-ii). Also audit the `epochs`
-proto/merge so an unset `start_checkpoint` is presence-tracked, not a `0`
-sentinel. Likely also add cohort-enumeration helpers (which pipelines are live
-vs history) so `sui-node` doesn't hardcode the split.
+**Next up: Phase 3 (fullnode integration in `sui-node` / `sui-core`).** Phase 2
+is done. The `sui-rpc-store` building blocks the embedded path needs now all
+exist and stay free of any `sui-core` dependency:
+
+- `restore_indexes(db, schema, source, config, RestoreLayer::indexes_only(),
+  metrics)` -- generic over `RestoreSource`, so `sui-node` injects
+  `PerpetualStoreRestoreSource`. Bulk-loads the live cohort to `T`.
+- `seed_history_cohort(db, schema, Watermark::for_checkpoint(L), chain_id,
+  Some(&perpetual_store as &dyn ObjectStore))` -- seeds the history cohort to
+  `L` + the partial epoch start record.
+- `PipelineLayer::embedded()` + `Indexer::from_store(...)` +
+  `add_pipelines(PipelineLayer::embedded(), committer)` + `run()`.
+
+Phase 3 order (per landing order): 3A (config flag, trivial) -> 3C (read-path
+wrapper) -> 3D (pruner integration) -> 3B (the startup orchestration that wires
+restore_indexes + seed_history_cohort + the 1A/1B clients together). Open
+decisions deferred to 3B/Phase 5: the exact `L` (= max pruned watermark + 1)
+and the off-by-one on the history seed (`for_checkpoint(L)` resumes at `L+1`;
+decide whether to seed `L-1` to include `L`); the pruning-watermark / true
+history-availability advertising during backfill (Phase 5).
 
 **Workflow the user asked for:** one commit per sub-phase (1A, 1B, ...); ensure
 `cargo nextest run -p <crate> <filter>`, `cargo xclippy` (from the crate dir),
@@ -229,28 +240,35 @@ store; `live_objects` is kept in sync but not on the read hot path.
   by the layer. 2 tests added (constructor set; `add_pipelines` registers exactly
   the ten); all 176 crate tests + clippy + fmt green.
 
-- [ ] **2B. Embedded restore + watermark seeding.** Restore entry over
-  `PerpetualStoreRestoreSource` (`sui-core`, exists) to bulk-load the live
-  cohort, write the partial current-epoch seed (see below), then seed
-  watermarks (live -> `T`, history -> `L`) via 1C. Wipe-then-restore via
-  `clear_user_data` for the out-of-range case.
+- [x] **2B. Embedded restore + watermark seeding** (`aa5801e39b`, `6bf04f0987`).
+  All in `sui-rpc-store`, no `sui-core` dep. `restore_indexes` was already
+  generic over `RestoreSource`, so `sui-node` injects
+  `PerpetualStoreRestoreSource` directly -- no change needed there. Added
+  `seed_history_cohort(db, schema, history_watermark, chain_id, objects)`
+  (`restore.rs`), the embedded analog of `floor_unrestored_pipelines`: writes
+  `__watermark = L` + `__chain_id` for each history-cohort pipeline and, given an
+  `&dyn ObjectStore`, the partial epoch seed. The caller (`sui-node`) passes its
+  perpetual store as the `ObjectStore`, keeping this crate `sui-core`-free.
+  Deliberately writes no pruning watermark (bitmap floor stays at 0 so backfilled
+  buckets survive; availability advertising is Phase 5). Added `LIVE_COHORT` /
+  `HISTORY_COHORT` consts as the single source of truth for the split, exported
+  from `lib.rs`, with the embedded-layer test retargeted to pin
+  `PipelineLayer::embedded()` to their union via the real registered
+  `Processor::NAME`s. Tests: epochs merge audit (partial seed + backfill don't
+  clobber), `seed_history_cohort` unit test, Simulacrum partial-epoch integration
+  test. All 180 crate tests + the rpc-node seed tests + clippy + fmt green.
 
-  - **Epoch seed (partial).** The formal-snapshot `seed_current_epoch_start`
-    lands at an epoch boundary, so it seeds the full start record
-    (`start_checkpoint = anchor + 1`, etc.). The perpetual-store restore lands
-    at the tip `T`, which is mid-epoch, so we can only seed the fields
-    derivable from the mid-epoch `SuiSystemState` (object `0x5`): epoch number,
-    protocol version, reference gas price, `epoch_start_timestamp_ms`, and the
-    `SuiSystemState` BCS. We CANNOT seed `start_checkpoint` (the epoch's first
-    checkpoint precedes `T` and is not in the system state). The upward
-    backfill fills `start_checkpoint` later iff that epoch's boundary falls in
-    `[L, T]`; if the epoch started below `L` it stays absent.
-  - **Merge implication.** The `epochs` merge must treat an unset
-    `start_checkpoint` (and any other field the seed omits) as "unknown" --
-    presence-tracked (proto `optional`), not a `0` sentinel -- so the partial
-    seed and a later full backfill start record combine without either
-    clobbering the other. Audit the `epochs` proto + merge operator for this
-    before relying on it.
+  - **Epoch seed (partial).** Done via `seed_current_epoch_start(.., None, ..)`.
+    The mid-epoch `SuiSystemState` (object `0x5`) supplies epoch, protocol
+    version, gas price, start timestamp, and BCS; `start_checkpoint` is left
+    unset because the epoch's first checkpoint precedes `T`. The upward backfill
+    fills it iff that boundary falls in `[L, T]`.
+  - **Merge implication.** AUDITED -- no change needed. The `epochs` proto
+    already declares every field `optional` and the merge operator copies only
+    fields present on an operand, so an unset `start_checkpoint` is presence-
+    tracked, not a `0` sentinel. The only change was making the `epochs::start`
+    builder accept `Option<u64>` so the partial seed can pass `None`; two merge
+    tests pin the non-clobbering behavior in both orders.
 
 ### Phase 3 -- fullnode integration (`sui-node` / `sui-core`)
 
