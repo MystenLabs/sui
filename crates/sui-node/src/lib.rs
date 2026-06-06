@@ -886,18 +886,17 @@ impl SuiNode {
         )
         .await?;
 
-        // Start the embedded rpc-store's tip indexer now that the
-        // checkpoint executor's broadcast stream exists; it follows the
-        // tip via that stream and backfills any gap from the perpetual
-        // store. The returned `Service` is retained inside the handle so
-        // the node keeps it running.
+        // Start the embedded rpc-store's tip indexer. It follows the tip
+        // via the checkpoint executor's broadcast stream and backfills
+        // any gap from the perpetual store. Spawned on a background task
+        // (see `spawn_indexer`) so node startup does not block on the
+        // first checkpoint, which the executor only produces after this
+        // function returns.
         if let Some(embedded) = embedded_rpc_store.as_mut() {
-            embedded
-                .spawn_indexer(
-                    subscription_service_checkpoint_sender.clone(),
-                    &prometheus_registry,
-                )
-                .await?;
+            embedded.spawn_indexer(
+                subscription_service_checkpoint_sender.clone(),
+                prometheus_registry.clone(),
+            );
         }
 
         let global_state_hasher = Arc::new(GlobalStateHasher::new(

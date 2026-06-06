@@ -67,6 +67,8 @@ use sui_types::digests::ChainIdentifier;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::storage::ObjectStore;
 use tokio::sync::broadcast;
+use tokio::task::JoinHandle;
+use tracing::error;
 use tracing::info;
 
 use crate::authority::authority_store::AuthorityStore;
@@ -172,10 +174,22 @@ pub struct EmbeddedRpcStore {
 
     chain_id: ChainIdentifier,
 
-    /// The running tip-indexer service, populated by
-    /// [`Self::spawn_indexer`]. Held so the node keeps it alive;
-    /// dropping it aborts the indexer's tasks.
-    indexer: Option<Service>,
+    /// Background task that builds and runs the tip indexer, populated
+    /// by [`Self::spawn_indexer`]. It owns the indexer's [`Service`];
+    /// the task (and with it the service) is aborted when this handle
+    /// is dropped on node shutdown.
+    indexer_task: Option<JoinHandle<()>>,
+}
+
+impl Drop for EmbeddedRpcStore {
+    fn drop(&mut self) {
+        // Abort the background indexer task so it -- and the `Service`
+        // it owns -- shut down with the node rather than leaking
+        // (notably across e2e tests sharing a process).
+        if let Some(task) = self.indexer_task.take() {
+            task.abort();
+        }
+    }
 }
 
 impl EmbeddedRpcStore {
@@ -288,7 +302,7 @@ impl EmbeddedRpcStore {
             reader,
             ingestion_source,
             chain_id: chain_identifier,
-            indexer: None,
+            indexer_task: None,
         })
     }
 
@@ -304,8 +318,17 @@ impl EmbeddedRpcStore {
         self.reader.clone()
     }
 
-    /// Build and start the tip-following indexer over the embedded
-    /// store, retaining its [`Service`] so the node keeps it running.
+    /// Spawn a background task that builds and runs the tip-following
+    /// indexer over the embedded store.
+    ///
+    /// The indexer is built on a background task -- rather than inline --
+    /// because the framework determines the tip via
+    /// `latest_checkpoint_number`, which blocks until the checkpoint
+    /// executor produces (and, via the broadcast stream, publishes) its
+    /// first checkpoint. The executor only starts after `start_async`
+    /// returns, so building inline would deadlock node startup against a
+    /// checkpoint that cannot arrive until startup completes. The
+    /// follower simply catches up once checkpoints begin to flow.
     ///
     /// `checkpoint_sender` is the checkpoint executor's broadcast
     /// stream; when present it drives a low-latency
@@ -313,48 +336,94 @@ impl EmbeddedRpcStore {
     /// client filling any gap. When absent (e.g. on a node that does
     /// not run the rpc servers) the ingestion client polls the
     /// perpetual store alone.
-    pub async fn spawn_indexer(
+    pub fn spawn_indexer(
         &mut self,
         checkpoint_sender: Option<broadcast::Sender<Arc<Checkpoint>>>,
-        registry: &Registry,
-    ) -> anyhow::Result<()> {
-        let ingestion_metrics = IngestionMetrics::new(Some(METRICS_PREFIX), registry);
-        let ingestion_client = IngestionClient::from_trait(
-            Arc::new(PerpetualStoreIngestionClient::new(
-                self.ingestion_source.clone(),
-                self.chain_id,
-            )),
-            ingestion_metrics,
-        );
-        let streaming_client: Option<BoxedStreamingClient> = checkpoint_sender.map(|sender| {
-            Box::new(BroadcastStreamingClient::new(sender, self.chain_id)) as BoxedStreamingClient
-        });
+        registry: Registry,
+    ) {
+        let store = self.store.clone();
+        let ingestion_source = self.ingestion_source.clone();
+        let chain_id = self.chain_id;
 
-        let mut indexer = Indexer::from_store(
-            self.store.clone(),
-            IndexerArgs::default(),
-            ingestion_client,
-            streaming_client,
-            ConsistencyConfig::default(),
-            // Pruning is driven by the validator's `AuthorityStorePruner`
-            // (history cohort only), not the rpc-store's own pruner.
-            None,
-            IngestionConfig::default(),
-            registry,
-        )
-        .await
-        .context("constructing the embedded rpc-store indexer")?;
-        indexer
-            .add_pipelines(PipelineLayer::embedded(), CommitterConfig::default())
+        let task = tokio::spawn(async move {
+            let mut service = match build_indexer(
+                store,
+                ingestion_source,
+                chain_id,
+                checkpoint_sender,
+                &registry,
+            )
             .await
-            .context("registering embedded rpc-store pipelines")?;
-        let service = indexer
-            .run()
-            .await
-            .context("starting the embedded rpc-store indexer")?;
-        self.indexer = Some(service);
-        Ok(())
+            {
+                Ok(service) => service,
+                Err(e) => {
+                    error!("failed to start the embedded rpc-store indexer: {e:#}");
+                    return;
+                }
+            };
+            // Hold the service for the task's lifetime; `join` only
+            // returns if an indexer task exits (it otherwise runs for the
+            // node's lifetime), so surface any fatal error.
+            if let Err(e) = service.join().await {
+                error!("the embedded rpc-store indexer exited with an error: {e:#}");
+            }
+        });
+        self.indexer_task = Some(task);
     }
+}
+
+/// Build the tip-following indexer over `store`, register the embedded
+/// cohort pipelines, and run it. Returns the composed [`Service`]
+/// driving ingestion, the synchronizer, and the committers.
+async fn build_indexer(
+    store: RpcStore,
+    ingestion_source: RocksDbStore,
+    chain_id: ChainIdentifier,
+    checkpoint_sender: Option<broadcast::Sender<Arc<Checkpoint>>>,
+    registry: &Registry,
+) -> anyhow::Result<Service> {
+    let ingestion_metrics = IngestionMetrics::new(Some(METRICS_PREFIX), registry);
+    let ingestion_client = IngestionClient::from_trait(
+        Arc::new(PerpetualStoreIngestionClient::new(
+            ingestion_source.clone(),
+            chain_id,
+        )),
+        ingestion_metrics,
+    );
+    // The broadcast streaming client follows the tip with low latency; it
+    // reads the current tip from the same local store the ingestion
+    // client uses (so the framework's `peek()` resolves immediately even
+    // on an idle chain), and the ingestion client backfills any gap.
+    let streaming_client: Option<BoxedStreamingClient> = checkpoint_sender.map(|sender| {
+        Box::new(BroadcastStreamingClient::new(
+            sender,
+            chain_id,
+            ingestion_source,
+        )) as BoxedStreamingClient
+    });
+
+    let mut indexer = Indexer::from_store(
+        store,
+        IndexerArgs::default(),
+        ingestion_client,
+        streaming_client,
+        ConsistencyConfig::default(),
+        // Pruning is driven by the validator's `AuthorityStorePruner`
+        // (history cohort only), not the rpc-store's own pruner.
+        None,
+        IngestionConfig::default(),
+        registry,
+    )
+    .await
+    .context("constructing the embedded rpc-store indexer")?;
+    indexer
+        .add_pipelines(PipelineLayer::embedded(), CommitterConfig::default())
+        .await
+        .context("registering embedded rpc-store pipelines")?;
+    indexer
+        .run()
+        .await
+        .context("starting the embedded rpc-store indexer")
 }
 
 /// The lowest checkpoint the perpetual store can still serve: one past
