@@ -77,6 +77,37 @@ impl<R: Reader> super::RpcStoreSchema<R> {
             timestamp_ms: stored.timestamp_ms,
         }))
     }
+
+    /// Iterate `(tx_seq, digest)` pairs over `[from, to_exclusive)`,
+    /// decoding only the digest from each row.
+    ///
+    /// The pruner uses this to unindex `tx_seq_by_digest` for a pruned
+    /// range. Iterating the table seeks straight to the first present
+    /// row and visits only rows that exist, so a sparse range — or a
+    /// floor of `0` when the lower bound is unknown — costs work
+    /// proportional to the rows actually present, not to the width of
+    /// the `tx_seq` interval.
+    pub fn iter_tx_seq_digests(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+    ) -> Result<impl Iterator<Item = Result<(u64, TransactionDigest), Error>> + '_, Error> {
+        let iter = self
+            .tx_metadata_by_seq
+            .iter(U64Be(from)..U64Be(to_exclusive))?
+            .map(|entry| {
+                let (U64Be(tx_seq), stored) = entry?;
+                let stored = stored.into_inner();
+                let digest_bytes: [u8; 32] = stored.digest.as_ref().try_into().map_err(|_| {
+                    DecodeError::msg(format!(
+                        "expected 32 bytes for {NAME} digest, got {}",
+                        stored.digest.len(),
+                    ))
+                })?;
+                Ok((tx_seq, TransactionDigest::new(digest_bytes)))
+            });
+        Ok(iter)
+    }
 }
 
 #[cfg(test)]

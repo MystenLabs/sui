@@ -377,6 +377,90 @@ fn prune_chunk(
     Ok(new)
 }
 
+/// Prune the embedded fullnode's history cohort up to a floor supplied
+/// by the validator's perpetual-store pruner.
+///
+/// Unlike [`start_pruner`], this is not epoch-driven and not a
+/// `Service`. The embedded deployment deactivates the raw chain-data
+/// CFs (`transactions`, `effects`, `events`, `objects`,
+/// `checkpoint_*`), so it can neither derive a retention floor nor walk
+/// effects to find the rows to delete. Instead the perpetual pruner —
+/// which owns the raw data — supplies the floor directly, and this
+/// prunes exactly the history-cohort CFs that grow without bound:
+///
+/// - `tx_metadata_by_seq` — range-deleted over
+///   `[old_tx_lo, pruned_tx_seq_exclusive)`.
+/// - `tx_seq_by_digest` — point-deleted; the digests are read from
+///   `tx_metadata_by_seq` (the only history CF that still carries them)
+///   over the pruned range, before that range is deleted.
+/// - `transaction_bitmap` / `event_bitmap` — evicted by advancing the
+///   shared `tx_seq` floor so their compaction filters drop
+///   fully-pruned buckets, then forcing a compaction.
+///
+/// The live cohort and the tiny `epochs` CF are never pruned.
+///
+/// `pruned_checkpoint_watermark` is the highest checkpoint the
+/// perpetual store has pruned (inclusive); `pruned_tx_seq_exclusive` is
+/// the first still-retained `tx_seq`. These mirror
+/// `sui_core::rpc_index::RpcIndexStore::prune`'s parameters so the
+/// embedded rpc-store and the legacy index prune in lockstep on the
+/// same floor. Idempotent: a re-run with the same or a lower floor is a
+/// no-op.
+pub fn prune_history_cohort(
+    db: &Db,
+    schema: &RpcStoreSchema,
+    pruned_checkpoint_watermark: u64,
+    pruned_tx_seq_exclusive: u64,
+) -> anyhow::Result<()> {
+    let cursor = schema.get_pruning_watermarks()?.unwrap_or_default();
+    let tx_lo = cursor.tx_seq_lo;
+    let tx_hi = pruned_tx_seq_exclusive;
+    // Lowest still-available checkpoint after this prune: the perpetual
+    // store has pruned through `pruned_checkpoint_watermark` inclusive.
+    let checkpoint_lo = pruned_checkpoint_watermark.saturating_add(1);
+
+    // No-op if the floor would not advance on either axis (idempotent
+    // re-run, or the perpetual floor is behind ours).
+    if tx_hi <= tx_lo && checkpoint_lo <= cursor.checkpoint_lo {
+        return Ok(());
+    }
+
+    let mut batch = db.batch();
+
+    // Unindex the digest reverse map for the pruned `tx_seq` range. The
+    // digests live in `tx_metadata_by_seq`; iterate it (seeking to the
+    // first present row) rather than point-getting each `tx_seq`, so a
+    // sparse range or an unknown (zero) floor costs work proportional to
+    // the rows present, not to the width of the interval.
+    for entry in schema.iter_tx_seq_digests(tx_lo, tx_hi)? {
+        let (_tx_seq, digest) = entry?;
+        batch.delete(&schema.tx_seq_by_digest, &tx_seq_by_digest::Key(digest))?;
+    }
+    batch.delete_range(&schema.tx_metadata_by_seq, &U64Be(tx_lo), &U64Be(tx_hi))?;
+
+    // Advance the persisted floor atomically with the deletes, taking
+    // the monotonic max on each axis so a stale lower floor never
+    // regresses an axis the other call already advanced.
+    let new = Watermarks {
+        tx_seq_lo: tx_hi.max(tx_lo),
+        checkpoint_lo: checkpoint_lo.max(cursor.checkpoint_lo),
+    };
+    let (k, v) = pruning_watermark::store(&new);
+    batch.put(&schema.pruning_watermark, &k, &v)?;
+    batch.commit()?;
+
+    // Durable now: advance the in-memory bitmap floor and force a
+    // compaction so the bitmap filters drop fully-pruned buckets
+    // promptly rather than waiting for a natural sweep.
+    schema.set_pruning_floor(new.tx_seq_lo);
+    db.compact_range_cf(transaction_bitmap::NAME, None, None)
+        .context("Compacting transaction_bitmap after prune")?;
+    db.compact_range_cf(event_bitmap::NAME, None, None)
+        .context("Compacting event_bitmap after prune")?;
+
+    Ok(())
+}
+
 /// The lowest epoch fully committed across every registered pipeline,
 /// or `None` if no pipeline has committed a watermark yet.
 ///
@@ -1004,6 +1088,174 @@ mod tests {
         assert!(
             schema.get_object_by_key(obj0, v_b).unwrap().is_some(),
             "live v_b must be preserved",
+        );
+    }
+
+    /// `prune_history_cohort` (the embedded entry point) range-deletes
+    /// `tx_metadata_by_seq`, point-deletes `tx_seq_by_digest` for the
+    /// pruned digests, and advances the persisted floor — all from the
+    /// floor the perpetual pruner supplies, without touching any raw
+    /// chain-data CF.
+    #[test]
+    fn prune_history_cohort_deletes_tx_metadata_and_advances_floor() {
+        use sui_types::digests::TransactionDigest;
+
+        use crate::schema::tx_metadata_by_seq;
+
+        let (_dir, db, schema) = fresh_db();
+
+        // Six transactions, tx_seq 0..6, each with a metadata row and a
+        // digest -> tx_seq reverse-index entry.
+        let digests: Vec<TransactionDigest> =
+            (0u8..6).map(|i| TransactionDigest::new([i; 32])).collect();
+        let mut batch = db.batch();
+        for (tx_seq, digest) in digests.iter().enumerate() {
+            let tx_seq = tx_seq as u64;
+            batch
+                .put(
+                    &schema.tx_metadata_by_seq,
+                    &U64Be(tx_seq),
+                    &tx_metadata_by_seq::store(&tx_metadata_by_seq::Metadata {
+                        digest: *digest,
+                        checkpoint_seq: tx_seq,
+                        ckpt_position: 0,
+                        event_count: 0,
+                        timestamp_ms: 0,
+                    }),
+                )
+                .unwrap();
+            batch
+                .put(
+                    &schema.tx_seq_by_digest,
+                    &tx_seq_by_digest::Key(*digest),
+                    &U64Varint(tx_seq),
+                )
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        // Perpetual store has pruned through checkpoint 2; tx_seq 3 is
+        // the first still-retained transaction.
+        prune_history_cohort(&db, &schema, 2, 3).unwrap();
+
+        // tx_metadata 0..3 pruned, 3..6 retained.
+        for tx_seq in 0..3 {
+            assert!(
+                schema.get_tx_metadata_by_seq(tx_seq).unwrap().is_none(),
+                "tx_metadata {tx_seq} should be pruned",
+            );
+        }
+        for tx_seq in 3..6 {
+            assert!(
+                schema.get_tx_metadata_by_seq(tx_seq).unwrap().is_some(),
+                "tx_metadata {tx_seq} should be retained",
+            );
+        }
+
+        // Digest reverse index unindexed for the pruned range only.
+        for digest in &digests[0..3] {
+            assert!(schema.get_tx_seq_by_digest(digest).unwrap().is_none());
+        }
+        for digest in &digests[3..6] {
+            assert!(schema.get_tx_seq_by_digest(digest).unwrap().is_some());
+        }
+
+        // Floor advanced: tx_seq 3 and checkpoint 3 (= pruned 2 + 1).
+        assert_eq!(
+            schema.get_pruning_watermarks().unwrap(),
+            Some(Watermarks {
+                tx_seq_lo: 3,
+                checkpoint_lo: 3,
+            }),
+        );
+
+        // Idempotent: a re-run at the same floor is a no-op.
+        prune_history_cohort(&db, &schema, 2, 3).unwrap();
+        assert_eq!(
+            schema.get_pruning_watermarks().unwrap(),
+            Some(Watermarks {
+                tx_seq_lo: 3,
+                checkpoint_lo: 3,
+            }),
+        );
+    }
+
+    /// `prune_history_cohort` visits only the rows that exist when the
+    /// floor is unknown (no prior watermark, so `tx_lo == 0`) and the
+    /// `tx_seq` range is sparse with large gaps — it must not walk every
+    /// integer in the interval.
+    #[test]
+    fn prune_history_cohort_handles_sparse_tx_seqs() {
+        use sui_types::digests::TransactionDigest;
+
+        use crate::schema::tx_metadata_by_seq;
+
+        let (_dir, db, schema) = fresh_db();
+
+        // Three rows spread across a wide interval.
+        let entries = [
+            (0u64, [10u8; 32]),
+            (500_000u64, [11u8; 32]),
+            (999_999u64, [12u8; 32]),
+        ];
+        let mut batch = db.batch();
+        for (tx_seq, digest_bytes) in entries {
+            let digest = TransactionDigest::new(digest_bytes);
+            batch
+                .put(
+                    &schema.tx_metadata_by_seq,
+                    &U64Be(tx_seq),
+                    &tx_metadata_by_seq::store(&tx_metadata_by_seq::Metadata {
+                        digest,
+                        checkpoint_seq: tx_seq,
+                        ckpt_position: 0,
+                        event_count: 0,
+                        timestamp_ms: 0,
+                    }),
+                )
+                .unwrap();
+            batch
+                .put(
+                    &schema.tx_seq_by_digest,
+                    &tx_seq_by_digest::Key(digest),
+                    &U64Varint(tx_seq),
+                )
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        // No prior pruning watermark (floor unknown -> 0); prune through
+        // checkpoint 0 / tx_seq 600_000 exclusive. Only the two rows
+        // below 600_000 are unindexed; the one at 999_999 survives.
+        prune_history_cohort(&db, &schema, 0, 600_000).unwrap();
+
+        assert!(schema.get_tx_metadata_by_seq(0).unwrap().is_none());
+        assert!(schema.get_tx_metadata_by_seq(500_000).unwrap().is_none());
+        assert!(schema.get_tx_metadata_by_seq(999_999).unwrap().is_some());
+        assert!(
+            schema
+                .get_tx_seq_by_digest(&TransactionDigest::new([10u8; 32]))
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            schema
+                .get_tx_seq_by_digest(&TransactionDigest::new([11u8; 32]))
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            schema
+                .get_tx_seq_by_digest(&TransactionDigest::new([12u8; 32]))
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(
+            schema.get_pruning_watermarks().unwrap(),
+            Some(Watermarks {
+                tx_seq_lo: 600_000,
+                checkpoint_lo: 1,
+            }),
         );
     }
 }
