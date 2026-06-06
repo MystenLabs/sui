@@ -53,7 +53,8 @@ async fn get_datatype_not_found() {
     let err = svc.get_datatype(request).await.unwrap_err();
     assert_eq!(err.code(), tonic::Code::Internal);
     assert!(
-        err.message().contains("Datatype 'NonExistentType' not found"),
+        err.message()
+            .contains("Datatype 'NonExistentType' not found"),
         "unexpected message: {}",
         err.message(),
     );

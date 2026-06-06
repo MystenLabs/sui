@@ -147,7 +147,8 @@ async fn legacy_coin_metadata_and_treasury() {
 
     let coin_type = format!("{}::legacy_coin::LEGACY_COIN", package_id);
     let metadata_id = find_object_by_type(&cluster, &effects, |t| {
-        t.to_canonical_string(true).contains("::coin::CoinMetadata<")
+        t.to_canonical_string(true)
+            .contains("::coin::CoinMetadata<")
     })
     .await
     .0;
@@ -282,7 +283,10 @@ async fn registry_coin_with_minted_supply() {
         metadata.metadata_cap_state,
         Some(MetadataCapState::Claimed as i32),
     );
-    assert_eq!(metadata.metadata_cap_id.as_deref(), Some(metadata_cap.to_string().as_str()));
+    assert_eq!(
+        metadata.metadata_cap_id.as_deref(),
+        Some(metadata_cap.to_string().as_str())
+    );
 
     let treasury = response.treasury.unwrap();
     assert_eq!(treasury.total_supply, Some(mint_amount));
@@ -439,7 +443,10 @@ async fn burnonly_coin_after_register_burnonly_supply() {
         &keypair,
     );
     let (_, err) = cluster.execute_transaction(tx).await.unwrap();
-    assert!(err.is_none(), "register_supply_as_burnonly must succeed: {err:?}");
+    assert!(
+        err.is_none(),
+        "register_supply_as_burnonly must succeed: {err:?}"
+    );
     cluster.create_checkpoint().await.unwrap();
 
     let mut client = state_client(&cluster).await;
@@ -461,10 +468,7 @@ async fn burnonly_coin_after_register_burnonly_supply() {
 
     let treasury = response.treasury.unwrap();
     assert_eq!(treasury.total_supply, Some(mint_amount));
-    assert_eq!(
-        treasury.supply_state,
-        Some(SupplyState::BurnOnly as i32),
-    );
+    assert_eq!(treasury.supply_state, Some(SupplyState::BurnOnly as i32),);
 }
 
 #[tokio::test]
@@ -507,7 +511,9 @@ async fn regulated_coin_reports_regulated_metadata() {
     assert_eq!(metadata.name.as_deref(), Some("Regulated Coin"));
     assert_eq!(metadata.symbol.as_deref(), Some("REG"));
 
-    let regulated = response.regulated_metadata.expect("regulated metadata present");
+    let regulated = response
+        .regulated_metadata
+        .expect("regulated metadata present");
     assert_eq!(
         regulated.coin_regulated_state,
         Some(CoinRegulatedState::Regulated as i32),
@@ -597,7 +603,10 @@ async fn non_otw_coin_after_create_currency() {
         metadata.metadata_cap_state,
         Some(MetadataCapState::Claimed as i32),
     );
-    assert_eq!(metadata.metadata_cap_id.as_deref(), Some(metadata_cap.to_string().as_str()));
+    assert_eq!(
+        metadata.metadata_cap_id.as_deref(),
+        Some(metadata_cap.to_string().as_str())
+    );
 
     let treasury = response.treasury.expect("treasury present");
     assert_eq!(treasury.total_supply.unwrap(), 0);
@@ -708,7 +717,9 @@ async fn shared_initial_version(cluster: &LocalCluster, id: ObjectID) -> Sequenc
         .await
         .unwrap_or_else(|| panic!("expected object {id} to exist"));
     match obj.owner {
-        Owner::Shared { initial_shared_version } => initial_shared_version,
+        Owner::Shared {
+            initial_shared_version,
+        } => initial_shared_version,
         _ => panic!("expected {id} to be a shared object, got {:?}", obj.owner),
     }
 }
@@ -728,4 +739,3 @@ async fn find_object_by_type(
     }
     panic!("no created/mutated object matched the type predicate");
 }
-

@@ -264,11 +264,7 @@ async fn list_package_versions_with_upgrades() {
     let mut paged = ListPackageVersionsRequest::default();
     paged.package_id = Some(package_ids[0].to_string());
     paged.page_size = Some(2);
-    let first = svc
-        .list_package_versions(paged)
-        .await
-        .unwrap()
-        .into_inner();
+    let first = svc.list_package_versions(paged).await.unwrap().into_inner();
     assert_eq!(first.versions.len(), 2);
     assert_eq!(first.versions[0].version, Some(1));
     assert_eq!(first.versions[1].version, Some(2));
@@ -287,10 +283,7 @@ async fn list_package_versions_with_upgrades() {
     assert!(second.next_page_token.is_none());
 }
 
-async fn package_id_from_effects(
-    effects: &TransactionEffects,
-    cluster: &LocalCluster,
-) -> ObjectID {
+async fn package_id_from_effects(effects: &TransactionEffects, cluster: &LocalCluster) -> ObjectID {
     // The publish creates the package as `Immutable`, but
     // `move_test_code`'s init functions also freeze a
     // CoinMetadata that's also Immutable. Distinguish by
@@ -324,11 +317,7 @@ async fn upgrade_cap_from_effects(
         let Some(obj) = cluster.get_object(oref.0).await else {
             continue;
         };
-        if obj
-            .type_()
-            .map(|t| t.is_upgrade_cap())
-            .unwrap_or(false)
-        {
+        if obj.type_().map(|t| t.is_upgrade_cap()).unwrap_or(false) {
             return oref;
         }
     }

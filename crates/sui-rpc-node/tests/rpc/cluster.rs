@@ -362,7 +362,12 @@ impl LocalCluster {
     /// objects from a transaction's effects by Move type — the
     /// effects only carry IDs, not types.
     pub async fn get_object(&self, id: ObjectID) -> Option<sui_types::object::Object> {
-        self.simulacrum.lock().await.store().get_object(&id).cloned()
+        self.simulacrum
+            .lock()
+            .await
+            .store()
+            .get_object(&id)
+            .cloned()
     }
 
     /// Compile the Move package at `path` with

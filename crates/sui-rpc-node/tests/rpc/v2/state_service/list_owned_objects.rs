@@ -176,7 +176,10 @@ async fn filter_by_type() {
     let metadata = metadata.unwrap();
     assert_eq!(coin_type.as_ref(), Some(&trusted_bare));
     assert_eq!(metadata.symbol.as_deref(), Some("TRUSTED"));
-    assert_eq!(metadata.description.as_deref(), Some("Trusted Coin for test"));
+    assert_eq!(
+        metadata.description.as_deref(),
+        Some("Trusted Coin for test")
+    );
     assert_eq!(metadata.name.as_deref(), Some("Trusted Coin"));
     assert_eq!(metadata.decimals, Some(2));
     assert_eq!(treasury.unwrap().total_supply, Some(0));
@@ -235,7 +238,9 @@ async fn filter_by_type() {
 
     // Supply now reads 100_000.
     let GetCoinInfoResponse {
-        coin_type, treasury, ..
+        coin_type,
+        treasury,
+        ..
     } = client
         .get_coin_info({
             let mut req = GetCoinInfoRequest::default();
@@ -495,4 +500,3 @@ async fn list_owned_count(client: &mut StateServiceClient<Channel>, owner: Strin
         .objects
         .len()
 }
-

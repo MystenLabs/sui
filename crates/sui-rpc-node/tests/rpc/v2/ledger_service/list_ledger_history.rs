@@ -133,7 +133,8 @@ async fn latest_checkpoint_sequence(cluster: &Cluster) -> u64 {
         .unwrap();
     client
         .get_checkpoint(
-            GetCheckpointRequest::latest().with_read_mask(FieldMask::from_paths(["sequence_number"])),
+            GetCheckpointRequest::latest()
+                .with_read_mask(FieldMask::from_paths(["sequence_number"])),
         )
         .await
         .unwrap()
@@ -443,18 +444,33 @@ async fn list_checkpoints_result(
     }
 }
 
-async fn expect_invalid_tx(client: &mut AlphaLedgerServiceClient<Channel>, req: ListTransactionsRequest) {
-    let err = client.list_transactions(req).await.expect_err("InvalidArgument expected");
+async fn expect_invalid_tx(
+    client: &mut AlphaLedgerServiceClient<Channel>,
+    req: ListTransactionsRequest,
+) {
+    let err = client
+        .list_transactions(req)
+        .await
+        .expect_err("InvalidArgument expected");
     assert_eq!(err.code(), tonic::Code::InvalidArgument);
 }
 
 async fn expect_invalid_ev(client: &mut AlphaLedgerServiceClient<Channel>, req: ListEventsRequest) {
-    let err = client.list_events(req).await.expect_err("InvalidArgument expected");
+    let err = client
+        .list_events(req)
+        .await
+        .expect_err("InvalidArgument expected");
     assert_eq!(err.code(), tonic::Code::InvalidArgument);
 }
 
-async fn expect_invalid_cp(client: &mut AlphaLedgerServiceClient<Channel>, req: ListCheckpointsRequest) {
-    let err = client.list_checkpoints(req).await.expect_err("InvalidArgument expected");
+async fn expect_invalid_cp(
+    client: &mut AlphaLedgerServiceClient<Channel>,
+    req: ListCheckpointsRequest,
+) {
+    let err = client
+        .list_checkpoints(req)
+        .await
+        .expect_err("InvalidArgument expected");
     assert_eq!(err.code(), tonic::Code::InvalidArgument);
 }
 
@@ -515,17 +531,26 @@ fn item_has_cursor(wm: Option<&Watermark>) -> bool {
 
 fn assert_tx_cursors(r: &TransactionsResult) {
     for item in &r.transactions {
-        assert!(item_has_cursor(item.watermark.as_ref()), "tx item should have cursor");
+        assert!(
+            item_has_cursor(item.watermark.as_ref()),
+            "tx item should have cursor"
+        );
     }
 }
 fn assert_ev_cursors(r: &EventsResult) {
     for item in &r.events {
-        assert!(item_has_cursor(item.watermark.as_ref()), "ev item should have cursor");
+        assert!(
+            item_has_cursor(item.watermark.as_ref()),
+            "ev item should have cursor"
+        );
     }
 }
 fn assert_cp_cursors(r: &CheckpointsResult) {
     for item in &r.checkpoints {
-        assert!(item_has_cursor(item.watermark.as_ref()), "cp item should have cursor");
+        assert!(
+            item_has_cursor(item.watermark.as_ref()),
+            "cp item should have cursor"
+        );
     }
 }
 
@@ -557,7 +582,10 @@ fn transaction_digest_set(r: &TransactionsResult) -> HashSet<String> {
         .collect()
 }
 fn event_digest_set(r: &EventsResult) -> HashSet<String> {
-    r.events.iter().filter_map(|e| e.transaction_digest.clone()).collect()
+    r.events
+        .iter()
+        .filter_map(|e| e.transaction_digest.clone())
+        .collect()
 }
 
 fn first_tx_cursor(r: &TransactionsResult, msg: &str) -> Bytes {
@@ -914,7 +942,11 @@ async fn test_list_transactions_query_options() {
     req.start_checkpoint = Some(start);
     req.end_checkpoint = Some(end);
     req.filter = Some(tx_sender(sender));
-    req.options = Some(query_options_between(3, first_cursor.clone(), last_cursor.clone()));
+    req.options = Some(query_options_between(
+        3,
+        first_cursor.clone(),
+        last_cursor.clone(),
+    ));
     let bounded = list_transactions_result(&mut client, req).await;
     assert_eq!(bounded.transactions.len(), 1);
     assert_eq!(bounded.end_reason, Some(QueryEndReason::CursorBound));
@@ -924,7 +956,11 @@ async fn test_list_transactions_query_options() {
     req.start_checkpoint = Some(start);
     req.end_checkpoint = Some(end);
     req.filter = Some(tx_sender(sender));
-    req.options = Some(query_options_between_descending(3, first_cursor, last_cursor.clone()));
+    req.options = Some(query_options_between_descending(
+        3,
+        first_cursor,
+        last_cursor.clone(),
+    ));
     let bounded_desc = list_transactions_result(&mut client, req).await;
     assert_eq!(bounded_desc.transactions.len(), 1);
     assert_eq!(bounded_desc.end_reason, Some(QueryEndReason::CursorBound));
@@ -1024,7 +1060,10 @@ async fn test_list_transactions_combinators_and_affected_filters() {
 
     let mut req = ListTransactionsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["digest"]));
-    req.filter = Some(tx_and(vec![tx_sender(sender_a), tx_move_call(&move_call_path)]));
+    req.filter = Some(tx_and(vec![
+        tx_sender(sender_a),
+        tx_move_call(&move_call_path),
+    ]));
     req.options = Some(query_options(100));
     let resp = list_transactions_result(&mut client, req).await;
     let digests = transaction_digest_set(&resp);
@@ -1624,7 +1663,10 @@ async fn test_list_checkpoints_filters_and_ordering() {
     );
     let mut req = ListCheckpointsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
-    req.filter = Some(tx_and(vec![tx_sender(sender_a), tx_move_call(&move_call_path)]));
+    req.filter = Some(tx_and(vec![
+        tx_sender(sender_a),
+        tx_move_call(&move_call_path),
+    ]));
     req.options = Some(query_options(100));
     let resp = list_checkpoints_result(&mut client, req).await;
     let seqs: HashSet<u64> = resp.checkpoints.iter().map(checkpoint_sequence).collect();
@@ -1725,7 +1767,11 @@ async fn test_list_checkpoints_query_options() {
     req.start_checkpoint = Some(start);
     req.end_checkpoint = Some(end);
     req.filter = Some(tx_sender(sender));
-    req.options = Some(query_options_between(3, first_cursor.clone(), last_cursor.clone()));
+    req.options = Some(query_options_between(
+        3,
+        first_cursor.clone(),
+        last_cursor.clone(),
+    ));
     let bounded = list_checkpoints_result(&mut client, req).await;
     assert_eq!(bounded.checkpoints.len(), 1);
     assert_eq!(bounded.end_reason, Some(QueryEndReason::CursorBound));
@@ -1735,7 +1781,11 @@ async fn test_list_checkpoints_query_options() {
     req.start_checkpoint = Some(start);
     req.end_checkpoint = Some(end);
     req.filter = Some(tx_sender(sender));
-    req.options = Some(query_options_between_descending(3, first_cursor, last_cursor.clone()));
+    req.options = Some(query_options_between_descending(
+        3,
+        first_cursor,
+        last_cursor.clone(),
+    ));
     let bounded_desc = list_checkpoints_result(&mut client, req).await;
     assert_eq!(bounded_desc.checkpoints.len(), 1);
     assert_eq!(bounded_desc.end_reason, Some(QueryEndReason::CursorBound));
@@ -1828,7 +1878,10 @@ async fn test_list_checkpoints_read_masks_and_empty_range() {
                     .any(|o| o.object_id.as_deref() == Some(gas_id.as_str()))
             })
     });
-    assert!(saw_gas, "expected gas object {gas_id} in checkpoint objects[]");
+    assert!(
+        saw_gas,
+        "expected gas object {gas_id} in checkpoint objects[]"
+    );
 
     let any_tx = resp.checkpoints.iter().any(|item| {
         item.checkpoint
@@ -1998,4 +2051,3 @@ async fn test_list_checkpoints_terminal_watermark() {
     assert_item_limit_end(limited.end, limited.end_reason);
     assert!(limited.watermarks.is_empty());
 }
-

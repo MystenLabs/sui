@@ -262,7 +262,10 @@ async fn tto_success() {
     );
     let digest: Digest = (*tx.digest()).into();
     let (_, err) = cluster.execute_transaction(tx).await.unwrap();
-    assert!(err.is_some(), "second receive should fail — the coin already moved");
+    assert!(
+        err.is_some(),
+        "second receive should fail — the coin already moved"
+    );
     cluster.create_checkpoint().await.unwrap();
 
     let txn = client

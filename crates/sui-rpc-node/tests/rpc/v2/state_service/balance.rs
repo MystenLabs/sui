@@ -170,7 +170,10 @@ async fn balance_changes_on_transfer() {
     verify_balances(
         &mut client,
         sender,
-        &[balance_proto(SUI_COIN_TYPE, initial - transfer_amount - gas_used)],
+        &[balance_proto(
+            SUI_COIN_TYPE,
+            initial - transfer_amount - gas_used,
+        )],
     )
     .await;
     verify_balances(
@@ -209,15 +212,36 @@ async fn multiple_concurrent_balance_changes() {
     let rgp = cluster.reference_gas_price().await;
 
     let gas_0 = split_and_transfer(
-        &cluster, addr_0, &kp_0, gas_0a, coin_0, addr_1, xfer_0_to_1, rgp,
+        &cluster,
+        addr_0,
+        &kp_0,
+        gas_0a,
+        coin_0,
+        addr_1,
+        xfer_0_to_1,
+        rgp,
     )
     .await;
     let gas_1 = split_and_transfer(
-        &cluster, addr_1, &kp_1, gas_1a, coin_1, addr_2, xfer_1_to_2, rgp,
+        &cluster,
+        addr_1,
+        &kp_1,
+        gas_1a,
+        coin_1,
+        addr_2,
+        xfer_1_to_2,
+        rgp,
     )
     .await;
     let gas_2 = split_and_transfer(
-        &cluster, addr_2, &kp_2, gas_2a, coin_2, addr_1, xfer_2_to_1, rgp,
+        &cluster,
+        addr_2,
+        &kp_2,
+        gas_2a,
+        coin_2,
+        addr_1,
+        xfer_2_to_1,
+        rgp,
     )
     .await;
     cluster.create_checkpoint().await.unwrap();
@@ -228,7 +252,10 @@ async fn multiple_concurrent_balance_changes() {
     verify_balances(
         &mut client,
         addr_0,
-        &[balance_proto(SUI_COIN_TYPE, initial * 2 - xfer_0_to_1 - gas_0)],
+        &[balance_proto(
+            SUI_COIN_TYPE,
+            initial * 2 - xfer_0_to_1 - gas_0,
+        )],
     )
     .await;
 
@@ -249,7 +276,10 @@ async fn multiple_concurrent_balance_changes() {
     verify_balances(
         &mut client,
         addr_2,
-        &[balance_proto(SUI_COIN_TYPE, initial * 2 + xfer_1_to_2 - xfer_2_to_1 - gas_2)],
+        &[balance_proto(
+            SUI_COIN_TYPE,
+            initial * 2 + xfer_1_to_2 - xfer_2_to_1 - gas_2,
+        )],
     )
     .await;
 }
@@ -296,7 +326,8 @@ async fn custom_coin_balance() {
         )
         .unwrap();
     let pt = builder.finish();
-    let tx_data = TransactionData::new_programmable(sender, vec![post_publish_gas], pt, 50_000_000, rgp);
+    let tx_data =
+        TransactionData::new_programmable(sender, vec![post_publish_gas], pt, 50_000_000, rgp);
     let (mint_effects, err) = cluster
         .execute_transaction(to_sender_signed_transaction(tx_data, &kp))
         .await
@@ -333,7 +364,9 @@ async fn custom_coin_balance() {
     let transfer_amount = 300_000u64;
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    let coin_arg = builder.obj(ObjectArg::ImmOrOwnedObject(trusted_coin_ref)).unwrap();
+    let coin_arg = builder
+        .obj(ObjectArg::ImmOrOwnedObject(trusted_coin_ref))
+        .unwrap();
     let amt = builder.pure(transfer_amount).unwrap();
     let split = builder.command(Command::SplitCoins(coin_arg, vec![amt]));
     let piece = match split {
@@ -342,7 +375,8 @@ async fn custom_coin_balance() {
     };
     builder.transfer_arg(recipient, piece);
     let pt = builder.finish();
-    let tx_data = TransactionData::new_programmable(sender, vec![post_mint_gas], pt, 50_000_000, rgp);
+    let tx_data =
+        TransactionData::new_programmable(sender, vec![post_mint_gas], pt, 50_000_000, rgp);
     let (xfer_effects, err) = cluster
         .execute_transaction(to_sender_signed_transaction(tx_data, &kp))
         .await
@@ -523,7 +557,8 @@ async fn verify_balances(
             .balance
             .unwrap();
         assert_eq!(
-            actual, *expected,
+            actual,
+            *expected,
             "balance mismatch for {} at {}: expected {:?}, got {:?}",
             expected.coin_type.as_deref().unwrap_or(""),
             address,
@@ -634,4 +669,3 @@ async fn find_object_by_type(
     }
     panic!("no created/mutated object matched the requested predicate");
 }
-
