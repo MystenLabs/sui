@@ -9,6 +9,46 @@ Status legend: `[ ]` todo, `[~]` in progress, `[x]` done.
 > Line numbers below are from this session's exploration and may drift;
 > re-grep before editing.
 
+## Handoff notes (read first)
+
+Branch `embed-rpc-store`. Completed pieces and their commits (newest last):
+
+- `141c212c33` 1A perpetual-store ingestion client (`sui-core`).
+- `071d797539` 1B-i broadcast checkpoint stream.
+- `b273008626` 1B-ii broadcast streaming client.
+- `91c1920731` 1C-i `Db::clear_all`.
+- `106b35e882` 1C-iii Synchronizer dynamic-membership snapshot coordinator.
+
+`git log --oneline main..HEAD` shows the series. Each commit is self-contained
+with tests + clippy + fmt green.
+
+**Phase 1 is complete.** The two open questions were resolved: implement behind
+unit tests (not a spike), and the concurrency primitive is a `std::sync::Mutex`
+over membership/arrival counts plus a `tokio::sync::watch<u64>` carrying the
+frontier (single source of truth + lost-wakeup-free wakeup). The fixed-size
+`Barrier` is gone; lagging pipelines commit freely and late-join the cohort at
+the frontier; a member whose channel closes on shutdown departs so peers do not
+deadlock. See `SnapshotCoordinator` in `synchronizer.rs`.
+
+**Next up: Phase 2 (2A embedded cohort wiring, then 2B restore + watermark
+seeding).** Start at 2A: verify/extend `PipelineLayer` (`config.rs`) for the
+cohort split and confirm `Indexer::from_store` registers only the active cohort
+so the snapshot barrier covers exactly those pipelines.
+
+**Workflow the user asked for:** one commit per sub-phase (1A, 1B, ...); ensure
+`cargo nextest run -p <crate> <filter>`, `cargo xclippy` (from the crate dir),
+and fmt all pass; then tick this doc. Commits: `scope: title` (e.g.
+`consistent-store: ...`), no Co-Authored-By lines.
+
+**rustfmt caveat (important):** local `rustfmt 1.8.0-stable` disagrees with the
+repo's pinned formatter on ~100-char boundary lines and flags *pre-existing,
+unmodified* code (e.g. `consistent-store/src/db.rs:277` in `open()`,
+`options.rs`). Do NOT whole-crate `cargo fmt -p <crate>` (it would churn
+unrelated boundary lines into the diff). Instead verify only your own added
+lines: `cargo fmt -p <crate> -- --check 2>&1 | rg 'Diff in .*<file>:[0-9]+'`
+and confirm no diff falls inside the lines you added. See
+[[feedback-rustfmt-version-mismatch]].
+
 ## Goal
 
 Embed `sui-rpc-store` into the fullnode to replace `sui-core/src/rpc_index.rs`,
@@ -76,51 +116,83 @@ store; `live_objects` is kept in sync but not on the read hot path.
 
 ### Phase 1 -- foundations (parallel, land first)
 
-- [ ] **1A. Perpetual-store ingestion client** (`sui-core`, sibling to
-  `rpc_store_restore_source.rs`). Implement `IngestionClientTrait`:
-  - `chain_id()` -> `state.get_chain_identifier()`.
-  - `checkpoint(seq)` -> assemble `full_checkpoint_content::Checkpoint`,
-    reusing the existing `load_checkpoint` / `load_checkpoint_data` helper
-    (`data_ingestion_handler.rs`); return NotFound outside `[L, T]`.
-  - `latest_checkpoint_number()` -> highest executed checkpoint seq.
-  - Wrap via `IngestionClient::from_trait(arc, metrics)`. Unit-test a
-    round-trip.
+- [x] **1A. Perpetual-store ingestion client**
+  (`sui-core/src/rpc_store_ingestion_client.rs`). Implemented
+  `PerpetualStoreIngestionClient<R>`, generic over `ReadStore` (production `R`
+  = `RocksDbStore`; generic bound keeps it unit-testable against an in-memory
+  mock). Implements `IngestionClientTrait`:
+  - `chain_id()` -> captured at construction (genesis may be pruned away).
+  - `checkpoint(seq)` -> `get_checkpoint_by_sequence_number` +
+    `get_checkpoint_contents_by_digest` + `ReadStore::get_checkpoint_data`
+    (cleaner than `load_checkpoint`, which is `pub(crate)` and needs the
+    cache reader); missing/pruned -> `NotFound`.
+  - `latest_checkpoint_number()` -> `get_latest_checkpoint_sequence_number`
+    (= highest executed on `RocksDbStore`).
+  - Added `sui-indexer-alt-framework` (default-features=false) to `sui-core`
+    deps (no cycle). `from_trait` wrapping happens at the wiring site (3B).
+  - 5 unit tests (NotFound, summary-without-contents, round-trip, latest,
+    chain_id) green; clippy + fmt clean.
 
-- [ ] **1B. Broadcast checkpoint stream + streaming client**
-  (`sui-core` / `sui-node` / `sui-rpc-api`).
-  - Convert the executor->subscription channel from
-    `mpsc::Sender<Checkpoint>` to `broadcast::Sender<Checkpoint>`
-    (`checkpoint_executor/mod.rs` field ~195; enqueue ~1065 becomes
-    non-blocking `send`, ignoring "no receivers").
-  - `SubscriptionService::build` (`subscription.rs` ~50) creates a broadcast
-    channel; the service holds a `broadcast::Receiver`. On `Lagged`/gap, drop
-    all in-progress subscriptions and continue; delete the out-of-order panic
-    (`subscription.rs` ~107).
-  - New `CheckpointStreamingClient` (`BoxedStreamingClient`) over a
-    `broadcast::Receiver`, lag handling modeled on `reconfig_observer.rs`; the
-    framework backfills any gap via 1A.
-  - Update node wiring (`sui-node/src/lib.rs` ~2593, executor construction
-    ~1744) for the broadcast sender type.
+- [x] **1B. Broadcast checkpoint stream + streaming client** (landed as two
+  commits). Channel type chosen: `broadcast::Sender<Arc<Checkpoint>>` (Arc to
+  keep fan-out cheap across multiple subscribers).
+  - [x] **1B-i. Broadcast conversion** (`sui-core` / `sui-rpc-api` /
+    `sui-node` / `sui-fork`). Executor field + `new_for_tests`(None) +
+    enqueue now non-blocking sync `send(Arc::new(..))`; the commit/enqueue
+    helper is no longer async. `SubscriptionService::build` creates a
+    `broadcast::channel`; `start()` matches `recv()` -> Ok / Lagged / Closed.
+    New `handle_lag` drops all in-progress subscriptions and resets the
+    in-order tracker; the out-of-order panic stays (now only reachable on a
+    true executor bug). `sui-fork`'s `Context` + `rpc_executor` test harness
+    updated to broadcast. 3 subscription unit tests + 95 sui-fork tests green.
+  - [x] **1B-ii. Broadcast streaming client**
+    (`sui-core/src/rpc_store_streaming_client.rs`). `BroadcastStreamingClient`
+    implements `CheckpointStreamingClient`: `connect()` subscribes and yields
+    a `Peekable<BoxStream>` via `stream::unfold`; `Lagged` -> stream error
+    (framework reconnects and fills the gap from 1A's ingestion client),
+    `Closed` -> stream ends. 3 unit tests (in-order, lag-errors, close) green.
+    Wiring of both clients into the indexer happens in 3B.
 
-- [ ] **1C. `sui-consistent-store` primitives.**
-  - `Db::clear_user_data()` -- drop + recreate non-framework user CFs and
-    reset `__watermark` / `__restore` / `__chain_id` for the
-    "initialized but out of range" wipe-then-restore path. (Uses `drop_cf`,
-    `db.rs` ~664.)
-  - Per-pipeline watermark seeding API -- set the live cohort to `T` and the
-    history cohort to `L` post-restore. Today only `complete_restore`
-    (`db/mod.rs` ~309) writes `__watermark` (`framework.rs` FrameworkSchema
-    ~201).
-  - **Synchronizer dynamic-cohort late-join** (riskiest): replace the
-    fixed-size `tokio::sync::Barrier` (`synchronizer.rs` task loop ~230-323;
-    snapshot barrier ~265-295) with a dynamic-membership coordinator so
-    snapshots only wait on pipelines that have reached the frontier. Lagging
-    pipelines commit freely and join on catch-up. The cross-pipeline equality
-    check (~302) relaxes to "joined pipelines at the frontier"; each pipeline
-    still processes its own checkpoints strictly in order. `init_checkpoint =
-    max(watermarks)` (~197) already seeds the frontier at the tip. Focused
-    unit test: two pipelines, one lagging, snapshots advance on the tip cohort
-    and the laggard joins on catch-up.
+- **1C. `sui-consistent-store` primitives.**
+  - [x] **1C-i. `Db::clear_all()`** (`db.rs`). Wipes every CF (user +
+    framework + default) back to empty in place, preserving each CF's options
+    (merge operators / compaction filters stay attached because CFs aren't
+    dropped), clears in-memory snapshots. Implemented as a whole-keyspace
+    range delete per CF + compaction. Note in the doc: a `drop_cf`-based wipe
+    would be O(file count) instead of O(data size) but would need to recreate
+    CFs with schema options (generic over `Schema` + `RocksDbConfig`);
+    deferred as a possible optimization (kept the simpler impl per review). 2
+    unit tests green; clippy clean; canonical `cargo fmt` flags only
+    pre-existing `open()` code (local rustfmt 1.8.0 boundary nit), not the new
+    code.
+  - [x] **1C-ii. Per-pipeline watermark seeding -- NO new code needed.** The
+    framework CFs are public `DbMap`s (`db.framework().watermarks`), and
+    `PipelineTaskKey::new` + `Watermark::for_checkpoint` are public, so 2B can
+    seed live cohort -> `T` and history cohort -> `L` directly via a `Batch`.
+    Plan: register only the live cohort with the restore driver (gets `T` via
+    `complete_restore`); seed history watermarks to `L` with a direct
+    `batch.put(&fw.watermarks, key, Watermark::for_checkpoint(L))`.
+  - [x] **1C-iii. Synchronizer dynamic-cohort late-join** (`106b35e882`).
+    Replaced both fixed-size `tokio::sync::Barrier`s with a
+    `SnapshotCoordinator`. `run()` classifies each pipeline at startup: those
+    within one stride of the frontier (`watermark >= current_window_start`,
+    where `current_window_start = (init_checkpoint / stride) * stride`) are
+    initial cohort members; pipelines lagging further behind (the history
+    cohort seeded to `L`) start outside the cohort. The per-pipeline task
+    reads the shared frontier each loop: below it -> commit freely; at it ->
+    `arrive()` (joins the cohort if not already a member, then blocks until
+    the snapshot is taken); past it -> bail (unreachable for a well-behaved
+    pipeline). The last member to arrive takes the snapshot and advances the
+    frontier. A late join is consistent because the joiner has committed
+    through `frontier - 1` when it arrives. Concurrency: `std::sync::Mutex`
+    over `{ members, arrived }` plus a `tokio::sync::watch<u64>` carrying the
+    frontier (source of truth + wakeup; `watch` retention avoids lost
+    wakeups). Added `depart()` so a member whose channel closes on shutdown
+    leaves the cohort and releases any peers parked at the frontier (the
+    original masked this shutdown deadlock via `JoinSet` abort). 2 focused
+    tests added (caught-up cohort snapshots while a laggard is never fed;
+    laggard joins on catch-up so a later snapshot waits for both); all 251
+    crate tests + clippy + fmt green.
 
 ### Phase 2 -- indexer embedding glue (`sui-rpc-store`)
 
