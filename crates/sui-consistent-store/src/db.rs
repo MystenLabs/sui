@@ -638,6 +638,68 @@ impl Db {
         Ok(())
     }
 
+    /// Wipe every column family back to empty, preserving each CF's
+    /// configured options (merge operators, compaction filters stay
+    /// attached because the CFs themselves are not dropped or
+    /// recreated). The framework bookkeeping CFs (`__restore`,
+    /// `__watermark`, `__chain_id`) are cleared too, so a subsequent
+    /// restore observes a never-restored database, and any in-memory
+    /// snapshots are discarded.
+    ///
+    /// This is the wipe-then-restore primitive: when a fullnode finds
+    /// its embedded rpc-store initialized but with watermarks outside
+    /// the perpetual store's available range, it cannot trust the
+    /// live-object indexes and must rebuild them from a clean slate.
+    ///
+    /// The caller must hold no live [`Snapshot`]s and run no concurrent
+    /// reads or writes; it is intended for single-threaded startup
+    /// before the indexer begins. Each CF is emptied with a single
+    /// range delete spanning its whole keyspace and then compacted so
+    /// the range tombstones and old data do not linger into the
+    /// re-restore.
+    ///
+    /// Possible optimization: the compaction reads every overlapping
+    /// SST to produce empty output, so this is O(data size) I/O. A
+    /// faster wipe would `drop_cf` each column family and recreate it,
+    /// which unlinks SSTs in O(file count). That requires re-deriving
+    /// each CF's options from the schema (merge operators and
+    /// compaction filters live in `Schema::cfs`, not on the open
+    /// `Db`), so it would make this method generic over the schema and
+    /// take the [`RocksDbConfig`](crate::RocksDbConfig). Worth pursuing
+    /// if the wipe-then-restore path proves slow on large databases.
+    pub fn clear_all(&self) -> Result<(), Error> {
+        let mut batch = rocksdb::WriteBatch::default();
+        let mut cleared = Vec::new();
+        for name in &self.inner.cf_names {
+            // CFs dropped at runtime via `drop_cf` have no handle; their
+            // data is already gone, so there is nothing to clear.
+            let Some(cf) = self.inner.db.cf_handle(name) else {
+                continue;
+            };
+            // `delete_range_cf` is a half-open `[from, to)`; appending a
+            // zero byte to the last key yields a bound strictly greater
+            // than every key present, so the whole keyspace is covered.
+            let mut iter = self.inner.db.raw_iterator_cf(&cf);
+            iter.seek_to_last();
+            if let Some(last) = iter.key() {
+                let mut end = last.to_vec();
+                end.push(0);
+                let empty: &[u8] = &[];
+                batch.delete_range_cf(&cf, empty, end.as_slice());
+            }
+            drop(iter);
+            cleared.push(cf);
+        }
+        self.inner.db.write(batch)?;
+        for cf in &cleared {
+            self.inner
+                .db
+                .compact_range_cf(cf, None::<&[u8]>, None::<&[u8]>);
+        }
+        self.inner.snapshots.write().clear();
+        Ok(())
+    }
+
     /// Drop the snapshot at `checkpoint`. Returns `true` if a
     /// snapshot was removed.
     ///
@@ -893,6 +955,61 @@ mod tests {
         let result = Db::open::<TestSchema>(&path, DbOptions::default());
         let err = result.expect_err("open should fail when the path is a regular file");
         assert!(std::error::Error::source(&err).is_some());
+    }
+
+    #[test]
+    fn clear_all_empties_every_cf_including_framework() {
+        use crate::framework::FrameworkSchema;
+        use crate::framework::PipelineTaskKey;
+        use crate::framework::Watermark;
+
+        let dir = TempDir::new().unwrap();
+        let (db, _schema) = Db::open::<TestSchema>(dir.path(), DbOptions::default()).unwrap();
+
+        // Seed the user CFs with a spread of raw keys.
+        for name in ["foo", "bar", "default"] {
+            let cf = db.cf_handle(name).unwrap();
+            for k in 0u8..8 {
+                db.rocksdb().put_cf(&cf, [k], [k]).unwrap();
+            }
+        }
+        // Seed a framework watermark to confirm bookkeeping is reset too.
+        let framework = FrameworkSchema::new(db.clone());
+        let key = PipelineTaskKey::new("some_pipeline");
+        let mut batch = db.batch();
+        batch
+            .put(&framework.watermarks, &key, &Watermark::for_checkpoint(42))
+            .unwrap();
+        batch.commit().unwrap();
+        assert!(framework.watermarks.get(&key).unwrap().is_some());
+
+        db.clear_all().unwrap();
+
+        for name in [
+            "foo",
+            "bar",
+            "default",
+            "__watermark",
+            "__restore",
+            "__chain_id",
+        ] {
+            let cf = db.cf_handle(name).unwrap();
+            let mut iter = db.rocksdb().raw_iterator_cf(&cf);
+            iter.seek_to_first();
+            assert!(!iter.valid(), "cf `{name}` should be empty after clear_all");
+        }
+        assert!(framework.watermarks.get(&key).unwrap().is_none());
+    }
+
+    #[test]
+    fn clear_all_on_empty_db_is_a_noop() {
+        let dir = TempDir::new().unwrap();
+        let (db, _schema) = Db::open::<TestSchema>(dir.path(), DbOptions::default()).unwrap();
+        db.clear_all().unwrap();
+        let cf = db.cf_handle("foo").unwrap();
+        let mut iter = db.rocksdb().raw_iterator_cf(&cf);
+        iter.seek_to_first();
+        assert!(!iter.valid());
     }
 
     #[test]
