@@ -266,6 +266,7 @@ impl DBCheckpointHandler {
             &perpetual_db,
             &checkpoint_store,
             Some(&rpc_index),
+            None,
             self.pruning_config.clone(),
             metrics,
             epoch_duration_ms,
