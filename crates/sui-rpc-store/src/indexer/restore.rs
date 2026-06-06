@@ -48,8 +48,6 @@ use tracing::warn;
 use crate::RestoreLayer;
 use crate::RpcStoreReader;
 use crate::RpcStoreSchema;
-use crate::schema::epochs;
-use crate::schema::keys::U64Be;
 use crate::indexer::balance::Balance;
 use crate::indexer::checkpoint_contents::CheckpointContents;
 use crate::indexer::checkpoint_seq_by_digest::CheckpointSeqByDigest;
@@ -67,6 +65,8 @@ use crate::indexer::transaction_bitmap::TransactionBitmap;
 use crate::indexer::transactions::Transactions;
 use crate::indexer::tx_metadata_by_seq::TxMetadataBySeq;
 use crate::indexer::tx_seq_by_digest::TxSeqByDigest;
+use crate::schema::epochs;
+use crate::schema::keys::U64Be;
 use crate::schema::pruning_watermark;
 
 /// Register every [`Restore`]-implementing pipeline opted in by
@@ -218,7 +218,10 @@ pub fn floor_unrestored_pipelines(
         let reader = RpcStoreReader::new(db.clone(), schema.clone());
         let start_checkpoint = target_watermark.checkpoint_hi_inclusive.saturating_add(1);
         match seed_current_epoch_start(&schema, &reader, start_checkpoint, &mut batch) {
-            Ok(epoch) => info!(epoch, start_checkpoint, "seeded start record for restore epoch"),
+            Ok(epoch) => info!(
+                epoch,
+                start_checkpoint, "seeded start record for restore epoch"
+            ),
             Err(e) => warn!(
                 error = %e,
                 "could not seed the restore epoch's start record; get_epoch / \

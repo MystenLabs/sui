@@ -50,9 +50,9 @@ use sui_consistent_store::DbMap;
 use sui_consistent_store::DbWideConfig;
 use sui_consistent_store::RocksDbConfig;
 use sui_consistent_store::Schema;
-use sui_consistent_store::WriteStallConfig;
 use sui_consistent_store::SchemaAtSnapshot;
 use sui_consistent_store::Snapshot;
+use sui_consistent_store::WriteStallConfig;
 use sui_consistent_store::error::OpenError;
 use sui_consistent_store::reader::Reader;
 
@@ -144,10 +144,7 @@ impl Schema for RpcStoreSchema {
     fn cfs(opts: &CfOptionsResolver) -> Vec<CfDescriptor> {
         vec![
             CfDescriptor::new(epochs::NAME, epochs::options(opts)),
-            CfDescriptor::new(
-                checkpoint_summary::NAME,
-                checkpoint_summary::options(opts),
-            ),
+            CfDescriptor::new(checkpoint_summary::NAME, checkpoint_summary::options(opts)),
             CfDescriptor::new(
                 checkpoint_contents::NAME,
                 checkpoint_contents::options(opts),
@@ -157,37 +154,19 @@ impl Schema for RpcStoreSchema {
                 checkpoint_seq_by_digest::options(opts),
             ),
             CfDescriptor::new(transactions::NAME, transactions::options(opts)),
-            CfDescriptor::new(
-                tx_seq_by_digest::NAME,
-                tx_seq_by_digest::options(opts),
-            ),
-            CfDescriptor::new(
-                tx_metadata_by_seq::NAME,
-                tx_metadata_by_seq::options(opts),
-            ),
+            CfDescriptor::new(tx_seq_by_digest::NAME, tx_seq_by_digest::options(opts)),
+            CfDescriptor::new(tx_metadata_by_seq::NAME, tx_metadata_by_seq::options(opts)),
             CfDescriptor::new(effects::NAME, effects::options(opts)),
             CfDescriptor::new(events::NAME, events::options(opts)),
             CfDescriptor::new(objects::NAME, objects::options(opts)),
             CfDescriptor::new(live_objects::NAME, live_objects::options(opts)),
-            CfDescriptor::new(
-                object_by_owner::NAME,
-                object_by_owner::options(opts),
-            ),
+            CfDescriptor::new(object_by_owner::NAME, object_by_owner::options(opts)),
             CfDescriptor::new(object_by_type::NAME, object_by_type::options(opts)),
             CfDescriptor::new(balance::NAME, balance::options(opts)),
-            CfDescriptor::new(
-                package_versions::NAME,
-                package_versions::options(opts),
-            ),
-            CfDescriptor::new(
-                transaction_bitmap::NAME,
-                transaction_bitmap::options(opts),
-            ),
+            CfDescriptor::new(package_versions::NAME, package_versions::options(opts)),
+            CfDescriptor::new(transaction_bitmap::NAME, transaction_bitmap::options(opts)),
             CfDescriptor::new(event_bitmap::NAME, event_bitmap::options(opts)),
-            CfDescriptor::new(
-                pruning_watermark::NAME,
-                pruning_watermark::options(opts),
-            ),
+            CfDescriptor::new(pruning_watermark::NAME, pruning_watermark::options(opts)),
         ]
     }
 

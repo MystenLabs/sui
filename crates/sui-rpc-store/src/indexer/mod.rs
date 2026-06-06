@@ -337,8 +337,7 @@ impl Indexer {
 
         // Register the pruner's metrics under its own prefix when
         // pruning is enabled; `run` starts the task from this.
-        let pruner = pruner_config
-            .map(|config| (config, PrunerMetrics::new(None, registry)));
+        let pruner = pruner_config.map(|config| (config, PrunerMetrics::new(None, registry)));
 
         Ok(Self {
             indexer,

@@ -284,10 +284,12 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
             // order but `skip_while` would only suppress a leading
             // run that matches, leaving every earlier row in the
             // output.
-            .filter(move |entry: &Result<(u64, ObjectID), TypedStoreError>| match entry {
-                Ok((v, _)) => cursor.map(|c| *v >= c).unwrap_or(true),
-                Err(_) => true,
-            });
+            .filter(
+                move |entry: &Result<(u64, ObjectID), TypedStoreError>| match entry {
+                    Ok((v, _)) => cursor.map(|c| *v >= c).unwrap_or(true),
+                    Err(_) => true,
+                },
+            );
         Ok(Box::new(mapped))
     }
 

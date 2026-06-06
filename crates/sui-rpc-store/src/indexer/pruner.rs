@@ -462,9 +462,17 @@ mod tests {
     /// digest reverse indexes. These cover both deletion mechanisms
     /// (range delete and point delete) plus the effects-driven object
     /// retraction.
-    async fn seed(db: &Db, schema: &RpcStoreSchema, checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>) {
+    async fn seed(
+        db: &Db,
+        schema: &RpcStoreSchema,
+        checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
+    ) {
         let mut batch = db.batch();
-        for row in crate::indexer::objects::Objects.process(checkpoint).await.unwrap() {
+        for row in crate::indexer::objects::Objects
+            .process(checkpoint)
+            .await
+            .unwrap()
+        {
             batch
                 .put(
                     &schema.objects,
@@ -476,7 +484,11 @@ mod tests {
                 )
                 .unwrap();
         }
-        for row in crate::indexer::effects::Effects.process(checkpoint).await.unwrap() {
+        for row in crate::indexer::effects::Effects
+            .process(checkpoint)
+            .await
+            .unwrap()
+        {
             batch
                 .put(&schema.effects, &U64Be(row.tx_seq), &row.value)
                 .unwrap();
@@ -545,12 +557,19 @@ mod tests {
         // Seed epoch 3's start record at checkpoint 300.
         let mut batch = db.batch();
         batch
-            .merge(&schema.epochs, &U64Be(3), &epochs::start(1, 1, 0, 300, None))
+            .merge(
+                &schema.epochs,
+                &U64Be(3),
+                &epochs::start(1, 1, 0, 300, None),
+            )
             .unwrap();
         batch.commit().unwrap();
         // current_epoch=5, retention=3 => retain [3, 5], oldest
         // retained is epoch 3, whose start checkpoint is the floor.
-        assert_eq!(retention_checkpoint_floor(&schema, 5, 3).unwrap(), Some(300));
+        assert_eq!(
+            retention_checkpoint_floor(&schema, 5, 3).unwrap(),
+            Some(300)
+        );
     }
 
     #[test]
@@ -624,7 +643,9 @@ mod tests {
         let mut bitmap0 = roaring::RoaringBitmap::new();
         bitmap0.insert(transaction_bitmap::bit_of(5));
         let mut bitmap1 = roaring::RoaringBitmap::new();
-        bitmap1.insert(transaction_bitmap::bit_of(transaction_bitmap::TX_BUCKET_SIZE + 5));
+        bitmap1.insert(transaction_bitmap::bit_of(
+            transaction_bitmap::TX_BUCKET_SIZE + 5,
+        ));
         let (k0, v0) = transaction_bitmap::store_bitmap(dim.clone(), 0, bitmap0);
         let (k1, v1) = transaction_bitmap::store_bitmap(dim.clone(), 1, bitmap1);
 
