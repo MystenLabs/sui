@@ -353,11 +353,16 @@ pub fn seed_current_epoch_start(
 /// embedded caller passes the validator's perpetual store directly
 /// (this crate stays free of any `sui-core` dependency).
 ///
-/// Deliberately does *not* write a `pruning_watermark`: the history
-/// backfill starts empty and fills upward, so the bitmap compaction
-/// floor is left at zero to keep freshly backfilled buckets from
-/// being dropped. Advertising the true ledger-history availability
-/// range during backfill is handled separately.
+/// Stamps the singleton `pruning_watermark` at the lowest available
+/// checkpoint `L` — the first checkpoint the backfill will index,
+/// `history_watermark.checkpoint_hi_inclusive + 1` — with
+/// `tx_seq_lo = history_watermark.tx_hi` (the first `tx_seq` that
+/// checkpoint contributes). This records that nothing below `L` is
+/// available and sets the bitmap compaction filter's floor. The
+/// backfill only ever writes `tx_seq` at or above the floor, so the
+/// filter drops nothing it produces. (The *upper* bound of history
+/// availability while a backfill is in progress is a separate
+/// concern, handled elsewhere.)
 ///
 /// Idempotent: re-running overwrites the same rows. Does not touch
 /// the live cohort or the deactivated (perpetual-store-served) CFs.
@@ -381,6 +386,20 @@ pub fn seed_history_cohort(
             .with_context(|| format!("stage __chain_id for {name:?}"))?;
     }
 
+    // Stamp the pruning floor at the lowest available checkpoint `L`
+    // (the first checkpoint the backfill will index). `tx_seq_lo` is
+    // the tx count through the seed point, i.e. the first `tx_seq`
+    // checkpoint `L` contributes, so the bitmap compaction filter
+    // drops nothing the backfill produces.
+    let tx_seq_lo = history_watermark.tx_hi;
+    let (k, v) = pruning_watermark::store(&pruning_watermark::Watermarks {
+        tx_seq_lo,
+        checkpoint_lo: history_watermark.checkpoint_hi_inclusive.saturating_add(1),
+    });
+    batch
+        .put(&schema.pruning_watermark, &k, &v)
+        .context("stage pruning_watermark row")?;
+
     if let Some(objects) = objects {
         // Mid-epoch restore: the epoch's first checkpoint precedes the
         // tip, so seed a partial start record (no `start_checkpoint`).
@@ -396,6 +415,13 @@ pub fn seed_history_cohort(
     }
 
     batch.commit().context("commit history-cohort seed batch")?;
+
+    // Mirror the on-disk floor into the process-wide atomic so any
+    // bitmap compaction-filter clones in this process see it
+    // immediately (a subsequent `Indexer::from_store` also calls
+    // `refresh_pruning_atomics`).
+    schema.set_pruning_floor(tx_seq_lo);
+
     Ok(())
 }
 
@@ -751,26 +777,32 @@ mod tests {
     }
 
     /// `seed_history_cohort` primes every history-cohort pipeline with
-    /// the lowest-available watermark `L` and the chain id, leaves the
-    /// live cohort untouched (the restore driver owns it), and does
-    /// not stamp a pruning watermark (so backfilled bitmap buckets
-    /// survive).
+    /// the seed watermark and the chain id, stamps the pruning floor at
+    /// the lowest available checkpoint `L`, and leaves the live cohort
+    /// untouched (the restore driver owns it).
     #[test]
-    fn seed_history_cohort_seeds_only_history_watermarks() {
+    fn seed_history_cohort_seeds_history_watermarks_and_pruning_floor() {
         let dir = tempfile::tempdir().unwrap();
         let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
 
         let chain_id = ChainId([5u8; 32]);
-        let l = Watermark::for_checkpoint(1_000);
-        seed_history_cohort(&db, &schema, l, chain_id, None).unwrap();
+        // Seed point: committed through checkpoint 999 / tx 5000, so the
+        // backfill resumes at (and the floor is) checkpoint 1000.
+        let seed = Watermark {
+            checkpoint_hi_inclusive: 999,
+            tx_hi: 5_000,
+            ..Watermark::default()
+        };
+        seed_history_cohort(&db, &schema, seed, chain_id, None).unwrap();
 
-        // History cohort resumes from L, pinned to the chain.
+        // History cohort resumes from the seed point, pinned to the
+        // chain.
         for name in HISTORY_COHORT {
             let key = PipelineTaskKey::new(*name);
             assert_eq!(
                 db.framework().watermarks.get(&key).unwrap(),
-                Some(l),
-                "{name} should resume from L",
+                Some(seed),
+                "{name} should resume from the seed point",
             );
             assert_eq!(
                 db.framework().chain_ids.get(&key).unwrap(),
@@ -789,9 +821,15 @@ mod tests {
             );
         }
 
-        // No pruning watermark: the bitmap compaction floor stays at
-        // zero so freshly backfilled buckets are not dropped.
-        assert!(schema.get_pruning_watermarks().unwrap().is_none());
+        // Pruning floor sits at the lowest available checkpoint
+        // (seed + 1) and the seed point's tx count.
+        assert_eq!(
+            schema.get_pruning_watermarks().unwrap(),
+            Some(crate::schema::pruning_watermark::Watermarks {
+                tx_seq_lo: 5_000,
+                checkpoint_lo: 1_000,
+            }),
+        );
     }
 
     /// The live and history cohorts are disjoint and each has the

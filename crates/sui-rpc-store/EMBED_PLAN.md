@@ -57,11 +57,14 @@ exist and stay free of any `sui-core` dependency:
 
 Phase 3 order (per landing order): 3A (config flag, trivial) -> 3C (read-path
 wrapper) -> 3D (pruner integration) -> 3B (the startup orchestration that wires
-restore_indexes + seed_history_cohort + the 1A/1B clients together). Open
-decisions deferred to 3B/Phase 5: the exact `L` (= max pruned watermark + 1)
-and the off-by-one on the history seed (`for_checkpoint(L)` resumes at `L+1`;
-decide whether to seed `L-1` to include `L`); the pruning-watermark / true
-history-availability advertising during backfill (Phase 5).
+restore_indexes + seed_history_cohort + the 1A/1B clients together). Note on the
+history seed point: `seed_history_cohort` treats the seed watermark as
+"committed through", so the backfill resumes at -- and the pruning floor sits at
+-- `seed.checkpoint_hi_inclusive + 1`. To make checkpoint `L` the lowest
+available, `sui-node` passes the watermark for `L - 1` (with `tx_hi` = tx count
+through `L - 1`, read from the perpetual store's checkpoint `L - 1`). Still
+deferred to Phase 5: advertising the *upper* bound of ledger-history
+availability while the backfill is mid-flight.
 
 **Workflow the user asked for:** one commit per sub-phase (1A, 1B, ...); ensure
 `cargo nextest run -p <crate> <filter>`, `cargo xclippy` (from the crate dir),
@@ -248,9 +251,13 @@ store; `live_objects` is kept in sync but not on the read hot path.
   (`restore.rs`), the embedded analog of `floor_unrestored_pipelines`: writes
   `__watermark = L` + `__chain_id` for each history-cohort pipeline and, given an
   `&dyn ObjectStore`, the partial epoch seed. The caller (`sui-node`) passes its
-  perpetual store as the `ObjectStore`, keeping this crate `sui-core`-free.
-  Deliberately writes no pruning watermark (bitmap floor stays at 0 so backfilled
-  buckets survive; availability advertising is Phase 5). Added `LIVE_COHORT` /
+  perpetual store as the `ObjectStore`, keeping this crate `sui-core`-free. Stamps
+  the pruning floor at the lowest available checkpoint `L`
+  (`checkpoint_lo = seed.checkpoint_hi_inclusive + 1`,
+  `tx_seq_lo = seed.tx_hi`), mirroring `floor_unrestored_pipelines`; the backfill
+  only writes `tx_seq` at or above the floor, so the bitmap compaction filter
+  drops nothing it produces (the *upper* availability bound during backfill is
+  still Phase 5). Added `LIVE_COHORT` /
   `HISTORY_COHORT` consts as the single source of truth for the split, exported
   from `lib.rs`, with the embedded-layer test retargeted to pin
   `PipelineLayer::embedded()` to their union via the real registered
