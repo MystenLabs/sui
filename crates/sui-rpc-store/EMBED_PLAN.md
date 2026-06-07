@@ -437,7 +437,18 @@ run drove the suite from 32 -> 56 -> 88 -> 90 as three runtime bugs were fixed:
   resume-and-catch-up-after-gap, and pruned-range-forces-rebuild
   (`Restore { clear: true }`). Each asserts `GetBalance` (live `balance` index)
   and `ListTransactions` (history `transaction_bitmap` index) answer correctly
-  afterward.
+  afterward. They pass under both `cargo nextest` and `cargo simtest` (validated
+  across seeds 1-20 plus repeats).
+
+  **Simtest restart race (`21a1214239`, `69a88d1c04`).** Restarting a node on the
+  same `db_path` can race the previous instance's RocksDB teardown for its file
+  locks. Under a real runtime the stop joins the node's thread, so the locks are
+  released first; under simulation the teardown (background tasks plus the
+  real-thread RocksDB close) is asynchronous and *not* deterministic w.r.t. the
+  simulated clock -- the same seed passes or fails across runs -- so no fixed or
+  `Weak`-based wait fully fixes it. Fixed with a bounded retry of `SuiNode::start`
+  in the swarm's simulation container (`container-sim.rs`); the test also waits on
+  a `Weak<SuiNode>` before restarting to shrink the window and minimize retries.
 
   **Bug found + fixed (`4317f0af2d`): restore-target vs object-set consistency.**
   The enable/rebuild test was ~50% flaky with a recipient balance reported at 2x.
