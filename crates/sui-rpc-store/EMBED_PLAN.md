@@ -470,6 +470,80 @@ run drove the suite from 32 -> 56 -> 88 -> 90 as three runtime bugs were fixed:
   object/state availability range -- extend the availability surface or pick a
   single conservative value. Deferred until everything else works.
 
+## Remaining work (consolidated tracker)
+
+Everything still open, roughly in critical-path order toward the hard cutover
+(make the embedded store the default and delete `rpc_index.rs`). Phases 1-4A are
+done.
+
+### Near-term hardening (pre-cutover)
+
+- [ ] **Broaden embedded-backend validation.** The `tests/rpc` suite is the only
+  e2e coverage running against the embedded backend (via the `restore` module's
+  explicit opt-in). Run the other index-dependent suites against it too:
+  `authenticated_events_*`, `address_balance_rpc_tests.rs`. Each needs the
+  `with_rpc_config` opt-in (or a temporary global flip while validating).
+- [ ] **CI strategy.** Decide whether the broader e2e suites run against the
+  embedded backend as a separate CI job, and wire it up.
+- [ ] **Pre-existing legacy flake.** `v2::state_service::list_owned_objects::
+  test_reverse_sorted_coins_by_balance` fails rarely under `-j2` parallel load
+  (passes 4/4 in isolation). It exercises the legacy `list_owned_objects` path,
+  not the embedded store, so it predates this work -- investigate the
+  read-after-write race, quarantine, or leave. Not a regression from the embed
+  changes.
+- [ ] **4B focused read-after-write test.** A small unit/integration test that
+  the embedded read path is read-after-write consistent end to end (the e2e
+  suite covers it; a smaller test would localize regressions). The rest of 4B is
+  done -- see 4B above.
+
+### Atomic-watermark fix follow-ups (`4317f0af2d`)
+
+- [ ] **Focused unit test** for `highest_committed_checkpoint`: that the executor
+  stamps it atomically with `commit_transaction_outputs`, and that the embedded
+  bootstrap reads it as the restore target. Currently only covered indirectly by
+  the e2e restore tests.
+- [ ] **Retire the `highest_executed` fallback** in `EmbeddedRpcStore::bootstrap`
+  once databases written before this watermark existed no longer need support.
+- [ ] **Confirm db-checkpoint/snapshot inclusion** of the new perpetual CF
+  (almost certainly handled by `#[derive(DBMapUtils)]`, but unverified).
+
+### Cutover (the end goal)
+
+- [ ] **`ListBalances` zero-balance parity.** The embedded `balance` CF drops
+  rows where both halves are zero, so `ListBalances` omits coin types held only
+  as zero-value coins; legacy reports them as `balance: 0`. Decide whether to
+  match legacy before cutover (a real behavioral divergence). See SUMMARY.md
+  "Deferred work".
+- [ ] **Hard cutover.** Flip the default to the embedded backend and delete
+  `sui-core/src/rpc_index.rs`. Gated on the validation breadth, Phase 5, and
+  zero-balance parity above.
+
+### Crate-level deferred work (`sui-rpc-store`)
+
+Tracked in full in `SUMMARY.md` "Deferred work"; mirrored here so this plan stays
+a complete checklist:
+
+- [ ] **Pruning follow-ups:** (a) optional `max_chunk_transactions` bound in
+  `PrunerConfig`; (b) no real-chain multi-epoch pruner e2e test; (c) bitmap
+  eviction of freshly-merged buckets can lag one compaction cycle.
+- [ ] **Configurable backpressure:** thread the remaining `SequentialConfig`
+  knobs (`min_eager_rows`, `max_pending_rows`, channel depths,
+  `subscriber_channel_size`) through `CommitterLayer`.
+- [ ] **Epoch-start seed only at restore finalize:** no retroactive backfill /
+  in-place repair for a db restored before that change or via a path skipping the
+  `objects` CF.
+- [ ] **Concurrent pipelines with sequential gating:** let raw-chain-data
+  pipelines run concurrent rather than sequential; needs a `sui-consistent-store`
+  synchronizer change.
+- [ ] **Cross-shard snapshot consistency (perpetual-store source):** fine today
+  because fullnode restore is blocking; an online restore would need one rocksdb
+  snapshot shared across all shard iterators. Distinct from the
+  `highest_committed_checkpoint` fix, which addresses restore-target vs
+  object-set consistency.
+- [ ] **End-to-end tests still missing:** a restore test against the
+  formal-snapshot source's real file layout, and an automated full
+  real-chain-stream assertion.
+
 ## Landing order
 
 1A, 1B, 1C in parallel -> 2A, 2B -> 3A (trivial), 3C, 3D -> 3B (the
