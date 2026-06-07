@@ -35,6 +35,14 @@ Branch `embed-rpc-store`. Completed pieces and their commits (newest last):
   streaming client tip-seed.
 - `f2683e87a5` 4-fix subscription service gates checkpoint delivery on indexing.
 - `7672250124` 4-fix balance reader reports the coin half, not the total.
+- `2fc998ec56` 4A expose embedded store bootstrap action + cohort watermarks
+  (`SuiNode::embedded_rpc_store`, `Bootstrap` pub).
+- `fab70e9e25` 4A restore test harness + resume case (`tests/rpc/restore.rs`).
+- `c2515768e1` 4A enable-indexing-rebuild case (`Restore { clear: false }`).
+- `d353078564` 4A resume-and-catch-up-after-indexing-gap case.
+- `83a8e41f3c` 4A pruned-range-forces-rebuild case (`Restore { clear: true }`).
+- `4317f0af2d` 4-fix atomic `highest_committed_checkpoint` watermark (restore
+  target vs live-object-set consistency; balance double-count on unclean restart).
 
 `git log --oneline main..HEAD` shows the series (plus `*: tick ... embed plan`
 doc commits). Each commit is self-contained with tests + clippy + fmt green.
@@ -55,25 +63,26 @@ frontier (single source of truth + lost-wakeup-free wakeup). The fixed-size
 the frontier; a member whose channel closes on shutdown departs so peers do not
 deadlock. See `SnapshotCoordinator` in `synchronizer.rs`.
 
-**Next up: Phase 4A (proper test-harness wiring) + revert the temp flag flip.**
-Phases 1-3 are complete and committed. Phase 4 *validation* is done: the full
-`sui-e2e-tests` rpc suite passes **90/90** against the embedded backend. That
-run surfaced and fixed three runtime bugs (the `5acd4b6a27` / `f2683e87a5` /
-`7672250124` commits above); see "Phase 4" below for the details.
+**Phase 4A is done.** The temp flag flip is reverted (it was never committed;
+the default is back to `unwrap_or(false)`). Bespoke restore tests opt into the
+embedded backend explicitly through the existing
+`TestClusterBuilder::with_rpc_config` ->
+`SwarmBuilder::with_fullnode_rpc_config` -> `FullnodeConfigBuilder::with_rpc_config`
+threading (a full `RpcConfig` with `use_experimental_rpc_store: Some(true)`), so
+no new builder toggle was needed. Phase 4 *validation* against the embedded
+backend (the 90/90 run) surfaced and fixed three runtime bugs (`5acd4b6a27` /
+`f2683e87a5` / `7672250124`); a fourth -- a balance double-count across an
+unclean restart -- was found by the new restore tests and fixed with the atomic
+`highest_committed_checkpoint` watermark (`4317f0af2d`); see "Phase 4" below.
 
-> **UNCOMMITTED TEMP HACK -- revert before finishing 4A.** Validation runs flip
-> the global default in `crates/sui-config/src/rpc_config.rs`
-> (`use_experimental_rpc_store()` -> `unwrap_or(true)`) so every test fullnode
-> builds the embedded store. This is on disk, NOT committed. 4A replaces it with
-> explicit opt-in through the test harness, then this line goes back to
-> `unwrap_or(false)`. If `git status` shows `rpc_config.rs` modified, that is this
-> hack.
+**Next up: Phase 5 (ledger-history availability exposure).**
 
-How to run the suite (with the temp flip in place): `cargo nextest run -p
-sui-e2e-tests --test rpc -j 2 --no-fail-fast` (cap concurrency at ~2; each test
-spins a `TestCluster`). For a single test add `-E 'test(<name>)'`. To debug a
-hang, add `telemetry_subscribers::init_for_testing();` as the first line of the
-test and run with `--no-capture` + `RUST_LOG="error,sui_core::rpc_store_embed=
+How to run the suite: `cargo nextest run -p sui-e2e-tests --test rpc -j 2
+--no-fail-fast` (cap concurrency at ~2; each test spins a `TestCluster`). For a
+single test add `-E 'test(<name>)'`; for just the restore cases,
+`-E 'test(restore::)'`. To debug a hang, add
+`telemetry_subscribers::init_for_testing();` as the first line of the test and
+run with `--no-capture` + `RUST_LOG="error,sui_core::rpc_store_embed=
 debug,sui_rpc_store=debug,sui_indexer_alt_framework=debug"` under a `timeout`.
 
 The 3B orchestrator lives in `sui-core::rpc_store_embed` (not `sui-node`, which
@@ -401,16 +410,47 @@ run drove the suite from 32 -> 56 -> 88 -> 90 as three runtime bugs were fixed:
   address (accumulator) balance was counted twice. Fixed to report `b.coin`.
   (`derive_detailed_balance_changes_2` is correct -- legacy uses it identically.)
 
-- [ ] **4A. Test wiring (TODO -- and revert the temp flag flip).** Replace the
-  global `rpc_config.rs` default hack with explicit opt-in: add a
-  `TestClusterBuilder` toggle (and optionally flip the `FullnodeConfigBuilder`
-  default at `node_config_builder.rs` ~648) so the e2e suites run against the new
-  backend. Path: `TestClusterBuilder::with_rpc_config` (~1426) ->
-  `SwarmBuilder::with_fullnode_rpc_config` (~225) -> `FullnodeConfigBuilder`. Then
-  set `RpcConfig::use_experimental_rpc_store()` back to `unwrap_or(false)`. Decide
-  whether to run the suites against the embedded backend in CI by default or as a
-  separate job. Other index-dependent suites to consider: `authenticated_events_*`,
-  `address_balance_rpc_tests.rs`.
+- [x] **4A. Test wiring + revert the temp flag flip.** The temp flip was
+  reverted (uncommitted, so just discarded; default back to `unwrap_or(false)`).
+  No new builder toggle was needed: the existing
+  `TestClusterBuilder::with_rpc_config` (~1426) ->
+  `SwarmBuilder::with_fullnode_rpc_config` (~225) ->
+  `FullnodeConfigBuilder::with_rpc_config` (~363) threading already lets a test
+  select the backend with a full `RpcConfig`. Bespoke restore tests opt in via
+  `RpcConfig { enable_indexing: Some(true), use_experimental_rpc_store: Some(true),
+  ledger_history_indexing: Some(true), .. }`. CI: the existing rpc suite runs
+  against the legacy backend (the default); the new `restore` module is the
+  embedded-backend coverage. Whether to also run the broader suites against the
+  embedded backend in CI (a separate job) is still open. Other index-dependent
+  suites to consider: `authenticated_events_*`, `address_balance_rpc_tests.rs`.
+
+  In-memory monitoring (no RPC surface): `SuiNode::embedded_rpc_store()` exposes
+  the `EmbeddedRpcStore`, whose `bootstrap_action()` reports the startup decision
+  (`Bootstrap::{Resume, SeedHistory, Restore { clear }}`, now `pub`) and
+  `live_committed_checkpoint()` / `history_committed_checkpoint()` report each
+  cohort's `min(checkpoint_hi_inclusive)`.
+
+  Restore tests live in `sui-e2e-tests/tests/rpc/restore.rs` (a dedicated
+  fullnode restarted with a mutated `NodeConfig.rpc` over a stable `db_path`;
+  reads use transient `SuiNodeHandle`s so a stop releases RocksDB locks). Four
+  cases: resume-no-restore, enable-indexing-rebuild (`Restore { clear: false }`),
+  resume-and-catch-up-after-gap, and pruned-range-forces-rebuild
+  (`Restore { clear: true }`). Each asserts `GetBalance` (live `balance` index)
+  and `ListTransactions` (history `transaction_bitmap` index) answer correctly
+  afterward.
+
+  **Bug found + fixed (`4317f0af2d`): restore-target vs object-set consistency.**
+  The enable/rebuild test was ~50% flaky with a recipient balance reported at 2x.
+  Root cause: the executor commits a checkpoint's objects (`commit_transaction_outputs`)
+  and bumps the checkpoint store's `highest_executed` watermark in a *separate*
+  write (with a `fail_point!("crash")` between). An unclean stop leaves the live
+  object set ahead of `highest_executed`; the restore (which reads the live set)
+  then stamped its watermark at `highest_executed`, so it captured the in-flight
+  checkpoint's coins *and* the forward indexer re-applied them via the additive
+  `balance` merge. Fixed by adding a `highest_committed_checkpoint` CF to
+  `AuthorityPerpetualTables`, written in the same atomic batch as the outputs
+  (new `ExecutionCacheCommit::set_highest_committed_checkpoint_in_batch` hook),
+  and using it as the embedded restore target (always >= `highest_executed`).
 
 - [~] **4B. Focused tests.** Done so far: startup decision matrix
   (`rpc_store_embed::tests`, the `decide` fn); subscription gate
