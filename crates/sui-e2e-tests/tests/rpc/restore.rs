@@ -31,6 +31,8 @@
 //! handle and drop it immediately.
 
 use std::collections::HashSet;
+use std::sync::Arc;
+use std::sync::Weak;
 use std::time::Duration;
 
 use prost_types::FieldMask;
@@ -107,13 +109,43 @@ async fn spawn_fullnode(cluster: &mut TestCluster, rpc: RpcConfig) -> (Authority
 }
 
 /// Stop the fullnode `name`, swap in `rpc` (the `db_path` is unchanged),
-/// and restart it. The stop releases the previous run's RocksDB locks
-/// because no strong `SuiNodeHandle` is held across the call.
+/// and restart it, waiting for the old instance to fully shut down first.
+///
+/// Restarting opens the same `db_path`, which fails if the stopped node
+/// still holds the RocksDB file locks (`SuiNode::start` is unwrapped inside
+/// the swarm container, so a conflict panics rather than returns). Under a
+/// real runtime the stop joins the node's thread, releasing the locks before
+/// it returns. Under simulation the stop only schedules the node's teardown,
+/// and its handles are released asynchronously when the last `Arc<SuiNode>`
+/// drops -- so wait for exactly that, observed via a `Weak<SuiNode>` we hold
+/// across the stop. The wait is a no-op under a real runtime (the node is
+/// already gone) and deterministic under simulation regardless of seed.
 async fn restart_fullnode(cluster: &TestCluster, name: &AuthorityName, rpc: RpcConfig) {
     let node = cluster.swarm.node(name).unwrap();
+    // Downgrade to a weak reference and drop the strong handle so it does not
+    // keep the node alive past the stop.
+    let weak = node
+        .get_node_handle()
+        .map(|handle| Arc::downgrade(handle.inner()));
     node.stop();
     node.config().rpc = Some(rpc);
+    if let Some(weak) = weak {
+        wait_until_shutdown(weak).await;
+    }
     node.start().await.unwrap();
+}
+
+/// Block until the stopped node has fully dropped (its `Arc<SuiNode>` count
+/// reaches zero, which closes its RocksDB instances and releases their file
+/// locks). Panics on timeout.
+async fn wait_until_shutdown(node: Weak<SuiNode>) {
+    let deadline = tokio::time::Instant::now() + WAIT_TIMEOUT;
+    while node.upgrade().is_some() {
+        if tokio::time::Instant::now() >= deadline {
+            panic!("timed out waiting for the stopped node to shut down");
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }
 
 /// Run `f` against the dedicated fullnode through a transient handle that
