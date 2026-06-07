@@ -17093,6 +17093,7 @@ version = "0.1.0"
 dependencies = [
  "bcs",
  "move-core-types",
+ "rand 0.8.5",
  "shared-crypto",
  "sui-genesis-builder",
  "sui-move-build",

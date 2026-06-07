@@ -632,7 +632,7 @@ impl CompositePayload {
             }
         }
 
-        (tx_builder.build_and_sign(keypair), op_set)
+        (tx_builder.ensure_unique().build_and_sign(keypair), op_set)
     }
 
     fn generate_alias_transaction(
@@ -664,6 +664,7 @@ impl CompositePayload {
                             CallArg::Pure(bcs::to_bytes(&alias_state.alias_address).unwrap()),
                         ],
                     )
+                    .ensure_unique()
                     .build_and_sign(keypair);
                 alias_state.cycle_state = AliasRevokeCycleState::RemovePending { tx_digest: None };
                 (
@@ -675,6 +676,7 @@ impl CompositePayload {
             AliasRevokeCycleState::Active { .. } => {
                 let data = TestTransactionBuilder::new(sender, gas, rgp)
                     .transfer_sui(None, sender)
+                    .ensure_unique()
                     .build();
                 let tx = Transaction::from_data_and_signer(
                     data,
@@ -689,6 +691,7 @@ impl CompositePayload {
             AliasRevokeCycleState::Revoked => {
                 let data = TestTransactionBuilder::new(sender, gas, rgp)
                     .transfer_sui(None, sender)
+                    .ensure_unique()
                     .build();
                 let tx = Transaction::from_data_and_signer(
                     data,
@@ -717,6 +720,7 @@ impl CompositePayload {
                             CallArg::Pure(bcs::to_bytes(&alias_state.alias_address).unwrap()),
                         ],
                     )
+                    .ensure_unique()
                     .build_and_sign(keypair);
                 alias_state.cycle_state = AliasRevokeCycleState::AddPending { tx_digest: None };
                 (
@@ -1355,6 +1359,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
         let transaction = TestTransactionBuilder::new(head.1, head.0, gas_price)
             .publish_async(path)
             .await
+            .ensure_unique()
             .build_and_sign(head.2.as_ref());
         let execution_result = execution_proxy.execute_transaction_block(transaction).await;
         let effects = execution_result.expect("Package publish should succeed");
@@ -1389,6 +1394,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
         for (gas, sender, keypair) in tail.iter() {
             let transaction = TestTransactionBuilder::new(*sender, *gas, gas_price)
                 .call_counter_create(self.package_id.unwrap())
+                .ensure_unique()
                 .build_and_sign(keypair.as_ref());
             let proxy_ref = execution_proxy.clone();
             futures.push(async move {
@@ -1483,7 +1489,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                         vec![coin_balance, recipient_arg],
                     );
                 }
-                let tx = tx_builder.build_and_sign(keypair.as_ref());
+                let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
                 let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
@@ -1506,6 +1512,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             let gas = &mut multi_gas[0];
             let tx = TestTransactionBuilder::new(*sender, *gas, gas_price)
                 .move_call(self.package_id.unwrap(), "balance_pool", "create", vec![])
+                .ensure_unique()
                 .build_and_sign(keypair.as_ref());
 
             let execution_result = execution_proxy.execute_transaction_block(tx).await;
@@ -1563,7 +1570,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     vec![pool_arg, coin_balance],
                 );
             }
-            let tx = tx_builder.build_and_sign(keypair.as_ref());
+            let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
             let execution_result = execution_proxy.execute_transaction_block(tx).await;
             let effects = execution_result.expect("Balance pool seed should succeed");
@@ -1582,6 +1589,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                         "create_cap",
                         vec![cap_ref.into()],
                     )
+                    .ensure_unique()
                     .build_and_sign(keypair.as_ref());
 
                 let execution_result = execution_proxy.execute_transaction_block(tx).await;
@@ -1621,7 +1629,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     vec![value_arg],
                 );
             }
-            let tx = tx_builder.build_and_sign(keypair.as_ref());
+            let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
             let execution_result = execution_proxy.execute_transaction_block(tx).await;
             let effects = execution_result.expect("Immutable object creation should succeed");
@@ -1685,7 +1693,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                             vec![balance, recipient_arg],
                         );
                     }
-                    let tx = tx_builder.build_and_sign(keypair.as_ref());
+                    let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
                     let execution_result = execution_proxy.execute_transaction_block(tx).await;
                     let effects = execution_result.expect("TEST_COIN seed deposit should succeed");
@@ -1737,6 +1745,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                             mutability: SharedObjectMutability::Mutable,
                         })],
                     )
+                    .ensure_unique()
                     .build_and_sign(keypair.as_ref());
 
                 let execution_result = execution_proxy.execute_transaction_block(enable_tx).await;
@@ -1797,7 +1806,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                         .collect();
                     builder.transfer_args(*sender, new_coin_args);
                 }
-                let tx = tx_builder.build_and_sign(keypair.as_ref());
+                let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
                 let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
                     let execution_result = proxy_ref.execute_transaction_block(tx).await;

@@ -70,6 +70,7 @@ impl Payload for SharedCounterTestPayload {
                 self.counter_id,
                 self.counter_initial_shared_version,
             )
+            .ensure_unique()
             .build_and_sign(self.gas.2.as_ref())
     }
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
@@ -231,6 +232,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         for (gas, sender, keypair) in tail.iter() {
             let transaction = TestTransactionBuilder::new(*sender, *gas, gas_price)
                 .call_counter_create(self.basics_package_id.unwrap())
+                .ensure_unique()
                 .build_and_sign(keypair.as_ref());
             let proxy_ref = execution_proxy.clone();
             futures.push(async move {
