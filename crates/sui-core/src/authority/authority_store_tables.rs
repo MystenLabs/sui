@@ -121,6 +121,20 @@ pub struct AuthorityPerpetualTables {
     /// A singleton table that stores latest pruned checkpoint. Used to keep objects pruner progress
     pub(crate) pruned_checkpoint: DBMap<(), CheckpointSequenceNumber>,
 
+    /// A singleton table recording the highest checkpoint whose transaction
+    /// outputs (objects, effects, etc.) are durably committed to this store.
+    /// It is written in the *same* atomic batch as those outputs (see
+    /// `AuthorityStore::build_db_batch` and the checkpoint executor), so it is
+    /// always consistent with the live object set even after an unclean stop.
+    ///
+    /// This differs from the checkpoint store's `highest_executed` watermark,
+    /// which is bumped in a separate write after the outputs are committed: an
+    /// abrupt stop can leave the object writes durable while `highest_executed`
+    /// still lags. Consumers that read the live object set directly (e.g. the
+    /// embedded rpc-store's bulk restore) use this watermark instead, so they
+    /// never observe objects beyond the checkpoint they think they are at.
+    pub(crate) highest_committed_checkpoint: DBMap<(), CheckpointSequenceNumber>,
+
     /// Expected total amount of SUI in the network. This is expected to remain constant
     /// throughout the lifetime of the network. We check it at the end of each epoch if
     /// expensive checks are enabled. We cannot use 10B today because in tests we often
@@ -359,6 +373,10 @@ impl AuthorityPerpetualTables {
             ),
             (
                 "pruned_checkpoint".to_string(),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
+            ),
+            (
+                "highest_committed_checkpoint".to_string(),
                 ThConfig::new(0, 1, KeyType::uniform(1)),
             ),
             (
@@ -611,6 +629,27 @@ impl AuthorityPerpetualTables {
         checkpoint_number: CheckpointSequenceNumber,
     ) -> SuiResult {
         wb.insert_batch(&self.pruned_checkpoint, [((), checkpoint_number)])?;
+        Ok(())
+    }
+
+    pub fn get_highest_committed_checkpoint(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
+        self.highest_committed_checkpoint.get(&())
+    }
+
+    /// Stage the highest-committed-checkpoint watermark into `wb`. Must be
+    /// called on the same batch that commits the checkpoint's transaction
+    /// outputs so the watermark and the outputs land atomically.
+    pub fn set_highest_committed_checkpoint(
+        &self,
+        wb: &mut DBBatch,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        wb.insert_batch(
+            &self.highest_committed_checkpoint,
+            [((), checkpoint_number)],
+        )?;
         Ok(())
     }
 

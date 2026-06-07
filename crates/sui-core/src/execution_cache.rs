@@ -156,6 +156,18 @@ pub trait ExecutionCacheCommit: Send + Sync {
     /// Build a DBBatch containing the given transaction outputs.
     fn build_db_batch(&self, epoch: EpochId, digests: &[TransactionDigest]) -> Batch;
 
+    /// Stage the highest-committed-checkpoint watermark into `batch` so it is
+    /// written atomically with that checkpoint's transaction outputs. Called by
+    /// CheckpointExecutor between [`Self::build_db_batch`] and
+    /// [`Self::commit_transaction_outputs`]. Unlike the checkpoint store's
+    /// separately-bumped `highest_executed` watermark, this stays consistent
+    /// with the durable object set across an unclean stop.
+    fn set_highest_committed_checkpoint_in_batch(
+        &self,
+        batch: &mut Batch,
+        checkpoint: CheckpointSequenceNumber,
+    );
+
     /// Durably commit the outputs of the given transactions to the database.
     /// Will be called by CheckpointExecutor to ensure that transaction outputs are
     /// written durably before marking a checkpoint as finalized.
