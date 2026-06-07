@@ -22,9 +22,22 @@ Branch `embed-rpc-store`. Completed pieces and their commits (newest last):
 - `aa5801e39b` 2B-i `epochs::start` / `seed_current_epoch_start` optional
   `start_checkpoint` (merge audit; proto/merge already presence-tracked).
 - `6bf04f0987` 2B-ii `seed_history_cohort` + `LIVE_COHORT`/`HISTORY_COHORT`.
+- `b3509e2542` 2B stamp the history-cohort pruning floor at `L`.
+- `009c5e2ab5` 3A `use_experimental_rpc_store` flag on `RpcConfig`.
+- `3141224969` 3C `RpcStoreReadStore` read path (`sui-core/src/storage.rs`).
+- `4b1be8bfef` 3D-i `prune_history_cohort` (rpc-store side).
+- `2fbfc1bdbb` 3D-ii thread `rpc_store` through `AuthorityStorePruner`.
+- `c351846a01` 3B-i `rpc_store` param on `AuthorityState::new` -> pruner.
+- `6dfed12216` 3B-ii `EmbeddedRpcStore` orchestrator (`rpc_store_embed.rs`) +
+  `decide` unit tests.
+- `d0e1117b37` 3B-iii sui-node startup wiring (bootstrap, read path, spawn).
+- `5acd4b6a27` 4-fix startup deadlock (background-spawn the indexer) + broadcast
+  streaming client tip-seed.
+- `f2683e87a5` 4-fix subscription service gates checkpoint delivery on indexing.
+- `7672250124` 4-fix balance reader reports the coin half, not the total.
 
-`git log --oneline main..HEAD` shows the series. Each commit is self-contained
-with tests + clippy + fmt green.
+`git log --oneline main..HEAD` shows the series (plus `*: tick ... embed plan`
+doc commits). Each commit is self-contained with tests + clippy + fmt green.
 
 The dynamic-membership coordinator was exercised live: a standalone
 `sui-rpc-node run` caught up at ~448 ckpt/s (range 247-639 over a 2-min
@@ -42,14 +55,26 @@ frontier (single source of truth + lost-wakeup-free wakeup). The fixed-size
 the frontier; a member whose channel closes on shutdown departs so peers do not
 deadlock. See `SnapshotCoordinator` in `synchronizer.rs`.
 
-**Next up: Phase 4 (tests).** Phase 3 is complete -- 3A (config flag), 3C
-(read-path wrapper), 3D (pruner integration), and 3B (startup orchestration) are
-all done and committed (compile + clippy + fmt + unit tests green). The embedded
-path is wired end to end behind `use_experimental_rpc_store`, but has NOT been
-exercised at runtime yet. Phase 4 wires the flag into `TestClusterBuilder` /
-`FullnodeConfigBuilder` so the existing e2e RPC suites run against the new
-backend (4A), plus focused tests (4B). That is the first real validation of the
-3B orchestration (restore / seed / tip indexing / read path) on a live cluster.
+**Next up: Phase 4A (proper test-harness wiring) + revert the temp flag flip.**
+Phases 1-3 are complete and committed. Phase 4 *validation* is done: the full
+`sui-e2e-tests` rpc suite passes **90/90** against the embedded backend. That
+run surfaced and fixed three runtime bugs (the `5acd4b6a27` / `f2683e87a5` /
+`7672250124` commits above); see "Phase 4" below for the details.
+
+> **UNCOMMITTED TEMP HACK -- revert before finishing 4A.** Validation runs flip
+> the global default in `crates/sui-config/src/rpc_config.rs`
+> (`use_experimental_rpc_store()` -> `unwrap_or(true)`) so every test fullnode
+> builds the embedded store. This is on disk, NOT committed. 4A replaces it with
+> explicit opt-in through the test harness, then this line goes back to
+> `unwrap_or(false)`. If `git status` shows `rpc_config.rs` modified, that is this
+> hack.
+
+How to run the suite (with the temp flip in place): `cargo nextest run -p
+sui-e2e-tests --test rpc -j 2 --no-fail-fast` (cap concurrency at ~2; each test
+spins a `TestCluster`). For a single test add `-E 'test(<name>)'`. To debug a
+hang, add `telemetry_subscribers::init_for_testing();` as the first line of the
+test and run with `--no-capture` + `RUST_LOG="error,sui_core::rpc_store_embed=
+debug,sui_rpc_store=debug,sui_indexer_alt_framework=debug"` under a `timeout`.
 
 The 3B orchestrator lives in `sui-core::rpc_store_embed` (not `sui-node`, which
 lacks the rpc-store / consistent-store / framework deps). It composes the
@@ -341,17 +366,62 @@ store; `live_objects` is kept in sync but not on the read hot path.
 
 ### Phase 4 -- tests
 
-- [ ] **4A. Test wiring.** Add a `TestClusterBuilder` toggle and flip the
-  `FullnodeConfigBuilder` default (`node_config_builder.rs` ~648) so existing
-  e2e RPC suites run against the new backend. Path:
-  `TestClusterBuilder::with_rpc_config` (~1426) ->
-  `SwarmBuilder::with_fullnode_rpc_config` (~225) -> `FullnodeConfigBuilder`.
-  Suites: `crates/sui-e2e-tests/tests/rpc/v2/...`, `authenticated_events_*`,
+**Validation done: the `sui-e2e-tests` rpc suite (`--test rpc`, 90 tests) passes
+90/90 against the embedded backend** (via the temp flag flip; see Handoff). The
+run drove the suite from 32 -> 56 -> 88 -> 90 as three runtime bugs were fixed:
+
+- **`5acd4b6a27` startup deadlock + streaming tip-seed.** (a) `spawn_indexer`
+  built the indexer inline in `start_async`; `Indexer::from_store` blocks on
+  `latest_checkpoint_number`, which can't resolve until the checkpoint executor
+  runs -- and the executor only starts after `start_async` returns. Fixed by
+  building/running the indexer on a background task whose handle
+  (`EmbeddedRpcStore::indexer_task`) is aborted on drop. (b) The framework
+  broadcaster `peek()`s the streaming stream to learn the tip before ingesting,
+  but a fresh `tokio::broadcast` subscription only carries *future* checkpoints,
+  so on an idle chain it blocked forever and ingested nothing. Fixed:
+  `BroadcastStreamingClient` now takes a `ReadStore`, seeds the stream with the
+  current tip read from the local store, and overrides `latest_checkpoint_number`
+  to read the local store. `MockReadStore` moved to a shared
+  `sui-core::rpc_store_test_utils` `#[cfg(test)]` module.
+- **`f2683e87a5` read-after-write consistency.** The legacy index was committed
+  synchronously by the executor before the checkpoint was enqueued to the
+  subscription service, so `execute_transaction_and_wait_for_checkpoint`
+  guaranteed a current index. The embedded indexer commits async, so delivery
+  raced indexing. Fixed: `SubscriptionService::build` takes an optional
+  `IndexedCheckpointFn`; `handle_checkpoint` holds a checkpoint back until the
+  index has committed it (bounded by a timeout). The gate lives in the
+  subscription service, NOT the executor enqueue (the indexer consumes the same
+  broadcast, so gating the enqueue would deadlock it). The signal is the LIVE
+  cohort's committed watermark (`EmbeddedRpcStore::indexed_checkpoint_fn`), not
+  min-across-all -- the history cohort backfills independently and would block
+  delivery on a restored node.
+- **`7672250124` balance double-count.** The reader's `get_balance` /
+  `balance_iter` set `BalanceInfo.coin_balance = Balance::total()` (coin +
+  address) instead of just the coin half; the caller sums the two halves, so the
+  address (accumulator) balance was counted twice. Fixed to report `b.coin`.
+  (`derive_detailed_balance_changes_2` is correct -- legacy uses it identically.)
+
+- [ ] **4A. Test wiring (TODO -- and revert the temp flag flip).** Replace the
+  global `rpc_config.rs` default hack with explicit opt-in: add a
+  `TestClusterBuilder` toggle (and optionally flip the `FullnodeConfigBuilder`
+  default at `node_config_builder.rs` ~648) so the e2e suites run against the new
+  backend. Path: `TestClusterBuilder::with_rpc_config` (~1426) ->
+  `SwarmBuilder::with_fullnode_rpc_config` (~225) -> `FullnodeConfigBuilder`. Then
+  set `RpcConfig::use_experimental_rpc_store()` back to `unwrap_or(false)`. Decide
+  whether to run the suites against the embedded backend in CI by default or as a
+  separate job. Other index-dependent suites to consider: `authenticated_events_*`,
   `address_balance_rpc_tests.rs`.
 
-- [ ] **4B. Focused tests.** Synchronizer late-join; startup decision matrix
-  (in-range / behind / out-of-range -> correct action); ingestion-client
-  round-trip; subscription-service lag tears down in-progress subscriptions.
+- [~] **4B. Focused tests.** Done so far: startup decision matrix
+  (`rpc_store_embed::tests`, the `decide` fn); subscription gate
+  (`subscription::tests::handle_checkpoint_waits_for_index_before_delivering`);
+  streaming-client tip-seed + `latest_checkpoint_number`
+  (`rpc_store_streaming_client::tests`); ingestion-client round-trip
+  (`rpc_store_ingestion_client::tests`); synchronizer late-join
+  (`synchronizer.rs` tests). TODO: a focused test that the embedded read path is
+  read-after-write consistent end to end (the e2e suite covers it, but a smaller
+  test would localize regressions); subscription-service lag teardown already
+  has a unit test (`handle_lag_drops_all_subscribers_and_resets_tracker`).
 
 ### Phase 5 -- deferred: ledger-history availability exposure
 
@@ -363,9 +433,35 @@ store; `live_objects` is kept in sync but not on the read hot path.
 ## Landing order
 
 1A, 1B, 1C in parallel -> 2A, 2B -> 3A (trivial), 3C, 3D -> 3B (the
-integration) -> Phase 4 -> Phase 5.
+integration) -> Phase 4 validation (done, 90/90) -> 4A harness wiring + revert
+temp flip -> Phase 5.
 
 ## Key code anchors (current state, this session)
+
+### Embedded-path code (added/changed this work)
+
+- `EmbeddedRpcStore`: `sui-core/src/rpc_store_embed.rs` -- `bootstrap`, pure
+  `decide` (resume / seed-history / restore), `cohort_committed` /
+  `cohort_resume`, `spawn_indexer` (background task) + `build_indexer`,
+  `store()` / `reader()` / `indexed_checkpoint_fn()`, `Drop` aborts the task.
+- sui-node wiring: `sui-node/src/lib.rs` -- bootstrap branch where `rpc_index`
+  is built (search `creating embedded rpc-store`); `AuthorityState::new`
+  gets `embedded.store()`; `build_http_servers(.. embedded_rpc_store)` builds the
+  read path (`RpcStoreReadStore` vs `RestReadStore`) and passes
+  `indexed_checkpoint` to `SubscriptionService::build`; `spawn_indexer` called
+  after `build_http_servers`; `_embedded_rpc_store` field on `SuiNode`.
+- `RpcStoreReadStore`: `sui-core/src/storage.rs` -- `new(state, rocks, reader)`.
+- Subscription gate: `sui-rpc-api/src/subscription.rs` -- `IndexedCheckpointFn`,
+  `build(.., indexed_checkpoint)`, async `handle_checkpoint`, `wait_until_indexed`.
+  Other `build` callers pass `None`: `sui-fork/src/{startup.rs,tests/subscription_e2e.rs}`.
+- Balance reader fix: `sui-rpc-store/src/reader/indexes.rs` `get_balance` /
+  `balance_iter` (report `coin` half, not `total()`).
+- Clients / test mock: `sui-core/src/rpc_store_{ingestion,streaming}_client.rs`;
+  shared `sui-core/src/rpc_store_test_utils.rs` (`#[cfg(test)] MockReadStore`).
+- TEMP flag flip (uncommitted): `sui-config/src/rpc_config.rs`
+  `use_experimental_rpc_store()` -> `unwrap_or(true)`.
+
+### Pre-existing anchors
 
 - `RpcIndexStore`: `sui-core/src/rpc_index.rs` -- struct ~1628, `new` ~1647,
   `index_checkpoint` ~2026, `commit_update_for_checkpoint` ~2047. Pruned from
