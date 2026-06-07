@@ -300,7 +300,8 @@ pub struct SuiNode {
     /// The embedded `sui-rpc-store`, present when the node is configured
     /// with `use_experimental_rpc_store`. Held for the node's lifetime
     /// so its tip indexer keeps running (dropping it aborts the indexer).
-    _embedded_rpc_store: Option<EmbeddedRpcStore>,
+    /// Exposed through [`SuiNode::embedded_rpc_store`] for introspection.
+    embedded_rpc_store: Option<EmbeddedRpcStore>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -1006,7 +1007,7 @@ impl SuiNode {
 
             auth_agg,
             subscription_service_checkpoint_sender,
-            _embedded_rpc_store: embedded_rpc_store,
+            embedded_rpc_store,
         };
 
         info!("SuiNode started!");
@@ -1729,6 +1730,15 @@ impl SuiNode {
 
     pub fn state(&self) -> Arc<AuthorityState> {
         self.state.clone()
+    }
+
+    /// The embedded `sui-rpc-store` index backend, when the node runs
+    /// with `use_experimental_rpc_store`. Exposes the startup bootstrap
+    /// decision and per-cohort watermarks for introspection (used by
+    /// tests to observe restore/resume behavior across restarts without
+    /// going through the RPC surface).
+    pub fn embedded_rpc_store(&self) -> Option<&EmbeddedRpcStore> {
+        self.embedded_rpc_store.as_ref()
     }
 
     #[cfg(any(test, msim))]

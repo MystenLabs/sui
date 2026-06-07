@@ -88,8 +88,13 @@ const RPC_STORE_DIR: &str = "rpc_store";
 const SNAPSHOT_CAPACITY: usize = 32;
 
 /// What the startup orchestration does with the on-disk rpc-store.
+///
+/// The action chosen at startup is retained on [`EmbeddedRpcStore`] and
+/// exposed via [`EmbeddedRpcStore::bootstrap_action`] so tests (and
+/// future introspection surfaces) can tell whether a restart resumed the
+/// existing indexes or rebuilt them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Bootstrap {
+pub enum Bootstrap {
     /// The on-disk state resumes within the available range; open it
     /// and follow the tip with no blocking work.
     Resume,
@@ -173,6 +178,11 @@ pub struct EmbeddedRpcStore {
     ingestion_source: RocksDbStore,
 
     chain_id: ChainIdentifier,
+
+    /// The bootstrap action [`decide`] selected for the on-disk store at
+    /// startup. Retained for introspection (see
+    /// [`Self::bootstrap_action`]); does not affect runtime behavior.
+    action: Bootstrap,
 
     /// Background task that builds and runs the tip indexer, populated
     /// by [`Self::spawn_indexer`]. It owns the indexer's [`Service`];
@@ -302,8 +312,38 @@ impl EmbeddedRpcStore {
             reader,
             ingestion_source,
             chain_id: chain_identifier,
+            action,
             indexer_task: None,
         })
+    }
+
+    /// The bootstrap action selected for the on-disk store at startup:
+    /// whether this run resumed the existing indexes, re-seeded the
+    /// history cohort, or rebuilt the live cohort. Read-only
+    /// introspection; primarily for tests.
+    pub fn bootstrap_action(&self) -> Bootstrap {
+        self.action
+    }
+
+    /// The highest checkpoint the live cohort has committed
+    /// (`min(checkpoint_hi_inclusive)` across its pipelines), i.e. how
+    /// far the live-object indexes have caught up to the tip. `None`
+    /// until every live pipeline has a watermark. Read-only
+    /// introspection; primarily for tests.
+    pub fn live_committed_checkpoint(&self) -> Option<u64> {
+        cohort_committed(self.store.db(), LIVE_COHORT)
+            .ok()
+            .flatten()
+    }
+
+    /// The highest checkpoint the history cohort has committed, i.e. how
+    /// far the ledger-history backfill has progressed. `None` until every
+    /// history pipeline has a watermark. Read-only introspection;
+    /// primarily for tests.
+    pub fn history_committed_checkpoint(&self) -> Option<u64> {
+        cohort_committed(self.store.db(), HISTORY_COHORT)
+            .ok()
+            .flatten()
     }
 
     /// A clone of the store handle, for the pruner's history-cohort
