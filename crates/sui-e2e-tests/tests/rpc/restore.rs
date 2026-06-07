@@ -419,3 +419,65 @@ async fn embedded_store_resumes_and_catches_up_after_indexing_gap() {
     assert_transfer_indexed(&rpc_url, &transfer1).await;
     assert_transfer_indexed(&rpc_url, &transfer2).await;
 }
+
+/// When the available range advances past the embedded store's watermark
+/// (its bulk-loaded indexes now reference pruned checkpoints), the bootstrap
+/// wipes and rebuilds rather than resuming stale state.
+#[sim_test]
+async fn pruned_available_range_forces_rebuild() {
+    let mut cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .disable_fullnode_pruning()
+        .build()
+        .await;
+    let (name, rpc_url) = spawn_fullnode(&mut cluster, embedded_indexing_config()).await;
+
+    // Phase 1: index a transfer to the tip.
+    let warmup = transfer_to_fresh_address(&cluster, 5_000_000).await;
+    wait_for_indexed(&cluster, &name, chain_tip(&cluster)).await;
+    let frozen_watermark = live_committed(&cluster, &name).unwrap();
+
+    // Phase 2: disable indexing and advance the chain past the watermark.
+    restart_fullnode(&cluster, &name, no_indexing_config()).await;
+    for _ in 0..5 {
+        transfer_to_fresh_address(&cluster, 1_000_000).await;
+    }
+
+    // Advance the available-range floor above the frozen index watermark by
+    // bumping the checkpoint store's pruned watermark. Nothing is
+    // physically deleted -- this only moves the floor the bootstrap
+    // consults, simulating a perpetual-store prune that outran indexing.
+    let prune_to = frozen_watermark + 2;
+    wait_for_executed(&cluster, &name, prune_to + 1).await;
+    with_node(&cluster, &name, |node| {
+        let state = node.state();
+        let checkpoint_store = state.get_checkpoint_store();
+        let checkpoint = checkpoint_store
+            .get_checkpoint_by_sequence_number(prune_to)
+            .unwrap()
+            .expect("checkpoint to prune to should exist");
+        checkpoint_store
+            .update_highest_pruned_checkpoint(&checkpoint)
+            .unwrap();
+    });
+
+    // Phase 3: re-enable indexing. The live cohort's watermark now sits
+    // below the available floor, so the store wipes and rebuilds.
+    restart_fullnode(&cluster, &name, embedded_indexing_config()).await;
+    assert_eq!(
+        bootstrap_action(&cluster, &name),
+        Some(Bootstrap::Restore { clear: true }),
+    );
+
+    // The rebuilt live cohort reflects full current state (the warmup
+    // recipient still holds its coin), and a fresh transfer above the floor
+    // is indexed end to end.
+    let transfer = transfer_to_fresh_address(&cluster, 6_000_000).await;
+    wait_for_indexed(&cluster, &name, chain_tip(&cluster)).await;
+    assert_eq!(
+        sui_balance(&rpc_url, warmup.receiver).await,
+        warmup.amount,
+        "rebuilt live cohort should reflect the pre-prune recipient's balance",
+    );
+    assert_transfer_indexed(&rpc_url, &transfer).await;
+}
