@@ -72,6 +72,8 @@ If only a test name was provided, find a repro as follows:
 - run `./scripts/simtest/seed-search.py --test <test_target_name> <test_name> --exact`. This program will search for a seed that fails.
 - Once you have a seed that fails, the repro will be `MSIM_TEST_SEED=<seed> cargo simtest --test <test_target> -E 'test(=<test_name>)'`
 
+**IMPORTANT**: Do NOT use `-p <package>` in the repro command. The seed-search script runs the test binary directly without `-p`, and adding `-p` changes the execution context in a way that breaks determinism and may cause the failure to not reproduce.
+
 ### 3. Run the test.
 
 Run the repro command. If `RUST_LOG=...` is missing, add `RUST_LOG=sui=debug,info`. if `--no-capture` is missing, add it.
