@@ -903,8 +903,37 @@ impl IndexStoreTables {
     ) -> Result<(), StorageError> {
         info!("Initializing RPC indexes");
 
-        let highest_executed_checkpint =
-            checkpoint_store.get_highest_executed_checkpoint_seq_number()?;
+        // The restore target: the highest checkpoint whose transaction outputs
+        // (objects, effects) are durably committed to the perpetual store. The
+        // live-object indexing below reads the live object set directly, and the
+        // historical backfill covers `[lowest, restore_target]`, so this is the
+        // checkpoint the rebuilt index reflects. We stamp `Watermark::Indexed`
+        // here, and `commit_update_for_checkpoint` then only applies the next
+        // contiguous checkpoint (`watermark + 1`), dropping forward updates at
+        // or below the watermark. That is what stops the checkpoint executor --
+        // which resumes from the possibly-lagging `highest_executed` -- from
+        // re-applying checkpoints the restore already captured.
+        //
+        // We use the perpetual store's `highest_committed` watermark (written
+        // atomically with the objects) rather than the checkpoint store's
+        // `highest_executed` (bumped in a separate write afterward). An unclean
+        // stop can leave the object writes durable while `highest_executed`
+        // still lags, so the live object set can reflect a checkpoint beyond
+        // `highest_executed`; using `highest_committed` keeps the restore target
+        // (and therefore the drop floor) consistent with the set we actually
+        // read, so the executor's re-application of `(highest_executed,
+        // highest_committed]` is dropped rather than double-counted.
+        //
+        // Fall back to `highest_executed` for a database written before the
+        // atomic `highest_committed` watermark existed: it has no stamp yet, so
+        // this preserves the prior restore target until the next committed
+        // checkpoint stamps the consistent one. In normal operation
+        // `highest_committed` is written before `highest_executed` is bumped, so
+        // it is never absent while the executed watermark is present.
+        let restore_target = authority_store
+            .perpetual_tables
+            .get_highest_committed_checkpoint()?
+            .or(checkpoint_store.get_highest_executed_checkpoint_seq_number()?);
         let lowest_available_checkpoint = checkpoint_store
             .get_highest_pruned_checkpoint_seq_number()?
             .map(|c| c.saturating_add(1))
@@ -919,9 +948,8 @@ impl IndexStoreTables {
         let lowest_available_checkpoint =
             lowest_available_checkpoint.max(lowest_available_checkpoint_objects);
 
-        let checkpoint_range = highest_executed_checkpint.map(|highest_executed_checkpint| {
-            lowest_available_checkpoint..=highest_executed_checkpint
-        });
+        let checkpoint_range =
+            restore_target.map(|restore_target| lowest_available_checkpoint..=restore_target);
 
         if let Some(checkpoint_range) = checkpoint_range.clone() {
             self.index_existing_checkpoints(authority_store, checkpoint_store, checkpoint_range)?;
@@ -942,7 +970,7 @@ impl IndexStoreTables {
         // Only index live objects if genesis checkpoint has been executed.
         // If genesis hasn't been executed yet, the objects will be properly indexed
         // as checkpoints are processed through the normal checkpoint execution path.
-        if highest_executed_checkpint.is_some() {
+        if restore_target.is_some() {
             let coin_index = Mutex::new(HashMap::new());
 
             let make_live_object_indexer = RpcParLiveObjectSetIndexer {
@@ -959,10 +987,17 @@ impl IndexStoreTables {
             self.coin.multi_insert(coin_index.into_inner().unwrap())?;
         }
 
-        self.watermark.insert(
-            &Watermark::Indexed,
-            &highest_executed_checkpint.unwrap_or(0),
-        )?;
+        // Stamp the watermark at the restore target so forward indexing resumes
+        // (and the drop floor in `commit_update_for_checkpoint` sits) exactly at
+        // the checkpoint the rebuilt index reflects. When `restore_target` is
+        // `None` -- a fresh node with nothing committed yet -- leave the
+        // watermark absent rather than stamping 0: nothing has been indexed, so
+        // genesis must still be applied by forward indexing (`watermark + 1`
+        // starts at 0), not dropped as already-covered.
+        if let Some(restore_target) = restore_target {
+            self.watermark
+                .insert(&Watermark::Indexed, &restore_target)?;
+        }
 
         // Write the schema version and the feature settings in one batch so the
         // two can never be persisted independently.
@@ -2043,6 +2078,20 @@ impl RpcIndexStore {
     /// - Callers of this function must ensure that it is called for each checkpoint in sequential
     ///   order. This will panic if the provided checkpoint does not match the expected next
     ///   checkpoint to commit.
+    ///
+    /// Forward updates are gated on `Watermark::Indexed`, the source of truth for
+    /// index coverage: only the next contiguous checkpoint (`watermark + 1`, or 0
+    /// when nothing is indexed yet) is written, and its batch advances the
+    /// watermark. A checkpoint at or below the watermark is already reflected in
+    /// the index, so its batch is dropped rather than re-applied -- this is what
+    /// prevents double-counting after a bulk restore. The restore stamps the
+    /// watermark at the checkpoint the live object set reflects
+    /// (`highest_committed`), but the checkpoint executor resumes from the
+    /// separately-bumped `highest_executed`, which can lag; without this drop it
+    /// would re-apply the `(highest_executed, highest_committed]` checkpoints the
+    /// restore already captured, double-counting additive indexes like balances.
+    /// A checkpoint above `watermark + 1` is a gap that would leave a hole in the
+    /// index, so it panics.
     #[tracing::instrument(skip(self))]
     pub fn commit_update_for_checkpoint(&self, checkpoint: u64) -> Result<(), StorageError> {
         let next_batch = self.pending_updates.lock().unwrap().pop_first();
@@ -2052,6 +2101,23 @@ impl RpcIndexStore {
         assert_eq!(
             checkpoint, next_sequence_number,
             "commit_update_for_checkpoint must be called in order"
+        );
+
+        let indexed = self.tables.watermark.get(&Watermark::Indexed)?;
+        let expected_next = indexed.map_or(0, |w| w + 1);
+        if checkpoint < expected_next {
+            // Already covered (by the bulk restore or a prior commit). Dropping
+            // the batch avoids re-applying its additive index updates.
+            debug!(
+                checkpoint,
+                expected_next, "dropping already-indexed checkpoint update"
+            );
+            return Ok(());
+        }
+        assert_eq!(
+            checkpoint, expected_next,
+            "rpc-index forward update is not contiguous: expected checkpoint {expected_next}, \
+             got {checkpoint}"
         );
 
         Ok(batch.write()?)
