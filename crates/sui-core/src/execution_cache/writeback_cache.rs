@@ -1458,6 +1458,17 @@ impl ExecutionCacheCommit for WritebackCache {
         self.build_db_batch(epoch, digests)
     }
 
+    fn set_highest_committed_checkpoint_in_batch(
+        &self,
+        batch: &mut Batch,
+        checkpoint: CheckpointSequenceNumber,
+    ) {
+        self.store
+            .perpetual_tables
+            .set_highest_committed_checkpoint(&mut batch.1, checkpoint)
+            .expect("db error");
+    }
+
     fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
