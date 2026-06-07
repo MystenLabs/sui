@@ -228,14 +228,31 @@ impl EmbeddedRpcStore {
             .context("opening the embedded rpc-store database")?;
         let schema = Arc::new(schema);
 
-        // The perpetual store's currently-available checkpoint range.
-        // `highest_executed` is `None` only on a node's very first boot
+        // The highest checkpoint whose transaction outputs are durably
+        // committed to the perpetual store. This is the live cohort's restore
+        // target: the bulk restore reads the live object set, so the target
+        // must match the checkpoint that set reflects. We use the perpetual
+        // store's `highest_committed` watermark (written atomically with the
+        // objects) rather than the checkpoint store's `highest_executed`
+        // (bumped separately afterward), so an unclean stop cannot leave the
+        // restore reading objects beyond its target and double-counting them
+        // against the forward indexer. `None` only on a node's very first boot
         // (genesis is executed later in startup), in which case there is
-        // nothing to bulk-load and the indexer builds both cohorts from
-        // genesis as the node executes.
-        let highest_executed = checkpoint_store
-            .get_highest_executed_checkpoint_seq_number()
-            .context("reading highest executed checkpoint")?;
+        // nothing to bulk-load and the indexer builds both cohorts from genesis
+        // as the node executes.
+        let highest_committed = perpetual
+            .get_highest_committed_checkpoint()
+            .context("reading highest committed checkpoint")?
+            // Fall back to the checkpoint store's executed watermark for a
+            // database written before the atomic `highest_committed` watermark
+            // existed: it has no stamp yet, so this preserves the prior restore
+            // target until the next committed checkpoint stamps the consistent
+            // one. In normal operation `highest_committed` is written before
+            // `highest_executed` is bumped, so it is never absent while the
+            // executed watermark is present.
+            .or(checkpoint_store
+                .get_highest_executed_checkpoint_seq_number()
+                .context("reading highest executed checkpoint")?);
         let lowest_available = lowest_available_checkpoint(&perpetual, checkpoint_store)?;
 
         let chain_id = ChainId(*chain_identifier.as_bytes());
@@ -247,7 +264,7 @@ impl EmbeddedRpcStore {
         info!(
             ?action,
             lowest_available,
-            ?highest_executed,
+            ?highest_committed,
             "bootstrapping embedded rpc-store",
         );
 
@@ -271,12 +288,12 @@ impl EmbeddedRpcStore {
                 // A synced node enabling the embedded store for the
                 // first time (or recovering an out-of-range one):
                 // bulk-load the live cohort, then seed the history cohort
-                // so it backfills `(L, T]`. When `highest_executed` is
-                // `None` (a fresh node, nothing executed yet) there is
+                // so it backfills `(L, T]`. When `highest_committed` is
+                // `None` (a fresh node, nothing committed yet) there is
                 // nothing to load -- every pipeline stays unwatermarked
                 // so the indexer builds both cohorts from genesis as
                 // checkpoints execute.
-                if let Some(target) = highest_executed {
+                if let Some(target) = highest_committed {
                     restore_live(
                         db.clone(),
                         schema.clone(),

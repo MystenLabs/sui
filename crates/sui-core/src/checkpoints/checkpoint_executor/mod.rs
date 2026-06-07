@@ -406,10 +406,19 @@ impl CheckpointExecutor {
 
         let seq = ckpt_state.data.checkpoint.sequence_number;
 
-        let batch = self
+        let mut batch = self
             .state
             .get_cache_commit()
             .build_db_batch(self.epoch_store.epoch(), &ckpt_state.data.tx_digests);
+
+        // Stamp the highest-committed-checkpoint watermark into the same batch
+        // as the outputs, so it lands atomically with the object writes. This
+        // gives consumers that read the live object set directly (the embedded
+        // rpc-store restore) a watermark that never lags the durable objects,
+        // unlike the separately-bumped `highest_executed` watermark below.
+        self.state
+            .get_cache_commit()
+            .set_highest_committed_checkpoint_in_batch(&mut batch, seq);
 
         finish_stage!(pipeline_handle, BuildDbBatch);
 
