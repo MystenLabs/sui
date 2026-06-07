@@ -8,9 +8,18 @@ use sui_config::NodeConfig;
 use sui_node::{SuiNode, SuiNodeHandle};
 use sui_types::base_types::ConciseableName;
 use tokio::sync::watch;
-use tracing::{info, trace};
+use tracing::{info, trace, warn};
 
 use super::node::RuntimeType;
+
+/// Maximum attempts to (re)start a node before giving up. A restarted node
+/// reopens the same `db_path`, and the previous instance's RocksDB locks may
+/// still be held: a node's teardown (including its background tasks and the
+/// real-thread RocksDB close) is asynchronous and not deterministic with
+/// respect to the simulated clock, so the locks are released some
+/// non-deterministic time after the stop. Retrying the open until they are
+/// free is robust where a fixed wait is not.
+const MAX_START_ATTEMPTS: usize = 60;
 
 #[derive(Debug)]
 pub(crate) struct Container {
@@ -59,8 +68,30 @@ impl Container {
                 let mut cancel_receiver = cancel_receiver.clone();
                 let startup_sender = startup_sender.clone();
                 async move {
-                    let registry_service = mysten_metrics::RegistryService::new(Registry::new());
-                    let server = SuiNode::start(config, registry_service).await.unwrap();
+                    // Retry the open: a node restarted on the same `db_path`
+                    // can race the previous instance's still-pending RocksDB
+                    // teardown and fail to acquire its file locks. The
+                    // teardown completes a non-deterministic time later, so
+                    // retry rather than panic on a transient lock conflict.
+                    let mut server = None;
+                    for attempt in 1..=MAX_START_ATTEMPTS {
+                        let registry_service =
+                            mysten_metrics::RegistryService::new(Registry::new());
+                        match SuiNode::start(config.clone(), registry_service).await {
+                            Ok(node) => {
+                                server = Some(node);
+                                break;
+                            }
+                            Err(e) if attempt < MAX_START_ATTEMPTS => {
+                                warn!("node start attempt {attempt} failed, retrying: {e:?}");
+                                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                            }
+                            Err(e) => {
+                                panic!("node failed to start after {attempt} attempts: {e:?}")
+                            }
+                        }
+                    }
+                    let server = server.expect("node start loop must set the node or panic");
 
                     startup_sender.send(Arc::downgrade(&server)).ok();
 
