@@ -148,6 +148,30 @@ fn history_committed(cluster: &TestCluster, name: &AuthorityName) -> Option<u64>
     })
 }
 
+/// The highest checkpoint the dedicated fullnode has executed (independent
+/// of indexing).
+fn node_highest_executed(cluster: &TestCluster, name: &AuthorityName) -> u64 {
+    with_node(cluster, name, |node| {
+        node.state()
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            .unwrap_or(0)
+    })
+}
+
+/// Block until the dedicated fullnode has executed through `target` (by
+/// state sync), independent of indexing.
+async fn wait_for_executed(cluster: &TestCluster, name: &AuthorityName, target: u64) {
+    let deadline = tokio::time::Instant::now() + WAIT_TIMEOUT;
+    while node_highest_executed(cluster, name) < target {
+        if tokio::time::Instant::now() >= deadline {
+            panic!("timed out waiting for fullnode to execute checkpoint {target}");
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
 /// Block until both cohorts of the dedicated fullnode's embedded store have
 /// committed through `target`. Panics on timeout with the last-observed
 /// watermarks.
@@ -349,4 +373,49 @@ async fn enabling_embedded_store_rebuilds_indexes() {
     // through both index cohorts.
     wait_for_indexed(&cluster, &name, target).await;
     assert_transfer_indexed(&rpc_url, &transfer).await;
+}
+
+/// Toggling indexing off, advancing the chain, then back on lets the store
+/// resume from its frozen watermark (still within the available range) and
+/// backfill the gap -- no rebuild.
+#[sim_test]
+async fn embedded_store_resumes_and_catches_up_after_indexing_gap() {
+    let mut cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .disable_fullnode_pruning()
+        .build()
+        .await;
+    let (name, rpc_url) = spawn_fullnode(&mut cluster, embedded_indexing_config()).await;
+
+    // Phase 1: index a first transfer to the tip.
+    let transfer1 = transfer_to_fresh_address(&cluster, 4_000_000).await;
+    wait_for_indexed(&cluster, &name, chain_tip(&cluster)).await;
+    let frozen_watermark = live_committed(&cluster, &name).unwrap();
+
+    // Phase 2: disable indexing and advance the chain past the watermark.
+    // The node keeps executing checkpoints; the embedded watermark stays
+    // frozen on disk.
+    restart_fullnode(&cluster, &name, no_indexing_config()).await;
+    assert!(!has_embedded_store(&cluster, &name));
+    let transfer2 = transfer_to_fresh_address(&cluster, 9_000_000).await;
+    for _ in 0..3 {
+        transfer_to_fresh_address(&cluster, 1_000_000).await;
+    }
+    let executed_tip = chain_tip(&cluster);
+    wait_for_executed(&cluster, &name, executed_tip).await;
+    assert!(
+        executed_tip > frozen_watermark,
+        "chain ({executed_tip}) should advance past the frozen watermark ({frozen_watermark})",
+    );
+
+    // Phase 3: re-enable indexing. The frozen watermark is still within the
+    // available range (nothing was pruned), so the store resumes and
+    // backfills the gap rather than rebuilding.
+    restart_fullnode(&cluster, &name, embedded_indexing_config()).await;
+    assert_eq!(bootstrap_action(&cluster, &name), Some(Bootstrap::Resume));
+
+    // After catching up, both the pre-gap and in-gap transfers are visible.
+    wait_for_indexed(&cluster, &name, chain_tip(&cluster)).await;
+    assert_transfer_indexed(&rpc_url, &transfer1).await;
+    assert_transfer_indexed(&rpc_url, &transfer2).await;
 }
