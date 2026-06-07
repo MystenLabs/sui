@@ -81,6 +81,16 @@ fn embedded_indexing_config() -> RpcConfig {
     }
 }
 
+/// An rpc config that builds no index at all: neither the legacy
+/// `rpc-index` nor the embedded `sui-rpc-store`.
+fn no_indexing_config() -> RpcConfig {
+    RpcConfig {
+        enable_indexing: Some(false),
+        use_experimental_rpc_store: Some(false),
+        ..Default::default()
+    }
+}
+
 /// Spawn a dedicated fullnode into the swarm with `rpc`, returning its
 /// (stable) name and rpc url. The handle `spawn_new_node` returns is
 /// dropped immediately so the node keeps no external strong reference and a
@@ -111,6 +121,10 @@ async fn restart_fullnode(cluster: &TestCluster, name: &AuthorityName, rpc: RpcC
 fn with_node<T>(cluster: &TestCluster, name: &AuthorityName, f: impl FnOnce(&SuiNode) -> T) -> T {
     let handle = cluster.swarm.node(name).unwrap().get_node_handle().unwrap();
     handle.with(f)
+}
+
+fn has_embedded_store(cluster: &TestCluster, name: &AuthorityName) -> bool {
+    with_node(cluster, name, |node| node.embedded_rpc_store().is_some())
 }
 
 fn bootstrap_action(cluster: &TestCluster, name: &AuthorityName) -> Option<Bootstrap> {
@@ -298,6 +312,41 @@ async fn embedded_store_resumes_after_restart() {
     assert_eq!(bootstrap_action(&cluster, &name), Some(Bootstrap::Resume));
 
     // The resumed store answers the same queries correctly.
+    wait_for_indexed(&cluster, &name, target).await;
+    assert_transfer_indexed(&rpc_url, &transfer).await;
+}
+
+/// Enabling the embedded store on a node that ran unindexed rebuilds the
+/// indexes from the perpetual store: the live cohort bulk-loads to the tip
+/// and the history cohort backfills from genesis (nothing was pruned).
+#[sim_test]
+async fn enabling_embedded_store_rebuilds_indexes() {
+    let mut cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .disable_fullnode_pruning()
+        .build()
+        .await;
+    let (name, rpc_url) = spawn_fullnode(&mut cluster, no_indexing_config()).await;
+    assert!(
+        !has_embedded_store(&cluster, &name),
+        "indexing is off, so the node should build no embedded store",
+    );
+
+    // Run a transfer while the node is unindexed.
+    let transfer = transfer_to_fresh_address(&cluster, 7_000_000).await;
+    let target = chain_tip(&cluster);
+
+    // Turn on the embedded store and restart. With no prior rpc-store
+    // database the live cohort has no watermark, so the store rebuilds it
+    // (resuming any partial restore in place rather than clearing).
+    restart_fullnode(&cluster, &name, embedded_indexing_config()).await;
+    assert_eq!(
+        bootstrap_action(&cluster, &name),
+        Some(Bootstrap::Restore { clear: false }),
+    );
+
+    // After the rebuild + backfill the pre-enable transfer is visible
+    // through both index cohorts.
     wait_for_indexed(&cluster, &name, target).await;
     assert_transfer_indexed(&rpc_url, &transfer).await;
 }
