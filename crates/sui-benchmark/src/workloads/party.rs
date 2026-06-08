@@ -137,7 +137,7 @@ impl PartyTestPayload {
             );
         }
 
-        tx_builder.build_and_sign(account.key())
+        tx_builder.ensure_unique().build_and_sign(account.key())
     }
 }
 
@@ -252,6 +252,7 @@ impl Workload<dyn Payload> for PartyWorkload {
             TestTransactionBuilder::new(first_gas.1, first_gas.0, reference_gas_price)
                 .publish_async(path)
                 .await
+                .ensure_unique()
                 .build_and_sign(first_gas.2.as_ref());
         let execution_result = execution_proxy.execute_transaction_block(transaction).await;
         let effects = execution_result.unwrap();
@@ -282,6 +283,7 @@ impl Workload<dyn Payload> for PartyWorkload {
         for (gas, sender, keypair) in &self.payload_gas[..self.payload_gas.len() / 2] {
             let transaction = TestTransactionBuilder::new(*sender, *gas, reference_gas_price)
                 .move_call(self.package_id, "party", "create_party", vec![])
+                .ensure_unique()
                 .build_and_sign(keypair.as_ref());
             let state = state.clone();
             let system_state_observer = system_state_observer.clone();
@@ -327,6 +329,7 @@ impl Workload<dyn Payload> for PartyWorkload {
         for (gas, sender, keypair) in &self.payload_gas[self.payload_gas.len() / 2..] {
             let transaction = TestTransactionBuilder::new(*sender, *gas, reference_gas_price)
                 .move_call(self.package_id, "party", "create_fastpath", vec![])
+                .ensure_unique()
                 .build_and_sign(keypair.as_ref());
             let state = state.clone();
             let system_state_observer = system_state_observer.clone();

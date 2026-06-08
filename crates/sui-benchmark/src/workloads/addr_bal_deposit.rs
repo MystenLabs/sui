@@ -204,7 +204,7 @@ impl Workload<dyn Payload> for AddrBalDepositWorkload {
                     vec![coin_balance, recipient_arg],
                 );
             }
-            let tx = tx_builder.build_and_sign(keypair.as_ref());
+            let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
             let proxy_ref = execution_proxy.clone();
             futures.push(async move {
                 let result = proxy_ref.execute_transaction_block(tx).await;
@@ -346,7 +346,9 @@ impl Payload for AddrBalDepositPayload {
             }
         }
 
-        let tx = tx_builder.build_and_sign(self.keypair.as_ref());
+        let tx = tx_builder
+            .ensure_unique()
+            .build_and_sign(self.keypair.as_ref());
         self.metrics.lock().unwrap().sent += 1;
         vec![tx]
     }
