@@ -26,11 +26,12 @@ use move_binary_format::{
     },
     file_format_common::VERSION_MAX,
 };
-use move_bytecode_verifier::verify_module_unmetered;
+use move_bytecode_verifier::verify_module_with_config_unmetered;
 use move_compiler::Compiler;
 use move_core_types::{
     account_address::AccountAddress, language_storage::TypeTag, vm_status::StatusCode,
 };
+use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
 use move_vm_runtime::{
     dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, storage::StoredPackage},
     execution::values::{Value, Vector},
@@ -45,12 +46,37 @@ use tracing::{debug, error, info};
 
 use std::{fs, io::Write, panic, sync::LazyLock, thread};
 
-/// This function calls the Bytecode verifier to test it
-fn run_verifier(module: CompiledModule) -> Result<CompiledModule, String> {
-    match verify_module_unmetered(&module) {
-        Ok(_) => Ok(module),
-        Err(err) => Err(format!("Module verification failed: {:#?}", err)),
+/// Verifier configuration used throughout generation: the `regex_reference_safety` pass replaces
+/// the `reference_safety` pass with the regex-based pass (matching the borrow model the generator
+/// mirrors). The *same* config is used for both standalone verification and the VM runtime's
+/// load-time verification, so the two never disagree (otherwise a module accepted by one and
+/// rejected by the other surfaces as an `UNEXPECTED_VERIFIER_ERROR`).
+fn regex_verifier_config() -> VerifierConfig {
+    VerifierConfig {
+        switch_to_regex_reference_safety: true,
+        ..VerifierConfig::default()
     }
+}
+
+/// This function calls the Bytecode verifier to test it, then exercises the binary (de)serializer by
+/// round-tripping the verified module and requiring it to come back structurally identical.
+fn run_verifier(module: CompiledModule) -> Result<CompiledModule, String> {
+    verify_module_with_config_unmetered(&regex_verifier_config(), &module)
+        .map_err(|err| format!("Module verification failed: {:#?}", err))?;
+
+    // Serialize at the module's own version and deserialize back; (de)serialization must be lossless,
+    // so the result must equal the original.
+    let mut bytes = vec![];
+    module
+        .serialize_with_version(module.version, &mut bytes)
+        .map_err(|err| format!("Module serialization failed: {:#?}", err))?;
+    let round_tripped = CompiledModule::deserialize_with_defaults(&bytes)
+        .map_err(|err| format!("Module deserialization failed: {:#?}", err))?;
+    if round_tripped != module {
+        return Err("Module did not round-trip identically through (de)serialization".to_string());
+    }
+
+    Ok(module)
 }
 
 static STORAGE_WITH_MOVE_STDLIB: LazyLock<InMemoryStorage> = LazyLock::new(|| {
@@ -136,13 +162,19 @@ fn execute_function_in_module(
         module.identifier_at(entry_name_idx).to_owned()
     };
     {
-        let move_runtime = MoveRuntime::new_with_default_config(
+        // Use the same regex reference-safety config as `run_verifier` so the VM's load-time
+        // verification agrees with the standalone verification stage.
+        let move_runtime = MoveRuntime::new(
             move_vm_runtime::natives::move_stdlib::stdlib_native_functions(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
                 move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
                 /* silent debug */ true,
             )
             .unwrap(),
+            VMConfig {
+                verifier: regex_verifier_config(),
+                ..VMConfig::default()
+            },
         );
 
         let mut vm = InMemoryTestAdapter::new_with_runtime_and_storage(

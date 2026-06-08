@@ -107,10 +107,8 @@ fn bytecode_pack() {
         AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     let (struct_value1, tokens) = create_struct_value(&state1.module.module);
     for token in tokens {
-        let abstract_value = AbstractValue {
-            token: token.clone(),
-            abilities: abilities(&state1.module.module, &token, &[]),
-        };
+        let abstract_value =
+            AbstractValue::new_value(token.clone(), abilities(&state1.module.module, &token, &[]));
         state1.stack_push(abstract_value);
     }
     let (state2, _) =
@@ -162,18 +160,19 @@ fn bytecode_mutborrowfield() {
     let mut state1 =
         AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     let struct_value = create_struct_value(&state1.module.module).0;
-    state1.stack_push(AbstractValue {
-        token: SignatureToken::MutableReference(Box::new(struct_value.token)),
-        abilities: struct_value.abilities,
-    });
+    state1
+        .push_fresh_reference(SignatureToken::MutableReference(Box::new(
+            struct_value.token,
+        )))
+        .unwrap();
     let (state2, _) = common::run_instruction(Bytecode::MutBorrowField(field_handle_idx), state1);
-    let abilities = abilities(&state2.module.module, &field_signature, &[]);
     assert_eq!(
         state2.stack_peek(0),
-        Some(AbstractValue {
-            token: SignatureToken::MutableReference(Box::new(field_signature)),
-            abilities,
-        }),
+        // The field reference is mutable and, being a reference, has `copy + drop` abilities.
+        Some(AbstractValue::new_value(
+            SignatureToken::MutableReference(Box::new(field_signature)),
+            AbilitySet::REFERENCES,
+        )),
         "stack type postcondition not met"
     );
 }
@@ -208,10 +207,9 @@ fn bytecode_mutborrowfield_ref_is_immutable() {
     let mut state1 =
         AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     let struct_value = create_struct_value(&state1.module.module).0;
-    state1.stack_push(AbstractValue {
-        token: SignatureToken::Reference(Box::new(struct_value.token)),
-        abilities: struct_value.abilities,
-    });
+    state1
+        .push_fresh_reference(SignatureToken::Reference(Box::new(struct_value.token)))
+        .unwrap();
     common::run_instruction(Bytecode::MutBorrowField(field_handle_idx), state1);
 }
 
@@ -230,18 +228,17 @@ fn bytecode_immborrowfield() {
     let mut state1 =
         AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     let struct_value = create_struct_value(&state1.module.module).0;
-    state1.stack_push(AbstractValue {
-        token: SignatureToken::Reference(Box::new(struct_value.token)),
-        abilities: struct_value.abilities,
-    });
+    state1
+        .push_fresh_reference(SignatureToken::Reference(Box::new(struct_value.token)))
+        .unwrap();
     let (state2, _) = common::run_instruction(Bytecode::ImmBorrowField(field_handle_idx), state1);
-    let abilities = abilities(&state2.module.module, &field_signature, &[]);
     assert_eq!(
         state2.stack_peek(0),
-        Some(AbstractValue {
-            token: SignatureToken::MutableReference(Box::new(field_signature)),
-            abilities,
-        }),
+        // `ImmBorrowField` yields an *immutable* field reference with `copy + drop` abilities.
+        Some(AbstractValue::new_value(
+            SignatureToken::Reference(Box::new(field_signature)),
+            AbilitySet::REFERENCES,
+        )),
         "stack type postcondition not met"
     );
 }
@@ -276,9 +273,10 @@ fn bytecode_immborrowfield_ref_is_mutable() {
     let mut state1 =
         AbstractState::from_locals(module, BTreeMap::new(), vec![], vec![], CallGraph::new(0));
     let struct_value = create_struct_value(&state1.module.module).0;
-    state1.stack_push(AbstractValue {
-        token: SignatureToken::MutableReference(Box::new(struct_value.token)),
-        abilities: struct_value.abilities,
-    });
+    state1
+        .push_fresh_reference(SignatureToken::MutableReference(Box::new(
+            struct_value.token,
+        )))
+        .unwrap();
     common::run_instruction(Bytecode::ImmBorrowField(field_handle_idx), state1);
 }

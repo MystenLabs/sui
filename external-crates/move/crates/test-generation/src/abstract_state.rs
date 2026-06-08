@@ -2,7 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{borrow_graph::BorrowGraph, error::VMError};
+use crate::{
+    borrow_graph::{BorrowGraph, Ref},
+    error::VMError,
+};
 use move_binary_format::file_format::{
     Ability, AbilitySet, CompiledModule, Constant, ConstantPoolIndex, FieldInstantiation,
     FieldInstantiationIndex, FunctionHandleIndex, FunctionInstantiation,
@@ -24,14 +27,27 @@ pub enum BorrowState {
 }
 
 /// This models a value on the stack or in the locals
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct AbstractValue {
     /// Represents the type of the value
     pub token: SignatureToken,
 
     /// Represents the abilities of the value
     pub abilities: AbilitySet,
+
+    /// For reference values, the node identifying this reference in the abstract borrow graph;
+    /// `None` for non-reference values. Excluded from equality: it is auxiliary borrow-tracking
+    /// state, not part of a value's type identity (which is what `AbstractValue` comparisons test).
+    pub reference: Option<Ref>,
 }
+
+impl PartialEq for AbstractValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.token == other.token && self.abilities == other.abilities
+    }
+}
+
+impl Eq for AbstractValue {}
 
 /// This models the mutability of a reference
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,11 +89,14 @@ impl AbstractValue {
         AbstractValue {
             token,
             abilities: AbilitySet::PRIMITIVES,
+            reference: None,
         }
     }
 
-    /// Create a new reference `AbstractValue` given its type and kind
-    pub fn new_reference(token: SignatureToken, abilities: AbilitySet) -> AbstractValue {
+    /// Create a new reference `AbstractValue` given its type and its node in the borrow graph. A
+    /// reference value always has `copy + drop` abilities (`AbilitySet::REFERENCES`), independent of
+    /// its referent.
+    pub fn new_reference(token: SignatureToken, reference: Ref) -> AbstractValue {
         assert!(
             matches!(
                 token,
@@ -85,7 +104,11 @@ impl AbstractValue {
             ),
             "AbstractValue::new_reference must be applied with a reference type"
         );
-        AbstractValue { token, abilities }
+        AbstractValue {
+            token,
+            abilities: AbilitySet::REFERENCES,
+            reference: Some(reference),
+        }
     }
 
     /// Create a new struct `AbstractValue` given its type and kind
@@ -97,11 +120,19 @@ impl AbstractValue {
             ),
             "AbstractValue::new_struct must be applied with a struct type"
         );
-        AbstractValue { token, abilities }
+        AbstractValue {
+            token,
+            abilities,
+            reference: None,
+        }
     }
 
     pub fn new_value(token: SignatureToken, abilities: AbilitySet) -> AbstractValue {
-        AbstractValue { token, abilities }
+        AbstractValue {
+            token,
+            abilities,
+            reference: None,
+        }
     }
 
     /// Predicate on whether the type of the abstract value is generic -- it is if it contains a
@@ -466,9 +497,8 @@ pub struct AbstractState {
     /// abstract state.
     control_flow_allowed: bool,
 
-    /// This graph stores borrow information needed to ensure that bytecode instructions
-    /// are memory safe
-    #[allow(dead_code)]
+    /// This graph stores borrow information needed to ensure that reference bytecode instructions
+    /// are memory safe, mirroring the verifier's `regex_reference_safety` pass.
     borrow_graph: BorrowGraph,
 
     pub call_graph: CallGraph,
@@ -512,7 +542,7 @@ impl AbstractState {
             acquires_global_resources,
             aborted: false,
             control_flow_allowed: false,
-            borrow_graph: BorrowGraph::new(locals_len as u8),
+            borrow_graph: BorrowGraph::new(locals_len),
             call_graph,
         }
     }
@@ -603,29 +633,85 @@ impl AbstractState {
         }
     }
 
-    /// Place a reference to the local at index `i` if it exists into the register
-    /// If it does not exist return a `VMError`.
+    /// Place a reference to the local at index `i` if it exists into the register, recording the
+    /// borrow in the abstract borrow graph. If it does not exist return a `VMError`.
     pub fn local_take_borrow(&mut self, i: usize, mutability: Mutability) -> Result<(), VMError> {
-        if let Some((abstract_value, _)) = self.locals.get(&i) {
-            let ref_token = match mutability {
-                Mutability::Mutable => {
-                    SignatureToken::MutableReference(Box::new(abstract_value.token.clone()))
-                }
-                Mutability::Immutable => {
-                    SignatureToken::Reference(Box::new(abstract_value.token.clone()))
-                }
-                Mutability::Either => {
-                    return Err(VMError::new("Mutability cannot be Either".to_string()));
-                }
-            };
-            self.register = Some(AbstractValue::new_reference(
-                ref_token,
-                abstract_value.abilities,
-            ));
-            Ok(())
+        let is_mut = match mutability {
+            Mutability::Mutable => true,
+            Mutability::Immutable => false,
+            Mutability::Either => {
+                return Err(VMError::new("Mutability cannot be Either".to_string()));
+            }
+        };
+        let Some((abstract_value, _)) = self.locals.get(&i) else {
+            return Err(VMError::new(format!("Local does not exist at index {}", i)));
+        };
+        let referent = abstract_value.token.clone();
+        let ref_token = if is_mut {
+            SignatureToken::MutableReference(Box::new(referent))
         } else {
-            Err(VMError::new(format!("Local does not exist at index {}", i)))
+            SignatureToken::Reference(Box::new(referent))
+        };
+        let r = self
+            .borrow_graph
+            .borrow_loc(i, is_mut)
+            .map_err(VMError::new)?;
+        self.register = Some(AbstractValue::new_reference(ref_token, r));
+        Ok(())
+    }
+
+    /// Push a reference value backed by a fresh, standalone node in the borrow graph (borrowing
+    /// nothing). A test-only helper for exercising reference instructions in isolation. It stays
+    /// `pub` rather than `#[cfg(test)]` because the crate's integration tests (`tests/*.rs`) consume
+    /// it, and those link against the non-test build where `#[cfg(test)]` items are absent; gating it
+    /// properly would require a `testing` cargo feature, which we deliberately avoid here.
+    #[doc(hidden)]
+    pub fn push_fresh_reference(&mut self, token: SignatureToken) -> Result<(), VMError> {
+        let is_mut = matches!(token, SignatureToken::MutableReference(_));
+        let r = self
+            .borrow_graph
+            .fresh_reference(is_mut)
+            .map_err(VMError::new)?;
+        self.stack_push(AbstractValue::new_reference(token, r));
+        Ok(())
+    }
+
+    /// Record a field borrow in the borrow graph, consuming the source reference `src` and returning
+    /// the node for the new field reference (`ImmBorrowField`/`MutBorrowField`).
+    pub fn borrow_field(
+        &mut self,
+        src: Ref,
+        is_mut: bool,
+        field: move_binary_format::file_format::FieldHandleIndex,
+    ) -> Result<Ref, VMError> {
+        self.borrow_graph
+            .borrow_field(src, is_mut, field)
+            .map_err(VMError::new)
+    }
+
+    /// Record a freeze in the borrow graph, consuming the mutable source `src` and returning the new
+    /// immutable reference node (`FreezeRef`).
+    pub fn freeze_ref(&mut self, src: Ref) -> Result<Ref, VMError> {
+        self.borrow_graph.freeze(src).map_err(VMError::new)
+    }
+
+    /// Release a reference node from the borrow graph (`Pop`/`ReadRef`/`WriteRef`).
+    pub fn release_ref(&mut self, r: Ref) -> Result<(), VMError> {
+        self.borrow_graph.release(r).map_err(VMError::new)
+    }
+
+    /// Whether the reference at stack position `index` is writable (`WriteRef` precondition):
+    /// mutable with no outstanding non-epsilon borrowers.
+    pub fn stack_ref_is_writable(&self, index: usize) -> bool {
+        match self.stack_peek(index).and_then(|v| v.reference) {
+            Some(r) => self.borrow_graph.is_writable(r),
+            None => false,
         }
+    }
+
+    /// Whether local `i` is borrowed in the graph. See `BorrowGraph::is_local_borrowed`.
+    pub fn local_is_borrowed(&self, i: usize, exclude_alias: bool) -> bool {
+        self.borrow_graph.is_local_borrowed(i, exclude_alias)
     }
 
     /// Set the availability of the local at index `i`

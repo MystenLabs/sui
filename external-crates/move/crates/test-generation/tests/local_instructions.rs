@@ -105,9 +105,10 @@ fn bytecode_mutborrowloc() {
     let (state2, _) = common::run_instruction(Bytecode::MutBorrowLoc(0), state1);
     assert_eq!(
         state2.stack_peek(0),
-        Some(AbstractValue::new_reference(
+        // A reference value has `copy + drop` abilities; equality ignores the borrow-graph node.
+        Some(AbstractValue::new_value(
             SignatureToken::MutableReference(Box::new(SignatureToken::U64)),
-            AbilitySet::PRIMITIVES
+            AbilitySet::REFERENCES
         )),
         "stack type postcondition not met"
     );
@@ -132,9 +133,10 @@ fn bytecode_immborrowloc() {
     let (state2, _) = common::run_instruction(Bytecode::ImmBorrowLoc(0), state1);
     assert_eq!(
         state2.stack_peek(0),
-        Some(AbstractValue::new_reference(
-            SignatureToken::Reference(Box::new(SignatureToken::U64),),
-            AbilitySet::PRIMITIVES
+        // A reference value has `copy + drop` abilities; equality ignores the borrow-graph node.
+        Some(AbstractValue::new_value(
+            SignatureToken::Reference(Box::new(SignatureToken::U64)),
+            AbilitySet::REFERENCES
         )),
         "stack type postcondition not met"
     );
@@ -162,27 +164,26 @@ fn bytecode_immborrowloc_no_local() {
     common::run_instruction(Bytecode::ImmBorrowLoc(0), state1);
 }
 
-// TODO: Turn back on when borrow graph and references are allowed
-// #[test]
-// #[should_panic]
-// fn bytecode_mutborrowloc_local_unavailable() {
-//     let mut state1 = AbstractState::new();
-//     state1.local_insert(
-//         0,
-//         AbstractValue::new_primitive(SignatureToken::U64),
-//         BorrowState::Unavailable,
-//     );
-//     common::run_instruction(Bytecode::MutBorrowLoc(0), state1);
-// }
-//
-// #[test]
-// #[should_panic]
-// fn bytecode_immborrowloc_local_unavailable() {
-//     let mut state1 = AbstractState::new();
-//     state1.local_insert(
-//         0,
-//         AbstractValue::new_primitive(SignatureToken::U64),
-//         BorrowState::Unavailable,
-//     );
-//     common::run_instruction(Bytecode::ImmBorrowLoc(0), state1);
-// }
+#[test]
+#[should_panic]
+fn bytecode_mutborrowloc_local_unavailable() {
+    let mut state1 = AbstractState::new();
+    state1.local_insert(
+        0,
+        AbstractValue::new_primitive(SignatureToken::U64),
+        BorrowState::Unavailable,
+    );
+    common::run_instruction(Bytecode::MutBorrowLoc(0), state1);
+}
+
+#[test]
+#[should_panic]
+fn bytecode_immborrowloc_local_unavailable() {
+    let mut state1 = AbstractState::new();
+    state1.local_insert(
+        0,
+        AbstractValue::new_primitive(SignatureToken::U64),
+        BorrowState::Unavailable,
+    );
+    common::run_instruction(Bytecode::ImmBorrowLoc(0), state1);
+}
