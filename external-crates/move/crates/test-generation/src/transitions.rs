@@ -5,7 +5,6 @@
 use crate::{
     abilities,
     abstract_state::{AbstractState, AbstractValue, BorrowState, Mutability},
-    config::ALLOW_MEMORY_UNSAFE,
     error::VMError,
     get_struct_handle_from_reference, get_type_actuals_from_reference, substitute,
 };
@@ -40,6 +39,13 @@ impl Subst {
     /// substitution is created.
     pub fn check_and_add(&mut self, stack_sig: SignatureToken, instr_sig: SignatureToken) -> bool {
         match (stack_sig, instr_sig) {
+            // A reference can never be a type argument (the signature checker rejects references in
+            // instantiations with `INVALID_SIGNATURE_TOKEN`), so a reference-typed stack value cannot
+            // satisfy a type parameter.
+            (
+                SignatureToken::Reference(_) | SignatureToken::MutableReference(_),
+                SignatureToken::TypeParameter(_),
+            ) => false,
             (tok, SignatureToken::TypeParameter(idx)) => {
                 if let Some(other_type) = self.subst.get(&(idx as usize)).cloned() {
                     // If we have already defined a subtitution for this type parameter, then make
@@ -334,6 +340,7 @@ pub fn stack_ref_polymorphic_eq(state: &AbstractState, index1: usize, index2: us
                 let abstract_value_inner = AbstractValue {
                     token: (*token).clone(),
                     abilities: abilities_for_token(state, &token, &state.instantiation[..]),
+                    reference: None,
                 };
                 return Some(abstract_value_inner) == state.stack_peek(index2);
             }
@@ -519,6 +526,7 @@ pub fn stack_satisfies_struct_signature(
                         .map(|param| param.constraints)
                         .collect::<Vec<_>>(),
                 ),
+                reference: None,
             };
             stack_has(state, i, Some(abstract_value))
         };
@@ -859,49 +867,58 @@ pub fn stack_unpack_struct(
         let abstract_value = AbstractValue {
             token: substitute(token, &ty_instantiation),
             abilities: abilities_for_token(&state, token, &abilities),
+            reference: None,
         };
         state = stack_push(&state, abstract_value)?;
     }
     Ok(state)
 }
 
-pub fn struct_ref_instantiation(state: &mut AbstractState) -> Result<Vec<SignatureToken>, VMError> {
-    let token = state.register_move().unwrap().token;
-    if let Some(type_actuals) = get_type_actuals_from_reference(&token) {
-        Ok(type_actuals)
-    } else {
-        Err(VMError::new("Invalid field borrow".to_string()))
-    }
-}
-
-/// Push the field at `field_index` of a struct as an `AbstractValue` to the stack
+/// Borrow the field at `field_index` of the struct reference currently in the register, pushing the
+/// resulting field reference (with the requested mutability) onto the stack and recording the borrow
+/// in the borrow graph (consuming the source reference).
 pub fn stack_struct_borrow_field(
     state: &AbstractState,
     field_index: FieldHandleIndex,
+    mutability: Mutability,
 ) -> Result<AbstractState, VMError> {
     let mut state = state.clone();
-    let typs = struct_ref_instantiation(&mut state)?;
-    let abilities = abilities_for_instantiation(&state, &typs);
-    let field_handle = state.module.module.field_handle_at(field_index);
-    let struct_def = state.module.module.struct_def_at(field_handle.owner);
-    let field_signature = match &struct_def.field_information {
-        StructFieldInformation::Native => {
-            return Err(VMError::new("Borrow field on a native struct".to_string()));
-        }
-        StructFieldInformation::Declared(fields) => {
-            let field_def = &fields[field_handle.field as usize];
-            &field_def.signature.0
+    let is_mut = match mutability {
+        Mutability::Mutable => true,
+        Mutability::Immutable => false,
+        Mutability::Either => {
+            return Err(VMError::new("Mutability must be specified".to_string()));
         }
     };
-    let reified_field_sig = substitute(field_signature, &typs);
-    // NB: We determine the kind on the non-reified_field_sig; we want any local references to
-    // type parameters to point to (struct) local type parameters. We could possibly also use the
-    // reified_field_sig coupled with the top-level instantiation, but I need to convince myself of
-    // the correctness of this.
-    let abstract_value = AbstractValue {
-        token: SignatureToken::MutableReference(Box::new(reified_field_sig)),
-        abilities: abilities_for_token(&state, field_signature, &abilities),
+    let source = state
+        .register_move()
+        .ok_or_else(|| VMError::new("Register is empty".to_string()))?;
+    let src_ref = source.reference.ok_or_else(|| {
+        VMError::new("Borrow field source is not a tracked reference".to_string())
+    })?;
+    let typs = get_type_actuals_from_reference(&source.token)
+        .ok_or_else(|| VMError::new("Invalid field borrow".to_string()))?;
+    let reified_field_sig = {
+        let field_handle = state.module.module.field_handle_at(field_index);
+        let struct_def = state.module.module.struct_def_at(field_handle.owner);
+        let field_signature = match &struct_def.field_information {
+            StructFieldInformation::Native => {
+                return Err(VMError::new("Borrow field on a native struct".to_string()));
+            }
+            StructFieldInformation::Declared(fields) => {
+                let field_def = &fields[field_handle.field as usize];
+                &field_def.signature.0
+            }
+        };
+        substitute(field_signature, &typs)
     };
+    let new_ref = state.borrow_field(src_ref, is_mut, field_index)?;
+    let token = if is_mut {
+        SignatureToken::MutableReference(Box::new(reified_field_sig))
+    } else {
+        SignatureToken::Reference(Box::new(reified_field_sig))
+    };
+    let abstract_value = AbstractValue::new_reference(token, new_ref);
     state = stack_push(&state, abstract_value)?;
     Ok(state)
 }
@@ -909,80 +926,71 @@ pub fn stack_struct_borrow_field(
 pub fn stack_struct_borrow_field_inst(
     state: &AbstractState,
     field_index: FieldInstantiationIndex,
-) -> Result<AbstractState, VMError> {
-    let field_inst = state.module.field_instantiantiation_at(field_index);
-    stack_struct_borrow_field(state, field_inst.handle)
-}
-
-/// Dereference the value stored in the register. If the value is not a reference, or
-/// the register is empty, return an error.
-pub fn register_dereference(state: &AbstractState) -> Result<AbstractState, VMError> {
-    let mut state = state.clone();
-    if let Some(abstract_value) = state.register_move() {
-        match abstract_value.token {
-            SignatureToken::MutableReference(token) => {
-                state.register_set(AbstractValue {
-                    token: *token,
-                    abilities: abstract_value.abilities,
-                });
-                Ok(state)
-            }
-            SignatureToken::Reference(token) => {
-                state.register_set(AbstractValue {
-                    token: *token,
-                    abilities: abstract_value.abilities,
-                });
-                Ok(state)
-            }
-            SignatureToken::Bool
-            | SignatureToken::U8
-            | SignatureToken::U64
-            | SignatureToken::U128
-            | SignatureToken::Address
-            | SignatureToken::Signer
-            | SignatureToken::Vector(_)
-            | SignatureToken::Datatype(_)
-            | SignatureToken::DatatypeInstantiation(_)
-            | SignatureToken::TypeParameter(_)
-            | SignatureToken::U16
-            | SignatureToken::U32
-            | SignatureToken::U256 => Err(VMError::new(
-                "Register does not contain a reference".to_string(),
-            )),
-        }
-    } else {
-        println!("{:?}", state);
-        Err(VMError::new("Register is empty".to_string()))
-    }
-}
-
-/// Push a reference to a register value with the given mutability.
-pub fn stack_push_register_borrow(
-    state: &AbstractState,
     mutability: Mutability,
 ) -> Result<AbstractState, VMError> {
+    let field_inst = state.module.field_instantiantiation_at(field_index);
+    stack_struct_borrow_field(state, field_inst.handle, mutability)
+}
+
+/// Dereference (`ReadRef`) the reference in the register: release its borrow-graph node and replace
+/// the register with the referent value (computing the referent's abilities). Errors if the register
+/// is empty or does not hold a reference.
+pub fn register_dereference(state: &AbstractState) -> Result<AbstractState, VMError> {
     let mut state = state.clone();
-    if let Some(abstract_value) = state.register_move() {
-        match mutability {
-            Mutability::Mutable => {
-                state.stack_push(AbstractValue {
-                    token: SignatureToken::MutableReference(Box::new(abstract_value.token)),
-                    abilities: abstract_value.abilities,
-                });
-                Ok(state)
-            }
-            Mutability::Immutable => {
-                state.stack_push(AbstractValue {
-                    token: SignatureToken::Reference(Box::new(abstract_value.token)),
-                    abilities: abstract_value.abilities,
-                });
-                Ok(state)
-            }
-            Mutability::Either => Err(VMError::new("Mutability must be specified".to_string())),
+    let Some(value) = state.register_move() else {
+        return Err(VMError::new("Register is empty".to_string()));
+    };
+    let reference = value.reference;
+    let inner = match value.token {
+        SignatureToken::MutableReference(token) | SignatureToken::Reference(token) => *token,
+        _ => {
+            return Err(VMError::new(
+                "Register does not contain a reference".to_string(),
+            ));
         }
-    } else {
-        Err(VMError::new("Register is empty".to_string()))
+    };
+    if let Some(r) = reference {
+        state.release_ref(r)?;
     }
+    let abilities = abilities_for_token(&state, &inner, &state.instantiation[..]);
+    state.register_set(AbstractValue::new_value(inner, abilities));
+    Ok(state)
+}
+
+/// `FreezeRef` effect: freeze the mutable reference currently in the register, pushing a new
+/// immutable reference value onto the stack and recording the freeze in the borrow graph.
+pub fn register_freeze(state: &AbstractState) -> Result<AbstractState, VMError> {
+    let mut state = state.clone();
+    let Some(value) = state.register_move() else {
+        return Err(VMError::new("Register is empty".to_string()));
+    };
+    let src_ref = value
+        .reference
+        .ok_or_else(|| VMError::new("Freeze source is not a tracked reference".to_string()))?;
+    let inner = match value.token {
+        SignatureToken::MutableReference(token) => *token,
+        _ => {
+            return Err(VMError::new(
+                "FreezeRef applied to a non-mutable reference".to_string(),
+            ));
+        }
+    };
+    let frozen = state.freeze_ref(src_ref)?;
+    let token = SignatureToken::Reference(Box::new(inner));
+    state.stack_push(AbstractValue::new_reference(token, frozen));
+    Ok(state)
+}
+
+/// Release the reference (if any) currently in the register, clearing it. Used by `Pop` and
+/// `WriteRef`, where a reference value is consumed without being dereferenced into a new value.
+pub fn register_release_reference(state: &AbstractState) -> Result<AbstractState, VMError> {
+    let mut state = state.clone();
+    if let Some(value) = state.register_move()
+        && let Some(r) = value.reference
+    {
+        state.release_ref(r)?;
+    }
+    Ok(state)
 }
 
 //---------------------------------------------------------------------------
@@ -1013,6 +1021,7 @@ pub fn stack_satisfies_function_signature(
             let abstract_value = AbstractValue {
                 token: parameter.clone(),
                 abilities,
+                reference: None,
             };
             stack_has(state, i, Some(abstract_value))
         };
@@ -1076,6 +1085,7 @@ pub fn stack_function_call(
         let abstract_value = AbstractValue {
             token: substitute(return_type, ty_instantiation),
             abilities: abilities_for_token(&state, return_type, &abilities),
+            reference: None,
         };
         state = stack_push(&state, abstract_value)?;
     }
@@ -1126,23 +1136,39 @@ pub fn stack_function_inst_popn(
     stack_function_popn(state, func_inst.handle)
 }
 
-/// TODO: This is a temporary function that represents memory
-/// safety for a reference. This should be removed and replaced
-/// with appropriate memory safety premises when the borrow checking
-/// infrastructure is fully implemented.
-/// `index` is `Some(i)` if the instruction can be memory safe when operating
-/// on non-reference types.
-pub fn memory_safe(state: &AbstractState, index: Option<usize>) -> bool {
-    match index {
-        Some(index) => {
-            if stack_has_reference(state, index, Mutability::Either) {
-                ALLOW_MEMORY_UNSAFE
-            } else {
-                true
-            }
-        }
-        None => ALLOW_MEMORY_UNSAFE,
-    }
+/// `WriteRef` (and vector mutation) precondition: the reference at stack position `index` is
+/// writable -- mutable with no outstanding non-epsilon borrowers.
+pub fn stack_ref_is_writable(state: &AbstractState, index: usize) -> bool {
+    state.stack_ref_is_writable(index)
+}
+
+/// `MoveLoc`/`StLoc` precondition: local `i` is not borrowed, with the verifier's `exclude_alias`
+/// semantics (`MoveLoc` counts any borrow; `StLoc` counts only proper field extensions).
+pub fn local_is_not_borrowed(state: &AbstractState, i: u8, exclude_alias: bool) -> bool {
+    !state.local_is_borrowed(i as usize, exclude_alias)
+}
+
+/// Precondition: the value at stack position `index` is not a reference.
+pub fn stack_has_no_reference(state: &AbstractState, index: usize) -> bool {
+    !stack_has_reference(state, index, Mutability::Either)
+}
+
+/// Precondition on the referent of the reference at stack position `index`: `ReadRef` requires the
+/// referent to have `copy` (it produces a copy of the value); `WriteRef` requires `drop` (it
+/// discards the overwritten value).
+pub fn stack_ref_referent_has_ability(
+    state: &AbstractState,
+    index: usize,
+    ability: Ability,
+) -> bool {
+    let Some(value) = state.stack_peek(index) else {
+        return false;
+    };
+    let inner = match value.token {
+        SignatureToken::Reference(t) | SignatureToken::MutableReference(t) => *t,
+        _ => return false,
+    };
+    abilities_for_token(state, &inner, &state.instantiation[..]).has_ability(ability)
 }
 
 //---------------------------------------------------------------------------
@@ -1422,15 +1448,15 @@ macro_rules! state_stack_struct_has_field_inst {
 /// `state` needs to be given.
 #[macro_export]
 macro_rules! state_stack_struct_borrow_field {
-    ($e: expr) => {
-        Box::new(move |state| stack_struct_borrow_field(state, $e))
+    ($e: expr, $mutability: expr) => {
+        Box::new(move |state| stack_struct_borrow_field(state, $e, $mutability))
     };
 }
 
 #[macro_export]
 macro_rules! state_stack_struct_borrow_field_inst {
-    ($e: expr) => {
-        Box::new(move |state| stack_struct_borrow_field_inst(state, $e))
+    ($e: expr, $mutability: expr) => {
+        Box::new(move |state| stack_struct_borrow_field_inst(state, $e, $mutability))
     };
 }
 
@@ -1452,12 +1478,19 @@ macro_rules! state_register_dereference {
     };
 }
 
-/// Wrapper for enclosing the arguments of `stack_push_register_borrow` so that only the
-/// `state` needs to be given.
+/// Wrapper for `register_freeze` (the `FreezeRef` effect).
 #[macro_export]
-macro_rules! state_stack_push_register_borrow {
-    ($e: expr) => {
-        Box::new(move |state| stack_push_register_borrow(state, $e))
+macro_rules! state_register_freeze {
+    () => {
+        Box::new(move |state| register_freeze(state))
+    };
+}
+
+/// Wrapper for `register_release_reference` (releases a consumed reference held in the register).
+#[macro_export]
+macro_rules! state_register_release_reference {
+    () => {
+        Box::new(move |state| register_release_reference(state))
     };
 }
 
@@ -1540,12 +1573,36 @@ macro_rules! state_function_can_acquire_resource {
     };
 }
 
-/// Wrapper for enclosing the arguments of `memory_safe` so that only the
-/// `state` needs to be given.
+/// Wrapper for `stack_ref_is_writable` (the `WriteRef` precondition).
 #[macro_export]
-macro_rules! state_memory_safe {
+macro_rules! state_stack_ref_is_writable {
     ($e: expr) => {
-        Box::new(move |state| memory_safe(state, $e))
+        Box::new(move |state| stack_ref_is_writable(state, $e))
+    };
+}
+
+/// Wrapper for `local_is_not_borrowed` (the `MoveLoc`/`StLoc` precondition).
+#[macro_export]
+macro_rules! state_local_is_not_borrowed {
+    ($e: expr, $exclude_alias: expr) => {
+        Box::new(move |state| local_is_not_borrowed(state, $e, $exclude_alias))
+    };
+}
+
+/// Wrapper for `stack_has_no_reference`.
+#[macro_export]
+macro_rules! state_stack_has_no_reference {
+    ($e: expr) => {
+        Box::new(move |state| stack_has_no_reference(state, $e))
+    };
+}
+
+/// Wrapper for `stack_ref_referent_has_ability` (referent ability preconditions for
+/// `ReadRef`/`WriteRef`).
+#[macro_export]
+macro_rules! state_stack_ref_referent_has_ability {
+    ($e: expr, $a: expr) => {
+        Box::new(move |state| stack_ref_referent_has_ability(state, $e, $a))
     };
 }
 

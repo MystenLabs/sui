@@ -7,15 +7,17 @@ use crate::{
     error::VMError,
     function_instantiation_for_state, state_control_flow, state_create_struct,
     state_create_struct_from_inst, state_function_inst_is_generic, state_function_is_not_generic,
-    state_local_availability_is, state_local_exists, state_local_has_ability, state_local_place,
-    state_local_set, state_local_take, state_local_take_borrow, state_memory_safe, state_never,
-    state_register_dereference, state_stack_bin_op, state_stack_function_call,
+    state_local_availability_is, state_local_exists, state_local_has_ability,
+    state_local_is_not_borrowed, state_local_place, state_local_set, state_local_take,
+    state_local_take_borrow, state_register_dereference, state_register_freeze,
+    state_register_release_reference, state_stack_bin_op, state_stack_function_call,
     state_stack_function_inst_call, state_stack_function_inst_popn, state_stack_function_popn,
     state_stack_has, state_stack_has_ability, state_stack_has_integer,
-    state_stack_has_polymorphic_eq, state_stack_has_reference, state_stack_has_struct,
-    state_stack_has_struct_inst, state_stack_is_castable, state_stack_local_polymorphic_eq,
-    state_stack_pop, state_stack_push, state_stack_push_register, state_stack_push_register_borrow,
-    state_stack_ref_polymorphic_eq, state_stack_satisfies_function_inst_signature,
+    state_stack_has_no_reference, state_stack_has_polymorphic_eq, state_stack_has_reference,
+    state_stack_has_struct, state_stack_has_struct_inst, state_stack_is_castable,
+    state_stack_local_polymorphic_eq, state_stack_pop, state_stack_push, state_stack_push_register,
+    state_stack_ref_is_writable, state_stack_ref_polymorphic_eq,
+    state_stack_ref_referent_has_ability, state_stack_satisfies_function_inst_signature,
     state_stack_satisfies_function_signature, state_stack_satisfies_struct_signature,
     state_stack_struct_borrow_field, state_stack_struct_borrow_field_inst,
     state_stack_struct_has_field, state_stack_struct_has_field_inst, state_stack_struct_inst_popn,
@@ -71,10 +73,13 @@ pub fn instruction_summary(instruction: Bytecode, exact: bool) -> Summary {
         Bytecode::Pop => Summary {
             preconditions: vec![
                 state_stack_has!(0, None),
-                state_stack_has_ability!(0, Ability::Copy),
-                state_memory_safe!(Some(0)),
+                // `Pop` discards the value, so the verifier requires `drop` (not `copy`).
+                state_stack_has_ability!(0, Ability::Drop),
             ],
-            effects: Effects::NoTyParams(vec![state_stack_pop!()]),
+            effects: Effects::NoTyParams(vec![
+                state_stack_pop!(),
+                state_register_release_reference!(),
+            ]),
         },
         Bytecode::LdU8(_) => Summary {
             preconditions: vec![],
@@ -178,7 +183,6 @@ pub fn instruction_summary(instruction: Bytecode, exact: bool) -> Summary {
                 state_local_exists!(i),
                 state_local_has_ability!(i, Ability::Copy),
                 state_local_availability_is!(i, BorrowState::Available),
-                state_memory_safe!(None),
             ],
             effects: Effects::NoTyParams(vec![state_local_take!(i), state_stack_push_register!()]),
         },
@@ -186,9 +190,9 @@ pub fn instruction_summary(instruction: Bytecode, exact: bool) -> Summary {
             preconditions: vec![
                 state_local_exists!(i),
                 state_local_availability_is!(i, BorrowState::Available),
-                // TODO: We need to track borrowing of locals. Add this in when we allow the borrow
-                // graph.
-                // state_memory_safe!(Some(i as usize)),
+                // The local cannot be moved while any reference borrows it (the verifier's
+                // `MOVELOC_EXISTS_BORROW_ERROR`); `exclude_alias = false` counts any borrow.
+                state_local_is_not_borrowed!(i, false),
             ],
             effects: Effects::NoTyParams(vec![
                 state_local_take!(i),
@@ -203,7 +207,9 @@ pub fn instruction_summary(instruction: Bytecode, exact: bool) -> Summary {
                 // TODO: This covers storing on an copyable local only
                 state_local_has_ability!(i, Ability::Drop),
                 state_stack_local_polymorphic_eq!(0, i as usize),
-                state_memory_safe!(Some(0)),
+                // The local cannot be overwritten while a field of it is borrowed (the verifier's
+                // `STLOC_UNSAFE_TO_DESTROY_ERROR`); `exclude_alias = true` ignores direct aliases.
+                state_local_is_not_borrowed!(i, true),
             ],
             effects: Effects::NoTyParams(vec![
                 state_stack_pop!(),
@@ -212,26 +218,20 @@ pub fn instruction_summary(instruction: Bytecode, exact: bool) -> Summary {
             ]),
         },
         Bytecode::MutBorrowLoc(i) => Summary {
-            // TODO: Add these back in when borrow graph is added
-            // preconditions: vec![
-            //     state_local_exists!(i),
-            //     state_local_availability_is!(i, BorrowState::Available),
-            //     state_memory_safe!(None),
-            // ],
-            preconditions: vec![state_never!()],
+            preconditions: vec![
+                state_local_exists!(i),
+                state_local_availability_is!(i, BorrowState::Available),
+            ],
             effects: Effects::NoTyParams(vec![
                 state_local_take_borrow!(i, Mutability::Mutable),
                 state_stack_push_register!(),
             ]),
         },
         Bytecode::ImmBorrowLoc(i) => Summary {
-            // TODO: Add these back in when the borrow graph is added
-            //preconditions: vec![
-            //    state_local_exists!(i),
-            //    state_local_availability_is!(i, BorrowState::Available),
-            //    state_memory_safe!(None),
-            //],
-            preconditions: vec![state_never!()],
+            preconditions: vec![
+                state_local_exists!(i),
+                state_local_availability_is!(i, BorrowState::Available),
+            ],
             effects: Effects::NoTyParams(vec![
                 state_local_take_borrow!(i, Mutability::Immutable),
                 state_stack_push_register!(),
@@ -240,7 +240,8 @@ pub fn instruction_summary(instruction: Bytecode, exact: bool) -> Summary {
         Bytecode::ReadRef => Summary {
             preconditions: vec![
                 state_stack_has_reference!(0, Mutability::Either),
-                state_memory_safe!(None),
+                // Reading through a reference produces a copy of the referent, which must be copyable.
+                state_stack_ref_referent_has_ability!(0, Ability::Copy),
             ],
             effects: Effects::NoTyParams(vec![
                 state_stack_pop!(),
@@ -253,20 +254,20 @@ pub fn instruction_summary(instruction: Bytecode, exact: bool) -> Summary {
                 state_stack_has_reference!(0, Mutability::Mutable),
                 state_stack_has!(1, None),
                 state_stack_ref_polymorphic_eq!(0, 1),
-                state_memory_safe!(None),
-            ],
-            effects: Effects::NoTyParams(vec![state_stack_pop!(), state_stack_pop!()]),
-        },
-        Bytecode::FreezeRef => Summary {
-            preconditions: vec![
-                state_stack_has_reference!(0, Mutability::Mutable),
-                state_memory_safe!(None),
+                // The reference must be writable: no outstanding borrows of it or its fields.
+                state_stack_ref_is_writable!(0),
+                // The overwritten value is discarded, so the referent must be droppable.
+                state_stack_ref_referent_has_ability!(0, Ability::Drop),
             ],
             effects: Effects::NoTyParams(vec![
                 state_stack_pop!(),
-                state_register_dereference!(),
-                state_stack_push_register_borrow!(Mutability::Immutable),
+                state_register_release_reference!(),
+                state_stack_pop!(),
             ]),
+        },
+        Bytecode::FreezeRef => Summary {
+            preconditions: vec![state_stack_has_reference!(0, Mutability::Mutable)],
+            effects: Effects::NoTyParams(vec![state_stack_pop!(), state_register_freeze!()]),
         },
         Bytecode::Add
         | Bytecode::Sub
@@ -313,8 +314,8 @@ pub fn instruction_summary(instruction: Bytecode, exact: bool) -> Summary {
                 state_stack_has!(1, None),
                 state_stack_has_ability!(0, Ability::Copy),
                 state_stack_has_polymorphic_eq!(0, 1),
-                state_memory_safe!(Some(0)),
-                state_memory_safe!(Some(1)),
+                state_stack_has_no_reference!(0),
+                state_stack_has_no_reference!(1),
             ],
             effects: Effects::NoTyParams(vec![
                 state_stack_pop!(),
@@ -375,44 +376,40 @@ pub fn instruction_summary(instruction: Bytecode, exact: bool) -> Summary {
             preconditions: vec![
                 state_stack_has_reference!(0, Mutability::Mutable),
                 state_stack_struct_has_field!(i),
-                state_memory_safe!(None),
             ],
             effects: Effects::NoTyParams(vec![
                 state_stack_pop!(),
-                state_stack_struct_borrow_field!(i),
+                state_stack_struct_borrow_field!(i, Mutability::Mutable),
             ]),
         },
         Bytecode::MutBorrowFieldGeneric(i) => Summary {
             preconditions: vec![
                 state_stack_has_reference!(0, Mutability::Mutable),
                 state_stack_struct_has_field_inst!(i),
-                state_memory_safe!(None),
             ],
             effects: Effects::NoTyParams(vec![
                 state_stack_pop!(),
-                state_stack_struct_borrow_field_inst!(i),
+                state_stack_struct_borrow_field_inst!(i, Mutability::Mutable),
             ]),
         },
         Bytecode::ImmBorrowField(i) => Summary {
             preconditions: vec![
                 state_stack_has_reference!(0, Mutability::Immutable),
                 state_stack_struct_has_field!(i),
-                state_memory_safe!(None),
             ],
             effects: Effects::NoTyParams(vec![
                 state_stack_pop!(),
-                state_stack_struct_borrow_field!(i),
+                state_stack_struct_borrow_field!(i, Mutability::Immutable),
             ]),
         },
         Bytecode::ImmBorrowFieldGeneric(i) => Summary {
             preconditions: vec![
                 state_stack_has_reference!(0, Mutability::Immutable),
                 state_stack_struct_has_field_inst!(i),
-                state_memory_safe!(None),
             ],
             effects: Effects::NoTyParams(vec![
                 state_stack_pop!(),
-                state_stack_struct_borrow_field_inst!(i),
+                state_stack_struct_borrow_field_inst!(i, Mutability::Immutable),
             ]),
         },
         Bytecode::Call(i) => Summary {

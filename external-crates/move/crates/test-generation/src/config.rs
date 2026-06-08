@@ -26,12 +26,6 @@ pub const NEGATE_PRECONDITIONS: bool = false;
 /// Default is `0.1`
 pub const NEGATION_PROBABILITY: f64 = 0.1;
 
-/// Whether generation of instructions that require borrow checking will
-/// be allowed. (Note that if `NEGATE_PRECONDITIONS` is true then these
-/// instructions can still come up).
-/// Default is `false`
-pub const ALLOW_MEMORY_UNSAFE: bool = false;
-
 /// Whether the generated programs should be run on the VM
 /// Default is `true`
 pub const RUN_ON_VM: bool = true;

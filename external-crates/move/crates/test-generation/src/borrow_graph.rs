@@ -2,134 +2,195 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abstract_state::Mutability;
-use std::collections::HashMap;
+//! A thin wrapper over `move-regex-borrow-graph` that mirrors the borrow tracking performed by the
+//! bytecode verifier's `regex_reference_safety` pass. The generator threads one of these through
+//! its `AbstractState` so that reference-using bytecode is memory-safe by construction.
+//!
+//! References are intra-block in the generator: a basic block is generated until its abstract stack
+//! drains to empty, and no local/parameter/field is reference-typed (`references_allowed: false` in
+//! module generation), so every reference lives transiently on the stack and is released before the
+//! block ends. As a result we never canonicalize or join graphs across blocks (for now! this is
+//! coming soon).
 
-/// Each partition is associated with a (unique) ID
-type PartitionID = u16;
+use move_binary_format::file_format::FieldHandleIndex;
+use move_regex_borrow_graph::{collections::Graph, meter::DummyMeter};
+use std::fmt;
 
-/// A nonce represents a runtime reference. It has a unique identifier and a mutability
-type Nonce = (u16, Mutability);
+pub use move_regex_borrow_graph::references::Ref;
 
-/// A set of nonces
-type NonceSet = Vec<Nonce>;
+pub type LocalIndex = usize;
 
-/// A path representing field accesses of a struct
-type Path = Vec<u8>;
-
-/// An edge in the graph. It consists of two partition IDs, a `Path` which
-/// may be empty, and an `EdgeType`
-type Edge = (PartitionID, PartitionID, Path, EdgeType);
-
-/// The `EdgeType` is either weak or strong. A weak edge represents imprecise information
-/// on the path along which the borrow takes place. A strong edge is precise.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EdgeType {
-    Weak,
-    Strong,
+/// A borrow-path label, mirroring `regex_reference_safety::Label`. `Local(i)` roots a borrow at
+/// local `i`; `Field(f)` extends a struct reference by one field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Label {
+    Local(LocalIndex),
+    Field(FieldHandleIndex),
 }
 
-/// The `BorrowGraph` stores information sufficient to determine whether the instruction
-/// of a bytecode instruction that interacts with references is memory safe.
-#[derive(Debug, Clone, PartialEq, Eq)]
+impl fmt::Display for Label {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Label::Local(i) => write!(f, "local#{i}"),
+            Label::Field(i) => write!(f, "field#{}", i.0),
+        }
+    }
+}
+
+/// Upper bound (exclusive on the crate side) for the canonical-reference capacity passed to
+/// `Graph::new`. `move-regex-borrow-graph`'s `GraphMap::new` asserts `capacity < 512`, so we stay one
+/// below that. The capacity is only a sizing hint -- the graph grows past it as needed, and Phase A
+/// never canonicalizes -- so clamping to this value is safe.
+const MAX_CANONICAL_REFERENCE_CAPACITY: usize = 511;
+
+/// The borrow graph for a single function body. `local_root` is the synthetic mutable reference all
+/// local borrows extend from (as in the verifier).
+#[derive(Clone, Debug)]
 pub struct BorrowGraph {
-    /// All of the partitions that make up the graph
-    partitions: Vec<PartitionID>,
-
-    /// A mapping from partitions to the associated with them
-    partition_map: HashMap<PartitionID, NonceSet>,
-
-    /// The edges of the graph
-    edges: Vec<Edge>,
-
-    /// A counter for determining what the next partition ID should be
-    partition_counter: u16,
+    graph: Graph<(), Label>,
+    local_root: Ref,
 }
 
 impl BorrowGraph {
-    /// Construct a new `BorrowGraph` given the number of locals it has
-    pub fn new(num_locals: u8) -> BorrowGraph {
-        BorrowGraph {
-            partitions: Vec::with_capacity(num_locals as usize),
-            partition_map: HashMap::new(),
-            edges: Vec::new(),
-            partition_counter: u16::from(num_locals),
-        }
+    /// Construct an empty graph for a function with `num_locals` locals. No parameter references are
+    /// seeded (Phase A has no reference parameters). The capacity is only a sizing hint for the
+    /// underlying graph and is bounded by the crate's internal assertion.
+    pub fn new(num_locals: usize) -> Self {
+        // `+ 1` reserves a slot for the synthetic `local_root` reference created just below.
+        let capacity = (num_locals + 1).min(MAX_CANONICAL_REFERENCE_CAPACITY);
+        let (mut graph, _map) = Graph::new(capacity, std::iter::empty::<(usize, (), bool)>())
+            .expect("empty borrow graph construction cannot fail");
+        let local_root = graph
+            .extend_by_epsilon(
+                (),
+                std::iter::empty::<Ref>(),
+                /* is_mut */ true,
+                &mut DummyMeter,
+            )
+            .expect("local root creation cannot fail");
+        Self { graph, local_root }
     }
 
-    /// Add a new partition to the graph containing nonce `n`
-    /// This operation may fail with an error a fresh partition ID
-    /// cannot be chosen.
-    pub fn fresh_partition(&mut self, n: Nonce) -> Result<(), String> {
-        if self.partition_counter.checked_add(1).is_some() {
-            if self.partition_map.get(&self.partition_counter).is_some() {
-                return Err("Partition map already contains ID".to_string());
+    /// A fresh, standalone reference borrowing nothing. Only supports the `push_fresh_reference`
+    /// test helper; real borrows go through [`Self::borrow_loc`] etc.
+    pub(crate) fn fresh_reference(&mut self, is_mut: bool) -> Result<Ref, String> {
+        self.graph
+            .extend_by_epsilon((), std::iter::empty::<Ref>(), is_mut, &mut DummyMeter)
+            .map_err(|e| format!("fresh_reference failed: {e:?}"))
+    }
+
+    /// `ImmBorrowLoc`/`MutBorrowLoc`: a new reference rooted at `local`.
+    pub fn borrow_loc(&mut self, local: LocalIndex, is_mut: bool) -> Result<Ref, String> {
+        self.graph
+            .extend_by_label(
+                (),
+                [self.local_root],
+                is_mut,
+                Label::Local(local),
+                &mut DummyMeter,
+            )
+            .map_err(|e| format!("borrow_loc failed: {e:?}"))
+    }
+
+    /// `ImmBorrowField`/`MutBorrowField`: extend `r` by `field`, consuming `r`.
+    pub fn borrow_field(
+        &mut self,
+        r: Ref,
+        is_mut: bool,
+        field: FieldHandleIndex,
+    ) -> Result<Ref, String> {
+        let new_r = self
+            .graph
+            .extend_by_label((), [r], is_mut, Label::Field(field), &mut DummyMeter)
+            .map_err(|e| format!("borrow_field failed: {e:?}"))?;
+        self.release(r)?;
+        Ok(new_r)
+    }
+
+    /// `FreezeRef`: a new immutable reference aliasing the mutable `r`, consuming `r`.
+    pub fn freeze(&mut self, r: Ref) -> Result<Ref, String> {
+        let frozen = self
+            .graph
+            .extend_by_epsilon((), [r], /* is_mut */ false, &mut DummyMeter)
+            .map_err(|e| format!("freeze failed: {e:?}"))?;
+        self.release(r)?;
+        Ok(frozen)
+    }
+
+    /// Release a reference (`Pop`, `ReadRef`, `WriteRef`, and the consumed source of a field
+    /// borrow/freeze).
+    pub fn release(&mut self, r: Ref) -> Result<(), String> {
+        self.graph
+            .release(r, &mut DummyMeter)
+            .map_err(|e| format!("release failed: {e:?}"))
+    }
+
+    pub fn is_mutable(&self, r: Ref) -> bool {
+        self.graph.is_mutable(r).unwrap_or(false)
+    }
+
+    /// `WriteRef` precondition: `r` is mutable and has no outstanding non-epsilon borrowers.
+    pub fn is_writable(&self, r: Ref) -> bool {
+        self.is_mutable(r)
+            && match self.graph.borrowed_by(r, &mut DummyMeter) {
+                Ok(borrowers) => borrowers
+                    .values()
+                    .all(|paths| paths.iter().all(|p| p.is_epsilon())),
+                Err(_) => false,
             }
-            self.partition_map.insert(self.partition_counter, vec![n]);
-            // Implication of `checked_add`
-            debug_assert!(self.partitions.len() < usize::MAX);
-            self.partitions.push(self.partition_counter);
-            Ok(())
-        } else {
-            Err("Partition map is full".to_string())
-        }
     }
 
-    /// Determine whether a partition is mutable, immutable, or either.
-    /// This operation may fail with an error if the given partition does
-    /// not exist in the graph.
-    pub fn partition_mutability(&self, partition_id: PartitionID) -> Result<Mutability, String> {
-        if let Some(nonce_set) = self.partition_map.get(&partition_id) {
-            if nonce_set
-                .iter()
-                .all(|(_, mutability)| *mutability == Mutability::Mutable)
-            {
-                Ok(Mutability::Mutable)
-            } else if nonce_set
-                .iter()
-                .all(|(_, mutability)| *mutability == Mutability::Immutable)
-            {
-                Ok(Mutability::Immutable)
-            } else {
-                Ok(Mutability::Either)
-            }
-        } else {
-            Err("Partition map does not contain given partition ID".to_string())
-        }
-    }
-
-    /// Determine whether the given partition is freezable. This operation may fail
-    /// with an error if the given partition ID is not in the graph.
-    pub fn partition_freezable(&self, partition_id: PartitionID) -> Result<bool, String> {
-        let mut freezable = true;
-        if self.partition_map.get(&partition_id).is_some() {
-            for (p1, p2, _, _) in self.edges.iter() {
-                if *p1 == partition_id && self.partition_mutability(*p2)? == Mutability::Mutable {
-                    freezable = false;
+    /// Whether `local` is borrowed. With `exclude_alias` only proper extensions (e.g. field borrows)
+    /// count, matching the verifier's `StLoc` check; otherwise any borrow counts (`MoveLoc`).
+    pub fn is_local_borrowed(&self, local: LocalIndex, exclude_alias: bool) -> bool {
+        let lbl = Label::Local(local);
+        match self.graph.borrowed_by(self.local_root, &mut DummyMeter) {
+            Ok(borrowers) => borrowers.values().flatten().any(|p| {
+                if exclude_alias {
+                    p.starts_with(&lbl) && !p.is_label(&lbl)
+                } else {
+                    p.starts_with(&lbl)
                 }
-            }
-            Ok(freezable)
-        } else {
-            Err("Partition map does not contain given partition ID".to_string())
+            }),
+            Err(_) => false,
         }
     }
+}
 
-    /// Determine whether the `path_1` is a prefix of `path_2`
-    fn path_is_prefix(&self, path_1: Path, path_2: Path) -> bool {
-        let mut prefix = true;
-        for (i, field) in path_1.iter().enumerate() {
-            if *field != path_2[i] {
-                prefix = false;
-            }
-        }
-        prefix
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fresh_mutable_reference_is_writable_immutable_is_not() {
+        let mut g = BorrowGraph::new(1);
+        let m = g.borrow_loc(0, true).unwrap();
+        assert!(g.is_writable(m), "a fresh mutable borrow has no borrowers");
+        let i = g.borrow_loc(0, false).unwrap();
+        assert!(!g.is_writable(i), "immutable references are never writable");
     }
 
-    /// Determine whether two edges are consistent; i.e. whether the path of the
-    /// first edge is a prefix of the second or vice versa.
-    pub fn edges_consistent(&self, edge_1: Edge, edge_2: Edge) -> bool {
-        let path_1 = edge_1.2;
-        let path_2 = edge_2.2;
-        self.path_is_prefix(path_1.clone(), path_2.clone()) || self.path_is_prefix(path_2, path_1)
+    #[test]
+    fn borrowing_a_local_blocks_moving_but_a_direct_alias_does_not_block_overwriting() {
+        let mut g = BorrowGraph::new(1);
+        assert!(!g.is_local_borrowed(0, false));
+        let r = g.borrow_loc(0, true).unwrap();
+        // A direct `&local` borrow blocks `MoveLoc` (any borrow) but not `StLoc` (proper
+        // extensions only).
+        assert!(g.is_local_borrowed(0, false));
+        assert!(!g.is_local_borrowed(0, true));
+        g.release(r).unwrap();
+        assert!(!g.is_local_borrowed(0, false));
+    }
+
+    #[test]
+    fn a_field_borrow_blocks_overwriting_the_local() {
+        let mut g = BorrowGraph::new(1);
+        let r = g.borrow_loc(0, true).unwrap();
+        // `borrow_field` consumes `r`; the resulting field reference still extends `local#0` via a
+        // proper (`Local . Field`) path, so it blocks both `MoveLoc` and `StLoc`.
+        let _f = g.borrow_field(r, true, FieldHandleIndex(0)).unwrap();
+        assert!(g.is_local_borrowed(0, false));
+        assert!(g.is_local_borrowed(0, true));
     }
 }
