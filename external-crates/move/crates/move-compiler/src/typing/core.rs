@@ -178,16 +178,6 @@ pub struct Context<'env, 'outer> {
     pub ide_info: IDEInfo,
 }
 
-/// True for regular compiler errors, or while speculatively typing an IDE macro body with
-/// diagnostics thrown away.
-macro_rules! has_errors_or_ide_typing_macro_body {
-    ($context:expr) => {
-        $context.env().has_errors() || $context.ide_typing_macro_body
-    };
-}
-
-pub(crate) use has_errors_or_ide_typing_macro_body;
-
 pub struct ResolvedFunctionType {
     pub declared: Loc,
     pub macro_: Option<Loc>,
@@ -771,6 +761,15 @@ impl<'env, 'outer> Context<'env, 'outer> {
     pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
         self.env()
             .check_feature(&self.reporter, package, feature, loc)
+    }
+
+    /// Asserts that normal compiler errors already exist or IDE macro-body diagnostics are discarded.
+    pub fn assert_errors(&self, msg: Option<&str>) {
+        let has_errors = self.env().has_errors() || self.ide_typing_macro_body;
+        match msg {
+            Some(msg) => assert!(has_errors, "{msg}"),
+            None => assert!(has_errors),
+        }
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {

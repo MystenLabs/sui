@@ -1765,7 +1765,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             );
             match ty_call_opt {
                 None => {
-                    assert!(core::has_errors_or_ide_typing_macro_body!(context));
+                    context.assert_errors(None);
                     (context.error_type(eloc), TE::UnresolvedError)
                 }
                 Some(ty_call) => ty_call,
@@ -1797,7 +1797,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             );
             match ty_call_opt {
                 None => {
-                    assert!(core::has_errors_or_ide_typing_macro_body!(context));
+                    context.assert_errors(None);
                     (context.error_type(eloc), TE::UnresolvedError)
                 }
                 Some(ty_call) => ty_call,
@@ -1828,10 +1828,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 };
                 (ret_ty, TE::UnresolvedError)
             } else {
-                assert!(
-                    core::has_errors_or_ide_typing_macro_body!(context),
-                    "ICE unbound var call. Should be expanded"
-                );
+                context.assert_errors(Some("ICE unbound var call. Should be expanded"));
                 (context.error_type(eloc), TE::UnresolvedError)
             }
         }
@@ -2170,7 +2167,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             (rhs, e_)
         }
         NE::UnresolvedError => {
-            assert!(core::has_errors_or_ide_typing_macro_body!(context));
+            context.assert_errors(None);
             (context.error_type(eloc), TE::UnresolvedError)
         }
 
@@ -3001,7 +2998,7 @@ fn lvalue(
             TL::Ignore
         }
         NL::Error => {
-            assert!(core::has_errors_or_ide_typing_macro_body!(context));
+            context.assert_errors(None);
             TL::Ignore
         }
         NL::Var {
@@ -3857,12 +3854,12 @@ fn borrow_exp_dotted(
                 base_type: index_base_type,
             } => {
                 let Some(index_methods) = syntax_methods else {
-                    assert!(core::has_errors_or_ide_typing_macro_body!(context));
+                    context.assert_errors(None);
                     exp = make_error_exp(context, loc);
                     break;
                 };
                 if matches!(index_base_type.value.inner(), TI::UnresolvedError) {
-                    assert!(core::has_errors_or_ide_typing_macro_body!(context));
+                    context.assert_errors(None);
                     exp = make_error_exp(context, loc);
                     break;
                 }
@@ -4192,7 +4189,7 @@ fn type_to_type_name_(
                     )
                 }
                 TI::UnresolvedError => {
-                    assert!(core::has_errors_or_ide_typing_macro_body!(context));
+                    context.assert_errors(None);
                     return None;
                 }
                 TI::Ref(_, _) | TI::Var(_) => {
@@ -4836,7 +4833,7 @@ fn expand_macro(
 
     let valid = context.add_macro_expansion(m, f, call_loc);
     if !valid {
-        assert!(core::has_errors_or_ide_typing_macro_body!(context));
+        context.assert_errors(None);
         return (context.error_type(call_loc), TE::UnresolvedError);
     }
     let res = match macro_expand::call(context, call_loc, m, f, type_args.clone(), args, return_ty)
