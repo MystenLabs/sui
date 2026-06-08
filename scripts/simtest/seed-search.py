@@ -387,6 +387,9 @@ parser.add_argument('--watchdog-timeout-ms', type=int, default=120000,
 parser.add_argument('--log-dir', type=str, default=None,
                     help='Directory for per-job log files plus failures.ndjson. '
                          'When set, per-job stdout+stderr is captured to disk instead of memory.')
+parser.add_argument('--error-regex', type=str, default=None,
+                    help='Regex to match against test output; exit early and report the repro command '
+                         'when a failing seed whose output matches the pattern is found.')
 args = parser.parse_args()
 
 if args.no_build and args.package:
@@ -396,10 +399,31 @@ if not args.test and not args.package:
     print("Error: must supply at least one --test or --package", file=sys.stderr)
     sys.exit(2)
 
+error_re = re.compile(args.error_regex) if args.error_regex else None
+
 # Cap on per-process wall time. Without this, a hung test process would block
 # the whole sweep forever; matches `simtestnightly`'s nextest slow-timeout
 # (period=30m, terminate-after=3 = 90 minutes).
 PROCESS_TIMEOUT_SECS = 90 * 60
+
+def _report_error_match_found(seed, job, log_path):
+    """Print repro info for a seed matching --error-regex and kill the process group."""
+    c = Colors
+    if is_tty and progress_tracker:
+        with print_lock:
+            sys.stdout.write("\033[2K\033[A\033[2K\r")
+            sys.stdout.flush()
+    binary_name = job["binary_name"]
+    test = job["test"]
+    print(f"\n{c.GREEN}{c.BOLD}[MATCH] --error-regex matched: seed={seed}{c.RESET}")
+    print(f"  binary: {binary_name}")
+    print(f"  test:   {test}")
+    print(f"\nRepro command:")
+    print(f"  MSIM_TEST_SEED={seed} RUST_LOG=sui=debug,info cargo simtest --test {binary_name} -E 'test(={test})' -- --no-capture")
+    if log_path:
+        print(f"  log:    {log_path}")
+    sys.stdout.flush()
+    os.killpg(0, signal.SIGKILL)
 
 def run_command(job):
     cmd = job["cmd"]
@@ -469,6 +493,19 @@ def run_command(job):
                 safe_print(f"stdout:\n=========================={captured_stdout.decode('utf-8', errors='replace')}\n==========================")
                 if captured_stderr:
                     safe_print(f"stderr:\n=========================={captured_stderr.decode('utf-8', errors='replace')}\n==========================")
+
+            if error_re is not None:
+                if log_path:
+                    try:
+                        with open(log_path, "rb") as f:
+                            output_text = f.read().decode("utf-8", errors="replace")
+                    except OSError:
+                        output_text = ""
+                else:
+                    output_text = (captured_stdout or b"").decode("utf-8", errors="replace")
+                    output_text += (captured_stderr or b"").decode("utf-8", errors="replace")
+                if error_re.search(output_text):
+                    _report_error_match_found(seed, job, log_path)
         else:
             if not is_tty:
                 safe_print(f"-- seed passed {seed}")
@@ -556,7 +593,7 @@ if __name__ == "__main__":
     if args.log_dir:
         os.makedirs(args.log_dir, exist_ok=True)
 
-    rust_log = "error" if (args.no_capture or args.log_dir) else "off"
+    rust_log = "error" if (args.no_capture or args.log_dir or args.error_regex) else "off"
 
     # SIMTEST_STATIC_INIT_MOVE is normally exported by cargo-simtest at runtime;
     # since we invoke test binaries directly, we have to set it ourselves.
