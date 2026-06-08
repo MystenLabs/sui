@@ -435,7 +435,11 @@ pub fn instruction_summary(instruction: Bytecode, exact: bool) -> Summary {
                 with_ty_param!((exact, i) => inst,
                     vec![
                         state_stack_function_inst_popn!(inst),
-                        state_stack_function_inst_call!(i),
+                        // Use the freshly-built instantiation `inst` (valid in the current
+                        // function's type-parameter context and matching the emitted
+                        // `CallGeneric(inst)`), not the candidate index `i`, whose type arguments
+                        // may have come from another function's context.
+                        state_stack_function_inst_call!(inst),
                     ]
                 ),
                 with_ty_param!((exact, i) => inst, Bytecode::CallGeneric(inst)),

@@ -70,6 +70,7 @@ impl CFG {
     pub fn new(
         rng: &mut StdRng,
         locals: &[SignatureToken],
+        local_abilities: &[AbilitySet],
         parameters: &Signature,
         target_blocks: BlockIDSize,
     ) -> CFG {
@@ -136,7 +137,7 @@ impl CFG {
         };
         // Assign locals to basic blocks
         debug_assert!(target_blocks == 0 || !cfg.basic_blocks.is_empty());
-        CFG::add_locals(&mut cfg, rng, locals, parameters.0.len());
+        CFG::add_locals(&mut cfg, rng, locals, local_abilities, parameters.0.len());
         cfg
     }
 
@@ -239,7 +240,13 @@ impl CFG {
 
     /// Add the incoming and outgoing locals for each basic block in the control flow graph.
     /// Currently the incoming and outgoing locals are the same for each block.
-    fn add_locals(cfg: &mut CFG, rng: &mut StdRng, locals: &[SignatureToken], args_len: usize) {
+    fn add_locals(
+        cfg: &mut CFG,
+        rng: &mut StdRng,
+        locals: &[SignatureToken],
+        local_abilities: &[AbilitySet],
+        args_len: usize,
+    ) {
         debug_assert!(
             !cfg.basic_blocks.is_empty(),
             "Cannot add locals to empty cfg"
@@ -264,7 +271,7 @@ impl CFG {
                         (
                             i,
                             (
-                                AbstractValue::new_value(token.clone(), AbilitySet::PRIMITIVES),
+                                AbstractValue::new_value(token.clone(), local_abilities[i]),
                                 borrow_state,
                             ),
                         )

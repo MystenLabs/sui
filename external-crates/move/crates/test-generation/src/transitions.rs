@@ -16,7 +16,7 @@ use move_binary_format::file_format::{
 };
 
 use move_binary_format::file_format::TableIndex;
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::HashMap;
 
 //---------------------------------------------------------------------------
 // Type Instantiations from Unification with the Abstract Stack
@@ -78,11 +78,16 @@ impl Subst {
         }
     }
 
-    /// Return the instantiation from the substitution that has been built.
-    pub fn instantiation(self) -> Vec<SignatureToken> {
-        let mut vec = self.subst.into_iter().collect::<Vec<_>>();
-        vec.sort_by(|a, b| a.0.cmp(&b.0));
-        vec.into_iter().map(|x| x.1).collect()
+    /// Return the instantiation (a type argument per type parameter) from the substitution that
+    /// has been built. `arity` is the number of type parameters being instantiated; any type
+    /// parameter for which the substitution has no entry (i.e. it was unconstrained by the values
+    /// on the stack) defaults to `U64`. Building the result by index rather than from the map's
+    /// entries guarantees a full-length, correctly-aligned vector even when the substitution has
+    /// gaps.
+    pub fn instantiation(self, arity: usize) -> Vec<SignatureToken> {
+        (0..arity)
+            .map(|i| self.subst.get(&i).cloned().unwrap_or(SignatureToken::U64))
+            .collect()
     }
 }
 
@@ -541,23 +546,14 @@ pub fn get_struct_instantiation_for_state(
         );
     }
     let struct_index = struct_inst.def;
-    let mut partial_instantiation = stack_satisfies_struct_signature(state, struct_index, None).1;
+    let partial_instantiation = stack_satisfies_struct_signature(state, struct_index, None).1;
     let struct_def = state.module.module.struct_def_at(struct_index);
     let shandle = state
         .module
         .module
         .datatype_handle_at(struct_def.struct_handle);
-    let typs = &shandle.type_parameters;
-    for (index, type_param) in typs.iter().enumerate() {
-        if let Entry::Vacant(e) = partial_instantiation.subst.entry(index) {
-            if type_param.constraints.has_key() {
-                unimplemented!("[Struct Instantiation] Need to fill in resource type params");
-            } else {
-                e.insert(SignatureToken::U64);
-            }
-        }
-    }
-    (struct_index, partial_instantiation.instantiation())
+    let arity = shandle.type_parameters.len();
+    (struct_index, partial_instantiation.instantiation(arity))
 }
 
 /// Determine if a struct (of the given signature) is at the top of the stack
@@ -1099,19 +1095,10 @@ pub fn get_function_instantiation_for_state(
     function_index: FunctionInstantiationIndex,
 ) -> (FunctionHandleIndex, Vec<SignatureToken>) {
     let func_inst = state.module.function_instantiantiation_at(function_index);
-    let mut partial_instantiation = stack_satisfies_function_signature(state, func_inst.handle).1;
+    let partial_instantiation = stack_satisfies_function_signature(state, func_inst.handle).1;
     let function_handle = state.module.module.function_handle_at(func_inst.handle);
-    let typs = &function_handle.type_parameters;
-    for (index, abilities) in typs.iter().enumerate() {
-        if let Entry::Vacant(e) = partial_instantiation.subst.entry(index) {
-            if abilities.has_key() {
-                unimplemented!("[Struct Instantiation] Need to fill in resource type params");
-            } else {
-                e.insert(SignatureToken::U64);
-            }
-        }
-    }
-    (func_inst.handle, partial_instantiation.instantiation())
+    let arity = function_handle.type_parameters.len();
+    (func_inst.handle, partial_instantiation.instantiation(arity))
 }
 
 /// Pop the number of stack values required to call the function
