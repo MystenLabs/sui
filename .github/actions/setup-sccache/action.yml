@@ -15,6 +15,13 @@ inputs:
   aws-secret-access-key:
     description: AWS secret access key for S3 cache backend (empty for fork PRs)
     required: false
+  role-to-assume:
+    description: >
+      AWS IAM role ARN to assume via GitHub OIDC for the S3 cache backend.
+      Preferred over static keys; takes priority when both are set. The caller
+      must grant `permissions: id-token: write`. Empty on fork PRs / untrusted
+      contexts (graceful degradation to a local cache). See AWS_OIDC_ROLES.md.
+    required: false
   key-prefix:
     description: S3 key prefix for cache partitioning (e.g., ubuntu-ghcloud, windows-ghcloud)
     required: true
@@ -73,16 +80,36 @@ runs:
         echo "RUSTFLAGS=-C force-frame-pointers=yes -C force-unwind-tables=yes -A unknown_lints -A mismatched_lifetime_syntaxes -C link-arg=-fuse-ld=mold" >> "$GITHUB_ENV"
 
     # ---- Configure AWS credentials (any OS) ----
-    - name: Configure AWS credentials
-      if: inputs.aws-access-key-id != ''
+    #
+    # Two auth paths, in priority order:
+    #   1. role-to-assume set -> assume the role via GitHub OIDC (no long-lived
+    #      keys). The caller must grant `permissions: id-token: write`.
+    #   2. static keys set    -> legacy access-key auth (being migrated off).
+    # When neither is set (fork PRs / untrusted contexts), every S3 step below is
+    # skipped and the build falls back to a local sccache. Keeping both paths lets
+    # callers migrate to OIDC one workflow/job at a time.
+    - name: Configure AWS credentials (OIDC)
+      if: inputs.role-to-assume != ''
+      uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      with:
+        role-to-assume: ${{ inputs.role-to-assume }}
+        # Identify the run/attempt in CloudTrail's AssumeRoleWithWebIdentity events.
+        role-session-name: sui-sccache-${{ github.run_id }}-${{ github.run_attempt }}
+        # Fail closed if STS ever returns creds for an unexpected account.
+        allowed-account-ids: '011083325127'
+        aws-region: us-west-2
+
+    - name: Configure AWS credentials (static keys)
+      if: inputs.role-to-assume == '' && inputs.aws-access-key-id != ''
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
       with:
         aws-access-key-id: ${{ inputs.aws-access-key-id }}
         aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        allowed-account-ids: '011083325127'
         aws-region: us-west-2
 
     - name: Set sccache environment
-      if: inputs.aws-access-key-id != ''
+      if: inputs.role-to-assume != '' || inputs.aws-access-key-id != ''
       shell: bash
       run: |
         echo "SCCACHE_BUCKET=mystenlabs-sccache" >> "$GITHUB_ENV"
@@ -90,7 +117,7 @@ runs:
         echo "SCCACHE_S3_KEY_PREFIX=${{ inputs.key-prefix }}" >> "$GITHUB_ENV"
 
     - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
-      if: inputs.aws-access-key-id != ''
+      if: inputs.role-to-assume != '' || inputs.aws-access-key-id != ''
       id: sccache
       continue-on-error: true
 
