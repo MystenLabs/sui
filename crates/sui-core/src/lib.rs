@@ -37,6 +37,12 @@ mod par_index_live_object_set;
 pub(crate) mod post_consensus_tx_reorder;
 pub mod randomness_round_receiver;
 pub mod rpc_index;
+pub mod rpc_store_embed;
+pub mod rpc_store_ingestion_client;
+pub mod rpc_store_restore_source;
+pub mod rpc_store_streaming_client;
+#[cfg(test)]
+mod rpc_store_test_utils;
 pub mod runtime;
 pub mod safe_client;
 pub mod signature_verifier;

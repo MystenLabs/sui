@@ -42,7 +42,7 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 use tap::{TapFallible, TapOptional};
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, instrument};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::backpressure::BackpressureManager;
@@ -192,7 +192,7 @@ pub struct CheckpointExecutor {
     config: CheckpointExecutorConfig,
     metrics: Arc<CheckpointExecutorMetrics>,
     tps_estimator: Mutex<TPSEstimator>,
-    subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<Checkpoint>>,
+    subscription_service_checkpoint_sender: Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
 }
 
 impl CheckpointExecutor {
@@ -204,7 +204,9 @@ impl CheckpointExecutor {
         backpressure_manager: Arc<BackpressureManager>,
         config: CheckpointExecutorConfig,
         metrics: Arc<CheckpointExecutorMetrics>,
-        subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<Checkpoint>>,
+        subscription_service_checkpoint_sender: Option<
+            tokio::sync::broadcast::Sender<Arc<Checkpoint>>,
+        >,
     ) -> Self {
         Self {
             epoch_store,
@@ -404,10 +406,19 @@ impl CheckpointExecutor {
 
         let seq = ckpt_state.data.checkpoint.sequence_number;
 
-        let batch = self
+        let mut batch = self
             .state
             .get_cache_commit()
             .build_db_batch(self.epoch_store.epoch(), &ckpt_state.data.tx_digests);
+
+        // Stamp the highest-committed-checkpoint watermark into the same batch
+        // as the outputs, so it lands atomically with the object writes. This
+        // gives consumers that read the live object set directly (the embedded
+        // rpc-store restore) a watermark that never lags the durable objects,
+        // unlike the separately-bumped `highest_executed` watermark below.
+        self.state
+            .get_cache_commit()
+            .set_highest_committed_checkpoint_in_batch(&mut batch, seq);
 
         finish_stage!(pipeline_handle, BuildDbBatch);
 
@@ -462,8 +473,7 @@ impl CheckpointExecutor {
         finish_stage!(pipeline_handle, FinalizeCheckpoint);
 
         if let Some(checkpoint_data) = ckpt_state.full_data.take() {
-            self.commit_index_updates_and_enqueue_to_subscription_service(checkpoint_data)
-                .await;
+            self.commit_index_updates_and_enqueue_to_subscription_service(checkpoint_data);
         }
 
         finish_stage!(pipeline_handle, UpdateRpcIndex);
@@ -1052,20 +1062,20 @@ impl CheckpointExecutor {
     /// If configured, commit the pending index updates for the provided checkpoint as well as
     /// enqueuing the checkpoint to the subscription service
     #[instrument(level = "info", skip_all)]
-    async fn commit_index_updates_and_enqueue_to_subscription_service(
-        &self,
-        checkpoint: Checkpoint,
-    ) {
+    fn commit_index_updates_and_enqueue_to_subscription_service(&self, checkpoint: Checkpoint) {
         if let Some(rpc_index) = &self.state.rpc_index {
             rpc_index
                 .commit_update_for_checkpoint(checkpoint.summary.sequence_number)
                 .expect("failed to update rpc_indexes");
         }
 
-        if let Some(sender) = &self.subscription_service_checkpoint_sender
-            && let Err(e) = sender.send(checkpoint).await
-        {
-            warn!("unable to send checkpoint to subscription service: {e}");
+        // Best-effort, non-blocking publish to the broadcast stream. A send
+        // error just means there are no live subscribers right now, which is
+        // fine: subscribers (the RPC subscription service and the embedded
+        // rpc-store indexer) recover any checkpoints they miss by fetching from
+        // the local stores.
+        if let Some(sender) = &self.subscription_service_checkpoint_sender {
+            let _ = sender.send(Arc::new(checkpoint));
         }
     }
 

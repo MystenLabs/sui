@@ -109,6 +109,7 @@ members = [
     "crates/sui-checkpoint-blob-indexer",
     "crates/sui-cluster-test",
     "crates/sui-config",
+    "crates/sui-consistent-store",
     "crates/sui-core",
     "crates/sui-cost",
     "crates/sui-data-ingestion-core",
@@ -176,7 +177,9 @@ members = [
     "crates/sui-rpc-api",
     "crates/sui-rpc-benchmark",
     "crates/sui-rpc-loadgen",
+    "crates/sui-rpc-node",
     "crates/sui-rpc-resolver",
+    "crates/sui-rpc-store",
     "crates/sui-sdk",
     "crates/sui-security-watchdog",
     "crates/sui-simulator",
@@ -667,6 +670,7 @@ sui-bridge = { path = "crates/sui-bridge" }
 sui-bridge-schema = { path = "crates/sui-bridge-schema" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
+sui-consistent-store = { path = "crates/sui-consistent-store" }
 sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
@@ -743,7 +747,9 @@ sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
 sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
 sui-rpc-api = { path = "crates/sui-rpc-api" }
+sui-rpc-node = { path = "crates/sui-rpc-node" }
 sui-rpc-resolver = { path = "crates/sui-rpc-resolver" }
+sui-rpc-store = { path = "crates/sui-rpc-store" }
 sui-tool = { path = "crates/sui-tool" }
 sui-transaction-builder = { path = "crates/sui-transaction-builder" }
 sui-transaction-checks = { path = "crates/sui-transaction-checks" }
