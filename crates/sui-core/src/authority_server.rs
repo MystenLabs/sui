@@ -668,6 +668,8 @@ impl ValidatorService {
         let mut total_size_bytes = 0;
         // Traffic control spam weight to use for the transaction.
         let mut spam_weight = Weight::zero();
+        // First gas price seen in this soft bundle.
+        let mut expected_soft_bundle_gas_price = None;
 
         let req_type = if is_ping_request {
             "ping"
@@ -700,6 +702,28 @@ impl ValidatorService {
 
             // Ok to fail the request when any transaction is invalid.
             let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
+            let tx_digest = *transaction.digest();
+
+            // Soft bundles require all transactions to use the same gas price.
+            if is_soft_bundle_request {
+                let gas_price = transaction.data().transaction_data().gas_price();
+                if let Some(expected) = expected_soft_bundle_gas_price {
+                    fp_ensure!(
+                        gas_price == expected,
+                        SuiErrorKind::UserInputError {
+                            error: UserInputError::GasPriceMismatchError {
+                                digest: tx_digest,
+                                expected,
+                                actual: gas_price,
+                            }
+                        }
+                        .into()
+                    );
+                } else {
+                    expected_soft_bundle_gas_price = Some(gas_price);
+                }
+            }
+
             let is_gasless = transaction
                 .data()
                 .transaction_data()
@@ -788,7 +812,6 @@ impl ValidatorService {
                 }
             };
 
-            let tx_digest = *verified_transaction.tx().digest();
             debug!(
                 ?tx_digest,
                 "handle_submit_transaction: verified transaction"
