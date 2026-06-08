@@ -178,6 +178,15 @@ fork exclusion must drop that permission, not just the role input.)
 `workflow_dispatch`. Keep this **separate** from the cache role (different
 bucket, narrower trust).
 
+> **Status: PROVISIONED 2026-06-08** as
+> **`arn:aws:iam::011083325127:role/sui-releases-rw-github`** (inline policy
+> `sui-releases-rw` = exactly the least-privilege policy below). Trust =
+> `repo:MystenLabs/sui:environment:release` (the environment variant), aud
+> pinned, no wildcard. **Not yet assumable** — Phase 5 must still (1) create the
+> `release` GitHub Environment with branch/tag protection + reviewers, and
+> (2) add `environment: release` to the release job. Until both exist, no run can
+> assume it (safe by construction).
+
 ### Trust policy — use a `release` environment (do NOT use tag subjects alone)
 
 `release.yml` triggers on **both** `release: created` (a tag ref) **and**
@@ -264,8 +273,20 @@ trust) — the only question is *when* each set of creds is active in the job.
 
 ## Role 3 — `sui-github-actions-kms-test`
 
+> **Status: NOT created — BLOCKED (2026-06-08).** Two blockers: (1) the AWS KMS
+> test in `turborepo.yml` is **disabled** (`E2E_AWS_KMS_TEST_ENABLE: "false"`), so
+> there's nothing to migrate yet; (2) the signing key is referenced only via the
+> secret `AWS_KMS_TEST_KMS_KEY_ID` and has **no discoverable alias** in us-west-2,
+> so the permission policy below can't be scoped to a real key ARN without
+> guessing. **Unblock:** supply the test key ARN (from that secret) and confirm
+> the test is being re-enabled; then create the role with the
+> `repo:MystenLabs/sui:environment:sui-typescript-aws-kms-test-env` subject (that
+> environment already exists) scoped to the one key. Good news: the env-subject is
+> available, so the trust shape is settled — only the key ARN + re-enable remain.
+
 **Used by:** the AWS KMS test in `turborepo.yml` (`kms:Sign`/`Verify` against a
-**dedicated test key**). Scope the trust to the contexts `turborepo.yml` runs in.
+**dedicated test key**, job-scoped to environment `sui-typescript-aws-kms-test-env`).
+Scope the trust to that environment subject.
 
 - If it runs only on `main`/scheduled, use the same trusted-ref pattern as Role 1.
 - If it must run on **PRs**, the minimal blast radius of a test-only KMS key may
