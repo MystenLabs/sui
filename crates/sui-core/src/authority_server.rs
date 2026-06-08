@@ -8,7 +8,7 @@ use fastcrypto::traits::KeyPair;
 use futures::{TryFutureExt, future};
 use itertools::Itertools as _;
 use mysten_common::ZipDebugEqIteratorExt;
-use mysten_common::{assert_reachable, debug_fatal};
+use mysten_common::assert_reachable;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
     Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec, Registry,
@@ -573,19 +573,15 @@ impl ValidatorService {
                             "ValidatorHaltedAtEpochEnd. Will retry after validator reconfigures"
                         );
 
-                        if let Ok(Ok(new_epoch)) =
+                        if let Ok(Ok(_new_epoch)) =
                             timeout(Duration::from_secs(15), state.wait_for_epoch(next_epoch)).await
                         {
                             assert_reachable!("retry submission at epoch end");
-                            if new_epoch == next_epoch {
-                                continue;
-                            }
-
-                            debug_fatal!(
-                                "expected epoch {} after reconfiguration. got {}",
-                                next_epoch,
-                                new_epoch
-                            );
+                            // wait_for_epoch guarantees _new_epoch >= next_epoch, so any
+                            // returned epoch is a valid signal that reconfiguration completed.
+                            // Under crashes/delays the epoch can advance by more than one, so
+                            // checking for strict equality was a false invariant.
+                            continue;
                         }
                     }
                     return Err(err.into());
