@@ -109,7 +109,7 @@ fun push_front_duplicate() {
     let mut table = linked_table::new(scenario.ctx());
     table.push_front(b"hello", 0);
     table.push_front(b"hello", 0u64);
-    abort 42
+    abort
 }
 
 #[test]
@@ -120,7 +120,7 @@ fun push_back_duplicate() {
     let mut table = linked_table::new(scenario.ctx());
     table.push_back(b"hello", 0u64);
     table.push_back(b"hello", 0);
-    abort 42
+    abort
 }
 
 #[test]
@@ -131,7 +131,7 @@ fun push_mixed_duplicate() {
     let mut table = linked_table::new(scenario.ctx());
     table.push_back(b"hello", 0u64);
     table.push_front(b"hello", 0);
-    abort 42
+    abort
 }
 
 #[test]
@@ -141,7 +141,7 @@ fun borrow_missing() {
     let mut scenario = test_scenario::begin(sender);
     let table = linked_table::new<u64, u64>(scenario.ctx());
     &table[0];
-    abort 42
+    abort
 }
 
 #[test]
@@ -151,7 +151,7 @@ fun borrow_mut_missing() {
     let mut scenario = test_scenario::begin(sender);
     let mut table = linked_table::new<u64, u64>(scenario.ctx());
     &mut table[0];
-    abort 42
+    abort
 }
 
 #[test]
@@ -161,7 +161,7 @@ fun remove_missing() {
     let mut scenario = test_scenario::begin(sender);
     let mut table = linked_table::new<u64, u64>(scenario.ctx());
     table.remove(0);
-    abort 42
+    abort
 }
 
 #[test]
@@ -171,7 +171,7 @@ fun pop_front_empty() {
     let mut scenario = test_scenario::begin(sender);
     let mut table = linked_table::new<u64, u64>(scenario.ctx());
     table.pop_front();
-    abort 42
+    abort
 }
 
 #[test]
@@ -181,7 +181,7 @@ fun pop_back_empty() {
     let mut scenario = test_scenario::begin(sender);
     let mut table = linked_table::new<u64, u64>(scenario.ctx());
     table.pop_back();
-    abort 42
+    abort
 }
 
 #[test]
@@ -234,6 +234,401 @@ fun sanity_check_size() {
     assert!(table.length() == 2);
     scenario.end();
     table.drop();
+}
+
+#[test]
+fun insert_before_singleton() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"anchor", 1u64);
+    table.insert_before(b"anchor", b"new", 0);
+    check_ordering(&table, &vector[b"new", b"anchor"]);
+    assert!(table[b"new"] == 0);
+    assert!(table[b"anchor"] == 1);
+    assert!(table.length() == 2);
+    assert!(table.front().borrow() == &b"new");
+    assert!(table.back().borrow() == &b"anchor");
+    scenario.end();
+    table.drop();
+}
+
+#[test]
+fun insert_before_head() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.push_back(b"b", 1);
+    table.push_back(b"c", 2);
+    table.insert_before(b"a", b"z", 99);
+    check_ordering(&table, &vector[b"z", b"a", b"b", b"c"]);
+    assert!(table.front().borrow() == &b"z");
+    assert!(table.back().borrow() == &b"c");
+    assert!(table.length() == 4);
+    scenario.end();
+    table.drop();
+}
+
+#[test]
+fun insert_before_middle() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.push_back(b"b", 1);
+    table.push_back(b"c", 2);
+    table.insert_before(b"b", b"m", 50);
+    check_ordering(&table, &vector[b"a", b"m", b"b", b"c"]);
+    assert!(table.front().borrow() == &b"a");
+    assert!(table.back().borrow() == &b"c");
+    scenario.end();
+    table.drop();
+}
+
+#[test]
+fun insert_before_tail() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.push_back(b"b", 1);
+    table.push_back(b"c", 2);
+    table.insert_before(b"c", b"x", 75);
+    check_ordering(&table, &vector[b"a", b"b", b"x", b"c"]);
+    assert!(table.front().borrow() == &b"a");
+    assert!(table.back().borrow() == &b"c");
+    scenario.end();
+    table.drop();
+}
+
+#[test]
+fun insert_after_singleton() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"anchor", 1u64);
+    table.insert_after(b"anchor", b"new", 0);
+    check_ordering(&table, &vector[b"anchor", b"new"]);
+    assert!(table[b"new"] == 0);
+    assert!(table[b"anchor"] == 1);
+    assert!(table.length() == 2);
+    assert!(table.front().borrow() == &b"anchor");
+    assert!(table.back().borrow() == &b"new");
+    scenario.end();
+    table.drop();
+}
+
+#[test]
+fun insert_after_head() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.push_back(b"b", 1);
+    table.push_back(b"c", 2);
+    table.insert_after(b"a", b"x", 25);
+    check_ordering(&table, &vector[b"a", b"x", b"b", b"c"]);
+    assert!(table.front().borrow() == &b"a");
+    assert!(table.back().borrow() == &b"c");
+    scenario.end();
+    table.drop();
+}
+
+#[test]
+fun insert_after_middle() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.push_back(b"b", 1);
+    table.push_back(b"c", 2);
+    table.insert_after(b"b", b"m", 50);
+    check_ordering(&table, &vector[b"a", b"b", b"m", b"c"]);
+    assert!(table.front().borrow() == &b"a");
+    assert!(table.back().borrow() == &b"c");
+    scenario.end();
+    table.drop();
+}
+
+#[test]
+fun insert_after_tail() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.push_back(b"b", 1);
+    table.push_back(b"c", 2);
+    table.insert_after(b"c", b"z", 99);
+    check_ordering(&table, &vector[b"a", b"b", b"c", b"z"]);
+    assert!(table.front().borrow() == &b"a");
+    assert!(table.back().borrow() == &b"z");
+    scenario.end();
+    table.drop();
+}
+
+#[test]
+fun push_front_after_insert_before_head() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.push_back(b"b", 1);
+    table.insert_before(b"a", b"z", 99);
+    check_ordering(&table, &vector[b"z", b"a", b"b"]);
+    table.push_front(b"y", 100);
+    check_ordering(&table, &vector[b"y", b"z", b"a", b"b"]);
+    table.push_back(b"c", 2);
+    check_ordering(&table, &vector[b"y", b"z", b"a", b"b", b"c"]);
+    scenario.end();
+    table.drop();
+}
+
+#[test]
+fun push_back_after_insert_after_tail() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.push_back(b"b", 1);
+    table.insert_after(b"b", b"z", 99);
+    check_ordering(&table, &vector[b"a", b"b", b"z"]);
+    table.push_back(b"y", 100);
+    check_ordering(&table, &vector[b"a", b"b", b"z", b"y"]);
+    table.push_front(b"x", 101);
+    check_ordering(&table, &vector[b"x", b"a", b"b", b"z", b"y"]);
+    scenario.end();
+    table.drop();
+}
+
+#[test]
+fun push_after_insert_at_singleton_boundary() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.insert_before(b"a", b"b", 1);
+    check_ordering(&table, &vector[b"b", b"a"]);
+    table.push_front(b"c", 2);
+    check_ordering(&table, &vector[b"c", b"b", b"a"]);
+    table.push_back(b"d", 3);
+    check_ordering(&table, &vector[b"c", b"b", b"a", b"d"]);
+
+    let mut table2 = linked_table::new(scenario.ctx());
+    table2.push_back(b"a", 0u64);
+    table2.insert_after(b"a", b"b", 1);
+    check_ordering(&table2, &vector[b"a", b"b"]);
+    table2.push_back(b"c", 2);
+    check_ordering(&table2, &vector[b"a", b"b", b"c"]);
+    table2.push_front(b"d", 3);
+    check_ordering(&table2, &vector[b"d", b"a", b"b", b"c"]);
+    scenario.end();
+    table.drop();
+    table2.drop();
+}
+
+#[test]
+fun insert_before_repeated_at_head() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"anchor", 0u64);
+    table.insert_before(b"anchor", b"a", 1);
+    table.insert_before(b"a", b"b", 2);
+    table.insert_before(b"b", b"c", 3);
+    check_ordering(&table, &vector[b"c", b"b", b"a", b"anchor"]);
+    assert!(table.length() == 4);
+    scenario.end();
+    table.drop();
+}
+
+#[test]
+fun insert_after_repeated_at_tail() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"anchor", 0u64);
+    table.insert_after(b"anchor", b"a", 1);
+    table.insert_after(b"a", b"b", 2);
+    table.insert_after(b"b", b"c", 3);
+    check_ordering(&table, &vector[b"anchor", b"a", b"b", b"c"]);
+    assert!(table.length() == 4);
+    scenario.end();
+    table.drop();
+}
+
+#[test]
+fun insert_before_and_after_interleaved() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"m", 0u64);
+    table.insert_before(b"m", b"l", 1);
+    check_ordering(&table, &vector[b"l", b"m"]);
+    table.insert_after(b"m", b"n", 2);
+    check_ordering(&table, &vector[b"l", b"m", b"n"]);
+    table.insert_before(b"l", b"k", 3);
+    check_ordering(&table, &vector[b"k", b"l", b"m", b"n"]);
+    table.insert_after(b"n", b"o", 4);
+    check_ordering(&table, &vector[b"k", b"l", b"m", b"n", b"o"]);
+    table.insert_after(b"l", b"l2", 5);
+    check_ordering(&table, &vector[b"k", b"l", b"l2", b"m", b"n", b"o"]);
+    table.insert_before(b"n", b"m2", 6);
+    check_ordering(&table, &vector[b"k", b"l", b"l2", b"m", b"m2", b"n", b"o"]);
+    assert!(table.length() == 7);
+    assert!(table.front().borrow() == &b"k");
+    assert!(table.back().borrow() == &b"o");
+    scenario.end();
+    table.drop();
+}
+
+#[test]
+fun insert_then_remove_preserves_ordering() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.push_back(b"c", 2);
+    table.insert_after(b"a", b"b", 1);
+    check_ordering(&table, &vector[b"a", b"b", b"c"]);
+    assert!(table.remove(b"b") == 1);
+    check_ordering(&table, &vector[b"a", b"c"]);
+    table.insert_before(b"c", b"b", 1);
+    check_ordering(&table, &vector[b"a", b"b", b"c"]);
+    assert!(table.remove(b"a") == 0);
+    check_ordering(&table, &vector[b"b", b"c"]);
+    assert!(table.remove(b"c") == 2);
+    check_ordering(&table, &vector[b"b"]);
+    assert!(table.remove(b"b") == 1);
+    check_ordering(&table, &vector[]);
+    scenario.end();
+    table.destroy_empty();
+}
+
+#[test]
+fun insert_before_then_pop() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"b", 1u64);
+    table.insert_before(b"b", b"a", 0);
+    let (k, v) = table.pop_front();
+    assert!(k == b"a");
+    assert!(v == 0);
+    check_ordering(&table, &vector[b"b"]);
+    let (k, v) = table.pop_back();
+    assert!(k == b"b");
+    assert!(v == 1);
+    check_ordering(&table, &vector[]);
+    scenario.end();
+    table.destroy_empty();
+}
+
+#[test]
+fun insert_after_then_pop() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.insert_after(b"a", b"b", 1);
+    let (k, v) = table.pop_back();
+    assert!(k == b"b");
+    assert!(v == 1);
+    check_ordering(&table, &vector[b"a"]);
+    let (k, v) = table.pop_front();
+    assert!(k == b"a");
+    assert!(v == 0);
+    check_ordering(&table, &vector[]);
+    scenario.end();
+    table.destroy_empty();
+}
+
+#[test]
+#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+fun insert_before_missing_anchor() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new<vector<u8>, u64>(scenario.ctx());
+    table.push_back(b"a", 0);
+    table.insert_before(b"missing", b"new", 1);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+fun insert_after_missing_anchor() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new<vector<u8>, u64>(scenario.ctx());
+    table.push_back(b"a", 0);
+    table.insert_after(b"missing", b"new", 1);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+fun insert_before_empty_table() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new<vector<u8>, u64>(scenario.ctx());
+    table.insert_before(b"anchor", b"new", 0);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+fun insert_after_empty_table() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new<vector<u8>, u64>(scenario.ctx());
+    table.insert_after(b"anchor", b"new", 0);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
+fun insert_before_duplicate_key() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.push_back(b"b", 1);
+    table.insert_before(b"b", b"a", 99);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
+fun insert_after_duplicate_key() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.push_back(b"b", 1);
+    table.insert_after(b"a", b"b", 99);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
+fun insert_before_anchor_equals_new_key() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.insert_before(b"a", b"a", 99);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
+fun insert_after_anchor_equals_new_key() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut table = linked_table::new(scenario.ctx());
+    table.push_back(b"a", 0u64);
+    table.insert_after(b"a", b"a", 99);
+    abort
 }
 
 #[test]

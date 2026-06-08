@@ -93,6 +93,52 @@ public fun push_back<K: copy + drop + store, V: store>(
     table.size = table.size + 1;
 }
 
+/// Inserts a key-value pair immediately before the entry with key `anchor: K`.
+/// If `anchor` is the front of the table, the newly inserted pair becomes the new front.
+/// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry
+/// with the key `anchor: K`.
+/// Aborts with `sui::dynamic_field::EFieldAlreadyExists` if the table already has an entry
+/// with the key `k: K`.
+public fun insert_before<K: copy + drop + store, V: store>(
+    table: &mut LinkedTable<K, V>,
+    anchor: K,
+    k: K,
+    value: V,
+) {
+    let anchor_node = df::borrow_mut<K, Node<K, V>>(&mut table.id, anchor);
+    let prev = anchor_node.prev.swap_or_fill(k);
+    if (prev.is_some()) {
+        df::borrow_mut<K, Node<K, V>>(&mut table.id, prev.destroy_some()).next = option::some(k);
+    } else {
+        table.head = option::some(k);
+    };
+    df::add(&mut table.id, k, Node { prev, next: option::some(anchor), value });
+    table.size = table.size + 1;
+}
+
+/// Inserts a key-value pair immediately after the entry with key `anchor: K`.
+/// If `anchor` is the back of the table, the newly inserted pair becomes the new back.
+/// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry
+/// with the key `anchor: K`.
+/// Aborts with `sui::dynamic_field::EFieldAlreadyExists` if the table already has an entry
+/// with the key `k: K`.
+public fun insert_after<K: copy + drop + store, V: store>(
+    table: &mut LinkedTable<K, V>,
+    anchor: K,
+    k: K,
+    value: V,
+) {
+    let anchor_node = df::borrow_mut<K, Node<K, V>>(&mut table.id, anchor);
+    let next = anchor_node.next.swap_or_fill(k);
+    if (next.is_some()) {
+        df::borrow_mut<K, Node<K, V>>(&mut table.id, next.destroy_some()).prev = option::some(k);
+    } else {
+        table.tail = option::some(k);
+    };
+    df::add(&mut table.id, k, Node { prev: option::some(anchor), next, value });
+    table.size = table.size + 1;
+}
+
 #[syntax(index)]
 /// Immutable borrows the value associated with the key in the table `table: &LinkedTable<K, V>`.
 /// Aborts with `sui::dynamic_df::EFieldDoesNotExist` if the table does not have an entry with
@@ -135,12 +181,9 @@ public fun next<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>, k: 
 public fun remove<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>, k: K): V {
     let Node<K, V> { prev, next, value } = df::remove(&mut table.id, k);
     table.size = table.size - 1;
-    if (prev.is_some()) {
-        df::borrow_mut<K, Node<K, V>>(&mut table.id, *prev.borrow()).next = next
-    };
-    if (next.is_some()) {
-        df::borrow_mut<K, Node<K, V>>(&mut table.id, *next.borrow()).prev = prev
-    };
+    prev.do!(|prev| df::borrow_mut<K, Node<K, V>>(&mut table.id, prev).next = next);
+    next.do!(|next| df::borrow_mut<K, Node<K, V>>(&mut table.id, next).prev = prev);
+
     if (table.head.borrow() == &k) table.head = next;
     if (table.tail.borrow() == &k) table.tail = prev;
     value
@@ -149,16 +192,14 @@ public fun remove<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V
 /// Removes the front of the table `table: &mut LinkedTable<K, V>`, returns the key and value.
 /// Aborts with `ETableIsEmpty` if the table is empty
 public fun pop_front<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>): (K, V) {
-    assert!(table.head.is_some(), ETableIsEmpty);
-    let head = *table.head.borrow();
+    let head = table.head.destroy_or!(abort ETableIsEmpty);
     (head, table.remove(head))
 }
 
 /// Removes the back of the table `table: &mut LinkedTable<K, V>`, returns the key and value.
 /// Aborts with `ETableIsEmpty` if the table is empty
 public fun pop_back<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>): (K, V) {
-    assert!(table.tail.is_some(), ETableIsEmpty);
-    let tail = *table.tail.borrow();
+    let tail = table.tail.destroy_or!(abort ETableIsEmpty);
     (tail, table.remove(tail))
 }
 

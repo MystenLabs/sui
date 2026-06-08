@@ -3364,6 +3364,12 @@ push_front
 push_back
 	public fun
 	0x2::linked_table
+insert_before
+	public fun
+	0x2::linked_table
+insert_after
+	public fun
+	0x2::linked_table
 borrow
 	public fun
 	0x2::linked_table
