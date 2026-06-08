@@ -22,6 +22,9 @@ jobs:
   warm-cache:
     name: Warm sccache (${{ matrix.os }})
     timeout-minutes: 240
+    permissions:
+      contents: read
+      id-token: write # mint the OIDC token to assume the sccache role
     strategy:
       matrix:
         os:
@@ -54,8 +57,10 @@ jobs:
 
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # OIDC on main (scheduled run / dispatch from main). The role trusts only
+          # the protected branches, so an off-ref workflow_dispatch passes an empty
+          # role and setup-sccache falls back to a local cache instead of failing.
+          role-to-assume: ${{ github.ref == 'refs/heads/main' && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || '' }}
           key-prefix: ${{ matrix.os }}
 
       - name: Register cargo problem matcher
@@ -150,11 +155,20 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs: [warm-cache]
+    permissions:
+      contents: read
+      id-token: write # mint the OIDC token to read bucket stats for the report
     steps:
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      # Read-only bucket stats via the same role (it has s3:ListBucket). Gated to
+      # main so an off-ref dispatch skips cred config; the report below then shows
+      # zeros instead of failing.
+      - name: Configure AWS credentials (OIDC)
+        if: github.ref == 'refs/heads/main'
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::011083325127:role/sui-sccache-rw-github
+          role-session-name: sui-sccache-summary-${{ github.run_id }}-${{ github.run_attempt }}
+          allowed-account-ids: '011083325127'
           aws-region: us-west-2
 
       - name: Generate cache report
