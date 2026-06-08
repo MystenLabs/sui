@@ -440,15 +440,66 @@ run drove the suite from 32 -> 56 -> 88 -> 90 as three runtime bugs were fixed:
   afterward. They pass under both `cargo nextest` and `cargo simtest` (validated
   across seeds 1-20 plus repeats).
 
-  **Simtest restart race (`21a1214239`, `69a88d1c04`).** Restarting a node on the
-  same `db_path` can race the previous instance's RocksDB teardown for its file
-  locks. Under a real runtime the stop joins the node's thread, so the locks are
-  released first; under simulation the teardown (background tasks plus the
-  real-thread RocksDB close) is asynchronous and *not* deterministic w.r.t. the
-  simulated clock -- the same seed passes or fails across runs -- so no fixed or
-  `Weak`-based wait fully fixes it. Fixed with a bounded retry of `SuiNode::start`
-  in the swarm's simulation container (`container-sim.rs`); the test also waits on
-  a `Weak<SuiNode>` before restarting to shrink the window and minimize retries.
+  **Simtest restart race (`21a1214239`, `69a88d1c04`) -- full investigation.**
+  Restarting a node on the same `db_path` reopens the previous instance's RocksDB
+  databases, which fails if their file locks are still held. Under a real runtime
+  `Node::stop` joins the node's thread, so everything is dropped before it
+  returns. Under `cargo simtest` the stop only schedules teardown
+  (`delete_node`), and the teardown -- the node's background tasks plus RocksDB's
+  destructor, which runs on `spawn_blocking` *real* threads -- finishes a
+  non-deterministic time later. The simulator is otherwise deterministic per
+  seed, but this real-thread teardown leaks real-time scheduling in, so **the
+  same seed passes or fails across runs** (observed: seed 10 went pass/pass/fail
+  over three runs). CI hit it under assorted seeds.
+
+  The conflict surfaces two different ways depending on which DB loses the race,
+  because the stores open differently:
+
+  - **committee / perpetual / checkpoint** use `#[derive(DBMapUtils)]`, whose
+    generated `open_tables_read_write` calls `.expect("Cannot open DB at ...")` ->
+    a **panic** at `committee_store.rs:24` (un-retryable). The committee store's
+    `live/epochs` DB is the usual loser here.
+  - the **embedded rpc-store** opens via `sui_consistent_store::Db::open(...)`
+    `.context("opening the embedded rpc-store database")?` -> returns an **`Err`**,
+    which the swarm container unwraps -> panic at `container-sim.rs:63`. This one
+    lingers past the `SuiNode` because the tip indexer task holds its own `Db`
+    clone (and does its writes via `spawn_blocking`), released only as the aborted
+    task winds down.
+
+  Approaches tried, and why a wait cannot be made reliable:
+
+  - **Fixed sleep** (100ms, then 5s): racy. The sleep is *simulated* time; the
+    RocksDB close runs in *real* time, so any fixed value flakes (100ms failed
+    seed 2; 5s failed seed 8).
+  - **`Weak<SuiNode>` wait**: necessary but insufficient. It covers the
+    `SuiNode`-owned DBs (committee/perpetual/checkpoint -- the panicking ones the
+    retry *cannot* catch), but the indexer's rpc-store `Db` outlives the
+    `SuiNode`, so the rpc-store still raced.
+  - **`DbRef` wait** (`Db::downgrade()` -> `Weak<DbInner>`): a more precise signal
+    -- it tracks the rpc-store `Db` itself, including the indexer's clone -- but
+    still 5/30 failures. `upgrade()` observes the `Arc<DbInner>` *strong count*,
+    which hits 0 the instant the last clone drops; but that last drop happens on
+    the `spawn_blocking` real thread, so the count reaches 0 *before* RocksDB's
+    destructor releases the OS lock. The handle drop is not synchronous with the
+    file-lock release.
+  - **LOCK-file polling**: a dead end. The RocksDB `LOCK` file is **empty (0
+    bytes), holds no data, and is never deleted** -- it is just the target of an
+    `fcntl` advisory lock, which is kernel state with no on-disk reflection. Worse,
+    under simulation the whole network is **one OS process**, and `fcntl` locks are
+    per-process, so the lock does not even conflict at the OS level -- RocksDB
+    rejects the reopen from its own in-process `locked_files` registry (hence the
+    error text `lock hold by current process`). An external `fcntl`/`flock`/file
+    probe from the same process cannot see that registry.
+
+  Because the conflict ultimately lives in RocksDB's in-process registry (released
+  only when the destructor finishes on the real thread), the one operation that
+  can observe "this path is openable again" is asking RocksDB to open it. So the
+  robust fix is a **bounded retry of `SuiNode::start`** in `container-sim.rs` (it
+  retries until the registry entry is gone), paired with the **`Weak<SuiNode>`
+  wait** for the panicking, un-retryable `DBMapUtils` stores. Validated 30/30
+  (seeds 1-20 plus 10x the worst seed). A `DbRef`/LOCK-file wait is not a viable
+  replacement for the retry; revisit only if the swarm gains a way to await a sim
+  node's *full* deletion.
 
   **Bug found + fixed (`4317f0af2d`): restore-target vs object-set consistency.**
   The enable/rebuild test was ~50% flaky with a recipient balance reported at 2x.
@@ -506,6 +557,17 @@ done.
   the embedded read path is read-after-write consistent end to end (the e2e
   suite covers it; a smaller test would localize regressions). The rest of 4B is
   done -- see 4B above.
+
+- [ ] **Simtest restart robustness without the container retry (optional).** The
+  restore tests rely on a bounded `SuiNode::start` retry in `container-sim.rs`
+  (see "Simtest restart race -- full investigation" under 4A for why a wait
+  cannot replace it). A cleaner alternative would be a swarm primitive that
+  awaits a sim node's *full* deletion (all tasks gone, all RocksDB destructors
+  finished) so a restart never races -- and/or making the `DBMapUtils`
+  `open_tables_read_write` return `Result` so committee/perpetual/checkpoint
+  conflicts are retryable like the rpc-store. Both are broader test-infra /
+  typed-store changes; the current retry + `Weak<SuiNode>` wait is robust (30/30)
+  in the meantime.
 
 ### Atomic-watermark fix follow-ups (`4317f0af2d`)
 
