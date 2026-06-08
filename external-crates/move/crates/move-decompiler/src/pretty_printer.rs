@@ -1041,12 +1041,12 @@ fn primitive_op_doc(context: &Context, op: &PrimitiveOp, args: &[Exp]) -> Doc {
     };
 
     match op {
-        PrimitiveOp::CastU8 => exp(context, &args[0]).concat(D::text("as u8")),
-        PrimitiveOp::CastU16 => exp(context, &args[0]).concat(D::text("as u16")),
-        PrimitiveOp::CastU32 => exp(context, &args[0]).concat(D::text("as u32")),
-        PrimitiveOp::CastU64 => exp(context, &args[0]).concat(D::text("as u64")),
-        PrimitiveOp::CastU128 => exp(context, &args[0]).concat(D::text("as u128")),
-        PrimitiveOp::CastU256 => exp(context, &args[0]).concat(D::text("as u256")),
+        PrimitiveOp::CastU8 => exp(context, &args[0]).concat_space(D::text("as u8")),
+        PrimitiveOp::CastU16 => exp(context, &args[0]).concat_space(D::text("as u16")),
+        PrimitiveOp::CastU32 => exp(context, &args[0]).concat_space(D::text("as u32")),
+        PrimitiveOp::CastU64 => exp(context, &args[0]).concat_space(D::text("as u64")),
+        PrimitiveOp::CastU128 => exp(context, &args[0]).concat_space(D::text("as u128")),
+        PrimitiveOp::CastU256 => exp(context, &args[0]).concat_space(D::text("as u256")),
 
         PrimitiveOp::Add => bin(&args[0], "+", &args[1]),
         PrimitiveOp::Subtract => bin(&args[0], "-", &args[1]),
