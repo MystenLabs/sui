@@ -13,7 +13,7 @@ mod checked {
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
-    use mysten_common::{debug_fatal, in_test_configuration};
+    use mysten_common::{assert_reachable, debug_fatal, in_test_configuration};
     use std::collections::BTreeMap;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
@@ -314,6 +314,7 @@ mod checked {
         // fall through to the address-balance gas-payment pruning hotfix instead); everywhere else
         // it applies based on `early_exit_on_iffw`.
         if should_short_circuit_insufficient_funds(&execution_params, protocol_config) {
+            assert_reachable!("IFFW short-circuit fired");
             temporary_store.ensure_active_inputs_mutated();
             transaction_dependencies.remove(&TransactionDigest::genesis_marker());
 
