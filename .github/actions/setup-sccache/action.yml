@@ -95,6 +95,8 @@ runs:
         role-to-assume: ${{ inputs.role-to-assume }}
         # Identify the run/attempt in CloudTrail's AssumeRoleWithWebIdentity events.
         role-session-name: sui-sccache-${{ github.run_id }}-${{ github.run_attempt }}
+        # Fail closed if STS ever returns creds for an unexpected account.
+        allowed-account-ids: '011083325127'
         aws-region: us-west-2
 
     - name: Configure AWS credentials (static keys)
@@ -103,6 +105,7 @@ runs:
       with:
         aws-access-key-id: ${{ inputs.aws-access-key-id }}
         aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        allowed-account-ids: '011083325127'
         aws-region: us-west-2
 
     - name: Set sccache environment

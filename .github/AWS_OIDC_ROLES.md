@@ -23,7 +23,7 @@ Create (once per account) the IAM OIDC provider:
 - Audience: `sts.amazonaws.com`
 
 ARN used by the trust policies below:
-`arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com`
+`arn:aws:iam::011083325127:oidc-provider/token.actions.githubusercontent.com`
 
 ## Trust-policy rules (read this before writing any role)
 
@@ -51,6 +51,21 @@ ARN used by the trust policies below:
 to the shared compile cache, **only from trusted contexts**. Forks and PRs do
 not assume this role (they fall back to a local cache).
 
+> **Status: ALREADY PROVISIONED.** This role exists in account `011083325127` as
+> **`arn:aws:iam::011083325127:role/sui-sccache-rw-github`** (created 2026-05-22),
+> with the managed policy `sui-sccache-rw` (exactly the least-privilege policy
+> below). Use this ARN as the `role-to-assume` value — **do not create a second
+> role.** Its current trust matches the "explicit refs" variant below but is
+> scoped to **only** the four protected branches:
+> `repo:MystenLabs/sui:ref:refs/heads/{main,devnet,testnet,mainnet}` — `aud`
+> pinned, no wildcard.
+>
+> **Gap to close if needed:** the live trust does **not** yet include
+> `releases/sui-*-release` branches or `*-v*` tags. sccache callers that run on a
+> release branch or tag therefore cannot assume it today; add those `sub` entries
+> (per the "explicit refs" block) before flipping any release-branch/tag-triggered
+> sccache caller.
+
 ### Trust policy
 
 Preferred (environment `aws-sccache`):
@@ -60,7 +75,7 @@ Preferred (environment `aws-sccache`):
   "Version": "2012-10-17",
   "Statement": [{
     "Effect": "Allow",
-    "Principal": { "Federated": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com" },
+    "Principal": { "Federated": "arn:aws:iam::011083325127:oidc-provider/token.actions.githubusercontent.com" },
     "Action": "sts:AssumeRoleWithWebIdentity",
     "Condition": {
       "StringEquals": {
@@ -133,17 +148,26 @@ denying forks. Pick one:
   contents). Recommended unless cache contents are sensitive.
 - **(B) No PR cache at all**: do not trust `pull_request`; same-repo PRs also
   lose the cache (slower CI), but the boundary is purely trust-policy-enforced.
-- **(C) Same-repo → RO, fork → none, enforced at the workflow layer**: trust
-  `pull_request`, but gate the input in the caller with
-  `if: github.event.pull_request.head.repo.fork == false` so a fork job never
-  passes `role-to-assume` (and never requests the token). Achieves the three-way
-  split, but the fork exclusion lives in the *workflow*, not the trust policy —
-  weaker (a future edit dropping the gate would re-admit forks). Document the
-  dependency if chosen.
+- **(C) Same-repo → RO, fork → none, enforced at the workflow layer.** Trust
+  `pull_request` on the RO role, then exclude forks in the workflow. **Gating only
+  the `role-to-assume` input is NOT sufficient:** if the fork's job still carries
+  `id-token: write` and the role trusts `pull_request`, a fork could mint the OIDC
+  token and call `sts:AssumeRoleWithWebIdentity` directly from any step — the
+  gated input doesn't stop it. The exclusion must remove the *capability*, not
+  just the input. Two correct shapes:
+    - **Skip the whole OIDC-capable job for forks**:
+      `if: github.event.pull_request.head.repo.fork == false` on the job, so a fork
+      PR never runs a job that has `id-token: write`; or
+    - **Split the paths**: a same-repo-PR job that has `id-token: write` +
+      `role-to-assume`, and a separate fork-PR job with **no** `id-token: write`
+      and no role (local-cache fallback only).
+  Either way the fork exclusion lives in the *workflow*, not the trust policy —
+  weaker than (A)/(B) (a future edit that re-adds `id-token: write` to a
+  fork-reachable job re-admits forks). Document the dependency if chosen.
 
-(Fork PRs run the **base** repo's workflow and get no repo secrets; whether they
-can mint an `id-token` depends on the base workflow's `permissions`. Option C's
-`if` gate is what makes the fork exclusion explicit and reviewable.)
+(Fork PRs run the **base** repo's workflow and get no repo secrets, but they CAN
+mint an `id-token` if the job grants `id-token: write` — which is exactly why the
+fork exclusion must drop that permission, not just the role input.)
 
 ---
 
@@ -215,6 +239,27 @@ cover cleanup of interrupted transfers):
 > It can reuse Role 1 (it runs on `main`/scheduled), so no separate role is
 > needed there.
 
+### Credential sequencing — `release.yml` touches BOTH buckets in one job
+
+`release.yml` builds with sccache (`mystenlabs-sccache`, Role 1) **and** uploads
+artifacts to `sui-releases` (Role 2) in the same job. `configure-aws-credentials`
+(and therefore `setup-sccache`) **overwrites the AWS credential env vars** each
+time it runs — whichever role was configured last wins. Do **not** assume the
+build-time sccache creds are still active at the `aws s3 cp` upload step.
+
+Manage the switch deliberately. Options:
+
+- **Re-assume `release-s3` immediately before the upload/download steps** — add a
+  dedicated `configure-aws-credentials` (with `role-to-assume: <release-s3 ARN>`,
+  `allowed-account-ids: '011083325127'`) right before the `aws s3 cp` block, so
+  the release creds are the active ones at upload time. Simplest, recommended.
+- **Split into two jobs** — a build job (Role 1, sccache) and an upload job
+  (Role 2, `sui-releases`), passing artifacts between them. Cleaner credential
+  isolation; costs an artifact handoff.
+
+Whichever is chosen, the two roles stay separate (different buckets, different
+trust) — the only question is *when* each set of creds is active in the job.
+
 ---
 
 ## Role 3 — `sui-github-actions-kms-test`
@@ -237,7 +282,7 @@ cover cleanup of interrupted transfers):
     "Sid": "KmsTestSignVerify",
     "Effect": "Allow",
     "Action": ["kms:Sign", "kms:Verify", "kms:GetPublicKey", "kms:DescribeKey"],
-    "Resource": "arn:aws:kms:us-west-2:<ACCOUNT_ID>:key/<TEST_KEY_ID>"
+    "Resource": "arn:aws:kms:us-west-2:011083325127:key/<TEST_KEY_ID>"
   }]
 }
 ```
@@ -251,32 +296,42 @@ are not secrets and should move to `vars`.
 
 ## Caller wiring (workflow side)
 
-Each job that assumes a role needs OIDC token permission and passes the ARN:
+Set `id-token: write` at **job level** (not workflow level) — only the
+AWS-touching job should be able to mint an OIDC token:
 
 ```yaml
-permissions:
-  id-token: write   # required to mint the OIDC token
-  contents: read
-...
+jobs:
+  build:
+    permissions:
+      id-token: write   # required to mint the OIDC token — job-scoped
+      contents: read
+    steps:
     - uses: ./.github/actions/setup-sccache
       with:
-        role-to-assume: arn:aws:iam::<ACCOUNT_ID>:role/sui-github-actions-sccache
+        # Pass the role only on trusted refs, so a workflow_dispatch from a
+        # non-main ref (whose sub the role does NOT trust) falls back to a local
+        # cache instead of failing the AssumeRole. For schedule/push this is
+        # always main.
+        role-to-assume: ${{ github.ref == 'refs/heads/main' && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || '' }}
         key-prefix: ${{ matrix.os }}
         # aws-access-key-id/secret omitted — OIDC takes priority
 ```
 
 `setup-sccache` already supports this: it assumes the role when `role-to-assume`
 is set, falls back to static keys when only those are set, and skips the S3
-cache when neither is set (fork PRs). This lets callers migrate one at a time.
-The action already sets `role-session-name` (`sui-sccache-<run_id>-<attempt>`).
+cache when neither is set (fork PRs / off-ref dispatch). This lets callers
+migrate one at a time. The action sets `role-session-name`
+(`sui-sccache-<run_id>-<attempt>`) and `allowed-account-ids: 011083325127` on
+both configure-credentials paths.
 
 ## Hardening (apply per role / caller)
 
 - **`allowed-account-ids`** — set it on `configure-aws-credentials` so a
-  misconfigured role ARN can't silently assume into the wrong account. Pass the
-  org's account id; for direct `configure-aws-credentials` steps (`release.yml`,
-  `turborepo.yml`) add `allowed-account-ids: "<ACCOUNT_ID>"`. (If wired through
-  `setup-sccache`, expose it as an input or set it in the caller.)
+  misconfigured role ARN can't silently assume into the wrong account.
+  `setup-sccache` already hardcodes `allowed-account-ids: '011083325127'` on both
+  its OIDC and static paths. For direct `configure-aws-credentials` steps
+  (`release.yml`, `turborepo.yml`) add `allowed-account-ids: "011083325127"`
+  explicitly.
 - **`role-session-name`** — include run/attempt identifiers
   (`…-${{ github.run_id }}-${{ github.run_attempt }}`) so every
   `AssumeRoleWithWebIdentity` in CloudTrail traces to a run. `setup-sccache` does
