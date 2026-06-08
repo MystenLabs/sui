@@ -34,7 +34,6 @@ serde_json.workspace = true
 bin-version.workspace = true
 url.workspace = true
 humantime.workspace = true
-itertools.workspace = true
 
 consensus-core.workspace = true
 sui-tls.workspace = true

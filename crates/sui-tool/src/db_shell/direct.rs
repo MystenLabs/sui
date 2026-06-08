@@ -6,10 +6,9 @@
 
 use anyhow::{Context, bail};
 use consensus_core::{
-    BlockAPI, CommitAPI, CommitIndex, CommitRange, CommitRef,
+    CommitAPI, CommitIndex, CommitRange,
     storage::{Store as ConsensusStore, rocksdb_store::RocksDBStore},
 };
-use itertools::Itertools;
 use std::sync::Arc;
 use sui_core::{
     authority::authority_store_tables::AuthorityPerpetualTables, checkpoints::CheckpointStore,
@@ -19,7 +18,6 @@ use sui_types::{
     base_types::EpochId,
     digests::{CheckpointContentsDigest, CheckpointDigest, TransactionDigest},
     messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint},
-    messages_consensus::ConsensusTransaction,
 };
 
 use crate::db_shell::{
@@ -223,60 +221,18 @@ impl DirectBackend {
         let cs = self.consensus_store.as_ref().ok_or_else(|| {
             anyhow::anyhow!("consensus store not available; use --consensus-db-path")
         })?;
-        let commits = cs
-            .scan_commits(CommitRange::new(index..=index))
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-        let commit = commits
-            .into_iter()
-            .next()
-            .ok_or_else(|| anyhow::anyhow!("commit {index} not found"))?;
-
-        let commit_ref: CommitRef = commit.reference();
-        let block_refs: Vec<_> = commit.blocks().to_vec();
-        let blocks = cs
-            .read_blocks(&block_refs)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-
-        let rejected = cs
-            .read_rejected_transactions(commit_ref)
-            .map_err(|e| anyhow::anyhow!("{e}"))?
-            .unwrap_or_default();
-
-        let mut tx_keys = Vec::new();
-        let mut missing_blocks = Vec::new();
-        for (block_ref, block_opt) in block_refs.iter().zip_eq(blocks) {
-            let block = match block_opt {
-                Some(b) => b,
-                // Missing block indicates storage corruption or a bug; note the ref explicitly.
-                None => {
-                    missing_blocks.push(format!("{block_ref:?}"));
-                    continue;
-                }
-            };
-            let rejected_indices: std::collections::HashSet<u16> = rejected
-                .get(block_ref)
-                .map(|v| v.iter().copied().collect())
-                .unwrap_or_default();
-            for (i, tx_bytes) in block.transactions_data().iter().enumerate() {
-                if let Ok(tx) = bcs::from_bytes::<ConsensusTransaction>(tx_bytes) {
-                    let key = format!("{:?}", tx.key());
-                    if rejected_indices.contains(&(i as u16)) {
-                        tx_keys.push(format!("{key} [rejected]"));
-                    } else {
-                        tx_keys.push(key);
-                    }
-                }
-            }
-        }
-
+        let summary =
+            sui_core::consensus_commit_summary::build_consensus_commit_summary(cs, index)?
+                .ok_or_else(|| anyhow::anyhow!("commit {index} not found"))?;
+        let commit = &summary.commit;
         Ok(serde_json::json!({
             "index": commit.index(),
             "timestamp_ms": commit.timestamp_ms(),
             "leader": commit.leader().to_string(),
             "previous_digest": commit.previous_digest().to_string(),
-            "block_count": block_refs.len(),
-            "transactions": tx_keys,
-            "missing_blocks": missing_blocks,
+            "block_count": commit.blocks().len(),
+            "transactions": summary.tx_keys,
+            "missing_blocks": summary.missing_blocks,
         }))
     }
 

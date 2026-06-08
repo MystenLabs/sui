@@ -19,14 +19,12 @@ use axum::{
 };
 use base64::Engine;
 use consensus_core::{
-    BlockAPI as _, CommitAPI as _, CommitRange, CommitRef,
+    CommitAPI as _, CommitRange,
     storage::{Store as ConsensusStore, rocksdb_store::RocksDBStore},
 };
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value as JsonValue;
 use std::sync::Arc;
-use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::{
     base_types::EpochId,
     digests::{
@@ -567,65 +565,26 @@ fn render_consensus_commit_summary(
     let cs = consensus_store.ok_or_else(|| {
         not_implemented("consensus store not available (node is not a validator)")
     })?;
-    let commits = cs
-        .scan_commits(CommitRange::new(index..=index))
-        .map_err(internal)?;
-    let commit = commits
-        .into_iter()
-        .next()
-        .ok_or_else(|| not_found(format!("consensus commit {index} not found")))?;
-
-    let commit_ref: CommitRef = commit.reference();
-    let block_refs: Vec<_> = commit.blocks().to_vec();
-    let blocks = cs.read_blocks(&block_refs).map_err(internal)?;
-
-    let rejected = cs
-        .read_rejected_transactions(commit_ref)
+    let summary = sui_core::consensus_commit_summary::build_consensus_commit_summary(cs, index)
         .map_err(internal)?
-        .unwrap_or_default();
-
-    let mut tx_keys: Vec<String> = Vec::new();
-    let mut missing_blocks: Vec<String> = Vec::new();
-    for (block_ref, block_opt) in block_refs.iter().zip_eq(blocks) {
-        let block = match block_opt {
-            Some(b) => b,
-            // Missing block indicates storage corruption or a bug; note the ref explicitly.
-            None => {
-                missing_blocks.push(format!("{block_ref:?}"));
-                continue;
-            }
-        };
-        let rejected_indices: std::collections::HashSet<u16> = rejected
-            .get(block_ref)
-            .map(|v| v.iter().copied().collect())
-            .unwrap_or_default();
-        for (i, tx_bytes) in block.transactions_data().iter().enumerate() {
-            if let Ok(tx) = bcs::from_bytes::<ConsensusTransaction>(tx_bytes) {
-                let key = format!("{:?}", tx.key());
-                if rejected_indices.contains(&(i as u16)) {
-                    tx_keys.push(format!("{key} [rejected]"));
-                } else {
-                    tx_keys.push(key);
-                }
-            }
-        }
-    }
+        .ok_or_else(|| not_found(format!("consensus commit {index} not found")))?;
+    let commit_index = summary.commit.index();
 
     match format {
         ReadFormat::Json => {
             let val = serde_json::json!({
-                "index": commit.index(),
-                "transactions": tx_keys,
-                "missing_blocks": missing_blocks,
+                "index": commit_index,
+                "transactions": summary.tx_keys,
+                "missing_blocks": summary.missing_blocks,
             });
             Ok(Json(val).into_response())
         }
         ReadFormat::Debug | ReadFormat::Bcs | ReadFormat::RawBcs => {
-            let mut text = format!("commit {}\n", commit.index());
-            for key in &tx_keys {
+            let mut text = format!("commit {commit_index}\n");
+            for key in &summary.tx_keys {
                 text.push_str(&format!("  {key}\n"));
             }
-            for r in &missing_blocks {
+            for r in &summary.missing_blocks {
                 text.push_str(&format!("  [missing block: {r}]\n"));
             }
             Ok(text.into_response())
