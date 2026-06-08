@@ -1941,6 +1941,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             deferral_key,
                             congested_objects
                         );
+                        // Crash-recovered transactions must not reach execution even via
+                        // the congestion-cancel path: their effects are gone and the fail
+                        // point would fire again, causing a second crash.
+                        if self
+                            .crashed_transactions
+                            .contains(transaction.tx().digest())
+                        {
+                            return;
+                        }
                         cancelled_txns.insert(
                             *transaction.tx().digest(),
                             CancelConsensusCertificateReason::CongestionOnObjects(
@@ -1951,6 +1960,21 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
             }
+        } else if self
+            .crashed_transactions
+            .contains(transaction.tx().digest())
+        {
+            // Drop crash-recovered transactions after their cost has been observed.
+            // The cost observation above keeps IndirectStateObserver consistent with
+            // the pre-crash run, so the ConsensusCommitPrologue's additional_state_digest
+            // is unchanged and locally_computed_checkpoints remains valid across restarts.
+            //
+            // Also bump the congestion tracker so that the shared objects this transaction
+            // was using are no longer marked as congested.  In the pre-crash run the
+            // transaction was eventually scheduled and the bump happened at that point;
+            // without it here the objects stay congested indefinitely, slowing down
+            // other transactions and preventing checkpoint progress.
+            shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, transaction.tx());
         } else {
             // Update object execution cost for all scheduled transactions
             shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, transaction.tx());
@@ -2534,9 +2558,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     continue;
                 }
 
-                // Drop transactions that caused a panic in a previous run so they cannot crash
-                // the node again. We record a Dropped status so callers waiting on effects will
-                // get a definitive response rather than hanging indefinitely.
+                // Transactions that caused a panic in a previous run are flagged here.
+                // We set Dropped so callers waiting on effects get a definitive response,
+                // but we do NOT continue — the transaction flows through the rest of the
+                // scheduling pipeline so that get_tx_cost still updates IndirectStateObserver.
+                // That keeps the ConsensusCommitPrologue's additional_state_digest identical
+                // to the pre-crash run, which is required for locally_computed_checkpoints to
+                // remain consistent across restarts.  Lock acquisition is skipped below to
+                // avoid creating a persistent owned-object lock that can never be released.
+                let mut is_crash_recovered = false;
                 if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
                     let digest = tx.digest();
                     if self.crashed_transactions.contains(digest) {
@@ -2549,7 +2579,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         );
                         self.epoch_store
                             .set_consensus_tx_status(position, ConsensusTxStatus::Dropped);
-                        continue;
+                        is_crash_recovered = true;
                     }
                 }
 
@@ -2648,8 +2678,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // This must happen AFTER all filtering checks above to avoid acquiring locks
                 // for transactions that will be dropped (e.g., during epoch change).
                 // Only applies to UserTransactionV2 - other transaction types don't need lock acquisition.
-                if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
-                    &parsed.transaction.kind
+                // Crash-recovered transactions skip lock acquisition: they are dropped before
+                // execution in handle_deferral_and_cancellation, so acquiring a lock here
+                // would create a persistent lock that is never released.
+                if !is_crash_recovered
+                    && let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
+                        &parsed.transaction.kind
                 {
                     let immutable_object_ids: HashSet<ObjectID> =
                         tx_with_claims.get_immutable_objects().into_iter().collect();
