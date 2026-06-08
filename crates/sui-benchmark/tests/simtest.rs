@@ -405,6 +405,14 @@ mod test {
     async fn test_simulated_load_reconfig_with_crashes_and_delays() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
+        // Use a short DKG timeout so that if DKG is prevented from completing (e.g. by the
+        // rb-dkg fail point below), DKG failure is declared quickly rather than at round 3000.
+        // This ensures the epoch transition completes within the surfer's 120s window.
+        let _dkg_timeout_guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_random_beacon_dkg_timeout_round_for_testing(50);
+            config
+        });
+
         register_fail_point_if("select-random-cache", || true);
 
         let test_cluster = Arc::new(
@@ -498,6 +506,10 @@ mod test {
         });
         register_fail_point_async("consensus-delay", || delay_failpoint(10..20, 0.001));
         register_fail_point_async("randomness-delay", || delay_failpoint(10..1000, 0.5));
+
+        // Cause DKG to fail ~5% of the time. With 4 validators and crashes reducing the active
+        // quorum, empirically ~6% per-validator skip rate produces ~5% DKG failure per epoch.
+        register_fail_point_if("rb-dkg", || thread_rng().gen_bool(0.06));
 
         test_simulated_load(test_cluster, 120).await;
     }
