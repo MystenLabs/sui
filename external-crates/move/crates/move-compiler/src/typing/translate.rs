@@ -476,7 +476,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     let body = if macro_.is_some() {
         let body_loc = n_body.loc;
         if context.env().ide_mode() {
-            ide_macro_body(context, loc, n_body)
+            ide_macro_body(context, name, n_body)
         }
         sp(body_loc, T::FunctionBody_::Macro)
     } else {
@@ -530,7 +530,7 @@ fn function_signature(context: &mut Context, macro_: Option<Loc>, sig: &N::Funct
 /// (already in scope from function_signature) to type the body, generating IDE annotations
 /// (DotAutocompleteInfo, etc.). Diagnostics from this best-effort pass are discarded.
 /// Speculatively typed macro function body is added to the current context's IDEInfo.
-fn ide_macro_body(context: &mut Context, function_loc: Loc, n_body: N::FunctionBody) {
+fn ide_macro_body(context: &mut Context, function_name: FunctionName, n_body: N::FunctionBody) {
     let reporter = context.outer.env.ide_diagnostic_reporter();
     let old_reporter = std::mem::replace(&mut context.reporter, reporter);
     let old_ide_typing_macro_body = context.ide_typing_macro_body;
@@ -538,7 +538,12 @@ fn ide_macro_body(context: &mut Context, function_loc: Loc, n_body: N::FunctionB
 
     let body = function_body(context, n_body);
     if let T::FunctionBody_::Defined(seq) = body.value {
-        context.ide_info.add_macro_function_body(function_loc, seq);
+        let module = *context
+            .current_module()
+            .expect("ICE macro function should be typed inside a module");
+        context
+            .ide_info
+            .add_macro_function_body(module, function_name, seq);
     }
     finalize_ide_info(context);
 

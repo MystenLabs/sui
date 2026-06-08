@@ -1061,7 +1061,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
             if let Some(seq) = self
                 .compiler_analysis_info
                 .macro_function_bodies
-                .get(&fdef.loc)
+                .get(&(module, function_name))
             {
                 self.visit_seq(fdef.body.loc, seq);
             }

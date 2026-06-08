@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use move_command_line_common::files::FileHash;
-use move_compiler::{shared::ide as CI, typing::ast as T};
+use move_compiler::{expansion::ast as E, parser::ast as P, shared::ide as CI, typing::ast as T};
 use move_ir_types::location::Loc;
 
 /// Compiler information used during symbolication analysis.
@@ -14,8 +14,9 @@ pub struct CompilerAnalysisInfo {
     /// Macro call information keyed by expanded expression location.
     /// Multiple expansions can share locations from macro definitions.
     pub macro_info: BTreeMap<Loc, Vec<CI::MacroCallInfo>>,
-    /// Typed macro function bodies keyed by function definition location.
-    pub macro_function_bodies: BTreeMap<Loc, T::Sequence>,
+    /// Typed macro function bodies keyed by defining module and function name
+    /// whose location is the location of the function definition.
+    pub macro_function_bodies: BTreeMap<(E::ModuleIdent, P::FunctionName), T::Sequence>,
     /// Expanded lambda expressions
     pub expanded_lambdas: BTreeSet<Loc>,
     /// Ellipsis-generated binders (to filter from IDE)

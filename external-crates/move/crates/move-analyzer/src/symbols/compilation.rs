@@ -41,7 +41,8 @@ use move_compiler::{
     linters::LintLevel,
     parser::ast as P,
     shared::{
-        NamedAddressMap, NamedAddressMaps, PackagePaths, files::MappedFiles, unique_map::UniqueMap,
+        Identifier, NamedAddressMap, NamedAddressMaps, PackagePaths, files::MappedFiles,
+        unique_map::UniqueMap,
     },
     typing::ast::ModuleDefinition,
 };
@@ -1190,7 +1191,7 @@ fn merge_compiler_analysis_info(
     result.macro_info.retain(|loc, _| !is_modified(loc));
     result
         .macro_function_bodies
-        .retain(|loc, _| !is_modified(loc));
+        .retain(|(_, function_name), _| !is_modified(&function_name.loc()));
     result.expanded_lambdas.retain(|loc| !is_modified(loc));
     result.ellipsis_binders.retain(|loc| !is_modified(loc));
     result.string_values.retain(|loc, _| !is_modified(loc));
