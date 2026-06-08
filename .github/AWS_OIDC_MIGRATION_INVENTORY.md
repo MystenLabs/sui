@@ -33,8 +33,8 @@ The decision is the OIDC `sub` of the run, which depends on the event + ref:
 | Event              | Ref                                  | `sub`                          | Assume RW role #1 today? | Plan                                  |
 | ------------------ | ------------------------------------ | ------------------------------ | ------------------------ | ------------------------------------- |
 | `push`             | `main`/`devnet`/`testnet`/`mainnet`  | `…:ref:refs/heads/<b>`         | **YES**                  | OIDC RW (trusted)                     |
-| `push`             | `releases/sui-*-release`             | `…:ref:refs/heads/releases/…`  | **NO — trust gap**       | add ref to role trust → OIDC RW       |
-| `push`             | `extensions` (external.yml only)     | `…:ref:refs/heads/extensions`  | **NO — trust gap**       | add ref to role trust, or local cache |
+| `push`             | `releases/sui-*-release`             | `…:ref:refs/heads/releases/…`  | **YES** (added 2026-06-08) | OIDC RW (trusted)                   |
+| `push`             | `extensions` (external.yml only)     | `…:ref:refs/heads/extensions`  | **NO — excluded**        | branch is 404; local-cache fallback   |
 | `workflow_dispatch`| `main`                               | `…:ref:refs/heads/main`        | **YES**                  | OIDC RW                               |
 | `workflow_dispatch`| feature branch                       | `…:ref:refs/heads/<feat>`      | **NO**                   | local-cache fallback (expected)       |
 | `pull_request`     | any (same-repo **and** fork)         | `…:pull_request`               | **NO — by design**       | **blocked on A/B/C** (see roles doc)  |
@@ -51,7 +51,7 @@ The decision is the OIDC `sub` of the run, which depends on the event + ref:
 ### `external.yml` — 2 sites (`push`[main,extensions,devnet] + `pull_request`)
 
 `external-crates-test` (L66), `clippy` (L107). Prefix `ubuntu-ghcloud`.
-Note `extensions` push is a trust gap.
+Note `extensions` push is **not** trusted (branch is 404 → excluded) → local cache.
 
 ### `bridge.yml` — 2 sites (`push`[main,devnet,testnet,mainnet,releases/sui-*-release] + `pull_request` + `workflow_dispatch`)
 
@@ -65,19 +65,32 @@ Note `extensions` push is a trust gap.
    the **same job**, and `configure-aws-credentials` overwrites cred env vars — the
    job must re-assume the right role before each S3 op (see roles doc §"Credential
    sequencing"). The `release` GitHub Environment for that role now exists.
-2. Its sccache run is on a **release tag** (`*-v*`), which is **not** in role #1's
-   trust — a separate gap from the release-branch one.
+2. **Environment-sub subtlety (not a tag-trust gap).** Once `release-build` declares
+   `environment: release` (required for the `release-s3` role), **every** OIDC assume
+   in that job — the sccache one included — presents
+   `sub=repo:MystenLabs/sui:environment:release`, **not** a tag/branch ref. So adding
+   `*-v*` tag trust to role #1 would do **nothing** for the sccache step. To give it
+   OIDC, pick one in Phase 5:
+   - **(a)** role #1 **also** trusts `repo:MystenLabs/sui:environment:release`; or
+   - **(b)** restructure `release.yml` so the sccache **build** runs in a job
+     *without* `environment: release` (gets a branch/tag sub role #1 trusts) and only
+     the S3 upload/download runs in a job *with* `environment: release`.
 
-## Trust-policy gaps blocking the "trusted" path
+## Trust-policy gaps — status
 
-Before a trusted-ref flip can actually use the cache (rather than silently
-dropping to local) on these refs, add the subject(s) to role #1's trust:
+Whether role #1 trusts each ref a trusted-ref flip needs (else it silently drops
+to local cache):
 
-1. **`releases/sui-*-release` branches** — needed by `rust.yml`, `bridge.yml` push CI.
-2. **`extensions` branch** — needed by `external.yml` push CI (decide if worth it).
-3. **`*-v*` tags** — needed by `release.yml` sccache (Phase 5).
-
-Until added, those refs fall back to local cache (no breakage, just no shared cache).
+1. **`releases/sui-*-release` branches** — **ADDED 2026-06-08** (StringLike; 4 exact
+   branches preserved, `aud` pinned). Covers `rust.yml` + `bridge.yml` protected
+   release-branch push CI.
+2. **`extensions` branch** — **excluded.** The branch returns 404 (not active), so
+   trusting it now is unused attack surface. Add only if it is confirmed active again;
+   until then `external.yml` `extensions` pushes fall back to local cache.
+3. **`release.yml` sccache** — **not a tag-trust gap.** Because `release-build` will
+   declare `environment: release`, its OIDC sub is `environment:release`, not a tag
+   ref — adding `*-v*` tag trust would not help. See the `release.yml` section above
+   for the two Phase-5 options.
 
 ## Recommended Phase-3 mechanic for mixed-trigger callers
 
