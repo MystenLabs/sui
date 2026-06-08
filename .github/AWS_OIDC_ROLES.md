@@ -15,6 +15,9 @@ resulting role ARNs via a `role-to-assume` input.
 > OIDC mints short-lived, request-scoped credentials with a trust policy that
 > pins exactly which repo/branch/tag/environment may assume the role.
 
+> **Caller migration status + per-call-site classification:** see
+> [`AWS_OIDC_MIGRATION_INVENTORY.md`](./AWS_OIDC_MIGRATION_INVENTORY.md).
+
 ## One-time: the GitHub OIDC identity provider
 
 Create (once per account) the IAM OIDC provider:
