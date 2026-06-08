@@ -6,29 +6,17 @@
 // it can tolerate failures for those transactions instead of retrying them.
 // We encode the probability as an integer (prob * 1e6) in an atomic so it
 // can be set once from test setup without threading it through every function.
-#[cfg(msim)]
-static CRASH_RECOVERY_PROBABILITY_1E6: std::sync::atomic::AtomicU32 =
-    std::sync::atomic::AtomicU32::new(0);
-
 /// Set the probability used by the crash-with-tx-logging fail point. Call
 /// this before starting the benchmark. The value must match the probability
-/// passed to `deterministic_probability` in the fail point.
+/// passed to `should_poison_transaction` in the fail point.
 #[cfg(msim)]
 pub fn set_crash_recovery_probability(prob: f32) {
-    CRASH_RECOVERY_PROBABILITY_1E6.store(
-        (prob * 1_000_000.0) as u32,
-        std::sync::atomic::Ordering::Relaxed,
-    );
+    sui_core::crash_recovery::set_crash_recovery_probability(prob as f64);
 }
 
 #[cfg(msim)]
-fn crash_recovery_probability() -> Option<f32> {
-    let v = CRASH_RECOVERY_PROBABILITY_1E6.load(std::sync::atomic::Ordering::Relaxed);
-    if v == 0 {
-        None
-    } else {
-        Some(v as f32 / 1_000_000.0)
-    }
+pub fn crash_recovery_probability() -> Option<f32> {
+    sui_core::crash_recovery::crash_recovery_probability().map(|p| p as f32)
 }
 
 use anyhow::Context;
