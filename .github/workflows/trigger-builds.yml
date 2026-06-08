@@ -31,7 +31,24 @@ jobs:
         shell: bash
         run: |
           sui_version=$(awk '/^\[workspace\.package\]/{found=1} found && /^version =/{gsub(/[" ]/,"",$3); print $3; exit}' Cargo.toml)
-          echo "cache_family=releases/sui-v${sui_version}-release" >> "$GITHUB_OUTPUT"
+          # Bucket the cargo-target cache by the branch the build originates from.
+          # Release branches are cut at the minor version (patch .0); normalize to
+          # that. If that branch doesn't exist yet (e.g. the devnet branch tracks
+          # main before the cut), the build is off main, so bucket by main instead
+          # of a non-existent releases/sui-v<version>-release.
+          release_branch="releases/sui-v$(echo "${sui_version}" | awk -F. '{print $1"."$2".0"}')-release"
+          # git ls-remote --exit-code: 0 = ref found, 2 = remote reached but ref
+          # absent, anything else = couldn't reach the remote. Only treat a genuine
+          # "absent" (2) as the pre-cut/main case; fail loudly on a lookup error so a
+          # transient GitHub/network blip can't silently mis-bucket the cache.
+          rc=0
+          git ls-remote --exit-code --heads https://github.com/MystenLabs/sui.git "${release_branch}" >/dev/null 2>&1 || rc=$?
+          case "${rc}" in
+            0) cache_family="${release_branch}" ;;
+            2) cache_family="main" ;;
+            *) echo "::error::git ls-remote for ${release_branch} failed (exit ${rc}) — refusing to guess cache_family"; exit 1 ;;
+          esac
+          echo "cache_family=${cache_family}" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
         uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
