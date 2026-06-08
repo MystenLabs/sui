@@ -758,6 +758,7 @@ impl<'env, 'outer> Context<'env, 'outer> {
         self.outer.current_module.as_ref()
     }
 
+    /// Checks the current feature using the currently-registered diagnostic reporter.
     pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
         self.env()
             .check_feature(&self.reporter, package, feature, loc)
