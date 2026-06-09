@@ -421,11 +421,13 @@ mod checked {
         // path never converts the budget to i64.)
         let mut total: u128 = 0;
 
+        let extra_gas_checks = protocol_config.additional_gas_input_checks();
+
         let (gas_objects, available_address_balance_gas) = if gas_paid_from_address_balance {
             // When paying from address balance via gas_data.payment = [], the budget is reserved by the scheduler
             // and guaranteed to be available.
             (vec![], gas_budget)
-        } else {
+        } else if extra_gas_checks {
             // Gas payment may include a mix of coin objects and coin reservations (withdrawals).
             // Sum up the reservation amounts separately since they don't have input objects.
             let mut available_address_balance_gas: u64 = 0;
@@ -461,10 +463,31 @@ mod checked {
                 }
             }
             (gas_objects, available_address_balance_gas)
+        } else {
+            // Pre-additional_gas_input_checks behavior: build gas_objects without
+            // the is_gas_coin / is_address_owned / balance-summing checks. Owner
+            // and balance are still enforced downstream by check_gas_balance.
+            let mut available_address_balance_gas: u64 = 0;
+            let mut gas_objects = vec![];
+            for obj_ref in gas {
+                if let Ok(parsed) = ParsedDigest::try_from(obj_ref.2) {
+                    available_address_balance_gas =
+                        available_address_balance_gas.saturating_add(parsed.reservation_amount());
+                } else {
+                    let obj = *objects
+                        .get(&obj_ref.0)
+                        .ok_or(UserInputError::ObjectNotFound {
+                            object_id: obj_ref.0,
+                            version: Some(obj_ref.1),
+                        })?;
+                    gas_objects.push(obj);
+                }
+            }
+            (gas_objects, available_address_balance_gas)
         };
 
         if !is_gasless {
-            if i64::try_from(total).is_err() {
+            if extra_gas_checks && i64::try_from(total).is_err() {
                 return Err(UserInputError::InvalidWithdrawReservation {
                     error: "Total gas payment (coins + reservations) exceeds i64::MAX".to_string(),
                 }

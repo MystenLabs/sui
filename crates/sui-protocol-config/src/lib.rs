@@ -355,6 +355,9 @@ const MAINNET_USDB: &str =
 // Version 126: Enable early_exit_on_iffw (gates the gas-underflow fix
 //              shipped to mainnet out-of-band in #26816).
 // Version 127: Enable always_advance_dkg_to_resolution.
+//              Enable additional_gas_input_checks (gates the gas-payment input
+//              validation tightening: rejects non-gas-coin objects and
+//              combined coin+reservation totals exceeding i64::MAX).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1130,6 +1133,13 @@ struct FeatureFlags {
     // If true, exit early for IFWW transactions.
     #[serde(skip_serializing_if = "is_false")]
     early_exit_on_iffw: bool,
+
+    // If true, check_gas performs additional input validation on gas payment:
+    // - rejects non-gas-coin objects (InvalidGasObject)
+    // - rejects gas payments whose combined coin+reservation total exceeds i64::MAX
+    //   (InvalidWithdrawReservation), preventing an overflow panic in smash_gas
+    #[serde(skip_serializing_if = "is_false")]
+    additional_gas_input_checks: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2875,6 +2885,10 @@ impl ProtocolConfig {
 
     pub fn early_exit_on_iffw(&self) -> bool {
         self.feature_flags.early_exit_on_iffw
+    }
+
+    pub fn additional_gas_input_checks(&self) -> bool {
+        self.feature_flags.additional_gas_input_checks
     }
 }
 
@@ -5004,6 +5018,7 @@ impl ProtocolConfig {
                 }
                 127 => {
                     cfg.feature_flags.always_advance_dkg_to_resolution = true;
+                    cfg.feature_flags.additional_gas_input_checks = true;
                 }
                 // Use this template when making changes:
                 //
