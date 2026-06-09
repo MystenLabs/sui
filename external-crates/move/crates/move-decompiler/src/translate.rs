@@ -662,17 +662,18 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             Out::Exp::Block(code, Box::new(Out::Exp::Seq(seq)))
         }
         // Dispatch synthesis: `Let(name)` → `let name;`, `Assign(name, k)` → `name = k;`,
-        // `Match(name, arms)` → `match (name) { k => ..., }`. All three are emitted as a
-        // group by `structure_loop`'s multi-succ branch and meet up in the surrounding `Seq`.
+        // `SelectorMatch(name, arms)` → `match (name) { k => ..., }`. All three are emitted
+        // as a group by `structure_loop`'s multi-succ branch and meet up in the surrounding
+        // `Seq`. Tag width is `crate::ast::DispatchTag` (= u32) at every layer.
         D::Structured::Let(name) => Out::Exp::Declare(vec![name]),
         D::Structured::Assign(name, value) => Out::Exp::Assign(
             vec![name],
             Box::new(Out::Exp::Value(
-                move_core_types::runtime_value::MoveValue::U32(value as u32),
+                move_core_types::runtime_value::MoveValue::U32(value),
             )),
         ),
-        D::Structured::Match(name, arms) => {
-            let translated_arms = arms
+        D::Structured::SelectorMatch(name, arms) => {
+            let translated_arms: Vec<(crate::ast::DispatchTag, Out::Exp)> = arms
                 .into_iter()
                 .map(|(tag, body)| (tag, generate_output(terms.clone(), body)))
                 .collect();

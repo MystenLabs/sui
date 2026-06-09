@@ -105,10 +105,10 @@ pub enum Structured {
     /// Synthetic assignment of an integer tag to a dispatch local: `<name> = <value>;`.
     /// Emitted at each exit site inside a multi-succ loop body to mark which arm to
     /// dispatch. Translated to `Exp::Assign(name, Constant(value))`.
-    Assign(String, u64),
+    Assign(String, crate::ast::DispatchTag),
     /// Synthetic integer-literal match emitted after a multi-succ loop:
     /// `match (<name>) { 0 => ..., 1 => ..., }`. Translated to `Exp::MatchLit`.
-    Match(String, Vec<(u64, Structured)>),
+    SelectorMatch(String, Vec<(crate::ast::DispatchTag, Structured)>),
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -237,7 +237,7 @@ impl std::fmt::Display for Structured {
                     indent(f, level)?;
                     writeln!(f, "{name} = {value};")
                 }
-                Structured::Match(name, arms) => {
+                Structured::SelectorMatch(name, arms) => {
                     indent(f, level)?;
                     writeln!(f, "match ({name}) {{")?;
                     for (lit, body) in arms {

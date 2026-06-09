@@ -323,18 +323,18 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
     let l30 = 0u64;
     let l22 = table::borrow_mut(&mut l0.cabinet, l45);
     l22 = table::borrow_mut(&mut l0.cabinet, *(&l22.affCode));
-    let loop_402_sel;
+    let __dispatch_402;
     let (l26, l31);
     loop {
         if (l30 >= 10u64) {
-            loop_402_sel = 1u32;
+            __dispatch_402 = 1u32;
             break
         };
         l26 = l29 / 100u64;
         let l24 = *(&l22.affCode);
         l31 = l30;
         if (*(&l22.affCode) == C62) {
-            loop_402_sel = 0u32;
+            __dispatch_402 = 0u32;
             break
         };
         l22 = table::borrow_mut(&mut l0.cabinet, *(&l22.affCode));
@@ -353,8 +353,8 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
         };
         l30 = l30 + 1u64;
     };
-    let (l10, l11, l13, l14, l15, l16, l17, l18, l19, l23, l25, l27, l32, l33, l34, l35, l36, l37, l40, l41, l42, l46, l47, l48, l7, l8, l9, loop_535_sel);
-    match (loop_402_sel) {
+    let (__dispatch_535, l10, l11, l13, l14, l15, l16, l17, l18, l19, l23, l25, l27, l32, l33, l34, l35, l36, l37, l40, l41, l42, l46, l47, l48, l7, l8, l9);
+    match (__dispatch_402) {
         0 => {
             while (l31 < 10u64) {
                 transfer::public_transfer(coin::split(l3, l26, l5), *(&(&l0.team_addresses)[l31 + 1u64]));
@@ -364,7 +364,7 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
             l25 = l45;
             loop {
                 if (l30 >= 5u64) {
-                    loop_535_sel = 1u32;
+                    __dispatch_535 = 1u32;
                     break
                 };
                 l27 = l29 / 100u64;
@@ -373,7 +373,7 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
                 l22 = table::borrow_mut(&mut l0.cabinet, *(&l22.affCode));
                 l32 = l30;
                 if (*(&l22.affCode) == C62) {
-                    loop_535_sel = 0u32;
+                    __dispatch_535 = 0u32;
                     break
                 };
                 l23 = *(&l22.position_floor_of_seating);
@@ -491,7 +491,7 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
                     l30 + 1u64
                 };
             };
-            match (loop_535_sel) {
+            match (__dispatch_535) {
                 0 => {
                     while (l32 < 5u64) {
                         l33 = 0u64;
@@ -522,7 +522,7 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
             l25 = l45;
             loop {
                 if (l30 >= 5u64) {
-                    loop_535_sel = 1u32;
+                    __dispatch_535 = 1u32;
                     break
                 };
                 l27 = l29 / 100u64;
@@ -531,7 +531,7 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
                 l22 = table::borrow_mut(&mut l0.cabinet, *(&l22.affCode));
                 l32 = l30;
                 if (*(&l22.affCode) == C62) {
-                    loop_535_sel = 0u32;
+                    __dispatch_535 = 0u32;
                     break
                 };
                 l23 = *(&l22.position_floor_of_seating);
@@ -649,7 +649,7 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
                     l30 + 1u64
                 };
             };
-            match (loop_535_sel) {
+            match (__dispatch_535) {
                 0 => {
                     while (l32 < 5u64) {
                         l33 = 0u64;
