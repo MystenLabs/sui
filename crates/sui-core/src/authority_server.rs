@@ -577,12 +577,12 @@ impl ValidatorService {
                             timeout(Duration::from_secs(15), state.wait_for_epoch(next_epoch)).await
                         {
                             assert_reachable!("retry submission at epoch end");
-                            if new_epoch == next_epoch {
+                            if new_epoch >= next_epoch {
                                 continue;
                             }
-
+                            // wait_for_epoch guarantees >= target; < would indicate a bug there.
                             debug_fatal!(
-                                "expected epoch {} after reconfiguration. got {}",
+                                "wait_for_epoch returned early: expected >= {}, got {}",
                                 next_epoch,
                                 new_epoch
                             );
