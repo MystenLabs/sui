@@ -12,8 +12,10 @@ Companion to [`AWS_OIDC_ROLES.md`](./AWS_OIDC_ROLES.md). Classifies every
 protected-branch push and "untrusted" on a PR.
 
 The RW cache role is `arn:aws:iam::011083325127:role/sui-sccache-rw-github`. Its
-trust today = **only** these subjects (aud pinned, no wildcard):
-`repo:MystenLabs/sui:ref:refs/heads/{main,devnet,testnet,mainnet}`.
+trust (aud pinned, no wildcard) = these subjects:
+`repo:MystenLabs/sui:ref:refs/heads/{main,devnet,testnet,mainnet}` **plus**
+`repo:MystenLabs/sui:ref:refs/heads/releases/sui-*-release` (added 2026-06-08).
+Keep any new `SCCACHE_ROLE` gate in sync with this exact set.
 
 ## Status
 
@@ -35,9 +37,18 @@ The decision is the OIDC `sub` of the run, which depends on the event + ref:
 | `push`             | `main`/`devnet`/`testnet`/`mainnet`  | `…:ref:refs/heads/<b>`         | **YES**                  | OIDC RW (trusted)                     |
 | `push`             | `releases/sui-*-release`             | `…:ref:refs/heads/releases/…`  | **YES** (added 2026-06-08) | OIDC RW (trusted)                   |
 | `push`             | `extensions` (external.yml only)     | `…:ref:refs/heads/extensions`  | **NO — excluded**        | branch is 404; local-cache fallback   |
-| `workflow_dispatch`| `main`                               | `…:ref:refs/heads/main`        | **YES**                  | OIDC RW                               |
+| `workflow_dispatch`| `main`, **no** `sui_repo_ref`        | `…:ref:refs/heads/main`        | **YES**                  | OIDC RW                               |
+| `workflow_dispatch`| `main` + `sui_repo_ref=<feature>`    | `…:ref:refs/heads/main`        | sub matches, but **gate OFF** | builds the override ref (untrusted code) → must NOT hold RW; gate requires `sui_repo_ref==''` → static/local |
 | `workflow_dispatch`| feature branch                       | `…:ref:refs/heads/<feat>`      | **NO**                   | local-cache fallback (expected)       |
 | `pull_request`     | any (same-repo **and** fork)         | `…:pull_request`               | **NO — by design**       | **blocked on A/B/C** (see roles doc)  |
+
+> **Checkout-ref caveat (rust.yml / bridge.yml).** The OIDC `sub` (and thus role
+> assumability) is decided by `github.ref` — but these workflows check out
+> `${{ github.event.inputs.sui_repo_ref || github.ref }}`. So a `workflow_dispatch`
+> from `main` with `sui_repo_ref` set to a feature ref has a **trusted `sub`** while
+> **building untrusted code**. The `SCCACHE_ROLE` gate must therefore also require
+> `sui_repo_ref` to be empty, or that build would populate the RW cache from
+> arbitrary code. `external.yml` has no such input, so it is unaffected.
 
 ## Per-call-site map
 
@@ -96,18 +107,37 @@ to local cache):
 
 `setup-sccache` prefers `role-to-assume` when set and falls back to static keys
 when only those are set. That lets a single call site be flipped **without
-changing PR behavior**, by passing **both**:
+changing PR behavior**. Compute the role once at the **workflow level** (a
+workflow-level `env` value may reference the `github` context — actionlint-confirmed)
+and reference it from each sccache job. As implemented + validated in `bridge.yml`
+(PR #26927):
 
 ```yaml
-- uses: ./.github/actions/setup-sccache
-  with:
-    # trusted refs → OIDC RW; empty elsewhere
-    role-to-assume: ${{ contains(fromJSON('["refs/heads/main","refs/heads/devnet","refs/heads/testnet","refs/heads/mainnet"]'), github.ref) && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || '' }}
-    # retained so same-repo PRs keep today's RW cache until Phase 4 decides A/B/C
-    aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-    aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    key-prefix: ...
+env:
+  # OIDC RW role only when BOTH: (1) the ref/sub is trusted, AND (2) we are not a
+  # workflow_dispatch building an override ref (sui_repo_ref). Keep the ref set in
+  # sync with the role trust. Drop the sui_repo_ref clause for workflows lacking
+  # that input (e.g. external.yml).
+  SCCACHE_ROLE: ${{ (github.event_name != 'workflow_dispatch' || github.event.inputs.sui_repo_ref == '') && (contains(fromJSON('["refs/heads/main","refs/heads/devnet","refs/heads/testnet","refs/heads/mainnet"]'), github.ref) || (startsWith(github.ref, 'refs/heads/releases/sui-') && endsWith(github.ref, '-release'))) && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || '' }}
+
+jobs:
+  <sccache-job>:
+    permissions:
+      contents: read
+      id-token: write # only the sccache jobs, not the whole workflow
+    steps:
+      - uses: ./.github/actions/setup-sccache
+        with:
+          role-to-assume: ${{ env.SCCACHE_ROLE }} # OIDC on trusted refs; empty elsewhere
+          # retained so same-repo PRs keep today's RW cache until Phase 4 decides A/B/C
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: ...
 ```
+
+The `sui_repo_ref` guard is **conservative** for jobs that ignore that input
+(e.g. `bridge.yml`'s `test` checks out the default ref) — they fall back to
+static/local on an override dispatch rather than OIDC. That is the safe direction.
 
 - **Trusted push / dispatch-from-main** → OIDC RW (no static keys used).
 - **`pull_request`** → empty role → static-key fallback = **unchanged behavior**.
