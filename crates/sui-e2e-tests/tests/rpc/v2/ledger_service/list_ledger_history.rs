@@ -640,7 +640,7 @@ fn ev_or(terms: Vec<Vec<EventLiteral>>) -> EventFilter {
     ev_filter_terms(terms)
 }
 
-fn tx_missing_include_filter(addr: SuiAddress) -> TransactionFilter {
+fn tx_not_sender_only_filter(addr: SuiAddress) -> TransactionFilter {
     let mut term = TransactionTerm::default();
     term.literals = vec![tx_not_sender_literal(addr)];
     let mut filter = TransactionFilter::default();
@@ -1614,6 +1614,161 @@ async fn test_list_events_unanchored_negation() {
 }
 
 #[sim_test]
+async fn test_list_transactions_unanchored_negation() {
+    let cluster = new_cluster().await;
+    let sender_a = cluster.get_address_0();
+    let sender_b = cluster.get_address_1();
+
+    let tx_a = transfer_self(&cluster, sender_a).await;
+    let tx_b = transfer_self(&cluster, sender_b).await;
+    let digest_a = tx_digest(&tx_a);
+    let digest_b = tx_digest(&tx_b);
+    let (start, end) = checkpoint_range(&[&tx_a, &tx_b]);
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    // Single-term exclude-only filter: `NOT sender = B` must return A's tx
+    // and every other tx in range (including system transactions), validating
+    // that the synthesized TxUniverse include anchors the term so the driver
+    // walks the dense tx space rather than rejecting the filter.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(tx_not_sender_only_filter(sender_b));
+    req.options = Some(query_options(100));
+    let resp = list_transactions_result(&mut client, req).await;
+    assert_transaction_cursors(&resp);
+    let digests = transaction_digest_set(&resp);
+    assert!(
+        digests.contains(&digest_a),
+        "A tx should match unanchored NOT(Sender=B)"
+    );
+    assert!(
+        !digests.contains(&digest_b),
+        "B tx should be excluded by unanchored NOT(Sender=B)"
+    );
+    assert!(
+        resp.transactions.len() >= 2,
+        "complement includes system transactions in range"
+    );
+    assert!(resp.end);
+    let full_complement = digests;
+
+    // Symmetric case: `NOT sender = A` returns B's tx.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(tx_not_sender_only_filter(sender_a));
+    req.options = Some(query_options(100));
+    let resp = list_transactions_result(&mut client, req).await;
+    let digests = transaction_digest_set(&resp);
+    assert!(
+        digests.contains(&digest_b),
+        "B tx should match unanchored NOT(Sender=A)"
+    );
+    assert!(
+        !digests.contains(&digest_a),
+        "A tx should be excluded by unanchored NOT(Sender=A)"
+    );
+
+    // DNF with two unanchored terms `NOT sender = A OR NOT sender = B` —
+    // every tx satisfies at least one branch, so both digests return.
+    // Confirms a multi-term exclude-only DNF survives the full stack.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(tx_or(vec![
+        vec![tx_not_sender_literal(sender_a)],
+        vec![tx_not_sender_literal(sender_b)],
+    ]));
+    req.options = Some(query_options(100));
+    let resp = list_transactions_result(&mut client, req).await;
+    let digests = transaction_digest_set(&resp);
+    assert!(digests.contains(&digest_a));
+    assert!(digests.contains(&digest_b));
+
+    // Pagination across the dense complement: small pages with cursor resume
+    // must cover exactly the single-shot result with no overlap.
+    let mut paged: HashSet<String> = HashSet::new();
+    let mut after: Option<Bytes> = None;
+    loop {
+        let mut req = ListTransactionsRequest::default();
+        req.read_mask = Some(FieldMask::from_paths(["digest"]));
+        req.start_checkpoint = Some(start);
+        req.end_checkpoint = Some(end);
+        req.filter = Some(tx_not_sender_only_filter(sender_b));
+        req.options = Some(query_options_maybe_after(2, after.clone()));
+        let resp = list_transactions_result(&mut client, req).await;
+        for digest in transaction_digest_set(&resp) {
+            assert!(paged.insert(digest), "pages must not overlap");
+        }
+        if resp.end_reason != Some(QueryEndReason::ItemLimit) {
+            break;
+        }
+        after = Some(transaction_end_cursor(
+            &resp,
+            "item-limited page should carry an end cursor",
+        ));
+    }
+    assert_eq!(
+        paged, full_complement,
+        "paged union must equal the single-shot complement"
+    );
+}
+
+#[sim_test]
+async fn test_list_checkpoints_unanchored_negation() {
+    let cluster = new_cluster().await;
+    let sender_a = cluster.get_address_0();
+    let sender_b = cluster.get_address_1();
+
+    let tx_a = transfer_self(&cluster, sender_a).await;
+    let tx_b = transfer_self(&cluster, sender_b).await;
+    let cp_a = tx_checkpoint(&tx_a);
+    let cp_b = tx_checkpoint(&tx_b);
+    let (start, end) = checkpoint_range(&[&tx_a, &tx_b]);
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    // Checkpoint filters reuse the tx filter machinery: a checkpoint matches
+    // when it contains at least one matching tx. `NOT sender = A` matches the
+    // system transactions in every checkpoint, so the unanchored filter must
+    // return the same checkpoint set as an unfiltered scan of the range —
+    // pinning the dense complement through the tx→checkpoint mapping.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.options = Some(query_options(100));
+    let unfiltered: Vec<u64> = list_checkpoints_result(&mut client, req)
+        .await
+        .checkpoints
+        .iter()
+        .map(checkpoint_sequence)
+        .collect();
+
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(start);
+    req.end_checkpoint = Some(end);
+    req.filter = Some(tx_not_sender_only_filter(sender_a));
+    req.options = Some(query_options(100));
+    let resp = list_checkpoints_result(&mut client, req).await;
+    assert_checkpoint_cursors(&resp);
+    let filtered: Vec<u64> = resp.checkpoints.iter().map(checkpoint_sequence).collect();
+    assert_eq!(
+        filtered, unfiltered,
+        "every checkpoint contains a non-A system tx, so the complement covers the range"
+    );
+    assert!(filtered.contains(&cp_a));
+    assert!(filtered.contains(&cp_b));
+    assert!(resp.end);
+}
+
+#[sim_test]
 async fn test_list_filter_edge_cases_and_limit_caps() {
     let cluster = new_cluster().await;
     let sender = cluster.get_address_0();
@@ -1749,14 +1904,6 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
     req.options = Some(query_options(10));
     expect_invalid_list_transactions(&mut client, req).await;
 
-    let mut req = ListTransactionsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["digest"]));
-    req.start_checkpoint = Some(0);
-    req.end_checkpoint = Some(DEFAULT_CHECKPOINT_RANGE_END);
-    req.filter = Some(tx_missing_include_filter(sender));
-    req.options = Some(query_options(10));
-    expect_invalid_list_transactions(&mut client, req).await;
-
     let mut req = ListEventsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["event_type"]));
     req.start_checkpoint = Some(0);
@@ -1783,14 +1930,6 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
     req.start_checkpoint = Some(0);
     req.end_checkpoint = Some(DEFAULT_CHECKPOINT_RANGE_END);
     req.filter = Some(TransactionFilter::default());
-    req.options = Some(query_options(10));
-    expect_invalid_list_checkpoints(&mut client, req).await;
-
-    let mut req = ListCheckpointsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
-    req.start_checkpoint = Some(0);
-    req.end_checkpoint = Some(DEFAULT_CHECKPOINT_RANGE_END);
-    req.filter = Some(tx_missing_include_filter(sender));
     req.options = Some(query_options(10));
     expect_invalid_list_checkpoints(&mut client, req).await;
 

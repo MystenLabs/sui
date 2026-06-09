@@ -510,4 +510,159 @@ mod tests {
             "final watermark must reach the range terminus"
         );
     }
+
+    /// An unanchored term (`NOT x`, anchored on the synthesized universe leaf)
+    /// emits the complement at exclude-occupied buckets, full bitmaps at gap
+    /// buckets, and keeps emitting full buckets after the exclude leaf EOFs.
+    #[test]
+    fn unanchored_term_emits_complement_over_gaps_and_past_exclude_eof() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([(
+                test_key(b"x"),
+                vec![(0, vec![1, 2]), (2, vec![5])],
+            )])),
+        };
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include_universe(), exclude(b"x")]).unwrap(),
+        ])
+        .unwrap();
+
+        let items: Vec<(u64, RoaringBitmap)> = eval_bitmap_query_bucket_iter(
+            source,
+            query,
+            0..(4 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+        )
+        .filter_map(|r| match r.unwrap() {
+            Watermarked::Item(it) => Some(it),
+            Watermarked::Watermark(_) => None,
+        })
+        .collect();
+
+        let complement = |bits: &[u32]| {
+            let mut bm = full_bucket();
+            for &b in bits {
+                bm.remove(b);
+            }
+            bm
+        };
+        let expected = vec![
+            (0, complement(&[1, 2])),
+            (1, full_bucket()),
+            (2, complement(&[5])),
+            (3, full_bucket()),
+        ];
+        assert_eq!(items, expected);
+    }
+
+    /// Iter/stream parity for a mixed DNF with an unanchored term, in both
+    /// directions — the universe leaf forces dense bucket coverage while the
+    /// anchored term stays sparse.
+    #[tokio::test]
+    async fn eval_bitmap_query_bucket_iter_matches_stream_for_unanchored_terms() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([
+                (test_key(b"a"), vec![(1, vec![7])]),
+                (test_key(b"x"), vec![(0, vec![1, 2]), (3, vec![5])]),
+            ])),
+        };
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a")]).unwrap(),
+            BitmapTerm::new(vec![include_universe(), exclude(b"x")]).unwrap(),
+        ])
+        .unwrap();
+
+        for direction in [ScanDirection::Ascending, ScanDirection::Descending] {
+            let stream_out: Vec<_> = eval_bitmap_query_bucket_stream(
+                source.clone(),
+                query.clone(),
+                0..(5 * BUCKET_SIZE),
+                BUCKET_SIZE,
+                direction,
+                BitmapScanBudget::new(1_000_000),
+            )
+            .collect()
+            .await;
+            let iter_out: Vec<_> = eval_bitmap_query_bucket_iter(
+                source.clone(),
+                query.clone(),
+                0..(5 * BUCKET_SIZE),
+                BUCKET_SIZE,
+                direction,
+            )
+            .collect();
+
+            assert_eq!(
+                collect_marked(stream_out),
+                collect_marked(iter_out),
+                "iter and stream diverged on unanchored terms for {direction:?}"
+            );
+        }
+    }
+
+    /// Budget exhaustion mid-dense-scan surfaces `BitmapScanLimitExceeded`
+    /// after a floor watermark, and resuming from that watermark covers the
+    /// remaining buckets exactly once.
+    #[tokio::test]
+    async fn unanchored_budget_exhaustion_resumes_at_watermark() {
+        use crate::bitmap_query::BitmapScanLimitExceeded;
+        use crate::bitmap_query::error_contains;
+
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::new()),
+        };
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include_universe(), exclude(b"x")]).unwrap(),
+        ])
+        .unwrap();
+
+        let first: Vec<_> = eval_bitmap_query_bucket_stream(
+            source.clone(),
+            query.clone(),
+            0..(10 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            BitmapScanBudget::new(3),
+        )
+        .collect()
+        .await;
+
+        let mut covered: Vec<u64> = Vec::new();
+        let mut last_watermark = 0;
+        let mut limit_hit = false;
+        for item in first {
+            match item {
+                Ok(Watermarked::Item((bucket, bitmap))) => {
+                    assert_eq!(bitmap, full_bucket());
+                    covered.push(bucket);
+                }
+                Ok(Watermarked::Watermark(p)) => last_watermark = p,
+                Err(e) => {
+                    assert!(error_contains::<BitmapScanLimitExceeded>(&e).is_some());
+                    limit_hit = true;
+                }
+            }
+        }
+        assert!(limit_hit, "3-bucket budget cannot cover 10 dense buckets");
+        assert_eq!(covered, vec![0, 1, 2]);
+        assert_eq!(last_watermark, 3 * BUCKET_SIZE);
+
+        let resumed: Vec<_> = eval_bitmap_query_bucket_stream(
+            source,
+            query,
+            last_watermark..(10 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            BitmapScanBudget::new(1_000_000),
+        )
+        .collect()
+        .await;
+        for item in resumed {
+            if let Watermarked::Item((bucket, _)) = item.unwrap() {
+                covered.push(bucket);
+            }
+        }
+        assert_eq!(covered, (0..10).collect::<Vec<_>>());
+    }
 }

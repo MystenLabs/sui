@@ -6,6 +6,7 @@ use sui_inverted_index::BitmapQuery;
 use sui_inverted_index::BitmapTerm;
 use sui_inverted_index::EVENT_EXTANT_VALUE;
 use sui_inverted_index::IndexDimension;
+use sui_inverted_index::TX_UNIVERSE_VALUE;
 use sui_inverted_index::emit_module_value;
 use sui_inverted_index::encode_dimension_key;
 use sui_inverted_index::event_type_value;
@@ -122,23 +123,32 @@ fn validate_literal_fanout(
 }
 
 fn transaction_term_to_query(term: &TransactionTerm) -> Result<BitmapTerm, RpcError> {
-    if !term.literals.iter().any(|literal| {
+    let has_include = term.literals.iter().any(|literal| {
         matches!(
             literal.polarity,
             Some(transaction_literal::Polarity::Include(_))
         )
-    }) {
-        return Err(FieldViolation::new("filter.terms.literals")
-            .with_description("at least one included literal is required")
-            .with_reason(ErrorReason::FieldMissing)
-            .into());
-    }
+    });
 
-    let literals = term
-        .literals
-        .iter()
-        .map(|p| convert_transaction_literal(p, "filter.terms.literals"))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut literals = Vec::with_capacity(term.literals.len() + usize::from(!has_include));
+    // Unanchored negation: a term with only excludes resolves as
+    // `range \ union(excludes)`. The tx-seq namespace is dense, so the
+    // universe needs no stored marker — backends synthesize full buckets for
+    // the `TxUniverse` key at scan time. The synthetic include anchors the
+    // term so the merge-join driver's floor advances through every bucket in
+    // range. `expect` is sound for the same reason as the event-side synthesis.
+    if !has_include {
+        literals.push(
+            BitmapLiteral::include(encode_dimension_key(
+                IndexDimension::TxUniverse,
+                TX_UNIVERSE_VALUE,
+            ))
+            .expect("TxUniverse key is statically valid"),
+        );
+    }
+    for p in &term.literals {
+        literals.push(convert_transaction_literal(p, "filter.terms.literals")?);
+    }
 
     BitmapTerm::new(literals).map_err(|e| {
         FieldViolation::new("filter.terms")
@@ -478,6 +488,10 @@ mod tests {
     const TEST_MAX_LITERALS: usize = 10;
 
     fn sender_literal(byte: u8) -> TransactionLiteral {
+        tx_sender_literal(byte, false)
+    }
+
+    fn tx_sender_literal(byte: u8, exclude: bool) -> TransactionLiteral {
         let address = SuiAddress::from_bytes([byte; 32])
             .expect("valid address bytes")
             .to_string();
@@ -488,8 +502,28 @@ mod tests {
         predicate.predicate = Some(transaction_predicate::Predicate::Sender(sender));
 
         let mut literal = TransactionLiteral::default();
-        literal.polarity = Some(transaction_literal::Polarity::Include(predicate));
+        literal.polarity = Some(if exclude {
+            transaction_literal::Polarity::Exclude(predicate)
+        } else {
+            transaction_literal::Polarity::Include(predicate)
+        });
         literal
+    }
+
+    fn tx_term(literals: Vec<TransactionLiteral>) -> TransactionTerm {
+        let mut term = TransactionTerm::default();
+        term.literals = literals;
+        term
+    }
+
+    fn tx_filter_with_terms(terms: Vec<TransactionTerm>) -> TransactionFilter {
+        let mut filter = TransactionFilter::default();
+        filter.terms = terms;
+        filter
+    }
+
+    fn tx_universe_key() -> Vec<u8> {
+        encode_dimension_key(IndexDimension::TxUniverse, TX_UNIVERSE_VALUE)
     }
 
     #[test]
@@ -641,23 +675,30 @@ mod tests {
     }
 
     #[test]
-    fn transaction_filter_exclude_only_term_still_rejected() {
-        // Pin PR 3's gate: tx-side unanchored negation is not yet supported.
-        let mut sender = SenderFilter::default();
-        sender.address = Some(SuiAddress::from_bytes([1; 32]).unwrap().to_string());
-        let mut predicate = TransactionPredicate::default();
-        predicate.predicate = Some(transaction_predicate::Predicate::Sender(sender));
-        let mut literal = TransactionLiteral::default();
-        literal.polarity = Some(transaction_literal::Polarity::Exclude(predicate));
+    fn transaction_filter_exclude_only_term_synthesizes_tx_universe_include() {
+        let filter = tx_filter_with_terms(vec![tx_term(vec![tx_sender_literal(1, true)])]);
+        let query = transaction_filter_to_query(&filter, TEST_MAX_LITERALS)
+            .expect("unanchored term is valid");
 
-        let mut term = TransactionTerm::default();
-        term.literals = vec![literal];
-        let mut filter = TransactionFilter::default();
-        filter.terms = vec![term];
+        let term = &query.terms()[0];
+        let literals = term.literals();
+        assert_eq!(literals.len(), 2, "synthetic include + user exclude");
+        assert!(
+            matches!(literals[0], BitmapLiteral::Include(_)),
+            "synthetic universe include is prepended"
+        );
+        assert_eq!(literals[0].key_bytes(), tx_universe_key().as_slice());
+        assert!(matches!(literals[1], BitmapLiteral::Exclude(_)));
+    }
 
-        let error = transaction_filter_to_query(&filter, TEST_MAX_LITERALS)
-            .expect_err("tx unanchored negation should still be rejected")
-            .into_status_proto();
-        assert!(error.message.contains("at least one included literal"));
+    #[test]
+    fn transaction_filter_unanchored_term_does_not_count_against_fanout() {
+        // Two unanchored terms with one exclude each = 2 user-provided literals;
+        // synthetic includes are not counted, so we stay under the cap.
+        let filter = tx_filter_with_terms(vec![
+            tx_term(vec![tx_sender_literal(1, true)]),
+            tx_term(vec![tx_sender_literal(2, true)]),
+        ]);
+        assert!(transaction_filter_to_query(&filter, 2).is_ok());
     }
 }
