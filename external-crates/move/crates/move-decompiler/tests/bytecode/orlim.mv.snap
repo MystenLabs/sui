@@ -259,7 +259,7 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
     let l18 = coin::zero(l3);
     let l8 = 0u64;
     let l10 = &l0.active_orders.len();
-    let loop_81_sel;
+    let __dispatch_81;
     let (l11, l12, l14, l5, l9);
     loop {
         if (l8 < l10) {
@@ -287,26 +287,26 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
                             *(&mut (&mut l12).cancelled_at) = option::some(l7);
                             l9 = 0u64;
                             l5 = &l0.active_orders.len();
-                            loop_81_sel = 0u32;
+                            __dispatch_81 = 0u32;
                             break
                         };
-                        loop_81_sel = 1u32;
+                        __dispatch_81 = 1u32;
                         break
                     };
-                    loop_81_sel = 2u32;
+                    __dispatch_81 = 2u32;
                     break
                 };
-                loop_81_sel = 2u32;
+                __dispatch_81 = 2u32;
                 break
             };
-            loop_81_sel = 3u32;
+            __dispatch_81 = 3u32;
             break
         };
-        loop_81_sel = 3u32;
+        __dispatch_81 = 3u32;
         break
     };
     let (l15, reg_174 : 0x2::object::UID);
-    match (loop_81_sel) {
+    match (__dispatch_81) {
         0 => {
             loop {
                 if (l9 < l5) {

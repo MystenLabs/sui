@@ -203,7 +203,7 @@ impl Graph {
             }
         }
 
-        let (loop_nodes, succ_nodes) = self.refine_loop_nodes(loop_nodes, succ_nodes, node_start);
+        let (loop_nodes, succ_nodes) = self.refine_loop_nodes(loop_nodes, succ_nodes);
         (loop_nodes, succ_nodes)
     }
 
@@ -211,7 +211,6 @@ impl Graph {
         &self,
         mut loop_nodes: HashSet<NodeIndex>,
         mut succ_nodes: HashSet<NodeIndex>,
-        _loop_header: NodeIndex,
     ) -> (HashSet<NodeIndex>, HashSet<NodeIndex>) {
         let mut new_nodes = succ_nodes.clone();
 

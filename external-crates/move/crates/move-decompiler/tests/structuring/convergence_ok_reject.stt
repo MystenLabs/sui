@@ -1,0 +1,35 @@
+// Convergence-check rejection fixture.
+//
+// `convergence_ok` (structuring/mod.rs) gates the elision of tail `Jump`s from absorbed
+// arms to hoisted orphans. It returns false when an absorbed arm has a CFG out-edge to a
+// node in `start_subtree` that is *not* an orphan candidate (and not an escape / loop
+// exit). Eliding in that case would silently rewrite the Jump as fall-through to the
+// wrong place; the check forces the Jump to survive.
+//
+// CFG:
+//
+//        0 (cond) ── then ──> 1 (cond) ── then ──> 3 (code, -> 6)
+//                ── else ──> 2 (code, -> 5)        └── else ──> 4 (code, -> 5)
+//        5 sink
+//        6 sink
+//
+// At node 0 the orphan-hoist absorbs arms 1 and 2 into an IfElse. 5 is an ichild of 0
+// (preds 2, 4 — dom LCA = 0) and the planned hoist orphan. 6 is *not* an ichild of 0:
+// its only predecessor is 3, so its idom is 3, not 0.
+//
+// absorbed_subtree = {0, 1, 2, 3, 4} (1's dom-children include 3 and 4 because each is
+// reached only from 1). The edge 3 -> 6 leaves absorbed_subtree to a node that's in
+// start_subtree but NOT in candidates ({5}). `convergence_ok` returns false → the
+// orphan-hoist skips elision → the `Jump(_, 6)` from block 3 survives in the structured
+// output.
+//
+// If someone later weakens `convergence_ok` (e.g. always returns true), the elision
+// fires and the residual Jump disappears from the snapshot — this fixture catches that.
+
+cond,0,1,2
+cond,1,3,4
+code,2,5
+code,3,6
+code,4,5
+code,5
+code,6

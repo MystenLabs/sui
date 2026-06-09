@@ -1300,23 +1300,23 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
         let l20 = &l1.len();
         let l17 = 0u64;
         let l15 = false;
-        let loop_81_sel;
+        let __dispatch_81;
         let (l13, l18);
         loop {
             if (l17 >= l20) {
-                loop_81_sel = 1u32;
+                __dispatch_81 = 1u32;
                 break
             };
             let l25 = &mut (&mut l1)[l17];
             if (*(&l25.collection_id) == l14 && *(&l25.asset_id) == l11 && !(l15)) {
                 l13 = false;
                 l18 = 0u64;
-                loop_81_sel = 0u32;
+                __dispatch_81 = 0u32;
                 break
             };
             l17 = l17 + 1u64;
         };
-        match (loop_81_sel) {
+        match (__dispatch_81) {
             0 => {
                 loop {
                     if (l18 < &l2.len()) {

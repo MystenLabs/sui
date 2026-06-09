@@ -304,7 +304,7 @@ fn exp(e: Exp, summary: Summary, already_bound: &HashSet<String>) -> Exp {
             let new_bound = extend_bound(already_bound, &decl);
 
             let scrut = Box::new(exp(*scrutinee, scrut_sum, &new_bound));
-            let new_arms: Vec<(u64, Exp)> = arms
+            let new_arms: Vec<(crate::ast::DispatchTag, Exp)> = arms
                 .into_iter()
                 .zip(arm_sums)
                 .map(|((tag, body), s)| (tag, exp(body, s, &new_bound)))
