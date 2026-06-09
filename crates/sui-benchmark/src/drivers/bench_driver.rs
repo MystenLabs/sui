@@ -1,16 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(msim)]
-pub fn set_crash_recovery_probability(prob: f32) {
-    sui_core::crash_recovery::set_crash_recovery_probability(prob as f64);
-}
-
-#[cfg(msim)]
-pub fn crash_recovery_probability() -> Option<f32> {
-    sui_core::crash_recovery::crash_recovery_probability().map(|p| p as f32)
-}
-
 use anyhow::Context;
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
@@ -889,7 +879,7 @@ async fn run_bench_worker(
                     transaction.digest()
                 );
                 #[cfg(msim)]
-                if crash_recovery_probability().is_some()
+                if sui_core::crash_recovery::crash_recovery_probability().is_some()
                     && sui_core::crash_recovery::should_poison_transaction(transaction.digest())
                 {
                     return NextOp::Failure { payload };

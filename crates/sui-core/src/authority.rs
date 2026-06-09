@@ -1497,22 +1497,13 @@ impl AuthorityState {
             return ExecutionOutput::Success((effects, None));
         }
 
-        // Simtest-only: simulate a deterministic transaction-induced crash.
-        //
-        // Must be placed AFTER the effects-cache check above. If placed before, the fail point
-        // would fire on every call to try_execute_immediately including re-executions where the
-        // effects are already committed (e.g. during checkpoint rebuild). Crashing on a
-        // re-execution records the tx in the crash log but the tx is already in a committed
-        // checkpoint, so dropping it on restart produces a checkpoint mismatch.
-        //
-        // We use catch_unwind to fire a plain panic (triggering the crash-recovery hook, which
-        // writes the crash log via TLS), then call kill_current_node once we are back in normal
-        // execution. We cannot call kill_current_node from inside the panic hook because
-        // kill_current_node itself panics (with PanicWrapper), which would be a double-panic.
+        // Must be placed AFTER the effects-cache check above so it only fires on the first
+        // execution attempt, not on re-executions during checkpoint rebuild.
         #[cfg(msim)]
         if !certificate.data().transaction_data().kind().is_system_tx() {
             sui_macros::fail_point_if!("crash-with-tx-logging", || {
                 if crate::crash_recovery::should_poison_transaction(&tx_digest) {
+                    // Use catch_unwind to trigger the panic hook without crashing the test process.
                     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         std::panic::panic_any(crate::crash_recovery::CRASH_SIM_PANIC_MSG);
                     }));
