@@ -493,7 +493,7 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
     let l32 = 0u64;
     let l31 = big_vector::borrow_slice(&l36.share, l32);
     let l22 = 0u64;
-    let loop_58_sel;
+    let __dispatch_58;
     let (l24, l29);
     loop {
         if (l22 < l25) {
@@ -511,14 +511,14 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
         if (l22 == l25) {
             l29 = C25;
             l24 = 0u64;
-            loop_58_sel = 0u32;
+            __dispatch_58 = 0u32;
             break
         };
-        loop_58_sel = 1u32;
+        __dispatch_58 = 1u32;
         break
     };
     let (l13, l14, l15, l16, l17, l18, l19, l21, l23, l26, l27, l28, l30, reg_309, reg_310);
-    match (loop_58_sel) {
+    match (__dispatch_58) {
         0 => {
             while (l24 < &l36.reward_tokens.len()) {
                 (&mut l29).push_back(0u64);

@@ -218,6 +218,12 @@ pub enum UnpackKind {
 /// whose only uses sit directly in the labeled loop's body (no nested loops in between).
 pub type Label = u64;
 
+/// Dispatch-table tag width. Multi-succ-loop dispatch synthesizes a tag at each owned-succ
+/// site (in `structure_loop`) and lowers it to `MoveValue::U32` at the runtime layer
+/// (`translate.rs`). Keeping the width as a named alias means the structurer, the post-loop
+/// `match`, and the runtime value agree by construction.
+pub type DispatchTag = u32;
+
 #[derive(Debug, Clone)]
 pub enum Exp {
     Break(Option<Label>),
@@ -248,7 +254,7 @@ pub enum Exp {
     /// this match dispatches on the tag after the loop. Each arm is `(literal, body)`;
     /// arms are emitted in tag order and cover every value the loop could have assigned
     /// (the decompiler controls every assignment site).
-    MatchLit(Box<Exp>, Vec<(u64, Exp)>),
+    MatchLit(Box<Exp>, Vec<(DispatchTag, Exp)>),
     Return(Vec<Exp>),
     // --------------------------------
     // non-control expressions

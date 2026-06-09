@@ -283,8 +283,7 @@ fn any_use_kept_live(exp: &Exp, name: &str, l: &Liveness) -> bool {
                 || arms.iter().any(|(_, _, b)| any_use_kept_live(b, name, l))
         }
         E::MatchLit(s, arms) => {
-            any_use_kept_live(s, name, l)
-                || arms.iter().any(|(_, b)| any_use_kept_live(b, name, l))
+            any_use_kept_live(s, name, l) || arms.iter().any(|(_, b)| any_use_kept_live(b, name, l))
         }
         E::Primitive { args, .. } | E::Data { args, .. } => {
             args.iter().any(|a| any_use_kept_live(a, name, l))
