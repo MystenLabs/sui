@@ -2310,17 +2310,7 @@ async fn test_fake_coin_reservation_dev_inspect_safe_when_flag_disabled() {
 // the accumulator object does not exist pre_object_load_checks fires first.
 #[sim_test]
 async fn test_poc_oversized_address_balance_gas_reservation_panics() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
-
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_coin_reservation_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let (sender, real_gas_coin) = test_env.get_sender_and_gas(0);
     let oversized_reservation = test_env.encode_coin_reservation(sender, 0, i64::MAX as u64 + 1);
@@ -2358,17 +2348,7 @@ async fn test_poc_oversized_address_balance_gas_reservation_panics() {
 // fires first.
 #[sim_test]
 async fn test_poc_gas_reservation_dedup_overflow_panics() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
-
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_coin_reservation_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let (sender, real_gas_coin) = test_env.get_sender_and_gas(0);
     let reservation_0 = test_env.encode_coin_reservation(sender, 0, i64::MAX as u64);
@@ -2411,19 +2391,11 @@ async fn test_poc_gas_reservation_dedup_overflow_panics() {
 // check_gas rejects this via the combined total (coin + reservation) bound.
 #[sim_test]
 async fn test_poc_smash_target_deposit_overflow_panics() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
-
     // Coin value must exceed i64::MAX to make deposit overflow.
     // Leave 100M MIST spare so there is enough for the setup transaction's gas.
     let huge_gas: u64 = i64::MAX as u64 + 100_000_000;
 
     let mut test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_coin_reservation_for_testing();
-            cfg
-        }))
         .with_test_cluster_builder_cb(Box::new(move |b| {
             b.with_accounts(vec![
                 AccountConfig {
@@ -2562,10 +2534,6 @@ async fn test_gas_budget_exceeding_i64_max_is_rejected() {
 // execution behavior.
 #[sim_test]
 async fn test_address_balance_paid_budget_above_i64_max_succeeds() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
-
     // Use two coins: a huge one whose value we move into address balance, and a
     // normal one to pay gas for the funding tx (otherwise the funding tx's own
     // i64::MAX check would reject the huge gas coin).
@@ -2574,7 +2542,6 @@ async fn test_address_balance_paid_budget_above_i64_max_succeeds() {
 
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_address_balance_gas_payments_for_testing();
             cfg.set_max_tx_gas_for_testing(u64::MAX);
             cfg.set_max_gas_price_for_testing(u64::MAX);
             cfg
@@ -2636,17 +2603,7 @@ async fn test_address_balance_paid_budget_above_i64_max_succeeds() {
 // so the error is consistent regardless of whether the total also exceeds i64::MAX.
 #[sim_test]
 async fn dryrun_rejects_non_sui_gas_coin_reservation() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
-
-    let mut test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_coin_reservation_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let mut test_env = TestEnvBuilder::new().build().await;
 
     let (sender, _) = test_env.get_sender_and_gas(0);
     let oversized: u64 = (i64::MAX as u64) + 1;
@@ -2695,17 +2652,7 @@ async fn dryrun_rejects_non_sui_gas_coin_reservation() {
 // `dev_inspect_transaction_block` with `skip_checks=true`.
 #[sim_test]
 async fn dev_inspect_rejects_non_sui_gas_coin_reservation() {
-    if has_mainnet_protocol_config_override() {
-        return;
-    }
-
-    let mut test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_coin_reservation_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let mut test_env = TestEnvBuilder::new().build().await;
 
     let (sender, _) = test_env.get_sender_and_gas(0);
     let oversized: u64 = (i64::MAX as u64) + 1;
