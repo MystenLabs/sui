@@ -1,14 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// In simtests the crash-recovery fail point poisons a fixed fraction of
-// transactions. The load generator needs to know the same probability so
-// it can tolerate failures for those transactions instead of retrying them.
-// We encode the probability as an integer (prob * 1e6) in an atomic so it
-// can be set once from test setup without threading it through every function.
-/// Set the probability used by the crash-with-tx-logging fail point. Call
-/// this before starting the benchmark. The value must match the probability
-/// passed to `should_poison_transaction` in the fail point.
 #[cfg(msim)]
 pub fn set_crash_recovery_probability(prob: f32) {
     sui_core::crash_recovery::set_crash_recovery_probability(prob as f64);
@@ -896,16 +888,11 @@ async fn run_bench_worker(
                     err,
                     transaction.digest()
                 );
-                // Poison transactions — those deterministically crashing a validator — will
-                // never succeed. Recycle the gas and move on rather than retrying forever.
                 #[cfg(msim)]
-                if let Some(prob) = crash_recovery_probability() {
-                    if sui_core::crash_recovery::should_poison_transaction(
-                        transaction.digest(),
-                        prob as f64,
-                    ) {
-                        return NextOp::Failure { payload };
-                    }
+                if crash_recovery_probability().is_some()
+                    && sui_core::crash_recovery::should_poison_transaction(transaction.digest())
+                {
+                    return NextOp::Failure { payload };
                 }
                 match payload.get_failure_type() {
                     Some(ExpectedFailureType::NoFailure) => {

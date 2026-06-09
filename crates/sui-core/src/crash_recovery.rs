@@ -48,6 +48,19 @@ use std::{
 use sui_types::{base_types::AuthorityName, digests::TransactionDigest};
 use tracing::{error, info, warn};
 
+macro_rules! git_revision {
+    () => {
+        match option_env!("GIT_REVISION") {
+            Some(r) => r,
+            None => "unknown",
+        }
+    };
+}
+
+const GIT_REVISION: &str = git_revision!();
+
+static FILE_WRITE_LOCK: Mutex<()> = Mutex::new(());
+
 // ---------------------------------------------------------------------------
 // Simtest-only: deterministic crash decision
 // ---------------------------------------------------------------------------
@@ -98,11 +111,14 @@ pub fn crash_recovery_probability() -> Option<f64> {
 /// digest. This is necessary because the blocking thread-pool workers used by msim each have
 /// distinct thread-local seeds, which would produce divergent crash decisions and checkpoint forks.
 ///
-/// `prob` is the desired crash probability in the range `[0.0, 1.0]`.  Passing `0.002` means
-/// approximately 0.2 % of user transactions are poisoned.
+/// Returns `false` if no crash probability has been set via `set_crash_recovery_probability`.
 #[cfg(msim)]
-pub fn should_poison_transaction(digest: &TransactionDigest, prob: f64) -> bool {
+pub fn should_poison_transaction(digest: &TransactionDigest) -> bool {
     use std::hash::{Hash, Hasher};
+
+    let Some(prob) = crash_recovery_probability() else {
+        return false;
+    };
 
     static CRASH_SEED: OnceLock<u64> = OnceLock::new();
     let seed = *CRASH_SEED.get_or_init(|| {
@@ -115,6 +131,42 @@ pub fn should_poison_transaction(digest: &TransactionDigest, prob: f64) -> bool 
     digest.hash(&mut hasher);
     let threshold = (prob.clamp(0.0, 1.0) * u64::MAX as f64) as u64;
     hasher.finish() < threshold
+}
+
+/// Mine a non-poison digest by adding an unused pure argument to the PTB.
+///
+/// If no crash probability is set, this is a no-op. Otherwise, iterates until the signed
+/// transaction's digest is not in the poison set.
+#[cfg(msim)]
+pub fn mine_non_poison_transaction(
+    tx_data: &mut sui_types::transaction::TransactionData,
+    signer: &dyn sui_types::crypto::Signer<sui_types::crypto::Signature>,
+) {
+    use sui_types::transaction::{CallArg, TransactionDataAPI as _, TransactionKind};
+
+    if crash_recovery_probability().is_none() {
+        return;
+    }
+
+    let mut nonce: u64 = 0;
+    loop {
+        let tx = sui_types::transaction::Transaction::from_data_and_signer(
+            tx_data.clone(),
+            vec![signer],
+        );
+        if !should_poison_transaction(tx.digest()) {
+            break;
+        }
+        nonce += 1;
+        if let TransactionKind::ProgrammableTransaction(pt) = tx_data.kind_mut() {
+            if nonce == 1 {
+                pt.inputs
+                    .push(CallArg::Pure(bcs::to_bytes(&nonce).unwrap()));
+            } else {
+                *pt.inputs.last_mut().unwrap() = CallArg::Pure(bcs::to_bytes(&nonce).unwrap());
+            }
+        }
+    }
 }
 
 /// File name within the node's db_path where panicking-transaction digests are persisted.
@@ -295,8 +347,9 @@ pub fn install_panic_hook(authority_name: AuthorityName, db_path: PathBuf) {
 }
 
 fn append_digest_to_log(path: &Path, digest: TransactionDigest) -> std::io::Result<()> {
+    let _guard = FILE_WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut file = OpenOptions::new().create(true).append(true).open(path)?;
-    writeln!(file, "{}", digest)?;
+    writeln!(file, "{} {}", GIT_REVISION, digest)?;
     file.flush()
 }
 
@@ -307,10 +360,16 @@ fn append_digest_to_log(path: &Path, digest: TransactionDigest) -> std::io::Resu
 /// Read the panic log and return the set of transaction digests that were active during a past
 /// crash.  Returns an empty set if the log file does not exist.
 ///
+/// Lines whose git revision does not match the current binary are skipped and removed from the
+/// log (the file is rewritten with only matching-revision lines).  This prevents stale entries
+/// from a different binary version from poisoning new runs.
+///
 /// `db_path` should be the same path passed to `install_panic_hook`.
 pub fn load_crashed_transactions(db_path: &Path) -> HashSet<TransactionDigest> {
+    const LINE_LIMIT: usize = 1024 * 1024;
+
     let log_path = db_path.join(PANIC_TX_LOG_FILE);
-    match fs::File::open(&log_path) {
+    let file = match fs::File::open(&log_path) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             return HashSet::new();
         }
@@ -321,33 +380,78 @@ pub fn load_crashed_transactions(db_path: &Path) -> HashSet<TransactionDigest> {
             );
             return HashSet::new();
         }
-        Ok(file) => {
-            let mut digests = HashSet::new();
-            for line in BufReader::new(file).lines() {
-                match line {
-                    Err(e) => {
-                        warn!("Error reading crash-recovery log: {e}");
+        Ok(f) => f,
+    };
+
+    let mut digests = HashSet::new();
+    let mut kept_lines: Vec<String> = Vec::new();
+    let mut any_skipped = false;
+
+    for line in BufReader::new(file).lines().take(LINE_LIMIT) {
+        match line {
+            Err(e) => {
+                warn!("Error reading crash-recovery log: {e}");
+            }
+            Ok(s) => {
+                let s = s.trim().to_owned();
+                if s.is_empty() {
+                    continue;
+                }
+                // Expected format: "<git_revision> <tx_digest>".
+                // Old single-token lines (bare digest) are treated as non-matching.
+                let mut parts = s.splitn(2, ' ');
+                let (rev, digest_str) = match (parts.next(), parts.next()) {
+                    (Some(r), Some(d)) => (r, d),
+                    _ => {
+                        warn!("Crash-recovery log contains unrecognised entry {s:?}; skipping");
+                        any_skipped = true;
+                        continue;
                     }
-                    Ok(s) => {
-                        let s = s.trim();
-                        if s.is_empty() {
-                            continue;
-                        }
-                        match s.parse::<TransactionDigest>() {
-                            Ok(d) => {
-                                info!(
-                                    "Crash-recovery: will drop previously-crashing transaction {d}"
-                                );
-                                digests.insert(d);
-                            }
-                            Err(e) => {
-                                warn!("Crash-recovery log contains unparseable digest {s:?}: {e}");
-                            }
-                        }
+                };
+
+                if rev != GIT_REVISION {
+                    info!("Crash-recovery: skipping entry from different binary revision {rev:?}");
+                    any_skipped = true;
+                    continue;
+                }
+
+                match digest_str.parse::<TransactionDigest>() {
+                    Ok(d) => {
+                        info!("Crash-recovery: will drop previously-crashing transaction {d}");
+                        digests.insert(d);
+                        kept_lines.push(s);
+                    }
+                    Err(e) => {
+                        warn!("Crash-recovery log contains unparseable digest {digest_str:?}: {e}");
+                        any_skipped = true;
                     }
                 }
             }
-            digests
         }
     }
+
+    if any_skipped {
+        let _guard = FILE_WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        match OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(&log_path)
+        {
+            Ok(mut f) => {
+                for line in &kept_lines {
+                    if let Err(e) = writeln!(f, "{line}") {
+                        warn!("Failed to rewrite crash-recovery log: {e}");
+                        break;
+                    }
+                }
+            }
+            Err(e) => warn!(
+                "Failed to rewrite crash-recovery log {}: {e}",
+                log_path.display()
+            ),
+        }
+    }
+
+    digests
 }
