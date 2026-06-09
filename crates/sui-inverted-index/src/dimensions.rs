@@ -87,7 +87,7 @@ const COMPOUND_VALUE_SEPARATOR: u8 = 0x00;
 /// `BitmapKey::new`'s length invariant (dimension keys must be at least two
 /// bytes) without a per-tag carve-out. The marker is a singleton — one row per
 /// bucket, not per event — so the extra byte costs ~1 byte per bucket-row.
-const EVENT_EXTANT_VALUE: &[u8] = &[0x00];
+pub const EVENT_EXTANT_VALUE: &[u8] = &[0x00];
 
 /// Visit all tx-space dimensions for a transaction.
 ///

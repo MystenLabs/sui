@@ -648,7 +648,7 @@ fn tx_missing_include_filter(addr: SuiAddress) -> TransactionFilter {
     filter
 }
 
-fn ev_missing_include_filter(addr: SuiAddress) -> EventFilter {
+fn ev_not_sender_only_filter(addr: SuiAddress) -> EventFilter {
     let mut term = EventTerm::default();
     term.literals = vec![ev_not_sender_literal(addr)];
     let mut filter = EventFilter::default();
@@ -1533,6 +1533,87 @@ async fn test_list_events_combinators() {
 }
 
 #[sim_test]
+async fn test_list_events_unanchored_negation() {
+    let cluster = new_cluster().await;
+    let sender_a = cluster.get_address_0();
+    let sender_b = cluster.get_address_1();
+
+    let (pkg, _) = publish_package(&cluster, sender_a, emit_test_event_pkg_path()).await;
+    let tx_a = call_move(
+        &cluster,
+        sender_a,
+        pkg,
+        "emit_test_event",
+        "emit_test_event",
+    )
+    .await;
+    let tx_b = call_move(
+        &cluster,
+        sender_b,
+        pkg,
+        "emit_test_event",
+        "emit_test_event",
+    )
+    .await;
+    let digest_a = tx_digest(&tx_a);
+    let digest_b = tx_digest(&tx_b);
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    // Single-term exclude-only filter: `NOT sender = B` must return A's event
+    // (and any other event whose sender is not B), validating that the
+    // synthesized EventExtant include actually anchors the term so the driver
+    // walks the event space rather than rejecting the filter.
+    let mut req = ListEventsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.filter = Some(ev_not_sender_only_filter(sender_b));
+    req.options = Some(query_options(100));
+    let resp = list_events_result(&mut client, req).await;
+    let digests = event_digest_set(&resp);
+    assert!(
+        digests.contains(&digest_a),
+        "A event should match unanchored NOT(Sender=B)"
+    );
+    assert!(
+        !digests.contains(&digest_b),
+        "B event should be excluded by unanchored NOT(Sender=B)"
+    );
+    assert!(resp.end);
+
+    // Symmetric case: `NOT sender = A` returns B's event.
+    let mut req = ListEventsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.filter = Some(ev_not_sender_only_filter(sender_a));
+    req.options = Some(query_options(100));
+    let resp = list_events_result(&mut client, req).await;
+    let digests = event_digest_set(&resp);
+    assert!(
+        digests.contains(&digest_b),
+        "B event should match unanchored NOT(Sender=A)"
+    );
+    assert!(
+        !digests.contains(&digest_a),
+        "A event should be excluded by unanchored NOT(Sender=A)"
+    );
+
+    // DNF with two unanchored terms `NOT sender = A OR NOT sender = B` —
+    // every emitted event satisfies at least one branch, so both digests
+    // come back. Exercises the dedup path: the synthetic EventExtant leaf
+    // is shared across both terms and must only be scanned once.
+    let mut req = ListEventsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.filter = Some(ev_or(vec![
+        vec![ev_not_sender_literal(sender_a)],
+        vec![ev_not_sender_literal(sender_b)],
+    ]));
+    req.options = Some(query_options(100));
+    let resp = list_events_result(&mut client, req).await;
+    let digests = event_digest_set(&resp);
+    assert!(digests.contains(&digest_a));
+    assert!(digests.contains(&digest_b));
+}
+
+#[sim_test]
 async fn test_list_filter_edge_cases_and_limit_caps() {
     let cluster = new_cluster().await;
     let sender = cluster.get_address_0();
@@ -1681,14 +1762,6 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
     req.start_checkpoint = Some(0);
     req.end_checkpoint = Some(DEFAULT_CHECKPOINT_RANGE_END);
     req.filter = Some(EventFilter::default());
-    req.options = Some(query_options(10));
-    expect_invalid_list_events(&mut client, req).await;
-
-    let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
-    req.start_checkpoint = Some(0);
-    req.end_checkpoint = Some(DEFAULT_CHECKPOINT_RANGE_END);
-    req.filter = Some(ev_missing_include_filter(sender));
     req.options = Some(query_options(10));
     expect_invalid_list_events(&mut client, req).await;
 

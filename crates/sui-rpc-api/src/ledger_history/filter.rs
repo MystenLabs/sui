@@ -4,6 +4,7 @@
 use sui_inverted_index::BitmapLiteral;
 use sui_inverted_index::BitmapQuery;
 use sui_inverted_index::BitmapTerm;
+use sui_inverted_index::EVENT_EXTANT_VALUE;
 use sui_inverted_index::IndexDimension;
 use sui_inverted_index::emit_module_value;
 use sui_inverted_index::encode_dimension_key;
@@ -148,22 +149,31 @@ fn transaction_term_to_query(term: &TransactionTerm) -> Result<BitmapTerm, RpcEr
 }
 
 fn event_term_to_query(term: &EventTerm) -> Result<BitmapTerm, RpcError> {
-    if !term
+    let has_include = term
         .literals
         .iter()
-        .any(|literal| matches!(literal.polarity, Some(event_literal::Polarity::Include(_))))
-    {
-        return Err(FieldViolation::new("filter.terms.literals")
-            .with_description("at least one included literal is required")
-            .with_reason(ErrorReason::FieldMissing)
-            .into());
-    }
+        .any(|literal| matches!(literal.polarity, Some(event_literal::Polarity::Include(_))));
 
-    let literals = term
-        .literals
-        .iter()
-        .map(|p| convert_event_literal(p, "filter.terms.literals"))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut literals = Vec::with_capacity(term.literals.len() + usize::from(!has_include));
+    // Unanchored negation: a term with only excludes resolves as
+    // `EventExtant \ union(excludes)`. The synthetic include anchors the
+    // term on the existence marker so the merge-join driver's floor advances
+    // through every bucket that contains a real event. `expect` is sound: the
+    // key bytes are a workspace-constant `[EventExtant.tag_byte(), 0x00]`, so
+    // `BitmapKey::new`'s validation can only fail under a source change
+    // that test suites would catch.
+    if !has_include {
+        literals.push(
+            BitmapLiteral::include(encode_dimension_key(
+                IndexDimension::EventExtant,
+                EVENT_EXTANT_VALUE,
+            ))
+            .expect("EventExtant universe key is statically valid"),
+        );
+    }
+    for p in &term.literals {
+        literals.push(convert_event_literal(p, "filter.terms.literals")?);
+    }
 
     BitmapTerm::new(literals).map_err(|e| {
         FieldViolation::new("filter.terms")
@@ -530,5 +540,124 @@ mod tests {
             key,
             encode_dimension_key(IndexDimension::EventStreamHead, &bytes)
         );
+    }
+
+    fn ev_sender_literal(byte: u8, exclude: bool) -> EventLiteral {
+        let address = SuiAddress::from_bytes([byte; 32])
+            .expect("valid address bytes")
+            .to_string();
+        let mut sender = SenderFilter::default();
+        sender.address = Some(address);
+
+        let mut predicate = EventPredicate::default();
+        predicate.predicate = Some(event_predicate::Predicate::Sender(sender));
+
+        let mut literal = EventLiteral::default();
+        literal.polarity = Some(if exclude {
+            event_literal::Polarity::Exclude(predicate)
+        } else {
+            event_literal::Polarity::Include(predicate)
+        });
+        literal
+    }
+
+    fn ev_term(literals: Vec<EventLiteral>) -> EventTerm {
+        let mut term = EventTerm::default();
+        term.literals = literals;
+        term
+    }
+
+    fn ev_filter_with_terms(terms: Vec<EventTerm>) -> EventFilter {
+        let mut filter = EventFilter::default();
+        filter.terms = terms;
+        filter
+    }
+
+    fn universe_key() -> Vec<u8> {
+        encode_dimension_key(IndexDimension::EventExtant, EVENT_EXTANT_VALUE)
+    }
+
+    #[test]
+    fn event_filter_exclude_only_term_synthesizes_event_extant_include() {
+        let filter = ev_filter_with_terms(vec![ev_term(vec![ev_sender_literal(1, true)])]);
+        let query =
+            event_filter_to_query(&filter, TEST_MAX_LITERALS).expect("unanchored term is valid");
+
+        let term = &query.terms()[0];
+        let literals = term.literals();
+        assert_eq!(literals.len(), 2, "synthetic include + user exclude");
+        assert!(
+            matches!(literals[0], BitmapLiteral::Include(_)),
+            "synthetic universe include is prepended"
+        );
+        assert_eq!(literals[0].key_bytes(), universe_key().as_slice());
+        assert!(matches!(literals[1], BitmapLiteral::Exclude(_)));
+    }
+
+    #[test]
+    fn event_filter_multiple_unanchored_terms_each_get_universe_include() {
+        let filter = ev_filter_with_terms(vec![
+            ev_term(vec![ev_sender_literal(1, true)]),
+            ev_term(vec![ev_sender_literal(2, true)]),
+        ]);
+        let query =
+            event_filter_to_query(&filter, TEST_MAX_LITERALS).expect("unanchored terms are valid");
+
+        for term in query.terms() {
+            assert_eq!(term.literals()[0].key_bytes(), universe_key().as_slice());
+        }
+    }
+
+    #[test]
+    fn event_filter_mixed_dnf_only_synthesizes_when_needed() {
+        let filter = ev_filter_with_terms(vec![
+            ev_term(vec![ev_sender_literal(1, false)]),
+            ev_term(vec![ev_sender_literal(2, true)]),
+        ]);
+        let query = event_filter_to_query(&filter, TEST_MAX_LITERALS).expect("mixed DNF is valid");
+
+        let terms = query.terms();
+        assert_ne!(
+            terms[0].literals()[0].key_bytes(),
+            universe_key().as_slice(),
+            "anchored term gets no synthetic include"
+        );
+        assert_eq!(
+            terms[1].literals()[0].key_bytes(),
+            universe_key().as_slice(),
+            "unanchored term gets the synthetic include"
+        );
+    }
+
+    #[test]
+    fn event_filter_unanchored_term_does_not_count_against_fanout() {
+        // Two unanchored terms with one exclude each = 2 user-provided literals;
+        // synthetic includes are not counted, so we stay under the cap.
+        let filter = ev_filter_with_terms(vec![
+            ev_term(vec![ev_sender_literal(1, true)]),
+            ev_term(vec![ev_sender_literal(2, true)]),
+        ]);
+        assert!(event_filter_to_query(&filter, 2).is_ok());
+    }
+
+    #[test]
+    fn transaction_filter_exclude_only_term_still_rejected() {
+        // Pin PR 3's gate: tx-side unanchored negation is not yet supported.
+        let mut sender = SenderFilter::default();
+        sender.address = Some(SuiAddress::from_bytes([1; 32]).unwrap().to_string());
+        let mut predicate = TransactionPredicate::default();
+        predicate.predicate = Some(transaction_predicate::Predicate::Sender(sender));
+        let mut literal = TransactionLiteral::default();
+        literal.polarity = Some(transaction_literal::Polarity::Exclude(predicate));
+
+        let mut term = TransactionTerm::default();
+        term.literals = vec![literal];
+        let mut filter = TransactionFilter::default();
+        filter.terms = vec![term];
+
+        let error = transaction_filter_to_query(&filter, TEST_MAX_LITERALS)
+            .expect_err("tx unanchored negation should still be rejected")
+            .into_status_proto();
+        assert!(error.message.contains("at least one included literal"));
     }
 }

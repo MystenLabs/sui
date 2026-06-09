@@ -260,7 +260,7 @@ impl BitmapLiteral {
         Ok(Self::Exclude(BitmapKey::new(dimension_key)?))
     }
 
-    pub(crate) fn key_bytes(&self) -> &[u8] {
+    pub fn key_bytes(&self) -> &[u8] {
         match self {
             BitmapLiteral::Include(k) | BitmapLiteral::Exclude(k) => k.as_bytes(),
         }
@@ -295,6 +295,10 @@ impl BitmapQuery {
             .collect::<HashSet<_>>()
             .len()
     }
+
+    pub fn terms(&self) -> &[BitmapTerm] {
+        &self.terms
+    }
 }
 
 impl BitmapTerm {
@@ -306,6 +310,10 @@ impl BitmapTerm {
             bail!("bitmap query term must contain at least one include literal");
         }
         Ok(Self { literals })
+    }
+
+    pub fn literals(&self) -> &[BitmapLiteral] {
+        &self.literals
     }
 }
 
