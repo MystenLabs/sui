@@ -13,7 +13,7 @@ use petgraph::{
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Graph {
     pub cfg: DiGraph<(), ()>,
     pub dom_tree: dom_tree::DominatorTree,

@@ -73,6 +73,14 @@ impl std::fmt::Display for Formula {
     }
 }
 
+/// `Formula::Atom` over a Move-bytecode block id. Wraps the `code as usize` → `NodeIndex`
+/// conversion so callers don't open-code it (and so a tagged-label refactor has a single
+/// site to update). Used at every site that builds a single-block guard — the dom-tree
+/// structurer's `CondIf`, the reaching diamond folder's atomic predicates.
+pub fn cond_atom(code: u64) -> Formula {
+    Formula::Atom(NodeIndex::new(code as usize))
+}
+
 /// Conjunction with constructor hygiene only (flatten nested `And`, drop `True`, short-circuit
 /// on `False`). This is *not* the simplifier — no absorption or complementarity reasoning; that
 /// is the boolean-recovery refinement's job.
@@ -131,8 +139,17 @@ fn edge_condition(pred_input: Option<&Input>, p: NodeIndex, n: NodeIndex) -> For
             } else if n == *els {
                 not(Formula::Atom(p))
             } else {
-                // `n` is not an arm of `p` — the caller's edge set is inconsistent. Treat as
-                // unconditional rather than panic; the guard is conservative (over-broad).
+                // `n` is not an arm of `p` — the caller's edge set is inconsistent with the
+                // condition's recorded arms. The adjacency build above only enumerates edges
+                // produced by `Input::edges`, which for a `Condition` returns exactly
+                // `(p, then)` and `(p, else)`, so reaching this arm means a Condition's
+                // arms were rewritten after the topo build. In release we fall back to a
+                // conservative `True` guard rather than panic — the resulting reaching set
+                // is over-broad but sound enough to keep the dom-tree fallback honest.
+                debug_assert!(
+                    false,
+                    "edge {p:?} -> {n:?} not in Condition's arms (then={then:?}, else={els:?})",
+                );
                 Formula::True
             }
         }

@@ -8,10 +8,10 @@ use petgraph::{
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DominatorTree(Node);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node {
     value: NodeIndex,
     children: Vec<Node>,

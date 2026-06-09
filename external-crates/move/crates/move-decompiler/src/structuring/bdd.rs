@@ -14,8 +14,12 @@
 //    every product. Reading a node back is the nested `if`/`&&`/`||` we want; the gluing that
 //    `stale_a ∨ (¬stale_a ∧ stale_b)` introduced never happens because the BDD reduces it away.
 //
-// Variable order is ascending `NodeIndex` (≈ program order), so the read-back nests in roughly
-// source order. Atoms are tiny per region, so the worst-case-exponential BDD size is a non-issue.
+// Variable order matters for read-back shape: the topmost variable is the one whose if-then-else
+// wraps the rest. The default constructor falls back to ascending `NodeIndex`. The reaching
+// structurer prefers reverse-postorder rank instead (constructed via `with_order`) — that's the
+// order the structurer walks the CFG, so the lowered guard nests in roughly source order rather
+// than whatever NodeIndex assignment the bytecode happened to pick. Atoms are tiny per region,
+// so the worst-case-exponential BDD size is a non-issue regardless.
 
 use crate::structuring::reaching::{Formula, and, not, or};
 use petgraph::graph::NodeIndex;
@@ -40,6 +44,10 @@ pub struct Bdd {
     not_memo: HashMap<BddId, BddId>,
     and_memo: HashMap<(BddId, BddId), BddId>,
     or_memo: HashMap<(BddId, BddId), BddId>,
+    /// Per-atom rank (smallest = topmost in the diagram). Populated via `with_order` so the
+    /// structurer can ask for read-back in reverse-postorder; empty for `new()` which falls
+    /// back to ascending `NodeIndex`.
+    var_order: HashMap<NodeIndex, u32>,
 }
 
 impl Default for Bdd {
@@ -53,6 +61,13 @@ impl Bdd {
     pub const TRUE: BddId = 1;
 
     pub fn new() -> Self {
+        Self::with_order(HashMap::new())
+    }
+
+    /// Build an arena with an explicit variable order. `var_order[atom] = rank` (smaller =
+    /// topmost). Atoms not in the map fall back to their `NodeIndex` for ordering purposes —
+    /// callers who care about read-back shape should pass a rank for every atom they'll build.
+    pub fn with_order(var_order: HashMap<NodeIndex, u32>) -> Self {
         // Placeholders so ids 0/1 are the terminals; their fields are never read because every
         // operation special-cases terminals before touching `var`/`low`/`high`.
         let placeholder = Node {
@@ -66,7 +81,17 @@ impl Bdd {
             not_memo: HashMap::new(),
             and_memo: HashMap::new(),
             or_memo: HashMap::new(),
+            var_order,
         }
+    }
+
+    /// Rank used for variable ordering. Caller-supplied rank takes precedence; otherwise we
+    /// fall back to `NodeIndex` raw value so the default `new()` case orders by program order.
+    fn rank(&self, v: NodeIndex) -> u32 {
+        self.var_order
+            .get(&v)
+            .copied()
+            .unwrap_or_else(|| v.index() as u32)
     }
 
     /// Reduced node constructor: collapse `low == high` (no decision to make) and hash-cons the
@@ -113,6 +138,12 @@ impl Bdd {
         }
     }
 
+    /// `id` is one of the two constant leaves (`FALSE` / `TRUE`). Use to short-circuit before
+    /// pulling the node out of `nodes` (terminals' placeholder fields are not safe to read).
+    fn is_terminal(id: BddId) -> bool {
+        id == Self::FALSE || id == Self::TRUE
+    }
+
     pub fn not(&mut self, f: BddId) -> BddId {
         if f == Self::FALSE {
             return Self::TRUE;
@@ -144,6 +175,7 @@ impl Bdd {
         if f == g {
             return f;
         }
+        debug_assert!(!Self::is_terminal(f) && !Self::is_terminal(g));
         let key = if f <= g { (f, g) } else { (g, f) };
         if let Some(&r) = self.and_memo.get(&key) {
             return r;
@@ -169,6 +201,7 @@ impl Bdd {
         if f == g {
             return f;
         }
+        debug_assert!(!Self::is_terminal(f) && !Self::is_terminal(g));
         let key = if f <= g { (f, g) } else { (g, f) };
         if let Some(&r) = self.or_memo.get(&key) {
             return r;
@@ -181,12 +214,16 @@ impl Bdd {
         r
     }
 
-    /// The topmost (smallest-`NodeIndex`) variable of two internal nodes, and the four cofactors
-    /// of `f` and `g` at it. A node not mentioning `v` is its own cofactor on both branches.
+    /// The topmost (smallest-rank) variable of two internal nodes, and the four cofactors of
+    /// `f` and `g` at it. A node not mentioning `v` is its own cofactor on both branches.
     fn cofactors(&self, f: BddId, g: BddId) -> (NodeIndex, BddId, BddId, BddId, BddId) {
         let nf = self.nodes[f];
         let ng = self.nodes[g];
-        let v = nf.var.min(ng.var);
+        let v = if self.rank(nf.var) <= self.rank(ng.var) {
+            nf.var
+        } else {
+            ng.var
+        };
         let (fl, fh) = if nf.var == v {
             (nf.low, nf.high)
         } else {
