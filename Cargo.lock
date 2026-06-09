@@ -14969,6 +14969,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-execution-backtest"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap",
+ "futures",
+ "move-core-types",
+ "prometheus",
+ "serde_json",
+ "sui-execution",
+ "sui-indexer-alt-framework",
+ "sui-protocol-config",
+ "sui-rpc",
+ "sui-types",
+ "tokio",
+ "tonic 0.14.6",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "sui-execution-cut"
 version = "0.1.0"
 dependencies = [
