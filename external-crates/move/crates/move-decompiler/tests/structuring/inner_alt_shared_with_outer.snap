@@ -6,7 +6,12 @@ if (1) {
     if (2) {
         { 3 }
         jump<CB> NodeIndex(5);
+    } else {
+        jump<AOS> NodeIndex(4);
     }
+} else {
+    jump<AOS> NodeIndex(4);
 }
 { 4 }
+jump<CB> NodeIndex(5);
 { 5 }

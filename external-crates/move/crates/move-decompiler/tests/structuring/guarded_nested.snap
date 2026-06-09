@@ -1,0 +1,9 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+if <((0 & 1) | (!0 & 2))> {
+    { 3 }
+} else {
+    { 4 }
+}
+{ 7 }

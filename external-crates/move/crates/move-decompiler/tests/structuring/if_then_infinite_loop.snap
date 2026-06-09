@@ -3,8 +3,10 @@ source: crates/move-decompiler/tests/tests.rs
 ---
 if (0) {
     { 1 }
+    jump<CB> NodeIndex(3);
 } else {
     { 2 }
+    jump<CB> NodeIndex(3);
 }
 { 3 }
 'loop_4: loop {

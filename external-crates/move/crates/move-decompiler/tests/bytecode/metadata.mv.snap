@@ -73,10 +73,23 @@ public fun clamp(l0: &mut vector<u8>, l1: u64, l2: u64) {
 }
 
 public fun get(l0: &vector<u8>, l1: u32): Option<vector<u8>> {
+    let l2;
     let l6 = metadata::get_chunk_offset(l0, l1);
     let l5 = metadata::get_chunk_length_at_offset(l0, l6);
     let l4 = l0.len();
-    if (l5 == 0u32 || l4 < l6 + l5as u64) {
+    if (l5 == 0u32) {
+        l2 = true;
+        unstructured {
+            goto 'label_25;
+        }
+    } else {
+        l2 = l4 < l6 + l5as u64;
+        unstructured {
+            goto 'label_25;
+        }
+    };
+    /* block 25 */;
+    if (l2) {
         return option::none()
     };
     let l8 = vector[];
@@ -180,11 +193,24 @@ public fun get_option_any_vec_u256(l0: &vector<u8>, l1: u32): Option<vector<u256
     if (option::is_none(&l8)) {
         return option::none()
     };
+    let l2;
     let l3 = bcs::new(option::destroy_some(l8));
     let l12 = bcs::peel_vec_length(&mut l3);
     let l9 = bcs::into_remainder_bytes(l3);
     let l4 = &l9.len();
-    if (l12 == 0u64 || l4 == 0u64) {
+    if (l12 == 0u64) {
+        l2 = true;
+        unstructured {
+            goto 'label_33;
+        }
+    } else {
+        l2 = l4 == 0u64;
+        unstructured {
+            goto 'label_33;
+        }
+    };
+    /* block 33 */;
+    if (l2) {
         return option::some(vector[])
     };
     if (l4 % l12 != 0u64) {
@@ -343,10 +369,23 @@ public fun get_vec_vec_u8(l0: &vector<u8>, l1: u32): vector<vector<u8>> {
 }
 
 public fun has_chunk(l0: &vector<u8>, l1: u32): bool {
+    let l2;
     let l5 = metadata::get_chunk_offset(l0, l1);
     let l4 = metadata::get_chunk_length_at_offset(l0, l5);
     let l3 = l0.len();
-    if (l4 == 0u32 || l3 < l5 + l4as u64) {
+    if (l4 == 0u32) {
+        l2 = true;
+        unstructured {
+            goto 'label_25;
+        }
+    } else {
+        l2 = l3 < l5 + l4as u64;
+        unstructured {
+            goto 'label_25;
+        }
+    };
+    /* block 25 */;
+    if (l2) {
         return false
     };
     return true
@@ -367,65 +406,183 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
                 return false
             };
             return true
+        };
+        unstructured {
+            goto 'label_383;
         }
     } else {
         let l24 = C3;
         if (l36 == &l24) {
             if (l38 == 1u32) {
                 return true
+            };
+            unstructured {
+                goto 'label_383;
             }
         } else {
             let l31 = C4;
             if (l36 == &l31) {
                 if (l38 == 8u32) {
                     return true
+                };
+                unstructured {
+                    goto 'label_383;
                 }
             } else {
                 let l33 = C5;
                 if (l36 == &l33) {
                     if (l38 == 16u32) {
                         return true
+                    };
+                    unstructured {
+                        goto 'label_383;
                     }
                 } else {
                     let l35 = C6;
                     if (l36 == &l35) {
                         if (l38 == 32u32) {
                             return true
+                        };
+                        unstructured {
+                            goto 'label_383;
                         }
                     } else {
                         let l4 = C7;
                         if (l36 == &l4) {
                             if (l38 == address::length()as u32) {
                                 return true
+                            };
+                            unstructured {
+                                goto 'label_383;
                             }
                         } else {
-                            if (l36.len() > 6u64 && *(&l36[0u64]) == 118u8 && *(&l36[1u64]) == 101u8 && *(&l36[2u64]) == 99u8 && *(&l36[3u64]) == 116u8 && *(&l36[4u64]) == 111u8 && *(&l36[5u64]) == 114u8) {
+                            let l6;
+                            if (l36.len() > 6u64) {
+                                l6 = *(&l36[0u64]) == 118u8;
+                                unstructured {
+                                    goto 'label_160;
+                                }
+                            } else {
+                                l6 = false;
+                                unstructured {
+                                    goto 'label_160;
+                                }
+                            };
+                            let l7;
+                            /* block 160 */;
+                            if (l6) {
+                                l7 = *(&l36[1u64]) == 101u8;
+                                unstructured {
+                                    goto 'label_172;
+                                }
+                            } else {
+                                l7 = false;
+                                unstructured {
+                                    goto 'label_172;
+                                }
+                            };
+                            let l8;
+                            /* block 172 */;
+                            if (l7) {
+                                l8 = *(&l36[2u64]) == 99u8;
+                                unstructured {
+                                    goto 'label_184;
+                                }
+                            } else {
+                                l8 = false;
+                                unstructured {
+                                    goto 'label_184;
+                                }
+                            };
+                            let l9;
+                            /* block 184 */;
+                            if (l8) {
+                                l9 = *(&l36[3u64]) == 116u8;
+                                unstructured {
+                                    goto 'label_196;
+                                }
+                            } else {
+                                l9 = false;
+                                unstructured {
+                                    goto 'label_196;
+                                }
+                            };
+                            let l10;
+                            /* block 196 */;
+                            if (l9) {
+                                l10 = *(&l36[4u64]) == 111u8;
+                                unstructured {
+                                    goto 'label_208;
+                                }
+                            } else {
+                                l10 = false;
+                                unstructured {
+                                    goto 'label_208;
+                                }
+                            };
+                            let l11;
+                            /* block 208 */;
+                            if (l10) {
+                                l11 = *(&l36[5u64]) == 114u8;
+                                unstructured {
+                                    goto 'label_220;
+                                }
+                            } else {
+                                l11 = false;
+                                unstructured {
+                                    goto 'label_220;
+                                }
+                            };
+                            /* block 220 */;
+                            if (l11) {
                                 let l43 = 1u64;
                                 let l37 = false;
                                 if (*(&l36[7u64]) == 117u8) {
                                     let l12 = C8;
                                     if (l36 == &l12) {
                                         l43 = 1u64;
+                                        unstructured {
+                                            goto 'label_334;
+                                        }
                                     } else {
                                         let l15 = C9;
                                         if (l36 == &l15) {
                                             l43 = 8u64;
+                                            unstructured {
+                                                goto 'label_334;
+                                            }
                                         } else {
                                             let l17 = C10;
                                             if (l36 == &l17) {
                                                 l43 = 4u64;
+                                                unstructured {
+                                                    goto 'label_334;
+                                                }
                                             } else {
                                                 let l19 = C11;
                                                 if (l36 == &l19) {
                                                     l43 = 32u64;
+                                                    unstructured {
+                                                        goto 'label_334;
+                                                    }
                                                 } else {
                                                     let l21 = C12;
                                                     if (l36 == &l21) {
                                                         l43 = 2u64;
+                                                        unstructured {
+                                                            goto 'label_334;
+                                                        }
                                                     } else {
                                                         let l23 = C13;
                                                         if (l36 == &l23) {
                                                             l43 = 16u64;
+                                                            unstructured {
+                                                                goto 'label_334;
+                                                            }
+                                                        } else {
+                                                            unstructured {
+                                                                goto 'label_334;
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -436,14 +593,25 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
                                     let l26 = C14;
                                     if (l36 == &l26) {
                                         l43 = 32u64;
+                                        unstructured {
+                                            goto 'label_334;
+                                        }
                                     } else {
                                         let l28 = C15;
                                         if (l36 == &l28) {
                                             l43 = 1u64;
                                             l37 = true;
+                                            unstructured {
+                                                goto 'label_334;
+                                            }
+                                        } else {
+                                            unstructured {
+                                                goto 'label_334;
+                                            }
                                         }
                                     }
                                 };
+                                /* block 334 */;
                                 let l41 = metadata::get_vec_length(l0, l1) * l43;
                                 if (l38as u64 < l41) {
                                     return false
@@ -460,8 +628,16 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
                                         };
                                         return false
                                     }
+                                } else {
+                                    unstructured {
+                                        goto 'label_377;
+                                    }
                                 };
+                                /* block 377 */;
                                 return true
+                            };
+                            unstructured {
+                                goto 'label_383;
                             }
                         }
                     }
@@ -469,6 +645,7 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
             }
         }
     };
+    /* block 383 */;
     return false
 }
 
@@ -504,11 +681,27 @@ public fun set<T0>(l0: &mut vector<u8>, l1: u32, l2: &T0): bool {
             std::vector::destroy_empty(l3);
             return true
         };
-        metadata::clamp(l0, l10, l9as u64)
+        metadata::clamp(l0, l10, l9as u64);
+        unstructured {
+            goto 'label_72;
+        }
+    } else {
+        unstructured {
+            goto 'label_72;
+        }
     };
+    /* block 72 */;
     if (freeze(l0).len() == 0u64) {
-        l0.push_back(0u8)
+        l0.push_back(0u8);
+        unstructured {
+            goto 'label_81;
+        }
+    } else {
+        unstructured {
+            goto 'label_81;
+        }
     };
+    /* block 81 */;
     let l6 = bcs::to_bytes(&l1);
     vector::append(l0, l6);
     let l8 = bcs::to_bytes(&l4as u32 + l5as u32);

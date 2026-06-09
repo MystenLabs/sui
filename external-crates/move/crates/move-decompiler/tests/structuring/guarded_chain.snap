@@ -1,0 +1,16 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+if (0) {
+    { 1 }
+    jump<CB> NodeIndex(6);
+} else {
+    if (2) {
+        { 3 }
+        jump<CB> NodeIndex(6);
+    } else {
+        { 4 }
+        jump<CB> NodeIndex(6);
+    }
+}
+{ 6 }

@@ -4,11 +4,15 @@ source: crates/move-decompiler/tests/tests.rs
 switch (0) {
     _0 => 
         { 1 }
+        jump<CB> NodeIndex(5);
     _1 => 
         { 2 }
+        jump<CB> NodeIndex(5);
     _2 => 
         { 3 }
+        jump<CB> NodeIndex(5);
     _3 => 
         { 4 }
+        jump<CB> NodeIndex(5);
 }
 { 5 }

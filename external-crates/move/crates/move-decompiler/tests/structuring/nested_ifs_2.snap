@@ -4,14 +4,18 @@ source: crates/move-decompiler/tests/tests.rs
 if (0) {
     if (1) {
         { 2 }
+        jump<CB> NodeIndex(7);
     } else {
         { 3 }
+        jump<CB> NodeIndex(7);
     }
 } else {
     if (4) {
         { 5 }
+        jump<CB> NodeIndex(7);
     } else {
         { 6 }
+        jump<CB> NodeIndex(7);
     }
 }
 { 7 }

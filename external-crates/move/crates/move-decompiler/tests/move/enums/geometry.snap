@@ -3,17 +3,26 @@ source: crates/move-decompiler/tests/tests.rs
 ---
 module geometry {
     public fun get_area () {
+        let l1;
         let l4 = l0;
-        return         match(&l4: Shape) {
+        match(&l4: Shape) {
             Shape::Square { side: reg_4 } => {
                 let Shape::Square { side: reg_6 } = l4;
                 let l7 = reg_6 : u64;
-l7 * l7            },
+                l1 = l7 * l7;
+                unstructured {
+                    goto 'label_33;
+                }
+            },
             Shape::Triangle { base: reg_11, height: reg_12 } => {
                 let Shape::Triangle { base: reg_14, height: reg_15 } = l4;
-reg_14 : u64 * reg_15 : u64 / 2u64            },
+                l1 = reg_14 : u64 * reg_15 : u64 / 2u64;
+                unstructured {
+                    goto 'label_33;
+                }
+            },
         }
-
+        return l1
     }
 
     public fun get_square_side () {

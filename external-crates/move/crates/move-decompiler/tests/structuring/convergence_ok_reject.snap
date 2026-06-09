@@ -7,8 +7,10 @@ if (0) {
         { 6 }
     } else {
         { 4 }
+        jump<CB> NodeIndex(5);
     }
 } else {
     { 2 }
+    jump<CB> NodeIndex(5);
 }
 { 5 }

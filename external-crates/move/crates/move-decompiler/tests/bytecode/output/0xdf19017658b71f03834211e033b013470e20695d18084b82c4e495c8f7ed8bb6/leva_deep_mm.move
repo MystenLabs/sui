@@ -118,6 +118,7 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
             events::emit_log_bytes(C3);
             let l97 = config::is_dry_run(l83);
             if (config::is_arbitrage_enabled(l83)) {
+                let l19;
                 let l99 = mm_state::last_arb_timestamp(freeze(l0));
                 let l86 = pool::mid_price(freeze(l3), l7);
                 let (reg_113, reg_114, reg_115, reg_116, reg_117, reg_118) = arbitrage_router::execute_arbitrage_analysis(l112, freeze(l5), l86, config::min_arb_profit_bps(l83), l99, config::arb_cooldown_ms(l83), l7);
@@ -125,20 +126,87 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
                 let l65 = reg_116;
                 let l139 = reg_114;
                 let l138 = reg_113;
-                let l52 = if (config::max_arb_amount(l83) > 0u64) {
-                    config::max_arb_amount(l83)
+                if (config::max_arb_amount(l83) > 0u64) {
+                    l19 = config::max_arb_amount(l83);
+                    unstructured {
+                        goto 'label_175;
+                    }
                 } else {
-                    0u64
+                    l19 = 0u64;
+                    unstructured {
+                        goto 'label_175;
+                    }
                 };
-                if (l138 || l139 && l52 > 0u64) {
+                let (l41, l52);
+                /* block 175 */;
+                l52 = l19;
+                if (l138) {
+                    l41 = true;
+                    unstructured {
+                        goto 'label_184;
+                    }
+                } else {
+                    l41 = l139;
+                    unstructured {
+                        goto 'label_184;
+                    }
+                };
+                let l30;
+                /* block 184 */;
+                if (l41) {
+                    l30 = l52 > 0u64;
+                    unstructured {
+                        goto 'label_193;
+                    }
+                } else {
+                    l30 = false;
+                    unstructured {
+                        goto 'label_193;
+                    }
+                };
+                /* block 193 */;
+                if (l30) {
+                    let l46;
                     events::emit_log_bytes(C4);
-                    if (l138 && reg_115 == arbitrage_router::pool_cetus() && !(l97)) {
+                    if (l138) {
+                        if (reg_115 == arbitrage_router::pool_cetus()) {
+                            l46 = !(l97);
+                            unstructured {
+                                goto 'label_214;
+                            }
+                        } else {
+                            l46 = false;
+                            unstructured {
+                                goto 'label_214;
+                            }
+                        }
+                    } else {
+                        l46 = false;
+                        unstructured {
+                            goto 'label_214;
+                        }
+                    };
+                    /* block 214 */;
+                    if (l46) {
+                        let l47;
                         let (reg_159, reg_160);
                         (reg_158, reg_159, reg_160) = arbitrage_router::execute_cetus_buy(l112, l2, l5, l6, l52, l65, l86, config::arb_slippage_bps(l83), l7, l18);
                         let l81 = reg_160;
                         let l129 = reg_159;
                         events::emit_log_bytes(C5);
-                        if (l81 && l129 > 0u64) {
+                        if (l81) {
+                            l47 = l129 > 0u64;
+                            unstructured {
+                                goto 'label_242;
+                            }
+                        } else {
+                            l47 = false;
+                            unstructured {
+                                goto 'label_242;
+                            }
+                        };
+                        /* block 242 */;
+                        if (l47) {
                             let reg_171;
                             (reg_170, reg_171, reg_172) = pool::pool_book_params(freeze(l3));
                             let l100 = reg_171;
@@ -147,26 +215,98 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
                                 let (reg_189, reg_190) = arbitrage_router::execute_deepbook_ioc(false, l3, l2, &l136, l86, l125, l83, l7, freeze(l18));
                                 if (reg_190) {
                                     events::emit_log_bytes(C6);
-                                    events::emit_arb_ioc_executed(l112, false, l86, l125, reg_189, l65, l108)
+                                    events::emit_arb_ioc_executed(l112, false, l86, l125, reg_189, l65, l108);
+                                    unstructured {
+                                        goto 'label_286;
+                                    }
                                 } else {
-                                    events::emit_log_bytes(C7)
+                                    events::emit_log_bytes(C7);
+                                    unstructured {
+                                        goto 'label_286;
+                                    }
+                                }
+                            } else {
+                                unstructured {
+                                    goto 'label_286;
                                 }
                             }
+                        } else {
+                            unstructured {
+                                goto 'label_286;
+                            }
                         };
+                        /* block 286 */;
                         mm_state::record_arb_time(l0, l108);
-                        events::emit_log_bytes(C8)
+                        events::emit_log_bytes(C8);
+                        unstructured {
+                            goto 'label_303;
+                        }
                     } else {
-                        if (l138 && l97) {
-                            events::emit_log_bytes(C9)
+                        let l48;
+                        if (l138) {
+                            l48 = l97;
+                            unstructured {
+                                goto 'label_299;
+                            }
+                        } else {
+                            l48 = false;
+                            unstructured {
+                                goto 'label_299;
+                            }
+                        };
+                        /* block 299 */;
+                        if (l48) {
+                            events::emit_log_bytes(C9);
+                            unstructured {
+                                goto 'label_303;
+                            }
+                        } else {
+                            unstructured {
+                                goto 'label_303;
+                            }
                         }
                     };
-                    if (l139 && reg_117 == arbitrage_router::pool_cetus() && !(l97)) {
+                    let l49;
+                    /* block 303 */;
+                    if (l139) {
+                        if (reg_117 == arbitrage_router::pool_cetus()) {
+                            l49 = !(l97);
+                            unstructured {
+                                goto 'label_318;
+                            }
+                        } else {
+                            l49 = false;
+                            unstructured {
+                                goto 'label_318;
+                            }
+                        }
+                    } else {
+                        l49 = false;
+                        unstructured {
+                            goto 'label_318;
+                        }
+                    };
+                    /* block 318 */;
+                    if (l49) {
+                        let l50;
                         let (reg_229, reg_231);
                         (reg_229, reg_230, reg_231) = arbitrage_router::execute_cetus_sell(l112, l2, l5, l6, l52, l67, l86, config::arb_slippage_bps(l83), l7, l18);
                         let l82 = reg_231;
                         let l130 = reg_229;
                         events::emit_log_bytes(C10);
-                        if (l82 && l130 > 0u64) {
+                        if (l82) {
+                            l50 = l130 > 0u64;
+                            unstructured {
+                                goto 'label_346;
+                            }
+                        } else {
+                            l50 = false;
+                            unstructured {
+                                goto 'label_346;
+                            }
+                        };
+                        /* block 346 */;
+                        if (l50) {
                             let reg_242;
                             (reg_241, reg_242, reg_243) = pool::pool_book_params(freeze(l3));
                             let l101 = reg_242;
@@ -175,134 +315,373 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
                                 let (reg_260, reg_261) = arbitrage_router::execute_deepbook_ioc(true, l3, l2, &l136, l86, l78, l83, l7, freeze(l18));
                                 if (reg_261) {
                                     events::emit_log_bytes(C11);
-                                    events::emit_arb_ioc_executed(l112, true, l86, l78, reg_260, l67, l108)
+                                    events::emit_arb_ioc_executed(l112, true, l86, l78, reg_260, l67, l108);
+                                    unstructured {
+                                        goto 'label_408;
+                                    }
                                 } else {
-                                    events::emit_log_bytes(C12)
+                                    events::emit_log_bytes(C12);
+                                    unstructured {
+                                        goto 'label_408;
+                                    }
+                                }
+                            } else {
+                                unstructured {
+                                    goto 'label_408;
                                 }
                             }
-                        };
-                        mm_state::record_arb_time(l0, l108);
-                        events::emit_log_bytes(C13)
-                    } else {
-                        if (l139 && l97) {
-                            events::emit_log_bytes(C14)
-                        }
-                    };
-                    let l131 = config::target_base_position(l83);
-                    let l21 = if (l131 > 0u64) {
-                        if (l62 >= l131) {
-                            l62 - l131 * 10000u64 / l131
                         } else {
-                            l131 - l62 * 10000u64 / l131
+                            unstructured {
+                                goto 'label_408;
+                            }
+                        };
+                        /* block 408 */;
+                        mm_state::record_arb_time(l0, l108);
+                        events::emit_log_bytes(C13);
+                        unstructured {
+                            goto 'label_437;
                         }
                     } else {
-                        0u64
+                        let l51;
+                        if (l139) {
+                            l51 = l97;
+                            unstructured {
+                                goto 'label_433;
+                            }
+                        } else {
+                            l51 = false;
+                            unstructured {
+                                goto 'label_433;
+                            }
+                        };
+                        /* block 433 */;
+                        if (l51) {
+                            events::emit_log_bytes(C14);
+                            unstructured {
+                                goto 'label_437;
+                            }
+                        } else {
+                            unstructured {
+                                goto 'label_437;
+                            }
+                        }
                     };
-                    events::emit_execution_detail(mm_state::state_id(freeze(l0)), l112, l13, mm_state::execution_count(freeze(l0)), l108, l8, l8, 0u64, 0u64, l62, l114, l131, l21, false, l9, l10, 0u64, 0u64, l80, false, 0u64, l15);
+                    let (l131, l21);
+                    /* block 437 */;
+                    l131 = config::target_base_position(l83);
+                    if (l131 > 0u64) {
+                        let l20;
+                        if (l62 >= l131) {
+                            l20 = l62 - l131 * 10000u64 / l131;
+                            unstructured {
+                                goto 'label_465;
+                            }
+                        } else {
+                            l20 = l131 - l62 * 10000u64 / l131;
+                            unstructured {
+                                goto 'label_465;
+                            }
+                        };
+                        /* block 465 */;
+                        l21 = l20;
+                        unstructured {
+                            goto 'label_470;
+                        }
+                    } else {
+                        l21 = 0u64;
+                        unstructured {
+                            goto 'label_470;
+                        }
+                    };
+                    /* block 470 */;
+                    let l93 = l21;
+                    events::emit_execution_detail(mm_state::state_id(freeze(l0)), l112, l13, mm_state::execution_count(freeze(l0)), l108, l8, l8, 0u64, 0u64, l62, l114, l131, l93, false, l9, l10, 0u64, 0u64, l80, false, 0u64, l15);
                     mm_state::record_order_time(l0, l108);
                     return
+                };
+                unstructured {
+                    goto 'label_503;
+                }
+            } else {
+                unstructured {
+                    goto 'label_503;
                 }
             };
+            let l27;
+            /* block 503 */;
             events::emit_log_bytes(C15);
-            let l110 = if (config::is_orderbook_analysis_enabled(l83)) {
+            if (config::is_orderbook_analysis_enabled(l83)) {
+                let l22;
                 let l127 = orderbook_analyzer::analyze_orderbook(freeze(l3), freeze(l2), config::min_significant_qty(l83), config::l2_tick_count(l83), l7);
-                let l118 = if (orderbook_analyzer::bid_prices(&l127).len() > 0u64) {
-                    *(&(orderbook_analyzer::bid_prices(&l127))[0u64])
-                } else {
-                    0u64
-                };
-                let l117 = if (orderbook_analyzer::ask_prices(&l127).len() > 0u64) {
-                    *(&(orderbook_analyzer::ask_prices(&l127))[0u64])
-                } else {
-                    0u64
-                };
-                let l26 = if (l118 > 0u64 && l117 > 0u64 && l117 > l118) {
-                    let l121 = l118 + l117 / 2u64;
-                    if (l121 > 0u64) {
-                        l117 - l118 * 10000u64 / l121
-                    } else {
-                        0u64
+                if (orderbook_analyzer::bid_prices(&l127).len() > 0u64) {
+                    l22 = *(&(orderbook_analyzer::bid_prices(&l127))[0u64]);
+                    unstructured {
+                        goto 'label_534;
                     }
                 } else {
-                    0u64
+                    l22 = 0u64;
+                    unstructured {
+                        goto 'label_534;
+                    }
                 };
-                events::emit_orderbook_analysis(l112, l108, orderbook_analyzer::bid_prices(&l127).len(), orderbook_analyzer::ask_prices(&l127).len(), l118, l117, l26, orderbook_analyzer::own_bid_qty_filtered(&l127), orderbook_analyzer::own_ask_qty_filtered(&l127), orderbook_analyzer::own_orders_count(&l127), orderbook_analyzer::best_bid(&l127), orderbook_analyzer::best_ask(&l127), orderbook_analyzer::spread_bps(&l127), orderbook_analyzer::significant_bid(&l127), orderbook_analyzer::significant_bid_qty(&l127), orderbook_analyzer::significant_ask(&l127), orderbook_analyzer::significant_ask_qty(&l127), orderbook_analyzer::total_bid_depth(&l127), orderbook_analyzer::total_ask_depth(&l127));
+                let (l118, l23);
+                /* block 534 */;
+                l118 = l22;
+                if (orderbook_analyzer::ask_prices(&l127).len() > 0u64) {
+                    l23 = *(&(orderbook_analyzer::ask_prices(&l127))[0u64]);
+                    unstructured {
+                        goto 'label_551;
+                    }
+                } else {
+                    l23 = 0u64;
+                    unstructured {
+                        goto 'label_551;
+                    }
+                };
+                let (l117, l24);
+                /* block 551 */;
+                l117 = l23;
+                if (l118 > 0u64) {
+                    if (l117 > 0u64) {
+                        l24 = l117 > l118;
+                        unstructured {
+                            goto 'label_571;
+                        }
+                    } else {
+                        l24 = false;
+                        unstructured {
+                            goto 'label_571;
+                        }
+                    }
+                } else {
+                    l24 = false;
+                    unstructured {
+                        goto 'label_571;
+                    }
+                };
+                let l26;
+                /* block 571 */;
+                if (l24) {
+                    let l25;
+                    let l121 = l118 + l117 / 2u64;
+                    if (l121 > 0u64) {
+                        l25 = l117 - l118 * 10000u64 / l121;
+                        unstructured {
+                            goto 'label_594;
+                        }
+                    } else {
+                        l25 = 0u64;
+                        unstructured {
+                            goto 'label_594;
+                        }
+                    };
+                    /* block 594 */;
+                    l26 = l25;
+                    unstructured {
+                        goto 'label_599;
+                    }
+                } else {
+                    l26 = 0u64;
+                    unstructured {
+                        goto 'label_599;
+                    }
+                };
+                /* block 599 */;
+                let l122 = l26;
+                events::emit_orderbook_analysis(l112, l108, orderbook_analyzer::bid_prices(&l127).len(), orderbook_analyzer::ask_prices(&l127).len(), l118, l117, l122, orderbook_analyzer::own_bid_qty_filtered(&l127), orderbook_analyzer::own_ask_qty_filtered(&l127), orderbook_analyzer::own_orders_count(&l127), orderbook_analyzer::best_bid(&l127), orderbook_analyzer::best_ask(&l127), orderbook_analyzer::spread_bps(&l127), orderbook_analyzer::significant_bid(&l127), orderbook_analyzer::significant_bid_qty(&l127), orderbook_analyzer::significant_ask(&l127), orderbook_analyzer::significant_ask_qty(&l127), orderbook_analyzer::total_bid_depth(&l127), orderbook_analyzer::total_ask_depth(&l127));
                 events::emit_log_bytes(C16);
-                option::some(l127)
+                l27 = option::some(l127);
+                unstructured {
+                    goto 'label_645;
+                }
             } else {
-                option::none()
+                l27 = option::none();
+                unstructured {
+                    goto 'label_645;
+                }
             };
-            let l119 = l8 * 100000u64 - l9 / 100000u64;
-            let l115 = l8 * 100000u64 + l10 / 100000u64;
+            let (l102, l105, l110, l115, l119, l133, l28, l76);
+            /* block 645 */;
+            l110 = l27;
+            l119 = l8 * 100000u64 - l9 / 100000u64;
+            l115 = l8 * 100000u64 + l10 / 100000u64;
             let (reg_471, reg_472, reg_473) = pool::pool_book_params(freeze(l3));
-            let l102 = reg_472;
-            let l133 = reg_471;
+            l105 = reg_473;
+            l102 = reg_472;
+            l133 = reg_471;
             let (reg_478, reg_480);
             (reg_478, reg_479, reg_480, reg_481) = pool::get_level2_ticks_from_mid(freeze(l3), 1u64, l7);
-            let l76 = reg_480;
+            l76 = reg_480;
             let l77 = reg_478;
-            let l64 = if (&l77.len() > 0u64) {
-                *(&(&l77)[0u64])
+            if (&l77.len() > 0u64) {
+                l28 = *(&(&l77)[0u64]);
+                unstructured {
+                    goto 'label_691;
+                }
             } else {
-                0u64
+                l28 = 0u64;
+                unstructured {
+                    goto 'label_691;
+                }
             };
-            let l63 = if (&l76.len() > 0u64) {
-                *(&(&l76)[0u64])
+            let (l29, l64);
+            /* block 691 */;
+            l64 = l28;
+            if (&l76.len() > 0u64) {
+                l29 = *(&(&l76)[0u64]);
+                unstructured {
+                    goto 'label_706;
+                }
             } else {
-                0u64
+                l29 = 0u64;
+                unstructured {
+                    goto 'label_706;
+                }
             };
-            let l69 = false;
-            let l53 = false;
-            let l85 = l119;
-            let l84 = l115;
-            if (l63 > 0u64 && l119 >= l63) {
+            let (l31, l53, l63, l69, l84, l85);
+            /* block 706 */;
+            l63 = l29;
+            l69 = false;
+            l53 = false;
+            l85 = l119;
+            l84 = l115;
+            if (l63 > 0u64) {
+                l31 = l119 >= l63;
+                unstructured {
+                    goto 'label_727;
+                }
+            } else {
+                l31 = false;
+                unstructured {
+                    goto 'label_727;
+                }
+            };
+            /* block 727 */;
+            if (l31) {
                 l69 = true;
                 l85 = l63 * 100000u64 - l11 / 100000u64;
+                unstructured {
+                    goto 'label_739;
+                }
+            } else {
+                unstructured {
+                    goto 'label_739;
+                }
             };
-            if (l64 > 0u64 && l115 <= l64) {
+            let l32;
+            /* block 739 */;
+            if (l64 > 0u64) {
+                l32 = l115 <= l64;
+                unstructured {
+                    goto 'label_750;
+                }
+            } else {
+                l32 = false;
+                unstructured {
+                    goto 'label_750;
+                }
+            };
+            /* block 750 */;
+            if (l32) {
                 l53 = true;
                 l84 = l64 * 100000u64 + l12 / 100000u64;
+                unstructured {
+                    goto 'label_762;
+                }
+            } else {
+                unstructured {
+                    goto 'label_762;
+                }
             };
-            if (l69 || l53) {
-                events::emit_crossing_prevented(l112, l108, l69, l53, l119, l115, l85, l84, l64, l63, l11, l12)
+            let l33;
+            /* block 762 */;
+            if (l69) {
+                l33 = true;
+                unstructured {
+                    goto 'label_769;
+                }
+            } else {
+                l33 = l53;
+                unstructured {
+                    goto 'label_769;
+                }
             };
-            let (l36, l37);
-            let l120 = l85;
-            let l116 = l84;
-            l36 = if (option::is_some(&l110)) {
+            /* block 769 */;
+            if (l33) {
+                events::emit_crossing_prevented(l112, l108, l69, l53, l119, l115, l85, l84, l64, l63, l11, l12);
+                unstructured {
+                    goto 'label_784;
+                }
+            } else {
+                unstructured {
+                    goto 'label_784;
+                }
+            };
+            let (l116, l120, l36, l37);
+            /* block 784 */;
+            l120 = l85;
+            l116 = l84;
+            if (option::is_some(&l110)) {
+                let l34;
                 let l128 = option::borrow(&l110);
                 let l113 = config::price_offset_ticks(l83) * l133;
                 let (reg_570, reg_571) = orderbook_analyzer::find_optimal_price_with_reason(l128, l120, true, l113, config::min_significant_qty(l83));
                 let l124 = orders::round_bid_price(reg_570, l133);
                 let l107 = orders::round_bid_price(l120, l133);
-                let l34 = if (l124 > l107) {
-                    l124 - l107
+                if (l124 > l107) {
+                    l34 = l124 - l107;
+                    unstructured {
+                        goto 'label_827;
+                    }
                 } else {
-                    l107 - l124
+                    l34 = l107 - l124;
+                    unstructured {
+                        goto 'label_827;
+                    }
                 };
+                let (l106, l123, l35, l59);
+                /* block 827 */;
+                let l70 = l34;
                 let l71 = l124 > l107;
-                events::emit_order_placement_decision(l112, l108, true, l8, l8, l107, orderbook_analyzer::significant_bid(l128), orderbook_analyzer::significant_bid_qty(l128), l124, l34 / l133, l71, reg_571);
+                events::emit_order_placement_decision(l112, l108, true, l8, l8, l107, orderbook_analyzer::significant_bid(l128), orderbook_analyzer::significant_bid_qty(l128), l124, l70 / l133, l71, reg_571);
                 let (reg_612, reg_613) = orderbook_analyzer::find_optimal_price_with_reason(l128, l116, false, l113, config::min_significant_qty(l83));
-                let l123 = orders::round_ask_price(reg_612, l133);
-                let l106 = orders::round_ask_price(l116, l133);
-                let l35 = if (l123 < l106) {
-                    l106 - l123
+                l59 = reg_613;
+                l123 = orders::round_ask_price(reg_612, l133);
+                l106 = orders::round_ask_price(l116, l133);
+                if (l123 < l106) {
+                    l35 = l106 - l123;
+                    unstructured {
+                        goto 'label_878;
+                    }
                 } else {
-                    l123 - l106
+                    l35 = l123 - l106;
+                    unstructured {
+                        goto 'label_878;
+                    }
                 };
+                /* block 878 */;
+                let l54 = l35;
                 let l55 = l123 < l106;
-                events::emit_order_placement_decision(l112, l108, false, l8, l8, l106, orderbook_analyzer::significant_ask(l128), orderbook_analyzer::significant_ask_qty(l128), l123, l35 / l133, l55, reg_613);
+                events::emit_order_placement_decision(l112, l108, false, l8, l8, l106, orderbook_analyzer::significant_ask(l128), orderbook_analyzer::significant_ask_qty(l128), l123, l54 / l133, l55, l59);
                 l37 = l123;
-                l124
+                l36 = l124;
+                unstructured {
+                    goto 'label_914;
+                }
             } else {
                 l37 = orders::round_ask_price(l116, l133);
-                orders::round_bid_price(l120, l133)
+                l36 = orders::round_bid_price(l120, l133);
+                unstructured {
+                    goto 'label_914;
+                }
             };
-            let l57 = l37;
-            let l73 = l36;
-            events::emit_debug_pool_params(l133, l102, reg_473, l120, l116, l73, l57);
-            let l74 = orders::round_to_lot(l16, l102);
-            let l58 = orders::round_to_lot(l17, l102);
+            let (l57, l58, l73, l74);
+            /* block 914 */;
+            l57 = l37;
+            l73 = l36;
+            events::emit_debug_pool_params(l133, l102, l105, l120, l116, l73, l57);
+            l74 = orders::round_to_lot(l16, l102);
+            l58 = orders::round_to_lot(l17, l102);
             let l109 = l14;
             let l111 = config::enable_deep_payment(l83);
             if (!(l97)) {
@@ -310,67 +689,196 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
                     let l134 = l74 + l58;
                     let l60 = l73 + l57 / 2u64;
                     (reg_697, reg_698) = deep_manager::ensure_deep_balance(freeze(l3), l4, l2, &l136, l134, l60, l83, l7, freeze(l18));
-                    events::emit_log_bytes(C17)
+                    events::emit_log_bytes(C17);
+                    unstructured {
+                        goto 'label_974;
+                    }
+                } else {
+                    unstructured {
+                        goto 'label_974;
+                    }
                 };
-                if (l74 >= config::min_order_size(l83) && l73 >= config::min_price(l83)) {
+                let l38;
+                /* block 974 */;
+                if (l74 >= config::min_order_size(l83)) {
+                    l38 = l73 >= config::min_price(l83);
+                    unstructured {
+                        goto 'label_987;
+                    }
+                } else {
+                    l38 = false;
+                    unstructured {
+                        goto 'label_987;
+                    }
+                };
+                /* block 987 */;
+                if (l38) {
                     let l72 = pool::place_limit_order(l3, l2, &l136, l15, constants::post_only(), constants::cancel_taker(), l73, l74, true, l111, l109, l7, freeze(l18));
-                    events::emit_post_only_order(l112, true, l73, l74, order_info::order_id(&l72), l8, l9, l108, l15)
+                    events::emit_post_only_order(l112, true, l73, l74, order_info::order_id(&l72), l8, l9, l108, l15);
+                    unstructured {
+                        goto 'label_1016;
+                    }
+                } else {
+                    unstructured {
+                        goto 'label_1016;
+                    }
                 };
-                if (l58 >= config::min_order_size(l83) && l57 <= config::max_price(l83)) {
+                let l39;
+                /* block 1016 */;
+                if (l58 >= config::min_order_size(l83)) {
+                    l39 = l57 <= config::max_price(l83);
+                    unstructured {
+                        goto 'label_1029;
+                    }
+                } else {
+                    l39 = false;
+                    unstructured {
+                        goto 'label_1029;
+                    }
+                };
+                /* block 1029 */;
+                if (l39) {
                     let l56 = pool::place_limit_order(l3, l2, &l136, l15, constants::post_only(), constants::cancel_taker(), l57, l58, false, l111, l109, l7, freeze(l18));
-                    events::emit_post_only_order(l112, false, l57, l58, order_info::order_id(&l56), l8, l10, l108, l15)
+                    events::emit_post_only_order(l112, false, l57, l58, order_info::order_id(&l56), l8, l10, l108, l15);
+                    unstructured {
+                        goto 'label_1068;
+                    }
+                } else {
+                    unstructured {
+                        goto 'label_1068;
+                    }
                 }
             } else {
-                events::emit_log_bytes(C18)
+                events::emit_log_bytes(C18);
+                unstructured {
+                    goto 'label_1068;
+                }
             };
+            let (l132, l137, l91, l92);
+            /* block 1068 */;
             events::emit_orders_placed(mm_state::state_id(freeze(l0)), l112, l73, l74, l57, l58, l108);
-            let l132 = config::target_base_position(l83);
-            let l91 = false;
-            let l92 = 0u64;
-            let l137 = l80;
+            l132 = config::target_base_position(l83);
+            l91 = false;
+            l92 = 0u64;
+            l137 = l80;
             if (config::is_hedge_enabled(l83)) {
                 let (reg_797, reg_798) = cetus_hedger::calculate_hedge_amount(l62, l132, config::max_hedge_pct(l83), config::min_hedge_amount(l83));
                 let l98 = reg_798;
                 let l90 = reg_797;
                 if (l90 > 0u64) {
+                    let l40;
                     let l87 = cetus_hedger::apply_cetus_fee(l80, l79, l98);
                     l137 = l87;
-                    let l126 = if (l98) {
-                        cetus_hedger::should_hedge_sell(l87, l8, config::min_hedge_profit_bps(l83))
+                    if (l98) {
+                        l40 = cetus_hedger::should_hedge_sell(l87, l8, config::min_hedge_profit_bps(l83));
+                        unstructured {
+                            goto 'label_1125;
+                        }
                     } else {
-                        cetus_hedger::should_hedge_buy(l87, l8, config::min_hedge_profit_bps(l83))
+                        l40 = cetus_hedger::should_hedge_buy(l87, l8, config::min_hedge_profit_bps(l83));
+                        unstructured {
+                            goto 'label_1125;
+                        }
                     };
+                    let (l126, l42);
+                    /* block 1125 */;
+                    l126 = l40;
                     l92 = cetus_hedger::calculate_hedge_profit_bps(l87, l8, l98);
                     events::emit_hedge_opportunity(mm_state::state_id(freeze(l0)), l112, l8, l80, l87, l90, l98, l126, l92, l108);
-                    if (l126 && !(l97)) {
+                    if (l126) {
+                        l42 = !(l97);
+                        unstructured {
+                            goto 'label_1153;
+                        }
+                    } else {
+                        l42 = false;
+                        unstructured {
+                            goto 'label_1153;
+                        }
+                    };
+                    /* block 1153 */;
+                    if (l42) {
                         if (l98) {
                             let l104 = l90 * l87 / 1000000000u64 * 99u64 / 100u64;
                             (reg_857, reg_858) = cetus_hedger::flash_swap_sell_sui(l2, l5, l6, l90, l104, l7, l18);
                             l91 = true;
-                            events::emit_log_bytes(C19)
+                            events::emit_log_bytes(C19);
+                            unstructured {
+                                goto 'label_1254;
+                            }
                         } else {
                             let l103 = l90 * l87 / 1000000000u64 * 101u64 / 100u64;
                             (reg_877, reg_878) = cetus_hedger::flash_swap_buy_sui(l2, l5, l6, l90, l103, l7, l18);
                             l91 = true;
-                            events::emit_log_bytes(C20)
+                            events::emit_log_bytes(C20);
+                            unstructured {
+                                goto 'label_1254;
+                            }
                         }
                     } else {
-                        if (l126 && l97) {
-                            events::emit_log_bytes(C21)
+                        let l43;
+                        if (l126) {
+                            l43 = l97;
+                            unstructured {
+                                goto 'label_1224;
+                            }
+                        } else {
+                            l43 = false;
+                            unstructured {
+                                goto 'label_1224;
+                            }
+                        };
+                        /* block 1224 */;
+                        if (l43) {
+                            events::emit_log_bytes(C21);
+                            unstructured {
+                                goto 'label_1254;
+                            }
+                        } else {
+                            unstructured {
+                                goto 'label_1254;
+                            }
                         }
                     }
-                }
-            };
-            let l45 = if (l132 > 0u64) {
-                if (l62 >= l132) {
-                    l62 - l132 * 10000u64 / l132
                 } else {
-                    l132 - l62 * 10000u64 / l132
+                    unstructured {
+                        goto 'label_1254;
+                    }
                 }
             } else {
-                0u64
+                unstructured {
+                    goto 'label_1254;
+                }
             };
-            events::emit_execution_detail(mm_state::state_id(freeze(l0)), l112, l13, mm_state::execution_count(freeze(l0)), l108, l8, l8, l73, l57, l62, l114, l132, l45, l62 > l132, l9, l10, l74, l58, l137, l91, l92, l15);
+            let l45;
+            /* block 1254 */;
+            if (l132 > 0u64) {
+                let l44;
+                if (l62 >= l132) {
+                    l44 = l62 - l132 * 10000u64 / l132;
+                    unstructured {
+                        goto 'label_1279;
+                    }
+                } else {
+                    l44 = l132 - l62 * 10000u64 / l132;
+                    unstructured {
+                        goto 'label_1279;
+                    }
+                };
+                /* block 1279 */;
+                l45 = l44;
+                unstructured {
+                    goto 'label_1284;
+                }
+            } else {
+                l45 = 0u64;
+                unstructured {
+                    goto 'label_1284;
+                }
+            };
+            /* block 1284 */;
+            let l94 = l45;
+            events::emit_execution_detail(mm_state::state_id(freeze(l0)), l112, l13, mm_state::execution_count(freeze(l0)), l108, l8, l8, l73, l57, l62, l114, l132, l94, l62 > l132, l9, l10, l74, l58, l137, l91, l92, l15);
             mm_state::record_order_time(l0, l108)
         }
     }

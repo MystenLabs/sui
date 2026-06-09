@@ -11,5 +11,6 @@ if (0) {
     }
 } else {
     { 2 }
+    jump<CB> NodeIndex(3);
 }
 { 3 }

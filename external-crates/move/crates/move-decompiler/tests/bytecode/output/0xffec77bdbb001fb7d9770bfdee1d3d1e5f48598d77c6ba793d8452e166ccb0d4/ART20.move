@@ -238,9 +238,22 @@ const C42: vector<u8> = vector[104u8, 116u8, 116u8, 112u8, 115u8, 58u8, 47u8, 47
 // -- functions -- 
 
 public entry fun add_to_deny_list(l0: &mut CollectionCap, l1: vector<address>, l2: &mut TxContext) {
+    let l3;
     let l9 = tx_context::sender(freeze(l2));
     let l5 = &l1.len();
-    assert!(l5 > 0u64 && l5 <= C29, C11);
+    if (l5 > 0u64) {
+        l3 = l5 <= C29;
+        unstructured {
+            goto 'label_18;
+        }
+    } else {
+        l3 = false;
+        unstructured {
+            goto 'label_18;
+        }
+    };
+    /* block 18 */;
+    assert!(l3, C11);
     assert!(l9 == *(&l0.creator), C1);
     assert!(*(&l0.has_deny_list_authority), C8);
     let l6 = object::uid_to_inner(&l0.id);
@@ -306,10 +319,23 @@ public entry fun batch_burn_art20(l0: vector<NFT>, l1: &mut CollectionCap, l2: v
 }
 
 public entry fun batch_burn_art20_by_asset_ids(l0: &mut CollectionCap, l1: vector<NFT>, l2: vector<UserBalance>, l3: vector<u64>, l4: &mut TxContext) {
+    let l5;
     let l22 = tx_context::sender(freeze(l4));
     let l13 = xf_ART20::get_collection_cap_id(freeze(l0));
     let l8 = &l3.len();
-    assert!(l8 > 0u64 && l8 <= C29, C11);
+    if (l8 > 0u64) {
+        l5 = l8 <= C29;
+        unstructured {
+            goto 'label_22;
+        }
+    } else {
+        l5 = false;
+        unstructured {
+            goto 'label_22;
+        }
+    };
+    /* block 22 */;
+    assert!(l5, C11);
     assert!(*(&l0.current_supply) >= l8, C4);
     let l21 = table::new(l4);
     let l23 = 0u64;
@@ -393,7 +419,20 @@ public entry fun batch_update_art20_image_uri_by_asset_ids(l0: &CollectionCap, l
     xf_ART20::check_deny_list_restrictions(l0, l17);
     let l7 = &l2.len();
     assert!(l7 == &l3.len(), C0);
-    assert!(l7 > 0u64 && l7 <= C29, C11);
+    let l5;
+    if (l7 > 0u64) {
+        l5 = l7 <= C29;
+        unstructured {
+            goto 'label_45;
+        }
+    } else {
+        l5 = false;
+        unstructured {
+            goto 'label_45;
+        }
+    };
+    /* block 45 */;
+    assert!(l5, C11);
     let l11 = 0u64;
     let (l12, l16);
     loop {
@@ -446,17 +485,49 @@ public entry fun batch_update_metadata(l0: &CollectionCap, l1: vector<NFT>, l2: 
     let l10 = tx_context::sender(freeze(l6));
     let l8 = xf_ART20::get_collection_cap_id(l0);
     if (option::is_some(&l2)) {
-        assert!(string::length(option::borrow(&l2)) <= 128u64, C10)
+        assert!(string::length(option::borrow(&l2)) <= 128u64, C10);
+        unstructured {
+            goto 'label_24;
+        }
+    } else {
+        unstructured {
+            goto 'label_24;
+        }
     };
+    /* block 24 */;
     if (option::is_some(&l3)) {
-        assert!(string::length(option::borrow(&l3)) <= 1000u64, C10)
+        assert!(string::length(option::borrow(&l3)) <= 1000u64, C10);
+        unstructured {
+            goto 'label_38;
+        }
+    } else {
+        unstructured {
+            goto 'label_38;
+        }
     };
+    /* block 38 */;
     if (option::is_some(&l4)) {
-        assert!(option::borrow(&l4).len() <= 256u64, C10)
+        assert!(option::borrow(&l4).len() <= 256u64, C10);
+        unstructured {
+            goto 'label_52;
+        }
+    } else {
+        unstructured {
+            goto 'label_52;
+        }
     };
+    /* block 52 */;
     if (option::is_some(&l5)) {
-        assert!(option::borrow(&l5).len() <= 256u64, C10)
+        assert!(option::borrow(&l5).len() <= 256u64, C10);
+        unstructured {
+            goto 'label_66;
+        }
+    } else {
+        unstructured {
+            goto 'label_66;
+        }
     };
+    /* block 66 */;
     let l9 = 0u64;
     while (l9 < l7) {
         let l11 = &mut (&mut l1)[l9];
@@ -485,36 +556,82 @@ public entry fun batch_update_metadata(l0: &CollectionCap, l1: vector<NFT>, l2: 
 }
 
 public entry fun batch_update_metadata_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>, l2: vector<u64>, l3: Option<String>, l4: Option<String>, l5: Option<vector<u8>>, l6: Option<vector<u8>>, l7: &mut TxContext) {
+    let l8;
     let l22 = tx_context::sender(freeze(l7));
     let l14 = xf_ART20::get_collection_cap_id(l0);
     let l10 = &l2.len();
-    assert!(l10 > 0u64 && l10 <= C29, C11);
+    if (l10 > 0u64) {
+        l8 = l10 <= C29;
+        unstructured {
+            goto 'label_21;
+        }
+    } else {
+        l8 = false;
+        unstructured {
+            goto 'label_21;
+        }
+    };
+    /* block 21 */;
+    assert!(l8, C11);
     if (option::is_some(&l3)) {
         let l19 = option::borrow(&l3);
         assert!(string::length(l19) <= 128u64, C10);
         let l12 = string::as_bytes(l19);
         assert!(l12.len() <= 512u64, C10);
-        assert!(l12.len() > 0u64, C10)
+        assert!(l12.len() > 0u64, C10);
+        unstructured {
+            goto 'label_79;
+        }
+    } else {
+        unstructured {
+            goto 'label_79;
+        }
     };
+    /* block 79 */;
     if (option::is_some(&l4)) {
         let l15 = option::borrow(&l4);
         assert!(string::length(l15) <= 1000u64, C10);
         let l13 = string::as_bytes(l15);
         assert!(l13.len() <= 4000u64, C10);
-        assert!(l13.len() > 0u64, C10)
+        assert!(l13.len() > 0u64, C10);
+        unstructured {
+            goto 'label_128;
+        }
+    } else {
+        unstructured {
+            goto 'label_128;
+        }
     };
+    /* block 128 */;
     if (option::is_some(&l5)) {
         let l24 = option::borrow(&l5);
         assert!(l24.len() <= 256u64, C10);
-        assert!(l24.len() > 0u64, C10)
+        assert!(l24.len() > 0u64, C10);
+        unstructured {
+            goto 'label_160;
+        }
+    } else {
+        unstructured {
+            goto 'label_160;
+        }
     };
+    /* block 160 */;
     if (option::is_some(&l6)) {
         let l18 = option::borrow(&l6);
         assert!(l18.len() <= 256u64, C10);
-        assert!(l18.len() > 0u64, C10)
+        assert!(l18.len() > 0u64, C10);
+        unstructured {
+            goto 'label_192;
+        }
+    } else {
+        unstructured {
+            goto 'label_192;
+        }
     };
-    let l21 = table::new(l7);
-    let l17 = 0u64;
+    let (l17, l21);
+    /* block 192 */;
+    l21 = table::new(l7);
+    l17 = 0u64;
     loop {
         if (l17 >= l10) {
             table::drop(l21);
@@ -566,7 +683,20 @@ public entry fun batch_update_token_logo_uri(l0: vector<NFT>, l1: vector<vector<
     let l9 = &l0.len();
     assert!(*(&l2.is_mutable), C2);
     assert!(l9 == &l1.len(), C0);
-    assert!(l9 > 0u64 && l9 <= C29, C11);
+    let l4;
+    if (l9 > 0u64) {
+        l4 = l9 <= C29;
+        unstructured {
+            goto 'label_40;
+        }
+    } else {
+        l4 = false;
+        unstructured {
+            goto 'label_40;
+        }
+    };
+    /* block 40 */;
+    assert!(l4, C11);
     xf_ART20::check_deny_list_restrictions(l2, l10);
     let l6 = 0u64;
     let (l13, l7);
@@ -707,8 +837,16 @@ public fun drop_collection_cap(l0: CollectionCap, l1: &mut TxContext) {
     let CollectionCap { id: reg_15, max_supply: reg_16, current_supply: reg_17, creator: reg_18, name: reg_19, description: reg_20, uri: reg_21, logo_uri: reg_22, is_mutable: reg_23, is_mintable: reg_24, has_deny_list_authority: reg_25, value_source: reg_26, is_api_source: reg_27 } = l0;
     let l2 = reg_15 : 0x2::object::UID;
     if (dynamic_field::exists_(&l2, DenyListKey { dummy_field: false })) {
-        table::drop(dynamic_field::remove(&mut l2, DenyListKey { dummy_field: false }))
+        table::drop(dynamic_field::remove(&mut l2, DenyListKey { dummy_field: false }));
+        unstructured {
+            goto 'label_45;
+        }
+    } else {
+        unstructured {
+            goto 'label_45;
+        }
     };
+    /* block 45 */;
     object::delete(l2)
 }
 
@@ -761,6 +899,7 @@ public fun get_collection_current_supply(l0: &CollectionCap): u64 {
 }
 
 public fun get_collection_details(l0: &CollectionCap): ( ID, address, String, String, Url, Url, u64, u64, bool, bool, u64) {
+    let l1;
     let l3 = xf_ART20::get_collection_cap_id(l0);
     let l2 = *(&l0.creator);
     let l11 = *(&l0.name);
@@ -771,11 +910,18 @@ public fun get_collection_details(l0: &CollectionCap): ( ID, address, String, St
     let l6 = *(&l0.max_supply);
     let l5 = *(&l0.is_mutable);
     let l4 = *(&l0.has_deny_list_authority);
-    let l1 = if (xf_ART20::has_deny_list(l0)) {
-        xf_ART20::deny_list_size(l0)
+    if (xf_ART20::has_deny_list(l0)) {
+        l1 = xf_ART20::deny_list_size(l0);
+        unstructured {
+            goto 'label_50;
+        }
     } else {
-        0u64
+        l1 = 0u64;
+        unstructured {
+            goto 'label_50;
+        }
     };
+    /* block 50 */;
     return (l3, l2, l11, l10, l9, l8, l7, l6, l5, l4, l1)
 }
 
@@ -876,22 +1022,32 @@ public fun get_holder_info(l0: &vector<NFT>, l1: &CollectionCap, l2: &vector<Use
         };
         l11 = l11 + 1u64;
     };
+    let l4;
     let l10 = xf_ART20::has_deny_list(l1);
     let l8 = xf_ART20::has_deny_list_authority(l1);
     let l12 = xf_ART20::is_denied(l1, l3);
-    let l4 = if (l10) {
-        xf_ART20::deny_list_size(l1)
+    if (l10) {
+        l4 = xf_ART20::deny_list_size(l1);
+        unstructured {
+            goto 'label_57;
+        }
     } else {
-        0u64
+        l4 = 0u64;
+        unstructured {
+            goto 'label_57;
+        }
     };
-    let l18 = vector[];
-    let l5 = vector[];
-    let l20 = vector[];
-    let l17 = vector[];
-    let l21 = vector[];
-    let l19 = vector[];
-    let l13 = 0u64;
-    let l16 = l0.len();
+    let (l13, l16, l17, l18, l19, l20, l21, l5, l9);
+    /* block 57 */;
+    l9 = l4;
+    l18 = vector[];
+    l5 = vector[];
+    l20 = vector[];
+    l17 = vector[];
+    l21 = vector[];
+    l19 = vector[];
+    l13 = 0u64;
+    l16 = l0.len();
     while (l13 < l16) {
         let l15 = &l0[l13];
         if (*(&l15.collection_id) == l7) {
@@ -904,7 +1060,7 @@ public fun get_holder_info(l0: &vector<NFT>, l1: &CollectionCap, l2: &vector<Use
         };
         l13 = l13 + 1u64;
     };
-    return (l7, *(&l1.creator), *(&l1.name), *(&l1.description), *(&l1.current_supply), *(&l1.max_supply), *(&l1.is_mutable), l22, l12, l10, l8, l4, l18, l5, l20, l17, l21, l19)
+    return (l7, *(&l1.creator), *(&l1.name), *(&l1.description), *(&l1.current_supply), *(&l1.max_supply), *(&l1.is_mutable), l22, l12, l10, l8, l9, l18, l5, l20, l17, l21, l19)
 }
 
 public fun get_max_supply(l0: &NFT): u64 {
@@ -1033,11 +1189,27 @@ public fun is_denied(l0: &CollectionCap, l1: address): bool {
 public entry fun mint_additional_art20(l0: &mut CollectionCap, l1: u64, l2: &mut TokenIdCounter, l3: vector<UserBalance>, l4: &Clock, l5: &mut TxContext) {
     assert!(*(&l0.is_mutable), C21);
     assert!(tx_context::sender(freeze(l5)) == *(&l0.creator), C1);
-    assert!(*(&l0.max_supply) == 0u64 || *(&l0.current_supply) + l1 <= *(&l0.max_supply), C13);
+    let l6;
+    if (*(&l0.max_supply) == 0u64) {
+        l6 = true;
+        unstructured {
+            goto 'label_53;
+        }
+    } else {
+        l6 = *(&l0.current_supply) + l1 <= *(&l0.max_supply);
+        unstructured {
+            goto 'label_53;
+        }
+    };
+    /* block 53 */;
+    assert!(l6, C13);
     let l11 = object::uid_to_inner(&l0.id);
     let l14 = tx_context::sender(freeze(l5));
     if (vector::is_empty(&l3)) {
-        transfer::transfer(UserBalance { id: object::new(l5), collection_id: l11, balance: l1 }, l14)
+        transfer::transfer(UserBalance { id: object::new(l5), collection_id: l11, balance: l1 }, l14);
+        unstructured {
+            goto 'label_132;
+        }
     } else {
         let l10 = false;
         let l12 = 0u64;
@@ -1058,6 +1230,7 @@ public entry fun mint_additional_art20(l0: &mut CollectionCap, l1: u64, l2: &mut
             break
         }
     };
+    /* block 132 */;
     let l13 = 0u64;
     while (l13 < l1) {
         *(&mut l2.last_id) = *(&l2.last_id) + 1u64;
@@ -1092,15 +1265,43 @@ public entry fun mint_art20<T0>(l0: vector<u8>, l1: vector<u8>, l2: u64, l3: u64
         assert!(type_name::get() == *(&l11.fee_coin_type), C20);
         if (l20 > *(&l11.fee_amount)) {
             let l21 = l20 - *(&l11.fee_amount);
-            transfer::public_transfer(coin::split(&mut l12, l21, l14), tx_context::sender(freeze(l14)))
+            transfer::public_transfer(coin::split(&mut l12, l21, l14), tx_context::sender(freeze(l14)));
+            unstructured {
+                goto 'label_129;
+            }
+        } else {
+            unstructured {
+                goto 'label_129;
+            }
         };
-        transfer::public_transfer(l12, *(&l11.fee_collector))
+        /* block 129 */;
+        transfer::public_transfer(l12, *(&l11.fee_collector));
+        unstructured {
+            goto 'label_142;
+        }
     } else {
-        transfer::public_transfer(l12, tx_context::sender(freeze(l14)))
+        transfer::public_transfer(l12, tx_context::sender(freeze(l14)));
+        unstructured {
+            goto 'label_142;
+        }
     };
+    /* block 142 */;
     assert!(l3 <= C28, C13);
     assert!(l2 <= C28, C13);
-    assert!(l3 == 0u64 || l2 <= l3, C19);
+    let l15;
+    if (l3 == 0u64) {
+        l15 = true;
+        unstructured {
+            goto 'label_179;
+        }
+    } else {
+        l15 = l2 <= l3;
+        unstructured {
+            goto 'label_179;
+        }
+    };
+    /* block 179 */;
+    assert!(l15, C19);
     assert!(*(&l10.last_id) <= C27 - l2, C12);
     let l17 = CollectionCap { id: object::new(l14), max_supply: l3, current_supply: l2, creator: tx_context::sender(freeze(l14)), name: string::utf8(l0), description: string::utf8(l1), uri: url::new_unsafe_from_bytes(l4), logo_uri: url::new_unsafe_from_bytes(l5), is_mutable: l8, is_mintable: true, has_deny_list_authority: l9, value_source: option::none(), is_api_source: false };
     let l18 = object::uid_to_inner(&(&l17).id);
@@ -1128,9 +1329,22 @@ public entry fun mint_art20<T0>(l0: vector<u8>, l1: vector<u8>, l2: u64, l3: u64
 }
 
 public entry fun remove_from_deny_list(l0: &mut CollectionCap, l1: vector<address>, l2: &mut TxContext) {
+    let l3;
     let l9 = tx_context::sender(freeze(l2));
     let l5 = &l1.len();
-    assert!(l5 > 0u64 && l5 <= C29, C11);
+    if (l5 > 0u64) {
+        l3 = l5 <= C29;
+        unstructured {
+            goto 'label_18;
+        }
+    } else {
+        l3 = false;
+        unstructured {
+            goto 'label_18;
+        }
+    };
+    /* block 18 */;
+    assert!(l3, C11);
     assert!(l9 == *(&l0.creator), C1);
     assert!(*(&l0.has_deny_list_authority), C8);
     let l6 = object::uid_to_inner(&l0.id);
@@ -1184,13 +1398,24 @@ public entry fun set_collection_value_source(l0: &mut CollectionCap, l1: vector<
             break
         }
     } else {
-        assert!(string::length(&l9) == 64u64, C17)
+        assert!(string::length(&l9) == 64u64, C17);
+        unstructured {
+            goto 'label_105;
+        }
     };
+    /* block 105 */;
     if (option::is_none(&l0.value_source)) {
-        *(&mut l0.value_source) = option::some(l9)
+        *(&mut l0.value_source) = option::some(l9);
+        unstructured {
+            goto 'label_120;
+        }
     } else {
-        *(option::borrow_mut(&mut l0.value_source)) = l9
+        *(option::borrow_mut(&mut l0.value_source)) = l9;
+        unstructured {
+            goto 'label_120;
+        }
     };
+    /* block 120 */;
     *(&mut l0.is_api_source) = l2;
     event::emit(CollectionValueSourceUpdated { collection_id: object::uid_to_inner(&l0.id), is_api: l2, source: l9, timestamp: clock::timestamp_ms(l3) })
 }
@@ -1484,27 +1709,60 @@ public entry fun update_metadata_by_asset_id(l0: &CollectionCap, l1: vector<NFT>
         assert!(string::length(l15) <= 128u64, C10);
         let l16 = string::as_bytes(l15);
         assert!(l16.len() <= 512u64, C10);
-        assert!(l16.len() > 0u64, C10)
+        assert!(l16.len() > 0u64, C10);
+        unstructured {
+            goto 'label_50;
+        }
+    } else {
+        unstructured {
+            goto 'label_50;
+        }
     };
+    /* block 50 */;
     if (option::is_some(&l4)) {
         let l12 = option::borrow(&l4);
         assert!(string::length(l12) <= 1000u64, C10);
         let l11 = string::as_bytes(l12);
         assert!(l11.len() <= 4000u64, C10);
-        assert!(l11.len() > 0u64, C10)
+        assert!(l11.len() > 0u64, C10);
+        unstructured {
+            goto 'label_93;
+        }
+    } else {
+        unstructured {
+            goto 'label_93;
+        }
     };
+    /* block 93 */;
     if (option::is_some(&l5)) {
         let l20 = option::borrow(&l5);
         assert!(l20.len() <= 256u64, C10);
-        assert!(l20.len() > 0u64, C10)
+        assert!(l20.len() > 0u64, C10);
+        unstructured {
+            goto 'label_121;
+        }
+    } else {
+        unstructured {
+            goto 'label_121;
+        }
     };
+    /* block 121 */;
     if (option::is_some(&l6)) {
         let l14 = option::borrow(&l6);
         assert!(l14.len() <= 256u64, C10);
-        assert!(l14.len() > 0u64, C10)
+        assert!(l14.len() > 0u64, C10);
+        unstructured {
+            goto 'label_149;
+        }
+    } else {
+        unstructured {
+            goto 'label_149;
+        }
     };
-    let l19 = vector[];
-    let l13 = false;
+    let (l13, l19);
+    /* block 149 */;
+    l19 = vector[];
+    l13 = false;
     while (!(vector::is_empty(&l1)) && !(l13)) {
         let l17 = (&mut l1).pop_back();
         if (*(&(&l17).collection_id) == l10 && *(&(&l17).asset_id) == l2) {
@@ -1545,23 +1803,55 @@ public entry fun update_metadata_by_object(l0: &mut NFT, l1: &CollectionCap, l2:
     if (option::is_some(&l2)) {
         let l9 = option::extract(&mut l2);
         assert!(string::length(&l9) <= 128u64, C10);
-        *(&mut l0.name) = l9
+        *(&mut l0.name) = l9;
+        unstructured {
+            goto 'label_60;
+        }
+    } else {
+        unstructured {
+            goto 'label_60;
+        }
     };
+    /* block 60 */;
     if (option::is_some(&l3)) {
         let l7 = option::extract(&mut l3);
         assert!(string::length(&l7) <= 1000u64, C10);
-        *(&mut l0.description) = l7
+        *(&mut l0.description) = l7;
+        unstructured {
+            goto 'label_80;
+        }
+    } else {
+        unstructured {
+            goto 'label_80;
+        }
     };
+    /* block 80 */;
     if (option::is_some(&l4)) {
         let l10 = option::extract(&mut l4);
         assert!(&l10.len() <= 256u64, C10);
-        *(&mut l0.uri) = url::new_unsafe_from_bytes(l10)
+        *(&mut l0.uri) = url::new_unsafe_from_bytes(l10);
+        unstructured {
+            goto 'label_101;
+        }
+    } else {
+        unstructured {
+            goto 'label_101;
+        }
     };
+    /* block 101 */;
     if (option::is_some(&l5)) {
         let l8 = option::extract(&mut l5);
         assert!(&l8.len() <= 256u64, C10);
-        *(&mut l0.logo_uri) = url::new_unsafe_from_bytes(l8)
+        *(&mut l0.logo_uri) = url::new_unsafe_from_bytes(l8);
+        unstructured {
+            goto 'label_122;
+        }
+    } else {
+        unstructured {
+            goto 'label_122;
+        }
     };
+    /* block 122 */;
     event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&l0.id), new_name: *(&l0.name), new_description: *(&l0.description) })
 }
 

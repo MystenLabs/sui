@@ -6,15 +6,20 @@ switch (0) {
         { 1 }
         if (2) {
             { 3 }
+            jump<CB> NodeIndex(6);
         } else {
             { 4 }
+            jump<CB> NodeIndex(6);
         }
     _1 => 
         { 5 }
+        jump<CB> NodeIndex(6);
 }
 if (6) {
     { 7 }
+    jump<CB> NodeIndex(9);
 } else {
     { 8 }
+    jump<CB> NodeIndex(9);
 }
 { 9 }
