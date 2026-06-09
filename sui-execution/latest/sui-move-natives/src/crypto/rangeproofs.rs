@@ -44,6 +44,21 @@ fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
         .enable_verify_bulletproofs_ristretto255())
 }
 
+/// Legacy entry point retained for backwards compatibility with already-published framework
+/// versions that reference it. Native function bindings can never be removed, since older
+/// framework bytecode and transaction replay still link against them. It carries no domain
+/// separation tag, so verification uses an empty one; new callers should use
+/// [`verify_bulletproofs_with_dst_ristretto255`].
+pub fn verify_bulletproofs_ristretto255(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 3);
+    verify_bulletproofs_ristretto255_impl(context, args, vec![])
+}
+
 pub fn verify_bulletproofs_with_dst_ristretto255(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -51,6 +66,16 @@ pub fn verify_bulletproofs_with_dst_ristretto255(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 4);
+    // The domain separation tag is the last argument, so it is popped first.
+    let dst = pop_arg!(args, VectorRef).as_bytes_ref()?.to_vec();
+    verify_bulletproofs_ristretto255_impl(context, args, dst)
+}
+
+fn verify_bulletproofs_ristretto255_impl(
+    context: &mut NativeContext,
+    mut args: VecDeque<Value>,
+    dst: Vec<u8>,
+) -> PartialVMResult<NativeResult> {
     if !is_supported(context)? {
         return Ok(NativeResult::err(context.gas_used(), NOT_SUPPORTED));
     }
@@ -70,9 +95,6 @@ pub fn verify_bulletproofs_with_dst_ristretto255(
                 "verify_bulletproofs_ristretto255_base_cost not available",
             ))?
     );
-
-    // The domain separation tag is the last argument, so it is popped first.
-    let dst = pop_arg!(args, VectorRef).as_bytes_ref()?.to_vec();
 
     let commitments = pop_arg!(args, VectorRef);
     let range_bits = pop_arg!(args, u8);

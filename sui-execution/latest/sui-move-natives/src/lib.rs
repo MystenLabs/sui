@@ -1303,6 +1303,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ),
         (
             "rangeproofs",
+            "verify_bulletproofs_ristretto255_internal",
+            make_native!(rangeproofs::verify_bulletproofs_ristretto255),
+        ),
+        (
+            "rangeproofs",
             "verify_bulletproofs_with_dst_ristretto255_internal",
             make_native!(rangeproofs::verify_bulletproofs_with_dst_ristretto255),
         ),
