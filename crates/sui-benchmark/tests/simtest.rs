@@ -27,11 +27,7 @@ mod test {
     };
     use sui_benchmark::{
         FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
-        drivers::{
-            Interval,
-            bench_driver::{BenchDriver, set_crash_recovery_probability},
-            driver::Driver,
-        },
+        drivers::{Interval, bench_driver::BenchDriver, driver::Driver},
         util::get_ed25519_keypair_from_keystore,
     };
     use sui_config::ExecutionCacheConfig;
@@ -527,7 +523,7 @@ mod test {
             None,
             Some(|_cluster: Arc<TestCluster>| {
                 register_fail_point_if("crash-with-tx-logging", || true);
-                set_crash_recovery_probability(CRASH_PROB);
+                sui_core::crash_recovery::set_crash_recovery_probability(CRASH_PROB as f64);
                 std::future::ready(())
             }),
             true,
