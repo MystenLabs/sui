@@ -1465,9 +1465,6 @@ impl AuthorityState {
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
 
         let tx_digest = certificate.digest();
-        // Register the digest in TLS so that a panic hook can identify which transaction caused
-        // the crash. The guard clears the slot on drop and is !Sync to prevent accidental use
-        // across threads in an async context.
         let _crash_guard =
             crate::crash_recovery::register_executing_transaction(*tx_digest, self.name);
 
@@ -1508,33 +1505,19 @@ impl AuthorityState {
         // re-execution records the tx in the crash log but the tx is already in a committed
         // checkpoint, so dropping it on restart produces a checkpoint mismatch.
         //
-        // A process-global seed is used so that all validators — regardless of which OS thread
-        // they run on — reach the same crash decision for a given digest. This mirrors a real
-        // production bug where the same transaction causes every validator that executes it to
-        // panic. Without crash-recovery the node would crash again on every restart.
-        //
         // We use catch_unwind to fire a plain panic (triggering the crash-recovery hook, which
         // writes the crash log via TLS), then call kill_current_node once we are back in normal
         // execution. We cannot call kill_current_node from inside the panic hook because
         // kill_current_node itself panics (with PanicWrapper), which would be a double-panic.
-        //
-        // Only poison user (programmable) transactions. System transactions (epoch change,
-        // randomness, consensus prologue, etc.) must always succeed or the cluster stalls.
         #[cfg(msim)]
         if !certificate.data().transaction_data().kind().is_system_tx() {
             sui_macros::fail_point_if!("crash-with-tx-logging", || {
-                if crate::crash_recovery::should_poison_transaction(&tx_digest, 0.002) {
-                    // Panic with the crash-simulation marker so the panic hook can identify this
-                    // as an intentional crash and write the crash log. The hook distinguishes this
-                    // from random node kills (which panic with a PanicWrapper, not a &str).
-                    // catch_unwind lets the hook fire and write the log before we call
-                    // kill_current_node, whose own PanicWrapper panic would not be identified as
-                    // a crash-simulation by the hook.
+                if crate::crash_recovery::should_poison_transaction(&tx_digest) {
                     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         std::panic::panic_any(crate::crash_recovery::CRASH_SIM_PANIC_MSG);
                     }));
-                    sui_simulator::task::kill_current_node(Some(std::time::Duration::from_secs(
-                        20,
+                    sui_simulator::task::kill_current_node(Some(std::time::Duration::from_millis(
+                        100,
                     )));
                 }
             });

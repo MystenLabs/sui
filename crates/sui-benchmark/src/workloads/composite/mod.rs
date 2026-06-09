@@ -644,10 +644,6 @@ impl CompositePayload {
             }
         }
 
-        // ensure_unique() randomises the transaction digest on every submission so that
-        // repeated calls for the same logical operation produce distinct digests.  This
-        // also means that if a submission happens to fall in the crash-simulation poison
-        // set, the next retry will almost certainly have a different (clean) digest.
         (tx_builder.ensure_unique().build_and_sign(keypair), op_set)
     }
 

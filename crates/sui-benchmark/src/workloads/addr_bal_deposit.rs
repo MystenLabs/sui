@@ -204,30 +204,15 @@ impl Workload<dyn Payload> for AddrBalDepositWorkload {
                     vec![coin_balance, recipient_arg],
                 );
             }
-            // Mine a transaction digest that is not in the poison set.  Seeding
-            // transactions are critical: they run exactly once in init() with no retry,
-            // so if one is crash-recovered the address balance is never funded.
-            // ensure_unique() alone is insufficient here because there is no retry loop.
-            // Incrementing the gas budget produces a different digest without changing
-            // transaction semantics.
-            let mut tx_data = tx_builder.ensure_unique().build();
+            // Seeding transactions run exactly once in init() with no retry loop, so they
+            // must not land in the crash-recovery poison set.
+            let tx_data = tx_builder.ensure_unique().build();
             #[cfg(msim)]
-            if let Some(prob) = crate::drivers::bench_driver::crash_recovery_probability() {
-                use sui_types::transaction::TransactionDataAPI as _;
-                loop {
-                    let candidate = sui_types::transaction::Transaction::from_data_and_signer(
-                        tx_data.clone(),
-                        vec![keypair.as_ref()],
-                    );
-                    if !sui_core::crash_recovery::should_poison_transaction(
-                        candidate.digest(),
-                        prob as f64,
-                    ) {
-                        break;
-                    }
-                    tx_data.gas_data_mut().budget += 1;
-                }
-            }
+            let tx_data = {
+                let mut d = tx_data;
+                sui_core::crash_recovery::mine_non_poison_transaction(&mut d, keypair.as_ref());
+                d
+            };
             let tx = sui_types::transaction::Transaction::from_data_and_signer(
                 tx_data,
                 vec![keypair.as_ref()],

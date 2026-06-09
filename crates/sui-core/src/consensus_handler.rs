@@ -2558,7 +2558,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     continue;
                 }
 
-                // Transactions that caused a panic in a previous run are flagged here.
                 // We set Dropped so callers waiting on effects get a definitive response,
                 // but we do NOT continue — the transaction flows through the rest of the
                 // scheduling pipeline so that get_tx_cost still updates IndirectStateObserver.
@@ -2566,22 +2565,27 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // to the pre-crash run, which is required for locally_computed_checkpoints to
                 // remain consistent across restarts.  Lock acquisition is skipped below to
                 // avoid creating a persistent owned-object lock that can never be released.
-                let mut is_crash_recovered = false;
-                if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
-                    let digest = tx.digest();
-                    if self.crashed_transactions.contains(digest) {
-                        assert_reachable!(
-                            "crash-recovery: dropping previously-crashing transaction"
-                        );
-                        warn!(
-                            ?digest,
-                            "Dropping transaction that caused a crash in a previous run"
-                        );
-                        self.epoch_store
-                            .set_consensus_tx_status(position, ConsensusTxStatus::Dropped);
-                        is_crash_recovered = true;
-                    }
-                }
+                let is_crash_recovered =
+                    if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
+                        let digest = tx.digest();
+                        if self.crashed_transactions.contains(digest) {
+                            assert_reachable!(
+                                "crash-recovery: dropping previously-crashing transaction"
+                            );
+                            warn!(
+                                ?digest,
+                                tx = ?bcs::to_bytes(&parsed.transaction).unwrap_or_default(),
+                                "Dropping transaction that caused a crash in a previous run"
+                            );
+                            self.epoch_store
+                                .set_consensus_tx_status(position, ConsensusTxStatus::Dropped);
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
 
                 let kind = classify(&parsed.transaction);
                 self.metrics
@@ -2673,11 +2677,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
-                // Perform post-consensus owned object conflict detection. If lock acquisition
-                // fails, the transaction has invalid/conflicting owned inputs and should be dropped.
-                // This must happen AFTER all filtering checks above to avoid acquiring locks
-                // for transactions that will be dropped (e.g., during epoch change).
-                // Only applies to UserTransactionV2 - other transaction types don't need lock acquisition.
                 // Crash-recovered transactions skip lock acquisition: they are dropped before
                 // execution in handle_deferral_and_cancellation, so acquiring a lock here
                 // would create a persistent lock that is never released.
