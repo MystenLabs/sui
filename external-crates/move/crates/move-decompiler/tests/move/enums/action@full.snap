@@ -19,15 +19,25 @@ public fun destroy_action(l0: Action) {
     let l2 = l0;
     match (&l2) {
         Stop => {
-            let Action::Stop {} = l2
+            let Action::Stop {} = l2;
+            unstructured {
+                goto 'label_26;
+            }
         },
         MoveTo { x: reg_6, y: reg_7 } => {
-            let Action::MoveTo { x: reg_9, y: reg_10 } = l2
+            let Action::MoveTo { x: reg_9, y: reg_10 } = l2;
+            unstructured {
+                goto 'label_26;
+            }
         },
         ChangeSpeed { pos0: reg_12 } => {
-            let Action::ChangeSpeed { pos0: reg_14 } = l2
+            let Action::ChangeSpeed { pos0: reg_14 } = l2;
+            unstructured {
+                goto 'label_26;
+            }
         }
-    }
+    };
+    /* block 26 */
 }
 
 public fun increase_speed(l0: &mut Action, l1: u64) {
@@ -57,11 +67,18 @@ public fun speed(l0: &Action): u64 {
         MoveTo { x: reg_7, y: reg_8 } => {
             let Action::MoveTo { x: reg_10, y: reg_11 } = &l3;
             l1 = *reg_10 : &u64;
+            unstructured {
+                goto 'label_29;
+            }
         },
         ChangeSpeed { pos0: reg_14 } => {
             let Action::ChangeSpeed { pos0: reg_16 } = &l3;
             l1 = *reg_16 : &u64;
+            unstructured {
+                goto 'label_29;
+            }
         }
     };
+    /* block 29 */;
     return l1
 }

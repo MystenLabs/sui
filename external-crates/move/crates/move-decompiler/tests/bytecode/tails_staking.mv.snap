@@ -247,8 +247,16 @@ public fun exp_down_with_fee(l0: &mut Version, l1: &mut TailsStakingRegistry, l2
     let l11 = typus_nft::tails_level(freeze(l8));
     if (option::is_some(&l7)) {
         let l10 = bag::borrow(&l1.tails_metadata, C9);
-        typus_nft::update_image_url(&l1.tails_manager_cap, l8, *(big_vector::borrow(table::borrow(l10, l11), l13 - 1u64)))
+        typus_nft::update_image_url(&l1.tails_manager_cap, l8, *(big_vector::borrow(table::borrow(l10, l11), l13 - 1u64)));
+        unstructured {
+            goto 'label_109;
+        }
+    } else {
+        unstructured {
+            goto 'label_109;
+        }
     };
+    /* block 109 */;
     *(&mut (bag::borrow_mut(&mut l1.tails_metadata, C8))[l13 - 1u64]) = l11;
     event::emit(ExpDownEvent { tails: l9, log: vector[l13, l4], bcs_padding: C17 })
 }
@@ -269,8 +277,16 @@ public fun exp_down_without_staking_with_fee(l0: &mut Version, l1: &TailsStaking
     let l13 = typus_nft::tails_level(freeze(l10));
     if (option::is_some(&l9)) {
         let l12 = bag::borrow(&l1.tails_metadata, C9);
-        typus_nft::update_image_url(&l1.tails_manager_cap, l10, *(big_vector::borrow(table::borrow(l12, l13), l14 - 1u64)))
+        typus_nft::update_image_url(&l1.tails_manager_cap, l10, *(big_vector::borrow(table::borrow(l12, l13), l14 - 1u64)));
+        unstructured {
+            goto 'label_92;
+        }
+    } else {
+        unstructured {
+            goto 'label_92;
+        }
     };
+    /* block 92 */;
     event::emit(ExpDownEvent { tails: l11, log: vector[l14, l6], bcs_padding: C17 })
 }
 
@@ -361,6 +377,13 @@ public fun get_max_staking_level(l0: &Version, l1: &TailsStakingRegistry, l2: ad
                 l8 = *(&l14[l15 - 1u64]);
             };
             l5 = l5 + 1u64;
+        };
+        unstructured {
+            goto 'label_143;
+        }
+    } else {
+        unstructured {
+            goto 'label_143;
         }
     };
     /* block 143 */;
@@ -472,11 +495,18 @@ entry fun level_up(l0: &Version, l1: &mut TailsStakingRegistry, l2: address, l3:
     let l8 = typus_nft::tails_level(freeze(l5));
     if (l3) {
         let l11 = bag::borrow(&l1.tails_metadata, C10);
-        typus_nft::update_image_url(&l1.tails_manager_cap, l5, *(table::borrow(l11, l8 * 10000u64 + l10)))
+        typus_nft::update_image_url(&l1.tails_manager_cap, l5, *(table::borrow(l11, l8 * 10000u64 + l10)));
+        unstructured {
+            goto 'label_80;
+        }
     } else {
         let l7 = bag::borrow(&l1.tails_metadata, C9);
-        typus_nft::update_image_url(&l1.tails_manager_cap, l5, *(big_vector::borrow(table::borrow(l7, l8), l10 - 1u64)))
+        typus_nft::update_image_url(&l1.tails_manager_cap, l5, *(big_vector::borrow(table::borrow(l7, l8), l10 - 1u64)));
+        unstructured {
+            goto 'label_80;
+        }
     };
+    /* block 80 */;
     *(&mut (bag::borrow_mut(&mut l1.tails_metadata, C8))[l10 - 1u64]) = l8;
     event::emit(LevelUpEvent { tails: l6, log: vector[l10, l8], bcs_padding: C17 })
 }
@@ -491,8 +521,16 @@ public fun public_exp_down(l0: &ManagerCap, l1: &Version, l2: &mut TailsStakingR
     let l9 = typus_nft::tails_level(freeze(l6));
     if (option::is_some(&typus_nft::level_up(&l2.tails_manager_cap, l6))) {
         let l8 = bag::borrow(&l2.tails_metadata, C9);
-        typus_nft::update_image_url(&l2.tails_manager_cap, l6, *(big_vector::borrow(table::borrow(l8, l9), l11 - 1u64)))
+        typus_nft::update_image_url(&l2.tails_manager_cap, l6, *(big_vector::borrow(table::borrow(l8, l9), l11 - 1u64)));
+        unstructured {
+            goto 'label_62;
+        }
+    } else {
+        unstructured {
+            goto 'label_62;
+        }
     };
+    /* block 62 */;
     *(&mut (bag::borrow_mut(&mut l2.tails_metadata, C8))[l11 - 1u64]) = l9;
     event::emit(ExpDownEvent { tails: l7, log: vector[l11, l4], bcs_padding: C17 })
 }
@@ -506,8 +544,16 @@ public fun public_exp_down_without_staking(l0: &ManagerCap, l1: &Version, l2: &T
     let l11 = typus_nft::tails_level(freeze(l8));
     if (option::is_some(&typus_nft::level_up(&l2.tails_manager_cap, l8))) {
         let l10 = bag::borrow(&l2.tails_metadata, C9);
-        typus_nft::update_image_url(&l2.tails_manager_cap, l8, *(big_vector::borrow(table::borrow(l10, l11), l12 - 1u64)))
+        typus_nft::update_image_url(&l2.tails_manager_cap, l8, *(big_vector::borrow(table::borrow(l10, l11), l12 - 1u64)));
+        unstructured {
+            goto 'label_55;
+        }
+    } else {
+        unstructured {
+            goto 'label_55;
+        }
     };
+    /* block 55 */;
     event::emit(ExpDownEvent { tails: l9, log: vector[l12, l6], bcs_padding: C17 })
 }
 
@@ -609,9 +655,21 @@ entry fun set_profit_sharing<T0, T1>(l0: &Version, l1: &mut TailsStakingRegistry
     if (!(l20)) {
         (&mut l1.profit_assets).push_back(l19);
         if (!(dynamic_field::exists_(&l1.id, l19))) {
-            dynamic_field::add(&mut l1.id, l19, balance::zero())
+            dynamic_field::add(&mut l1.id, l19, balance::zero());
+            unstructured {
+                goto 'label_188;
+            }
+        } else {
+            unstructured {
+                goto 'label_188;
+            }
+        }
+    } else {
+        unstructured {
+            goto 'label_188;
         }
     };
+    /* block 188 */;
     let l22 = dynamic_field::borrow_mut(&mut l1.id, l19);
     let l27 = coin::value(&l3);
     assert!(balance::value(freeze(l22)) >= l32, C2);
@@ -811,13 +869,20 @@ entry fun upload_webp_bytes(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64
     ecosystem::verify(l0, l5);
     let l6 = bag::borrow_mut(&mut l1.tails_metadata, C10);
     if (!(table::contains(freeze(l6), l3 * 10000u64 + l2))) {
-        table::add(l6, l3 * 10000u64 + l2, l4)
+        table::add(l6, l3 * 10000u64 + l2, l4);
+        unstructured {
+            goto 'label_47;
+        }
     } else {
         let l7 = table::borrow_mut(l6, l3 * 10000u64 + l2);
         while (!(vector::is_empty(&l4))) {
             l7.push_back((&mut l4).pop_back())
+        };
+        unstructured {
+            goto 'label_47;
         }
-    }
+    };
+    /* block 47 */
 }
 
 public fun verify_staking(l0: &Version, l1: &TailsStakingRegistry, l2: address, l3: address): bool {

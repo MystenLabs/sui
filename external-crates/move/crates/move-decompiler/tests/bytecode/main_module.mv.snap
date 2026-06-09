@@ -272,8 +272,21 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
     assert!(*(&l1.version) <= C0, C7);
     assert!(table::contains(&l0.cabinet, l45), C3);
     assert!(coin::value(freeze(l3)) >= C1 * l2, C6);
+    let l6;
     let l44 = table::borrow_mut(&mut l0.cabinet, l45);
-    assert!(l2 > 0u64 && *(&l44.has_stake_number) + l2 <= 50u64, C5);
+    if (l2 > 0u64) {
+        l6 = *(&l44.has_stake_number) + l2 <= 50u64;
+        unstructured {
+            goto 'label_101;
+        }
+    } else {
+        l6 = false;
+        unstructured {
+            goto 'label_101;
+        }
+    };
+    /* block 101 */;
+    assert!(l6, C5);
     *(&mut l44.has_stake_number) = *(&l44.has_stake_number) + l2;
     let l28 = false;
     if (*(&l44.position_floor_of_seating) == 0u64) {
@@ -284,47 +297,97 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
         if (*(&l1.current_row) + 1u64 > 2u64) {
             *(&mut l1.current_row) = 0u64;
             *(&mut l1.current_floor) = *(&l1.current_floor) + 1u64;
-            (&mut l1.seating).push_back(vector[])
+            (&mut l1.seating).push_back(vector[]);
+            unstructured {
+                goto 'label_189;
+            }
         } else {
-            *(&mut l1.current_row) = *(&l1.current_row) + 1u64
+            *(&mut l1.current_row) = *(&l1.current_row) + 1u64;
+            unstructured {
+                goto 'label_189;
+            }
         };
+        /* block 189 */;
         let l20 = table::borrow_mut(&mut l0.cabinet, *(&l44.affCode));
         *(&mut l20.total_effective_invite_number) = *(&l20.total_effective_invite_number) + 1u64;
         (&mut l20.invite_addresses).push_back(l45);
         let l38 = *(&l20.total_effective_invite_number);
         l44 = table::borrow_mut(&mut l0.cabinet, l45);
-        *(&mut l44.position_of_aff) = l38
+        *(&mut l44.position_of_aff) = l38;
+        unstructured {
+            goto 'label_221;
+        }
+    } else {
+        unstructured {
+            goto 'label_221;
+        }
     };
+    let (l12, l29);
+    /* block 221 */;
     sbt::mint(l4, l45, l5);
     event::emit(Participates { from: l45, num: l2 });
-    let l29 = C1 * l2;
-    let l12 = if (l28 == true) {
-        l29 * 3u64
+    l29 = C1 * l2;
+    if (l28 == true) {
+        l12 = l29 * 3u64;
+        unstructured {
+            goto 'label_248;
+        }
     } else {
-        l29 * 22u64 / 10u64
+        l12 = l29 * 22u64 / 10u64;
+        unstructured {
+            goto 'label_248;
+        }
     };
-    *(&mut l44.could_reward) = *(&l44.could_reward) + l12;
+    let (l21, l39);
+    /* block 248 */;
+    let l43 = l12;
+    *(&mut l44.could_reward) = *(&l44.could_reward) + l43;
     transfer::public_transfer(coin::split(l3, l29 * 6u64 / 100u64, l5), *(&(&l0.team_addresses)[53u64]));
     transfer::public_transfer(coin::split(l3, l29 * 4u64 / 100u64, l5), *(&(&l0.team_addresses)[52u64]));
     l29 = l29 * 90u64 / 100u64;
-    let l21 = l29 * 50u64 / 100u64;
-    let l39 = *(&l44.affCode);
+    l21 = l29 * 50u64 / 100u64;
+    l39 = *(&l44.affCode);
     if (*(&l44.position_of_aff) % 3u64 == 0u64) {
         transfer::public_transfer(coin::split(l3, l29 * 40u64 / 100u64, l5), *(&(&l0.team_addresses)[0u64]));
         l21 = l29 * 10u64 / 100u64;
+        unstructured {
+            goto 'label_330;
+        }
+    } else {
+        unstructured {
+            goto 'label_330;
+        }
     };
+    /* block 330 */;
     l44 = table::borrow_mut(&mut l0.cabinet, l39);
     if (*(&l44.could_reward) <= l21) {
         transfer::public_transfer(coin::split(l3, l21 - *(&l44.could_reward), l5), *(&(&l0.team_addresses)[0u64]));
         l21 = *(&l44.could_reward);
+        unstructured {
+            goto 'label_359;
+        }
+    } else {
+        unstructured {
+            goto 'label_359;
+        }
     };
+    /* block 359 */;
     if (l21 > 0u64) {
         transfer::public_transfer(coin::split(l3, l21, l5), l39);
         *(&mut l44.could_reward) = *(&l44.could_reward) - l21;
-        *(&mut l44.has_reward) = *(&l44.has_reward) + l21
+        *(&mut l44.has_reward) = *(&l44.has_reward) + l21;
+        unstructured {
+            goto 'label_388;
+        }
+    } else {
+        unstructured {
+            goto 'label_388;
+        }
     };
-    let l30 = 0u64;
-    let l22 = table::borrow_mut(&mut l0.cabinet, l45);
+    let (l22, l30);
+    /* block 388 */;
+    l30 = 0u64;
+    l22 = table::borrow_mut(&mut l0.cabinet, l45);
     l22 = table::borrow_mut(&mut l0.cabinet, *(&l22.affCode));
     let __dispatch_402;
     let (l26, l31);
@@ -711,12 +774,21 @@ public entry fun whiteList(l0: vector<address>, l1: vector<u64>, l2: &mut Coin<S
 }
 
 public entry fun withdraw(l0: &mut TheTreasury, l1: &AdminCap, l2: Option<u64>, l3: &mut TxContext) {
-    let l4 = if (option::is_some(&l2)) {
+    let l4;
+    if (option::is_some(&l2)) {
         let l6 = option::destroy_some(l2);
         assert!(l6 <= x2_balance::value(&l0.balance), C2);
-        l6
+        l4 = l6;
+        unstructured {
+            goto 'label_26;
+        }
     } else {
-        x2_balance::value(&l0.balance)
+        l4 = x2_balance::value(&l0.balance);
+        unstructured {
+            goto 'label_26;
+        }
     };
-    transfer::public_transfer(coin::take(&mut l0.balance, l4, l3), tx_context::sender(freeze(l3)))
+    /* block 26 */;
+    let l5 = l4;
+    transfer::public_transfer(coin::take(&mut l0.balance, l5, l3), tx_context::sender(freeze(l3)))
 }

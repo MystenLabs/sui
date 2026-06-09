@@ -59,6 +59,10 @@ pub enum GotoSource {
     SelfLoop,
     /// Escape Jump synthesized in `insert_breaks` when a JumpIf has one Latch arm.
     EscapeJumpIf,
+    /// Jump emitted by the reaching-condition structurer at a region-exit edge — either the
+    /// loop-body back edge (target == loop_head, rewritten to `Continue` by `insert_breaks`)
+    /// or a break-target edge (target outside the loop, rewritten to `Break`).
+    ReachingExit,
 }
 
 impl GotoSource {
@@ -72,6 +76,7 @@ impl GotoSource {
             GotoSource::LatchCode => "LC",
             GotoSource::SelfLoop => "SL",
             GotoSource::EscapeJumpIf => "EJI",
+            GotoSource::ReachingExit => "RE",
         }
     }
 }
@@ -89,7 +94,17 @@ pub enum Structured {
     /// labeled `Break`/`Continue` from inner loops that target this one.
     Loop(Label, Box<Structured>),
     Seq(Vec<Structured>),
-    IfElse(Code, Box<Structured>, Box<Option<Structured>>),
+    /// An `if`/`else` whose guard is a `Formula` over branch-condition atoms (block ids).
+    /// `Formula::Atom(code)` is the degenerate single-block case (the dom-tree structurer's
+    /// product); compound `And`/`Or`/`Not` formulas come from the reaching-condition acyclic
+    /// structurer recovering a guarded forward skip without a goto. Lowered to `Exp::IfElse`
+    /// by substituting each atom with its block's condition expression and threading
+    /// `&&`/`||`/`!` through.
+    CondIf(
+        crate::structuring::reaching::Formula,
+        Box<Structured>,
+        Box<Option<Structured>>,
+    ),
     Switch(
         Code,
         /* enum */ (ModuleId<Symbol>, Symbol),
@@ -173,9 +188,16 @@ impl std::fmt::Display for Structured {
                     indent(f, level)?;
                     writeln!(f, "}}")
                 }
-                Structured::IfElse(cond, then_branch, else_branch) => {
+                Structured::CondIf(cond, then_branch, else_branch) => {
+                    use crate::structuring::reaching::Formula;
                     indent(f, level)?;
-                    writeln!(f, "if ({:?}) {{", cond)?;
+                    // For the single-atom case (the migrated `IfElse(Code, ...)`) render the
+                    // bare block id, matching legacy output. For compound formulas show the
+                    // recovered boolean inside `<…>` so debug output stays scannable.
+                    match cond {
+                        Formula::Atom(n) => writeln!(f, "if ({}) {{", n.index())?,
+                        _ => writeln!(f, "if <{cond}> {{")?,
+                    }
                     fmt_structured(then_branch, f, level + 1)?;
                     indent(f, level)?;
                     if let Some(else_branch) = &**else_branch {

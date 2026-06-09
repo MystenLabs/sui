@@ -16,49 +16,85 @@ public enum Color has copy, drop {
 // -- functions -- 
 
 public fun is_blue(l0: Color): bool {
+    let l1;
     let l3 = l0;
-    return match (&l3) {
+    match (&l3) {
         Red => {
-            false
+            l1 = false;
+            unstructured {
+                goto 'label_22;
+            }
         },
         Green => {
-            false
+            l1 = false;
+            unstructured {
+                goto 'label_22;
+            }
         },
         Blue => {
             let Color::Blue {} = l3;
-            true
+            l1 = true;
+            unstructured {
+                goto 'label_22;
+            }
         }
-    }
+    };
+    /* block 22 */;
+    return l1
 }
 
 public fun is_green(l0: Color): bool {
+    let l1;
     let l3 = l0;
-    return match (&l3) {
+    match (&l3) {
         Red => {
-            false
+            l1 = false;
+            unstructured {
+                goto 'label_22;
+            }
         },
         Green => {
             let Color::Green {} = l3;
-            true
+            l1 = true;
+            unstructured {
+                goto 'label_22;
+            }
         },
         Blue => {
-            false
+            l1 = false;
+            unstructured {
+                goto 'label_22;
+            }
         }
-    }
+    };
+    /* block 22 */;
+    return l1
 }
 
 public fun is_red(l0: Color): bool {
+    let l1;
     let l3 = l0;
-    return match (&l3) {
+    match (&l3) {
         Red => {
             let Color::Red {} = l3;
-            true
+            l1 = true;
+            unstructured {
+                goto 'label_22;
+            }
         },
         Green => {
-            false
+            l1 = false;
+            unstructured {
+                goto 'label_22;
+            }
         },
         Blue => {
-            false
+            l1 = false;
+            unstructured {
+                goto 'label_22;
+            }
         }
-    }
+    };
+    /* block 22 */;
+    return l1
 }

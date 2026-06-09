@@ -5,10 +5,13 @@ if (0) {
     switch (1) {
         _0 => 
             { 2 }
+            jump<CB> NodeIndex(5);
         _1 => 
             { 3 }
+            jump<CB> NodeIndex(5);
     }
 } else {
     { 4 }
+    jump<CB> NodeIndex(5);
 }
 { 5 }

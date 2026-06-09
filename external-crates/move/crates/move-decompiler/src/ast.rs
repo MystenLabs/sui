@@ -206,7 +206,7 @@ impl std::fmt::Display for TypeRef {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnpackKind {
     Value,
     ImmRef,
@@ -832,6 +832,30 @@ fn write_data_op(
     }
 }
 
+/// Render `exp` as an operand of `&&`/`||`. Naked `Seq` operands — which `recover_flag` emits
+/// when each `||` branch needs its per-feed setup statements to stay lazy under short-circuit
+/// — are wrapped in `{ … }` so the output parses as Move. All other shapes render via their
+/// normal `Display`. This mirrors `pretty_printer::primitive_op_doc::bin`'s production
+/// behavior so the debug `Display` path used by `run_move_test` produces valid Move.
+fn fmt_short_circuit_operand(
+    f: &mut std::fmt::Formatter<'_>,
+    exp: &Exp,
+) -> Result<(), std::fmt::Error> {
+    match exp {
+        Exp::Seq(items) => {
+            write!(f, "{{ ")?;
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    write!(f, "; ")?;
+                }
+                write!(f, "{}", item)?;
+            }
+            write!(f, " }}")
+        }
+        _ => write!(f, "{}", exp),
+    }
+}
+
 fn write_primitive_op(
     f: &mut std::fmt::Formatter<'_>,
     op: &PrimitiveOp,
@@ -852,8 +876,16 @@ fn write_primitive_op(
         PrimitiveOp::BitOr => write!(f, "{} | {}", args[0], args[1]),
         PrimitiveOp::BitAnd => write!(f, "{} & {}", args[0], args[1]),
         PrimitiveOp::Xor => write!(f, "{} ^ {}", args[0], args[1]),
-        PrimitiveOp::Or => write!(f, "{} || {}", args[0], args[1]),
-        PrimitiveOp::And => write!(f, "{} && {}", args[0], args[1]),
+        PrimitiveOp::Or => {
+            fmt_short_circuit_operand(f, &args[0])?;
+            write!(f, " || ")?;
+            fmt_short_circuit_operand(f, &args[1])
+        }
+        PrimitiveOp::And => {
+            fmt_short_circuit_operand(f, &args[0])?;
+            write!(f, " && ")?;
+            fmt_short_circuit_operand(f, &args[1])
+        }
         PrimitiveOp::Not => write!(f, "!({})", args[0]),
         PrimitiveOp::Equal => write!(f, "{} == {}", args[0], args[1]),
         PrimitiveOp::NotEqual => write!(f, "{} != {}", args[0], args[1]),

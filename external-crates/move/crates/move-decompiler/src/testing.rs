@@ -130,6 +130,16 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
         return "Expected an entry point `0`, but none was found".to_owned();
     }
     let config = crate::config::Config::default();
-    let (structured, _unemitted) = crate::structuring::structure(&config, input, 0.into());
+    // `run_structuring_test` exercises the structurer in isolation on a tiny `.stt` fixture
+    // — there's no `terms` map (term reconstruction is part of `translate.rs`, not the
+    // structurer). Pass an empty map; `bodies_equivalent` treats every block with no entry
+    // in `terms` as "no body to compare", drops them all via `filter_map`, and the resulting
+    // empty s1/s2 lists trivially compare equal — i.e., the guard is bypassed. That's the
+    // right behavior for these `.stt` shape tests: they pin the structurer's CFG-to-AST
+    // mapping, and the content-level guard would only mask the shape regressions they
+    // exist to catch.
+    let empty_terms = std::collections::BTreeMap::new();
+    let (structured, _unemitted) =
+        crate::structuring::structure(&config, input, 0.into(), &empty_terms);
     structured.to_test_string()
 }

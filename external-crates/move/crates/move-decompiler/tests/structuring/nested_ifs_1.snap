@@ -5,7 +5,14 @@ if (0) {
     if (1) {
         if (2) {
             { 3 }
+            jump<CB> NodeIndex(4);
+        } else {
+            jump<AOS> NodeIndex(4);
         }
+    } else {
+        jump<AOS> NodeIndex(4);
     }
+} else {
+    jump<AOS> NodeIndex(4);
 }
 { 4 }

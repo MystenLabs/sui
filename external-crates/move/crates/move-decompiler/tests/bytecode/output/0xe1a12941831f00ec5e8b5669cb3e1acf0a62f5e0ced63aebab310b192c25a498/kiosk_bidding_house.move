@@ -219,9 +219,21 @@ public fun buy_nft_with_request<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l
         if (dynamic_object_field::exists_with_type(&l0.id, l20)) {
             let Bid { id: reg_88, bidder: reg_89, amount: reg_90, timestamp: reg_91 } = dynamic_object_field::remove(&mut l0.id, l20);
             transfer::public_transfer(coin::from_balance(reg_90 : 0x2::balance::Balance<0x2::sui::SUI>, l6), l20);
-            object::delete(reg_88 : 0x2::object::UID)
+            object::delete(reg_88 : 0x2::object::UID);
+            unstructured {
+                goto 'label_149;
+            }
+        } else {
+            unstructured {
+                goto 'label_149;
+            }
+        }
+    } else {
+        unstructured {
+            goto 'label_149;
         }
     };
+    /* block 149 */;
     let (reg_103, reg_104) = kiosk::purchase_with_cap(l3, reg_17 : 0x2::kiosk::PurchaseCap<T0>, coin::zero(l6));
     object::delete(reg_13 : 0x2::object::UID);
     event::emit(NftBoughtOut { listing_id: l2, seller: l23, buyer: tx_context::sender(freeze(l6)), amount: l9, nft_id: reg_16 : 0x2::object::ID });
@@ -242,9 +254,21 @@ public fun cancel_listing<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: ID,
         if (dynamic_object_field::exists_with_type(&l0.id, l6)) {
             let Bid { id: reg_61, bidder: reg_62, amount: reg_63, timestamp: reg_64 } = dynamic_object_field::remove(&mut l0.id, l6);
             transfer::public_transfer(coin::from_balance(reg_63 : 0x2::balance::Balance<0x2::sui::SUI>, l3), l6);
-            object::delete(reg_61 : 0x2::object::UID)
+            object::delete(reg_61 : 0x2::object::UID);
+            unstructured {
+                goto 'label_111;
+            }
+        } else {
+            unstructured {
+                goto 'label_111;
+            }
+        }
+    } else {
+        unstructured {
+            goto 'label_111;
         }
     };
+    /* block 111 */;
     kiosk::return_purchase_cap(l2, reg_16 : 0x2::kiosk::PurchaseCap<T0>);
     object::delete(reg_12 : 0x2::object::UID);
     event::emit(ListingCancelled { listing_id: l1, seller: l12, nft_id: reg_15 : 0x2::object::ID })
@@ -358,8 +382,16 @@ public entry fun emergency_reset_accepted_bid<T0: key + store>(l0: &mut Kiosk_Bi
         let l9 = object::id(&l8);
         transfer::public_transfer(l8, l4);
         object::delete(reg_17 : 0x2::object::UID);
-        event::emit(BidClaimed { listing_id: reg_18 : 0x2::object::ID, bidder: l4, nft_id: l9, timestamp: tx_context::epoch(freeze(l3)) })
-    }
+        event::emit(BidClaimed { listing_id: reg_18 : 0x2::object::ID, bidder: l4, nft_id: l9, timestamp: tx_context::epoch(freeze(l3)) });
+        unstructured {
+            goto 'label_51;
+        }
+    } else {
+        unstructured {
+            goto 'label_51;
+        }
+    };
+    /* block 51 */
 }
 
 public entry fun emergency_reset_listing<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: &AuctionHouse, l2: ID, l3: &mut TxContext) {
@@ -378,12 +410,32 @@ public entry fun emergency_reset_listing<T0: key + store>(l0: &mut Kiosk_Bidding
             if (dynamic_object_field::exists_with_type(&l0.id, l6)) {
                 let Bid { id: reg_59, bidder: reg_60, amount: reg_61, timestamp: reg_62 } = dynamic_object_field::remove(&mut l0.id, l6);
                 transfer::public_transfer(coin::from_balance(reg_61 : 0x2::balance::Balance<0x2::sui::SUI>, l3), l6);
-                object::delete(reg_59 : 0x2::object::UID)
+                object::delete(reg_59 : 0x2::object::UID);
+                unstructured {
+                    goto 'label_95;
+                }
+            } else {
+                unstructured {
+                    goto 'label_95;
+                }
+            }
+        } else {
+            unstructured {
+                goto 'label_95;
             }
         };
+        /* block 95 */;
         object::delete(reg_17 : 0x2::object::UID);
-        event::emit(ListingCancelled { listing_id: l2, seller: reg_18 : address, nft_id: l11 })
-    }
+        event::emit(ListingCancelled { listing_id: l2, seller: reg_18 : address, nft_id: l11 });
+        unstructured {
+            goto 'label_107;
+        }
+    } else {
+        unstructured {
+            goto 'label_107;
+        }
+    };
+    /* block 107 */
 }
 
 public fun get_accepted_bid_bidder<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): address {
@@ -450,17 +502,34 @@ public fun place_bid<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: ID, l2: 
     assert!(*(&l11.status) == C0, C4);
     assert!(l9 <= *(&l11.expires_at), C15);
     assert!(l7 > 0u64, C3);
-    let l4 = if (*(&l11.highest_bid) == 0u64) {
-        1u64
+    let l4;
+    if (*(&l11.highest_bid) == 0u64) {
+        l4 = 1u64;
+        unstructured {
+            goto 'label_95;
+        }
     } else {
-        *(&l11.highest_bid) + *(&l11.highest_bid) * C2as u64 / 10000u64
+        l4 = *(&l11.highest_bid) + *(&l11.highest_bid) * C2as u64 / 10000u64;
+        unstructured {
+            goto 'label_95;
+        }
     };
-    assert!(l7 >= l4, C5);
+    /* block 95 */;
+    let l13 = l4;
+    assert!(l7 >= l13, C5);
     let l15 = option::none();
     let l12 = dynamic_object_field::borrow_mut(&mut l0.id, l1);
     if (option::is_some(&l12.highest_bidder)) {
         l15 = option::some(*(option::borrow(&l12.highest_bidder)));
+        unstructured {
+            goto 'label_129;
+        }
+    } else {
+        unstructured {
+            goto 'label_129;
+        }
     };
+    /* block 129 */;
     *(&mut l12.highest_bid) = l7;
     *(&mut l12.highest_bidder) = option::some(l8);
     if (option::is_some(&l15)) {
@@ -468,9 +537,21 @@ public fun place_bid<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: ID, l2: 
         if (dynamic_object_field::exists_with_type(&l0.id, l14)) {
             let Bid { id: reg_105, bidder: reg_106, amount: reg_107, timestamp: reg_108 } = dynamic_object_field::remove(&mut l0.id, l14);
             transfer::public_transfer(coin::from_balance(reg_107 : 0x2::balance::Balance<0x2::sui::SUI>, l3), l14);
-            object::delete(reg_105 : 0x2::object::UID)
+            object::delete(reg_105 : 0x2::object::UID);
+            unstructured {
+                goto 'label_165;
+            }
+        } else {
+            unstructured {
+                goto 'label_165;
+            }
+        }
+    } else {
+        unstructured {
+            goto 'label_165;
         }
     };
+    /* block 165 */;
     let l6 = Bid { id: object::new(l3), bidder: l8, amount: coin::into_balance(l2), timestamp: l9 };
     dynamic_object_field::add(&mut l0.id, l8, l6);
     event::emit(BidPlaced { listing_id: l1, bidder: l8, amount: l7, timestamp: l9 })

@@ -34,12 +34,19 @@ public fun update_1(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l11 > l10) {
         if (l11 - l10 < l13) {
             return
+        };
+        unstructured {
+            goto 'label_59;
         }
     } else {
         if (l10 - l11 < l13) {
             return
+        };
+        unstructured {
+            goto 'label_59;
         }
     };
+    /* block 59 */;
     let l14 = vaa::parse_and_verify(l4, l5, l7);
     let l12 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l14, l7);
     hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l12, l2, coin::split(l6, state::get_base_update_fee(l0), l8), l7))
@@ -51,23 +58,12 @@ public fun update_2(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     let l15 = true;
     let l16 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
     let l18 = option::get_with_default(&l5, l14);
-    if (l16 > l13) {
-        if (l16 - l13 >= l18) {
-            l15 = false;
-        }
+    if (l16 > l13 && l16 - l13 >= l18 || l16 <= l13 && l13 - l16 >= l18) {
+        l15 = false;
     } else {
-        if (l13 - l16 >= l18) {
-            l15 = false;
-        }
-    };
-    l16 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
-    l18 = option::get_with_default(&l3, l14);
-    if (l16 > l13) {
-        if (l16 - l13 >= l18) {
-            l15 = false;
-        }
-    } else {
-        if (l13 - l16 >= l18) {
+        l16 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
+        l18 = option::get_with_default(&l3, l14);
+        if (l16 > l13 && l16 - l13 >= l18 || l16 <= l13 && l13 - l16 >= l18) {
             l15 = false;
         }
     };
@@ -87,44 +83,21 @@ public fun update_3(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     let l18 = true;
     let l19 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
     let l21 = option::get_with_default(&l7, l17);
-    if (l19 > l16) {
-        if (l19 - l16 >= l21) {
-            l18 = false;
-        }
+    if (l19 > l16 && l19 - l16 >= l21 || l19 <= l16 && l16 - l19 >= l21) {
+        l18 = false;
     } else {
-        if (l16 - l19 >= l21) {
+        l19 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
+        l21 = option::get_with_default(&l5, l17);
+        if (l19 > l16 && l19 - l16 >= l21 || l19 <= l16 && l16 - l19 >= l21) {
             l18 = false;
-        }
-    };
-    l19 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
-    l21 = option::get_with_default(&l5, l17);
-    if (l19 > l16) {
-        if (l19 - l16 >= l21) {
-            l18 = false;
-            unstructured {
-                goto 'label_109;
-            }
-        }
-    } else {
-        if (l16 - l19 >= l21) {
-            l18 = false;
-            unstructured {
-                goto 'label_109;
+        } else {
+            l19 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
+            l21 = option::get_with_default(&l3, l17);
+            if (l19 > l16 && l19 - l16 >= l21 || l19 <= l16 && l16 - l19 >= l21) {
+                l18 = false;
             }
         }
     };
-    l19 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
-    l21 = option::get_with_default(&l3, l17);
-    if (l19 > l16) {
-        if (l19 - l16 >= l21) {
-            l18 = false;
-        }
-    } else {
-        if (l16 - l19 >= l21) {
-            l18 = false;
-        }
-    };
-    /* block 109 */;
     if (l18) {
         
     } else {
@@ -142,61 +115,27 @@ public fun update_4(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     let l21 = true;
     let l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
     let l24 = option::get_with_default(&l9, l20);
-    if (l22 > l19) {
-        if (l22 - l19 >= l24) {
-            l21 = false;
-        }
+    if (l22 > l19 && l22 - l19 >= l24 || l22 <= l19 && l19 - l22 >= l24) {
+        l21 = false;
     } else {
-        if (l19 - l22 >= l24) {
+        l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
+        l24 = option::get_with_default(&l7, l20);
+        if (l22 > l19 && l22 - l19 >= l24 || l22 <= l19 && l19 - l22 >= l24) {
             l21 = false;
-        }
-    };
-    l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
-    l24 = option::get_with_default(&l7, l20);
-    if (l22 > l19) {
-        if (l22 - l19 >= l24) {
-            l21 = false;
-            unstructured {
-                goto 'label_142;
-            }
-        }
-    } else {
-        if (l19 - l22 >= l24) {
-            l21 = false;
-            unstructured {
-                goto 'label_142;
+        } else {
+            l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
+            l24 = option::get_with_default(&l5, l20);
+            if (l22 > l19 && l22 - l19 >= l24 || l22 <= l19 && l19 - l22 >= l24) {
+                l21 = false;
+            } else {
+                l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
+                l24 = option::get_with_default(&l3, l20);
+                if (l22 > l19 && l22 - l19 >= l24 || l22 <= l19 && l19 - l22 >= l24) {
+                    l21 = false;
+                }
             }
         }
     };
-    l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
-    l24 = option::get_with_default(&l5, l20);
-    if (l22 > l19) {
-        if (l22 - l19 >= l24) {
-            l21 = false;
-            unstructured {
-                goto 'label_142;
-            }
-        }
-    } else {
-        if (l19 - l22 >= l24) {
-            l21 = false;
-            unstructured {
-                goto 'label_142;
-            }
-        }
-    };
-    l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
-    l24 = option::get_with_default(&l3, l20);
-    if (l22 > l19) {
-        if (l22 - l19 >= l24) {
-            l21 = false;
-        }
-    } else {
-        if (l19 - l22 >= l24) {
-            l21 = false;
-        }
-    };
-    /* block 142 */;
     if (l21) {
         
     } else {
@@ -215,78 +154,33 @@ public fun update_5(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     let l24 = true;
     let l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
     let l27 = option::get_with_default(&l11, l23);
-    if (l25 > l22) {
-        if (l25 - l22 >= l27) {
-            l24 = false;
-        }
+    if (l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27) {
+        l24 = false;
     } else {
-        if (l22 - l25 >= l27) {
+        l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
+        l27 = option::get_with_default(&l9, l23);
+        if (l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27) {
             l24 = false;
-        }
-    };
-    l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
-    l27 = option::get_with_default(&l9, l23);
-    if (l25 > l22) {
-        if (l25 - l22 >= l27) {
-            l24 = false;
-            unstructured {
-                goto 'label_175;
-            }
-        }
-    } else {
-        if (l22 - l25 >= l27) {
-            l24 = false;
-            unstructured {
-                goto 'label_175;
-            }
-        }
-    };
-    l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
-    l27 = option::get_with_default(&l7, l23);
-    if (l25 > l22) {
-        if (l25 - l22 >= l27) {
-            l24 = false;
-            unstructured {
-                goto 'label_175;
-            }
-        }
-    } else {
-        if (l22 - l25 >= l27) {
-            l24 = false;
-            unstructured {
-                goto 'label_175;
+        } else {
+            l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
+            l27 = option::get_with_default(&l7, l23);
+            if (l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27) {
+                l24 = false;
+            } else {
+                l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
+                l27 = option::get_with_default(&l5, l23);
+                if (l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27) {
+                    l24 = false;
+                } else {
+                    l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
+                    l27 = option::get_with_default(&l3, l23);
+                    if (l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27) {
+                        l24 = false;
+                    }
+                }
             }
         }
     };
-    l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
-    l27 = option::get_with_default(&l5, l23);
-    if (l25 > l22) {
-        if (l25 - l22 >= l27) {
-            l24 = false;
-            unstructured {
-                goto 'label_175;
-            }
-        }
-    } else {
-        if (l22 - l25 >= l27) {
-            l24 = false;
-            unstructured {
-                goto 'label_175;
-            }
-        }
-    };
-    l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
-    l27 = option::get_with_default(&l3, l23);
-    if (l25 > l22) {
-        if (l25 - l22 >= l27) {
-            l24 = false;
-        }
-    } else {
-        if (l22 - l25 >= l27) {
-            l24 = false;
-        }
-    };
-    /* block 175 */;
     if (l24) {
         
     } else {
@@ -306,95 +200,39 @@ public fun update_6(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     let l27 = true;
     let l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l12)));
     let l30 = option::get_with_default(&l13, l26);
-    if (l28 > l25) {
-        if (l28 - l25 >= l30) {
-            l27 = false;
-        }
+    if (l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30) {
+        l27 = false;
     } else {
-        if (l25 - l28 >= l30) {
+        l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
+        l30 = option::get_with_default(&l11, l26);
+        if (l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30) {
             l27 = false;
-        }
-    };
-    l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
-    l30 = option::get_with_default(&l11, l26);
-    if (l28 > l25) {
-        if (l28 - l25 >= l30) {
-            l27 = false;
-            unstructured {
-                goto 'label_208;
-            }
-        }
-    } else {
-        if (l25 - l28 >= l30) {
-            l27 = false;
-            unstructured {
-                goto 'label_208;
-            }
-        }
-    };
-    l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
-    l30 = option::get_with_default(&l9, l26);
-    if (l28 > l25) {
-        if (l28 - l25 >= l30) {
-            l27 = false;
-            unstructured {
-                goto 'label_208;
-            }
-        }
-    } else {
-        if (l25 - l28 >= l30) {
-            l27 = false;
-            unstructured {
-                goto 'label_208;
+        } else {
+            l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
+            l30 = option::get_with_default(&l9, l26);
+            if (l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30) {
+                l27 = false;
+            } else {
+                l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
+                l30 = option::get_with_default(&l7, l26);
+                if (l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30) {
+                    l27 = false;
+                } else {
+                    l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
+                    l30 = option::get_with_default(&l5, l26);
+                    if (l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30) {
+                        l27 = false;
+                    } else {
+                        l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
+                        l30 = option::get_with_default(&l3, l26);
+                        if (l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30) {
+                            l27 = false;
+                        }
+                    }
+                }
             }
         }
     };
-    l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
-    l30 = option::get_with_default(&l7, l26);
-    if (l28 > l25) {
-        if (l28 - l25 >= l30) {
-            l27 = false;
-            unstructured {
-                goto 'label_208;
-            }
-        }
-    } else {
-        if (l25 - l28 >= l30) {
-            l27 = false;
-            unstructured {
-                goto 'label_208;
-            }
-        }
-    };
-    l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
-    l30 = option::get_with_default(&l5, l26);
-    if (l28 > l25) {
-        if (l28 - l25 >= l30) {
-            l27 = false;
-            unstructured {
-                goto 'label_208;
-            }
-        }
-    } else {
-        if (l25 - l28 >= l30) {
-            l27 = false;
-            unstructured {
-                goto 'label_208;
-            }
-        }
-    };
-    l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
-    l30 = option::get_with_default(&l3, l26);
-    if (l28 > l25) {
-        if (l28 - l25 >= l30) {
-            l27 = false;
-        }
-    } else {
-        if (l25 - l28 >= l30) {
-            l27 = false;
-        }
-    };
-    /* block 208 */;
     if (l27) {
         
     } else {
@@ -415,112 +253,45 @@ public fun update_7(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     let l30 = true;
     let l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l14)));
     let l33 = option::get_with_default(&l15, l29);
-    if (l31 > l28) {
-        if (l31 - l28 >= l33) {
-            l30 = false;
-        }
+    if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
+        l30 = false;
     } else {
-        if (l28 - l31 >= l33) {
+        l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l12)));
+        l33 = option::get_with_default(&l13, l29);
+        if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
             l30 = false;
-        }
-    };
-    l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l12)));
-    l33 = option::get_with_default(&l13, l29);
-    if (l31 > l28) {
-        if (l31 - l28 >= l33) {
-            l30 = false;
-            unstructured {
-                goto 'label_241;
-            }
-        }
-    } else {
-        if (l28 - l31 >= l33) {
-            l30 = false;
-            unstructured {
-                goto 'label_241;
-            }
-        }
-    };
-    l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
-    l33 = option::get_with_default(&l11, l29);
-    if (l31 > l28) {
-        if (l31 - l28 >= l33) {
-            l30 = false;
-            unstructured {
-                goto 'label_241;
-            }
-        }
-    } else {
-        if (l28 - l31 >= l33) {
-            l30 = false;
-            unstructured {
-                goto 'label_241;
+        } else {
+            l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
+            l33 = option::get_with_default(&l11, l29);
+            if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
+                l30 = false;
+            } else {
+                l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
+                l33 = option::get_with_default(&l9, l29);
+                if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
+                    l30 = false;
+                } else {
+                    l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
+                    l33 = option::get_with_default(&l7, l29);
+                    if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
+                        l30 = false;
+                    } else {
+                        l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
+                        l33 = option::get_with_default(&l5, l29);
+                        if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
+                            l30 = false;
+                        } else {
+                            l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
+                            l33 = option::get_with_default(&l3, l29);
+                            if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
+                                l30 = false;
+                            }
+                        }
+                    }
+                }
             }
         }
     };
-    l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
-    l33 = option::get_with_default(&l9, l29);
-    if (l31 > l28) {
-        if (l31 - l28 >= l33) {
-            l30 = false;
-            unstructured {
-                goto 'label_241;
-            }
-        }
-    } else {
-        if (l28 - l31 >= l33) {
-            l30 = false;
-            unstructured {
-                goto 'label_241;
-            }
-        }
-    };
-    l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
-    l33 = option::get_with_default(&l7, l29);
-    if (l31 > l28) {
-        if (l31 - l28 >= l33) {
-            l30 = false;
-            unstructured {
-                goto 'label_241;
-            }
-        }
-    } else {
-        if (l28 - l31 >= l33) {
-            l30 = false;
-            unstructured {
-                goto 'label_241;
-            }
-        }
-    };
-    l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
-    l33 = option::get_with_default(&l5, l29);
-    if (l31 > l28) {
-        if (l31 - l28 >= l33) {
-            l30 = false;
-            unstructured {
-                goto 'label_241;
-            }
-        }
-    } else {
-        if (l28 - l31 >= l33) {
-            l30 = false;
-            unstructured {
-                goto 'label_241;
-            }
-        }
-    };
-    l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
-    l33 = option::get_with_default(&l3, l29);
-    if (l31 > l28) {
-        if (l31 - l28 >= l33) {
-            l30 = false;
-        }
-    } else {
-        if (l28 - l31 >= l33) {
-            l30 = false;
-        }
-    };
-    /* block 241 */;
     if (l30) {
         
     } else {
@@ -542,129 +313,51 @@ public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     let l33 = true;
     let l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l16)));
     let l36 = option::get_with_default(&l17, l32);
-    if (l34 > l31) {
-        if (l34 - l31 >= l36) {
-            l33 = false;
-        }
+    if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
+        l33 = false;
     } else {
-        if (l31 - l34 >= l36) {
+        l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l14)));
+        l36 = option::get_with_default(&l15, l32);
+        if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
             l33 = false;
-        }
-    };
-    l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l14)));
-    l36 = option::get_with_default(&l15, l32);
-    if (l34 > l31) {
-        if (l34 - l31 >= l36) {
-            l33 = false;
-            unstructured {
-                goto 'label_274;
-            }
-        }
-    } else {
-        if (l31 - l34 >= l36) {
-            l33 = false;
-            unstructured {
-                goto 'label_274;
-            }
-        }
-    };
-    l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l12)));
-    l36 = option::get_with_default(&l13, l32);
-    if (l34 > l31) {
-        if (l34 - l31 >= l36) {
-            l33 = false;
-            unstructured {
-                goto 'label_274;
-            }
-        }
-    } else {
-        if (l31 - l34 >= l36) {
-            l33 = false;
-            unstructured {
-                goto 'label_274;
-            }
-        }
-    };
-    l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
-    l36 = option::get_with_default(&l11, l32);
-    if (l34 > l31) {
-        if (l34 - l31 >= l36) {
-            l33 = false;
-            unstructured {
-                goto 'label_274;
-            }
-        }
-    } else {
-        if (l31 - l34 >= l36) {
-            l33 = false;
-            unstructured {
-                goto 'label_274;
+        } else {
+            l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l12)));
+            l36 = option::get_with_default(&l13, l32);
+            if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
+                l33 = false;
+            } else {
+                l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
+                l36 = option::get_with_default(&l11, l32);
+                if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
+                    l33 = false;
+                } else {
+                    l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
+                    l36 = option::get_with_default(&l9, l32);
+                    if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
+                        l33 = false;
+                    } else {
+                        l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
+                        l36 = option::get_with_default(&l7, l32);
+                        if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
+                            l33 = false;
+                        } else {
+                            l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
+                            l36 = option::get_with_default(&l5, l32);
+                            if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
+                                l33 = false;
+                            } else {
+                                l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
+                                l36 = option::get_with_default(&l3, l32);
+                                if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
+                                    l33 = false;
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     };
-    l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
-    l36 = option::get_with_default(&l9, l32);
-    if (l34 > l31) {
-        if (l34 - l31 >= l36) {
-            l33 = false;
-            unstructured {
-                goto 'label_274;
-            }
-        }
-    } else {
-        if (l31 - l34 >= l36) {
-            l33 = false;
-            unstructured {
-                goto 'label_274;
-            }
-        }
-    };
-    l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
-    l36 = option::get_with_default(&l7, l32);
-    if (l34 > l31) {
-        if (l34 - l31 >= l36) {
-            l33 = false;
-            unstructured {
-                goto 'label_274;
-            }
-        }
-    } else {
-        if (l31 - l34 >= l36) {
-            l33 = false;
-            unstructured {
-                goto 'label_274;
-            }
-        }
-    };
-    l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
-    l36 = option::get_with_default(&l5, l32);
-    if (l34 > l31) {
-        if (l34 - l31 >= l36) {
-            l33 = false;
-            unstructured {
-                goto 'label_274;
-            }
-        }
-    } else {
-        if (l31 - l34 >= l36) {
-            l33 = false;
-            unstructured {
-                goto 'label_274;
-            }
-        }
-    };
-    l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
-    l36 = option::get_with_default(&l3, l32);
-    if (l34 > l31) {
-        if (l34 - l31 >= l36) {
-            l33 = false;
-        }
-    } else {
-        if (l31 - l34 >= l36) {
-            l33 = false;
-        }
-    };
-    /* block 274 */;
     if (l33) {
         
     } else {
