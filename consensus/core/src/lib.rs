@@ -63,7 +63,9 @@ pub use block::BlockAPI;
 
 /// Exported API for testing and tools.
 pub use block::{TestBlock, Transaction, VerifiedBlock};
-pub use commit::{CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef, CommittedSubDag};
+pub use commit::{
+    CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef, CommittedSubDag, TrustedCommit,
+};
 pub use commit_consumer::{CommitConsumerArgs, CommitConsumerMonitor};
 pub use context::Clock;
 pub use metrics::Metrics;

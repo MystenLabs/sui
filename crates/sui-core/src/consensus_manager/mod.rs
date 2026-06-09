@@ -13,7 +13,7 @@ use consensus_config::{
 };
 use consensus_core::{
     Clock, CommitConsumerArgs, CommitConsumerMonitor, CommitIndex, ConsensusAuthority, NetworkType,
-    RandomnessSignatureHandler,
+    RandomnessSignatureHandler, storage::rocksdb_store::RocksDBStore,
 };
 use core::panic;
 use fastcrypto::traits::KeyPair as _;
@@ -453,6 +453,10 @@ impl ConsensusManager {
 
     pub fn get_storage_base_path(&self) -> PathBuf {
         self.consensus_config.db_path().to_path_buf()
+    }
+
+    pub fn consensus_store(&self) -> Option<Arc<RocksDBStore>> {
+        self.authority.load().as_ref().map(|a| a.0.store())
     }
 
     fn get_store_path(&self, epoch: EpochId) -> PathBuf {

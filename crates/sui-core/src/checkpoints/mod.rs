@@ -1034,6 +1034,106 @@ impl CheckpointStore {
         Ok(seq)
     }
 
+    /// Returns the sequence number of the first checkpoint in the given epoch.
+    /// For epoch 0 this is always 0; for epoch N > 0 it is last_checkpoint(N-1) + 1.
+    pub fn get_epoch_first_checkpoint_seq(
+        &self,
+        epoch: EpochId,
+    ) -> SuiResult<Option<CheckpointSequenceNumber>> {
+        if epoch == 0 {
+            return Ok(Some(0));
+        }
+        Ok(self
+            .tables
+            .epoch_last_checkpoint_map
+            .get(&(epoch - 1))?
+            .map(|s| s + 1))
+    }
+
+    /// Iterate certified checkpoints starting at `start` (inclusive), up to `limit`.
+    pub fn list_checkpoints_from_seq(
+        &self,
+        start: Option<CheckpointSequenceNumber>,
+        limit: usize,
+    ) -> Result<Vec<(CheckpointSequenceNumber, VerifiedCheckpoint)>, TypedStoreError> {
+        self.tables
+            .certified_checkpoints
+            .safe_iter_with_bounds(start, None)
+            .take(limit)
+            .map(|r| r.map(|(seq, cp)| (seq, cp.into())))
+            .collect()
+    }
+
+    /// Iterate epoch→last-checkpoint-seq entries starting at `start` epoch, up to `limit`.
+    pub fn list_epoch_last_checkpoints(
+        &self,
+        start: Option<EpochId>,
+        limit: usize,
+    ) -> Result<Vec<(EpochId, CheckpointSequenceNumber)>, TypedStoreError> {
+        self.tables
+            .epoch_last_checkpoint_map
+            .safe_iter_with_bounds(start, None)
+            .take(limit)
+            .collect()
+    }
+
+    /// Iterate checkpoint digests from `checkpoint_by_digest`, starting at `start`, up to `limit`.
+    pub fn list_checkpoint_digests(
+        &self,
+        start: Option<CheckpointDigest>,
+        limit: usize,
+    ) -> Result<Vec<CheckpointDigest>, TypedStoreError> {
+        self.tables
+            .checkpoint_by_digest
+            .safe_iter_with_bounds(start, None)
+            .take(limit)
+            .map(|r| r.map(|(d, _)| d))
+            .collect()
+    }
+
+    /// Iterate checkpoint contents digests, starting at `start`, up to `limit`.
+    pub fn list_checkpoint_contents_digests(
+        &self,
+        start: Option<CheckpointContentsDigest>,
+        limit: usize,
+    ) -> Result<Vec<CheckpointContentsDigest>, TypedStoreError> {
+        self.tables
+            .checkpoint_content
+            .safe_iter_with_bounds(start, None)
+            .take(limit)
+            .map(|r| r.map(|(d, _)| d))
+            .collect()
+    }
+
+    /// Iterate certified checkpoints belonging to `epoch`, starting at `start_seq`, up to `limit`.
+    pub fn list_epoch_checkpoints(
+        &self,
+        epoch: EpochId,
+        start_seq: Option<CheckpointSequenceNumber>,
+        limit: usize,
+    ) -> Result<Vec<(CheckpointSequenceNumber, VerifiedCheckpoint)>, TypedStoreError> {
+        let Some(last_seq) = self.tables.epoch_last_checkpoint_map.get(&epoch)? else {
+            return Ok(vec![]);
+        };
+        // Compute first seq directly to stay within TypedStoreError.
+        let first_seq = if epoch == 0 {
+            0
+        } else {
+            self.tables
+                .epoch_last_checkpoint_map
+                .get(&(epoch - 1))?
+                .map(|s| s + 1)
+                .unwrap_or(0)
+        };
+        let start = start_seq.map(|s| s.max(first_seq)).unwrap_or(first_seq);
+        self.tables
+            .certified_checkpoints
+            .safe_iter_with_bounds(Some(start), Some(last_seq + 1))
+            .take(limit)
+            .map(|r| r.map(|(seq, cp)| (seq, cp.into())))
+            .collect()
+    }
+
     pub fn insert_epoch_last_checkpoint(
         &self,
         epoch_id: EpochId,

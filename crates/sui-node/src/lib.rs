@@ -158,6 +158,7 @@ use typed_store::rocks::default_db_options;
 use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 
 pub mod admin;
+pub mod db_shell;
 mod handle;
 pub mod metrics;
 
@@ -1692,11 +1693,24 @@ impl SuiNode {
         self.state.committee_store().clone()
     }
 
-    /*
-    pub fn clone_authority_store(&self) -> Arc<AuthorityStore> {
-        self.state.db()
+    pub fn clone_checkpoint_store(&self) -> Arc<CheckpointStore> {
+        self.checkpoint_store.clone()
     }
-    */
+
+    pub fn clone_authority_store(&self) -> Arc<AuthorityStore> {
+        self.state.authority_store()
+    }
+
+    pub fn clone_consensus_store(
+        &self,
+    ) -> Option<Arc<consensus_core::storage::rocksdb_store::RocksDBStore>> {
+        self.validator_components
+            .try_lock()
+            .ok()?
+            .as_ref()?
+            .consensus_manager
+            .consensus_store()
+    }
 
     /// Clone an AuthorityAggregator currently used in this node, if the node is a fullnode.
     /// After reconfig, Transaction Driver builds a new AuthorityAggregator. The caller

@@ -116,6 +116,12 @@ impl ConsensusAuthority {
         }
     }
 
+    pub fn store(&self) -> Arc<RocksDBStore> {
+        match self {
+            Self::WithTonic(authority) => authority.store(),
+        }
+    }
+
     #[cfg(test)]
     fn context(&self) -> &Arc<Context> {
         match self {
@@ -152,6 +158,7 @@ where
     start_time: Instant,
     transaction_client: Arc<TransactionClient>,
     synchronizer: Arc<SynchronizerHandle>,
+    store: Arc<RocksDBStore>,
 
     commit_syncer_handle: CommitSyncerHandle,
     round_prober_handle: Option<RoundProberHandle>,
@@ -521,6 +528,7 @@ where
             start_time,
             transaction_client: Arc::new(tx_client),
             synchronizer,
+            store,
             commit_syncer_handle,
             round_prober_handle,
             leader_timeout_handle,
@@ -566,6 +574,10 @@ where
 
     pub(crate) fn transaction_client(&self) -> Arc<TransactionClient> {
         self.transaction_client.clone()
+    }
+
+    pub(crate) fn store(&self) -> Arc<RocksDBStore> {
+        self.store.clone()
     }
 
     pub(crate) fn update_peer_address(

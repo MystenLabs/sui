@@ -3809,6 +3809,18 @@ impl AuthorityState {
             .database_for_testing()
     }
 
+    /// Access to the underlying authority store for diagnostic tooling (db-shell).
+    ///
+    /// Goes through `testing_api` deliberately: db-shell is read-only diagnostics
+    /// that bypasses the writeback cache, and we want the execution path to have
+    /// no other route to the raw `AuthorityStore`. Using the testing API here
+    /// keeps that invariant visible — diagnostic code is the only non-test caller.
+    pub fn authority_store(&self) -> Arc<AuthorityStore> {
+        self.execution_cache_trait_pointers
+            .testing_api
+            .database_for_testing()
+    }
+
     pub fn cache_for_testing(&self) -> &WritebackCache {
         self.execution_cache_trait_pointers
             .testing_api

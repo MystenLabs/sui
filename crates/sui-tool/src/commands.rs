@@ -307,6 +307,10 @@ pub enum ToolCommand {
         cmd: ReplayToolCommand,
     },
 
+    /// Interactive shell for navigating the validator database.
+    #[command(name = "db-shell")]
+    DbShell(crate::db_shell::DbShellArgs),
+
     /// Interactive Rhai shell for inspecting a TideHunter database.
     #[cfg(all(feature = "tideconsole", not(windows)))]
     #[command(name = "tideconsole")]
@@ -754,6 +758,9 @@ impl ToolCommand {
             } => {
                 execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, chain, cmd)
                     .await?;
+            }
+            ToolCommand::DbShell(args) => {
+                tokio::task::spawn_blocking(move || crate::db_shell::run(args)).await??;
             }
             #[cfg(all(feature = "tideconsole", not(windows)))]
             ToolCommand::TideConsole { db, exec, script } => {
