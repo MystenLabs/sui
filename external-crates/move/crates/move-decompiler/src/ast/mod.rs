@@ -1,6 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod exp_eq;
+
 use move_binary_format::{
     file_format::{AbilitySet, DatatypeTyParameter, Visibility},
     normalized::{self, Constant, ModuleId},

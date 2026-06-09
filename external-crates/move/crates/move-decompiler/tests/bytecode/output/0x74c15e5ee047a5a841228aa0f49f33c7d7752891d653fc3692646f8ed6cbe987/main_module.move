@@ -416,7 +416,7 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
         };
         l30 = l30 + 1u64;
     };
-    let (__dispatch_535, l10, l11, l13, l14, l15, l16, l17, l18, l19, l23, l25, l27, l32, l33, l34, l35, l36, l37, l40, l41, l42, l46, l47, l48, l7, l8, l9);
+    let (l10, l11, l13, l14, l15, l16, l17, l18, l19, l23, l25, l27, l32, l33, l34, l35, l36, l37, l40, l41, l42, l46, l47, l48, l7, l8, l9);
     match (__dispatch_402) {
         0 => {
             while (l31 < 10u64) {
@@ -427,8 +427,9 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
             l25 = l45;
             loop {
                 if (l30 >= 5u64) {
-                    __dispatch_535 = 1u32;
-                    break
+                    /* block 1192 */;
+                    transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), *(&(&l0.team_addresses)[0u64]));
+                    return
                 };
                 l27 = l29 / 100u64;
                 l22 = table::borrow_mut(&mut l0.cabinet, l25);
@@ -436,7 +437,6 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
                 l22 = table::borrow_mut(&mut l0.cabinet, *(&l22.affCode));
                 l32 = l30;
                 if (*(&l22.affCode) == C62) {
-                    __dispatch_535 = 0u32;
                     break
                 };
                 l23 = *(&l22.position_floor_of_seating);
@@ -554,30 +554,23 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
                     l30 + 1u64
                 };
             };
-            match (__dispatch_535) {
-                0 => {
-                    while (l32 < 5u64) {
-                        l33 = 0u64;
-                        if (l32 < 3u64) {
-                            while (l33 < 9u64) {
-                                transfer::public_transfer(coin::split(l3, l27, l5), *(&(&l0.team_addresses)[l32 * 9u64 + 11u64 + l33]));
-                                l33 = l33 + 1u64;
-                            }
-                        } else {
-                            while (l33 < 6u64) {
-                                transfer::public_transfer(coin::split(l3, l27, l5), *(&(&l0.team_addresses)[l32 - 3u64 * 6u64 + 38u64 + l33]));
-                                l33 = l33 + 1u64;
-                            }
-                        };
-                        l32 = l32 + 1u64;
-                    };
-                    transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), *(&(&l0.team_addresses)[0u64]));
-                    return
-                },
-                1 => {
-                    transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), *(&(&l0.team_addresses)[0u64]));
-                    return
-                }
+            while (l32 < 5u64) {
+                l33 = 0u64;
+                if (l32 < 3u64) {
+                    while (l33 < 9u64) {
+                        transfer::public_transfer(coin::split(l3, l27, l5), *(&(&l0.team_addresses)[l32 * 9u64 + 11u64 + l33]));
+                        l33 = l33 + 1u64;
+                    }
+                } else {
+                    while (l33 < 6u64) {
+                        transfer::public_transfer(coin::split(l3, l27, l5), *(&(&l0.team_addresses)[l32 - 3u64 * 6u64 + 38u64 + l33]));
+                        l33 = l33 + 1u64;
+                    }
+                };
+                l32 = l32 + 1u64;
+            };
+            unstructured {
+                goto 'label_1192;
             }
         },
         1 => {
@@ -585,8 +578,9 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
             l25 = l45;
             loop {
                 if (l30 >= 5u64) {
-                    __dispatch_535 = 1u32;
-                    break
+                    /* block 1192 */;
+                    transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), *(&(&l0.team_addresses)[0u64]));
+                    return
                 };
                 l27 = l29 / 100u64;
                 l22 = table::borrow_mut(&mut l0.cabinet, l25);
@@ -594,7 +588,6 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
                 l22 = table::borrow_mut(&mut l0.cabinet, *(&l22.affCode));
                 l32 = l30;
                 if (*(&l22.affCode) == C62) {
-                    __dispatch_535 = 0u32;
                     break
                 };
                 l23 = *(&l22.position_floor_of_seating);
@@ -712,30 +705,23 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
                     l30 + 1u64
                 };
             };
-            match (__dispatch_535) {
-                0 => {
-                    while (l32 < 5u64) {
-                        l33 = 0u64;
-                        if (l32 < 3u64) {
-                            while (l33 < 9u64) {
-                                transfer::public_transfer(coin::split(l3, l27, l5), *(&(&l0.team_addresses)[l32 * 9u64 + 11u64 + l33]));
-                                l33 = l33 + 1u64;
-                            }
-                        } else {
-                            while (l33 < 6u64) {
-                                transfer::public_transfer(coin::split(l3, l27, l5), *(&(&l0.team_addresses)[l32 - 3u64 * 6u64 + 38u64 + l33]));
-                                l33 = l33 + 1u64;
-                            }
-                        };
-                        l32 = l32 + 1u64;
-                    };
-                    transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), *(&(&l0.team_addresses)[0u64]));
-                    return
-                },
-                1 => {
-                    transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), *(&(&l0.team_addresses)[0u64]));
-                    return
-                }
+            while (l32 < 5u64) {
+                l33 = 0u64;
+                if (l32 < 3u64) {
+                    while (l33 < 9u64) {
+                        transfer::public_transfer(coin::split(l3, l27, l5), *(&(&l0.team_addresses)[l32 * 9u64 + 11u64 + l33]));
+                        l33 = l33 + 1u64;
+                    }
+                } else {
+                    while (l33 < 6u64) {
+                        transfer::public_transfer(coin::split(l3, l27, l5), *(&(&l0.team_addresses)[l32 - 3u64 * 6u64 + 38u64 + l33]));
+                        l33 = l33 + 1u64;
+                    }
+                };
+                l32 = l32 + 1u64;
+            };
+            unstructured {
+                goto 'label_1192;
             }
         }
     }

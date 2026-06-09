@@ -13,6 +13,7 @@
 // This is deliberately conservative: it returns `None` (handing back to the dom-tree structurer)
 // on any shape it doesn't recognize, so it only ever *replaces* output that currently has a goto.
 
+use crate::config;
 use crate::structuring::{
     ast::{self as D, GotoSource},
     bdd::Bdd,
@@ -20,21 +21,20 @@ use crate::structuring::{
 };
 use petgraph::algo::dominators::{self, Dominators};
 use petgraph::graph::{DiGraph, NodeIndex};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Structure an acyclic region via reaching conditions. `input` is the region's basic blocks
-/// (the caller trims it to the region's nodes), `entry` is where to start emitting, and `exit`
-/// — when `Some` — is where to stop: emission proceeds only up to but not including the exit
-/// node, treating it as the region's natural rejoin point. Returns `None` to fall back to the
-/// dom-tree structurer when the shape isn't a recognized skip-diamond chain (so clean regions
-/// are left byte-identical).
+/// (the caller trims it to the region's nodes) and `entry` is where to start emitting. Edges
+/// leaving the region (to a node not in `input`) signal an unexpected escape — emission relies
+/// on natural CFG sinks. Returns `None` to fall back to the dom-tree structurer when the shape
+/// isn't a recognized skip-diamond chain (so clean regions are left byte-identical).
 pub fn structure(
+    config: &config::Config,
     input: &BTreeMap<NodeIndex, D::Input>,
     entry: NodeIndex,
-    exit: Option<NodeIndex>,
     terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
 ) -> Option<D::Structured> {
-    structure_inner(input, entry, exit, /*emit_exit_jumps*/ false, terms)
+    structure_inner(config, input, entry, Mode::WholeFunction, terms)
 }
 
 /// Same as [`structure`], but every edge leaving the region (either to the explicit `exit` or
@@ -44,43 +44,73 @@ pub fn structure(
 /// structurer keeps owning shapes reaching doesn't improve on (clean nested ifs in a loop
 /// body, etc., where reaching's more-nested form would just churn snapshots).
 pub fn structure_with_exit_jumps(
+    config: &config::Config,
     input: &BTreeMap<NodeIndex, D::Input>,
     entry: NodeIndex,
     exit: NodeIndex,
     terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
 ) -> Option<D::Structured> {
-    structure_inner(
-        input,
-        entry,
-        Some(exit),
-        /*emit_exit_jumps*/ true,
-        terms,
-    )
+    structure_inner(config, input, entry, Mode::LoopBody { exit }, terms)
+}
+
+/// What kind of region we're structuring. Whole-function vs loop-body is a closed dichotomy —
+/// either the caller is the top-level driver (no explicit exit, escapes are errors) or it's
+/// `structure_loop` handing us a back-edge-rooted region (explicit exit, escapes lower to
+/// `Jump(ReachingExit, …)` for `insert_breaks` to rewrite). Encoding it as one enum keeps the
+/// pair of related decisions in lockstep so we can't construct an invalid "exit, no jumps" or
+/// "jumps, no exit" combination.
+#[derive(Clone, Copy)]
+enum Mode {
+    /// Whole-function (top-level driver). No explicit region exit; an escape from `input` is
+    /// an unexpected control-flow leak and bails to the dom-tree structurer.
+    WholeFunction,
+    /// Loop-body region. `exit` is the back-edge target; edges to `exit` or to nodes outside
+    /// `input` are emitted as `Structured::Jump(GotoSource::ReachingExit, target)`.
+    LoopBody { exit: NodeIndex },
+}
+
+impl Mode {
+    fn region_exit(self) -> Option<NodeIndex> {
+        match self {
+            Mode::WholeFunction => None,
+            Mode::LoopBody { exit } => Some(exit),
+        }
+    }
+
+    fn emit_exit_jumps(self) -> bool {
+        matches!(self, Mode::LoopBody { .. })
+    }
 }
 
 fn structure_inner(
+    config: &config::Config,
     input: &BTreeMap<NodeIndex, D::Input>,
     entry: NodeIndex,
-    exit: Option<NodeIndex>,
-    emit_exit_jumps: bool,
+    mode: Mode,
     terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
 ) -> Option<D::Structured> {
-    let pdom = PostDom::build(input, exit)?;
+    let pdom = PostDom::build(input, mode.region_exit())?;
+    // BDD variable order = reverse-postorder rank over the in-region nodes reachable from
+    // `entry`. Each `Formula::Atom(n)` the diamond folder builds is a condition node from this
+    // walk, so the BDD's read-back nests the guard in roughly the same order the structurer
+    // visits the CFG (source order) rather than however the bytecode happened to number the
+    // blocks.
+    let var_order = region_rpo(input, entry, mode);
     let mut ctx = Ctx {
         input,
         pdom,
-        bdd: Bdd::new(),
+        bdd: Bdd::with_order(var_order),
         folded_any: false,
-        region_exit: exit,
-        emit_exit_jumps,
+        mode,
         visiting: HashSet::new(),
         terms,
+        debug_print_structuring: config.debug_print.structuring,
     };
     // Process the region's entry without the `node == stop` short-circuit — for a loop-body
     // region where `entry == exit` (back-edge target), the entry IS the natural exit but we
-    // still need to emit its content the first time through. Recursive descent (via `go`)
-    // does check `node == stop`, preventing back-edge cycles.
-    let body = ctx.go_body(entry, exit)?;
+    // still need to emit its content the first time through. Recursive descent (via
+    // `structure_reachable_subregion`) does check `node == stop`, preventing back-edge cycles.
+    let body = ctx.process_node(entry, mode.region_exit())?;
     // Only take over when we actually folded a skip — otherwise let the existing structurer
     // own the (already-clean) output so its snapshots don't churn.
     if !ctx.folded_any {
@@ -94,48 +124,67 @@ struct Ctx<'a> {
     pdom: PostDom,
     bdd: Bdd,
     folded_any: bool,
-    /// The region's explicit exit node, when one is set (loop-body case). Edges to this node
-    /// are treated as leaving the region just like edges to nodes outside `input`.
-    region_exit: Option<NodeIndex>,
-    /// When true (loop-body mode), edges leaving the region are emitted as explicit
-    /// `Structured::Jump(GotoSource::ReachingExit, target)`. When false (whole-function), the
-    /// caller relies on natural CFG sinks; an unexpected escape returns `None`.
-    emit_exit_jumps: bool,
-    /// Nodes currently being processed by `go_body`. Reaching only handles acyclic regions;
-    /// any revisit means the region contains an inner cycle (typically a nested loop whose
-    /// body is in our `input` snapshot), so we bail with `None` and the caller falls back to
-    /// the dom-tree structurer.
+    /// What kind of region we're structuring — whole-function or a loop-body. Encodes both
+    /// the region exit (for `in_region`) and whether escapes lower to explicit `Jump`s.
+    mode: Mode,
+    /// Nodes currently being processed by `process_node`. Reaching only handles acyclic
+    /// regions; any revisit means the region contains an inner cycle (typically a nested
+    /// loop whose body is in our `input` snapshot), so we bail with `None` and the caller
+    /// falls back to the dom-tree structurer.
     visiting: HashSet<NodeIndex>,
     /// Per-block term map (lowered `Exp` content), keyed by `NodeIndex` whose value matches
     /// the basic-block id. Consulted by `bodies_equivalent` in `recognize_diamond` to guard
     /// the s1/s2 fold against non-uniform arms.
     terms: &'a BTreeMap<NodeIndex, crate::ast::Exp>,
+    /// Snapshot of `config.debug_print.structuring` so the `process_node` bail-out path can
+    /// log a diagnostic without borrowing the config through every call.
+    debug_print_structuring: bool,
 }
 
 impl Ctx<'_> {
-    /// Structure flow from `node` up to (but not including) `stop` (`None` = no boundary).
-    /// `stop` is consulted only for recursive descent — the initial call from `structure`
-    /// uses `go_body` directly so it can process the region's entry even when `entry == stop`.
-    fn go(&mut self, node: NodeIndex, stop: Option<NodeIndex>) -> Option<D::Structured> {
+    /// Build the `Structured` form for the sub-flow rooted at `node`, walked forward up to
+    /// (but not including) `stop`. Returns `Some(Seq([]))` when `node == stop` (we're at the
+    /// region boundary; nothing to emit), `None` on failure (region cycle, Variants shape,
+    /// arm escape without a shared join), otherwise `Some(Structured)`.
+    ///
+    /// Most recursive descent in `process_node` flows back through here so each step honors
+    /// the boundary. The initial call from `structure_inner` goes straight to `process_node`
+    /// instead, so loop-body regions where `entry == exit` (back-edge target) still emit the
+    /// entry's content the first time through.
+    fn structure_reachable_subregion(
+        &mut self,
+        node: NodeIndex,
+        stop: Option<NodeIndex>,
+    ) -> Option<D::Structured> {
         if Some(node) == stop {
             return Some(D::Structured::Seq(vec![]));
         }
-        self.go_body(node, stop)
+        self.process_node(node, stop)
     }
 
-    /// Process `node`'s content (Code chain or Condition), recursing via `go` for sub-flow
-    /// so each recursive visit honors `stop`. Called directly for the region's entry to skip
-    /// the entry-equals-stop short-circuit (loop-body region case).
-    fn go_body(&mut self, node: NodeIndex, stop: Option<NodeIndex>) -> Option<D::Structured> {
+    /// Process `node`'s content (a `Code` chain or a `Condition`) without the
+    /// `node == stop` short-circuit, recursing into sub-flow via
+    /// `structure_reachable_subregion` so each recursive visit honors `stop`. Called
+    /// directly for the region's entry (so loop-body regions where `entry == exit` still
+    /// emit the entry's content the first time through) and via
+    /// `structure_reachable_subregion` for every recursive descent.
+    fn process_node(&mut self, node: NodeIndex, stop: Option<NodeIndex>) -> Option<D::Structured> {
         if !self.visiting.insert(node) {
+            if self.debug_print_structuring {
+                println!("reaching: revisited node {node:?} (region cycle); bailing");
+            }
             return None;
         }
-        let result = self.go_body_inner(node, stop);
+        let result = self.process_node_inner(node, stop);
         self.visiting.remove(&node);
         result
     }
 
-    fn go_body_inner(&mut self, node: NodeIndex, stop: Option<NodeIndex>) -> Option<D::Structured> {
+    fn process_node_inner(
+        &mut self,
+        node: NodeIndex,
+        stop: Option<NodeIndex>,
+    ) -> Option<D::Structured> {
         match self.input.get(&node)? {
             D::Input::Variants(..) => None,
             D::Input::Code(_, code, next) => {
@@ -148,7 +197,7 @@ impl Ctx<'_> {
                         // `Jump` so `insert_breaks` can rewrite it to `Continue`/`Break`;
                         // whole-function callers fall through to a natural sink and don't
                         // expect escapes here.
-                        if self.emit_exit_jumps {
+                        if self.mode.emit_exit_jumps() {
                             Some(seq(head, exit_jump(*next)))
                         } else {
                             Some(head)
@@ -156,7 +205,7 @@ impl Ctx<'_> {
                     }
                     Some(next) if Some(*next) == stop => Some(head),
                     Some(next) => {
-                        let rest = self.go(*next, stop)?;
+                        let rest = self.structure_reachable_subregion(*next, stop)?;
                         Some(seq(head, rest))
                     }
                 }
@@ -170,13 +219,16 @@ impl Ctx<'_> {
                     // so both the stale fall-through and the fresh continuation reach it once —
                     // no goto, no duplication.
                     let then_body = diamond.stale_body;
-                    let else_body = self.go(diamond.continue_at, Some(diamond.far_join))?;
+                    let else_body = self.structure_reachable_subregion(
+                        diamond.continue_at,
+                        Some(diamond.far_join),
+                    )?;
                     let cond_if = D::Structured::CondIf(
                         diamond.cond,
                         Box::new(then_body),
                         Box::new(non_empty(else_body)),
                     );
-                    let rest = self.go(diamond.far_join, stop)?;
+                    let rest = self.structure_reachable_subregion(diamond.far_join, stop)?;
                     Some(seq(cond_if, rest))
                 } else {
                     // Genuine branch: structure both arms up to where they rejoin, then continue.
@@ -184,12 +236,12 @@ impl Ctx<'_> {
                     let then_s = self.arm(then, join)?;
                     let els_s = self.arm(els, join)?;
                     let if_s = D::Structured::CondIf(
-                        reaching::Formula::Atom(NodeIndex::new(code as usize)),
+                        reaching::cond_atom(code),
                         Box::new(then_s),
                         Box::new(non_empty(els_s)),
                     );
                     match join {
-                        Some(j) => Some(seq(if_s, self.go(j, stop)?)),
+                        Some(j) => Some(seq(if_s, self.structure_reachable_subregion(j, stop)?)),
                         None => Some(if_s),
                     }
                 }
@@ -202,8 +254,8 @@ impl Ctx<'_> {
     /// directly so we don't try to recur into a node that isn't in our `input`.
     fn arm(&mut self, target: NodeIndex, join: Option<NodeIndex>) -> Option<D::Structured> {
         if self.in_region(target) {
-            self.go(target, join)
-        } else if self.emit_exit_jumps {
+            self.structure_reachable_subregion(target, join)
+        } else if self.mode.emit_exit_jumps() {
             Some(exit_jump(target))
         } else {
             // Whole-function mode: an arm that escapes the region without going through the
@@ -214,9 +266,9 @@ impl Ctx<'_> {
     }
 
     /// True iff `node` is part of the structured region: it lives in `self.input` AND is not
-    /// the explicit `region_exit` (back-edge target in a loop-body region).
+    /// the loop-body `exit` (back-edge target).
     fn in_region(&self, node: NodeIndex) -> bool {
-        self.input.contains_key(&node) && Some(node) != self.region_exit
+        self.input.contains_key(&node) && Some(node) != self.mode.region_exit()
     }
 
     /// Recognize a balanced abs_diff-style skip diamond rooted at `node`:
@@ -308,8 +360,11 @@ impl Ctx<'_> {
     /// (1) the next node is `k` — the diamond's shared continuation, which is emitted as the
     ///     `else` arm and the post-diamond fall-through, NOT as part of the stale body; or
     /// (2) the next node is not a fall-through code block (a condition, the function's
-    ///     `if (flag)` join, or the loop-head back-edge target).
-    /// In either case that next node is the common far join. `None` if `s` isn't a code chain.
+    ///     `if (flag)` join, or the loop-head back-edge target); or
+    /// (3) the next node leaves the region (outside `input` or the loop-body exit). For
+    ///     loop-body regions, this stops the chain at the back-edge target rather than
+    ///     wandering into a node whose `Code` link points outside the region snapshot.
+    /// In every case that next node is the common far join. `None` if `s` isn't a code chain.
     fn stale_chain(&self, s: NodeIndex, k: NodeIndex) -> Option<(Vec<u64>, NodeIndex)> {
         let mut codes = Vec::new();
         let mut cur = s;
@@ -317,7 +372,7 @@ impl Ctx<'_> {
             match self.input.get(&cur)? {
                 D::Input::Code(_, code, Some(next)) => {
                     codes.push(*code);
-                    if *next == k {
+                    if *next == k || !self.in_region(*next) {
                         return Some((codes, *next));
                     }
                     match self.input.get(next)? {
@@ -329,6 +384,48 @@ impl Ctx<'_> {
             }
         }
     }
+}
+
+/// Reverse-postorder rank of the in-region nodes reachable from `entry`. Walks successors that
+/// stay in the region (per `Mode`); nodes outside the region or downstream of an escape don't
+/// participate, since the BDD won't see them as atoms. Used as the BDD variable order so the
+/// read-back nests in source order rather than NodeIndex order.
+fn region_rpo(
+    input: &BTreeMap<NodeIndex, D::Input>,
+    entry: NodeIndex,
+    mode: Mode,
+) -> HashMap<NodeIndex, u32> {
+    let in_region = |n: NodeIndex| input.contains_key(&n) && Some(n) != mode.region_exit();
+    let mut visited: HashSet<NodeIndex> = HashSet::new();
+    let mut post: Vec<NodeIndex> = Vec::new();
+    // Iterative post-order DFS: tag each frame with whether we've already expanded its
+    // successors (otherwise infinite recursion on cycles, and we want post-order).
+    let mut stack: Vec<(NodeIndex, bool)> = Vec::new();
+    if in_region(entry) {
+        stack.push((entry, false));
+    }
+    while let Some((node, expanded)) = stack.pop() {
+        if expanded {
+            post.push(node);
+            continue;
+        }
+        if !visited.insert(node) {
+            continue;
+        }
+        stack.push((node, true));
+        if let Some(inp) = input.get(&node) {
+            for (_, v) in inp.edges() {
+                if in_region(v) && !visited.contains(&v) {
+                    stack.push((v, false));
+                }
+            }
+        }
+    }
+    let n = post.len();
+    post.into_iter()
+        .enumerate()
+        .map(|(i, node)| (node, (n - 1 - i) as u32))
+        .collect()
 }
 
 struct Diamond {
@@ -377,25 +474,21 @@ fn bodies_equivalent(
         }
     }
     let body_of = |code: u64| -> Option<&Exp> { terms.get(&NodeIndex::new(code as usize)) };
-    let mut s1: Vec<&Exp> = s1_codes
+    let s1: Vec<&Exp> = s1_codes
         .iter()
         .filter_map(|c| body_of(*c))
         .filter(|e| !is_padding(e))
         .collect();
-    let mut s2: Vec<&Exp> = s2_codes
+    let s2: Vec<&Exp> = s2_codes
         .iter()
         .filter_map(|c| body_of(*c))
         .filter(|e| !is_padding(e))
         .collect();
-    if s1.len() != s2.len() {
-        return false;
-    }
-    while let (Some(a), Some(b)) = (s1.pop(), s2.pop()) {
-        if !crate::exp_eq::exp_struct_eq(a, b) {
-            return false;
-        }
-    }
-    true
+    s1.len() == s2.len()
+        && s1
+            .iter()
+            .zip(s2.iter())
+            .all(|(a, b)| crate::ast::exp_eq::exp_struct_eq(a, b))
 }
 
 fn blocks_seq(codes: &[u64]) -> D::Structured {
@@ -411,7 +504,7 @@ fn exit_jump(target: NodeIndex) -> D::Structured {
 }
 
 fn atom_pol(code: u64, positive: bool) -> reaching::Formula {
-    let atom = reaching::Formula::Atom(NodeIndex::new(code as usize));
+    let atom = reaching::cond_atom(code);
     if positive { atom } else { reaching::not(atom) }
 }
 
@@ -443,7 +536,14 @@ fn non_empty(s: D::Structured) -> Option<D::Structured> {
 
 struct PostDom {
     doms: Dominators<NodeIndex>,
-    exit: NodeIndex,
+    /// Synthetic exit's petgraph index (the dominator-algorithm root).
+    exit_internal: NodeIndex,
+    /// Map CFG `NodeIndex` (input keys) to its index inside `doms`'s reversed graph. We
+    /// intern only the region's nodes, so the graph is `O(|input|)` regardless of how
+    /// sparsely the original CFG numbers them.
+    to_internal: HashMap<NodeIndex, NodeIndex>,
+    /// Inverse of `to_internal`. The synthetic exit's slot is `None`.
+    from_internal: Vec<Option<NodeIndex>>,
 }
 
 impl PostDom {
@@ -457,30 +557,35 @@ impl PostDom {
         input: &BTreeMap<NodeIndex, D::Input>,
         region_exit: Option<NodeIndex>,
     ) -> Option<Self> {
-        let max_input = input.keys().map(|n| n.index()).max()?;
-        let max_idx = match region_exit {
-            Some(e) => max_input.max(e.index()),
-            None => max_input,
-        };
-        let exit = NodeIndex::new(max_idx + 1);
-        let mut rev: DiGraph<(), ()> = DiGraph::new();
-        while rev.node_count() <= exit.index() {
-            rev.add_node(());
+        if input.is_empty() {
+            return None;
         }
+        let mut rev: DiGraph<(), ()> = DiGraph::new();
+        let mut to_internal: HashMap<NodeIndex, NodeIndex> = HashMap::with_capacity(input.len());
+        let mut from_internal: Vec<Option<NodeIndex>> = Vec::with_capacity(input.len() + 1);
+        for n in input.keys() {
+            let idx = rev.add_node(());
+            to_internal.insert(*n, idx);
+            from_internal.push(Some(*n));
+        }
+        let exit_internal = rev.add_node(());
+        from_internal.push(None);
         let mut has_sink = false;
         let in_region = |n: NodeIndex| input.contains_key(&n) && Some(n) != region_exit;
         for (n, inp) in input {
+            let u_int = to_internal[n];
             let succs = inp.edges();
             if succs.is_empty() {
-                rev.add_edge(exit, *n, ());
+                rev.add_edge(exit_internal, u_int, ());
                 has_sink = true;
                 continue;
             }
             for (u, v) in succs {
+                debug_assert_eq!(u, *n, "Input::edges always sources from the input's label");
                 if in_region(v) {
-                    rev.add_edge(v, u, ());
+                    rev.add_edge(to_internal[&v], u_int, ());
                 } else {
-                    rev.add_edge(exit, u, ());
+                    rev.add_edge(exit_internal, u_int, ());
                     has_sink = true;
                 }
             }
@@ -489,16 +594,19 @@ impl PostDom {
             return None;
         }
         Some(PostDom {
-            doms: dominators::simple_fast(&rev, exit),
-            exit,
+            doms: dominators::simple_fast(&rev, exit_internal),
+            exit_internal,
+            to_internal,
+            from_internal,
         })
     }
 
     /// The immediate post-dominator of `node`, or `None` when it is the synthetic exit (i.e. the
     /// branch's arms don't rejoin before the function returns).
     fn ipostdom(&self, node: NodeIndex) -> Option<NodeIndex> {
-        match self.doms.immediate_dominator(node) {
-            Some(ip) if ip != self.exit => Some(ip),
+        let n_int = *self.to_internal.get(&node)?;
+        match self.doms.immediate_dominator(n_int) {
+            Some(ip) if ip != self.exit_internal => self.from_internal[ip.index()],
             _ => None,
         }
     }
