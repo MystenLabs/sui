@@ -44,11 +44,6 @@ fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
         .enable_verify_bulletproofs_ristretto255())
 }
 
-/// Legacy entry point retained for backwards compatibility with already-published framework
-/// versions that reference it. Native function bindings can never be removed, since older
-/// framework bytecode and transaction replay still link against them. It carries no domain
-/// separation tag, so verification uses an empty one; new callers should use
-/// [`verify_bulletproofs_with_dst_ristretto255`].
 pub fn verify_bulletproofs_ristretto255(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
