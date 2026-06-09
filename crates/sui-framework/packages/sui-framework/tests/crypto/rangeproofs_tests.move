@@ -167,18 +167,13 @@ fun test_bulletproof_with_dst() {
 }
 
 #[test]
-fun test_deprecated_matches_empty_dst() {
-    // The deprecated entry point verifies with a trivial (empty) DST, so it accepts the same
-    // proof as `verify_bulletproofs_with_dst_ristretto255` with an empty DST.
-    let proof =
-        x"800cc916d5bf8335c8c19698271a275ff68c2c6b72c29cbaf1300679754668773ef47a57485ac66a2f1e106a88a051d854199af0db189f9172a5c6c059ed566030c003e902f3e159f6e8f3c5e41a7d18277c1653449b51ec6453aa560376ae1864e03a04902640e929611d8267fe36ab7b437610b4b30ed3003d12175d70855722733cefa6bb85fe8b6b07653c2659c9d54ea6bbb59f70ede385e292a5ad6c009040621235e9bdf91be1a0f231e058a3cb88a751f71d16a38feeec0996b776011a314d53752cccc970f08f46a7aeb36aad3fef6f2587e4b01a07d54740504b01a2c205511cb6832e131b7ee23114a62a2eaf3b4b385d2c5a9512b5f263b4d34e7e5fc6fc85b976b32516940bbe2fc3504b661e29a9f631c46973e708622c1253b6d64281ecdb438d7307e8954a8ade469f2398d599e22eba918f1cf24896e27ce6f285204b6795089ed7904a6c646bdc7a4c1a116570d25b086772e05208b83000f9cd8c13f875649a6e3ef4874a3b5b505d3ef3fa1a2295b97a0d74e3e30c207684afebbb8a433bfa59e1f6e804c5dc176fd0bcc28545e90143fd167b135601aef7ee42646616c4b98ca23df6366802d88f484f9d418f1dccd198ff7a70306402be209b35f11a6ed9e23dfc2ab86c301183cfbe5477f28d2ba47da53934ae4eca5b4e77cafae01c9723b8bde0012812f54280b290e6162bad2bd08b4bb8ff09e01401cec270c9f555f0fce2f40b132b85418f83a92ac7eba929d194c25af12d1acd8e0b88bcc5a8e6f01841a2b9ea486496ffa2365dd8cf6b9780a7292303027e797f9da8881b81f047a691e0cb88618398077e88f8664fd39bfb9355fc540b";
+#[expected_failure(abort_code = 1, location = sui::rangeproofs)]
+fun test_deprecated_aborts() {
+    // The deprecated entry point is disabled and always aborts.
     let commitment = ristretto255::g_from_bytes(
         &x"3881417f033fc69b256df6c73d35ca3f06649d2de98970391e39e6139fd95c44",
     );
-    assert!(verify_bulletproofs_ristretto255(&proof, 32, &vector[commitment], 0));
-    assert!(
-        verify_bulletproofs_with_dst_ristretto255(&proof, 32, &vector[commitment], &vector[], 0),
-    );
+    verify_bulletproofs_ristretto255(&vector[], 32, &vector[commitment], 0);
 }
 
 // TODO: If fixed length vectors are ever supported, we should use that instead.

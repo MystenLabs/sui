@@ -51,15 +51,15 @@ public fun verify_bulletproofs_with_dst_ristretto255(
 }
 
 #[deprecated(note = b"Use `verify_bulletproofs_with_dst_ristretto255` instead.")]
-/// Verify a range proof with a trivial (empty) domain separation tag. Retained for backwards
-/// compatibility; new callers should use `verify_bulletproofs_with_dst_ristretto255`.
+/// Disabled. This entry point always aborts; use `verify_bulletproofs_with_dst_ristretto255`
+/// instead. The signature is retained for backwards compatibility.
 public fun verify_bulletproofs_ristretto255(
-    proof: &vector<u8>,
-    bits: u8,
-    commitments: &vector<Element<ristretto255::G>>,
-    version: u8,
+    _proof: &vector<u8>,
+    _bits: u8,
+    _commitments: &vector<Element<ristretto255::G>>,
+    _version: u8,
 ): bool {
-    verify_bulletproofs_with_dst_ristretto255(proof, bits, commitments, &vector[], version)
+    abort 1
 }
 
 native fun verify_bulletproofs_with_dst_ristretto255_internal(
