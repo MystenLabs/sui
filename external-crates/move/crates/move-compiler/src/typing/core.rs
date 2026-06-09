@@ -765,12 +765,9 @@ impl<'env, 'outer> Context<'env, 'outer> {
     }
 
     /// Asserts that normal compiler errors already exist or IDE macro-body diagnostics are discarded.
-    pub fn assert_errors(&self, msg: Option<&str>) {
+    pub fn assert_errors(&self, msg: &str) {
         let has_errors = self.env().has_errors() || self.ide_typing_macro_body;
-        match msg {
-            Some(msg) => assert!(has_errors, "{msg}"),
-            None => assert!(has_errors),
-        }
+        assert!(has_errors, "{msg}");
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {
