@@ -314,9 +314,10 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
                 continue
             }
         };
+        let __c104 = option::is_some(&(&l16).oco_group_id);
         break
     };
-    let __dispatch_81 = if (option::is_some(&(&l16).oco_group_id)) {
+    let __dispatch_81 = if (__c104) {
         l14 = *(option::borrow(&(&l16).oco_group_id));
         if (table::contains(&l0.oco_groups, l14)) {
             let l13 = table::borrow_mut(&mut l0.oco_groups, l14);

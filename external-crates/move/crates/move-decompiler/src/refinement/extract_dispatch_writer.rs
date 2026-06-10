@@ -187,6 +187,14 @@ fn try_extract(exp: Exp) -> Result<Exp, Exp> {
     if items[..k].iter().any(|p| contains_break_for(p, label)) {
         return Err(Exp::Loop(Some(label), Box::new(Exp::Seq(items))));
     }
+    // A `Continue(Some(label))` buried in the soon-to-be-extracted suffix would target a
+    // loop we're about to remove. `all_paths_terminate` only checks tail positions, so an
+    // early Continue in a Seq prefix passes the tail check and would dangle once extracted.
+    // Bail rather than try to rewrite it; the dispatch-writer shape this fires on always
+    // writes-then-breaks and doesn't construct such suffixes in practice.
+    if items[k..].iter().any(|s| contains_continue_for(s, label)) {
+        return Err(Exp::Loop(Some(label), Box::new(Exp::Seq(items))));
+    }
 
     let suffix_items: Vec<Exp> = items.split_off(k);
     items.push(Exp::Break(Some(label)));
@@ -207,6 +215,16 @@ fn try_extract(exp: Exp) -> Result<Exp, Exp> {
 /// True iff every leaf evaluation path of `exp` terminates (Break(label), Return, or
 /// Abort). A path that falls through, continues, or breaks to a different label doesn't
 /// count.
+///
+/// Conservative on a few shapes:
+/// - `Loop` / `While` return `false` unconditionally, even when their body unconditionally
+///   returns/aborts. Recognizing that would require a recursive structural analysis that
+///   detected "no escaping break path"; not worth the complexity until the corpus exercises
+///   it.
+/// - `Switch` / `Match` / `MatchLit` rely on the arm list being exhaustive over the
+///   scrutinee. Move's enum dispatch is exhaustive at the type level, so post-structuring
+///   shapes meet this. If a future refinement drops an arm during folding, this check is
+///   over-optimistic — flag the change with a regression fixture.
 fn all_paths_terminate(exp: &Exp, label: Label) -> bool {
     use Exp as E;
     match exp {
@@ -280,6 +298,66 @@ fn contains_break_for(exp: &Exp, label: Label) -> bool {
         }
         E::Break(None)
         | E::Continue(_)
+        | E::Declare(_)
+        | E::Value(_)
+        | E::Variable(_)
+        | E::Constant(_) => false,
+    }
+}
+
+/// True iff `exp` syntactically contains `Continue(Some(label))`. Mirrors
+/// `contains_break_for`; used to bail extraction when the suffix would dangle a continue
+/// at the now-removed loop's label.
+fn contains_continue_for(exp: &Exp, label: Label) -> bool {
+    use Exp as E;
+    match exp {
+        E::Continue(Some(l)) => *l == label,
+        E::Seq(items) | E::Return(items) | E::Call(_, items) => {
+            items.iter().any(|i| contains_continue_for(i, label))
+        }
+        E::IfElse(c, t, alt) => {
+            contains_continue_for(c, label)
+                || contains_continue_for(t, label)
+                || alt
+                    .as_ref()
+                    .as_ref()
+                    .is_some_and(|a| contains_continue_for(a, label))
+        }
+        E::Switch(c, _, arms) => {
+            contains_continue_for(c, label)
+                || arms.iter().any(|(_, b)| contains_continue_for(b, label))
+        }
+        E::Match(c, _, arms) => {
+            contains_continue_for(c, label)
+                || arms.iter().any(|(_, _, b)| contains_continue_for(b, label))
+        }
+        E::MatchLit(c, arms) => {
+            contains_continue_for(c, label)
+                || arms.iter().any(|(_, b)| contains_continue_for(b, label))
+        }
+        E::Loop(_, b) | E::Block(_, b) => contains_continue_for(b, label),
+        E::While(_, c, b) => contains_continue_for(c, label) || contains_continue_for(b, label),
+        E::Primitive { args, .. } | E::Data { args, .. } => {
+            args.iter().any(|a| contains_continue_for(a, label))
+        }
+        E::Assign(_, e)
+        | E::LetBind(_, e)
+        | E::Abort(e)
+        | E::Borrow(_, e)
+        | E::Unpack(_, _, e)
+        | E::UnpackVariant(_, _, _, e)
+        | E::VecUnpack(_, e) => contains_continue_for(e, label),
+        E::Unstructured(nodes) => {
+            use crate::ast::UnstructuredNode;
+            nodes.iter().any(|n| match n {
+                UnstructuredNode::Labeled(_, body) | UnstructuredNode::Statement(body) => {
+                    contains_continue_for(body, label)
+                }
+                UnstructuredNode::Goto(_) => false,
+            })
+        }
+        E::Continue(None)
+        | E::Break(_)
         | E::Declare(_)
         | E::Value(_)
         | E::Variable(_)

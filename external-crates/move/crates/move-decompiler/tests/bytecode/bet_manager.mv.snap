@@ -1721,9 +1721,10 @@ public fun is_valid_bet(l0: u64, l1: u64, l2: Option<u64>, l3: u64, l4: vector<u
                 l28 = l28 + 1u64;
                 continue
             };
+            let __c282 = l22;
             break
         };
-        assert!(l22, C0)
+        assert!(__c282, C0)
     } else {
         unstructured {
             goto 'label_289;
@@ -1749,9 +1750,10 @@ public fun is_valid_bet(l0: u64, l1: u64, l2: Option<u64>, l3: u64, l4: vector<u
                 l29 = l29 + 1u64;
                 continue
             };
+            let __c357 = l23;
             break
         };
-        assert!(l23, C0)
+        assert!(__c357, C0)
     } else {
         unstructured {
             goto 'label_364;

@@ -299,9 +299,10 @@ public entry fun batch_burn_art20(l0: vector<NFT>, l1: &mut CollectionCap, l2: v
                 *(&mut l6.balance) = xf_ART20::safe_sub(*(&l6.balance), 1u64);
                 l8 = true;
             };
+            let __c144 = l8;
             break
         };
-        assert!(l8, C6);
+        assert!(__c144, C6);
         xf_ART20::burn_single_art20(l15, l1, freeze(l3));
         l11 = l11 + 1u64;
     };
@@ -376,9 +377,10 @@ public entry fun batch_burn_art20_by_asset_ids(l0: &mut CollectionCap, l1: vecto
                         *(&mut l11.balance) = xf_ART20::safe_sub(*(&l11.balance), 1u64);
                         l12 = true;
                     };
+                    let __c201 = l12;
                     break
                 };
-                assert!(l12, C6);
+                assert!(__c201, C6);
                 *(&mut l0.current_supply) = xf_ART20::safe_sub(*(&l0.current_supply), 1u64);
                 event::emit(BurnEvent { owner: l22, id: object::uid_to_inner(&(&l20).id) });
                 let NFT { id: reg_147, artinals_id: reg_148, creator: reg_149, name: reg_150, description: reg_151, uri: reg_152, logo_uri: reg_153, asset_id: reg_154, max_supply: reg_155, collection_id: reg_156, category: reg_157 } = l20;
@@ -739,7 +741,7 @@ public entry fun burn_art20(l0: NFT, l1: &mut CollectionCap, l2: vector<UserBala
     let l8 = false;
     let l10 = vector[];
     loop {
-        if (vector::is_empty(&l7)) {
+        if (!(!(vector::is_empty(&l7)))) {
             assert!(l8, C6);
             break
         };
@@ -1223,9 +1225,10 @@ public entry fun mint_additional_art20(l0: &mut CollectionCap, l1: u64, l2: &mut
                 *(&mut l8.balance) = *(&l8.balance) + l1;
                 l10 = true;
             };
+            let __c122 = !(l10);
             break
         };
-        if (!(l10)) {
+        if (__c122) {
             transfer::transfer(UserBalance { id: object::new(l5), collection_id: l11, balance: l1 }, l14)
         }
     };
@@ -1393,9 +1396,10 @@ public entry fun set_collection_value_source(l0: &mut CollectionCap, l1: vector<
                 };
                 l10 = false;
             };
+            let __c84 = l10;
             break
         };
-        assert!(l10, C16)
+        assert!(__c84, C16)
     } else {
         assert!(string::length(&l9) == 64u64, C17);
         unstructured {
@@ -1473,9 +1477,10 @@ public entry fun transfer_art20(l0: vector<NFT>, l1: vector<address>, l2: &Colle
                 *(&mut l9.balance) = xf_ART20::safe_sub(*(&l9.balance), 1u64);
                 l11 = true;
             };
+            let __c186 = l11;
             break
         };
-        assert!(l11, C6);
+        assert!(__c186, C6);
         (&mut l23).push_back(object::uid_to_inner(&(&l21).id));
         (&mut l7).push_back(1u64);
         event::emit(TransferEvent { from: l20, to: l17, id: object::uid_to_inner(&(&l21).id), royalty: 0u64, asset_id: *(&(&l21).asset_id) });
@@ -1540,6 +1545,7 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
             };
             l17 = l17 + 1u64;
         };
+        let __c191;
         match (__dispatch_81) {
             0 => {
                 loop {
@@ -1552,19 +1558,22 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
                         *(&mut l12.balance) = xf_ART20::safe_sub(*(&l12.balance), 1u64);
                         l13 = true;
                     };
+                    let __c163 = l13;
                     break
                 };
-                assert!(l13, C6);
+                assert!(__c163, C6);
                 (&mut l26).push_back(l21);
                 (&mut l9).push_back(1u64);
                 transfer::transfer(vector::remove(&mut l1, l17), l4);
                 l15 = true;
-                assert!(l15, C15);
+                __c191 = l15;
+                assert!(__c191, C15);
                 l16 = l16 + 1u64;
                 continue
             },
             1 => {
-                assert!(l15, C15);
+                __c191 = l15;
+                assert!(__c191, C15);
                 l16 = l16 + 1u64;
                 continue
             }

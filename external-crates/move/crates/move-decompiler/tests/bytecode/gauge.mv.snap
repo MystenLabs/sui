@@ -278,9 +278,10 @@ public fun deposit_position<T0, T1, T2>(l0: &GlobalConfig, l1: &DistributionConf
                     continue
                 }
             };
+            let __c181 = l8 >= l18.len();
             break
         };
-        if (l8 >= l18.len()) {
+        if (__c181) {
             (table::borrow_mut(&mut l2.stakes, l13)).push_back(l11)
         }
     };
