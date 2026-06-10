@@ -18,6 +18,7 @@
 //! Every pipeline targets the same backing [`RpcStoreSchema`].
 
 pub mod balance;
+pub mod checkpoint_broadcast;
 pub mod checkpoint_contents;
 pub mod checkpoint_seq_by_digest;
 pub mod checkpoint_summary;
@@ -453,6 +454,36 @@ impl Indexer {
         add!(self::event_bitmap::EventBitmap, event_bitmap);
 
         Ok(())
+    }
+
+    /// Register the checkpoint-broadcast pipeline, which re-publishes
+    /// each committed checkpoint to `sender` in checkpoint order (see
+    /// [`checkpoint_broadcast`]). Call alongside [`Self::add_pipelines`]
+    /// and before [`Self::run`].
+    ///
+    /// Kept separate from [`Self::add_pipelines`] because it carries a
+    /// runtime `broadcast::Sender` rather than a [`PipelineLayer`]
+    /// toggle — only the standalone `sui-rpc-node`, which hosts the
+    /// subscription service, registers it; the embedded fullnode feeds
+    /// its subscription service from the checkpoint executor instead.
+    ///
+    /// As with every synchronizer-coordinated pipeline, registers with
+    /// `max_batch_checkpoints = 1` so each `commit` (and thus each
+    /// broadcast) is exactly one checkpoint.
+    pub async fn add_checkpoint_broadcast(
+        &mut self,
+        sender: tokio::sync::broadcast::Sender<Arc<Checkpoint>>,
+        committer: CommitterConfig,
+    ) -> anyhow::Result<()> {
+        self.sequential_pipeline(
+            self::checkpoint_broadcast::CheckpointBroadcast::new(sender),
+            SequentialConfig {
+                committer,
+                max_batch_checkpoints: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
     }
 
     /// Register a single sequential pipeline. The pipeline is

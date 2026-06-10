@@ -46,6 +46,7 @@ pub use crate::config::ServiceConfig;
 pub use crate::indexer::Indexer;
 pub use crate::indexer::METRICS_PREFIX;
 pub use crate::indexer::Store;
+pub use crate::indexer::checkpoint_broadcast::CheckpointBroadcast;
 pub use crate::indexer::pruner::prune_history_cohort;
 pub use crate::indexer::restore::HISTORY_COHORT;
 pub use crate::indexer::restore::LIVE_COHORT;
