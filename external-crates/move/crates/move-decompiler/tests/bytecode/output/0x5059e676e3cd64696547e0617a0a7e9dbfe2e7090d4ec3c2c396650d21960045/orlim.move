@@ -304,7 +304,6 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
     let l18 = coin::zero(l3);
     let l8 = 0u64;
     let l10 = &l0.active_orders.len();
-    let __dispatch_81;
     let (l11, l12, l14, l5, l9);
     loop {
         if (l8 < l10) {
@@ -315,40 +314,40 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
                 continue
             }
         };
-        if (option::is_some(&(&l16).oco_group_id)) {
-            l14 = *(option::borrow(&(&l16).oco_group_id));
-            if (table::contains(&l0.oco_groups, l14)) {
-                let l13 = table::borrow_mut(&mut l0.oco_groups, l14);
-                if (*(&l13.is_active)) {
-                    l11 = if (*(&l13.order1_id) == l17) {
-                        *(&l13.order2_id)
-                    } else {
-                        *(&l13.order1_id)
-                    };
-                    if (table::contains(&l0.receipts, l11)) {
-                        l12 = table::remove(&mut l0.receipts, l11);
-                        if (*(&(&l12).is_active)) {
-                            *(&mut (&mut l12).is_active) = false;
-                            *(&mut (&mut l12).cancelled_at) = option::some(l7);
-                            l9 = 0u64;
-                            l5 = &l0.active_orders.len();
-                            __dispatch_81 = 0u32;
-                            break
-                        };
-                        __dispatch_81 = 1u32;
-                        break
-                    };
-                    __dispatch_81 = 2u32;
-                    break
-                };
-                __dispatch_81 = 2u32;
-                break
-            };
-            __dispatch_81 = 3u32;
-            break
-        };
-        __dispatch_81 = 3u32;
         break
+    };
+    let __dispatch_81 = if (option::is_some(&(&l16).oco_group_id)) {
+        l14 = *(option::borrow(&(&l16).oco_group_id));
+        if (table::contains(&l0.oco_groups, l14)) {
+            let l13 = table::borrow_mut(&mut l0.oco_groups, l14);
+            if (*(&l13.is_active)) {
+                l11 = if (*(&l13.order1_id) == l17) {
+                    *(&l13.order2_id)
+                } else {
+                    *(&l13.order1_id)
+                };
+                if (table::contains(&l0.receipts, l11)) {
+                    l12 = table::remove(&mut l0.receipts, l11);
+                    if (*(&(&l12).is_active)) {
+                        *(&mut (&mut l12).is_active) = false;
+                        *(&mut (&mut l12).cancelled_at) = option::some(l7);
+                        l9 = 0u64;
+                        l5 = &l0.active_orders.len();
+                        0u32
+                    } else {
+                        1u32
+                    }
+                } else {
+                    2u32
+                }
+            } else {
+                2u32
+            }
+        } else {
+            3u32
+        }
+    } else {
+        3u32
     };
     let (l15, reg_174 : 0x2::object::UID);
     match (__dispatch_81) {

@@ -724,29 +724,29 @@ fun stake_tails_(l0: &mut TailsStakingRegistry, l1: Tails, l2: address) {
             big_vector::push_back(&mut l0.staking_infos, StakingInfo { user: l2, tails: C14, profits: l6, u64_padding: C25 })
         };
         let l11 = big_vector::borrow_mut(&mut l0.staking_infos, l4);
-        assert!(&l11.tails.len() < *(&(&l0.config)[C1]), C11);
-        (&mut l11.tails).push_back(typus_nft::tails_number(&l1));
-        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C19))) {
-            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C19))
-        };
-        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C20))) {
-            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C20))
-        };
-        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C21))) {
-            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C21))
-        };
-        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C22))) {
-            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C22))
-        };
-        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C23))) {
-            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C23))
-        };
-        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C24))) {
-            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C24))
-        };
-        object_table::add(&mut l0.tails, object::id_address(&l1), l1);
-        return
-    }
+        break
+    };
+    assert!(&l11.tails.len() < *(&(&l0.config)[C1]), C11);
+    (&mut l11.tails).push_back(typus_nft::tails_number(&l1));
+    if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C19))) {
+        typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C19))
+    };
+    if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C20))) {
+        typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C20))
+    };
+    if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C21))) {
+        typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C21))
+    };
+    if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C22))) {
+        typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C22))
+    };
+    if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C23))) {
+        typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C23))
+    };
+    if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C24))) {
+        typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C24))
+    };
+    object_table::add(&mut l0.tails, object::id_address(&l1), l1)
 }
 
 public fun transfer_tails(l0: &mut Version, l1: &TailsStakingRegistry, l2: &mut Kiosk, l3: &KioskOwnerCap, l4: address, l5: Coin<SUI>, l6: address, l7: &mut TxContext) {

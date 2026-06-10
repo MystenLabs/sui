@@ -143,7 +143,11 @@ public fun format(l0: &vector<u8>, l1: &vector<u8>): vector<u8> {
                     (&mut l9).push_back(l11);
                     let l4 = false;
                     let l7 = l6 + 2u64;
-                    while (!(l4) && l12 > l7) {
+                    loop {
+                        let l3 = !(l4) && l12 > l7;
+                        break
+                    };
+                    if (l3) {
                         let l8 = *(&l0[l7]);
                         if (l8 == 125u8) {
                             l4 = true;
@@ -151,6 +155,7 @@ public fun format(l0: &vector<u8>, l1: &vector<u8>): vector<u8> {
                             (&mut l9).push_back(l8)
                         };
                         l7 = l7 + 1u64;
+                        continue 'loop_75
                     };
                     if (x2_format::append_format_piece(&mut l10, &l9, l13, l1)) {
                         l13 = l13 + 1u64;

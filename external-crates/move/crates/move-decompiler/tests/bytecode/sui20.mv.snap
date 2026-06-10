@@ -253,14 +253,15 @@ public fun mint(l0: &mut Global, l1: &Clock, l2: String, l3: u64, l4: Coin<SUI>,
                 vector::insert(&mut l7.users, l15, l8)
             };
             let l11 = &l7.users.len();
-            if (l11 == l10 && l10 < C0) {
-                (&mut l7.users).push_back(l15);
-                break
-            };
-            if (l11 > C0) {
-                break
-            };
+            let l6 = l11 == l10 && l10 < C0;
             break
+        };
+        if (l6) {
+            (&mut l7.users).push_back(l15)
+        } else {
+            if (l11 > C0) {
+                
+            }
         }
     } else {
         unstructured {
