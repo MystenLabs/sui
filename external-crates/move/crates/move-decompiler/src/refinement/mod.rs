@@ -20,6 +20,7 @@ mod loop_to_seq;
 mod negate_comparison;
 mod reconstruct_match;
 mod recover_asserts;
+mod recover_flag;
 mod remove_trailing_continue;
 mod remove_trailing_return;
 mod simplify_borrow_deref;
@@ -57,6 +58,7 @@ const REFINEMENTS: &[Refinement] = &[
     negate_comparison::refine,
     simplify_if::refine,
     bool_if_simplify::refine,
+    recover_flag::refine,
     recover_asserts::refine,
     strip_loop_labels::refine,
     swap_continue_break::refine,
