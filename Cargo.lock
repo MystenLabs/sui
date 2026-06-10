@@ -17329,6 +17329,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml 0.8.26",
+ "sha2 0.10.9",
  "shared-crypto",
  "signature 1.6.4",
  "static_assertions",

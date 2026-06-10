@@ -87,6 +87,7 @@ sui-rpc.workspace = true
 ciborium.workspace = true
 x509-parser.workspace = true
 p384.workspace = true
+sha2.workspace = true
 rustls-pki-types.workspace = true
 
 [dev-dependencies]
@@ -114,6 +115,10 @@ harness = false
 
 [[bench]]
 name = "nitro_attestation_bench"
+harness = false
+
+[[bench]]
+name = "ecdsa_p384_bench"
 harness = false
 
 [features]

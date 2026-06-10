@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 127;
+const MAX_PROTOCOL_VERSION: u64 = 128;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -355,6 +355,9 @@ const MAINNET_USDB: &str =
 // Version 126: Enable early_exit_on_iffw (gates the gas-underflow fix
 //              shipped to mainnet out-of-band in #26816).
 // Version 127: Enable always_advance_dkg_to_resolution.
+// Version 128: Add native ECDSA verification over NIST P-384 (secp384r1), enabled on
+//              devnet/testnet with provisional gas costs (for Apple App Attest / X.509 use
+//              cases). Mainnet activation pending benchmarked gas costs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1097,6 +1100,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     gasless_verify_remaining_balance: bool,
 
+    // Enable the ecdsa_p384 native module (ECDSA signature verification over NIST P-384).
+    #[serde(skip_serializing_if = "is_false")]
+    enable_ecdsa_p384_native: bool,
+
     #[serde(skip_serializing_if = "is_false")]
     disallow_jump_orphans: bool,
 
@@ -1718,6 +1725,14 @@ pub struct ProtocolConfig {
     ecdsa_r1_secp256r1_verify_sha256_cost_base: Option<u64>,
     ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte: Option<u64>,
     ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block: Option<u64>,
+
+    // ecdsa_p384::secp384r1_verify
+    ecdsa_p384_secp384r1_verify_sha256_cost_base: Option<u64>,
+    ecdsa_p384_secp384r1_verify_sha256_msg_cost_per_byte: Option<u64>,
+    ecdsa_p384_secp384r1_verify_sha256_msg_cost_per_block: Option<u64>,
+    ecdsa_p384_secp384r1_verify_sha384_cost_base: Option<u64>,
+    ecdsa_p384_secp384r1_verify_sha384_msg_cost_per_byte: Option<u64>,
+    ecdsa_p384_secp384r1_verify_sha384_msg_cost_per_block: Option<u64>,
 
     // ecvrf::verify
     ecvrf_ecvrf_verify_cost_base: Option<u64>,
@@ -2600,6 +2615,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_party_transfer
     }
 
+    pub fn enable_ecdsa_p384_native(&self) -> bool {
+        self.feature_flags.enable_ecdsa_p384_native
+    }
+
     pub fn allow_unbounded_system_objects(&self) -> bool {
         self.feature_flags.allow_unbounded_system_objects
     }
@@ -3238,6 +3257,14 @@ impl ProtocolConfig {
             ecdsa_r1_secp256r1_verify_sha256_cost_base: Some(52),
             ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte: Some(2),
             ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block: Some(2),
+
+            // ecdsa_p384::secp384r1_verify
+            ecdsa_p384_secp384r1_verify_sha256_cost_base: None,
+            ecdsa_p384_secp384r1_verify_sha256_msg_cost_per_byte: None,
+            ecdsa_p384_secp384r1_verify_sha256_msg_cost_per_block: None,
+            ecdsa_p384_secp384r1_verify_sha384_cost_base: None,
+            ecdsa_p384_secp384r1_verify_sha384_msg_cost_per_byte: None,
+            ecdsa_p384_secp384r1_verify_sha384_msg_cost_per_block: None,
 
             // ecvrf::verify
             ecvrf_ecvrf_verify_cost_base: Some(52),
@@ -5005,6 +5032,25 @@ impl ProtocolConfig {
                 127 => {
                     cfg.feature_flags.always_advance_dkg_to_resolution = true;
                 }
+                128 => {
+                    // Native ECDSA verification over NIST P-384 (secp384r1). Rolled out to
+                    // devnet/testnet first; mainnet activation is intentionally deferred to the
+                    // core team for reference-validator confirmation. The base cost is anchored to
+                    // the already-priced P-256 (secp256r1) verify base of 4225 gas, scaled by the
+                    // measured P-384/P-256 verification-time ratio of ~12.8x (criterion bench
+                    // `ecdsa_p384_bench`): 4225 * 12.8 ~= 54000. The ratio reflects both the larger
+                    // curve and that p384 (RustCrypto) is unoptimized vs fastcrypto's secp256r1.
+                    // The EC operation dominates, so SHA-256 and SHA-384 share the same base.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_ecdsa_p384_native = true;
+                        cfg.ecdsa_p384_secp384r1_verify_sha256_cost_base = Some(54000);
+                        cfg.ecdsa_p384_secp384r1_verify_sha256_msg_cost_per_byte = Some(2);
+                        cfg.ecdsa_p384_secp384r1_verify_sha256_msg_cost_per_block = Some(2);
+                        cfg.ecdsa_p384_secp384r1_verify_sha384_cost_base = Some(54000);
+                        cfg.ecdsa_p384_secp384r1_verify_sha384_msg_cost_per_byte = Some(2);
+                        cfg.ecdsa_p384_secp384r1_verify_sha384_msg_cost_per_block = Some(2);
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -5298,6 +5344,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_party_transfer_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_party_transfer = val
+    }
+
+    pub fn set_enable_ecdsa_p384_native_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_ecdsa_p384_native = val
     }
 
     pub fn set_consensus_distributed_vote_scoring_strategy_for_testing(&mut self, val: bool) {

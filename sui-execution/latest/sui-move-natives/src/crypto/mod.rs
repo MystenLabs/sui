@@ -3,6 +3,7 @@
 
 pub mod bls12381;
 pub mod ecdsa_k1;
+pub mod ecdsa_p384;
 pub mod ecdsa_r1;
 pub mod ecvrf;
 pub mod ed25519;

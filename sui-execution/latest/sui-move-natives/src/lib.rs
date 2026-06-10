@@ -4,13 +4,14 @@
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
     config::ConfigReadSettingImplCostParams,
-    crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
+    crypto::{bls12381, ecdsa_k1, ecdsa_p384, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
     crypto::{
         bls12381::{Bls12381Bls12381MinPkVerifyCostParams, Bls12381Bls12381MinSigVerifyCostParams},
         ecdsa_k1::{
             EcdsaK1DecompressPubkeyCostParams, EcdsaK1EcrecoverCostParams,
             EcdsaK1Secp256k1VerifyCostParams,
         },
+        ecdsa_p384::EcdsaP384Secp384R1VerifyCostParams,
         ecdsa_r1::{EcdsaR1EcrecoverCostParams, EcdsaR1Secp256R1VerifyCostParams},
         ecvrf::EcvrfEcvrfVerifyCostParams,
         ed25519::Ed25519VerifyCostParams,
@@ -164,6 +165,9 @@ pub struct NativesCostTable {
     // ecdsar1
     pub ecdsa_r1_ecrecover_cost_params: EcdsaR1EcrecoverCostParams,
     pub ecdsa_r1_secp256_r1_verify_cost_params: EcdsaR1Secp256R1VerifyCostParams,
+
+    // ecdsap384
+    pub ecdsa_p384_secp384_r1_verify_cost_params: EcdsaP384Secp384R1VerifyCostParams,
 
     // ecvrf
     pub ecvrf_ecvrf_verify_cost_params: EcvrfEcvrfVerifyCostParams,
@@ -555,6 +559,26 @@ impl NativesCostTable {
                 ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block: protocol_config
                     .ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block()
                     .into(),
+            },
+            ecdsa_p384_secp384_r1_verify_cost_params: EcdsaP384Secp384R1VerifyCostParams {
+                ecdsa_p384_secp384r1_verify_sha256_cost_base: protocol_config
+                    .ecdsa_p384_secp384r1_verify_sha256_cost_base_as_option()
+                    .map(Into::into),
+                ecdsa_p384_secp384r1_verify_sha256_msg_cost_per_byte: protocol_config
+                    .ecdsa_p384_secp384r1_verify_sha256_msg_cost_per_byte_as_option()
+                    .map(Into::into),
+                ecdsa_p384_secp384r1_verify_sha256_msg_cost_per_block: protocol_config
+                    .ecdsa_p384_secp384r1_verify_sha256_msg_cost_per_block_as_option()
+                    .map(Into::into),
+                ecdsa_p384_secp384r1_verify_sha384_cost_base: protocol_config
+                    .ecdsa_p384_secp384r1_verify_sha384_cost_base_as_option()
+                    .map(Into::into),
+                ecdsa_p384_secp384r1_verify_sha384_msg_cost_per_byte: protocol_config
+                    .ecdsa_p384_secp384r1_verify_sha384_msg_cost_per_byte_as_option()
+                    .map(Into::into),
+                ecdsa_p384_secp384r1_verify_sha384_msg_cost_per_block: protocol_config
+                    .ecdsa_p384_secp384r1_verify_sha384_msg_cost_per_block_as_option()
+                    .map(Into::into),
             },
             ecvrf_ecvrf_verify_cost_params: EcvrfEcvrfVerifyCostParams {
                 ecvrf_ecvrf_verify_cost_base: protocol_config.ecvrf_ecvrf_verify_cost_base().into(),
@@ -1006,6 +1030,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "ecdsa_r1",
             "secp256r1_verify",
             make_native!(ecdsa_r1::secp256r1_verify),
+        ),
+        (
+            "ecdsa_p384",
+            "secp384r1_verify",
+            make_native!(ecdsa_p384::secp384r1_verify),
         ),
         (
             "ed25519",

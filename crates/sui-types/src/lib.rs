@@ -49,6 +49,7 @@ pub mod digests;
 pub mod display;
 pub mod display_registry;
 pub mod dynamic_field;
+pub mod ecdsa_p384;
 pub mod effects;
 pub mod epoch_data;
 pub mod event;
