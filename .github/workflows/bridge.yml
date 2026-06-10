@@ -47,6 +47,13 @@ env:
   RUST_LOG: error
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
+  # sccache RW role on trusted refs only (protected branches + release branches),
+  # AND only when not building an override ref: a workflow_dispatch with a non-empty
+  # sui_repo_ref checks out arbitrary code, so it must NOT hold the RW cache even
+  # though github.ref (and the OIDC sub) is main. Empty elsewhere → setup-sccache
+  # falls back to static keys (same-repo PRs) or a local cache (forks / overrides).
+  # Keep in sync with the sui-sccache-rw-github trust policy.
+  SCCACHE_ROLE: ${{ (github.event_name != 'workflow_dispatch' || github.event.inputs.sui_repo_ref == '') && (contains(fromJSON('["refs/heads/main","refs/heads/devnet","refs/heads/testnet","refs/heads/mainnet"]'), github.ref) || (startsWith(github.ref, 'refs/heads/releases/sui-') && endsWith(github.ref, '-release'))) && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || '' }}
 
 jobs:
   diff:
@@ -78,12 +85,18 @@ jobs:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-ghcloud ]
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: ./.github/actions/setup-sccache
         with:
+          # Dual-pass: OIDC on trusted refs (SCCACHE_ROLE non-empty); static-key
+          # fallback on same-repo PRs / untrusted refs until Phase 4 sets PR cache.
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
@@ -101,6 +114,9 @@ jobs:
       # non-deterministic `test` job.
       SUI_SKIP_SIMTESTS: 1
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     strategy:
       matrix:
         os:
@@ -110,6 +126,9 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - uses: ./.github/actions/setup-sccache
         with:
+          # Dual-pass: OIDC on trusted refs (SCCACHE_ROLE non-empty); static-key
+          # fallback on same-repo PRs / untrusted refs until Phase 4 sets PR cache.
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
