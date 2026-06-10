@@ -61,8 +61,16 @@ fn try_recover(items: &mut Vec<Exp>) -> bool {
             continue;
         };
         let cond = or_fold(ops);
-        // Bail if recovery wouldn't fully eliminate the flag (some other use of `f` remains).
-        if mentions(&cond, &flag) || mentions(&then_t, &flag) || mentions(&f_false_branch, &flag) {
+        if !flag_fully_consumed(
+            items,
+            &flag,
+            init_idx,
+            structure_idx,
+            test_idx,
+            &cond,
+            &then_t,
+            &f_false_branch,
+        ) {
             continue;
         }
         let recovered = Exp::IfElse(
@@ -77,6 +85,47 @@ fn try_recover(items: &mut Vec<Exp>) -> bool {
         return true;
     }
     false
+}
+
+/// True iff dropping the flag (the `let f = …` at `init_idx`) would not leave any
+/// dangling read of `f`. Three places where a leftover read could hide:
+///
+///   1. The recovered condition `cond` (an op_setup that reused `f`).
+///   2. The recovered then/else arms (an arm reads `f` after being set).
+///   3. Any sibling of the canonical `init / structure / test` shape: items strictly
+///      between `init_idx` and `structure_idx` (intervening blocks that touch `f`),
+///      or items after `test_idx` (a later block reads `f` once the canonical chain
+///      has run).
+///
+/// Each case is its own short-circuit so a failure is grep-able to the responsible shape.
+fn flag_fully_consumed(
+    items: &[Exp],
+    flag: &str,
+    init_idx: usize,
+    structure_idx: usize,
+    test_idx: usize,
+    cond: &Exp,
+    then_t: &Exp,
+    f_false_branch: &Exp,
+) -> bool {
+    if mentions(cond, flag) || mentions(then_t, flag) || mentions(f_false_branch, flag) {
+        return false;
+    }
+    let intervening = items[init_idx + 1..structure_idx]
+        .iter()
+        .any(|e| mentions(e, flag));
+    if intervening {
+        return false;
+    }
+    let trailing = items
+        .get(test_idx + 1..)
+        .into_iter()
+        .flatten()
+        .any(|e| mentions(e, flag));
+    if trailing {
+        return false;
+    }
+    true
 }
 
 /// `Some(f)` iff `exp` is `if (Variable(f)) { _ } else { _ }`.
