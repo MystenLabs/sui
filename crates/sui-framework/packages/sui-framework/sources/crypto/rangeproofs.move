@@ -15,6 +15,7 @@ const EInvalidRange: u64 = 2;
 #[allow(unused_const)]
 const EInvalidBatchSize: u64 = 3;
 const EUnsupportedVersion: u64 = 4;
+const EDeprecated: u64 = 5;
 
 /// Verify a range proof over the Ristretto255 curve that all committed values are in the range [0, 2^bits).
 /// Currently, the only supported version is 0 which corresponds to the original Bulletproofs construction (https://eprint.iacr.org/2017/1066.pdf).
@@ -59,7 +60,7 @@ public fun verify_bulletproofs_ristretto255(
     _commitments: &vector<Element<ristretto255::G>>,
     _version: u8,
 ): bool {
-    abort 1
+    abort EDeprecated
 }
 
 native fun verify_bulletproofs_with_dst_ristretto255_internal(

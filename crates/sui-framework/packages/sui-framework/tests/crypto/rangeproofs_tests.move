@@ -167,7 +167,7 @@ fun test_bulletproof_with_dst() {
 }
 
 #[test]
-#[expected_failure(abort_code = 1, location = sui::rangeproofs)]
+#[expected_failure(abort_code = sui::rangeproofs::EDeprecated)]
 fun test_deprecated_aborts() {
     // The deprecated entry point is disabled and always aborts.
     let commitment = ristretto255::g_from_bytes(
