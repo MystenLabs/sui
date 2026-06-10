@@ -107,7 +107,7 @@ fn verify_bulletproofs_ristretto255_impl(
         return Ok(NativeResult::err(context.gas_used(), INVALID_PROOF));
     };
 
-    let Ok(range) = range_from_bits(range_bits).map_err(|_| InvalidInput) else {
+    let Ok(range) = range_from_bits(range_bits) else {
         return Ok(NativeResult::err(context.gas_used(), INVALID_RANGE));
     };
 
