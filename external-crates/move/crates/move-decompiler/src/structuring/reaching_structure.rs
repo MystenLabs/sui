@@ -335,7 +335,7 @@ impl Ctx<'_> {
         }
         // cond = (node ∧ stale-arm(I1)) ∨ (¬node ∧ stale-arm(I2)), as atoms over block ids,
         // canonicalized through the BDD so the lowered guard comes out clean.
-        let a_node = reaching::Formula::Atom(node);
+        let a_node = reaching::atom(node);
         let cond = reaching::or(vec![
             reaching::and(vec![a_node.clone(), atom_pol(i1c, s1_then)]),
             reaching::and(vec![reaching::not(a_node), atom_pol(i2c, s2_then)]),

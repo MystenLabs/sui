@@ -23,10 +23,22 @@ use crate::structuring::ast::Input;
 use petgraph::graph::NodeIndex;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-/// A boolean formula over branch-condition atoms. `Atom(n)` denotes "the test at condition
-/// node `n` took its `then` edge".
+/// A boolean formula over branch-condition atoms. Opaque newtype around the underlying
+/// `FormulaTree` enum: construction goes through the canonical helpers `cond_atom` / `and`
+/// / `or` / `not` (which apply constructor hygiene), and query goes through `as_atom` /
+/// `atoms` / `Display`. The two engines that need the variants — the BDD canonicalizer in
+/// `bdd.rs` and the `Formula -> Exp` lowering in `translate::formula_to_exp` — destructure
+/// `&formula.0` directly; the `pub(crate)` field visibility makes that explicit instead of
+/// hidden behind a guarded accessor.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Formula {
+pub struct Formula(pub(crate) FormulaTree);
+
+/// Backing enum for [`Formula`]. Crate-visible so the lowering pass and the BDD engine can
+/// match on it; external code constructs a `Formula` via [`cond_atom`] / [`and`] / [`or`]
+/// / [`not`] or queries it via `Formula::as_atom` / `Formula::atoms`. `Atom(n)` denotes
+/// "the test at condition node `n` took its `then` edge".
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum FormulaTree {
     True,
     False,
     Atom(NodeIndex),
@@ -39,33 +51,44 @@ impl Formula {
     /// Every distinct atom (condition-block id) referenced by the formula.
     pub fn atoms(&self) -> BTreeSet<NodeIndex> {
         fn go(f: &Formula, out: &mut BTreeSet<NodeIndex>) {
-            match f {
-                Formula::True | Formula::False => {}
-                Formula::Atom(n) => {
+            match &f.0 {
+                FormulaTree::True | FormulaTree::False => {}
+                FormulaTree::Atom(n) => {
                     out.insert(*n);
                 }
-                Formula::Not(inner) => go(inner, out),
-                Formula::And(fs) | Formula::Or(fs) => fs.iter().for_each(|x| go(x, out)),
+                FormulaTree::Not(inner) => go(inner, out),
+                FormulaTree::And(fs) | FormulaTree::Or(fs) => fs.iter().for_each(|x| go(x, out)),
             }
         }
         let mut out = BTreeSet::new();
         go(self, &mut out);
         out
     }
+
+    /// `Some(n)` iff `self` is the single-atom degenerate guard (the dom-tree structurer's
+    /// product). The lowering / pretty-printer / `entry_label` path uses this to detect
+    /// the case where a `CondIf` is "just block N's condition," distinct from a compound
+    /// boolean recovered by the reaching folder.
+    pub fn as_atom(&self) -> Option<NodeIndex> {
+        match &self.0 {
+            FormulaTree::Atom(n) => Some(*n),
+            _ => None,
+        }
+    }
 }
 
 impl std::fmt::Display for Formula {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Formula::True => write!(f, "true"),
-            Formula::False => write!(f, "false"),
-            Formula::Atom(n) => write!(f, "{}", n.index()),
-            Formula::Not(inner) => write!(f, "!{inner}"),
-            Formula::And(fs) => {
+        match &self.0 {
+            FormulaTree::True => write!(f, "true"),
+            FormulaTree::False => write!(f, "false"),
+            FormulaTree::Atom(n) => write!(f, "{}", n.index()),
+            FormulaTree::Not(inner) => write!(f, "!{inner}"),
+            FormulaTree::And(fs) => {
                 let parts: Vec<String> = fs.iter().map(|x| x.to_string()).collect();
                 write!(f, "({})", parts.join(" & "))
             }
-            Formula::Or(fs) => {
+            FormulaTree::Or(fs) => {
                 let parts: Vec<String> = fs.iter().map(|x| x.to_string()).collect();
                 write!(f, "({})", parts.join(" | "))
             }
@@ -78,7 +101,22 @@ impl std::fmt::Display for Formula {
 /// site to update). Used at every site that builds a single-block guard — the dom-tree
 /// structurer's `CondIf`, the reaching diamond folder's atomic predicates.
 pub fn cond_atom(code: u64) -> Formula {
-    Formula::Atom(NodeIndex::new(code as usize))
+    Formula(FormulaTree::Atom(NodeIndex::new(code as usize)))
+}
+
+/// Atomic predicate at condition node `p`.
+pub fn atom(p: NodeIndex) -> Formula {
+    Formula(FormulaTree::Atom(p))
+}
+
+/// The constant `true` formula.
+pub fn truth() -> Formula {
+    Formula(FormulaTree::True)
+}
+
+/// The constant `false` formula.
+pub fn falsity() -> Formula {
+    Formula(FormulaTree::False)
 }
 
 /// Conjunction with constructor hygiene only (flatten nested `And`, drop `True`, short-circuit
@@ -87,17 +125,17 @@ pub fn cond_atom(code: u64) -> Formula {
 pub fn and(formulas: Vec<Formula>) -> Formula {
     let mut out = Vec::new();
     for f in formulas {
-        match f {
-            Formula::True => {}
-            Formula::False => return Formula::False,
-            Formula::And(inner) => out.extend(inner),
-            other => out.push(other),
+        match f.0 {
+            FormulaTree::True => {}
+            FormulaTree::False => return falsity(),
+            FormulaTree::And(inner) => out.extend(inner),
+            other => out.push(Formula(other)),
         }
     }
     match out.len() {
-        0 => Formula::True,
+        0 => truth(),
         1 => out.pop().unwrap(),
-        _ => Formula::And(out),
+        _ => Formula(FormulaTree::And(out)),
     }
 }
 
@@ -106,27 +144,27 @@ pub fn and(formulas: Vec<Formula>) -> Formula {
 pub fn or(formulas: Vec<Formula>) -> Formula {
     let mut out = Vec::new();
     for f in formulas {
-        match f {
-            Formula::False => {}
-            Formula::True => return Formula::True,
-            Formula::Or(inner) => out.extend(inner),
-            other => out.push(other),
+        match f.0 {
+            FormulaTree::False => {}
+            FormulaTree::True => return truth(),
+            FormulaTree::Or(inner) => out.extend(inner),
+            other => out.push(Formula(other)),
         }
     }
     match out.len() {
-        0 => Formula::False,
+        0 => falsity(),
         1 => out.pop().unwrap(),
-        _ => Formula::Or(out),
+        _ => Formula(FormulaTree::Or(out)),
     }
 }
 
 /// Negation, collapsing constants and double negation.
 pub fn not(formula: Formula) -> Formula {
-    match formula {
-        Formula::True => Formula::False,
-        Formula::False => Formula::True,
-        Formula::Not(inner) => *inner,
-        other => Formula::Not(Box::new(other)),
+    match formula.0 {
+        FormulaTree::True => falsity(),
+        FormulaTree::False => truth(),
+        FormulaTree::Not(inner) => *inner,
+        other => Formula(FormulaTree::Not(Box::new(Formula(other)))),
     }
 }
 
@@ -135,9 +173,9 @@ fn edge_condition(pred_input: Option<&Input>, p: NodeIndex, n: NodeIndex) -> For
     match pred_input {
         Some(Input::Condition(_, _, then, els)) => {
             if n == *then {
-                Formula::Atom(p)
+                atom(p)
             } else if n == *els {
-                not(Formula::Atom(p))
+                not(atom(p))
             } else {
                 // `n` is not an arm of `p` — the caller's edge set is inconsistent with the
                 // condition's recorded arms. The adjacency build above only enumerates edges
@@ -150,11 +188,11 @@ fn edge_condition(pred_input: Option<&Input>, p: NodeIndex, n: NodeIndex) -> For
                     false,
                     "edge {p:?} -> {n:?} not in Condition's arms (then={then:?}, else={els:?})",
                 );
-                Formula::True
+                truth()
             }
         }
         // Unconditional fall-through, or a node we don't model: the edge is always taken.
-        _ => Formula::True,
+        _ => truth(),
     }
 }
 
@@ -210,14 +248,14 @@ pub fn reaching_conditions(
     // Forward-propagate. In a DAG every predecessor precedes its successor in `topo`, so each
     // `reach[p]` is already populated when we reach `n`.
     let mut reach: BTreeMap<NodeIndex, Formula> = BTreeMap::new();
-    reach.insert(entry, Formula::True);
+    reach.insert(entry, truth());
     for &n in &topo {
         if n == entry {
             continue;
         }
         let mut terms = Vec::new();
         for &p in preds.get(&n).into_iter().flatten() {
-            let rp = reach.get(&p).cloned().unwrap_or(Formula::False);
+            let rp = reach.get(&p).cloned().unwrap_or(falsity());
             terms.push(and(vec![rp, edge_condition(input.get(&p), p, n)]));
         }
         reach.insert(n, or(terms));
@@ -234,8 +272,8 @@ mod tests {
         i.into()
     }
 
-    fn atom(i: u32) -> Formula {
-        Formula::Atom(n(i))
+    fn atomic(i: u32) -> Formula {
+        atom(n(i))
     }
 
     // Mirrors tests/structuring/guarded_chain_nested.stt: two chained pyth-style diamonds
@@ -265,26 +303,26 @@ mod tests {
         let reach = reaching_conditions(&input, n(0)).expect("region is acyclic");
 
         // R(3) = a0 ∧ a1   (feed-a, then-side, stale)
-        assert_eq!(reach[&n(3)], and(vec![atom(0), atom(1)]));
+        assert_eq!(reach[&n(3)], and(vec![atomic(0), atomic(1)]));
         // R(5) = ¬a0 ∧ a2  (feed-a, else-side, stale)
-        assert_eq!(reach[&n(5)], and(vec![not(atom(0)), atom(2)]));
+        assert_eq!(reach[&n(5)], and(vec![not(atomic(0)), atomic(2)]));
         // R(4) = (a0 ∧ ¬a1) ∨ (¬a0 ∧ ¬a2)  == "not stale on a"
         assert_eq!(
             reach[&n(4)],
             or(vec![
-                and(vec![atom(0), not(atom(1))]),
-                and(vec![not(atom(0)), not(atom(2))]),
+                and(vec![atomic(0), not(atomic(1))]),
+                and(vec![not(atomic(0)), not(atomic(2))]),
             ])
         );
         // R(8) = R(4) ∧ a4 ∧ a6  (feed-b reached only when feed-a fresh)
         assert_eq!(
             reach[&n(8)],
-            and(vec![reach[&n(4)].clone(), atom(4), atom(6)])
+            and(vec![reach[&n(4)].clone(), atomic(4), atomic(6)])
         );
         // R(9) = R(4) ∧ ¬a4 ∧ a7
         assert_eq!(
             reach[&n(9)],
-            and(vec![reach[&n(4)].clone(), not(atom(4)), atom(7)])
+            and(vec![reach[&n(4)].clone(), not(atomic(4)), atomic(7)])
         );
     }
 
