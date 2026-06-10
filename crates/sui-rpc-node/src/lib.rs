@@ -51,6 +51,7 @@ use prometheus::Registry;
 use sui_consistent_store::ChainId;
 use sui_consistent_store::Db;
 use sui_consistent_store::DbOptions;
+use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::Schema as _;
 use sui_consistent_store::Watermark;
 use sui_consistent_store::metrics::ColumnFamilyStatsCollector;
@@ -69,6 +70,8 @@ use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::ingestion::streaming_client::GrpcStreamingClient;
 use sui_indexer_alt_framework::metrics::IngestionMetrics;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_rpc_api::subscription::IndexedCheckpointFn;
+use sui_rpc_api::subscription::SubscriptionService;
 use sui_rpc_store::Indexer;
 use sui_rpc_store::PipelineLayer;
 use sui_rpc_store::RestoreLayer;
@@ -145,7 +148,7 @@ pub async fn start_service(
     // proof-of-concept is to drive the full stack.
     let committer_config = committer.finish(CommitterConfig::default());
     indexer
-        .add_pipelines(PipelineLayer::all(), committer_config)
+        .add_pipelines(PipelineLayer::all(), committer_config.clone())
         .await
         .context("Failed to register rpc-store pipelines")?;
 
@@ -154,6 +157,33 @@ pub async fn start_service(
     // CF) and is owned by the reader rather than the indexer's
     // store.
     let db = indexer.store().db().clone();
+
+    // Host the checkpoint-subscription service over the checkpoints this
+    // node indexes — the standalone analog of the fullnode's
+    // checkpoint-executor broadcast. The `checkpoint_broadcast` pipeline
+    // (registered below) feeds `checkpoint_sender` in checkpoint order;
+    // the service holds each checkpoint back until the indexes have
+    // committed it (`indexed_checkpoint`) so a subscriber can read its
+    // indexed state as soon as it is delivered.
+    //
+    // Seed the broadcast pipeline's watermark to the current tip first,
+    // so on the first run after a restore it follows live instead of
+    // dragging the shared ingestion start back to genesis (a no-op on a
+    // fresh database or once the watermark exists).
+    if let Some(tip) = highest_indexed_checkpoint(&db) {
+        sui_rpc_store::seed_checkpoint_broadcast_watermark(&db, tip)
+            .context("Failed to seed checkpoint_broadcast watermark")?;
+    }
+    let indexed_checkpoint: IndexedCheckpointFn = {
+        let db = db.clone();
+        Arc::new(move || highest_indexed_checkpoint(&db))
+    };
+    let (checkpoint_sender, subscription_handle) =
+        SubscriptionService::build(registry, Some(indexed_checkpoint));
+    indexer
+        .add_checkpoint_broadcast(checkpoint_sender, committer_config)
+        .await
+        .context("Failed to register checkpoint-broadcast pipeline")?;
 
     // Expose per-CF RocksDB stats (sizes, compaction backlog, write-stall
     // state). The collector holds only a weak handle to the database.
@@ -169,6 +199,7 @@ pub async fn start_service(
         Arc::new(RpcStoreSchema::open(&db).context("Failed to bind RpcStoreSchema for reads")?),
         consistency,
         rpc,
+        Some(subscription_handle),
         bin_name,
         version,
         registry,
@@ -178,6 +209,23 @@ pub async fn start_service(
 
     let s_indexer = indexer.run().await?;
     Ok(s_indexer.merge(rpc_service))
+}
+
+/// The highest checkpoint every registered pipeline has committed
+/// through — the minimum committed watermark across pipelines, i.e. the
+/// point up to which all of the indexes are coherent. `None` before
+/// anything has been indexed (a fresh database). Used both to seed the
+/// broadcast pipeline at the tip and as the subscription service's
+/// read-after-write gate.
+fn highest_indexed_checkpoint(db: &Db) -> Option<u64> {
+    let framework = FrameworkSchema::new(db.clone());
+    let mut min: Option<u64> = None;
+    for entry in framework.watermarks.iter(..).ok()? {
+        let (_, watermark) = entry.ok()?;
+        let hi = watermark.checkpoint_hi_inclusive;
+        min = Some(min.map_or(hi, |m| m.min(hi)));
+    }
+    min
 }
 
 /// `Serve` entry point. Opens the existing database at
@@ -233,11 +281,15 @@ pub async fn start_serve(
         )))
         .context("Failed to register RocksDB column-family stats collector")?;
 
+    // No indexer runs in `serve` mode, so there is no broadcast source
+    // to back a subscription service; `subscribe_checkpoints` stays
+    // unimplemented here.
     build_rpc_service(
         database.clone(),
         schema,
         consistency,
         rpc,
+        None,
         bin_name,
         version,
         registry,

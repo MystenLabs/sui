@@ -21,6 +21,7 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_
 use sui_rpc_api::RpcMetrics;
 use sui_rpc_api::RpcService;
 use sui_rpc_api::ServerVersion;
+use sui_rpc_api::subscription::SubscriptionServiceHandle;
 use sui_rpc_store::ConsistencyConfig;
 use sui_rpc_store::RpcStoreReader;
 use sui_rpc_store::RpcStoreSchema;
@@ -44,6 +45,7 @@ pub async fn build_rpc_service(
     schema: Arc<RpcStoreSchema>,
     consistency: ConsistencyConfig,
     config: RpcConfig,
+    subscription_handle: Option<SubscriptionServiceHandle>,
     bin_name: &'static str,
     version: &'static str,
     registry: &Registry,
@@ -58,6 +60,14 @@ pub async fn build_rpc_service(
     rpc_service.with_server_version(ServerVersion::new(bin_name, version));
     rpc_service.with_metrics(RpcMetrics::new(registry));
     rpc_service.with_config(config.config.clone());
+
+    // Mount the checkpoint-subscription service when a handle is
+    // supplied (the `run` path, which drives the indexer and feeds the
+    // broadcast). Without it the v2 `SubscriptionService` stays
+    // unregistered and `subscribe_checkpoints` returns `Unimplemented`.
+    if let Some(subscription_handle) = subscription_handle {
+        rpc_service.with_subscription_service(subscription_handle);
+    }
 
     // Mount the v1alpha `ConsistentService` over the same `Db`
     // / schema. The service hands out paginated, checkpoint-

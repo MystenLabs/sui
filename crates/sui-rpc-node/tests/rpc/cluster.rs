@@ -58,6 +58,7 @@ use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientTrait
 use sui_indexer_alt_framework::metrics::IngestionMetrics;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_move_build::BuildConfig;
+use sui_rpc_api::subscription::SubscriptionService;
 use sui_rpc_node::METRICS_PREFIX;
 use sui_rpc_node::config::ServiceConfig;
 use sui_rpc_node::rpc::build_rpc_service;
@@ -254,13 +255,22 @@ impl LocalCluster {
         .await
         .context("Failed to construct rpc-store indexer")?;
 
+        let committer_config = committer.finish(CommitterConfig::default());
         indexer
-            .add_pipelines(
-                PipelineLayer::all(),
-                committer.finish(CommitterConfig::default()),
-            )
+            .add_pipelines(PipelineLayer::all(), committer_config.clone())
             .await
             .context("Failed to register rpc-store pipelines")?;
+
+        // Mirror `start_service`: register the checkpoint-broadcast
+        // pipeline and host the subscription service over it. No
+        // indexed-checkpoint gate here — the harness delivers
+        // immediately. No watermark seed either: a fresh Simulacrum db
+        // starts at genesis, so the pipeline follows from checkpoint 0.
+        let (checkpoint_sender, subscription_handle) = SubscriptionService::build(&registry, None);
+        indexer
+            .add_checkpoint_broadcast(checkpoint_sender, committer_config)
+            .await
+            .context("Failed to register checkpoint-broadcast pipeline")?;
 
         let pipelines: Vec<&'static str> = indexer.pipelines().collect();
 
@@ -285,6 +295,7 @@ impl LocalCluster {
             schema.clone(),
             consistency_for_rpc,
             rpc,
+            Some(subscription_handle),
             "sui-rpc-node-tests",
             "0.0",
             &registry,

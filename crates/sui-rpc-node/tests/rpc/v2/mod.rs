@@ -9,4 +9,5 @@
 mod ledger_service;
 mod move_package_service;
 mod state_service;
+mod subscription_service;
 mod unchanged_loaded_runtime_objects;
