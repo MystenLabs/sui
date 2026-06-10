@@ -113,6 +113,9 @@ async fn restart_fullnode(cluster: &TestCluster, name: &AuthorityName, rpc: RpcC
     let node = cluster.swarm.node(name).unwrap();
     node.stop();
     node.config().rpc = Some(rpc);
+    if cfg!(msim) {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
     node.start().await.unwrap();
 }
 

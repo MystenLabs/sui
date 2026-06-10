@@ -87,6 +87,60 @@ const RPC_STORE_DIR: &str = "rpc_store";
 /// stride of 1 this is roughly a 32-checkpoint consistency window.
 const SNAPSHOT_CAPACITY: usize = 32;
 
+fn db_options() -> DbOptions {
+    DbOptions {
+        rocksdb: default_rocksdb_config(),
+        snapshot_capacity: SNAPSHOT_CAPACITY,
+    }
+}
+
+/// Open the rpc-store database at `path`.
+#[cfg(not(msim))]
+async fn open_db(path: &std::path::Path) -> anyhow::Result<(Db, RpcStoreSchema)> {
+    Db::open::<RpcStoreSchema>(path, db_options())
+        .context("opening the embedded rpc-store database")
+}
+
+/// Open the rpc-store database at `path`, retrying a transient lock
+/// conflict.
+///
+/// A node restarted on the same `db_path` (the simtest restart path) can
+/// briefly observe the path as locked: the previous instance's RocksDB
+/// teardown frees its in-process lock registry entry inside RocksDB's
+/// native close, on its own threads, and that release is not synchronized
+/// with the drop of the last `Db` handle -- so even after every strong
+/// handle has dropped, the reopen can race the unfinished native teardown.
+/// Retrying is robust where a wait is not (the only operation that can
+/// observe "the path is openable again" is asking RocksDB to open it); a
+/// genuine, persistent failure surfaces once attempts are exhausted.
+/// Mirrors `typed_store::safe_drop_rocksdb`'s retry on the inverse
+/// (destroy-vs-teardown) race.
+///
+/// Simulation-only: under a real runtime `Node::stop` joins the node's
+/// thread, so the prior instance's teardown completes before the restart
+/// and the open never races.
+#[cfg(msim)]
+async fn open_db(path: &std::path::Path) -> anyhow::Result<(Db, RpcStoreSchema)> {
+    const OPEN_ATTEMPTS: usize = 60;
+    const OPEN_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
+
+    let mut attempt = 1;
+    loop {
+        match Db::open::<RpcStoreSchema>(path, db_options()) {
+            Ok(opened) => return Ok(opened),
+            Err(e) if attempt < OPEN_ATTEMPTS => {
+                tracing::warn!(
+                    attempt,
+                    "opening the embedded rpc-store database failed, retrying: {e:?}"
+                );
+                attempt += 1;
+                tokio::time::sleep(OPEN_RETRY_DELAY).await;
+            }
+            Err(e) => return Err(e).context("opening the embedded rpc-store database"),
+        }
+    }
+}
+
 /// What the startup orchestration does with the on-disk rpc-store.
 ///
 /// The action chosen at startup is retained on [`EmbeddedRpcStore`] and
@@ -220,12 +274,7 @@ impl EmbeddedRpcStore {
     ) -> anyhow::Result<Self> {
         let perpetual = authority_store.perpetual_tables.clone();
         let path = config.db_path().join(RPC_STORE_DIR);
-        let db_options = DbOptions {
-            rocksdb: default_rocksdb_config(),
-            snapshot_capacity: SNAPSHOT_CAPACITY,
-        };
-        let (db, schema) = Db::open::<RpcStoreSchema>(&path, db_options)
-            .context("opening the embedded rpc-store database")?;
+        let (db, schema) = open_db(&path).await?;
         let schema = Arc::new(schema);
 
         // The highest checkpoint whose transaction outputs are durably
