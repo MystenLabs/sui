@@ -127,9 +127,21 @@ fn try_inline_at(items: &mut Vec<Exp>, let_idx: usize, sel_name: &Var) -> bool {
     //     assignment sites were originally cascade arms (post-let). Now the assignments
     //     live deeper inside the if-tree (earlier in flow); the Declares must precede the
     //     if-tree to keep use-before-declare from sneaking in.
+    //     NOTE:HOIST_DECL — this step is load-bearing only if `hoist_declarations` has
+    //     already run upstream. If pipeline order changes (the pass is moved or disabled),
+    //     re-validate this assumption: a Declare not produced by `hoist_declarations`
+    //     might not appear at all, in which case we'd be inserting a spurious one.
     let mut new_tree = if_tree;
     strip_leaf_values(&mut new_tree);
-    for (path, body) in &placements {
+    // Insert deepest LCAs first. `insert_at_path` walks down through the IfElse arms
+    // (peeking past `Seq` setup wrappers via `inner_ifelse_mut`); if a shallower body has
+    // already been appended at an ancestor, the IfElse stops being the trailing item of
+    // that arm's `Seq` — the deeper insert then finds no IfElse to recur into and
+    // silently no-ops. Sorting placements by path length descending preserves the correct
+    // nesting regardless of how the cascade bounds map onto subtree depths.
+    let mut placements_by_depth: Vec<&(Vec<bool>, Exp)> = placements.iter().collect();
+    placements_by_depth.sort_by_key(|(p, _)| std::cmp::Reverse(p.len()));
+    for (path, body) in placements_by_depth {
         insert_at_path(&mut new_tree, path, body.clone());
     }
 
@@ -155,8 +167,9 @@ fn try_inline_at(items: &mut Vec<Exp>, let_idx: usize, sel_name: &Var) -> bool {
         if cascade_set.contains(&i) {
             continue;
         }
-        // If this is a Declare for any of the assigned-in-bodies variables that lives
-        // AFTER let_idx, split it into the hoisted portion and the rest.
+        // NOTE:HOIST_DECL — assumes `hoist_declarations` has placed Declares as siblings
+        // of the cascade. If a Declare for an assigned-in-bodies variable lives AFTER
+        // let_idx, split it into the hoisted portion and the rest.
         if i > let_idx
             && let Exp::Declare(names) = &item
         {
@@ -431,7 +444,25 @@ fn for_each_leaf(exp: &Exp, f: &mut impl FnMut(u32)) {
 /// from `exp` to the deepest IfElse node N such that the leaves under N are exactly
 /// `{ l | l.value <= bound }`. If no such N exists, returns None. An empty path means
 /// the root itself is the LCA.
+///
+/// Precondition: every leaf in the if-tree carries a tag value that comes from the
+/// dispatch synthesis in `structuring/mod.rs`, which assigns a dense `0..N-1` range
+/// to the owned succs. There is no sentinel "default" leaf above the cascade range,
+/// and the cascade arms cover every leaf — the `bound`s passed in stay within
+/// `0..cascade_arms.len()-1`. The debug_assert catches a future change that violates
+/// this (e.g. an arm dropped from the cascade after dispatch synthesis); a violation
+/// would fold partially and silently leave stale leaves behind.
 fn find_exact_subtree_path(exp: &Exp, bound: u32) -> Option<Vec<bool>> {
+    if cfg!(debug_assertions) {
+        let mut max_leaf = 0u32;
+        for_each_leaf(exp, &mut |v| {
+            max_leaf = max_leaf.max(v);
+        });
+        debug_assert!(
+            bound <= max_leaf,
+            "find_exact_subtree_path: bound {bound} exceeds max leaf tag {max_leaf}",
+        );
+    }
     // Special case: if every leaf in `exp` has value <= bound, the root is the answer.
     let mut all_leq = true;
     let mut any_leq = false;
