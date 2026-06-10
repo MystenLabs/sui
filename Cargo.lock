@@ -13934,6 +13934,7 @@ dependencies = [
  "mysten-metrics",
  "nonempty",
  "parking_lot 0.12.3",
+ "petgraph 0.8.1",
  "quick_cache",
  "serde",
  "serde_json",

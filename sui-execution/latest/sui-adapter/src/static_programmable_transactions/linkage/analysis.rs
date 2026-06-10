@@ -8,7 +8,9 @@ use crate::{
     static_programmable_transactions::{
         linkage::{
             config::{LinkageConfig, ResolutionConfig},
-            resolution::{ResolutionTable, VersionConstraint, add_and_unify, get_package},
+            resolution::{
+                ResolutionTable, VersionConstraint, add_and_unify, add_package, get_package,
+            },
             resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
         },
         loading::ast::Type,
@@ -16,7 +18,6 @@ use crate::{
 };
 use move_binary_format::file_format::Visibility;
 use move_core_types::identifier::IdentStr;
-use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID, error::ExecutionErrorTrait, execution_status::ExecutionErrorKind,
@@ -99,26 +100,6 @@ impl LinkageAnalyzer {
         store: &dyn PackageStore,
     ) -> Result<ResolutionTable, E> {
         let mut resolution_table = self.internal.resolution_table_with_native_packages(store)?;
-
-        fn add_package<E: ExecutionErrorTrait>(
-            object_id: &ObjectID,
-            store: &dyn PackageStore,
-            resolution_table: &mut ResolutionTable,
-            self_resolution_fn: fn(&VerifiedPackage) -> Option<VersionConstraint>,
-            dep_resolution_fn: fn(&VerifiedPackage) -> Option<VersionConstraint>,
-        ) -> Result<(), E> {
-            let pkg = get_package(object_id, store)?;
-            let transitive_deps = resolution_table
-                .config
-                .linkage_table(&pkg)
-                .into_values()
-                .map(ObjectID::from);
-            for object_id in transitive_deps {
-                add_and_unify(&object_id, store, resolution_table, dep_resolution_fn)?;
-            }
-            add_and_unify(object_id, store, resolution_table, self_resolution_fn)?;
-            Ok(())
-        }
 
         let pkg = get_package(package, store)?;
         let fn_not_found_err = || -> E {

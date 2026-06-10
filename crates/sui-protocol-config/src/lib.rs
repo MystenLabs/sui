@@ -1130,6 +1130,10 @@ struct FeatureFlags {
     // If true, exit early for IFWW transactions.
     #[serde(skip_serializing_if = "is_false")]
     early_exit_on_iffw: bool,
+
+    // If true enable component-based linkage
+    #[serde(skip_serializing_if = "is_false")]
+    enable_component_based_linkage: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2875,6 +2879,10 @@ impl ProtocolConfig {
 
     pub fn early_exit_on_iffw(&self) -> bool {
         self.feature_flags.early_exit_on_iffw
+    }
+
+    pub fn enable_component_based_linkage(&self) -> bool {
+        self.feature_flags.enable_component_based_linkage
     }
 }
 
@@ -5004,6 +5012,9 @@ impl ProtocolConfig {
                 }
                 127 => {
                     cfg.feature_flags.always_advance_dkg_to_resolution = true;
+                    // TODO: Place this in the correct protocol version once we have a better idea
+                    // on rollout date.
+                    cfg.feature_flags.enable_component_based_linkage = true;
                 }
                 // Use this template when making changes:
                 //

@@ -79,8 +79,8 @@ task 11, lines 49-51:
 //# programmable
 //> 0: test::m1::r();
 //> MakeMoveVec<u64>([NestedResult(0, 2), NestedResult(1, 0)])
-Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds secondary access to result vector 0 at secondary index 2
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: SecondaryIndexOutOfBounds { result_idx: 0, secondary_idx: 2 } }, source: None, command: Some(1) } }
+Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds access to input or result vector 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: IndexOutOfBounds { idx: 1 } }, source: None, command: Some(1) } }
 
 task 12, lines 53-55:
 //# programmable
