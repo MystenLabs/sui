@@ -80,19 +80,20 @@ module a::m {
     public fun binop_then_returned(c: &ValueCap): u64 { c.value + 1 }
     public fun binop_then_compared(c: &ValueCap) { assert!(c.value + 1 > 0, ERR); }
 
-    // Pack carries per-field tracking. Returning the packed struct exposes
-    // its tracked fields to the caller and counts as use.
+    // In all the pack cases below, the use is the `c.value` read itself:
+    // evaluating the pack's field expression dereferences the field, which
+    // marks the root at that point. The packed struct carries no tracking —
+    // what happens to it afterwards (returned, read, passed, dropped) does
+    // not matter to the lint.
     public fun pack_returned(c: &ValueCap): Wrapper {
         Wrapper { val: c.value, other: 0 }
     }
 
-    // Reading the field that was packed with `c.value` recovers tracking.
     public fun pack_then_read_tracked(c: &ValueCap): u64 {
         let w = Wrapper { val: c.value, other: 0 };
         w.val
     }
 
-    // Passing the packed struct to a function counts as use.
     public fun pack_then_pass(c: &ValueCap) {
         let w = Wrapper { val: c.value, other: 0 };
         consume_wrapper(w);
@@ -110,7 +111,8 @@ module a::m {
         b
     }
 
-    // packed into a local struct, tracked field then read in an assertion
+    // the `o.flag` read inside the pack is the use; the later assertion
+    // reads the (untracked) local struct and contributes nothing
     public fun pack_local_then_assert_field(o: &BoolCap) {
         let t = Wrapped { f: o.flag };
         assert!(t.f, ERR);
@@ -148,6 +150,47 @@ module a::m {
     // Vector literal of a field-derived value (returned).
     public fun vector_returned(c: &ValueCap): vector<u64> {
         vector[c.value]
+    }
+
+    // Field read inside a loop body: the use is recorded in the body
+    // block's post-state; nothing after the loop touches `c`.
+    public fun loop_field_in_body(c: &ValueCap, n: u64): u64 {
+        let acc = 0;
+        let i = 0;
+        while (i < n) {
+            acc = acc + c.value;
+            i = i + 1;
+        };
+        acc
+    }
+
+    // The field-derived view of `c` reaches the deref after the loop only
+    // through the back edge: with zero iterations `r` still points at
+    // `zero`. Marking `c` needs the fixed point to push the body's
+    // borrow around the back edge and re-process the exit block.
+    public fun loop_back_edge_then_use(c: &OwnerCap, n: u64) {
+        let zero = @0;
+        let r = &zero;
+        let i = 0;
+        while (i < n) {
+            r = &c.owns;
+            i = i + 1;
+        };
+        assert!(*r == @0, ERR);
+    }
+
+    // The only use of `c` is the deref at the top of the body, which sees
+    // the field-derived value only on the second iteration — i.e. only
+    // after the back-edge join changes `r` and the body is re-processed.
+    public fun loop_back_edge_use_in_body(c: &OwnerCap, n: u64) {
+        let zero = @0;
+        let r = &zero;
+        let i = 0;
+        while (i < n) {
+            assert!(*r == @0, ERR);
+            r = &c.owns;
+            i = i + 1;
+        };
     }
 
     fun check(c: &OwnerCap) { assert!(c.owns == @0, ERR); }

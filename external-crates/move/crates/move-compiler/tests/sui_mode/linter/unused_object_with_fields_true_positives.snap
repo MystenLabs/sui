@@ -68,3 +68,19 @@ warning[Lint W99012]: unused object with fields
    │         ^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
    │
    = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:52:36
+   │
+52 │     public fun loop_bare_back_edge(c1: &OwnerCap, c2: &OwnerCap, n: u64): &OwnerCap {
+   │                                    ^^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:52:51
+   │
+52 │     public fun loop_bare_back_edge(c1: &OwnerCap, c2: &OwnerCap, n: u64): &OwnerCap {
+   │                                                   ^^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

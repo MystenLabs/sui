@@ -26,9 +26,7 @@ use crate::{
         Diagnostic, Diagnostics,
         codes::{DiagnosticInfo, Severity, custom},
     },
-    hlir::ast::{
-        BaseType_, Label, ModuleCall, SingleType, SingleType_, Type, Type_, TypeName_, Var,
-    },
+    hlir::ast::{BaseType_, ModuleCall, SingleType, SingleType_, Type, Type_, TypeName_, Var},
     parser::ast::Ability_,
     shared::Identifier,
     sui_mode::SUI_ADDR_VALUE,
@@ -121,10 +119,6 @@ impl SimpleAbsIntConstructor for CustomStateChangeVerifier {
 impl SimpleAbsInt for CustomStateChangeVerifierAI {
     type State = State;
     type ExecutionContext = ExecutionContext;
-
-    fn finish(&mut self, _final_states: BTreeMap<Label, State>, diags: Diagnostics) -> Diagnostics {
-        diags
-    }
 
     fn start_command(&self, _: &mut State) -> ExecutionContext {
         ExecutionContext {

@@ -7,7 +7,7 @@ use crate::{
     PreCompiledProgramInfo,
     cfgir::{
         CFGContext,
-        absint::{AbstractDomain, JoinResult, TransferFunctions, analyze_function},
+        absint::{AbstractDomain, AnalysisResult, JoinResult, TransferFunctions, analyze_function},
         ast as G,
         cfg::ImmForwardCFG,
     },
@@ -546,8 +546,8 @@ pub trait SimpleAbsIntConstructor: Sized {
         let Some(mut ai) = Self::new(context, cfg, &mut init_state) else {
             return Diagnostics::new();
         };
-        let (final_state, ds) = analyze_function(&mut ai, cfg, init_state);
-        ai.finish(final_state, ds)
+        let result = analyze_function(&mut ai, cfg, init_state);
+        ai.finish(result)
     }
 }
 
@@ -556,14 +556,14 @@ pub trait SimpleAbsInt: Sized {
     /// The execution context local to a command
     type ExecutionContext: SimpleExecutionContext;
 
-    /// A hook for an additional processing after visiting all codes. The `final_states` are the
-    /// pre-states for each block (keyed by the label for the block). The `diags` are collected from
-    /// all code visited.
-    fn finish(
-        &mut self,
-        final_states: BTreeMap<Label, Self::State>,
-        diags: Diagnostics,
-    ) -> Diagnostics;
+    /// A hook for additional processing after visiting all code, with access
+    /// to the analysis result: per-block pre-states (keyed by label),
+    /// post-states for each *reachable* block (unprocessed blocks are absent),
+    /// and the diagnostics collected during the analysis. The default just
+    /// forwards the diagnostics.
+    fn finish(&mut self, result: AnalysisResult<Self::State>) -> Diagnostics {
+        result.diags
+    }
 
     /// A hook for any pre-processing at the start of a command
     fn start_command(&self, pre: &mut Self::State) -> Self::ExecutionContext;

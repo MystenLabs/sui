@@ -22,7 +22,7 @@ use crate::{
         Diagnostic, Diagnostics,
         codes::{DiagnosticInfo, Severity, custom},
     },
-    hlir::ast::{Label, ModuleCall, Type, Type_, Var},
+    hlir::ast::{ModuleCall, Type, Type_, Var},
     parser::ast::Ability_,
     sui_mode::{SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME},
 };
@@ -121,10 +121,6 @@ impl SimpleAbsIntConstructor for SelfTransferVerifier {
 impl SimpleAbsInt for SelfTransferVerifierAI {
     type State = State;
     type ExecutionContext = ExecutionContext;
-
-    fn finish(&mut self, _final_states: BTreeMap<Label, State>, diags: Diagnostics) -> Diagnostics {
-        diags
-    }
 
     fn start_command(&self, _: &mut State) -> ExecutionContext {
         ExecutionContext {

@@ -45,6 +45,19 @@ module a::m {
     ): &Inner {
         if (cond) a else &outer.inner
     }
+
+    // A bare root circulating through a loop's back edge never becomes a
+    // field use — both roots stay `Bare` through every join and the
+    // returned pass-through marks nothing.
+    public fun loop_bare_back_edge(c1: &OwnerCap, c2: &OwnerCap, n: u64): &OwnerCap {
+        let r = c1;
+        let i = 0;
+        while (i < n) {
+            r = c2;
+            i = i + 1;
+        };
+        r
+    }
 }
 
 module sui::object {

@@ -25,23 +25,27 @@
 //!
 //! ## How the analysis tracks "unused"
 //!
-//! The analysis records, in `UnusedObjWithFieldsAI::used`, every tracked
-//! root that any reachable command marks as used. Because the abstract
-//! interpreter only processes blocks with a non-bottom pre-state, this
-//! union is exactly the set of params with at least one observable use on
-//! some reachable path. Params not in that set after the fixed point are
-//! never used on any reachable path — those are the ones we flag.
+//! Each [`State`] carries a `used: BTreeSet<Var>` that records every
+//! tracked root marked as used along some path reaching the current
+//! program point. The set grows monotonically inside a block (transfer
+//! functions only add) and joins by union (see [`State::join_impl`]), so
+//! the framework's fixed-point converges. At [`SimpleAbsInt::finish`] we
+//! union `used` across every reachable block's post-state: a root in that
+//! union is used on some reachable path; a root absent from it is never
+//! used on any reachable path — those are the ones we flag.
 //!
-//! Each tracked value carries a per-root `Kind` (`true` = field-derived,
-//! `false` = bare reference to the root). `Borrow` lifts `false → true`;
-//! join takes per-root union with `||` so we conservatively treat a root
-//! as field-derived if any incoming path produced a field-derived view.
+//! Each tracked value carries a per-root [`Kind`] — `Bare` (a reference to
+//! the root param itself) or `FieldDerived` (the value went through a
+//! `Borrow`). `Borrow` lifts `Bare → FieldDerived`; join takes per-root
+//! union with [`Kind::join`] (a max on the `Bare < FieldDerived` ordering)
+//! so we conservatively treat a root as field-derived if any incoming path
+//! produced a field-derived view.
 
 use crate::{
     PreCompiledProgramInfo,
     cfgir::{
         CFGContext,
-        absint::JoinResult,
+        absint::{AnalysisResult, JoinResult},
         cfg::{CFG, ImmForwardCFG},
         visitor::{
             LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
@@ -53,7 +57,7 @@ use crate::{
         codes::{DiagnosticInfo, Severity, custom},
     },
     hlir::ast::{
-        BaseType_, Command, Command_ as C, Exp, Label, ModuleCall, SingleType, SingleType_, Type,
+        BaseType_, Command, Command_ as C, Exp, ModuleCall, SingleType, SingleType_, Type,
         TypeName_, UnannotatedExp_, Var,
     },
     naming::ast::StructFields,
@@ -62,7 +66,6 @@ use crate::{
     sui_mode::linters::{LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode},
 };
 use move_ir_types::location::*;
-use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
 const UNUSED_OBJ_WITH_FIELDS_DIAG: DiagnosticInfo = custom(
@@ -81,14 +84,26 @@ pub struct UnusedObjWithFieldsVerifier;
 
 pub struct UnusedObjWithFieldsAI {
     tracked_params: BTreeMap<Var, Loc>,
-    /// Tracked roots that some reachable command has marked as used. Grows
-    /// monotonically across the fixed-point iterations.
-    used: RefCell<BTreeSet<Var>>,
 }
 
-/// Per-root tag on a tracked value: `true` means field-derived (the value
-/// went through a `Borrow`), `false` means a bare reference to the root.
-pub type Kind = bool;
+/// Per-root tag on a tracked value: how the value relates to its root.
+///
+/// Ordered so that `Bare < FieldDerived`; the lattice join is `max`.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Kind {
+    /// Bare reference to the root param itself (`&c`). A pass-through.
+    Bare,
+    /// Field-derived view of the root (`&c.f`, or any further `&.g`).
+    FieldDerived,
+}
+
+impl Kind {
+    /// Lattice join: `FieldDerived` dominates `Bare`. If any incoming path
+    /// produced a field-derived view, the merged view is field-derived.
+    fn join(self, other: Self) -> Self {
+        self.max(other)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum Value {
@@ -107,6 +122,10 @@ pub struct ExecutionContext {
 #[derive(Clone, Debug)]
 pub struct State {
     locals: BTreeMap<Var, LocalState<Value>>,
+    /// Tracked roots that some command on a path reaching this program
+    /// point has marked as used. Grows monotonically inside a block and
+    /// joins by union.
+    used: BTreeSet<Var>,
 }
 
 //**************************************************************************************************
@@ -146,17 +165,14 @@ impl SimpleAbsIntConstructor for UnusedObjWithFieldsVerifier {
                 debug_assert!(false, "parameter must be available at init");
                 continue;
             };
-            *val = Value::Tracked(BTreeMap::from([(*v, false)]));
+            *val = Value::Tracked(BTreeMap::from([(*v, Kind::Bare)]));
             tracked_params.insert(*v, v.0.loc);
         }
         if tracked_params.is_empty() {
             return None;
         }
 
-        Some(UnusedObjWithFieldsAI {
-            tracked_params,
-            used: RefCell::new(BTreeSet::new()),
-        })
+        Some(UnusedObjWithFieldsAI { tracked_params })
     }
 }
 
@@ -217,12 +233,23 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
     type State = State;
     type ExecutionContext = ExecutionContext;
 
-    fn finish(
-        &mut self,
-        _final_states: BTreeMap<Label, State>,
-        mut diags: Diagnostics,
-    ) -> Diagnostics {
-        let used = self.used.borrow();
+    fn finish(&mut self, result: AnalysisResult<State>) -> Diagnostics {
+        let AnalysisResult {
+            pre_states: _,
+            post_states,
+            mut diags,
+        } = result;
+        // Union `used` across every reachable block's post-state: a root
+        // used on any reachable path appears here. Unprocessed
+        // (unreachable) blocks are absent from `post_states` and so
+        // correctly contribute nothing. The union over *all* blocks (not
+        // just terminal ones) is what makes this correct for uses that
+        // never reach a terminal block — e.g. a use on an abort branch or
+        // inside a loop body.
+        let mut used: BTreeSet<Var> = BTreeSet::new();
+        for state in post_states.values() {
+            used.extend(state.used.iter().copied());
+        }
         for (var, loc) in &self.tracked_params {
             if !used.contains(var) {
                 diags.add(diag!(
@@ -262,7 +289,7 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
             C::Mutate(lhs, rhs) => {
                 self.exp(context, state, rhs);
                 let lhs_vals = self.exp(context, state, lhs);
-                self.mark_used(&lhs_vals);
+                state.mark_used(&lhs_vals);
                 true
             }
             // Returning a field-derived value escapes the function. A bare
@@ -270,19 +297,19 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
             // use of any field.
             C::Return { exp, .. } => {
                 let vals = self.exp(context, state, exp);
-                self.mark_used_fields(&vals);
+                state.mark_used_fields(&vals);
                 true
             }
             // Inspecting a tracked value to drive control flow counts.
             C::JumpIf { cond: e, .. } | C::VariantSwitch { subject: e, .. } => {
                 let vals = self.exp(context, state, e);
-                self.mark_used(&vals);
+                state.mark_used(&vals);
                 true
             }
             // Aborting on a tracked value inspects it for the abort code.
             C::Abort(_, e) => {
                 let vals = self.exp(context, state, e);
-                self.mark_used(&vals);
+                state.mark_used(&vals);
                 true
             }
             // `Assign` propagates the RHS value to the LHS binding via the
@@ -318,9 +345,9 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
                 Some(
                     vals.into_iter()
                         .map(|v| match v {
-                            Value::Tracked(map) => {
-                                Value::Tracked(map.into_keys().map(|k| (k, true)).collect())
-                            }
+                            Value::Tracked(map) => Value::Tracked(
+                                map.into_keys().map(|k| (k, Kind::FieldDerived)).collect(),
+                            ),
                             Value::Other => Value::Other,
                         })
                         .collect(),
@@ -335,7 +362,7 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
             // primitives — so any tracking we see here is field-derived.
             E::Dereference(inner) | E::UnaryExp(_, inner) | E::Cast(inner, _) => {
                 let vals = self.exp(context, state, inner);
-                self.mark_used(&vals);
+                state.mark_used(&vals);
                 Some(vec![Value::Other])
             }
             // Binop operands are consumed — references reach binop only
@@ -345,8 +372,8 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
             E::BinopExp(e1, _, e2) => {
                 let v1 = self.exp(context, state, e1);
                 let v2 = self.exp(context, state, e2);
-                self.mark_used(&v1);
-                self.mark_used(&v2);
+                state.mark_used(&v1);
+                state.mark_used(&v2);
                 Some(vec![Value::Other])
             }
             _ => None,
@@ -356,39 +383,37 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
     fn call_custom(
         &self,
         _context: &mut ExecutionContext,
-        _state: &mut State,
+        state: &mut State,
         _loc: &Loc,
         _return_ty: &Type,
         _f: &ModuleCall,
         args: Vec<Value>,
     ) -> Option<Vec<Value>> {
         // A tracked value flowing into a function call has escaped.
-        self.mark_used(&args);
+        state.mark_used(&args);
         None
     }
 }
 
-impl UnusedObjWithFieldsAI {
+impl State {
     /// Records every root referenced by `values` as used.
-    fn mark_used(&self, values: &[Value]) {
-        let mut used = self.used.borrow_mut();
+    fn mark_used(&mut self, values: &[Value]) {
         for v in values {
             if let Value::Tracked(map) = v {
-                used.extend(map.keys().copied());
+                self.used.extend(map.keys().copied());
             }
         }
     }
 
     /// Like [`Self::mark_used`], but only marks roots that flow as
-    /// field-derived values. A bare root reference (`Kind = false`) is a
+    /// field-derived values. A bare root reference ([`Kind::Bare`]) is a
     /// pass-through and does not count on its own.
-    fn mark_used_fields(&self, values: &[Value]) {
-        let mut used = self.used.borrow_mut();
+    fn mark_used_fields(&mut self, values: &[Value]) {
         for v in values {
             if let Value::Tracked(map) = v {
-                for (k, &is_field) in map {
-                    if is_field {
-                        used.insert(*k);
+                for (k, kind) in map {
+                    if *kind == Kind::FieldDerived {
+                        self.used.insert(*k);
                     }
                 }
             }
@@ -400,7 +425,10 @@ impl SimpleDomain for State {
     type Value = Value;
 
     fn new(_context: &CFGContext, locals: BTreeMap<Var, LocalState<Value>>) -> Self {
-        State { locals }
+        State {
+            locals,
+            used: BTreeSet::new(),
+        }
     }
 
     fn locals_mut(&mut self) -> &mut BTreeMap<Var, LocalState<Value>> {
@@ -419,7 +447,7 @@ impl SimpleDomain for State {
                 for (k, &kind) in m2 {
                     merged
                         .entry(*k)
-                        .and_modify(|e| *e |= kind)
+                        .and_modify(|e| *e = e.join(kind))
                         .or_insert(kind);
                 }
                 Value::Tracked(merged)
@@ -427,7 +455,20 @@ impl SimpleDomain for State {
         }
     }
 
-    fn join_impl(&mut self, _other: &Self, _result: &mut JoinResult) {}
+    /// Union the per-state `used` sets and bump `result` to `Changed` if
+    /// that introduced any new entries. Note that the diagnostics do not
+    /// depend on this propagation — a use is recorded in the post-state of
+    /// the block where it occurs, and [`SimpleAbsInt::finish`] unions all
+    /// reachable post-states. Flagging `Changed` keeps each block's
+    /// post-state self-contained ("all uses reaching the end of this
+    /// block"), so consumers of a single block's state see a complete set.
+    fn join_impl(&mut self, other: &Self, result: &mut JoinResult) {
+        for v in &other.used {
+            if self.used.insert(*v) {
+                *result = JoinResult::Changed;
+            }
+        }
+    }
 }
 
 impl SimpleExecutionContext for ExecutionContext {

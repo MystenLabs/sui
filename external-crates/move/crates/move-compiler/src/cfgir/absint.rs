@@ -39,31 +39,46 @@ pub trait TransferFunctions {
     ) -> Diagnostics;
 }
 
+/// Result of analyzing a function. `pre_states` is keyed by every block in
+/// the CFG; `post_states` is keyed only by reachable blocks (unprocessed
+/// blocks are absent).
+pub struct AnalysisResult<State> {
+    pub pre_states: BTreeMap<Label, State>,
+    pub post_states: BTreeMap<Label, State>,
+    pub diags: Diagnostics,
+}
+
 pub fn analyze_function<C: CFG, TF: TransferFunctions>(
     transfer_functions: &mut TF,
     cfg: &C,
     initial_state: TF::State,
-) -> (BTreeMap<Label, TF::State>, Diagnostics) {
+) -> AnalysisResult<TF::State> {
     fn collect_states_and_diagnostics<State>(
         map: BTreeMap<Label, absint::BlockInvariant<(State, Option<Rc<Diagnostics>>)>>,
-    ) -> (BTreeMap<Label, State>, Diagnostics) {
+    ) -> AnalysisResult<State> {
         let mut diags = Diagnostics::new();
-        let final_states = map
-            .into_iter()
-            .map(|(lbl, inv)| {
-                let absint::BlockInvariant {
-                    pre: (pre, _pre_diags),
-                    post,
-                } = inv;
-                debug_assert!(_pre_diags.is_none());
-                // can be None for empty blocks
-                if let absint::BlockPostCondition::Processed((_, Some(rc_diags))) = post {
+        let mut pre_states = BTreeMap::new();
+        let mut post_states = BTreeMap::new();
+        for (lbl, inv) in map {
+            let absint::BlockInvariant {
+                pre: (pre, _pre_diags),
+                post,
+            } = inv;
+            debug_assert!(_pre_diags.is_none());
+            pre_states.insert(lbl, pre);
+            // Unprocessed for unreachable blocks; rc_diags may be None for empty blocks.
+            if let absint::BlockPostCondition::Processed((state, rc_diags_opt)) = post {
+                if let Some(rc_diags) = rc_diags_opt {
                     diags.extend(Rc::into_inner(rc_diags).unwrap());
                 }
-                (lbl, pre)
-            })
-            .collect();
-        (final_states, diags)
+                post_states.insert(lbl, state);
+            }
+        }
+        AnalysisResult {
+            pre_states,
+            post_states,
+            diags,
+        }
     }
 
     let mut interpreter = AbstractInterpreter { transfer_functions };

@@ -111,10 +111,10 @@ pub fn verify(
     let mut initial_state = BorrowState::initial(locals, safety.mutably_used.clone(), has_errors);
     initial_state.bind_arguments(&signature.parameters);
     initial_state.canonicalize_locals(&safety.local_numbers);
-    let (final_state, ds) = analyze_function(&mut safety, cfg, initial_state);
-    context.add_diags(ds);
+    let result = analyze_function(&mut safety, cfg, initial_state);
+    context.add_diags(result.diags);
     unused_mut_borrows(context, safety.mutably_used);
-    final_state
+    result.pre_states
 }
 
 fn unused_mut_borrows(context: &super::CFGContext, mutably_used: RefExpInfoMap) {
