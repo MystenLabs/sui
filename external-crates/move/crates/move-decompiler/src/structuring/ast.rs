@@ -189,14 +189,13 @@ impl std::fmt::Display for Structured {
                     writeln!(f, "}}")
                 }
                 Structured::CondIf(cond, then_branch, else_branch) => {
-                    use crate::structuring::reaching::Formula;
                     indent(f, level)?;
                     // For the single-atom case (the migrated `IfElse(Code, ...)`) render the
                     // bare block id, matching legacy output. For compound formulas show the
                     // recovered boolean inside `<…>` so debug output stays scannable.
-                    match cond {
-                        Formula::Atom(n) => writeln!(f, "if ({}) {{", n.index())?,
-                        _ => writeln!(f, "if <{cond}> {{")?,
+                    match cond.as_atom() {
+                        Some(n) => writeln!(f, "if ({}) {{", n.index())?,
+                        None => writeln!(f, "if <{cond}> {{")?,
                     }
                     fmt_structured(then_branch, f, level + 1)?;
                     indent(f, level)?;

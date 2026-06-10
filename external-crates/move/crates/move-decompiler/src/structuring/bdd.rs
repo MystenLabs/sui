@@ -21,7 +21,7 @@
 // than whatever NodeIndex assignment the bytecode happened to pick. Atoms are tiny per region,
 // so the worst-case-exponential BDD size is a non-issue regardless.
 
-use crate::structuring::reaching::{Formula, and, not, or};
+use crate::structuring::reaching::{Formula, FormulaTree, and, atom, falsity, not, or, truth};
 use petgraph::graph::NodeIndex;
 use std::collections::HashMap;
 
@@ -111,15 +111,15 @@ impl Bdd {
 
     /// Build the canonical BDD for a [`Formula`].
     pub fn build(&mut self, formula: &Formula) -> BddId {
-        match formula {
-            Formula::True => Self::TRUE,
-            Formula::False => Self::FALSE,
-            Formula::Atom(n) => self.mk(*n, Self::FALSE, Self::TRUE),
-            Formula::Not(inner) => {
+        match &formula.0 {
+            FormulaTree::True => Self::TRUE,
+            FormulaTree::False => Self::FALSE,
+            FormulaTree::Atom(n) => self.mk(*n, Self::FALSE, Self::TRUE),
+            FormulaTree::Not(inner) => {
                 let f = self.build(inner);
                 self.not(f)
             }
-            Formula::And(fs) => {
+            FormulaTree::And(fs) => {
                 let mut acc = Self::TRUE;
                 for f in fs {
                     let g = self.build(f);
@@ -127,7 +127,7 @@ impl Bdd {
                 }
                 acc
             }
-            Formula::Or(fs) => {
+            FormulaTree::Or(fs) => {
                 let mut acc = Self::FALSE;
                 for f in fs {
                     let g = self.build(f);
@@ -242,23 +242,36 @@ impl Bdd {
     /// common short-circuit shapes come out directly.
     pub fn to_formula(&self, id: BddId) -> Formula {
         if id == Self::FALSE {
-            return Formula::False;
+            return falsity();
         }
         if id == Self::TRUE {
-            return Formula::True;
+            return truth();
         }
         let Node { var, low, high } = self.nodes[id];
-        let atom = Formula::Atom(var);
+        let a = atom(var);
         let hi = self.to_formula(high);
         let lo = self.to_formula(low);
-        match (&hi, &lo) {
-            (Formula::True, Formula::False) => atom,
-            (Formula::False, Formula::True) => not(atom),
-            (Formula::True, _) => or(vec![atom, lo]),
-            (_, Formula::False) => and(vec![atom, hi]),
-            (Formula::False, _) => and(vec![not(atom), lo]),
-            (_, Formula::True) => or(vec![not(atom), hi]),
-            _ => or(vec![and(vec![atom.clone(), hi]), and(vec![not(atom), lo])]),
+        match (&hi.0, &lo.0) {
+            (FormulaTree::True, FormulaTree::False) => a,
+            (FormulaTree::False, FormulaTree::True) => not(a),
+            (FormulaTree::True, _) => or(vec![a, lo]),
+            (_, FormulaTree::False) => and(vec![a, hi]),
+            (FormulaTree::False, _) => and(vec![not(a), lo]),
+            (_, FormulaTree::True) => or(vec![not(a), hi]),
+            _ => or(vec![and(vec![a.clone(), hi]), and(vec![not(a), lo])]),
+        }
+    }
+
+    /// `Some(true)` / `Some(false)` if `id` is one of the two constant leaves, otherwise
+    /// `None`. Lets callers tag a formula as `[always reached]` / `[unreachable]` without
+    /// exposing the raw terminal ids.
+    pub fn const_value(id: BddId) -> Option<bool> {
+        if id == Self::TRUE {
+            Some(true)
+        } else if id == Self::FALSE {
+            Some(false)
+        } else {
+            None
         }
     }
 }
@@ -273,8 +286,8 @@ mod tests {
     fn n(i: u32) -> NodeIndex {
         i.into()
     }
-    fn atom(i: u32) -> Formula {
-        Formula::Atom(n(i))
+    fn atomic(i: u32) -> Formula {
+        atom(n(i))
     }
 
     // Same shape as tests/structuring/guarded_chain_nested.stt.
@@ -302,12 +315,12 @@ mod tests {
         // minimizer left glued onto stale_b becomes pointer equality here — the BDD never glues
         // it. (Disjoint atom sets so the two are genuinely equal.)
         let stale_a = or(vec![
-            and(vec![atom(0), atom(1)]),
-            and(vec![not(atom(0)), atom(2)]),
+            and(vec![atomic(0), atomic(1)]),
+            and(vec![not(atomic(0)), atomic(2)]),
         ]);
         let stale_b = or(vec![
-            and(vec![atom(4), atom(5)]),
-            and(vec![not(atom(4)), atom(6)]),
+            and(vec![atomic(4), atomic(5)]),
+            and(vec![not(atomic(4)), atomic(6)]),
         ]);
         let glued = or(vec![
             stale_a.clone(),
@@ -323,12 +336,12 @@ mod tests {
         let mut b = Bdd::new();
         // (a ∧ b) ∨ (a ∧ ¬b) = a
         let f = or(vec![
-            and(vec![atom(0), atom(1)]),
-            and(vec![atom(0), not(atom(1))]),
+            and(vec![atomic(0), atomic(1)]),
+            and(vec![atomic(0), not(atomic(1))]),
         ]);
-        assert_eq!(b.build(&f), b.build(&atom(0)));
-        assert_eq!(b.build(&or(vec![atom(0), not(atom(0))])), Bdd::TRUE);
-        assert_eq!(b.build(&and(vec![atom(0), not(atom(0))])), Bdd::FALSE);
+        assert_eq!(b.build(&f), b.build(&atomic(0)));
+        assert_eq!(b.build(&or(vec![atomic(0), not(atomic(0))])), Bdd::TRUE);
+        assert_eq!(b.build(&and(vec![atomic(0), not(atomic(0))])), Bdd::FALSE);
     }
 
     #[test]
@@ -348,8 +361,8 @@ mod tests {
     #[test]
     fn readback_round_trips() {
         let f = or(vec![
-            and(vec![atom(0), atom(1)]),
-            and(vec![not(atom(0)), atom(2)]),
+            and(vec![atomic(0), atomic(1)]),
+            and(vec![not(atomic(0)), atomic(2)]),
         ]);
         let mut b = Bdd::new();
         let id = b.build(&f);

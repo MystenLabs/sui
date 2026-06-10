@@ -574,30 +574,30 @@ fn formula_to_exp(
     formula: &crate::structuring::reaching::Formula,
     conds: &BTreeMap<D::Label, Exp>,
 ) -> Exp {
-    use crate::structuring::reaching::Formula as F;
+    use crate::structuring::reaching::FormulaTree as T;
     fn prim(op: SB::PrimitiveOp, a: Exp, b: Exp) -> Exp {
         Out::Exp::Primitive {
             op,
             args: vec![a, b],
         }
     }
-    match formula {
-        F::True => Out::Exp::Value(move_core_types::runtime_value::MoveValue::Bool(true)),
-        F::False => Out::Exp::Value(move_core_types::runtime_value::MoveValue::Bool(false)),
-        F::Atom(n) => conds
+    match &formula.0 {
+        T::True => Out::Exp::Value(move_core_types::runtime_value::MoveValue::Bool(true)),
+        T::False => Out::Exp::Value(move_core_types::runtime_value::MoveValue::Bool(false)),
+        T::Atom(n) => conds
             .get(n)
             .cloned()
             .expect("CondIf atom missing its condition expression"),
-        F::Not(inner) => Out::Exp::Primitive {
+        T::Not(inner) => Out::Exp::Primitive {
             op: SB::PrimitiveOp::Not,
             args: vec![formula_to_exp(inner, conds)],
         },
-        F::And(fs) => fs
+        T::And(fs) => fs
             .iter()
             .map(|x| formula_to_exp(x, conds))
             .reduce(|a, b| prim(SB::PrimitiveOp::And, a, b))
             .expect("non-empty And"),
-        F::Or(fs) => fs
+        T::Or(fs) => fs
             .iter()
             .map(|x| formula_to_exp(x, conds))
             .reduce(|a, b| prim(SB::PrimitiveOp::Or, a, b))
@@ -625,7 +625,6 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             Out::Exp::Seq(items)
         }
         D::Structured::CondIf(formula, conseq, alt) => {
-            use crate::structuring::reaching::Formula;
             // Pull each atom block's term apart: its trailing expr is the block's condition;
             // any leading statements are setup that must run before the (hoisted) `if`. Atoms
             // are taken in block-id order (≈ program order), so hoisted setups stay correctly
@@ -658,11 +657,9 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             // anchored at the condition block's label so any `Break(Some(lbl))` targeting it
             // (synthesized upstream by the structurer) still has its target. Compound formulas
             // come from the reaching structurer where no `Break` targets the synthesized guard.
-            match &formula {
-                Formula::Atom(n) => {
-                    Out::Exp::Block(n.index() as u64, Box::new(Out::Exp::Seq(setups)))
-                }
-                _ => Out::Exp::Seq(setups),
+            match formula.as_atom() {
+                Some(n) => Out::Exp::Block(n.index() as u64, Box::new(Out::Exp::Seq(setups))),
+                None => Out::Exp::Seq(setups),
             }
         }
         D::Structured::Switch(lbl, enum_, cases) => {

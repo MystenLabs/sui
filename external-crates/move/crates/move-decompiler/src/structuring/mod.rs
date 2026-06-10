@@ -30,6 +30,25 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 // compilation to avoid some of the more-complex structuring issues that arise in general
 // decompilation.
 
+/// Read-only context threaded through the structurer pipeline. Bundles the three references
+/// that every internal step needs:
+/// - `config` — for debug-print gating and structuring-policy toggles.
+/// - `terms` — per-block lowered `Exp` content, consulted by `bodies_equivalent` in the
+///   reaching diamond folder and by the lowering layer (`translate.rs`) downstream.
+/// - `original_input` — the raw per-block `Input` map *as captured before* `structure_nodes`
+///   began draining its mutable working copy. `structure_loop` and the speculative path use
+///   it to hand the reaching structurer the original Code/Condition shape of a loop body
+///   without having to re-derive it from the partially-structured `input`.
+///
+/// `Copy` so the context can be passed by value through the recursion without per-call
+/// `&ctx` plumbing. The three contained refs are themselves `Copy`.
+#[derive(Clone, Copy)]
+pub(crate) struct StructureContext<'a> {
+    pub config: &'a config::Config,
+    pub terms: &'a BTreeMap<D::Label, crate::ast::Exp>,
+    pub original_input: &'a BTreeMap<D::Label, D::Input>,
+}
+
 pub(crate) fn structure(
     config: &config::Config,
     mut input: BTreeMap<D::Label, D::Input>,
@@ -49,6 +68,11 @@ pub(crate) fn structure(
     // as it walks; `structure_loop` consults the snapshot to feed the reaching-condition
     // acyclic structurer the original Code/Condition shape for the loop body region.
     let original_input: BTreeMap<D::Label, D::Input> = input.clone();
+    let ctx = StructureContext {
+        config,
+        terms,
+        original_input: &original_input,
+    };
 
     let mut structured_blocks: BTreeMap<D::Label, D::Structured> = BTreeMap::new();
 
@@ -70,12 +94,10 @@ pub(crate) fn structure(
         for (node, formula) in &reach {
             let id = solver.build(formula);
             let factored = solver.to_formula(id);
-            let tag = if id == bdd::Bdd::TRUE {
-                " [always reached]"
-            } else if id == bdd::Bdd::FALSE {
-                " [unreachable]"
-            } else {
-                ""
+            let tag = match bdd::Bdd::const_value(id) {
+                Some(true) => " [always reached]",
+                Some(false) => " [unreachable]",
+                None => "",
             };
             println!("R({}) = {:?}{}", node.index(), factored, tag);
         }
@@ -97,13 +119,11 @@ pub(crate) fn structure(
     }
 
     structure_nodes(
-        config,
+        ctx,
         &mut input,
         entry_node,
         &mut graph,
         &mut structured_blocks,
-        &original_input,
-        terms,
     );
 
     let mut result = structured_blocks.remove(&entry_node).unwrap();
@@ -132,7 +152,6 @@ pub(crate) fn structure(
 /// Returns `None` for forms with no single entry (empty Seq, Continue/Break, raw Jumps).
 fn entry_label(s: &D::Structured) -> Option<NodeIndex> {
     use D::Structured as DS;
-    use reaching::Formula;
     match s {
         DS::Block(code) => Some(NodeIndex::new(*code as usize)),
         DS::Switch(code, _, _) => Some(NodeIndex::new(*code as usize)),
@@ -143,8 +162,7 @@ fn entry_label(s: &D::Structured) -> Option<NodeIndex> {
         // A single-atom `CondIf` (the dom-tree structurer's product) has the atom's block
         // as its CFG entry. A compound-formula `CondIf` is a recovered boolean over multiple
         // condition blocks — no single entry.
-        DS::CondIf(Formula::Atom(n), _, _) => Some(*n),
-        DS::CondIf(_, _, _) => None,
+        DS::CondIf(cond, _, _) => cond.as_atom(),
         // Dispatch synthesis nodes carry no CFG entry of their own.
         DS::Let(_) | DS::Assign(_, _) | DS::SelectorMatch(_, _) => None,
     }
@@ -203,34 +221,24 @@ fn elide_inter_item_gotos(items: &mut [D::Structured]) {
 }
 
 fn structure_nodes(
-    config: &config::Config,
+    ctx: StructureContext<'_>,
     input: &mut BTreeMap<NodeIndex, ast::Input>,
     entry_node: NodeIndex,
     graph: &mut Graph,
     structured_blocks: &mut BTreeMap<NodeIndex, ast::Structured>,
-    original_input: &BTreeMap<NodeIndex, ast::Input>,
-    terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
 ) {
     let mut post_order = DfsPostOrder::new(&graph.cfg, entry_node);
 
     while let Some(node) = post_order.next(&graph.cfg) {
-        if config.debug_print.structuring {
+        if ctx.config.debug_print.structuring {
             println!("Trying to structure node {node:#?}");
             println!("  > cur blocks: {:?}", structured_blocks.keys());
         }
         if graph.loop_heads.contains(&node) {
-            structure_loop(
-                config,
-                graph,
-                structured_blocks,
-                node,
-                input,
-                original_input,
-                terms,
-            );
+            structure_loop(ctx, graph, structured_blocks, node, input);
         } else {
             structure_acyclic(
-                config,
+                ctx,
                 graph,
                 structured_blocks,
                 node,
@@ -243,14 +251,15 @@ fn structure_nodes(
 
 #[allow(clippy::expect_fun_call)]
 fn structure_loop(
-    config: &config::Config,
+    ctx: StructureContext<'_>,
     graph: &mut Graph,
     structured_blocks: &mut BTreeMap<NodeIndex, D::Structured>,
     loop_head: NodeIndex,
     input: &mut BTreeMap<D::Label, D::Input>,
-    original_input: &BTreeMap<D::Label, D::Input>,
-    terms: &BTreeMap<D::Label, crate::ast::Exp>,
 ) {
+    let config = ctx.config;
+    let terms = ctx.terms;
+    let original_input = ctx.original_input;
     if config.debug_print.structuring {
         println!("structuring loop at node {loop_head:#?}");
     }
@@ -298,7 +307,7 @@ fn structure_loop(
         let primary = owned_succs.iter().copied().min().unwrap();
 
         if try_structure_loop_without_dispatch(
-            config,
+            ctx,
             &mut spec_graph,
             &mut spec_blocks,
             &mut spec_input,
@@ -307,8 +316,6 @@ fn structure_loop(
             &succ_nodes,
             &owned_succs,
             primary,
-            original_input,
-            terms,
         ) {
             *graph = spec_graph;
             *structured_blocks = spec_blocks;
@@ -327,7 +334,7 @@ fn structure_loop(
     };
 
     structure_acyclic(
-        config,
+        ctx,
         graph,
         structured_blocks,
         loop_head,
@@ -537,7 +544,7 @@ fn emit_single_exit_loop(
 /// CFG RPO order. `elide_inter_item_gotos` across the sibling chain collapses tail Jumps
 /// between adjacent owned-succ bodies.
 fn try_structure_loop_without_dispatch(
-    config: &config::Config,
+    ctx: StructureContext<'_>,
     graph: &mut Graph,
     structured_blocks: &mut BTreeMap<NodeIndex, D::Structured>,
     input: &mut BTreeMap<D::Label, D::Input>,
@@ -546,9 +553,10 @@ fn try_structure_loop_without_dispatch(
     succ_nodes: &HashSet<NodeIndex>,
     owned_succs: &[NodeIndex],
     primary: NodeIndex,
-    original_input: &BTreeMap<D::Label, D::Input>,
-    terms: &BTreeMap<D::Label, crate::ast::Exp>,
 ) -> bool {
+    let config = ctx.config;
+    let terms = ctx.terms;
+    let original_input = ctx.original_input;
     let non_primary: HashSet<NodeIndex> = owned_succs
         .iter()
         .copied()
@@ -556,7 +564,7 @@ fn try_structure_loop_without_dispatch(
         .collect();
 
     structure_acyclic(
-        config,
+        ctx,
         graph,
         structured_blocks,
         loop_head,
@@ -861,13 +869,14 @@ fn insert_breaks(
 }
 
 fn structure_acyclic(
-    config: &config::Config,
+    ctx: StructureContext<'_>,
     graph: &mut Graph,
     structured_blocks: &mut BTreeMap<NodeIndex, D::Structured>,
     node: NodeIndex,
     input: &mut BTreeMap<D::Label, D::Input>,
     loop_successor: Option<NodeIndex>,
 ) {
+    let config = ctx.config;
     if graph.back_edges.contains_key(&node) {
         let result = structure_latch_node(config, graph, node, input.remove(&node).unwrap());
         structured_blocks.insert(node, result);
