@@ -13,6 +13,7 @@ mod flatten_seq;
 mod fuse_let;
 mod hoist_arm_assignments;
 mod hoist_dual_continue;
+mod hoist_shared_landing;
 mod hoist_tail_continue;
 mod inline_dispatch_cascade;
 mod inline_immutable_alias;
@@ -63,6 +64,7 @@ const REFINEMENTS: &[Refinement] = &[
     bool_if_simplify::refine,
     recover_flag::refine,
     recover_asserts::refine,
+    hoist_shared_landing::refine,
     strip_loop_labels::refine,
     swap_continue_break::refine,
     swap_continue_break_else::refine,

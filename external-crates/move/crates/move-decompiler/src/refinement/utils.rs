@@ -3,7 +3,7 @@
 
 //! Helpers shared between refinements.
 
-use crate::ast::{Exp, Label};
+use crate::ast::{Exp, Label, UnstructuredNode};
 use move_stackless_bytecode_2::ast::PrimitiveOp;
 
 /// Look through any `Exp::Block` wrappers to reach the inner expression. Used by refinements
@@ -155,4 +155,183 @@ pub(super) fn seq_or_singleton(mut items: Vec<Exp>) -> Exp {
         1 => items.pop().unwrap(),
         _ => Exp::Seq(items),
     }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Tree walkers + goto rewrites
+// -------------------------------------------------------------------------------------------------
+
+/// Call `f` on each direct child expression of `exp`. Used by refinements that walk the AST
+/// post-order without consuming it. Skips `Unstructured(Goto)` (no body) and visits
+/// `Unstructured(Labeled|Statement)` bodies as children.
+pub(super) fn walk_children(exp: &Exp, f: &mut impl FnMut(&Exp)) {
+    match exp {
+        Exp::Loop(_, b)
+        | Exp::Block(_, b)
+        | Exp::Assign(_, b)
+        | Exp::LetBind(_, b)
+        | Exp::Abort(b)
+        | Exp::Borrow(_, b)
+        | Exp::Unpack(_, _, b)
+        | Exp::UnpackVariant(_, _, _, b)
+        | Exp::VecUnpack(_, b) => f(b),
+        Exp::While(_, c, b) => {
+            f(c);
+            f(b);
+        }
+        Exp::IfElse(c, t, alt) => {
+            f(c);
+            f(t);
+            if let Some(a) = alt.as_ref().as_ref() {
+                f(a);
+            }
+        }
+        Exp::Switch(c, _, arms) => {
+            f(c);
+            for (_, e) in arms {
+                f(e);
+            }
+        }
+        Exp::Match(c, _, arms) => {
+            f(c);
+            for (_, _, e) in arms {
+                f(e);
+            }
+        }
+        Exp::MatchLit(c, arms) => {
+            f(c);
+            for (_, e) in arms {
+                f(e);
+            }
+        }
+        Exp::Seq(es) | Exp::Return(es) | Exp::Call(_, es) => {
+            for e in es {
+                f(e);
+            }
+        }
+        Exp::Primitive { args, .. } | Exp::Data { args, .. } => {
+            for a in args {
+                f(a);
+            }
+        }
+        Exp::Unstructured(nodes) => {
+            for node in nodes {
+                if let UnstructuredNode::Labeled(_, b) | UnstructuredNode::Statement(b) = node {
+                    f(b);
+                }
+            }
+        }
+        Exp::Break(_)
+        | Exp::Continue(_)
+        | Exp::Declare(_)
+        | Exp::Value(_)
+        | Exp::Variable(_)
+        | Exp::Constant(_) => {}
+    }
+}
+
+/// Mutable counterpart to [`walk_children`]. Same traversal shape.
+pub(super) fn walk_children_mut(exp: &mut Exp, f: &mut impl FnMut(&mut Exp)) {
+    match exp {
+        Exp::Loop(_, b)
+        | Exp::Block(_, b)
+        | Exp::Assign(_, b)
+        | Exp::LetBind(_, b)
+        | Exp::Abort(b)
+        | Exp::Borrow(_, b)
+        | Exp::Unpack(_, _, b)
+        | Exp::UnpackVariant(_, _, _, b)
+        | Exp::VecUnpack(_, b) => f(b),
+        Exp::While(_, c, b) => {
+            f(c);
+            f(b);
+        }
+        Exp::IfElse(c, t, alt) => {
+            f(c);
+            f(t);
+            if let Some(a) = alt.as_mut().as_mut() {
+                f(a);
+            }
+        }
+        Exp::Switch(c, _, arms) => {
+            f(c);
+            for (_, e) in arms {
+                f(e);
+            }
+        }
+        Exp::Match(c, _, arms) => {
+            f(c);
+            for (_, _, e) in arms {
+                f(e);
+            }
+        }
+        Exp::MatchLit(c, arms) => {
+            f(c);
+            for (_, e) in arms {
+                f(e);
+            }
+        }
+        Exp::Seq(es) | Exp::Return(es) | Exp::Call(_, es) => {
+            for e in es {
+                f(e);
+            }
+        }
+        Exp::Primitive { args, .. } | Exp::Data { args, .. } => {
+            for a in args {
+                f(a);
+            }
+        }
+        Exp::Unstructured(nodes) => {
+            for node in nodes {
+                if let UnstructuredNode::Labeled(_, b) | UnstructuredNode::Statement(b) = node {
+                    f(b);
+                }
+            }
+        }
+        Exp::Break(_)
+        | Exp::Continue(_)
+        | Exp::Declare(_)
+        | Exp::Value(_)
+        | Exp::Variable(_)
+        | Exp::Constant(_) => {}
+    }
+}
+
+/// Replace every `Unstructured(Goto(target))` reachable in `exp` with `Break(Some(target))`.
+/// A single-goto `Unstructured` collapses to a bare `Break`; a goto among other unstructured
+/// nodes becomes an `Unstructured(Statement(Break))` in place.
+///
+/// Two refinements use this — `goto_to_break` and `hoist_shared_landing` — both at the point
+/// where they've decided some `Goto(target)` should redirect into a `Block(target, …)` wrap
+/// that now encloses it.
+pub(super) fn rewrite_gotos_as_breaks(exp: &mut Exp, target: Label) {
+    if let Exp::Unstructured(nodes) = exp {
+        for node in nodes.iter_mut() {
+            if let UnstructuredNode::Goto(l) = node
+                && *l == target
+            {
+                *node = UnstructuredNode::Statement(Box::new(Exp::Break(Some(target))));
+            }
+        }
+        if nodes.len() == 1
+            && let UnstructuredNode::Statement(b) = &nodes[0]
+            && matches!(**b, Exp::Break(Some(_)))
+        {
+            let UnstructuredNode::Statement(b) = nodes.remove(0) else {
+                unreachable!()
+            };
+            *exp = *b;
+            return;
+        }
+        if let Exp::Unstructured(nodes) = exp {
+            for node in nodes.iter_mut() {
+                if let UnstructuredNode::Labeled(_, body) | UnstructuredNode::Statement(body) = node
+                {
+                    rewrite_gotos_as_breaks(body, target);
+                }
+            }
+        }
+        return;
+    }
+    walk_children_mut(exp, &mut |c| rewrite_gotos_as_breaks(c, target));
 }

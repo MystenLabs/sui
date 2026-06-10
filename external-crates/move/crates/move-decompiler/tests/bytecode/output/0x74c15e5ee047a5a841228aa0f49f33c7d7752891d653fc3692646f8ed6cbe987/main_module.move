@@ -425,11 +425,10 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
     };
     l30 = 0u64;
     let l25 = l45;
+    /* block 1192 */;
     loop {
         if (l30 >= 5u64) {
-            /* block 1192 */;
-            transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), *(&(&l0.team_addresses)[0u64]));
-            return
+            break 'loop_1192
         };
         l27 = l29 / 100u64;
         l22 = table::borrow_mut(&mut l0.cabinet, l25);
@@ -569,9 +568,7 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
         };
         l32 = l32 + 1u64;
     };
-    unstructured {
-        goto 'label_1192;
-    }
+    transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), *(&(&l0.team_addresses)[0u64]))
 }
 
 public entry fun register(l0: &mut InviteArchieves, l1: address, l2: &mut TxContext) {
