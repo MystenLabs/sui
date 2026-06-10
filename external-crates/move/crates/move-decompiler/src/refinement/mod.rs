@@ -6,6 +6,7 @@ use crate::ast::Exp;
 mod bool_if_simplify;
 mod collapse_let_usage;
 mod collect_uses;
+mod compress_dispatch_cascade;
 mod dedupe_freeze;
 mod extract_dispatch_writer;
 mod flatten_seq;
@@ -40,6 +41,7 @@ pub type Refinement = fn(&mut Exp) -> bool;
 
 const REFINEMENTS: &[Refinement] = &[
     extract_dispatch_writer::refine,
+    compress_dispatch_cascade::refine,
     flatten_seq::refine,
     fuse_let::refine,
     hoist_arm_assignments::refine,
