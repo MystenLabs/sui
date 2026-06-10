@@ -25,7 +25,12 @@
 
 use std::sync::Arc;
 
+use anyhow::Context as _;
 use async_trait::async_trait;
+use sui_consistent_store::Db;
+use sui_consistent_store::FrameworkSchema;
+use sui_consistent_store::PipelineTaskKey;
+use sui_consistent_store::Watermark;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::sequential;
 use sui_types::full_checkpoint_content::Checkpoint;
@@ -100,12 +105,52 @@ impl sequential::Handler for CheckpointBroadcast {
     }
 }
 
+/// Seed the broadcast pipeline's resume watermark to `checkpoint` when
+/// it has none yet, so it starts at the live tip rather than genesis.
+///
+/// The broadcast pipeline is registered like any other (it persists a
+/// watermark and resumes from it), but it is not covered by the formal
+/// snapshot or [`floor_unrestored_pipelines`](crate::floor_unrestored_pipelines),
+/// so on the first run after a restore it would have no watermark and
+/// the framework would start it — and, since the shared ingestion start
+/// is the minimum across pipelines, *all* pipelines — back at genesis.
+/// Seeding it to the current tip avoids that. A no-op once a watermark
+/// exists (subsequent runs resume normally), so callers pass the tip
+/// and skip the call on a fresh database with none.
+pub fn seed_watermark_to_tip(db: &Db, checkpoint: u64) -> anyhow::Result<()> {
+    let framework = FrameworkSchema::new(db.clone());
+    let key = PipelineTaskKey::new(CheckpointBroadcast::NAME);
+    if framework
+        .watermarks
+        .get(&key)
+        .context("reading checkpoint_broadcast watermark")?
+        .is_some()
+    {
+        return Ok(());
+    }
+    let mut batch = db.batch();
+    batch
+        .put(
+            &framework.watermarks,
+            &key,
+            &Watermark::for_checkpoint(checkpoint),
+        )
+        .context("staging checkpoint_broadcast watermark seed")?;
+    batch
+        .commit()
+        .context("committing checkpoint_broadcast watermark seed")?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    use sui_consistent_store::DbOptions;
     use sui_indexer_alt_framework::pipeline::sequential::Handler as _;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+    use tempfile::TempDir;
 
     use super::*;
+    use crate::RpcStoreSchema;
 
     #[tokio::test]
     async fn process_emits_the_checkpoint() {
@@ -126,5 +171,28 @@ mod tests {
         let mut batch = None;
         handler.batch(&mut batch, vec![checkpoint].into_iter());
         assert_eq!(batch.unwrap().summary.sequence_number, 9);
+    }
+
+    #[test]
+    fn seed_watermark_writes_once_and_does_not_overwrite() {
+        let dir = TempDir::new().unwrap();
+        let (db, _schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let key = PipelineTaskKey::new(CheckpointBroadcast::NAME);
+        let framework = FrameworkSchema::new(db.clone());
+
+        // Fresh: seeds to the requested tip.
+        seed_watermark_to_tip(&db, 100).unwrap();
+        assert_eq!(
+            framework.watermarks.get(&key).unwrap(),
+            Some(Watermark::for_checkpoint(100)),
+        );
+
+        // Already seeded: a later call is a no-op so the pipeline
+        // resumes from where it left off rather than jumping.
+        seed_watermark_to_tip(&db, 200).unwrap();
+        assert_eq!(
+            framework.watermarks.get(&key).unwrap(),
+            Some(Watermark::for_checkpoint(100)),
+        );
     }
 }
