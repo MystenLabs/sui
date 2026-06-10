@@ -57,6 +57,14 @@ pub enum IndexDimension {
     /// event maps to the same singleton key; it carries a single placeholder
     /// value byte so the encoded key keeps the standard `[tag, value...]` shape.
     EventExtant = 0x08,
+    /// Internal query-only universe marker for tx-space unanchored negation
+    /// (not user-queryable, never persisted): the tx-seq namespace is dense —
+    /// every integer up to the indexed tip is a real transaction — so backends
+    /// synthesize full buckets for this key at scan time instead of reading
+    /// storage. The filter layer anchors exclude-only tx terms with an include
+    /// on this key, resolving `NOT D` as `range \ D` without an extra
+    /// evaluator code path. No write path emits this dimension.
+    TxUniverse = 0x09,
 }
 
 impl IndexDimension {
@@ -74,6 +82,7 @@ impl IndexDimension {
             tag if tag == Self::EventType.tag_byte() => Some(Self::EventType),
             tag if tag == Self::EventStreamHead.tag_byte() => Some(Self::EventStreamHead),
             tag if tag == Self::EventExtant.tag_byte() => Some(Self::EventExtant),
+            tag if tag == Self::TxUniverse.tag_byte() => Some(Self::TxUniverse),
             _ => None,
         }
     }
@@ -87,7 +96,14 @@ const COMPOUND_VALUE_SEPARATOR: u8 = 0x00;
 /// `BitmapKey::new`'s length invariant (dimension keys must be at least two
 /// bytes) without a per-tag carve-out. The marker is a singleton — one row per
 /// bucket, not per event — so the extra byte costs ~1 byte per bucket-row.
-const EVENT_EXTANT_VALUE: &[u8] = &[0x00];
+pub const EVENT_EXTANT_VALUE: &[u8] = &[0x00];
+
+/// Singleton value for the internal [`IndexDimension::TxUniverse`] marker.
+/// Like [`EVENT_EXTANT_VALUE`], it is a single placeholder byte so the encoded
+/// key has the standard `[tag, value...]` shape and passes `BitmapKey::new`'s
+/// length invariant. The key never reaches storage — backends recognize the
+/// tag at scan time and synthesize full buckets over the requested range.
+pub const TX_UNIVERSE_VALUE: &[u8] = &[0x00];
 
 /// Visit all tx-space dimensions for a transaction.
 ///
