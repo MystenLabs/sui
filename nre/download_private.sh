@@ -28,5 +28,8 @@ done
 
 echo "[+] Verifying sui binaries for $commit_sha ..."
 for binary in sui sui-node sui-tool; do
-    cosign verify-blob --insecure-ignore-tlog --key "$pub_key" --signature "$url/$binary.sig" "$binary"
+    if ! cosign verify-blob --insecure-ignore-tlog --key "$pub_key" --signature "$url/$binary.sig" "$binary"; then
+        echo "Error: signature verification failed for $binary"
+        exit 1
+    fi
 done
