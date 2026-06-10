@@ -64,7 +64,6 @@ pub fn verify_bulletproofs_with_dst_ristretto255(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 4);
-    // The domain separation tag is the last argument, so it is popped first.
     let dst = pop_arg!(args, VectorRef).as_bytes_ref()?.to_vec();
     let commitments = pop_arg!(args, VectorRef);
     let range_bits = pop_arg!(args, u8);
