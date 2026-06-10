@@ -277,16 +277,12 @@ public fun cancel_multiple_orders_safe(l0: &mut OrderManager, l1: vector<u64>, l
         };
         l4 = l4 + 1u64;
     };
-    loop {
-        if (&l1.len() <= 0u64) {
-            break
-        }
+    while (&l1.len() > 0u64) {
+        
     };
     std::vector::destroy_empty(l1);
-    loop {
-        if (&l7.len() <= 0u64) {
-            break
-        }
+    while (&l7.len() > 0u64) {
+        
     };
     std::vector::destroy_empty(l7)
 }
@@ -314,10 +310,10 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
                 continue
             }
         };
-        let __c104 = option::is_some(&(&l16).oco_group_id);
         break
     };
-    let __dispatch_81 = if (__c104) {
+    let l15;
+    if (option::is_some(&(&l16).oco_group_id)) {
         l14 = *(option::borrow(&(&l16).oco_group_id));
         if (table::contains(&l0.oco_groups, l14)) {
             let l13 = table::borrow_mut(&mut l0.oco_groups, l14);
@@ -334,45 +330,28 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
                         *(&mut (&mut l12).cancelled_at) = option::some(l7);
                         l9 = 0u64;
                         l5 = &l0.active_orders.len();
-                        0u32
-                    } else {
-                        1u32
-                    }
-                } else {
-                    2u32
-                }
-            } else {
-                2u32
-            }
-        } else {
-            3u32
-        }
-    } else {
-        3u32
-    };
-    let (l15, reg_174 : 0x2::object::UID);
-    if (__dispatch_81 <= 0u32) {
-        loop {
-            if (l9 < l5) {
-                if (*(&(&l0.active_orders)[l9]) == l11) {
-                    
-                } else {
-                    l9 = l9 + 1u64;
-                    continue
+                        loop {
+                            if (l9 < l5) {
+                                if (*(&(&l0.active_orders)[l9]) == l11) {
+                                    
+                                } else {
+                                    l9 = l9 + 1u64;
+                                    continue
+                                }
+                            };
+                            event::emit(OCOOrderCancelledEvent { oco_group_id: l14, cancelled_order_id: l11, user: *(&l0.owner), cancelled_at: l7 });
+                            break
+                        }
+                    };
+                    table::add(&mut l0.receipts, l11, l12)
                 }
             };
-            event::emit(OCOOrderCancelledEvent { oco_group_id: l14, cancelled_order_id: l11, user: *(&l0.owner), cancelled_at: l7 });
-            break
+            l15 = table::remove(&mut l0.oco_groups, l14);
+            *(&mut (&mut l15).is_active) = false;
+            table::add(&mut l0.oco_groups, l14, l15)
         }
     };
-    if (__dispatch_81 <= 1u32) {
-        table::add(&mut l0.receipts, l11, l12)
-    };
-    if (__dispatch_81 <= 2u32) {
-        l15 = table::remove(&mut l0.oco_groups, l14);
-        *(&mut (&mut l15).is_active) = false;
-        table::add(&mut l0.oco_groups, l14, l15)
-    };
+    let reg_174 : 0x2::object::UID;
     table::add(&mut l0.receipts, l17, l16);
     event::emit(OrderCancelledByOwnerEvent { order_id: l17, owner: *(&l0.owner), cancelled_at: l7 });
     let OrderReceipt { id: reg_174, order_data: reg_175, owner: reg_176 } = l1;
