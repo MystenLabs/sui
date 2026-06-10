@@ -20,6 +20,7 @@ mod loop_to_seq;
 mod negate_comparison;
 mod reconstruct_match;
 mod recover_asserts;
+mod recover_flag;
 mod remove_trailing_continue;
 mod remove_trailing_return;
 mod simplify_borrow_deref;
@@ -46,9 +47,6 @@ const REFINEMENTS: &[Refinement] = &[
     introduce_while::refine,
     loop_to_seq::refine,
     reconstruct_match::refine,
-    // Strip spurious trailing `continue`/`return` markers first — they're structurer
-    // artifacts that would otherwise make `simplify_if`'s `always_terminates` predicate
-    // fire on arms whose true Move-level shape doesn't actually terminate.
     remove_trailing_continue::refine,
     remove_trailing_return::refine,
     simplify_borrow_deref::refine,
@@ -57,6 +55,7 @@ const REFINEMENTS: &[Refinement] = &[
     negate_comparison::refine,
     simplify_if::refine,
     bool_if_simplify::refine,
+    recover_flag::refine,
     recover_asserts::refine,
     strip_loop_labels::refine,
     swap_continue_break::refine,

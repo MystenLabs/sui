@@ -55,21 +55,13 @@ public fun update_1(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
 public fun update_2(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3: Option<u64>, l4: &mut PriceInfoObject, l5: Option<u64>, l6: &State, l7: vector<u8>, l8: &mut Coin<SUI>, l9: &Clock, l10: &mut TxContext) {
     let l14 = state::get_stale_price_threshold_secs(l0);
     let l13 = clock::timestamp_ms(l9) / 1000u64;
-    let l15 = true;
     let l16 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
     let l18 = option::get_with_default(&l5, l14);
-    if (l16 > l13 && l16 - l13 >= l18 || l16 <= l13 && l13 - l16 >= l18) {
-        l15 = false;
-    } else {
+    if (l16 > l13 && l16 - l13 >= l18 || l16 <= l13 && l13 - l16 >= l18 || {
         l16 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
         l18 = option::get_with_default(&l3, l14);
-        if (l16 > l13 && l16 - l13 >= l18 || l16 <= l13 && l13 - l16 >= l18) {
-            l15 = false;
-        }
-    };
-    if (l15) {
-        
-    } else {
+        l16 > l13 && l16 - l13 >= l18 || l16 <= l13 && l13 - l16 >= l18
+    }) {
         let l19 = vaa::parse_and_verify(l6, l7, l9);
         let l17 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l19, l9);
         l17 = pyth::update_single_price_feed(l0, l17, l2, coin::split(l8, state::get_base_update_fee(l0), l10), l9);
@@ -80,27 +72,17 @@ public fun update_2(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
 public fun update_3(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3: Option<u64>, l4: &mut PriceInfoObject, l5: Option<u64>, l6: &mut PriceInfoObject, l7: Option<u64>, l8: &State, l9: vector<u8>, l10: &mut Coin<SUI>, l11: &Clock, l12: &mut TxContext) {
     let l17 = state::get_stale_price_threshold_secs(l0);
     let l16 = clock::timestamp_ms(l11) / 1000u64;
-    let l18 = true;
     let l19 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
     let l21 = option::get_with_default(&l7, l17);
-    if (l19 > l16 && l19 - l16 >= l21 || l19 <= l16 && l16 - l19 >= l21) {
-        l18 = false;
-    } else {
+    if (l19 > l16 && l19 - l16 >= l21 || l19 <= l16 && l16 - l19 >= l21 || {
         l19 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
         l21 = option::get_with_default(&l5, l17);
-        if (l19 > l16 && l19 - l16 >= l21 || l19 <= l16 && l16 - l19 >= l21) {
-            l18 = false;
-        } else {
-            l19 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
-            l21 = option::get_with_default(&l3, l17);
-            if (l19 > l16 && l19 - l16 >= l21 || l19 <= l16 && l16 - l19 >= l21) {
-                l18 = false;
-            }
-        }
-    };
-    if (l18) {
-        
-    } else {
+        l19 > l16 && l19 - l16 >= l21 || l19 <= l16 && l16 - l19 >= l21
+    } || {
+        l19 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
+        l21 = option::get_with_default(&l3, l17);
+        l19 > l16 && l19 - l16 >= l21 || l19 <= l16 && l16 - l19 >= l21
+    }) {
         let l22 = vaa::parse_and_verify(l8, l9, l11);
         let l20 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l22, l11);
         l20 = pyth::update_single_price_feed(l0, l20, l2, coin::split(l10, state::get_base_update_fee(l0), l12), l11);
@@ -112,33 +94,21 @@ public fun update_3(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
 public fun update_4(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3: Option<u64>, l4: &mut PriceInfoObject, l5: Option<u64>, l6: &mut PriceInfoObject, l7: Option<u64>, l8: &mut PriceInfoObject, l9: Option<u64>, l10: &State, l11: vector<u8>, l12: &mut Coin<SUI>, l13: &Clock, l14: &mut TxContext) {
     let l20 = state::get_stale_price_threshold_secs(l0);
     let l19 = clock::timestamp_ms(l13) / 1000u64;
-    let l21 = true;
     let l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
     let l24 = option::get_with_default(&l9, l20);
-    if (l22 > l19 && l22 - l19 >= l24 || l22 <= l19 && l19 - l22 >= l24) {
-        l21 = false;
-    } else {
+    if (l22 > l19 && l22 - l19 >= l24 || l22 <= l19 && l19 - l22 >= l24 || {
         l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
         l24 = option::get_with_default(&l7, l20);
-        if (l22 > l19 && l22 - l19 >= l24 || l22 <= l19 && l19 - l22 >= l24) {
-            l21 = false;
-        } else {
-            l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
-            l24 = option::get_with_default(&l5, l20);
-            if (l22 > l19 && l22 - l19 >= l24 || l22 <= l19 && l19 - l22 >= l24) {
-                l21 = false;
-            } else {
-                l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
-                l24 = option::get_with_default(&l3, l20);
-                if (l22 > l19 && l22 - l19 >= l24 || l22 <= l19 && l19 - l22 >= l24) {
-                    l21 = false;
-                }
-            }
-        }
-    };
-    if (l21) {
-        
-    } else {
+        l22 > l19 && l22 - l19 >= l24 || l22 <= l19 && l19 - l22 >= l24
+    } || {
+        l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
+        l24 = option::get_with_default(&l5, l20);
+        l22 > l19 && l22 - l19 >= l24 || l22 <= l19 && l19 - l22 >= l24
+    } || {
+        l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
+        l24 = option::get_with_default(&l3, l20);
+        l22 > l19 && l22 - l19 >= l24 || l22 <= l19 && l19 - l22 >= l24
+    }) {
         let l25 = vaa::parse_and_verify(l10, l11, l13);
         let l23 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l25, l13);
         l23 = pyth::update_single_price_feed(l0, l23, l2, coin::split(l12, state::get_base_update_fee(l0), l14), l13);
@@ -151,39 +121,25 @@ public fun update_4(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
 public fun update_5(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3: Option<u64>, l4: &mut PriceInfoObject, l5: Option<u64>, l6: &mut PriceInfoObject, l7: Option<u64>, l8: &mut PriceInfoObject, l9: Option<u64>, l10: &mut PriceInfoObject, l11: Option<u64>, l12: &State, l13: vector<u8>, l14: &mut Coin<SUI>, l15: &Clock, l16: &mut TxContext) {
     let l23 = state::get_stale_price_threshold_secs(l0);
     let l22 = clock::timestamp_ms(l15) / 1000u64;
-    let l24 = true;
     let l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
     let l27 = option::get_with_default(&l11, l23);
-    if (l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27) {
-        l24 = false;
-    } else {
+    if (l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27 || {
         l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
         l27 = option::get_with_default(&l9, l23);
-        if (l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27) {
-            l24 = false;
-        } else {
-            l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
-            l27 = option::get_with_default(&l7, l23);
-            if (l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27) {
-                l24 = false;
-            } else {
-                l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
-                l27 = option::get_with_default(&l5, l23);
-                if (l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27) {
-                    l24 = false;
-                } else {
-                    l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
-                    l27 = option::get_with_default(&l3, l23);
-                    if (l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27) {
-                        l24 = false;
-                    }
-                }
-            }
-        }
-    };
-    if (l24) {
-        
-    } else {
+        l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27
+    } || {
+        l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
+        l27 = option::get_with_default(&l7, l23);
+        l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27
+    } || {
+        l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
+        l27 = option::get_with_default(&l5, l23);
+        l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27
+    } || {
+        l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
+        l27 = option::get_with_default(&l3, l23);
+        l25 > l22 && l25 - l22 >= l27 || l25 <= l22 && l22 - l25 >= l27
+    }) {
         let l28 = vaa::parse_and_verify(l12, l13, l15);
         let l26 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l28, l15);
         l26 = pyth::update_single_price_feed(l0, l26, l2, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
@@ -197,45 +153,29 @@ public fun update_5(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
 public fun update_6(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3: Option<u64>, l4: &mut PriceInfoObject, l5: Option<u64>, l6: &mut PriceInfoObject, l7: Option<u64>, l8: &mut PriceInfoObject, l9: Option<u64>, l10: &mut PriceInfoObject, l11: Option<u64>, l12: &mut PriceInfoObject, l13: Option<u64>, l14: &State, l15: vector<u8>, l16: &mut Coin<SUI>, l17: &Clock, l18: &mut TxContext) {
     let l26 = state::get_stale_price_threshold_secs(l0);
     let l25 = clock::timestamp_ms(l17) / 1000u64;
-    let l27 = true;
     let l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l12)));
     let l30 = option::get_with_default(&l13, l26);
-    if (l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30) {
-        l27 = false;
-    } else {
+    if (l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30 || {
         l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
         l30 = option::get_with_default(&l11, l26);
-        if (l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30) {
-            l27 = false;
-        } else {
-            l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
-            l30 = option::get_with_default(&l9, l26);
-            if (l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30) {
-                l27 = false;
-            } else {
-                l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
-                l30 = option::get_with_default(&l7, l26);
-                if (l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30) {
-                    l27 = false;
-                } else {
-                    l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
-                    l30 = option::get_with_default(&l5, l26);
-                    if (l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30) {
-                        l27 = false;
-                    } else {
-                        l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
-                        l30 = option::get_with_default(&l3, l26);
-                        if (l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30) {
-                            l27 = false;
-                        }
-                    }
-                }
-            }
-        }
-    };
-    if (l27) {
-        
-    } else {
+        l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30
+    } || {
+        l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
+        l30 = option::get_with_default(&l9, l26);
+        l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30
+    } || {
+        l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
+        l30 = option::get_with_default(&l7, l26);
+        l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30
+    } || {
+        l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
+        l30 = option::get_with_default(&l5, l26);
+        l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30
+    } || {
+        l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
+        l30 = option::get_with_default(&l3, l26);
+        l28 > l25 && l28 - l25 >= l30 || l28 <= l25 && l25 - l28 >= l30
+    }) {
         let l31 = vaa::parse_and_verify(l14, l15, l17);
         let l29 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l31, l17);
         l29 = pyth::update_single_price_feed(l0, l29, l2, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
@@ -250,51 +190,33 @@ public fun update_6(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
 public fun update_7(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3: Option<u64>, l4: &mut PriceInfoObject, l5: Option<u64>, l6: &mut PriceInfoObject, l7: Option<u64>, l8: &mut PriceInfoObject, l9: Option<u64>, l10: &mut PriceInfoObject, l11: Option<u64>, l12: &mut PriceInfoObject, l13: Option<u64>, l14: &mut PriceInfoObject, l15: Option<u64>, l16: &State, l17: vector<u8>, l18: &mut Coin<SUI>, l19: &Clock, l20: &mut TxContext) {
     let l29 = state::get_stale_price_threshold_secs(l0);
     let l28 = clock::timestamp_ms(l19) / 1000u64;
-    let l30 = true;
     let l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l14)));
     let l33 = option::get_with_default(&l15, l29);
-    if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
-        l30 = false;
-    } else {
+    if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33 || {
         l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l12)));
         l33 = option::get_with_default(&l13, l29);
-        if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
-            l30 = false;
-        } else {
-            l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
-            l33 = option::get_with_default(&l11, l29);
-            if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
-                l30 = false;
-            } else {
-                l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
-                l33 = option::get_with_default(&l9, l29);
-                if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
-                    l30 = false;
-                } else {
-                    l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
-                    l33 = option::get_with_default(&l7, l29);
-                    if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
-                        l30 = false;
-                    } else {
-                        l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
-                        l33 = option::get_with_default(&l5, l29);
-                        if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
-                            l30 = false;
-                        } else {
-                            l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
-                            l33 = option::get_with_default(&l3, l29);
-                            if (l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33) {
-                                l30 = false;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    };
-    if (l30) {
-        
-    } else {
+        l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33
+    } || {
+        l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
+        l33 = option::get_with_default(&l11, l29);
+        l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33
+    } || {
+        l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
+        l33 = option::get_with_default(&l9, l29);
+        l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33
+    } || {
+        l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
+        l33 = option::get_with_default(&l7, l29);
+        l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33
+    } || {
+        l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
+        l33 = option::get_with_default(&l5, l29);
+        l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33
+    } || {
+        l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
+        l33 = option::get_with_default(&l3, l29);
+        l31 > l28 && l31 - l28 >= l33 || l31 <= l28 && l28 - l31 >= l33
+    }) {
         let l34 = vaa::parse_and_verify(l16, l17, l19);
         let l32 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l34, l19);
         l32 = pyth::update_single_price_feed(l0, l32, l2, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
@@ -310,57 +232,37 @@ public fun update_7(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
 public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3: Option<u64>, l4: &mut PriceInfoObject, l5: Option<u64>, l6: &mut PriceInfoObject, l7: Option<u64>, l8: &mut PriceInfoObject, l9: Option<u64>, l10: &mut PriceInfoObject, l11: Option<u64>, l12: &mut PriceInfoObject, l13: Option<u64>, l14: &mut PriceInfoObject, l15: Option<u64>, l16: &mut PriceInfoObject, l17: Option<u64>, l18: &State, l19: vector<u8>, l20: &mut Coin<SUI>, l21: &Clock, l22: &mut TxContext) {
     let l32 = state::get_stale_price_threshold_secs(l0);
     let l31 = clock::timestamp_ms(l21) / 1000u64;
-    let l33 = true;
     let l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l16)));
     let l36 = option::get_with_default(&l17, l32);
-    if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
-        l33 = false;
-    } else {
+    if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36 || {
         l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l14)));
         l36 = option::get_with_default(&l15, l32);
-        if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
-            l33 = false;
-        } else {
-            l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l12)));
-            l36 = option::get_with_default(&l13, l32);
-            if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
-                l33 = false;
-            } else {
-                l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
-                l36 = option::get_with_default(&l11, l32);
-                if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
-                    l33 = false;
-                } else {
-                    l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
-                    l36 = option::get_with_default(&l9, l32);
-                    if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
-                        l33 = false;
-                    } else {
-                        l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
-                        l36 = option::get_with_default(&l7, l32);
-                        if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
-                            l33 = false;
-                        } else {
-                            l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
-                            l36 = option::get_with_default(&l5, l32);
-                            if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
-                                l33 = false;
-                            } else {
-                                l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
-                                l36 = option::get_with_default(&l3, l32);
-                                if (l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36) {
-                                    l33 = false;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    };
-    if (l33) {
-        
-    } else {
+        l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36
+    } || {
+        l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l12)));
+        l36 = option::get_with_default(&l13, l32);
+        l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36
+    } || {
+        l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
+        l36 = option::get_with_default(&l11, l32);
+        l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36
+    } || {
+        l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
+        l36 = option::get_with_default(&l9, l32);
+        l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36
+    } || {
+        l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
+        l36 = option::get_with_default(&l7, l32);
+        l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36
+    } || {
+        l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
+        l36 = option::get_with_default(&l5, l32);
+        l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36
+    } || {
+        l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
+        l36 = option::get_with_default(&l3, l32);
+        l34 > l31 && l34 - l31 >= l36 || l34 <= l31 && l31 - l34 >= l36
+    }) {
         let l37 = vaa::parse_and_verify(l18, l19, l21);
         let l35 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l37, l21);
         l35 = pyth::update_single_price_feed(l0, l35, l2, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
