@@ -55,17 +55,12 @@ public(friend) fun a40f8bc58a06c8b33(l0: &A0ea878587b719a64, l1: &mut Ad1f26f3c0
         let l29 = l10;
         let l28 = l11;
         let l39 = l12;
-        let l33 = l13;
-        let l34 = l14;
         let l51 = a2ec4300f6df080d1::a558d3d4811fa675d(l40, l49, l50, l31, l30, l32, l55, l56, l29, l28);
         let l52 = a2ec4300f6df080d1::ac4104d3c58483259(l40, l49, l50, l31, l30, l32, l55, l56, l29, l28, l51);
+        /* block 440 */;
         if (a10868438248226c1::ad3e462cd25333e7f(l51, l39) > l52) {
-            a2ec4300f6df080d1::a5eefc623c389ac57(l40, l27, l24, l49, l50, l31, l30, l32, l55, l56, l29, l28, l33, l34);
-            unstructured {
-                goto 'label_440;
-            }
+            a2ec4300f6df080d1::a5eefc623c389ac57(l40, l27, l24, l49, l50, l31, l30, l32, l55, l56, l29, l28, l13, l14)
         } else {
-            let l19;
             let l38 = a2ec4300f6df080d1::a99ab6d0cf8644a81(l40, l49, l50, l31, l30, l32, l55, l56, l29, l28);
             let l54 = a2ec4300f6df080d1::aa8fecb213cfb45e1(l40, l49, l50, l31, l30, l32, l55, l56, l29, l28);
             let l37 = i32::div(l38, l54);
@@ -77,79 +72,39 @@ public(friend) fun a40f8bc58a06c8b33(l0: &A0ea878587b719a64, l1: &mut Ad1f26f3c0
             let l46 = a10868438248226c1::ab78d0325509532d4(l25, freeze(l27));
             let l58 = l47;
             let l64 = a783956f993d811bc::ae2894da560e9dfaf(l25);
-            if (l58 < l64) {
-                l19 = l58;
-                unstructured {
-                    goto 'label_187;
-                }
+            let l19 = if (l58 < l64) {
+                l58
             } else {
-                l19 = l64;
-                unstructured {
-                    goto 'label_187;
-                }
+                l64
             };
             let l20;
             /* block 187 */;
             l47 = l19;
             let l59 = l46;
             let l65 = a783956f993d811bc::a8f57f404176c397b(l25);
-            if (l59 < l65) {
-                l20 = l59;
-                unstructured {
-                    goto 'label_203;
-                }
+            l20 = if (l59 < l65) {
+                l59
             } else {
-                l20 = l65;
-                unstructured {
-                    goto 'label_203;
-                }
+                l65
             };
             let (l21, l36);
             /* block 203 */;
             l46 = l20;
             l36 = a2ec4300f6df080d1::a1d4c92881210dfd5(l40, l24);
-            if (ad9e4d11aecc532fa::a86e56d31feeb19a6(&l36) == l26) {
-                l21 = ad9e4d11aecc532fa::a21b8c64204576499(&l36) == l23;
-                unstructured {
-                    goto 'label_222;
-                }
-            } else {
-                l21 = false;
-                unstructured {
-                    goto 'label_222;
-                }
-            };
+            l21 = ad9e4d11aecc532fa::a86e56d31feeb19a6(&l36) == l26 && ad9e4d11aecc532fa::a21b8c64204576499(&l36) == l23;
             /* block 222 */;
             if (l21) {
-                let l22;
                 let l53 = a10868438248226c1::aa2c4ceebf26949f7(l25, l46, l47, l39);
                 let l35 = a10868438248226c1::aa2c4ceebf26949f7(l25, ad9e4d11aecc532fa::ae18556b7140949ca(&l36), ad9e4d11aecc532fa::a888b107d980228f4(&l36), l39);
                 let l60 = l53;
                 let l66 = l35;
-                if (l60 > l66) {
-                    l22 = l60 - l66;
-                    unstructured {
-                        goto 'label_255;
-                    }
-                } else {
-                    l22 = l66 - l60;
-                    unstructured {
-                        goto 'label_255;
-                    }
-                };
                 /* block 255 */;
-                if (l22 < l53 / 2u64) {
-                    unstructured {
-                        goto 'label_440;
-                    }
+                if (if (l60 > l66) {
+                    l60 - l66
                 } else {
-                    unstructured {
-                        goto 'label_292;
-                    }
-                }
-            } else {
-                unstructured {
-                    goto 'label_292;
+                    l66 - l60
+                } < l53 / 2u64) {
+                    break 'loop_440
                 }
             };
             let l16;
@@ -158,16 +113,10 @@ public(friend) fun a40f8bc58a06c8b33(l0: &A0ea878587b719a64, l1: &mut Ad1f26f3c0
             let l43 = a2ec4300f6df080d1::a7235c62aa5b27437(l40, l49, l50, l31, l30, l32, l55, l56, l29, l28, l26, l23, l46, true);
             let l61 = l44;
             let l67 = l43;
-            if (l61 < l67) {
-                l16 = l61;
-                unstructured {
-                    goto 'label_337;
-                }
+            l16 = if (l61 < l67) {
+                l61
             } else {
-                l16 = l67;
-                unstructured {
-                    goto 'label_337;
-                }
+                l67
             };
             let l17;
             /* block 337 */;
@@ -175,66 +124,36 @@ public(friend) fun a40f8bc58a06c8b33(l0: &A0ea878587b719a64, l1: &mut Ad1f26f3c0
             let l48 = a2ec4300f6df080d1::a8fa7d5a111cd2750(l40, l49, l50, l31, l30, l32, l55, l56, l29, l28) * a783956f993d811bc::afa416ea5d7b9d0f7(l25);
             let l62 = l41;
             let l68 = l48;
-            if (l62 < l68) {
-                l17 = l62;
-                unstructured {
-                    goto 'label_367;
-                }
+            l17 = if (l62 < l68) {
+                l62
             } else {
-                l17 = l68;
-                unstructured {
-                    goto 'label_367;
-                }
+                l68
             };
             let (l18, l42);
             /* block 367 */;
             l42 = l17;
             let l63 = l42;
             let l69 = ad9e4d11aecc532fa::afb1904d62fe08653(&l36);
-            if (l63 > l69) {
-                l18 = l63 - l69;
-                unstructured {
-                    goto 'label_387;
-                }
+            l18 = if (l63 > l69) {
+                l63 - l69
             } else {
-                l18 = l69 - l63;
-                unstructured {
-                    goto 'label_387;
-                }
+                l69 - l63
             };
             /* block 387 */;
             if (l18 < l42 / 2u128) {
-                unstructured {
-                    goto 'label_440;
-                }
+                
             } else {
-                a2ec4300f6df080d1::a6dc79187e3841ff0(l40, l27, l24, l49, l50, l31, l30, l32, l55, l56, l29, l28, l26, l23, l42, l33, l34);
-                unstructured {
-                    goto 'label_440;
-                }
+                a2ec4300f6df080d1::a6dc79187e3841ff0(l40, l27, l24, l49, l50, l31, l30, l32, l55, l56, l29, l28, l26, l23, l42, l13, l14)
             }
-        };
-        /* block 440 */
+        }
     }
 }
 
 public(friend) fun a94cdf867cab7cc5c(l0: &A0ea878587b719a64, l1: &mut BalanceManager, l2: &mut Ad1f26f3c041612f2, l3: &mut x7_Pool<SUI, USDC>, l4: &Version, l5: &mut Pool<USDC, SUI>, l6: &GlobalConfig, l7: &mut RewarderGlobalVault, l8: &mut x9_Pool<SUI, USDC, FEE500BPS>, l9: &Versioned, l10: &mut x3_Pool<SUI, USDC>, l11: &x3_GlobalConfig, l12: u64, l13: u64, l14: &Clock, l15: &mut TxContext) {
-    let l16;
     let l18 = a10868438248226c1::a9d9f98ebd95b9dad(l0, freeze(l1));
     let l17 = a10868438248226c1::ab78d0325509532d4(l0, freeze(l1));
-    if (l12 <= l18) {
-        l16 = l13 <= l17;
-        unstructured {
-            goto 'label_21;
-        }
-    } else {
-        l16 = false;
-        unstructured {
-            goto 'label_21;
-        }
-    };
     /* block 21 */;
-    if (l16) {
+    if (l12 <= l18 && l13 <= l17) {
         
     } else {
         a2ec4300f6df080d1::a5eefc623c389ac57(&a2ec4300f6df080d1::a099d08408fdb4a75(), l1, l2, l3, l4, l5, l6, l7, l8, l9, l10, l11, l14, l15)

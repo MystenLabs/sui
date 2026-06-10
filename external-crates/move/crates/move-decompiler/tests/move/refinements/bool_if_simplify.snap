@@ -3,67 +3,19 @@ source: crates/move-decompiler/tests/tests.rs
 ---
 module bool_if_simplify {
     public fun and_left () {
-        let l2;
-        if (l0 == 0u64) {
-            l2 = l1 > 0u64;
-            unstructured {
-                goto 'label_11;
-            }
-        } else {
-            l2 = false;
-            unstructured {
-                goto 'label_11;
-            }
-        }
-        return l2
+        return l0 == 0u64 && l1 > 0u64
     }
 
     public fun ident () {
-        let l1;
-        if (l0 == 0u64) {
-            l1 = true;
-            unstructured {
-                goto 'label_9;
-            }
-        } else {
-            l1 = false;
-            unstructured {
-                goto 'label_9;
-            }
-        }
-        return l1
+        return l0 == 0u64
     }
 
     public fun neg () {
-        let l1;
-        if (l0 == 0u64) {
-            l1 = false;
-            unstructured {
-                goto 'label_9;
-            }
-        } else {
-            l1 = true;
-            unstructured {
-                goto 'label_9;
-            }
-        }
-        return l1
+        return l0 != 0u64
     }
 
     public fun or_right () {
-        let l2;
-        if (l0 == 0u64) {
-            l2 = true;
-            unstructured {
-                goto 'label_11;
-            }
-        } else {
-            l2 = l1 > 0u64;
-            unstructured {
-                goto 'label_11;
-            }
-        }
-        return l2
+        return l0 == 0u64 || l1 > 0u64
     }
 
 }

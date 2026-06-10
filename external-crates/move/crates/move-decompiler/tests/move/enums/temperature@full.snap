@@ -22,16 +22,10 @@ public fun dtor(l0: Temperature) {
     let l2 = l0;
     match (&l2) {
         Fahrenheit { pos0: reg_4 } => {
-            let Temperature::Fahrenheit { pos0: reg_6 } = l2;
-            unstructured {
-                goto 'label_19;
-            }
+            let Temperature::Fahrenheit { pos0: reg_6 } = l2
         },
         Celcius { pos0: reg_8 } => {
-            let Temperature::Celcius { pos0: reg_10 } = l2;
-            unstructured {
-                goto 'label_19;
-            }
+            let Temperature::Celcius { pos0: reg_10 } = l2
         }
     };
     /* block 19 */
@@ -46,15 +40,9 @@ public fun is_temperature_fahrenheit(l0: &Temperature): bool {
     match (l0) {
         Fahrenheit { pos0: reg_3 } => {
             l1 = true;
-            unstructured {
-                goto 'label_14;
-            }
         },
         Celcius => {
             l1 = false;
-            unstructured {
-                goto 'label_14;
-            }
         }
     };
     /* block 14 */;

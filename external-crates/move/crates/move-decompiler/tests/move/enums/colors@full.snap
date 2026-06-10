@@ -21,22 +21,13 @@ public fun is_blue(l0: Color): bool {
     match (&l3) {
         Red => {
             l1 = false;
-            unstructured {
-                goto 'label_22;
-            }
         },
         Green => {
             l1 = false;
-            unstructured {
-                goto 'label_22;
-            }
         },
         Blue => {
             let Color::Blue {} = l3;
             l1 = true;
-            unstructured {
-                goto 'label_22;
-            }
         }
     };
     /* block 22 */;
@@ -49,22 +40,13 @@ public fun is_green(l0: Color): bool {
     match (&l3) {
         Red => {
             l1 = false;
-            unstructured {
-                goto 'label_22;
-            }
         },
         Green => {
             let Color::Green {} = l3;
             l1 = true;
-            unstructured {
-                goto 'label_22;
-            }
         },
         Blue => {
             l1 = false;
-            unstructured {
-                goto 'label_22;
-            }
         }
     };
     /* block 22 */;
@@ -78,21 +60,12 @@ public fun is_red(l0: Color): bool {
         Red => {
             let Color::Red {} = l3;
             l1 = true;
-            unstructured {
-                goto 'label_22;
-            }
         },
         Green => {
             l1 = false;
-            unstructured {
-                goto 'label_22;
-            }
         },
         Blue => {
             l1 = false;
-            unstructured {
-                goto 'label_22;
-            }
         }
     };
     /* block 22 */;

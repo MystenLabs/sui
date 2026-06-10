@@ -409,7 +409,7 @@ fn extract_input(block: &SB::BasicBlock, next_block_label: Option<SB::Label>) ->
 
 /// Collect every label that a surviving `Unstructured(Goto(_))` targets. Block markers
 /// whose ID is in this set are kept (for cross-referencing); the rest are stripped.
-fn collect_goto_targets(exp: &Exp) -> HashSet<u64> {
+pub(crate) fn collect_goto_targets(exp: &Exp) -> HashSet<u64> {
     let mut out = HashSet::new();
     collect_goto_targets_into(exp, &mut out);
     out

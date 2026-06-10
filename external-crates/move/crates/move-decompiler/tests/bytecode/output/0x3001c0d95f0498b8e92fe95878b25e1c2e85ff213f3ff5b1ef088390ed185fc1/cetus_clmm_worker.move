@@ -239,15 +239,9 @@ public entry fun add_collateral_single<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T
     let l45 = cetus_clmm_worker::share_to_balance(freeze(l0), l53);
     let l47 = cetus_clmm_worker::work_inner(l0, l3, l4, l5, l46, l7, l48, l9, l10, l13, l14);
     if (coin::value(&l47) == 0u64) {
-        coin::destroy_zero(l47);
-        unstructured {
-            goto 'label_143;
-        }
+        coin::destroy_zero(l47)
     } else {
-        pay::keep(l47, freeze(l14));
-        unstructured {
-            goto 'label_143;
-        }
+        pay::keep(l47, freeze(l14))
     };
     /* block 143 */;
     let l50 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l1), freeze(l4), l11, l12, l13);
@@ -273,15 +267,9 @@ public entry fun add_collateral_single_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T
     let l48 = vault::get_add_collateral_context_debt(&l44);
     let l47 = cetus_clmm_worker::work_inner_reverse(l0, l3, l4, l5, l46, l7, l48, l9, l10, l13, l14);
     if (coin::value(&l47) == 0u64) {
-        coin::destroy_zero(l47);
-        unstructured {
-            goto 'label_145;
-        }
+        coin::destroy_zero(l47)
     } else {
-        pay::keep(l47, freeze(l14));
-        unstructured {
-            goto 'label_145;
-        }
+        pay::keep(l47, freeze(l14))
     };
     /* block 145 */;
     let l50 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l1), freeze(l4), l11, l12, l13);
@@ -296,31 +284,17 @@ fun add_share<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: u64, l2: u128, l3
     if (l2 > 0u128) {
         let l9 = cetus_clmm_worker::balance_to_share_inner(freeze(l0), l2, l3);
         assert!(l9 > 0u128, C3);
-        let l7;
         let l10 = &mut l0.shares;
-        if (table::contains(freeze(l10), l1)) {
-            l7 = table::borrow_mut(l10, l1);
-            unstructured {
-                goto 'label_46;
-            }
+        let l7 = if (table::contains(freeze(l10), l1)) {
+            table::borrow_mut(l10, l1)
         } else {
             table::add(l10, l1, 0u128);
-            l7 = table::borrow_mut(l10, l1);
-            unstructured {
-                goto 'label_46;
-            }
+            table::borrow_mut(l10, l1)
         };
         /* block 46 */;
         let l8 = l7;
         *l8 = *l8 + l9;
-        *(&mut l0.total_share) = *(&l0.total_share) + l9;
-        unstructured {
-            goto 'label_65;
-        }
-    } else {
-        unstructured {
-            goto 'label_65;
-        }
+        *(&mut l0.total_share) = *(&l0.total_share) + l9
     };
     /* block 65 */
 }
@@ -352,22 +326,8 @@ public fun collect_reward<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &
         let l19 = mole_math::mul_div(balance::value(&l12), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l12) >= l19) {
             let l21 = balance::split(&mut l12, l19);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l6) {
@@ -375,22 +335,8 @@ public fun collect_reward<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &
         let l23 = mole_math::mul_div(balance::value(&l15), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l15) >= l23) {
             let l24 = balance::split(&mut l15, l23);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_90;
-        }
-    } else {
-        unstructured {
-            goto 'label_90;
-        }
+        /* block 85 */
     };
     /* block 90 */;
     if (l7) {
@@ -403,32 +349,12 @@ public fun collect_reward<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &
             let l20 = mole_math::mul_div(balance::value(&l13), *(&l0.reinvest_bounty_bps), C43);
             if (balance::value(&l13) >= l20) {
                 let l22 = balance::split(&mut l13, l20);
-                unstructured {
-                    goto 'label_151;
-                }
-            } else {
-                unstructured {
-                    goto 'label_151;
-                }
             };
-            /* block 151 */;
-            unstructured {
-                goto 'label_167;
-            }
+            /* block 151 */
         } else {
-            coin::destroy_zero(coin::from_balance(l16, l9));
-            unstructured {
-                goto 'label_167;
-            }
+            coin::destroy_zero(coin::from_balance(l16, l9))
         };
-        /* block 167 */;
-        unstructured {
-            goto 'label_180;
-        }
-    } else {
-        unstructured {
-            goto 'label_180;
-        }
+        /* block 167 */
     };
     /* block 180 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -444,22 +370,8 @@ public fun collect_reward_all_reverse<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1
         let l19 = mole_math::mul_div(balance::value(&l12), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l12) >= l19) {
             let l21 = balance::split(&mut l12, l19);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l6) {
@@ -467,22 +379,8 @@ public fun collect_reward_all_reverse<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1
         let l23 = mole_math::mul_div(balance::value(&l15), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l15) >= l23) {
             let l24 = balance::split(&mut l15, l23);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_90;
-        }
-    } else {
-        unstructured {
-            goto 'label_90;
-        }
+        /* block 85 */
     };
     /* block 90 */;
     if (l7) {
@@ -495,32 +393,12 @@ public fun collect_reward_all_reverse<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1
             let l20 = mole_math::mul_div(balance::value(&l13), *(&l0.reinvest_bounty_bps), C43);
             if (balance::value(&l13) >= l20) {
                 let l22 = balance::split(&mut l13, l20);
-                unstructured {
-                    goto 'label_151;
-                }
-            } else {
-                unstructured {
-                    goto 'label_151;
-                }
             };
-            /* block 151 */;
-            unstructured {
-                goto 'label_167;
-            }
+            /* block 151 */
         } else {
-            coin::destroy_zero(coin::from_balance(l16, l9));
-            unstructured {
-                goto 'label_167;
-            }
+            coin::destroy_zero(coin::from_balance(l16, l9))
         };
-        /* block 167 */;
-        unstructured {
-            goto 'label_180;
-        }
-    } else {
-        unstructured {
-            goto 'label_180;
-        }
+        /* block 167 */
     };
     /* block 180 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -536,22 +414,8 @@ public fun collect_reward_all_reverse_one_other<T0, T1, T2, T3>(l0: &mut WorkerI
         let l24 = mole_math::mul_div(balance::value(&l14), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l14) >= l24) {
             let l26 = balance::split(&mut l14, l24);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l7) {
@@ -559,22 +423,8 @@ public fun collect_reward_all_reverse_one_other<T0, T1, T2, T3>(l0: &mut WorkerI
         let l28 = mole_math::mul_div(balance::value(&l17), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l17) >= l28) {
             let l30 = balance::split(&mut l17, l28);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_90;
-        }
-    } else {
-        unstructured {
-            goto 'label_90;
-        }
+        /* block 85 */
     };
     /* block 90 */;
     if (l8) {
@@ -588,18 +438,8 @@ public fun collect_reward_all_reverse_one_other<T0, T1, T2, T3>(l0: &mut WorkerI
                 let l25 = mole_math::mul_div(balance::value(&l15), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l15) >= l25) {
                     let l27 = balance::split(&mut l15, l25);
-                    unstructured {
-                        goto 'label_155;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_155;
-                    }
                 };
-                /* block 155 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 155 */
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact_reverse(l1, l5, coin::zero(l11), coin::from_balance(l19, l11), false, true, l12, l10, l11);
                 coin::destroy_zero(reg_144);
@@ -607,37 +447,14 @@ public fun collect_reward_all_reverse_one_other<T0, T1, T2, T3>(l0: &mut WorkerI
                 let l29 = mole_math::mul_div(balance::value(&l18), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l18) >= l29) {
                     let l31 = balance::split(&mut l18, l29);
-                    unstructured {
-                        goto 'label_205;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_205;
-                    }
                 };
-                /* block 205 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 205 */
             };
-            /* block 210 */;
-            unstructured {
-                goto 'label_223;
-            }
+            /* block 210 */
         } else {
-            coin::destroy_zero(coin::from_balance(l19, l11));
-            unstructured {
-                goto 'label_223;
-            }
+            coin::destroy_zero(coin::from_balance(l19, l11))
         };
-        /* block 223 */;
-        unstructured {
-            goto 'label_238;
-        }
-    } else {
-        unstructured {
-            goto 'label_238;
-        }
+        /* block 223 */
     };
     /* block 238 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -653,22 +470,8 @@ public fun collect_reward_all_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut Wo
         let l36 = mole_math::mul_div(balance::value(&l19), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l19) >= l36) {
             let l39 = balance::split(&mut l19, l36);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l9) {
@@ -676,22 +479,8 @@ public fun collect_reward_all_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut Wo
         let l42 = mole_math::mul_div(balance::value(&l23), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l23) >= l42) {
             let l45 = balance::split(&mut l23, l42);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_90;
-        }
-    } else {
-        unstructured {
-            goto 'label_90;
-        }
+        /* block 85 */
     };
     /* block 90 */;
     if (l10) {
@@ -705,18 +494,8 @@ public fun collect_reward_all_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut Wo
                 let l37 = mole_math::mul_div(balance::value(&l20), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l20) >= l37) {
                     let l40 = balance::split(&mut l20, l37);
-                    unstructured {
-                        goto 'label_155;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_155;
-                    }
                 };
-                /* block 155 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 155 */
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact_reverse(l1, l5, coin::zero(l15), coin::from_balance(l26, l15), false, true, l16, l14, l15);
                 coin::destroy_zero(reg_144);
@@ -724,37 +503,14 @@ public fun collect_reward_all_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut Wo
                 let l43 = mole_math::mul_div(balance::value(&l24), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l24) >= l43) {
                     let l46 = balance::split(&mut l24, l43);
-                    unstructured {
-                        goto 'label_205;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_205;
-                    }
                 };
-                /* block 205 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 205 */
             };
-            /* block 210 */;
-            unstructured {
-                goto 'label_219;
-            }
+            /* block 210 */
         } else {
-            coin::destroy_zero(coin::from_balance(l26, l15));
-            unstructured {
-                goto 'label_219;
-            }
+            coin::destroy_zero(coin::from_balance(l26, l15))
         };
-        /* block 219 */;
-        unstructured {
-            goto 'label_224;
-        }
-    } else {
-        unstructured {
-            goto 'label_224;
-        }
+        /* block 219 */
     };
     /* block 224 */;
     if (l11) {
@@ -768,18 +524,8 @@ public fun collect_reward_all_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut Wo
                 let l38 = mole_math::mul_div(balance::value(&l21), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l21) >= l38) {
                     let l41 = balance::split(&mut l21, l38);
-                    unstructured {
-                        goto 'label_289;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_289;
-                    }
                 };
-                /* block 289 */;
-                unstructured {
-                    goto 'label_344;
-                }
+                /* block 289 */
             } else {
                 let (reg_246, reg_247) = cetus_clmm_utils::swap_exact_reverse(l1, l7, coin::zero(l15), coin::from_balance(l27, l15), false, true, l17, l14, l15);
                 coin::destroy_zero(reg_247);
@@ -787,37 +533,14 @@ public fun collect_reward_all_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut Wo
                 let l44 = mole_math::mul_div(balance::value(&l25), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l25) >= l44) {
                     let l47 = balance::split(&mut l25, l44);
-                    unstructured {
-                        goto 'label_339;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_339;
-                    }
                 };
-                /* block 339 */;
-                unstructured {
-                    goto 'label_344;
-                }
+                /* block 339 */
             };
-            /* block 344 */;
-            unstructured {
-                goto 'label_357;
-            }
+            /* block 344 */
         } else {
-            coin::destroy_zero(coin::from_balance(l27, l15));
-            unstructured {
-                goto 'label_357;
-            }
+            coin::destroy_zero(coin::from_balance(l27, l15))
         };
-        /* block 357 */;
-        unstructured {
-            goto 'label_372;
-        }
-    } else {
-        unstructured {
-            goto 'label_372;
-        }
+        /* block 357 */
     };
     /* block 372 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -833,22 +556,8 @@ public fun collect_reward_one_other<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1, 
         let l24 = mole_math::mul_div(balance::value(&l14), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l14) >= l24) {
             let l26 = balance::split(&mut l14, l24);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l7) {
@@ -856,22 +565,8 @@ public fun collect_reward_one_other<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1, 
         let l28 = mole_math::mul_div(balance::value(&l17), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l17) >= l28) {
             let l30 = balance::split(&mut l17, l28);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_90;
-        }
-    } else {
-        unstructured {
-            goto 'label_90;
-        }
+        /* block 85 */
     };
     /* block 90 */;
     if (l8) {
@@ -885,18 +580,8 @@ public fun collect_reward_one_other<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1, 
                 let l25 = mole_math::mul_div(balance::value(&l15), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l15) >= l25) {
                     let l27 = balance::split(&mut l15, l25);
-                    unstructured {
-                        goto 'label_155;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_155;
-                    }
                 };
-                /* block 155 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 155 */
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact(l1, l5, coin::zero(l11), coin::from_balance(l19, l11), false, true, l12, l10, l11);
                 coin::destroy_zero(reg_144);
@@ -904,37 +589,14 @@ public fun collect_reward_one_other<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1, 
                 let l29 = mole_math::mul_div(balance::value(&l18), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l18) >= l29) {
                     let l31 = balance::split(&mut l18, l29);
-                    unstructured {
-                        goto 'label_205;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_205;
-                    }
                 };
-                /* block 205 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 205 */
             };
-            /* block 210 */;
-            unstructured {
-                goto 'label_223;
-            }
+            /* block 210 */
         } else {
-            coin::destroy_zero(coin::from_balance(l19, l11));
-            unstructured {
-                goto 'label_223;
-            }
+            coin::destroy_zero(coin::from_balance(l19, l11))
         };
-        /* block 223 */;
-        unstructured {
-            goto 'label_238;
-        }
-    } else {
-        unstructured {
-            goto 'label_238;
-        }
+        /* block 223 */
     };
     /* block 238 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -950,22 +612,8 @@ public fun collect_reward_pool_reverse<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T
         let l19 = mole_math::mul_div(balance::value(&l12), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l12) >= l19) {
             let l21 = balance::split(&mut l12, l19);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l6) {
@@ -973,22 +621,8 @@ public fun collect_reward_pool_reverse<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T
         let l23 = mole_math::mul_div(balance::value(&l15), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l15) >= l23) {
             let l24 = balance::split(&mut l15, l23);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_90;
-        }
-    } else {
-        unstructured {
-            goto 'label_90;
-        }
+        /* block 85 */
     };
     /* block 90 */;
     if (l7) {
@@ -1001,32 +635,12 @@ public fun collect_reward_pool_reverse<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T
             let l20 = mole_math::mul_div(balance::value(&l13), *(&l0.reinvest_bounty_bps), C43);
             if (balance::value(&l13) >= l20) {
                 let l22 = balance::split(&mut l13, l20);
-                unstructured {
-                    goto 'label_151;
-                }
-            } else {
-                unstructured {
-                    goto 'label_151;
-                }
             };
-            /* block 151 */;
-            unstructured {
-                goto 'label_167;
-            }
+            /* block 151 */
         } else {
-            coin::destroy_zero(coin::from_balance(l16, l9));
-            unstructured {
-                goto 'label_167;
-            }
+            coin::destroy_zero(coin::from_balance(l16, l9))
         };
-        /* block 167 */;
-        unstructured {
-            goto 'label_180;
-        }
-    } else {
-        unstructured {
-            goto 'label_180;
-        }
+        /* block 167 */
     };
     /* block 180 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -1042,22 +656,8 @@ public fun collect_reward_pool_reverse_one_other<T0, T1, T2, T3>(l0: &mut Worker
         let l24 = mole_math::mul_div(balance::value(&l14), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l14) >= l24) {
             let l26 = balance::split(&mut l14, l24);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l7) {
@@ -1065,22 +665,8 @@ public fun collect_reward_pool_reverse_one_other<T0, T1, T2, T3>(l0: &mut Worker
         let l28 = mole_math::mul_div(balance::value(&l17), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l17) >= l28) {
             let l30 = balance::split(&mut l17, l28);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_90;
-        }
-    } else {
-        unstructured {
-            goto 'label_90;
-        }
+        /* block 85 */
     };
     /* block 90 */;
     if (l8) {
@@ -1094,18 +680,8 @@ public fun collect_reward_pool_reverse_one_other<T0, T1, T2, T3>(l0: &mut Worker
                 let l25 = mole_math::mul_div(balance::value(&l15), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l15) >= l25) {
                     let l27 = balance::split(&mut l15, l25);
-                    unstructured {
-                        goto 'label_155;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_155;
-                    }
                 };
-                /* block 155 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 155 */
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact(l1, l5, coin::zero(l11), coin::from_balance(l19, l11), false, true, l12, l10, l11);
                 coin::destroy_zero(reg_144);
@@ -1113,37 +689,14 @@ public fun collect_reward_pool_reverse_one_other<T0, T1, T2, T3>(l0: &mut Worker
                 let l29 = mole_math::mul_div(balance::value(&l18), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l18) >= l29) {
                     let l31 = balance::split(&mut l18, l29);
-                    unstructured {
-                        goto 'label_205;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_205;
-                    }
                 };
-                /* block 205 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 205 */
             };
-            /* block 210 */;
-            unstructured {
-                goto 'label_223;
-            }
+            /* block 210 */
         } else {
-            coin::destroy_zero(coin::from_balance(l19, l11));
-            unstructured {
-                goto 'label_223;
-            }
+            coin::destroy_zero(coin::from_balance(l19, l11))
         };
-        /* block 223 */;
-        unstructured {
-            goto 'label_238;
-        }
-    } else {
-        unstructured {
-            goto 'label_238;
-        }
+        /* block 223 */
     };
     /* block 238 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -1159,22 +712,8 @@ public fun collect_reward_pool_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
         let l36 = mole_math::mul_div(balance::value(&l19), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l19) >= l36) {
             let l39 = balance::split(&mut l19, l36);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l9) {
@@ -1182,22 +721,8 @@ public fun collect_reward_pool_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
         let l42 = mole_math::mul_div(balance::value(&l23), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l23) >= l42) {
             let l45 = balance::split(&mut l23, l42);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_90;
-        }
-    } else {
-        unstructured {
-            goto 'label_90;
-        }
+        /* block 85 */
     };
     /* block 90 */;
     if (l10) {
@@ -1211,18 +736,8 @@ public fun collect_reward_pool_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
                 let l37 = mole_math::mul_div(balance::value(&l20), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l20) >= l37) {
                     let l40 = balance::split(&mut l20, l37);
-                    unstructured {
-                        goto 'label_155;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_155;
-                    }
                 };
-                /* block 155 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 155 */
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact(l1, l5, coin::zero(l15), coin::from_balance(l26, l15), false, true, l16, l14, l15);
                 coin::destroy_zero(reg_144);
@@ -1230,37 +745,14 @@ public fun collect_reward_pool_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
                 let l43 = mole_math::mul_div(balance::value(&l24), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l24) >= l43) {
                     let l46 = balance::split(&mut l24, l43);
-                    unstructured {
-                        goto 'label_205;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_205;
-                    }
                 };
-                /* block 205 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 205 */
             };
-            /* block 210 */;
-            unstructured {
-                goto 'label_219;
-            }
+            /* block 210 */
         } else {
-            coin::destroy_zero(coin::from_balance(l26, l15));
-            unstructured {
-                goto 'label_219;
-            }
+            coin::destroy_zero(coin::from_balance(l26, l15))
         };
-        /* block 219 */;
-        unstructured {
-            goto 'label_224;
-        }
-    } else {
-        unstructured {
-            goto 'label_224;
-        }
+        /* block 219 */
     };
     /* block 224 */;
     if (l11) {
@@ -1274,18 +766,8 @@ public fun collect_reward_pool_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
                 let l38 = mole_math::mul_div(balance::value(&l21), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l21) >= l38) {
                     let l41 = balance::split(&mut l21, l38);
-                    unstructured {
-                        goto 'label_289;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_289;
-                    }
                 };
-                /* block 289 */;
-                unstructured {
-                    goto 'label_344;
-                }
+                /* block 289 */
             } else {
                 let (reg_246, reg_247) = cetus_clmm_utils::swap_exact(l1, l7, coin::zero(l15), coin::from_balance(l27, l15), false, true, l17, l14, l15);
                 coin::destroy_zero(reg_247);
@@ -1293,37 +775,14 @@ public fun collect_reward_pool_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
                 let l44 = mole_math::mul_div(balance::value(&l25), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l25) >= l44) {
                     let l47 = balance::split(&mut l25, l44);
-                    unstructured {
-                        goto 'label_339;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_339;
-                    }
                 };
-                /* block 339 */;
-                unstructured {
-                    goto 'label_344;
-                }
+                /* block 339 */
             };
-            /* block 344 */;
-            unstructured {
-                goto 'label_357;
-            }
+            /* block 344 */
         } else {
-            coin::destroy_zero(coin::from_balance(l27, l15));
-            unstructured {
-                goto 'label_357;
-            }
+            coin::destroy_zero(coin::from_balance(l27, l15))
         };
-        /* block 357 */;
-        unstructured {
-            goto 'label_372;
-        }
-    } else {
-        unstructured {
-            goto 'label_372;
-        }
+        /* block 357 */
     };
     /* block 372 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -1339,22 +798,8 @@ public fun collect_reward_swap_reverse<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T
         let l19 = mole_math::mul_div(balance::value(&l12), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l12) >= l19) {
             let l21 = balance::split(&mut l12, l19);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l6) {
@@ -1362,22 +807,8 @@ public fun collect_reward_swap_reverse<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T
         let l23 = mole_math::mul_div(balance::value(&l15), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l15) >= l23) {
             let l24 = balance::split(&mut l15, l23);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_90;
-        }
-    } else {
-        unstructured {
-            goto 'label_90;
-        }
+        /* block 85 */
     };
     /* block 90 */;
     if (l7) {
@@ -1390,32 +821,12 @@ public fun collect_reward_swap_reverse<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T
             let l20 = mole_math::mul_div(balance::value(&l13), *(&l0.reinvest_bounty_bps), C43);
             if (balance::value(&l13) >= l20) {
                 let l22 = balance::split(&mut l13, l20);
-                unstructured {
-                    goto 'label_151;
-                }
-            } else {
-                unstructured {
-                    goto 'label_151;
-                }
             };
-            /* block 151 */;
-            unstructured {
-                goto 'label_167;
-            }
+            /* block 151 */
         } else {
-            coin::destroy_zero(coin::from_balance(l16, l9));
-            unstructured {
-                goto 'label_167;
-            }
+            coin::destroy_zero(coin::from_balance(l16, l9))
         };
-        /* block 167 */;
-        unstructured {
-            goto 'label_180;
-        }
-    } else {
-        unstructured {
-            goto 'label_180;
-        }
+        /* block 167 */
     };
     /* block 180 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -1431,22 +842,8 @@ public fun collect_reward_swap_reverse_one_other<T0, T1, T2, T3>(l0: &mut Worker
         let l24 = mole_math::mul_div(balance::value(&l14), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l14) >= l24) {
             let l26 = balance::split(&mut l14, l24);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l7) {
@@ -1454,22 +851,8 @@ public fun collect_reward_swap_reverse_one_other<T0, T1, T2, T3>(l0: &mut Worker
         let l28 = mole_math::mul_div(balance::value(&l17), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l17) >= l28) {
             let l30 = balance::split(&mut l17, l28);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_90;
-        }
-    } else {
-        unstructured {
-            goto 'label_90;
-        }
+        /* block 85 */
     };
     /* block 90 */;
     if (l8) {
@@ -1483,18 +866,8 @@ public fun collect_reward_swap_reverse_one_other<T0, T1, T2, T3>(l0: &mut Worker
                 let l25 = mole_math::mul_div(balance::value(&l15), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l15) >= l25) {
                     let l27 = balance::split(&mut l15, l25);
-                    unstructured {
-                        goto 'label_155;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_155;
-                    }
                 };
-                /* block 155 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 155 */
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact_reverse(l1, l5, coin::zero(l11), coin::from_balance(l19, l11), false, true, l12, l10, l11);
                 coin::destroy_zero(reg_144);
@@ -1502,37 +875,14 @@ public fun collect_reward_swap_reverse_one_other<T0, T1, T2, T3>(l0: &mut Worker
                 let l29 = mole_math::mul_div(balance::value(&l18), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l18) >= l29) {
                     let l31 = balance::split(&mut l18, l29);
-                    unstructured {
-                        goto 'label_205;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_205;
-                    }
                 };
-                /* block 205 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 205 */
             };
-            /* block 210 */;
-            unstructured {
-                goto 'label_223;
-            }
+            /* block 210 */
         } else {
-            coin::destroy_zero(coin::from_balance(l19, l11));
-            unstructured {
-                goto 'label_223;
-            }
+            coin::destroy_zero(coin::from_balance(l19, l11))
         };
-        /* block 223 */;
-        unstructured {
-            goto 'label_238;
-        }
-    } else {
-        unstructured {
-            goto 'label_238;
-        }
+        /* block 223 */
     };
     /* block 238 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -1548,22 +898,8 @@ public fun collect_reward_swap_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
         let l36 = mole_math::mul_div(balance::value(&l19), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l19) >= l36) {
             let l39 = balance::split(&mut l19, l36);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l9) {
@@ -1571,22 +907,8 @@ public fun collect_reward_swap_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
         let l42 = mole_math::mul_div(balance::value(&l23), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l23) >= l42) {
             let l45 = balance::split(&mut l23, l42);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_90;
-        }
-    } else {
-        unstructured {
-            goto 'label_90;
-        }
+        /* block 85 */
     };
     /* block 90 */;
     if (l10) {
@@ -1600,18 +922,8 @@ public fun collect_reward_swap_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
                 let l37 = mole_math::mul_div(balance::value(&l20), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l20) >= l37) {
                     let l40 = balance::split(&mut l20, l37);
-                    unstructured {
-                        goto 'label_155;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_155;
-                    }
                 };
-                /* block 155 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 155 */
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact_reverse(l1, l5, coin::zero(l15), coin::from_balance(l26, l15), false, true, l16, l14, l15);
                 coin::destroy_zero(reg_144);
@@ -1619,37 +931,14 @@ public fun collect_reward_swap_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
                 let l43 = mole_math::mul_div(balance::value(&l24), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l24) >= l43) {
                     let l46 = balance::split(&mut l24, l43);
-                    unstructured {
-                        goto 'label_205;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_205;
-                    }
                 };
-                /* block 205 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 205 */
             };
-            /* block 210 */;
-            unstructured {
-                goto 'label_219;
-            }
+            /* block 210 */
         } else {
-            coin::destroy_zero(coin::from_balance(l26, l15));
-            unstructured {
-                goto 'label_219;
-            }
+            coin::destroy_zero(coin::from_balance(l26, l15))
         };
-        /* block 219 */;
-        unstructured {
-            goto 'label_224;
-        }
-    } else {
-        unstructured {
-            goto 'label_224;
-        }
+        /* block 219 */
     };
     /* block 224 */;
     if (l11) {
@@ -1663,18 +952,8 @@ public fun collect_reward_swap_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
                 let l38 = mole_math::mul_div(balance::value(&l21), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l21) >= l38) {
                     let l41 = balance::split(&mut l21, l38);
-                    unstructured {
-                        goto 'label_289;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_289;
-                    }
                 };
-                /* block 289 */;
-                unstructured {
-                    goto 'label_344;
-                }
+                /* block 289 */
             } else {
                 let (reg_246, reg_247) = cetus_clmm_utils::swap_exact_reverse(l1, l7, coin::zero(l15), coin::from_balance(l27, l15), false, true, l17, l14, l15);
                 coin::destroy_zero(reg_247);
@@ -1682,37 +961,14 @@ public fun collect_reward_swap_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
                 let l44 = mole_math::mul_div(balance::value(&l25), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l25) >= l44) {
                     let l47 = balance::split(&mut l25, l44);
-                    unstructured {
-                        goto 'label_339;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_339;
-                    }
                 };
-                /* block 339 */;
-                unstructured {
-                    goto 'label_344;
-                }
+                /* block 339 */
             };
-            /* block 344 */;
-            unstructured {
-                goto 'label_357;
-            }
+            /* block 344 */
         } else {
-            coin::destroy_zero(coin::from_balance(l27, l15));
-            unstructured {
-                goto 'label_357;
-            }
+            coin::destroy_zero(coin::from_balance(l27, l15))
         };
-        /* block 357 */;
-        unstructured {
-            goto 'label_372;
-        }
-    } else {
-        unstructured {
-            goto 'label_372;
-        }
+        /* block 357 */
     };
     /* block 372 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -1728,22 +984,8 @@ public fun collect_reward_two_others<T0, T1, T2, T3, T4>(l0: &mut WorkerInfo<T0,
         let l36 = mole_math::mul_div(balance::value(&l19), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l19) >= l36) {
             let l39 = balance::split(&mut l19, l36);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l9) {
@@ -1751,22 +993,8 @@ public fun collect_reward_two_others<T0, T1, T2, T3, T4>(l0: &mut WorkerInfo<T0,
         let l42 = mole_math::mul_div(balance::value(&l23), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l23) >= l42) {
             let l45 = balance::split(&mut l23, l42);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_90;
-        }
-    } else {
-        unstructured {
-            goto 'label_90;
-        }
+        /* block 85 */
     };
     /* block 90 */;
     if (l10) {
@@ -1780,18 +1008,8 @@ public fun collect_reward_two_others<T0, T1, T2, T3, T4>(l0: &mut WorkerInfo<T0,
                 let l37 = mole_math::mul_div(balance::value(&l20), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l20) >= l37) {
                     let l40 = balance::split(&mut l20, l37);
-                    unstructured {
-                        goto 'label_155;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_155;
-                    }
                 };
-                /* block 155 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 155 */
             } else {
                 let (reg_143, reg_144) = cetus_clmm_utils::swap_exact(l1, l5, coin::zero(l15), coin::from_balance(l26, l15), false, true, l16, l14, l15);
                 coin::destroy_zero(reg_144);
@@ -1799,37 +1017,14 @@ public fun collect_reward_two_others<T0, T1, T2, T3, T4>(l0: &mut WorkerInfo<T0,
                 let l43 = mole_math::mul_div(balance::value(&l24), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l24) >= l43) {
                     let l46 = balance::split(&mut l24, l43);
-                    unstructured {
-                        goto 'label_205;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_205;
-                    }
                 };
-                /* block 205 */;
-                unstructured {
-                    goto 'label_210;
-                }
+                /* block 205 */
             };
-            /* block 210 */;
-            unstructured {
-                goto 'label_219;
-            }
+            /* block 210 */
         } else {
-            coin::destroy_zero(coin::from_balance(l26, l15));
-            unstructured {
-                goto 'label_219;
-            }
+            coin::destroy_zero(coin::from_balance(l26, l15))
         };
-        /* block 219 */;
-        unstructured {
-            goto 'label_224;
-        }
-    } else {
-        unstructured {
-            goto 'label_224;
-        }
+        /* block 219 */
     };
     /* block 224 */;
     if (l11) {
@@ -1843,18 +1038,8 @@ public fun collect_reward_two_others<T0, T1, T2, T3, T4>(l0: &mut WorkerInfo<T0,
                 let l38 = mole_math::mul_div(balance::value(&l21), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l21) >= l38) {
                     let l41 = balance::split(&mut l21, l38);
-                    unstructured {
-                        goto 'label_289;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_289;
-                    }
                 };
-                /* block 289 */;
-                unstructured {
-                    goto 'label_344;
-                }
+                /* block 289 */
             } else {
                 let (reg_246, reg_247) = cetus_clmm_utils::swap_exact(l1, l7, coin::zero(l15), coin::from_balance(l27, l15), false, true, l17, l14, l15);
                 coin::destroy_zero(reg_247);
@@ -1862,37 +1047,14 @@ public fun collect_reward_two_others<T0, T1, T2, T3, T4>(l0: &mut WorkerInfo<T0,
                 let l44 = mole_math::mul_div(balance::value(&l25), *(&l0.reinvest_bounty_bps), C43);
                 if (balance::value(&l25) >= l44) {
                     let l47 = balance::split(&mut l25, l44);
-                    unstructured {
-                        goto 'label_339;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_339;
-                    }
                 };
-                /* block 339 */;
-                unstructured {
-                    goto 'label_344;
-                }
+                /* block 339 */
             };
-            /* block 344 */;
-            unstructured {
-                goto 'label_357;
-            }
+            /* block 344 */
         } else {
-            coin::destroy_zero(coin::from_balance(l27, l15));
-            unstructured {
-                goto 'label_357;
-            }
+            coin::destroy_zero(coin::from_balance(l27, l15))
         };
-        /* block 357 */;
-        unstructured {
-            goto 'label_372;
-        }
-    } else {
-        unstructured {
-            goto 'label_372;
-        }
+        /* block 357 */
     };
     /* block 372 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -1908,22 +1070,8 @@ public fun collect_reward_without_swap<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T
         let l11 = mole_math::mul_div(balance::value(&l8), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l8) >= l11) {
             let l12 = balance::split(&mut l8, l11);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l5) {
@@ -1931,22 +1079,8 @@ public fun collect_reward_without_swap<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T
         let l13 = mole_math::mul_div(balance::value(&l10), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l10) >= l13) {
             let l14 = balance::split(&mut l10, l13);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_99;
-        }
-    } else {
-        unstructured {
-            goto 'label_99;
-        }
+        /* block 85 */
     };
     /* block 99 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -1962,22 +1096,8 @@ public fun collect_reward_without_swap_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T
         let l11 = mole_math::mul_div(balance::value(&l8), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l8) >= l11) {
             let l12 = balance::split(&mut l8, l11);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            unstructured {
-                goto 'label_46;
-            }
         };
-        /* block 46 */;
-        unstructured {
-            goto 'label_51;
-        }
-    } else {
-        unstructured {
-            goto 'label_51;
-        }
+        /* block 46 */
     };
     /* block 51 */;
     if (l5) {
@@ -1985,22 +1105,8 @@ public fun collect_reward_without_swap_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T
         let l13 = mole_math::mul_div(balance::value(&l10), *(&l0.reinvest_bounty_bps), C43);
         if (balance::value(&l10) >= l13) {
             let l14 = balance::split(&mut l10, l13);
-            unstructured {
-                goto 'label_85;
-            }
-        } else {
-            unstructured {
-                goto 'label_85;
-            }
         };
-        /* block 85 */;
-        unstructured {
-            goto 'label_99;
-        }
-    } else {
-        unstructured {
-            goto 'label_99;
-        }
+        /* block 85 */
     };
     /* block 99 */;
     return (balance::value(&l0.tiny_coin_base), balance::value(&l0.tiny_coin_farming))
@@ -2015,18 +1121,7 @@ fun get_mkt_sell_amount(l0: u64, l1: u64, l2: u64): u64 {
     if (l0 == 0u64) {
         return 0u64
     };
-    let l3;
-    if (l1 > 0u64) {
-        l3 = l2 > 0u64;
-        unstructured {
-            goto 'label_17;
-        }
-    } else {
-        l3 = false;
-        unstructured {
-            goto 'label_17;
-        }
-    };
+    let l3 = l1 > 0u64 && l2 > 0u64;
     /* block 17 */;
     assert!(l3, C5);
     let l4 = l0 * 9980u64;
@@ -2055,13 +1150,6 @@ public fun health<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Pool<T0, T1>, l2
     let l7 = 0u128;
     if (table::contains(l8, l2)) {
         l7 = *(table::borrow(l8, l2));
-        unstructured {
-            goto 'label_19;
-        }
-    } else {
-        unstructured {
-            goto 'label_19;
-        }
     };
     let (l11, l3, l6, l9);
     /* block 19 */;
@@ -2070,30 +1158,18 @@ public fun health<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Pool<T0, T1>, l2
     let (reg_25, reg_26) = position::tick_range(option::borrow(&l0.position_nft));
     let (reg_33, reg_34) = clmm_math::get_amount_by_liquidity(reg_25, reg_26, pool::current_tick_index(l1), pool::current_sqrt_price(l1), l9, false);
     l11 = reg_34;
-    if (l9 == 0u128) {
-        l3 = 0u64;
-        unstructured {
-            goto 'label_58;
-        }
+    l3 = if (l9 == 0u128) {
+        0u64
     } else {
-        l3 = mole_math::mul_div_u128(l6, reg_33as u128, l9)as u64;
-        unstructured {
-            goto 'label_58;
-        }
+        mole_math::mul_div_u128(l6, reg_33as u128, l9)as u64
     };
     let (l12, l4);
     /* block 58 */;
     l12 = l3;
-    if (l9 == 0u128) {
-        l4 = 0u64;
-        unstructured {
-            goto 'label_74;
-        }
+    l4 = if (l9 == 0u128) {
+        0u64
     } else {
-        l4 = mole_math::mul_div_u128(l6, l11as u128, l9)as u64;
-        unstructured {
-            goto 'label_74;
-        }
+        mole_math::mul_div_u128(l6, l11as u128, l9)as u64
     };
     /* block 74 */;
     let l13 = l4;
@@ -2106,13 +1182,6 @@ public fun health_reverse<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Pool<T1,
     let l7 = 0u128;
     if (table::contains(l8, l2)) {
         l7 = *(table::borrow(l8, l2));
-        unstructured {
-            goto 'label_19;
-        }
-    } else {
-        unstructured {
-            goto 'label_19;
-        }
     };
     let (l11, l3, l6, l9);
     /* block 19 */;
@@ -2121,30 +1190,18 @@ public fun health_reverse<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Pool<T1,
     let (reg_25, reg_26) = position::tick_range(option::borrow(&l0.position_nft));
     let (reg_33, reg_34) = clmm_math::get_amount_by_liquidity(reg_25, reg_26, pool::current_tick_index(l1), pool::current_sqrt_price(l1), l9, false);
     l11 = reg_33;
-    if (l9 == 0u128) {
-        l3 = 0u64;
-        unstructured {
-            goto 'label_58;
-        }
+    l3 = if (l9 == 0u128) {
+        0u64
     } else {
-        l3 = mole_math::mul_div_u128(l6, reg_34as u128, l9)as u64;
-        unstructured {
-            goto 'label_58;
-        }
+        mole_math::mul_div_u128(l6, reg_34as u128, l9)as u64
     };
     let (l12, l4);
     /* block 58 */;
     l12 = l3;
-    if (l9 == 0u128) {
-        l4 = 0u64;
-        unstructured {
-            goto 'label_74;
-        }
+    l4 = if (l9 == 0u128) {
+        0u64
     } else {
-        l4 = mole_math::mul_div_u128(l6, l11as u128, l9)as u64;
-        unstructured {
-            goto 'label_74;
-        }
+        mole_math::mul_div_u128(l6, l11as u128, l9)as u64
     };
     /* block 74 */;
     let l13 = l4;
@@ -2186,41 +1243,17 @@ public entry fun initialize_reverse<T0, T1, T2>(l0: &AdminCap, l1: &x5_AdminCap,
 }
 
 public fun is_rebalancer<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: address): bool {
-    let l2;
     cetus_clmm_worker::checked_package_version(l0);
     let l3 = &l0.ok_rebalancers;
-    if (table::contains(l3, l1)) {
-        l2 = *(table::borrow(l3, l1));
-        unstructured {
-            goto 'label_19;
-        }
-    } else {
-        l2 = false;
-        unstructured {
-            goto 'label_19;
-        }
-    };
     /* block 19 */;
-    return l2
+    return table::contains(l3, l1) && *(table::borrow(l3, l1))
 }
 
 public fun is_reinvestor<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: address): bool {
-    let l2;
     cetus_clmm_worker::checked_package_version(l0);
     let l3 = &l0.ok_reinvestors;
-    if (table::contains(l3, l1)) {
-        l2 = *(table::borrow(l3, l1));
-        unstructured {
-            goto 'label_19;
-        }
-    } else {
-        l2 = false;
-        unstructured {
-            goto 'label_19;
-        }
-    };
     /* block 19 */;
-    return l2
+    return table::contains(l3, l1) && *(table::borrow(l3, l1))
 }
 
 public fun is_reserve_consistent<T0, T1, T2>(): bool {
@@ -2238,21 +1271,10 @@ public fun is_stable<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &GlobalStorage
     if (reg_16 + 86400u64 <= l12) {
         return false
     };
-    let l6;
     let l9 = reg_6 * math::pow(10u64, 8u8)as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals))as u128 / reg_5 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals))as u128as u64;
     let l10 = worker_config::get_max_price_diff(l1, l7, cetus_clmm_worker::get_mole_cetus_worker_addr());
     let l11 = worker_config::get_max_price_diff_scale();
-    if (l9 * l11 > l14 * l10) {
-        l6 = true;
-        unstructured {
-            goto 'label_91;
-        }
-    } else {
-        l6 = l9 * l10 < l14 * l11;
-        unstructured {
-            goto 'label_91;
-        }
-    };
+    let l6 = l9 * l11 > l14 * l10 || l9 * l10 < l14 * l11;
     /* block 91 */;
     if (l6) {
         return false
@@ -2271,21 +1293,10 @@ public fun is_stable_reverse<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Globa
     if (reg_16 + 86400u64 <= l12) {
         return false
     };
-    let l6;
     let l9 = reg_5 * math::pow(10u64, 8u8)as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals))as u128 / reg_6 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals))as u128as u64;
     let l10 = worker_config::get_max_price_diff(l1, l7, cetus_clmm_worker::get_mole_cetus_worker_addr());
     let l11 = worker_config::get_max_price_diff_scale();
-    if (l9 * l11 > l14 * l10) {
-        l6 = true;
-        unstructured {
-            goto 'label_91;
-        }
-    } else {
-        l6 = l9 * l10 < l14 * l11;
-        unstructured {
-            goto 'label_91;
-        }
-    };
+    let l6 = l9 * l11 > l14 * l10 || l9 * l10 < l14 * l11;
     /* block 91 */;
     if (l6) {
         return false
@@ -2294,22 +1305,10 @@ public fun is_stable_reverse<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Globa
 }
 
 public fun is_strategy_ok<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: u8): bool {
-    let l2;
     cetus_clmm_worker::checked_package_version(l0);
     let l3 = &l0.ok_strategies;
-    if (table::contains(l3, l1)) {
-        l2 = *(table::borrow(l3, l1));
-        unstructured {
-            goto 'label_19;
-        }
-    } else {
-        l2 = false;
-        unstructured {
-            goto 'label_19;
-        }
-    };
     /* block 19 */;
-    return l2
+    return table::contains(l3, l1) && *(table::borrow(l3, l1))
 }
 
 fun join_split_keep<T0>(l0: vector<Coin<T0>>, l1: u64, l2: &mut TxContext): Coin<T0> {
@@ -2405,38 +1404,21 @@ public entry fun rebalance_all_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
 fun rebalance_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T0, T1>, l3: u32, l4: u32, l5: u128, l6: u64, l7: u64, l8: vector<u8>, l9: &Clock, l10: &mut TxContext) {
     let l11 = tx_context::sender(freeze(l10));
     assert!(cetus_clmm_worker::is_rebalancer(freeze(l0), l11), C31);
-    let l12;
     let (reg_16, reg_17) = position::tick_range(option::borrow(&l0.position_nft));
-    if (i32::as_u32(reg_16) == l3) {
-        l12 = i32::as_u32(reg_17) == l4;
-        unstructured {
-            goto 'label_39;
-        }
-    } else {
-        l12 = false;
-        unstructured {
-            goto 'label_39;
-        }
-    };
+    let l12 = i32::as_u32(reg_16) == l3 && i32::as_u32(reg_17) == l4;
     /* block 39 */;
     assert!(!(l12), C25);
     let (l13, l14);
     let l23 = pool::open_position(l1, l2, l3, l4, l10);
     let l24 = option::extract(&mut l0.position_nft);
     let l21 = position::liquidity(&l24);
-    if (l21 > 0u128) {
+    l13 = if (l21 > 0u128) {
         let (reg_52, reg_53) = pool::remove_liquidity(l1, l2, &mut l24, l21, l9);
         l14 = reg_53;
-        l13 = reg_52;
-        unstructured {
-            goto 'label_84;
-        }
+        reg_52
     } else {
         l14 = balance::zero();
-        l13 = balance::zero();
-        unstructured {
-            goto 'label_84;
-        }
+        balance::zero()
     };
     let (l15, l17, l18);
     /* block 84 */;
@@ -2444,43 +1426,15 @@ fun rebalance_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConf
     l17 = l13;
     pool::close_position(l1, l2, l24);
     option::fill(&mut l0.position_nft, l23);
-    if (balance::value(&l17) > 0u64) {
-        l15 = true;
-        unstructured {
-            goto 'label_121;
-        }
-    } else {
-        l15 = balance::value(&l18) > 0u64;
-        unstructured {
-            goto 'label_121;
-        }
-    };
+    l15 = balance::value(&l17) > 0u64 || balance::value(&l18) > 0u64;
     /* block 121 */;
     if (l15) {
-        let l16;
         let (reg_99, reg_100) = cetus_clmm_worker::strategy_execute(l0, l1, l2, coin::from_balance(l17, l10), coin::from_balance(l18, l10), 0u128, 0u64, C38, l8, l9, l10);
-        if (coin::value(&reg_99) <= l6) {
-            l16 = coin::value(&reg_100) <= l7;
-            unstructured {
-                goto 'label_154;
-            }
-        } else {
-            l16 = false;
-            unstructured {
-                goto 'label_154;
-            }
-        };
         /* block 154 */;
-        assert!(l16, C26);
-        unstructured {
-            goto 'label_186;
-        }
+        assert!(coin::value(&reg_99) <= l6 && coin::value(&reg_100) <= l7, C26)
     } else {
         balance::destroy_zero(l17);
-        balance::destroy_zero(l18);
-        unstructured {
-            goto 'label_186;
-        }
+        balance::destroy_zero(l18)
     };
     /* block 186 */;
     let l22 = position::liquidity(option::borrow(&l0.position_nft));
@@ -2491,38 +1445,21 @@ fun rebalance_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConf
 fun rebalance_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T1, T0>, l3: u32, l4: u32, l5: u128, l6: u64, l7: u64, l8: vector<u8>, l9: &Clock, l10: &mut TxContext) {
     let l11 = tx_context::sender(freeze(l10));
     assert!(cetus_clmm_worker::is_rebalancer(freeze(l0), l11), C31);
-    let l12;
     let (reg_16, reg_17) = position::tick_range(option::borrow(&l0.position_nft));
-    if (i32::as_u32(reg_16) == l3) {
-        l12 = i32::as_u32(reg_17) == l4;
-        unstructured {
-            goto 'label_39;
-        }
-    } else {
-        l12 = false;
-        unstructured {
-            goto 'label_39;
-        }
-    };
+    let l12 = i32::as_u32(reg_16) == l3 && i32::as_u32(reg_17) == l4;
     /* block 39 */;
     assert!(!(l12), C25);
     let (l13, l14);
     let l23 = pool::open_position(l1, l2, l3, l4, l10);
     let l24 = option::extract(&mut l0.position_nft);
     let l21 = position::liquidity(&l24);
-    if (l21 > 0u128) {
+    l13 = if (l21 > 0u128) {
         let (reg_52, reg_53) = pool::remove_liquidity(l1, l2, &mut l24, l21, l9);
         l14 = reg_53;
-        l13 = reg_52;
-        unstructured {
-            goto 'label_84;
-        }
+        reg_52
     } else {
         l14 = balance::zero();
-        l13 = balance::zero();
-        unstructured {
-            goto 'label_84;
-        }
+        balance::zero()
     };
     let (l15, l17, l18);
     /* block 84 */;
@@ -2530,43 +1467,15 @@ fun rebalance_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &Gl
     l18 = l13;
     pool::close_position(l1, l2, l24);
     option::fill(&mut l0.position_nft, l23);
-    if (balance::value(&l17) > 0u64) {
-        l15 = true;
-        unstructured {
-            goto 'label_121;
-        }
-    } else {
-        l15 = balance::value(&l18) > 0u64;
-        unstructured {
-            goto 'label_121;
-        }
-    };
+    l15 = balance::value(&l17) > 0u64 || balance::value(&l18) > 0u64;
     /* block 121 */;
     if (l15) {
-        let l16;
         let (reg_99, reg_100) = cetus_clmm_worker::strategy_execute_reverse(l0, l1, l2, coin::from_balance(l17, l10), coin::from_balance(l18, l10), 0u128, 0u64, C38, l8, l9, l10);
-        if (coin::value(&reg_99) <= l6) {
-            l16 = coin::value(&reg_100) <= l7;
-            unstructured {
-                goto 'label_154;
-            }
-        } else {
-            l16 = false;
-            unstructured {
-                goto 'label_154;
-            }
-        };
         /* block 154 */;
-        assert!(l16, C26);
-        unstructured {
-            goto 'label_186;
-        }
+        assert!(coin::value(&reg_99) <= l6 && coin::value(&reg_100) <= l7, C26)
     } else {
         balance::destroy_zero(l17);
-        balance::destroy_zero(l18);
-        unstructured {
-            goto 'label_186;
-        }
+        balance::destroy_zero(l18)
     };
     /* block 186 */;
     let l22 = position::liquidity(option::borrow(&l0.position_nft));
@@ -2661,36 +1570,14 @@ public entry fun reinvest_all_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut Wo
 fun reinvest_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T0, T1>, l3: u128, l4: u64, l5: u64, l6: vector<u8>, l7: &Clock, l8: &mut TxContext) {
     let l9 = tx_context::sender(freeze(l8));
     assert!(cetus_clmm_worker::is_reinvestor(freeze(l0), l9), C19);
-    let l10;
     let l16 = position::liquidity(option::borrow(&l0.position_nft));
     let l12 = balance::withdraw_all(&mut l0.tiny_coin_base);
     let l13 = balance::withdraw_all(&mut l0.tiny_coin_farming);
-    if (balance::value(&l12) == 0u64) {
-        l10 = balance::value(&l13) == 0u64;
-        unstructured {
-            goto 'label_48;
-        }
-    } else {
-        l10 = false;
-        unstructured {
-            goto 'label_48;
-        }
-    };
+    let l10 = balance::value(&l12) == 0u64 && balance::value(&l13) == 0u64;
     /* block 48 */;
     assert!(!(l10), C28);
-    let l11;
     let (reg_54, reg_55) = cetus_clmm_worker::strategy_execute(l0, l1, l2, coin::from_balance(l12, l8), coin::from_balance(l13, l8), 0u128, 0u64, C38, l6, l7, l8);
-    if (coin::value(&reg_54) <= l4) {
-        l11 = coin::value(&reg_55) <= l5;
-        unstructured {
-            goto 'label_93;
-        }
-    } else {
-        l11 = false;
-        unstructured {
-            goto 'label_93;
-        }
-    };
+    let l11 = coin::value(&reg_54) <= l4 && coin::value(&reg_55) <= l5;
     /* block 93 */;
     assert!(l11, C26);
     let l17 = position::liquidity(option::borrow(&l0.position_nft));
@@ -2701,36 +1588,14 @@ fun reinvest_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfi
 fun reinvest_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T1, T0>, l3: u128, l4: u64, l5: u64, l6: vector<u8>, l7: &Clock, l8: &mut TxContext) {
     let l9 = tx_context::sender(freeze(l8));
     assert!(cetus_clmm_worker::is_reinvestor(freeze(l0), l9), C19);
-    let l10;
     let l16 = position::liquidity(option::borrow(&l0.position_nft));
     let l12 = balance::withdraw_all(&mut l0.tiny_coin_base);
     let l13 = balance::withdraw_all(&mut l0.tiny_coin_farming);
-    if (balance::value(&l12) == 0u64) {
-        l10 = balance::value(&l13) == 0u64;
-        unstructured {
-            goto 'label_48;
-        }
-    } else {
-        l10 = false;
-        unstructured {
-            goto 'label_48;
-        }
-    };
+    let l10 = balance::value(&l12) == 0u64 && balance::value(&l13) == 0u64;
     /* block 48 */;
     assert!(!(l10), C28);
-    let l11;
     let (reg_54, reg_55) = cetus_clmm_worker::strategy_execute_reverse(l0, l1, l2, coin::from_balance(l12, l8), coin::from_balance(l13, l8), 0u128, 0u64, C38, l6, l7, l8);
-    if (coin::value(&reg_54) <= l4) {
-        l11 = coin::value(&reg_55) <= l5;
-        unstructured {
-            goto 'label_93;
-        }
-    } else {
-        l11 = false;
-        unstructured {
-            goto 'label_93;
-        }
-    };
+    let l11 = coin::value(&reg_54) <= l4 && coin::value(&reg_55) <= l5;
     /* block 93 */;
     assert!(l11, C26);
     let l17 = position::liquidity(option::borrow(&l0.position_nft));
@@ -2806,13 +1671,6 @@ fun remove_share<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: u64): u128 {
             *(&mut l0.total_share) = *(&l0.total_share) - l3;
             *(table::borrow_mut(&mut l0.shares, l1)) = 0u128;
             return l2
-        };
-        unstructured {
-            goto 'label_46;
-        }
-    } else {
-        unstructured {
-            goto 'label_46;
         }
     };
     /* block 46 */;
@@ -2856,15 +1714,9 @@ public entry fun set_reinvestor_ok<T0, T1, T2>(l0: &AdminCap, l1: &mut WorkerInf
     cetus_clmm_worker::checked_package_version(freeze(l1));
     let l5 = &mut l1.ok_reinvestors;
     if (table::contains(freeze(l5), l2)) {
-        *(table::borrow_mut(l5, l2)) = l3;
-        unstructured {
-            goto 'label_23;
-        }
+        *(table::borrow_mut(l5, l2)) = l3
     } else {
-        table::add(l5, l2, l3);
-        unstructured {
-            goto 'label_23;
-        }
+        table::add(l5, l2, l3)
     };
     /* block 23 */
 }
@@ -2905,15 +1757,9 @@ public entry fun set_strategy_ok<T0, T1, T2>(l0: &AdminCap, l1: &mut WorkerInfo<
     cetus_clmm_worker::checked_package_version(freeze(l1));
     let l5 = &mut l1.ok_strategies;
     if (table::contains(freeze(l5), l2)) {
-        *(table::borrow_mut(l5, l2)) = l3;
-        unstructured {
-            goto 'label_23;
-        }
+        *(table::borrow_mut(l5, l2)) = l3
     } else {
-        table::add(l5, l2, l3);
-        unstructured {
-            goto 'label_23;
-        }
+        table::add(l5, l2, l3)
     };
     /* block 23 */
 }
@@ -2998,15 +1844,9 @@ public entry fun withdraw_rewards_bounty<T0, T1, T2>(l0: &AdminCap, l1: &mut Wor
     if (l2) {
         l3 = balance::value(&l1.tiny_coin_base_bounty);
         l4 = balance::value(&l1.tiny_coin_farming_bounty);
-        unstructured {
-            goto 'label_40;
-        }
     } else {
         assert!(l3 <= balance::value(&l1.tiny_coin_base_bounty), C33);
-        assert!(l4 <= balance::value(&l1.tiny_coin_farming_bounty), C34);
-        unstructured {
-            goto 'label_40;
-        }
+        assert!(l4 <= balance::value(&l1.tiny_coin_farming_bounty), C34)
     };
     /* block 40 */;
     let l6 = balance::split(&mut l1.tiny_coin_base_bounty, l3);
@@ -3023,20 +1863,9 @@ public entry fun work<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &mut Glob
 }
 
 fun work_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T0, T1>, l3: u64, l4: Coin<T0>, l5: Coin<T1>, l6: u64, l7: u8, l8: vector<u8>, l9: &Clock, l10: &mut TxContext): Coin<T0> {
-    let l11;
     let l12 = cetus_clmm_worker::remove_share(l0, l3);
     let l17 = &l0.ok_strategies;
-    if (table::contains(l17, l7)) {
-        l11 = *(table::borrow(l17, l7));
-        unstructured {
-            goto 'label_21;
-        }
-    } else {
-        l11 = false;
-        unstructured {
-            goto 'label_21;
-        }
-    };
+    let l11 = table::contains(l17, l7) && *(table::borrow(l17, l7));
     /* block 21 */;
     assert!(l11, C21);
     assert!(object::id(freeze(l2)) == *(&l0.pool_id), C24);
@@ -3045,15 +1874,9 @@ fun work_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l
     let l16 = reg_52;
     let l13 = position::liquidity(option::borrow(&l0.position_nft)) - l14;
     if (coin::value(&l16) == 0u64) {
-        coin::destroy_zero(l16);
-        unstructured {
-            goto 'label_99;
-        }
+        coin::destroy_zero(l16)
     } else {
-        pay::keep(l16, freeze(l10));
-        unstructured {
-            goto 'label_99;
-        }
+        pay::keep(l16, freeze(l10))
     };
     /* block 99 */;
     cetus_clmm_worker::add_share(l0, l3, l13, l14);
@@ -3061,20 +1884,9 @@ fun work_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l
 }
 
 fun work_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T1, T0>, l3: u64, l4: Coin<T0>, l5: Coin<T1>, l6: u64, l7: u8, l8: vector<u8>, l9: &Clock, l10: &mut TxContext): Coin<T0> {
-    let l11;
     let l12 = cetus_clmm_worker::remove_share(l0, l3);
     let l17 = &l0.ok_strategies;
-    if (table::contains(l17, l7)) {
-        l11 = *(table::borrow(l17, l7));
-        unstructured {
-            goto 'label_21;
-        }
-    } else {
-        l11 = false;
-        unstructured {
-            goto 'label_21;
-        }
-    };
+    let l11 = table::contains(l17, l7) && *(table::borrow(l17, l7));
     /* block 21 */;
     assert!(l11, C21);
     assert!(object::id(freeze(l2)) == *(&l0.pool_id), C24);
@@ -3083,15 +1895,9 @@ fun work_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalC
     let l16 = reg_52;
     let l13 = position::liquidity(option::borrow(&l0.position_nft)) - l14;
     if (coin::value(&l16) == 0u64) {
-        coin::destroy_zero(l16);
-        unstructured {
-            goto 'label_99;
-        }
+        coin::destroy_zero(l16)
     } else {
-        pay::keep(l16, freeze(l10));
-        unstructured {
-            goto 'label_99;
-        }
+        pay::keep(l16, freeze(l10))
     };
     /* block 99 */;
     cetus_clmm_worker::add_share(l0, l3, l13, l14);
@@ -3151,29 +1957,16 @@ public entry fun work_single<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &m
     vault::merge_work_context_coin_back(l39, l31);
     if (l34 > 0u64) {
         let l29 = l5;
-        vault::set_work_context_health(l39, cetus_clmm_worker::health(freeze(l0), freeze(l4), l29));
-        unstructured {
-            goto 'label_100;
-        }
-    } else {
-        unstructured {
-            goto 'label_100;
-        }
+        vault::set_work_context_health(l39, cetus_clmm_worker::health(freeze(l0), freeze(l4), l29))
     };
     /* block 100 */;
     let l36 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l1), freeze(l4), l12, l13, l14);
     let l33 = vault::after_work(&l0.position_operator_cap, l1, l2, &l37, l38, l9, l36, l14, l15);
     coin::join(&mut l32, l33);
     if (coin::value(&l32) == 0u64) {
-        coin::destroy_zero(l32);
-        unstructured {
-            goto 'label_150;
-        }
+        coin::destroy_zero(l32)
     } else {
-        pay::keep(l32, freeze(l15));
-        unstructured {
-            goto 'label_150;
-        }
+        pay::keep(l32, freeze(l15))
     };
     /* block 150 */
 }
@@ -3194,29 +1987,16 @@ public entry fun work_single_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>
     vault::merge_work_context_coin_back(l39, l31);
     if (l34 > 0u64) {
         let l29 = l5;
-        vault::set_work_context_health(l39, cetus_clmm_worker::health_reverse(freeze(l0), freeze(l4), l29));
-        unstructured {
-            goto 'label_100;
-        }
-    } else {
-        unstructured {
-            goto 'label_100;
-        }
+        vault::set_work_context_health(l39, cetus_clmm_worker::health_reverse(freeze(l0), freeze(l4), l29))
     };
     /* block 100 */;
     let l36 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l1), freeze(l4), l12, l13, l14);
     let l33 = vault::after_work(&l0.position_operator_cap, l1, l2, &l37, l38, l9, l36, l14, l15);
     coin::join(&mut l32, l33);
     if (coin::value(&l32) == 0u64) {
-        coin::destroy_zero(l32);
-        unstructured {
-            goto 'label_150;
-        }
+        coin::destroy_zero(l32)
     } else {
-        pay::keep(l32, freeze(l15));
-        unstructured {
-            goto 'label_150;
-        }
+        pay::keep(l32, freeze(l15))
     };
     /* block 150 */
 }

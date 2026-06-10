@@ -297,6 +297,26 @@ pub(super) fn walk_children_mut(exp: &mut Exp, f: &mut impl FnMut(&mut Exp)) {
     }
 }
 
+/// True if `exp` syntactically contains an `Unstructured(Goto(n))`. Walks through nested
+/// `Unstructured` bodies and through arbitrary AST children.
+pub(super) fn contains_goto(exp: &Exp, n: Label) -> bool {
+    if let Exp::Unstructured(nodes) = exp {
+        return nodes.iter().any(|node| match node {
+            UnstructuredNode::Goto(l) => *l == n,
+            UnstructuredNode::Labeled(_, body) | UnstructuredNode::Statement(body) => {
+                contains_goto(body, n)
+            }
+        });
+    }
+    let mut found = false;
+    walk_children(exp, &mut |c| {
+        if contains_goto(c, n) {
+            found = true;
+        }
+    });
+    found
+}
+
 /// Replace every `Unstructured(Goto(target))` reachable in `exp` with `Break(Some(target))`.
 /// A single-goto `Unstructured` collapses to a bare `Break`; a goto among other unstructured
 /// nodes becomes an `Unstructured(Statement(Break))` in place.
