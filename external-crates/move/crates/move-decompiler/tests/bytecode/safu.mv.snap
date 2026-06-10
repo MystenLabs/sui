@@ -559,21 +559,16 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
         };
         break
     };
-    let __dispatch_58 = if (l22 == l25) {
+    if (l22 == l25) {
         l29 = C25;
         l24 = 0u64;
-        0u32
-    } else {
-        1u32
-    };
-    let (l13, l14, l15, l16, l17, l18, l21, l23, l27, l28, reg_309, reg_310);
-    if (__dispatch_58 <= 0u32) {
         while (l24 < &l36.reward_tokens.len()) {
             (&mut l29).push_back(0u64);
             l24 = l24 + 1u64;
         };
         big_vector::push_back(&mut l36.share, Share { user: l35, share: l29, u64_padding: vector[0u64, l20], bcs_padding: C37 })
     };
+    let (l13, l14, l15, l16, l17, l18, l21, l23, l27, l28, reg_309, reg_310);
     let l30 = big_vector::borrow_mut(&mut l36.share, l22);
     let l26 = *(&(&l30.u64_padding)[C7])as u256 * l20 - *(&(&l30.u64_padding)[C8])as u256 * *(&(&l36.config)[C12])as u256 / 3600000u256 / 10000u256as u64;
     *(&mut (&mut l30.u64_padding)[C8]) = l20;

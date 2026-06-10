@@ -14,6 +14,7 @@ mod fuse_let;
 mod hoist_arm_assignments;
 mod hoist_dual_continue;
 mod hoist_tail_continue;
+mod inline_dispatch_cascade;
 mod inline_immutable_alias;
 mod introduce_while;
 mod lift_terminating_arm;
@@ -42,6 +43,7 @@ pub type Refinement = fn(&mut Exp) -> bool;
 const REFINEMENTS: &[Refinement] = &[
     extract_dispatch_writer::refine,
     compress_dispatch_cascade::refine,
+    inline_dispatch_cascade::refine,
     flatten_seq::refine,
     fuse_let::refine,
     hoist_arm_assignments::refine,
