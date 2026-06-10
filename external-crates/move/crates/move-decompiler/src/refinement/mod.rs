@@ -7,6 +7,7 @@ mod bool_if_simplify;
 mod collapse_let_usage;
 mod collect_uses;
 mod dedupe_freeze;
+mod extract_dispatch_writer;
 mod flatten_seq;
 mod fuse_let;
 mod hoist_arm_assignments;
@@ -38,6 +39,7 @@ pub use liveness::collect_local_names;
 pub type Refinement = fn(&mut Exp) -> bool;
 
 const REFINEMENTS: &[Refinement] = &[
+    extract_dispatch_writer::refine,
     flatten_seq::refine,
     fuse_let::refine,
     hoist_arm_assignments::refine,

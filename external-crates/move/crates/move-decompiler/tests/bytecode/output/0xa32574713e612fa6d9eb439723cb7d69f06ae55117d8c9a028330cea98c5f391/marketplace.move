@@ -449,10 +449,10 @@ public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2
                 };
                 l32 = *(&(&vector::remove(l34, l39)).last_points_claimed_at);
             };
-            if (freeze(l34).len() == 0u64) {
-                break
-            };
             break
+        };
+        if (freeze(l34).len() == 0u64) {
+            
         }
     } else {
         assert!(linked_table::contains(&l29.bids, l5), C17);
@@ -481,11 +481,10 @@ public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2
                 };
                 let l22 = vector::remove(l35, l40);
             };
-            if (freeze(l35).len() == 0u64) {
-                std::vector::destroy_empty(linked_table::remove(&mut l36.collection_bids, l7));
-                break
-            };
             break
+        };
+        if (freeze(l35).len() == 0u64) {
+            std::vector::destroy_empty(linked_table::remove(&mut l36.collection_bids, l7))
         }
     } else {
         assert!(object::uid_to_inner(&(&linked_table::remove(&mut (linked_table::borrow_mut(&mut l36.bids, l5)).bids, l7)).id) == l6, C26);
@@ -702,10 +701,10 @@ public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlace
                 };
                 l29 = *(&(&vector::remove(l31, l36)).last_points_claimed_at);
             };
-            if (freeze(l31).len() == 0u64) {
-                break
-            };
             break
+        };
+        if (freeze(l31).len() == 0u64) {
+            
         }
     } else {
         assert!(linked_table::contains(&l26.bids, l5), C17);
@@ -729,11 +728,10 @@ public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlace
                 };
                 let l18 = vector::remove(l32, l37);
             };
-            if (freeze(l32).len() == 0u64) {
-                std::vector::destroy_empty(linked_table::remove(&mut l33.collection_bids, l6));
-                break
-            };
             break
+        };
+        if (freeze(l32).len() == 0u64) {
+            std::vector::destroy_empty(linked_table::remove(&mut l33.collection_bids, l6))
         }
     } else {
         assert!(linked_table::contains(&l33.bids, l5), C17);
@@ -1156,11 +1154,10 @@ public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>
                 };
                 let l22 = vector::remove(l20, l30);
             };
-            if (freeze(l20).len() == 0u64) {
-                std::vector::destroy_empty(linked_table::remove(&mut l28.collection_bids, l27));
-                break
-            };
             break
+        };
+        if (freeze(l20).len() == 0u64) {
+            std::vector::destroy_empty(linked_table::remove(&mut l28.collection_bids, l27))
         }
     };
     /* block 166 */;
@@ -1185,10 +1182,10 @@ public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>
                 l26 = *(&(&l23).bid_price);
                 l34 = *(&(&l23).last_points_claimed_at);
             };
-            if (freeze(l25).len() == 0u64) {
-                break
-            };
             break
+        };
+        if (freeze(l25).len() == 0u64) {
+            
         }
     } else {
         let l36 = *(option::borrow(&l1));

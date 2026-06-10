@@ -543,7 +543,6 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
     let l32 = 0u64;
     let l31 = big_vector::borrow_slice(&l36.share, l32);
     let l22 = 0u64;
-    let __dispatch_58;
     let (l24, l29);
     loop {
         if (l22 < l25) {
@@ -558,14 +557,14 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
                 continue
             }
         };
-        if (l22 == l25) {
-            l29 = C25;
-            l24 = 0u64;
-            __dispatch_58 = 0u32;
-            break
-        };
-        __dispatch_58 = 1u32;
         break
+    };
+    let __dispatch_58 = if (l22 == l25) {
+        l29 = C25;
+        l24 = 0u64;
+        0u32
+    } else {
+        1u32
     };
     let (l13, l14, l15, l16, l17, l18, l19, l21, l23, l26, l27, l28, l30, reg_309, reg_310);
     match (__dispatch_58) {
@@ -969,17 +968,17 @@ public fun snapshot(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l2: &mu
                 continue
             }
         };
-        if (l10 == l11) {
-            dynamic_field::add(&mut l4.id, ascii::string(C6), l17);
-            return
-        };
+        break
+    };
+    if (l10 == l11) {
+        dynamic_field::add(&mut l4.id, ascii::string(C6), l17)
+    } else {
         let l13 = big_vector::borrow_mut(&mut l19.share, l10);
         let l12 = *(&(&l13.u64_padding)[C7])as u256 * l9 - *(&(&l13.u64_padding)[C8])as u256 * *(&(&l19.config)[C12])as u256 / 3600000u256 / 10000u256as u64;
         *(&mut (&mut l13.u64_padding)[C8]) = l9;
         *(&mut (&mut l13.u64_padding)[C7]) = *(&(&l13.share)[C7]) + *(&(&l13.share)[C10])as u128 * *(&(&l19.info)[C13])as u128 / 10000u128as u64;
         event::emit(UserEvent { action: ascii::string(C42), log: vector[l5, *(&(&l19.info)[C8]), l12], bcs_padding: C21 });
-        dynamic_field::add(&mut l4.id, ascii::string(C6), l17);
-        return
+        dynamic_field::add(&mut l4.id, ascii::string(C6), l17)
     }
 }
 

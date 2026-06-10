@@ -587,10 +587,9 @@ public entry fun add_collection_to_slot<T0>(l0: &mut StakingPool<T0>, l1: u8, l2
             l8 = true;
             event::emit(SlotCollectionsUpdated { pool_id: l12, slot_number: l1, old_collections: l11, new_collections: *(&l6.allowed_collections), is_open_to_all: *(&l6.is_open_to_all), updated_by: tx_context::sender(freeze(l4)), update_time: l7 })
         };
-        assert!(l8, C29);
-        break;
-        return
-    }
+        break
+    };
+    assert!(l8, C29)
 }
 
 public entry fun add_payment_custom_token<T0, T1>(l0: &mut StakingPool<T1>, l1: &Clock, l2: &mut TxContext) {
@@ -1630,10 +1629,9 @@ public entry fun remove_collection_from_slot<T0>(l0: &mut StakingPool<T0>, l1: u
             l9 = true;
             event::emit(SlotCollectionsUpdated { pool_id: l13, slot_number: l1, old_collections: l12, new_collections: *(&l7.allowed_collections), is_open_to_all: *(&l7.is_open_to_all), updated_by: tx_context::sender(freeze(l4)), update_time: l8 })
         };
-        assert!(l9, C29);
-        break;
-        return
-    }
+        break
+    };
+    assert!(l9, C29)
 }
 
 public entry fun remove_payment_custom_token<T0, T1>(l0: &mut StakingPool<T1>, l1: &Clock, l2: &mut TxContext) {
@@ -1906,10 +1904,9 @@ public entry fun set_slot_allowed_collections<T0>(l0: &mut StakingPool<T0>, l1: 
             l9 = true;
             event::emit(SlotCollectionsUpdated { pool_id: l13, slot_number: l1, old_collections: l12, new_collections: *(&l7.allowed_collections), is_open_to_all: l3, updated_by: tx_context::sender(freeze(l5)), update_time: l8 })
         };
-        assert!(l9, C29);
-        break;
-        return
-    }
+        break
+    };
+    assert!(l9, C29)
 }
 
 public entry fun set_wallet_bonus_multiplier<T0>(l0: &mut StakingPool<T0>, l1: address, l2: u64, l3: String, l4: &Clock, l5: &mut TxContext) {
@@ -2326,10 +2323,9 @@ public entry fun update_slot_multiplier<T0>(l0: &mut StakingPool<T0>, l1: u8, l2
             l9 = true;
             event::emit(SlotMultiplierUpdated { pool_id: object::id(freeze(l0)), slot_number: l1, old_multiplier: l12, new_multiplier: l2, updated_by: tx_context::sender(freeze(l4)), update_time: l8 })
         };
-        assert!(l9, C29);
-        break;
-        return
-    }
+        break
+    };
+    assert!(l9, C29)
 }
 
 public entry fun update_slot_price<T0>(l0: &mut StakingPool<T0>, l1: u8, l2: String, l3: u64, l4: &Clock, l5: &mut TxContext) {
