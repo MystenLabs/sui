@@ -47,11 +47,14 @@ fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
 pub fn verify_bulletproofs_ristretto255(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
-    args: VecDeque<Value>,
+    mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 3);
-    verify_bulletproofs_ristretto255_impl(context, args, vec![])
+    let commitments = pop_arg!(args, VectorRef);
+    let range_bits = pop_arg!(args, u8);
+    let proof = pop_arg!(args, VectorRef);
+    verify_bulletproofs_ristretto255_impl(context, commitments, range_bits, proof, vec![])
 }
 
 pub fn verify_bulletproofs_with_dst_ristretto255(
@@ -63,12 +66,17 @@ pub fn verify_bulletproofs_with_dst_ristretto255(
     debug_assert!(args.len() == 4);
     // The domain separation tag is the last argument, so it is popped first.
     let dst = pop_arg!(args, VectorRef).as_bytes_ref()?.to_vec();
-    verify_bulletproofs_ristretto255_impl(context, args, dst)
+    let commitments = pop_arg!(args, VectorRef);
+    let range_bits = pop_arg!(args, u8);
+    let proof = pop_arg!(args, VectorRef);
+    verify_bulletproofs_ristretto255_impl(context, commitments, range_bits, proof, dst)
 }
 
 fn verify_bulletproofs_ristretto255_impl(
     context: &mut NativeContext,
-    mut args: VecDeque<Value>,
+    commitments: VectorRef,
+    range_bits: u8,
+    proof: VectorRef,
     dst: Vec<u8>,
 ) -> PartialVMResult<NativeResult> {
     if !is_supported(context)? {
@@ -90,10 +98,6 @@ fn verify_bulletproofs_ristretto255_impl(
                 "verify_bulletproofs_ristretto255_base_cost not available",
             ))?
     );
-
-    let commitments = pop_arg!(args, VectorRef);
-    let range_bits = pop_arg!(args, u8);
-    let proof = pop_arg!(args, VectorRef);
 
     let proof_bytes = proof.as_bytes_ref()?;
     if proof_bytes.len() > MAX_PROOF_SIZE {
