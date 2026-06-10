@@ -80,10 +80,6 @@ fun append_format_piece(l0: &mut vector<u8>, l1: &vector<u8>, l2: u64, l3: &vect
                 };
                 l10 = l10 + 1u64;
             }
-        } else {
-            unstructured {
-                goto 'label_57;
-            }
         };
         /* block 57 */;
         if (&l12.len() > 0u64) {
@@ -94,13 +90,6 @@ fun append_format_piece(l0: &mut vector<u8>, l1: &vector<u8>, l2: u64, l3: &vect
             };
             vector::append(l0, C12);
             return false
-        };
-        unstructured {
-            goto 'label_87;
-        }
-    } else {
-        unstructured {
-            goto 'label_87;
         }
     };
     /* block 87 */;
@@ -175,33 +164,7 @@ public fun format_string(l0: &x1_String, l1: &vector<u8>): x1_String {
 }
 
 public fun is_printable_char(l0: u8): bool {
-    let l2;
-    if (l0 == 10u8) {
-        l2 = true;
-        unstructured {
-            goto 'label_20;
-        }
-    } else {
-        let l1;
-        if (l0 >= 32u8) {
-            l1 = l0 < 126u8;
-            unstructured {
-                goto 'label_18;
-            }
-        } else {
-            l1 = false;
-            unstructured {
-                goto 'label_18;
-            }
-        };
-        /* block 18 */;
-        l2 = l1;
-        unstructured {
-            goto 'label_20;
-        }
-    };
-    /* block 20 */;
-    return l2
+    /* block 20 */ return l0 == 10u8 || /* block 18 */ l0 >= 32u8 && l0 < 126u8
 }
 
 public fun looks_like_a_string(l0: &vector<u8>, l1: u32): bool {
@@ -229,153 +192,44 @@ public fun meta_chunk_to_string(l0: &vector<u8>, l1: u32, l2: &vector<u8>): vect
     let l20 = C0;
     let l3 = C9;
     if (l2 == &l3) {
-        if (metadata::has_chunk_of_type(l0, l1)) {
-            l20 = C4;
-            unstructured {
-                goto 'label_146;
-            }
+        l20 = if (metadata::has_chunk_of_type(l0, l1)) {
+            C4
         } else {
             if (metadata::has_chunk_of_type(l0, l1)) {
-                l20 = C2;
-                unstructured {
-                    goto 'label_146;
-                }
+                C2
             } else {
-                let l5;
-                if (metadata::has_chunk_of_type(l0, l1)) {
-                    l5 = true;
-                    unstructured {
-                        goto 'label_48;
-                    }
-                } else {
-                    l5 = metadata::has_chunk_of_type(l0, l1);
-                    unstructured {
-                        goto 'label_48;
-                    }
-                };
-                let l6;
                 /* block 48 */;
-                if (l5) {
-                    l6 = true;
-                    unstructured {
-                        goto 'label_57;
-                    }
-                } else {
-                    l6 = metadata::has_chunk_of_type(l0, l1);
-                    unstructured {
-                        goto 'label_57;
-                    }
-                };
-                let l7;
+                let l6 = metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1);
                 /* block 57 */;
-                if (l6) {
-                    l7 = true;
-                    unstructured {
-                        goto 'label_66;
-                    }
-                } else {
-                    l7 = metadata::has_chunk_of_type(l0, l1);
-                    unstructured {
-                        goto 'label_66;
-                    }
-                };
+                let l7 = l6 || metadata::has_chunk_of_type(l0, l1);
                 /* block 66 */;
                 if (l7) {
-                    l20 = C8;
-                    unstructured {
-                        goto 'label_146;
-                    }
+                    C8
                 } else {
-                    let l8;
-                    if (metadata::has_chunk_of_type(l0, l1)) {
-                        l8 = true;
-                        unstructured {
-                            goto 'label_82;
-                        }
-                    } else {
-                        l8 = metadata::has_chunk_of_type(l0, l1);
-                        unstructured {
-                            goto 'label_82;
-                        }
-                    };
-                    let l9;
                     /* block 82 */;
-                    if (l8) {
-                        l9 = true;
-                        unstructured {
-                            goto 'label_91;
-                        }
-                    } else {
-                        l9 = metadata::has_chunk_of_type(l0, l1);
-                        unstructured {
-                            goto 'label_91;
-                        }
-                    };
+                    let l9 = metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1);
                     /* block 91 */;
                     if (l9) {
-                        l20 = C6;
-                        unstructured {
-                            goto 'label_146;
-                        }
+                        C6
                     } else {
-                        let l10;
-                        if (metadata::has_chunk_of_type(l0, l1)) {
-                            l10 = x2_format::looks_like_a_string(l0, l1);
-                            unstructured {
-                                goto 'label_107;
-                            }
-                        } else {
-                            l10 = false;
-                            unstructured {
-                                goto 'label_107;
-                            }
-                        };
                         /* block 107 */;
-                        if (l10) {
-                            l20 = C5;
-                            unstructured {
-                                goto 'label_146;
-                            }
+                        if (metadata::has_chunk_of_type(l0, l1) && x2_format::looks_like_a_string(l0, l1)) {
+                            C5
                         } else {
-                            let l11;
-                            if (metadata::has_chunk_of_type(l0, l1)) {
-                                l11 = true;
-                                unstructured {
-                                    goto 'label_123;
-                                }
-                            } else {
-                                l11 = metadata::has_chunk_of_type(l0, l1);
-                                unstructured {
-                                    goto 'label_123;
-                                }
-                            };
                             /* block 123 */;
-                            if (l11) {
-                                l20 = C7;
-                                unstructured {
-                                    goto 'label_146;
-                                }
+                            if (metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1)) {
+                                C7
                             } else {
-                                l20 = C0;
-                                unstructured {
-                                    goto 'label_146;
-                                }
+                                C0
                             }
                         }
                     }
                 }
             }
-        }
+        };
     } else {
         if (*(&l2[0u64]) == 58u8) {
             l20 = *(&l2[1u64]);
-            unstructured {
-                goto 'label_146;
-            }
-        } else {
-            unstructured {
-                goto 'label_146;
-            }
         }
     };
     /* block 146 */;
@@ -484,42 +338,16 @@ public fun vu8_to_hex(l0: &vector<u8>, l1: bool, l2: bool): vector<u8> {
     let l8 = 87u8;
     if (l2) {
         l8 = 55u8;
-        unstructured {
-            goto 'label_10;
-        }
-    } else {
-        unstructured {
-            goto 'label_10;
-        }
     };
     /* block 10 */;
     let l12 = l0.len();
     if (l12 == 0u64) {
         return l11
     };
-    let l3;
     let l5 = *(&l0[0u64]);
-    if (l5 > 0u8) {
-        l3 = l5as u64 == l12 - 1u64;
-        unstructured {
-            goto 'label_40;
-        }
-    } else {
-        l3 = false;
-        unstructured {
-            goto 'label_40;
-        }
-    };
     /* block 40 */;
-    if (l3) {
+    if (l5 > 0u8 && l5as u64 == l12 - 1u64) {
         l7 = 1u64;
-        unstructured {
-            goto 'label_44;
-        }
-    } else {
-        unstructured {
-            goto 'label_44;
-        }
     };
     /* block 44 */;
     let l10 = !(l1);

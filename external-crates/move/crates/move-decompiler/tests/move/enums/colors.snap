@@ -8,22 +8,13 @@ module colors {
         match(&l3: Color) {
             Color::Red => {
                 l1 = false;
-                unstructured {
-                    goto 'label_22;
-                }
             },
             Color::Green => {
                 l1 = false;
-                unstructured {
-                    goto 'label_22;
-                }
             },
             Color::Blue => {
                 let Color::Blue {} = l3;
                 l1 = true;
-                unstructured {
-                    goto 'label_22;
-                }
             },
         }
         return l1
@@ -35,22 +26,13 @@ module colors {
         match(&l3: Color) {
             Color::Red => {
                 l1 = false;
-                unstructured {
-                    goto 'label_22;
-                }
             },
             Color::Green => {
                 let Color::Green {} = l3;
                 l1 = true;
-                unstructured {
-                    goto 'label_22;
-                }
             },
             Color::Blue => {
                 l1 = false;
-                unstructured {
-                    goto 'label_22;
-                }
             },
         }
         return l1
@@ -63,21 +45,12 @@ module colors {
             Color::Red => {
                 let Color::Red {} = l3;
                 l1 = true;
-                unstructured {
-                    goto 'label_22;
-                }
             },
             Color::Green => {
                 l1 = false;
-                unstructured {
-                    goto 'label_22;
-                }
             },
             Color::Blue => {
                 l1 = false;
-                unstructured {
-                    goto 'label_22;
-                }
             },
         }
         return l1

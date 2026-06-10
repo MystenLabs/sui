@@ -11,15 +11,9 @@ module temperature {
         match(&l2: Temperature) {
             Temperature::Fahrenheit { pos0: reg_4 } => {
                 let Temperature::Fahrenheit { pos0: reg_6 } = l2;
-                unstructured {
-                    goto 'label_19;
-                }
             },
             Temperature::Celcius { pos0: reg_8 } => {
                 let Temperature::Celcius { pos0: reg_10 } = l2;
-                unstructured {
-                    goto 'label_19;
-                }
             },
         }
     }
@@ -33,15 +27,9 @@ module temperature {
         match(l0: Temperature) {
             Temperature::Fahrenheit { pos0: reg_3 } => {
                 l1 = true;
-                unstructured {
-                    goto 'label_14;
-                }
             },
             Temperature::Celcius => {
                 l1 = false;
-                unstructured {
-                    goto 'label_14;
-                }
             },
         }
         return l1

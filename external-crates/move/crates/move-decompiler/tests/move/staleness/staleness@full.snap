@@ -53,26 +53,12 @@ public fun inner_loop_two_feed(l0: u64, l1: u64, l2: u64, l3: u64, l4: &mut bool
 public fun non_uniform_arms(l0: u64, l1: u64, l2: u64, l3: &mut u64, l4: &mut bool) {
     if (l0 > l1) {
         if (l0 - l1 >= l2) {
-            *l4 = false;
-            unstructured {
-                goto 'label_39;
-            }
-        } else {
-            unstructured {
-                goto 'label_39;
-            }
+            *l4 = false
         }
     } else {
         if (l1 - l0 >= l2) {
             *l4 = false;
-            *l3 = *l3 + 1u64;
-            unstructured {
-                goto 'label_39;
-            }
-        } else {
-            unstructured {
-                goto 'label_39;
-            }
+            *l3 = *l3 + 1u64
         }
     };
     /* block 39 */

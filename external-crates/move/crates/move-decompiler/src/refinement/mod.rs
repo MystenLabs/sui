@@ -8,9 +8,11 @@ mod collapse_let_usage;
 mod collect_uses;
 mod compress_dispatch_cascade;
 mod dedupe_freeze;
+mod elide_tail_goto_to_block;
 mod extract_dispatch_writer;
 mod flatten_seq;
 mod fuse_let;
+mod goto_to_break;
 mod hoist_arm_assignments;
 mod hoist_dual_continue;
 mod hoist_shared_landing;
@@ -68,6 +70,8 @@ const REFINEMENTS: &[Refinement] = &[
     recover_flag::refine,
     recover_asserts::refine,
     hoist_shared_landing::refine,
+    elide_tail_goto_to_block::refine,
+    goto_to_break::refine,
     strip_loop_labels::refine,
     swap_continue_break::refine,
     swap_continue_break_else::refine,

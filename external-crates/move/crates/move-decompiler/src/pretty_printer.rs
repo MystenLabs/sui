@@ -18,8 +18,16 @@ use indexmap::IndexMap;
 // Render Context
 // -------------------------------------------------------------------------------------------------
 
+#[derive(Clone)]
 struct Context {
     constant_table: IndexMap<*const Constant<Symbol>, String>,
+    /// Set of `Block(N)` ids targeted by any surviving `Goto(N)` or `Break(Some(N))` in the
+    /// currently-rendering function's body. Populated per-function in [`function`] from
+    /// [`crate::translate::collect_goto_targets`]. When a `Block(N)` has its id in this set,
+    /// we render it as a labeled scope (`'label_N: { body }`) instead of the inline
+    /// `/* block N */ body` form, and `Break(Some(N))` / `Continue(Some(N))` render as
+    /// `'label_N` instead of `'loop_N`. Module-level value is empty.
+    goto_targets: std::collections::HashSet<u64>,
 }
 
 impl Context {
@@ -63,7 +71,10 @@ pub fn module<S: SourceKind>(
             .map(|(k, (name, _))| (*k, name.clone()))
             .collect();
 
-        Context { constant_table }
+        Context {
+            constant_table,
+            goto_targets: std::collections::HashSet::new(),
+        }
     };
 
     let crate::ast::Module {
@@ -198,6 +209,17 @@ pub fn module<S: SourceKind>(
 fn function(context: &Context, fun: &Function) -> Doc {
     let header = fun_header_doc(fun);
     let code = &fun.code;
+
+    // Build a per-function context populated with the set of `Block(N)` ids targeted by
+    // surviving gotos (and labeled-block breaks). Block / Break / Continue rendering use
+    // this to switch between the inline `/* block N */` comment form (untargeted) and the
+    // labeled-scope `'label_N: { ... }` / `break 'label_N` form (targeted).
+    let context = {
+        let mut fn_ctx = context.clone();
+        fn_ctx.goto_targets = crate::translate::collect_goto_targets(code);
+        fn_ctx
+    };
+    let context = &context;
 
     // Notice for input blocks the structurer received but never emitted. Prepending it
     // inside the function braces puts the warning right above the recovered source so a
@@ -612,6 +634,11 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
 
     fn push_stmt(context: &Context, e: &Exp, out: &mut Vec<Doc>) {
         match e {
+            Exp::Block(id, body) if context.goto_targets.contains(id) => {
+                // A goto in this function targets `id`. Render the Block as a labeled
+                // scope so the goto resolves: `'label_id: { body }`.
+                out.push(D::text(format!("'label_{id}:")).concat_space(e_block(context, body)));
+            }
             Exp::Block(id, body) => {
                 out.push(D::text(format!("/* block {id} */")));
                 match &**body {
@@ -632,10 +659,16 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
     fn recur(context: &Context, e: &Exp) -> Doc {
         match e {
             Exp::Break(label) => match label {
+                Some(l) if context.goto_targets.contains(l) => {
+                    D::text(format!("break 'label_{}", l))
+                }
                 Some(l) => D::text(format!("break 'loop_{}", l)),
                 None => D::text("break"),
             },
             Exp::Continue(label) => match label {
+                Some(l) if context.goto_targets.contains(l) => {
+                    D::text(format!("continue 'label_{}", l))
+                }
                 Some(l) => D::text(format!("continue 'loop_{}", l)),
                 None => D::text("continue"),
             },
@@ -811,9 +844,13 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
             Exp::Unstructured(nodes) => {
                 D::text("unstructured").concat_space(unstructured_block(context, nodes))
             }
-            // Expression-position Block: emit an inline `/* block N */` comment and recur
-            // into the body. Statement-position rendering goes through `stmts` / `push_stmt`,
-            // which keeps the comment on its own line above the inlined body items.
+            // Expression-position Block: when targeted by a goto, render as a labeled scope
+            // (`'label_N: { body }`) so the goto resolves; otherwise emit an inline
+            // `/* block N */` comment and recur into the body. Statement-position rendering
+            // goes through `stmts` / `push_stmt`, which has its own labeled/comment fork.
+            Exp::Block(id, body) if context.goto_targets.contains(id) => {
+                D::text(format!("'label_{id}:")).concat_space(e_block(context, body))
+            }
             Exp::Block(id, body) => {
                 D::text(format!("/* block {id} */")).concat_space(recur(context, body))
             }
@@ -821,11 +858,16 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
     }
 
     fn e_block(context: &Context, e: &Exp) -> Doc {
-        // Peel `Block` wrappers, collecting `/* block N */` comments to lead the brace-block,
-        // then delegate the inner shape (Seq -> stmts; single Exp -> statement).
+        // Peel `Block` wrappers, collecting headers to lead the brace-block. For a Block(N)
+        // that's NOT a goto target we emit a `/* block N */` comment. For a targeted Block
+        // we don't peel - labeled scopes need to remain wrappers - so we stop peeling and
+        // let the caller render via `Block(id) if targeted` arms above.
         let mut headers: Vec<Doc> = Vec::new();
         let mut inner = e;
         while let Exp::Block(id, body) = inner {
+            if context.goto_targets.contains(id) {
+                break;
+            }
             headers.push(D::text(format!("/* block {id} */")));
             inner = body;
         }

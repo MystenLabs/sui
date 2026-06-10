@@ -269,19 +269,8 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
     assert!(*(&l1.version) <= C0, C7);
     assert!(table::contains(&l0.cabinet, l45), C3);
     assert!(coin::value(freeze(l3)) >= C1 * l2, C6);
-    let l6;
     let l44 = table::borrow_mut(&mut l0.cabinet, l45);
-    if (l2 > 0u64) {
-        l6 = *(&l44.has_stake_number) + l2 <= 50u64;
-        unstructured {
-            goto 'label_101;
-        }
-    } else {
-        l6 = false;
-        unstructured {
-            goto 'label_101;
-        }
-    };
+    let l6 = l2 > 0u64 && *(&l44.has_stake_number) + l2 <= 50u64;
     /* block 101 */;
     assert!(l6, C5);
     *(&mut l44.has_stake_number) = *(&l44.has_stake_number) + l2;
@@ -294,15 +283,9 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
         if (*(&l1.current_row) + 1u64 > 2u64) {
             *(&mut l1.current_row) = 0u64;
             *(&mut l1.current_floor) = *(&l1.current_floor) + 1u64;
-            (&mut l1.seating).push_back(vector[]);
-            unstructured {
-                goto 'label_189;
-            }
+            (&mut l1.seating).push_back(vector[])
         } else {
-            *(&mut l1.current_row) = *(&l1.current_row) + 1u64;
-            unstructured {
-                goto 'label_189;
-            }
+            *(&mut l1.current_row) = *(&l1.current_row) + 1u64
         };
         /* block 189 */;
         let l20 = table::borrow_mut(&mut l0.cabinet, *(&l44.affCode));
@@ -310,30 +293,17 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
         (&mut l20.invite_addresses).push_back(l45);
         let l38 = *(&l20.total_effective_invite_number);
         l44 = table::borrow_mut(&mut l0.cabinet, l45);
-        *(&mut l44.position_of_aff) = l38;
-        unstructured {
-            goto 'label_221;
-        }
-    } else {
-        unstructured {
-            goto 'label_221;
-        }
+        *(&mut l44.position_of_aff) = l38
     };
     let (l12, l29);
     /* block 221 */;
     sbt::mint(l4, l45, l5);
     event::emit(Participates { from: l45, num: l2 });
     l29 = C1 * l2;
-    if (l28 == true) {
-        l12 = l29 * 3u64;
-        unstructured {
-            goto 'label_248;
-        }
+    l12 = if (l28 == true) {
+        l29 * 3u64
     } else {
-        l12 = l29 * 22u64 / 10u64;
-        unstructured {
-            goto 'label_248;
-        }
+        l29 * 22u64 / 10u64
     };
     let (l21, l39);
     /* block 248 */;
@@ -347,39 +317,18 @@ public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2
     if (*(&l44.position_of_aff) % 3u64 == 0u64) {
         transfer::public_transfer(coin::split(l3, l29 * 40u64 / 100u64, l5), *(&(&l0.team_addresses)[0u64]));
         l21 = l29 * 10u64 / 100u64;
-        unstructured {
-            goto 'label_330;
-        }
-    } else {
-        unstructured {
-            goto 'label_330;
-        }
     };
     /* block 330 */;
     l44 = table::borrow_mut(&mut l0.cabinet, l39);
     if (*(&l44.could_reward) <= l21) {
         transfer::public_transfer(coin::split(l3, l21 - *(&l44.could_reward), l5), *(&(&l0.team_addresses)[0u64]));
         l21 = *(&l44.could_reward);
-        unstructured {
-            goto 'label_359;
-        }
-    } else {
-        unstructured {
-            goto 'label_359;
-        }
     };
     /* block 359 */;
     if (l21 > 0u64) {
         transfer::public_transfer(coin::split(l3, l21, l5), l39);
         *(&mut l44.could_reward) = *(&l44.could_reward) - l21;
-        *(&mut l44.has_reward) = *(&l44.has_reward) + l21;
-        unstructured {
-            goto 'label_388;
-        }
-    } else {
-        unstructured {
-            goto 'label_388;
-        }
+        *(&mut l44.has_reward) = *(&l44.has_reward) + l21
     };
     let (l22, l30);
     /* block 388 */;
@@ -645,22 +594,14 @@ public entry fun whiteList(l0: vector<address>, l1: vector<u64>, l2: &mut Coin<S
 }
 
 public entry fun withdraw(l0: &mut TheTreasury, l1: &AdminCap, l2: Option<u64>, l3: &mut TxContext) {
-    let l4;
-    if (option::is_some(&l2)) {
+    let l4 = if (option::is_some(&l2)) {
         let l6 = option::destroy_some(l2);
         assert!(l6 <= x2_balance::value(&l0.balance), C2);
-        l4 = l6;
-        unstructured {
-            goto 'label_26;
-        }
+        l6
     } else {
-        l4 = x2_balance::value(&l0.balance);
-        unstructured {
-            goto 'label_26;
-        }
+        x2_balance::value(&l0.balance)
     };
     /* block 26 */;
-    let l5 = l4;
-    transfer::public_transfer(coin::take(&mut l0.balance, l5, l3), tx_context::sender(freeze(l3)))
+    transfer::public_transfer(coin::take(&mut l0.balance, l4, l3), tx_context::sender(freeze(l3)))
 }
 

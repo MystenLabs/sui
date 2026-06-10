@@ -31,16 +31,10 @@ public fun update_1(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l11 > l10) {
         if (l11 - l10 < l13) {
             return
-        };
-        unstructured {
-            goto 'label_59;
         }
     } else {
         if (l10 - l11 < l13) {
             return
-        };
-        unstructured {
-            goto 'label_59;
         }
     };
     /* block 59 */;

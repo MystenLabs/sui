@@ -8,69 +8,17 @@ module refinements::bool_if_simplify;
 // -- functions -- 
 
 public fun and_left(l0: u64, l1: u64): bool {
-    let l2;
-    if (l0 == 0u64) {
-        l2 = l1 > 0u64;
-        unstructured {
-            goto 'label_11;
-        }
-    } else {
-        l2 = false;
-        unstructured {
-            goto 'label_11;
-        }
-    };
-    /* block 11 */;
-    return l2
+    /* block 11 */ return l0 == 0u64 && l1 > 0u64
 }
 
 public fun ident(l0: u64): bool {
-    let l1;
-    if (l0 == 0u64) {
-        l1 = true;
-        unstructured {
-            goto 'label_9;
-        }
-    } else {
-        l1 = false;
-        unstructured {
-            goto 'label_9;
-        }
-    };
-    /* block 9 */;
-    return l1
+    /* block 9 */ return l0 == 0u64
 }
 
 public fun neg(l0: u64): bool {
-    let l1;
-    if (l0 == 0u64) {
-        l1 = false;
-        unstructured {
-            goto 'label_9;
-        }
-    } else {
-        l1 = true;
-        unstructured {
-            goto 'label_9;
-        }
-    };
-    /* block 9 */;
-    return l1
+    /* block 9 */ return l0 != 0u64
 }
 
 public fun or_right(l0: u64, l1: u64): bool {
-    let l2;
-    if (l0 == 0u64) {
-        l2 = true;
-        unstructured {
-            goto 'label_11;
-        }
-    } else {
-        l2 = l1 > 0u64;
-        unstructured {
-            goto 'label_11;
-        }
-    };
-    /* block 11 */;
-    return l2
+    /* block 11 */ return l0 == 0u64 || l1 > 0u64
 }
