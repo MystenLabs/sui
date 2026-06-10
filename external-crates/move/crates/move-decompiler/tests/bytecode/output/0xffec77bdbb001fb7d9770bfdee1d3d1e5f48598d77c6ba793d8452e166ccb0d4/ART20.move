@@ -1545,39 +1545,28 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
             };
             l17 = l17 + 1u64;
         };
-        let __c191;
-        match (__dispatch_81) {
-            0 => {
-                loop {
-                    if (l18 < &l2.len()) {
-                        let l12 = &mut (&mut l2)[l18];
-                        if (!(*(&l12.collection_id) == l14 && *(&l12.balance) > 0u64)) {
-                            l18 = l18 + 1u64;
-                            continue
-                        };
-                        *(&mut l12.balance) = xf_ART20::safe_sub(*(&l12.balance), 1u64);
-                        l13 = true;
+        if (__dispatch_81 <= 0u32) {
+            loop {
+                if (l18 < &l2.len()) {
+                    let l12 = &mut (&mut l2)[l18];
+                    if (!(*(&l12.collection_id) == l14 && *(&l12.balance) > 0u64)) {
+                        l18 = l18 + 1u64;
+                        continue
                     };
-                    let __c163 = l13;
-                    break
+                    *(&mut l12.balance) = xf_ART20::safe_sub(*(&l12.balance), 1u64);
+                    l13 = true;
                 };
-                assert!(__c163, C6);
-                (&mut l26).push_back(l21);
-                (&mut l9).push_back(1u64);
-                transfer::transfer(vector::remove(&mut l1, l17), l4);
-                l15 = true;
-                __c191 = l15;
-                assert!(__c191, C15);
-                l16 = l16 + 1u64;
-                continue
-            },
-            1 => {
-                __c191 = l15;
-                assert!(__c191, C15);
-                l16 = l16 + 1u64;
-                continue
-            }
-        }
+                let __c163 = l13;
+                break
+            };
+            assert!(__c163, C6);
+            (&mut l26).push_back(l21);
+            (&mut l9).push_back(1u64);
+            transfer::transfer(vector::remove(&mut l1, l17), l4);
+            l15 = true;
+        };
+        assert!(l15, C15);
+        l16 = l16 + 1u64;
     };
     while (l19 < &l2.len()) {
         if (*(&(&mut (&mut l2)[l19]).balance) == 0u64) {
