@@ -249,7 +249,6 @@ public fun exp_down_with_fee(l0: &mut Version, l1: &mut TailsStakingRegistry, l2
         let l10 = bag::borrow(&l1.tails_metadata, C9);
         typus_nft::update_image_url(&l1.tails_manager_cap, l8, *(big_vector::borrow(table::borrow(l10, l11), l13 - 1u64)))
     };
-    /* block 109 */;
     *(&mut (bag::borrow_mut(&mut l1.tails_metadata, C8))[l13 - 1u64]) = l11;
     event::emit(ExpDownEvent { tails: l9, log: vector[l13, l4], bcs_padding: C17 })
 }
@@ -272,7 +271,6 @@ public fun exp_down_without_staking_with_fee(l0: &mut Version, l1: &TailsStaking
         let l12 = bag::borrow(&l1.tails_metadata, C9);
         typus_nft::update_image_url(&l1.tails_manager_cap, l10, *(big_vector::borrow(table::borrow(l12, l13), l14 - 1u64)))
     };
-    /* block 92 */;
     event::emit(ExpDownEvent { tails: l11, log: vector[l14, l6], bcs_padding: C17 })
 }
 
@@ -330,7 +328,6 @@ public fun get_max_staking_level(l0: &Version, l1: &TailsStakingRegistry, l2: ad
     let l8 = 0u64;
     let l14 = bag::borrow(&l1.tails_metadata, C8);
     let l6 = big_vector::length(&l1.staking_infos);
-    /* block 143 */;
     if (l6 > 0u64) {
         let l12 = big_vector::slice_size(&l1.staking_infos)as u64;
         let l10 = 0u64;
@@ -476,7 +473,6 @@ entry fun level_up(l0: &Version, l1: &mut TailsStakingRegistry, l2: address, l3:
         let l7 = bag::borrow(&l1.tails_metadata, C9);
         typus_nft::update_image_url(&l1.tails_manager_cap, l5, *(big_vector::borrow(table::borrow(l7, l8), l10 - 1u64)))
     };
-    /* block 80 */;
     *(&mut (bag::borrow_mut(&mut l1.tails_metadata, C8))[l10 - 1u64]) = l8;
     event::emit(LevelUpEvent { tails: l6, log: vector[l10, l8], bcs_padding: C17 })
 }
@@ -493,7 +489,6 @@ public fun public_exp_down(l0: &ManagerCap, l1: &Version, l2: &mut TailsStakingR
         let l8 = bag::borrow(&l2.tails_metadata, C9);
         typus_nft::update_image_url(&l2.tails_manager_cap, l6, *(big_vector::borrow(table::borrow(l8, l9), l11 - 1u64)))
     };
-    /* block 62 */;
     *(&mut (bag::borrow_mut(&mut l2.tails_metadata, C8))[l11 - 1u64]) = l9;
     event::emit(ExpDownEvent { tails: l7, log: vector[l11, l4], bcs_padding: C17 })
 }
@@ -509,7 +504,6 @@ public fun public_exp_down_without_staking(l0: &ManagerCap, l1: &Version, l2: &T
         let l10 = bag::borrow(&l2.tails_metadata, C9);
         typus_nft::update_image_url(&l2.tails_manager_cap, l8, *(big_vector::borrow(table::borrow(l10, l11), l12 - 1u64)))
     };
-    /* block 55 */;
     event::emit(ExpDownEvent { tails: l9, log: vector[l12, l6], bcs_padding: C17 })
 }
 
@@ -614,7 +608,6 @@ entry fun set_profit_sharing<T0, T1>(l0: &Version, l1: &mut TailsStakingRegistry
             dynamic_field::add(&mut l1.id, l19, balance::zero())
         }
     };
-    /* block 188 */;
     let l22 = dynamic_field::borrow_mut(&mut l1.id, l19);
     let l27 = coin::value(&l3);
     assert!(balance::value(freeze(l22)) >= l32, C2);
@@ -651,9 +644,7 @@ fun stake_tails_(l0: &mut TailsStakingRegistry, l1: Tails, l2: address) {
     let l4 = 0u64;
     loop {
         if (l4 < l5) {
-            if (*(&(big_vector::borrow_from_slice(l7, l4 % l10)).user) == l2) {
-                
-            } else {
+            if (*(&(big_vector::borrow_from_slice(l7, l4 % l10)).user) != l2) {
                 if (l4 + 1u64 < l5 && l4 + 1u64 == l8 * l10 + l9) {
                     l8 = big_vector::get_slice_idx(l7) + 1u64;
                     l7 = big_vector::borrow_slice(&l0.staking_infos, l8);
@@ -668,9 +659,9 @@ fun stake_tails_(l0: &mut TailsStakingRegistry, l1: Tails, l2: address) {
             utility::pad_u64_vector(&mut l6, &l0.profit_assets.len() - 1u64);
             big_vector::push_back(&mut l0.staking_infos, StakingInfo { user: l2, tails: C14, profits: l6, u64_padding: C25 })
         };
-        let l11 = big_vector::borrow_mut(&mut l0.staking_infos, l4);
         break
     };
+    let l11 = big_vector::borrow_mut(&mut l0.staking_infos, l4);
     assert!(&l11.tails.len() < *(&(&l0.config)[C1]), C11);
     (&mut l11.tails).push_back(typus_nft::tails_number(&l1));
     if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C19))) {
@@ -807,8 +798,7 @@ entry fun upload_webp_bytes(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64
         while (!(vector::is_empty(&l4))) {
             l7.push_back((&mut l4).pop_back())
         }
-    };
-    /* block 47 */
+    }
 }
 
 public fun verify_staking(l0: &Version, l1: &TailsStakingRegistry, l2: address, l3: address): bool {

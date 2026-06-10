@@ -3,57 +3,45 @@ source: crates/move-decompiler/tests/tests.rs
 ---
 module colors {
     public fun is_blue () {
-        let l1;
         let l3 = l0;
-        match(&l3: Color) {
+        return         match(&l3: Color) {
             Color::Red => {
-                l1 = false;
-            },
+false            },
             Color::Green => {
-                l1 = false;
-            },
+false            },
             Color::Blue => {
                 let Color::Blue {} = l3;
-                l1 = true;
-            },
+true            },
         }
-        return l1
+
     }
 
     public fun is_green () {
-        let l1;
         let l3 = l0;
-        match(&l3: Color) {
+        return         match(&l3: Color) {
             Color::Red => {
-                l1 = false;
-            },
+false            },
             Color::Green => {
                 let Color::Green {} = l3;
-                l1 = true;
-            },
+true            },
             Color::Blue => {
-                l1 = false;
-            },
+false            },
         }
-        return l1
+
     }
 
     public fun is_red () {
-        let l1;
         let l3 = l0;
-        match(&l3: Color) {
+        return         match(&l3: Color) {
             Color::Red => {
                 let Color::Red {} = l3;
-                l1 = true;
-            },
+true            },
             Color::Green => {
-                l1 = false;
-            },
+false            },
             Color::Blue => {
-                l1 = false;
-            },
+false            },
         }
-        return l1
+
     }
 
 }

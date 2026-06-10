@@ -37,7 +37,6 @@ public fun update_1(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             return
         }
     };
-    /* block 59 */;
     let l14 = vaa::parse_and_verify(l4, l5, l7);
     let l12 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l14, l7);
     hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l12, l2, coin::split(l6, state::get_base_update_fee(l0), l8), l7))

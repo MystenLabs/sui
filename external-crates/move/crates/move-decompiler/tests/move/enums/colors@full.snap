@@ -16,58 +16,49 @@ public enum Color has copy, drop {
 // -- functions -- 
 
 public fun is_blue(l0: Color): bool {
-    let l1;
     let l3 = l0;
-    match (&l3) {
+    return match (&l3) {
         Red => {
-            l1 = false;
+            false
         },
         Green => {
-            l1 = false;
+            false
         },
         Blue => {
             let Color::Blue {} = l3;
-            l1 = true;
+            true
         }
-    };
-    /* block 22 */;
-    return l1
+    }
 }
 
 public fun is_green(l0: Color): bool {
-    let l1;
     let l3 = l0;
-    match (&l3) {
+    return match (&l3) {
         Red => {
-            l1 = false;
+            false
         },
         Green => {
             let Color::Green {} = l3;
-            l1 = true;
+            true
         },
         Blue => {
-            l1 = false;
+            false
         }
-    };
-    /* block 22 */;
-    return l1
+    }
 }
 
 public fun is_red(l0: Color): bool {
-    let l1;
     let l3 = l0;
-    match (&l3) {
+    return match (&l3) {
         Red => {
             let Color::Red {} = l3;
-            l1 = true;
+            true
         },
         Green => {
-            l1 = false;
+            false
         },
         Blue => {
-            l1 = false;
+            false
         }
-    };
-    /* block 22 */;
-    return l1
+    }
 }

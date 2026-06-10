@@ -128,28 +128,19 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
                 let l65 = reg_116;
                 let l139 = reg_114;
                 let l138 = reg_113;
-                let l19 = if (config::max_arb_amount(l83) > 0u64) {
+                let l52 = if (config::max_arb_amount(l83) > 0u64) {
                     config::max_arb_amount(l83)
                 } else {
                     0u64
                 };
-                let (l41, l52);
-                /* block 175 */;
-                l52 = l19;
-                l41 = l138 || l139;
-                /* block 184 */;
-                let l30 = l41 && l52 > 0u64;
-                /* block 193 */;
-                if (l30) {
+                if (l138 || l139 && l52 > 0u64) {
                     events::emit_log_bytes(C4);
-                    /* block 214 */;
                     if (l138 && reg_115 == arbitrage_router::pool_cetus() && !(l97)) {
                         let (reg_159, reg_160);
                         (reg_158, reg_159, reg_160) = arbitrage_router::execute_cetus_buy(l112, l2, l5, l6, l52, l65, l86, config::arb_slippage_bps(l83), l7, l18);
                         let l81 = reg_160;
                         let l129 = reg_159;
                         events::emit_log_bytes(C5);
-                        /* block 242 */;
                         if (l81 && l129 > 0u64) {
                             let reg_171;
                             (reg_170, reg_171, reg_172) = pool::pool_book_params(freeze(l3));
@@ -165,25 +156,19 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
                                 }
                             }
                         };
-                        /* block 286 */;
                         mm_state::record_arb_time(l0, l108);
                         events::emit_log_bytes(C8)
                     } else {
-                        /* block 299 */;
                         if (l138 && l97) {
                             events::emit_log_bytes(C9)
                         }
                     };
-                    /* block 303 */;
-                    let l49 = l139 && reg_117 == arbitrage_router::pool_cetus() && !(l97);
-                    /* block 318 */;
-                    if (l49) {
+                    if (l139 && reg_117 == arbitrage_router::pool_cetus() && !(l97)) {
                         let (reg_229, reg_231);
                         (reg_229, reg_230, reg_231) = arbitrage_router::execute_cetus_sell(l112, l2, l5, l6, l52, l67, l86, config::arb_slippage_bps(l83), l7, l18);
                         let l82 = reg_231;
                         let l130 = reg_229;
                         events::emit_log_bytes(C10);
-                        /* block 346 */;
                         if (l82 && l130 > 0u64) {
                             let reg_242;
                             (reg_241, reg_242, reg_243) = pool::pool_book_params(freeze(l3));
@@ -199,20 +184,15 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
                                 }
                             }
                         };
-                        /* block 408 */;
                         mm_state::record_arb_time(l0, l108);
                         events::emit_log_bytes(C13)
                     } else {
-                        /* block 433 */;
                         if (l139 && l97) {
                             events::emit_log_bytes(C14)
                         }
                     };
-                    let (l131, l21);
-                    /* block 437 */;
-                    l131 = config::target_base_position(l83);
-                    l21 = if (l131 > 0u64) {
-                        /* block 465 */;
+                    let l131 = config::target_base_position(l83);
+                    let l21 = if (l131 > 0u64) {
                         if (l62 >= l131) {
                             l62 - l131 * 10000u64 / l131
                         } else {
@@ -221,39 +201,26 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
                     } else {
                         0u64
                     };
-                    /* block 470 */;
-                    let l93 = l21;
-                    events::emit_execution_detail(mm_state::state_id(freeze(l0)), l112, l13, mm_state::execution_count(freeze(l0)), l108, l8, l8, 0u64, 0u64, l62, l114, l131, l93, false, l9, l10, 0u64, 0u64, l80, false, 0u64, l15);
+                    events::emit_execution_detail(mm_state::state_id(freeze(l0)), l112, l13, mm_state::execution_count(freeze(l0)), l108, l8, l8, 0u64, 0u64, l62, l114, l131, l21, false, l9, l10, 0u64, 0u64, l80, false, 0u64, l15);
                     mm_state::record_order_time(l0, l108);
                     return
                 }
             };
-            let l27;
-            /* block 503 */;
             events::emit_log_bytes(C15);
-            l27 = if (config::is_orderbook_analysis_enabled(l83)) {
+            let l110 = if (config::is_orderbook_analysis_enabled(l83)) {
                 let l127 = orderbook_analyzer::analyze_orderbook(freeze(l3), freeze(l2), config::min_significant_qty(l83), config::l2_tick_count(l83), l7);
-                let l22 = if (orderbook_analyzer::bid_prices(&l127).len() > 0u64) {
+                let l118 = if (orderbook_analyzer::bid_prices(&l127).len() > 0u64) {
                     *(&(orderbook_analyzer::bid_prices(&l127))[0u64])
                 } else {
                     0u64
                 };
-                let (l118, l23);
-                /* block 534 */;
-                l118 = l22;
-                l23 = if (orderbook_analyzer::ask_prices(&l127).len() > 0u64) {
+                let l117 = if (orderbook_analyzer::ask_prices(&l127).len() > 0u64) {
                     *(&(orderbook_analyzer::ask_prices(&l127))[0u64])
                 } else {
                     0u64
                 };
-                let (l117, l24);
-                /* block 551 */;
-                l117 = l23;
-                l24 = l118 > 0u64 && l117 > 0u64 && l117 > l118;
-                /* block 571 */;
-                let l26 = if (l24) {
+                let l26 = if (l118 > 0u64 && l117 > 0u64 && l117 > l118) {
                     let l121 = l118 + l117 / 2u64;
-                    /* block 594 */;
                     if (l121 > 0u64) {
                         l117 - l118 * 10000u64 / l121
                     } else {
@@ -262,69 +229,49 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
                 } else {
                     0u64
                 };
-                /* block 599 */;
                 events::emit_orderbook_analysis(l112, l108, orderbook_analyzer::bid_prices(&l127).len(), orderbook_analyzer::ask_prices(&l127).len(), l118, l117, l26, orderbook_analyzer::own_bid_qty_filtered(&l127), orderbook_analyzer::own_ask_qty_filtered(&l127), orderbook_analyzer::own_orders_count(&l127), orderbook_analyzer::best_bid(&l127), orderbook_analyzer::best_ask(&l127), orderbook_analyzer::spread_bps(&l127), orderbook_analyzer::significant_bid(&l127), orderbook_analyzer::significant_bid_qty(&l127), orderbook_analyzer::significant_ask(&l127), orderbook_analyzer::significant_ask_qty(&l127), orderbook_analyzer::total_bid_depth(&l127), orderbook_analyzer::total_ask_depth(&l127));
                 events::emit_log_bytes(C16);
                 option::some(l127)
             } else {
                 option::none()
             };
-            let (l102, l105, l110, l115, l119, l133, l28, l76);
-            /* block 645 */;
-            l110 = l27;
-            l119 = l8 * 100000u64 - l9 / 100000u64;
-            l115 = l8 * 100000u64 + l10 / 100000u64;
+            let l119 = l8 * 100000u64 - l9 / 100000u64;
+            let l115 = l8 * 100000u64 + l10 / 100000u64;
             let (reg_471, reg_472, reg_473) = pool::pool_book_params(freeze(l3));
-            l105 = reg_473;
-            l102 = reg_472;
-            l133 = reg_471;
+            let l102 = reg_472;
+            let l133 = reg_471;
             let (reg_478, reg_480);
             (reg_478, reg_479, reg_480, reg_481) = pool::get_level2_ticks_from_mid(freeze(l3), 1u64, l7);
-            l76 = reg_480;
+            let l76 = reg_480;
             let l77 = reg_478;
-            l28 = if (&l77.len() > 0u64) {
+            let l64 = if (&l77.len() > 0u64) {
                 *(&(&l77)[0u64])
             } else {
                 0u64
             };
-            let (l29, l64);
-            /* block 691 */;
-            l64 = l28;
-            l29 = if (&l76.len() > 0u64) {
+            let l63 = if (&l76.len() > 0u64) {
                 *(&(&l76)[0u64])
             } else {
                 0u64
             };
-            let (l31, l53, l63, l69, l84, l85);
-            /* block 706 */;
-            l63 = l29;
-            l69 = false;
-            l53 = false;
-            l85 = l119;
-            l84 = l115;
-            l31 = l63 > 0u64 && l119 >= l63;
-            /* block 727 */;
-            if (l31) {
+            let l69 = false;
+            let l53 = false;
+            let l85 = l119;
+            let l84 = l115;
+            if (l63 > 0u64 && l119 >= l63) {
                 l69 = true;
                 l85 = l63 * 100000u64 - l11 / 100000u64;
             };
-            /* block 739 */;
-            let l32 = l64 > 0u64 && l115 <= l64;
-            /* block 750 */;
-            if (l32) {
+            if (l64 > 0u64 && l115 <= l64) {
                 l53 = true;
                 l84 = l64 * 100000u64 + l12 / 100000u64;
             };
-            /* block 762 */;
-            let l33 = l69 || l53;
-            /* block 769 */;
-            if (l33) {
+            if (l69 || l53) {
                 events::emit_crossing_prevented(l112, l108, l69, l53, l119, l115, l85, l84, l64, l63, l11, l12)
             };
-            let (l116, l120, l36, l37);
-            /* block 784 */;
-            l120 = l85;
-            l116 = l84;
+            let (l36, l37);
+            let l120 = l85;
+            let l116 = l84;
             l36 = if (option::is_some(&l110)) {
                 let l128 = option::borrow(&l110);
                 let l113 = config::price_offset_ticks(l83) * l133;
@@ -336,36 +283,29 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
                 } else {
                     l107 - l124
                 };
-                let (l106, l123, l35, l59);
-                /* block 827 */;
                 let l71 = l124 > l107;
                 events::emit_order_placement_decision(l112, l108, true, l8, l8, l107, orderbook_analyzer::significant_bid(l128), orderbook_analyzer::significant_bid_qty(l128), l124, l34 / l133, l71, reg_571);
                 let (reg_612, reg_613) = orderbook_analyzer::find_optimal_price_with_reason(l128, l116, false, l113, config::min_significant_qty(l83));
-                l59 = reg_613;
-                l123 = orders::round_ask_price(reg_612, l133);
-                l106 = orders::round_ask_price(l116, l133);
-                l35 = if (l123 < l106) {
+                let l123 = orders::round_ask_price(reg_612, l133);
+                let l106 = orders::round_ask_price(l116, l133);
+                let l35 = if (l123 < l106) {
                     l106 - l123
                 } else {
                     l123 - l106
                 };
-                /* block 878 */;
-                let l54 = l35;
                 let l55 = l123 < l106;
-                events::emit_order_placement_decision(l112, l108, false, l8, l8, l106, orderbook_analyzer::significant_ask(l128), orderbook_analyzer::significant_ask_qty(l128), l123, l54 / l133, l55, l59);
+                events::emit_order_placement_decision(l112, l108, false, l8, l8, l106, orderbook_analyzer::significant_ask(l128), orderbook_analyzer::significant_ask_qty(l128), l123, l35 / l133, l55, reg_613);
                 l37 = l123;
                 l124
             } else {
                 l37 = orders::round_ask_price(l116, l133);
                 orders::round_bid_price(l120, l133)
             };
-            let (l57, l58, l73, l74);
-            /* block 914 */;
-            l57 = l37;
-            l73 = l36;
-            events::emit_debug_pool_params(l133, l102, l105, l120, l116, l73, l57);
-            l74 = orders::round_to_lot(l16, l102);
-            l58 = orders::round_to_lot(l17, l102);
+            let l57 = l37;
+            let l73 = l36;
+            events::emit_debug_pool_params(l133, l102, reg_473, l120, l116, l73, l57);
+            let l74 = orders::round_to_lot(l16, l102);
+            let l58 = orders::round_to_lot(l17, l102);
             let l109 = l14;
             let l111 = config::enable_deep_payment(l83);
             if (!(l97)) {
@@ -375,30 +315,22 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
                     (reg_697, reg_698) = deep_manager::ensure_deep_balance(freeze(l3), l4, l2, &l136, l134, l60, l83, l7, freeze(l18));
                     events::emit_log_bytes(C17)
                 };
-                /* block 974 */;
-                let l38 = l74 >= config::min_order_size(l83) && l73 >= config::min_price(l83);
-                /* block 987 */;
-                if (l38) {
+                if (l74 >= config::min_order_size(l83) && l73 >= config::min_price(l83)) {
                     let l72 = pool::place_limit_order(l3, l2, &l136, l15, constants::post_only(), constants::cancel_taker(), l73, l74, true, l111, l109, l7, freeze(l18));
                     events::emit_post_only_order(l112, true, l73, l74, order_info::order_id(&l72), l8, l9, l108, l15)
                 };
-                /* block 1016 */;
-                let l39 = l58 >= config::min_order_size(l83) && l57 <= config::max_price(l83);
-                /* block 1029 */;
-                if (l39) {
+                if (l58 >= config::min_order_size(l83) && l57 <= config::max_price(l83)) {
                     let l56 = pool::place_limit_order(l3, l2, &l136, l15, constants::post_only(), constants::cancel_taker(), l57, l58, false, l111, l109, l7, freeze(l18));
                     events::emit_post_only_order(l112, false, l57, l58, order_info::order_id(&l56), l8, l10, l108, l15)
                 }
             } else {
                 events::emit_log_bytes(C18)
             };
-            let (l132, l137, l91, l92);
-            /* block 1068 */;
             events::emit_orders_placed(mm_state::state_id(freeze(l0)), l112, l73, l74, l57, l58, l108);
-            l132 = config::target_base_position(l83);
-            l91 = false;
-            l92 = 0u64;
-            l137 = l80;
+            let l132 = config::target_base_position(l83);
+            let l91 = false;
+            let l92 = 0u64;
+            let l137 = l80;
             if (config::is_hedge_enabled(l83)) {
                 let (reg_797, reg_798) = cetus_hedger::calculate_hedge_amount(l62, l132, config::max_hedge_pct(l83), config::min_hedge_amount(l83));
                 let l98 = reg_798;
@@ -406,19 +338,14 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
                 if (l90 > 0u64) {
                     let l87 = cetus_hedger::apply_cetus_fee(l80, l79, l98);
                     l137 = l87;
-                    let l40 = if (l98) {
+                    let l126 = if (l98) {
                         cetus_hedger::should_hedge_sell(l87, l8, config::min_hedge_profit_bps(l83))
                     } else {
                         cetus_hedger::should_hedge_buy(l87, l8, config::min_hedge_profit_bps(l83))
                     };
-                    let (l126, l42);
-                    /* block 1125 */;
-                    l126 = l40;
                     l92 = cetus_hedger::calculate_hedge_profit_bps(l87, l8, l98);
                     events::emit_hedge_opportunity(mm_state::state_id(freeze(l0)), l112, l8, l80, l87, l90, l98, l126, l92, l108);
-                    l42 = l126 && !(l97);
-                    /* block 1153 */;
-                    if (l42) {
+                    if (l126 && !(l97)) {
                         if (l98) {
                             let l104 = l90 * l87 / 1000000000u64 * 99u64 / 100u64;
                             (reg_857, reg_858) = cetus_hedger::flash_swap_sell_sui(l2, l5, l6, l90, l104, l7, l18);
@@ -431,16 +358,13 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
                             events::emit_log_bytes(C20)
                         }
                     } else {
-                        /* block 1224 */;
                         if (l126 && l97) {
                             events::emit_log_bytes(C21)
                         }
                     }
                 }
             };
-            /* block 1254 */;
             let l45 = if (l132 > 0u64) {
-                /* block 1279 */;
                 if (l62 >= l132) {
                     l62 - l132 * 10000u64 / l132
                 } else {
@@ -449,7 +373,6 @@ public fun execute<T0, T1, T2, T3, T4>(l0: &mut MMState, l1: &MMRegistry, l2: &m
             } else {
                 0u64
             };
-            /* block 1284 */;
             events::emit_execution_detail(mm_state::state_id(freeze(l0)), l112, l13, mm_state::execution_count(freeze(l0)), l108, l8, l8, l73, l57, l62, l114, l132, l45, l62 > l132, l9, l10, l74, l58, l137, l91, l92, l15);
             mm_state::record_order_time(l0, l108)
         }

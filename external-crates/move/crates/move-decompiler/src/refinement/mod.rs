@@ -33,6 +33,7 @@ mod simplify_borrow_deref;
 mod simplify_if;
 mod simplify_zero_compare;
 mod strip_loop_labels;
+mod strip_untargeted_blocks;
 mod swap_continue_break;
 mod swap_continue_break_else;
 mod swap_continue_fallthrough;
@@ -44,6 +45,7 @@ pub use liveness::collect_local_names;
 pub type Refinement = fn(&mut Exp) -> bool;
 
 const REFINEMENTS: &[Refinement] = &[
+    strip_untargeted_blocks::refine,
     extract_dispatch_writer::refine,
     compress_dispatch_cascade::refine,
     inline_dispatch_cascade::refine,

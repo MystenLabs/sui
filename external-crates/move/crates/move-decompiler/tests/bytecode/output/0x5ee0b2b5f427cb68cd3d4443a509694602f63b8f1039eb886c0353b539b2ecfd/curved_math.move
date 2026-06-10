@@ -142,13 +142,10 @@ public fun add_liquidity_computation(l0: &Clock, l1: &mut CurvedPoolConfig, l2: 
     } else {
         *(&l1._D)
     };
-    let l27;
-    /* block 102 */;
-    l27 = curved_math::solve_D(l8, l13as u256, l31);
+    let l27 = curved_math::solve_D(l8, l13as u256, l31);
     if (l21 == 0u256) {
         l18 = curved_math::get_xcp(l27, *(&l1.price_scale), l19as u256);
     };
-    /* block 120 */;
     if (l21 > 0u256) {
         let l11 = math::mul_div_u256(curved_math::fee(l31, *(&l1.mid_fee), *(&l1.out_fee), *(&l1.fee_gamma)as u256), l19as u256, 4u256 * l19as u256 - 1u256);
         let l16 = 0u64;
@@ -161,7 +158,6 @@ public fun add_liquidity_computation(l0: &Clock, l1: &mut CurvedPoolConfig, l2: 
         l18 = math::mul_div_u256(l4, l28, l21) - l4;
         l4 = l4 + l18;
         let l6 = 0u256;
-        /* block 217 */;
         if (l18 > math::pow_10_u256(5u8) && l23 < l19) {
             let l26 = 0u256;
             let l14 = 0u64;
@@ -177,7 +173,6 @@ public fun add_liquidity_computation(l0: &Clock, l1: &mut CurvedPoolConfig, l2: 
             let l9 = l22 - math::mul_div_u256(l18, l24, l4);
             l6 = math::mul_div_u256(l26, C0, l9);
         };
-        /* block 277 */;
         let l25 = *(&l1.last_prices_timestamp);
         let l17 = *(&l1.last_prices);
         curved_math::tweak_price(l1, l8, l13as u256, l31, l23, l6, l27, l4, l25, l20, l17)
@@ -186,42 +181,29 @@ public fun add_liquidity_computation(l0: &Clock, l1: &mut CurvedPoolConfig, l2: 
         *(&mut l1.virtual_price) = C0;
         *(&mut l1.xcp_profit) = C0
     };
-    /* block 311 */;
     assert!(l18 > 0u256, C27);
     return (l18, l12)
 }
 
 public fun assert_new_config_params(l0: u64, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64) {
     if (l0 > 0u64) {
-        /* block 15 */;
         assert!(l0 >= C5 && l0 <= C6, C28)
     };
-    /* block 20 */;
     if (l1 > 0u64) {
-        /* block 35 */;
         assert!(l1 >= C5 && l1 <= C6, C30)
     };
-    /* block 40 */;
     if (l2 > 0u64) {
-        /* block 55 */;
         assert!(l2 >= C11 && l2 <= C12, C31)
     };
-    /* block 60 */;
     if (l4 > 0u64) {
-        /* block 77 */;
         assert!(l4as u256 >= C2 && l4as u256 <= C10, C32)
     };
-    /* block 82 */;
     if (l5 > 0u64) {
-        /* block 99 */;
         assert!(l5as u256 >= C2 && l5as u256 <= C10, C33)
     };
-    /* block 104 */;
     if (l3 > 0u64) {
-        /* block 119 */;
         assert!(l3 >= C8 && l3 <= C9, C29)
-    };
-    /* block 124 */
+    }
 }
 
 public fun calc_geometric_mean(l0: vector<u256>, l1: bool): u256 {
@@ -230,10 +212,8 @@ public fun calc_geometric_mean(l0: vector<u256>, l1: bool): u256 {
     if (l1) {
         l11 = math::sort_u256(l11);
     };
-    let (l4, l7);
-    /* block 10 */;
-    l4 = *(&(&l11)[0u64]);
-    l7 = 0u64;
+    let l4 = *(&(&l11)[0u64]);
+    let l7 = 0u64;
     loop {
         assert!(l7 < 255u64, C14);
         let l3 = l4;
@@ -262,11 +242,9 @@ public fun calc_withdraw_one_coin(l0: &Clock, l1: &mut CurvedPoolConfig, l2: vec
     if (*(&l1.future_A_gamma_time) > l24) {
         l6 = true;
     };
-    let (l17, l20, l27);
-    /* block 20 */;
-    l17 = l2;
-    l27 = 0u256;
-    l20 = 0u64;
+    let l17 = l2;
+    let l27 = 0u256;
+    let l20 = 0u64;
     while (l20 < l23) {
         let l11 = *(&(&l1.price_scale)[l20]);
         *(&mut (&mut l17)[l20]) = math::mul_div_u256(*(&(&l17)[l20]), l11, C0);
@@ -280,21 +258,15 @@ public fun calc_withdraw_one_coin(l0: &Clock, l1: &mut CurvedPoolConfig, l2: vec
     } else {
         *(&l1._D)
     };
-    let (l10, l12, l14, l29, l8);
-    /* block 72 */;
     let l18 = curved_math::fee(l17, *(&l1.mid_fee), *(&l1.out_fee), *(&l1.fee_gamma)as u256);
-    l14 = math::mul_div_u256(l5, l25, l3);
+    let l14 = math::mul_div_u256(l5, l25, l3);
     let l15 = math::mul_div_u256(l14, l18, 2u64 * C7as u256) + 1u256;
-    l29 = l25 - l14 - l15;
+    let l29 = l25 - l14 - l15;
     let l30 = curved_math::newton_y(l13as u256, l19as u256, l17, l29, l4);
-    l12 = math::mul_div_u256(*(&(&l17)[l4]) - l30, C0, l27);
+    let l12 = math::mul_div_u256(*(&(&l17)[l4]) - l30, C0, l27);
     *(&mut (&mut l17)[l4]) = l30;
-    l10 = 0u256;
-    l8 = l7 && l12 > math::pow_10_u256(5u8);
-    /* block 142 */;
-    let l9 = l8 && l5 > math::pow_10_u256(5u8);
-    /* block 152 */;
-    if (l9) {
+    let l10 = 0u256;
+    if (l7 && l12 > math::pow_10_u256(5u8) && l5 > math::pow_10_u256(5u8)) {
         let l28 = 0u256;
         let l21 = 0u64;
         while (l21 < l23) {
@@ -307,7 +279,6 @@ public fun calc_withdraw_one_coin(l0: &Clock, l1: &mut CurvedPoolConfig, l2: vec
         let l16 = l12 - math::mul_div_u256(l14, *(&(&l2)[l4]), l25);
         l10 = math::mul_div_u256(l28, C0, l16);
     };
-    /* block 206 */;
     let l26 = *(&l1.last_prices_timestamp);
     let l22 = *(&l1.last_prices);
     curved_math::tweak_price(l1, l13, l19as u256, l17, l4as u64, l10, l29, l3 - l5, l26, l24, l22);
@@ -330,7 +301,6 @@ public fun compute_ask_amount(l0: &Clock, l1: &mut CurvedPoolConfig, l2: u64, l3
     *(&mut (&mut l17)[l2]) = *(&(&l5)[l2]) + l4;
     l17 = curved_math::xp(l17, *(&l1.price_scale));
     let l14 = *(&(&l5)[l3]);
-    /* block 57 */;
     if (*(&l1.init_A_gamma_time) < l22 && *(&l1.future_A_gamma_time) > l22) {
         let l12 = *(&(&l1.price_scale)[l2]);
         l15 = math::mul_div_u256(l15, l12, C0);
@@ -339,19 +309,14 @@ public fun compute_ask_amount(l0: &Clock, l1: &mut CurvedPoolConfig, l2: u64, l3
         *(&mut l1._D) = curved_math::solve_D(l13, l19as u256, l17);
         *(&mut (&mut l17)[l2]) = l25
     };
-    let (l11, l16, l18, l8);
-    /* block 93 */;
     let l21 = curved_math::newton_y(l13as u256, l19as u256, l17, *(&l1._D)as u256, l3);
-    l16 = *(&mut (&mut l17)[l3]) - l21;
+    let l16 = *(&mut (&mut l17)[l3]) - l21;
     *(&mut (&mut l17)[l3]) = *(&(&l17)[l3]) - l16;
     l16 = math::mul_div_u256(l16 - 1u256, C0, *(&(&l1.price_scale)[l3]));
-    l18 = math::mul_div_u256(curved_math::fee(l17, *(&l1.mid_fee), *(&l1.out_fee), *(&l1.fee_gamma)as u256), l16, C7as u256);
+    let l18 = math::mul_div_u256(curved_math::fee(l17, *(&l1.mid_fee), *(&l1.out_fee), *(&l1.fee_gamma)as u256), l16, C7as u256);
     *(&mut (&mut l17)[l3]) = math::mul_div_u256(l14 - l16 - l18, *(&(&l1.price_scale)[l3]), C0);
-    l11 = 0u256;
-    l8 = l4 > math::pow_10_u256(5u8) && l16 > math::pow_10_u256(5u8);
-    /* block 181 */;
-    if (l8) {
-        /* block 194 */;
+    let l11 = 0u256;
+    if (l4 > math::pow_10_u256(5u8) && l16 > math::pow_10_u256(5u8)) {
         if (l2 != 0u64 && l3 != 0u64) {
             l11 = math::mul_div_u256(l4, *(&(&l1.last_prices)[l2]), l16);
         } else {
@@ -363,7 +328,6 @@ public fun compute_ask_amount(l0: &Clock, l1: &mut CurvedPoolConfig, l2: u64, l3
             }
         }
     };
-    /* block 223 */;
     let l23 = *(&l1.last_prices_timestamp);
     let l20 = *(&l1.last_prices);
     let l10 = *(&l1._D);
@@ -384,7 +348,6 @@ public fun compute_offer_amount(l0: &Clock, l1: &mut CurvedPoolConfig, l2: u64, 
     *(&mut (&mut l17)[l3]) = *(&(&l5)[l3]) - l13;
     l17 = curved_math::xp(l17, *(&l1.price_scale));
     let l22 = *(&(&l5)[l2]);
-    /* block 83 */;
     if (*(&l1.init_A_gamma_time) < l21 && *(&l1.future_A_gamma_time) > l21) {
         let l11 = *(&(&l1.price_scale)[l3]);
         l15 = math::mul_div_u256(l15, l11, C0);
@@ -393,18 +356,13 @@ public fun compute_offer_amount(l0: &Clock, l1: &mut CurvedPoolConfig, l2: u64, 
         *(&mut l1._D) = curved_math::solve_D(l12, l19as u256, l17);
         *(&mut (&mut l17)[l3]) = l26
     };
-    let (l14, l16, l24, l8);
-    /* block 119 */;
-    l16 = curved_math::newton_y(l12as u256, l19as u256, l17, *(&l1._D)as u256, l2) - *(&mut (&mut l17)[l2]);
+    let l16 = curved_math::newton_y(l12as u256, l19as u256, l17, *(&l1._D)as u256, l2) - *(&mut (&mut l17)[l2]);
     *(&mut (&mut l17)[l2]) = *(&(&l17)[l2]) + l16;
     l16 = math::mul_div_u256(l16 + 1u256, C0, *(&(&l1.price_scale)[l2]));
     *(&mut (&mut l17)[l2]) = math::mul_div_u256(l22 + l16, *(&(&l1.price_scale)[l2]), C0);
-    l14 = l13 - l4;
-    l24 = 0u256;
-    l8 = l13 > math::pow_10_u256(5u8) && l16 > math::pow_10_u256(5u8);
-    /* block 190 */;
-    if (l8) {
-        /* block 203 */;
+    let l14 = l13 - l4;
+    let l24 = 0u256;
+    if (l13 > math::pow_10_u256(5u8) && l16 > math::pow_10_u256(5u8)) {
         if (l2 != 0u64 && l3 != 0u64) {
             l24 = math::mul_div_u256(l13, *(&(&l1.last_prices)[l3]), l16);
         } else {
@@ -416,7 +374,6 @@ public fun compute_offer_amount(l0: &Clock, l1: &mut CurvedPoolConfig, l2: u64, 
             }
         }
     };
-    /* block 232 */;
     let l23 = *(&l1.last_prices_timestamp);
     let l20 = *(&l1.last_prices);
     let l10 = *(&l1._D);
@@ -438,8 +395,7 @@ fun ema_recorder(l0: &mut CurvedPoolConfig, l1: u256, l2: u256, l3: vector<u256>
         };
         *(&mut l0.oracle_prices) = l8;
         *(&mut l0.last_prices_timestamp) = l2as u64
-    };
-    /* block 67 */
+    }
 }
 
 public fun fee(l0: vector<u256>, l1: u64, l2: u64, l3: u256): u256 {
@@ -456,7 +412,6 @@ public fun get_cur_A_gamma(l0: &Clock, l1: &CurvedPoolConfig): ( u256, u64) {
     let l15 = *(&l1.next_amp);
     let l2 = *(&l1.init_A_gamma_time) < l16 && l16 < l18;
     let (l5, l6);
-    /* block 28 */;
     l5 = if (l2) {
         let l17 = *(&l1.init_A_gamma_time);
         let l9 = *(&l1.init_gamma);
@@ -469,23 +424,17 @@ public fun get_cur_A_gamma(l0: &Clock, l1: &CurvedPoolConfig): ( u256, u64) {
         } else {
             l9 - l11
         };
-        let (l14, l4);
-        /* block 76 */;
-        l14 = l3;
         let l7 = math::mul_div(math::max_u64(l15, l12) - math::min_u64(l15, l12), l8, l19);
-        l4 = if (l15 > l12) {
+        l6 = if (l15 > l12) {
             l12 + l7
         } else {
             l12 - l7
         };
-        /* block 102 */;
-        l6 = l4;
-        l14
+        l3
     } else {
         l6 = l15;
         l10
     };
-    /* block 115 */;
     return (l5, l6)
 }
 
@@ -606,42 +555,22 @@ public fun initialize_curved_config(l0: &Clock, l1: vector<u64>, l2: vector<u256
     let l36 = *(&(&l1)[7u64]);
     let l39 = math::pow(l4, l4)as u64 * C1 / 100u64;
     let l37 = math::pow(l4, l4)as u64 * C1 * 1000u64;
-    let l6 = l39 <= l33 && l33 <= l37;
-    /* block 110 */;
-    assert!(l6, C21);
-    let l17 = l35 >= C2 && l35 <= C3;
-    /* block 126 */;
-    assert!(l17, C25);
-    let l24 = l36 >= C8 && l36 <= C9;
-    /* block 142 */;
-    assert!(l24, C29);
-    let l25 = l38 >= C5 && l38 <= C6;
-    /* block 158 */;
-    assert!(l25, C28);
-    let l26 = l40 >= C5 && l40 <= C6;
-    /* block 174 */;
-    assert!(l26, C30);
-    let l27 = l34 >= C11 && l34 <= C12;
-    /* block 190 */;
-    assert!(l27, C31);
-    let l28 = l32 >= C2 && l32 <= C10;
-    /* block 206 */;
-    assert!(l28, C32);
-    let l29 = l31 >= C2 && l31 <= C10;
-    /* block 222 */;
-    assert!(l29, C33);
+    assert!(l39 <= l33 && l33 <= l37, C21);
+    assert!(l35 >= C2 && l35 <= C3, C25);
+    assert!(l36 >= C8 && l36 <= C9, C29);
+    assert!(l38 >= C5 && l38 <= C6, C28);
+    assert!(l40 >= C5 && l40 <= C6, C30);
+    assert!(l34 >= C11 && l34 <= C12, C31);
+    assert!(l32 >= C2 && l32 <= C10, C32);
+    assert!(l31 >= C2 && l31 <= C10, C33);
     let l19 = l36as u256;
     return CurvedPoolConfig { scaling_factor: l3, init_A_gamma_time: l41, future_A_gamma_time: l41, init_amp: l33, next_amp: l33, init_gamma: l35, next_gamma: l35, mid_fee: l38, out_fee: l40, fee_gamma: l34, ma_half_time: l19, allowed_extra_profit: l32, adjustment_step: l31, price_scale: l2, oracle_prices: l2, last_prices: l2, last_prices_timestamp: l41, _D: 0u256, virtual_price: 0u256, xcp_profit: 0u256, not_adjusted: true }
 }
 
 fun newton_D(l0: u64, l1: u256, l2: vector<u256>, l3: u256): u256 {
     let l19 = &l2.len();
-    let l4 = l0 > curved_math::get_min_amp(l19) - 1u64 && l0 < curved_math::get_max_amp(l19) + 1u64;
-    /* block 20 */;
-    assert!(l4, C18);
-    let l5 = l1 > C2 - 1u256 && l1 < C3 + 1u256;
-    /* block 40 */;
-    assert!(l5, C19);
+    assert!(l0 > curved_math::get_min_amp(l19) - 1u64 && l0 < curved_math::get_max_amp(l19) + 1u64, C18);
+    assert!(l1 > C2 - 1u256 && l1 < C3 + 1u256, C19);
     let l21 = 0u256;
     let l13 = 0u64;
     while (l13 < &l2.len()) {
@@ -696,15 +625,9 @@ fun newton_D(l0: u64, l1: u256, l2: vector<u256>, l3: u256): u256 {
 
 public fun newton_y(l0: u256, l1: u256, l2: vector<u256>, l3: u256, l4: u64): u256 {
     let l25 = &l2.len();
-    let l5 = l0as u64 > curved_math::get_min_amp(l25) - 1u64 && l0as u64 < curved_math::get_max_amp(l25) + 1u64;
-    /* block 22 */;
-    assert!(l5, C18);
-    let l6 = l1 > C2 - 1u256 && l1 < C3 + 1u256;
-    /* block 42 */;
-    assert!(l6, C19);
-    let l7 = l3 > math::pow_10_u256(17u8) - 1u256 && l3 < math::pow_10_u256(15u8) * C0 + 1u256;
-    /* block 66 */;
-    assert!(l7, C19);
+    assert!(l0as u64 > curved_math::get_min_amp(l25) - 1u64 && l0as u64 < curved_math::get_max_amp(l25) + 1u64, C18);
+    assert!(l1 > C2 - 1u256 && l1 < C3 + 1u256, C19);
+    assert!(l3 > math::pow_10_u256(17u8) - 1u256 && l3 < math::pow_10_u256(15u8) * C0 + 1u256, C19);
     let l21 = 0u64;
     let (l11, l13, l17, l22, l26, l27);
     loop {
@@ -729,9 +652,7 @@ public fun newton_y(l0: u256, l1: u256, l2: vector<u256>, l3: u256, l4: u64): u2
             let l16 = *(&(&l26)[l22]);
             l27 = math::mul_div_u256(l27, l3, l16 * l25as u256);
             l13 = l13 + l16;
-            if (l22 == 0u64) {
-                
-            } else {
+            if (l22 != 0u64) {
                 l22 = l22 - 1u64;
                 continue
             }
@@ -818,7 +739,6 @@ public fun reduction_coefficient(l0: vector<u256>, l1: u256): u256 {
     if (l1 > 0u256) {
         l4 = l1 * C0 / l1 + C0 - l4;
     };
-    /* block 63 */;
     return l4
 }
 
@@ -826,9 +746,7 @@ public fun solve_D(l0: u64, l1: u256, l2: vector<u256>): u256 {
     let l6 = &l2.len();
     let l7 = math::sort_u256(l2);
     let l5 = *(&(&l7)[0u64]);
-    let l3 = l5 > math::pow_10_u256(9u8) - 1u256 && l5 < math::pow_10_u256(15u8) * C0 + 1u256;
-    /* block 30 */;
-    assert!(l3, C17);
+    assert!(l5 > math::pow_10_u256(9u8) - 1u256 && l5 < math::pow_10_u256(15u8) * C0 + 1u256, C17);
     let l4 = l6as u256 * curved_math::calc_geometric_mean(l7, false);
     return curved_math::newton_D(l0, l1, l7, l4)
 }
@@ -840,7 +758,6 @@ fun tweak_price(l0: &mut CurvedPoolConfig, l1: u64, l2: u256, l3: vector<u256>, 
     if (l6 == 0u256) {
         l17 = curved_math::solve_D(l1, l2, l3);
     };
-    /* block 23 */;
     if (l5 > 0u256) {
         if (l4 > 0u64) {
             *(&mut (&mut l0.last_prices)[l4]) = l5
@@ -862,12 +779,10 @@ fun tweak_price(l0: &mut CurvedPoolConfig, l1: u64, l2: u256, l3: vector<u256>, 
             l20 = l20 + 1u64;
         }
     };
-    let (l21, l32, l33, l42);
-    /* block 120 */;
-    l33 = *(&l0.xcp_profit);
-    l32 = *(&l0.virtual_price);
-    l42 = vector[];
-    l21 = 0u64;
+    let l33 = *(&l0.xcp_profit);
+    let l32 = *(&l0.virtual_price);
+    let l42 = vector[];
+    let l21 = 0u64;
     while (l21 < l24) {
         let l37 = math::mul_div_u256(l17, C0, *(&(&l0.price_scale)[l21]) * l24as u256);
         (&mut l42).push_back(l37);
@@ -879,20 +794,14 @@ fun tweak_price(l0: &mut CurvedPoolConfig, l1: u64, l2: u256, l3: vector<u256>, 
         let l39 = curved_math::calc_geometric_mean(l42, true);
         l38 = math::mul_div_u256(C0, l39, l7);
         l40 = math::mul_div_u256(l33, l38, l32);
-        /* block 192 */;
         assert!(!(l38 < l32 && *(&l0.future_A_gamma_time) < l9), C34)
     };
-    let (l12, l25);
-    /* block 200 */;
     *(&mut l0.xcp_profit) = l40;
-    l25 = *(&l0.not_adjusted);
-    l12 = !(l25) && l38 * 2u256 - C0 > l40 + 2u256 * *(&l0.allowed_extra_profit);
-    /* block 228 */;
-    if (l12) {
+    let l25 = *(&l0.not_adjusted);
+    if (!(l25) && l38 * 2u256 - C0 > l40 + 2u256 * *(&l0.allowed_extra_profit)) {
         l25 = true;
         *(&mut l0.not_adjusted) = true
     };
-    /* block 236 */;
     if (l25) {
         let l15 = *(&l0.adjustment_step);
         let l29 = 0u256;
@@ -902,7 +811,6 @@ fun tweak_price(l0: &mut CurvedPoolConfig, l1: u64, l2: u256, l3: vector<u256>, 
             l29 = l29 + l35 * l35;
             l22 = l22 + 1u64;
         };
-        /* block 289 */;
         if (l29 > l15 * l15 && l32 > 0u256) {
             let l30 = math::sqrt_int_u256(l29 / C0);
             let l27 = vector[];
@@ -927,9 +835,7 @@ fun tweak_price(l0: &mut CurvedPoolConfig, l1: u64, l2: u256, l3: vector<u256>, 
                 l23 = l23 + 1u64;
             };
             let l28 = math::mul_div_u256(curved_math::calc_geometric_mean(l36, true), C0, l7);
-            let l14 = l28 > C0 && 2u256 * l28 - C0 > l40;
-            /* block 421 */;
-            if (l14) {
+            if (l28 > C0 && 2u256 * l28 - C0 > l40) {
                 *(&mut l0.price_scale) = l27;
                 *(&mut l0._D) = l26;
                 *(&mut l0.virtual_price) = l28;
@@ -938,7 +844,6 @@ fun tweak_price(l0: &mut CurvedPoolConfig, l1: u64, l2: u256, l3: vector<u256>, 
             *(&mut l0.not_adjusted) = false
         }
     };
-    /* block 441 */;
     *(&mut l0._D) = l17;
     *(&mut l0.virtual_price) = l38
 }
@@ -948,19 +853,10 @@ public fun update_A_and_gamma(l0: &mut CurvedPoolConfig, l1: u64, l2: u64, l3: u
     let l14 = math::pow(l13, l13)as u64;
     let l12 = l14 * C1 / 100u64;
     let l11 = l14 * C1 * 1000u64;
-    let l5 = l12 < l2 && l2 < l11;
-    /* block 33 */;
-    assert!(l5, C21);
-    let l6 = l3 >= C2 && l3 <= C3 + 1u256;
-    /* block 53 */;
-    assert!(l6, C25);
-    /* block 77 */;
-    let l9 = l2 >= *(&l0.init_amp) && l2 <= *(&l0.init_amp) * C4 || /* block 99 */ l2 < *(&l0.init_amp) && l2 * C4 >= *(&l0.init_amp);
-    /* block 101 */;
-    assert!(l9, C23);
-    let l10 = l4 > l1 && l4 - l1 > C13;
-    /* block 121 */;
-    assert!(l10, C22);
+    assert!(l12 < l2 && l2 < l11, C21);
+    assert!(l3 >= C2 && l3 <= C3 + 1u256, C25);
+    assert!(l2 >= *(&l0.init_amp) && l2 <= *(&l0.init_amp) * C4 || l2 < *(&l0.init_amp) && l2 * C4 >= *(&l0.init_amp), C23);
+    assert!(l4 > l1 && l4 - l1 > C13, C22);
     *(&mut l0.init_A_gamma_time) = l1;
     *(&mut l0.next_amp) = l2;
     *(&mut l0.next_gamma) = l3;
@@ -969,55 +865,34 @@ public fun update_A_and_gamma(l0: &mut CurvedPoolConfig, l1: u64, l2: u64, l3: u
 
 public fun update_config_fee_params(l0: &mut CurvedPoolConfig, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64, l6: u64) {
     if (l1 > 0u64) {
-        let l7 = l1 >= C5 && l1 <= C6;
-        /* block 15 */;
-        assert!(l7, C28);
+        assert!(l1 >= C5 && l1 <= C6, C28);
         *(&mut l0.mid_fee) = l1
     };
-    /* block 26 */;
     if (l2 > 0u64) {
-        let l8 = l2 >= C5 && l2 <= C6;
-        /* block 41 */;
-        assert!(l8, C30);
+        assert!(l2 >= C5 && l2 <= C6, C30);
         *(&mut l0.out_fee) = l2
     };
-    /* block 52 */;
     assert!(*(&l0.mid_fee) <= *(&l0.out_fee), C20);
     if (l3 > 0u64) {
-        let l9 = l3 >= C11 && l3 <= C12;
-        /* block 80 */;
-        assert!(l9, C31);
+        assert!(l3 >= C11 && l3 <= C12, C31);
         *(&mut l0.fee_gamma) = l3
     };
-    /* block 91 */;
     if (l5 > 0u64) {
-        let l10 = l5as u256 >= C2 && l5as u256 <= C10;
-        /* block 108 */;
-        assert!(l10, C32);
+        assert!(l5as u256 >= C2 && l5as u256 <= C10, C32);
         *(&mut l0.allowed_extra_profit) = l5as u256
     };
-    /* block 120 */;
     if (l6 > 0u64) {
-        let l11 = l6as u256 >= C2 && l6as u256 <= C10;
-        /* block 137 */;
-        assert!(l11, C33);
+        assert!(l6as u256 >= C2 && l6as u256 <= C10, C33);
         *(&mut l0.adjustment_step) = l6as u256
     };
-    /* block 149 */;
     if (l4 > 0u64) {
-        let l12 = l4 >= C8 && l4 <= C9;
-        /* block 164 */;
-        assert!(l12, C29);
+        assert!(l4 >= C8 && l4 <= C9, C29);
         *(&mut l0.ma_half_time) = l4as u256
-    };
-    /* block 179 */
+    }
 }
 
 public fun update_initial_prices(l0: &mut CurvedPoolConfig, l1: vector<u256>) {
-    /* block 15 */;
-    let l3 = *(&l0._D) == 0u256 && *(&l0.virtual_price) == 0u256 && *(&l0.xcp_profit) == 0u256;
-    /* block 26 */;
-    assert!(l3, C17);
+    assert!(*(&l0._D) == 0u256 && *(&l0.virtual_price) == 0u256 && *(&l0.xcp_profit) == 0u256, C17);
     *(&mut l0.price_scale) = l1;
     *(&mut l0.oracle_prices) = l1;
     *(&mut l0.last_prices) = l1

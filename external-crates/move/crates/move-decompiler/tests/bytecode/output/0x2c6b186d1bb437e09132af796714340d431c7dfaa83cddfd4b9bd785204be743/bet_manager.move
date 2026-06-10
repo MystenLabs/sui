@@ -140,81 +140,55 @@ public fun fill_bet_number(l0: &mut Bet, l1: u64) {
 }
 
 public fun get_bet_max_payout(l0: u64, l1: u64, l2: Option<u64>): u64 {
-    let l3 = l1 == C0 || l1 == C1 || l1 == C9 || l1 == C10;
-    /* block 25 */;
-    if (l3) {
+    if (l1 == C0 || l1 == C1 || l1 == C9 || l1 == C10) {
         return bet_manager::mul(l0, 1000000000u64)
     };
-    let l12 = l1 == C14 || l1 == C16;
-    /* block 42 */;
-    if (l12) {
+    if (l1 == C14 || l1 == C16) {
         let l21 = *(option::borrow(&l2));
-        let l13 = l21 == 4u64 || l21 == 10u64;
-        /* block 59 */;
-        if (l13) {
+        if (l21 == 4u64 || l21 == 10u64) {
             return bet_manager::mul(l0, 2000000000u64)
         };
-        let l14 = l21 == 5u64 || l21 == 9u64;
-        /* block 76 */;
-        if (l14) {
+        if (l21 == 5u64 || l21 == 9u64) {
             return bet_manager::mul(l0, 1500000000u64)
         };
         return bet_manager::mul(l0, 1200000000u64)
     };
-    let l15 = l1 == C15 || l1 == C17;
-    /* block 97 */;
-    if (l15) {
+    if (l1 == C15 || l1 == C17) {
         let l22 = *(option::borrow(&l2));
-        let l16 = l22 == 4u64 || l22 == 10u64;
-        /* block 114 */;
-        if (l16) {
+        if (l22 == 4u64 || l22 == 10u64) {
             return bet_manager::mul(l0, 500000000u64)
         };
-        let l17 = l22 == 5u64 || l22 == 9u64;
-        /* block 131 */;
-        if (l17) {
+        if (l22 == 5u64 || l22 == 9u64) {
             return bet_manager::mul(l0, 666666666u64)
         };
         return bet_manager::mul(l0, 833333333u64)
     };
     if (l1 == C3) {
         let l23 = *(option::borrow(&l2));
-        let l18 = l23 == 4u64 || l23 == 10u64;
-        /* block 160 */;
-        if (l18) {
+        if (l23 == 4u64 || l23 == 10u64) {
             return bet_manager::mul(l0, 1800000000u64)
         };
-        let l19 = l23 == 5u64 || l23 == 9u64;
-        /* block 177 */;
-        if (l19) {
+        if (l23 == 5u64 || l23 == 9u64) {
             return bet_manager::mul(l0, 1400000000u64)
         };
         return bet_manager::mul(l0, 1166666666u64)
     };
     if (l1 == C4) {
         let l24 = *(option::borrow(&l2));
-        let l4 = l24 == 4u64 || l24 == 10u64;
-        /* block 206 */;
-        if (l4) {
+        if (l24 == 4u64 || l24 == 10u64) {
             return bet_manager::mul(l0, 2000000000u64)
         };
-        let l5 = l24 == 5u64 || l24 == 9u64;
-        /* block 223 */;
-        if (l5) {
+        if (l24 == 5u64 || l24 == 9u64) {
             return bet_manager::mul(l0, 1500000000u64)
         };
         return bet_manager::mul(l0, 1200000000u64)
     };
     if (l1 == C5) {
         let l25 = *(option::borrow(&l2));
-        let l6 = l25 == 4u64 || l25 == 10u64;
-        /* block 252 */;
-        if (l6) {
+        if (l25 == 4u64 || l25 == 10u64) {
             return bet_manager::mul(l0, 500000000u64)
         };
-        let l7 = l25 == 5u64 || l25 == 9u64;
-        /* block 269 */;
-        if (l7) {
+        if (l25 == 5u64 || l25 == 9u64) {
             return bet_manager::mul(l0, 666666666u64)
         };
         return bet_manager::mul(l0, 833333333u64)
@@ -224,14 +198,10 @@ public fun get_bet_max_payout(l0: u64, l1: u64, l2: Option<u64>): u64 {
     };
     if (l1 == C11) {
         let l26 = *(option::borrow(&l2));
-        let l8 = l26 == 4u64 || l26 == 10u64;
-        /* block 306 */;
-        if (l8) {
+        if (l26 == 4u64 || l26 == 10u64) {
             return bet_manager::mul(l0, 7000000000u64)
         };
-        let l9 = l26 == 6u64 || l26 == 8u64;
-        /* block 323 */;
-        assert!(l9, C0);
+        assert!(l26 == 6u64 || l26 == 8u64, C0);
         return bet_manager::mul(l0, 9000000000u64)
     };
     if (l1 == C12) {
@@ -254,9 +224,7 @@ public fun get_bet_max_payout(l0: u64, l1: u64, l2: Option<u64>): u64 {
     if (l1 == C13) {
         return bet_manager::mul(l0, 4000000000u64)
     };
-    let l10 = l1 == C6 || l1 == C7;
-    /* block 408 */;
-    if (l10) {
+    if (l1 == C6 || l1 == C7) {
         return bet_manager::mul(l0, 30000000000u64)
     };
     if (l1 == C8) {
@@ -265,12 +233,10 @@ public fun get_bet_max_payout(l0: u64, l1: u64, l2: Option<u64>): u64 {
     assert!(l1 == C18, C0);
     if (option::is_some(&l2)) {
         let l27 = *(option::borrow(&l2));
-        /* block 451 */;
         if (l27 == 2u64 || l27 == 3u64 || l27 == 12u64) {
             return bet_manager::mul(l0, 3000000000u64)
         }
     };
-    /* block 457 */;
     return bet_manager::mul(l0, 7000000000u64)
 }
 
@@ -278,24 +244,16 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
     if (l0 == C12) {
         if (option::is_some(&l1)) {
             let l99 = option::borrow(&l1);
-            let l7 = l99 == &l5 && *l99 == 2u64;
-            /* block 24 */;
-            if (l7) {
+            if (l99 == &l5 && *l99 == 2u64) {
                 return (true, false, bet_manager::mul(l2, 30000000000u64))
             };
-            let l18 = l99 == &l5 && *l99 == 3u64;
-            /* block 46 */;
-            if (l18) {
+            if (l99 == &l5 && *l99 == 3u64) {
                 return (true, false, bet_manager::mul(l2, 15000000000u64))
             };
-            let l29 = l99 == &l5 && *l99 == 11u64;
-            /* block 68 */;
-            if (l29) {
+            if (l99 == &l5 && *l99 == 11u64) {
                 return (true, false, bet_manager::mul(l2, 15000000000u64))
             };
-            let l40 = l99 == &l5 && *l99 == 12u64;
-            /* block 92 */;
-            if (l40) {
+            if (l99 == &l5 && *l99 == 12u64) {
                 return (true, false, bet_manager::mul(l2, 30000000000u64))
             };
             return (false, false, 0u64)
@@ -325,19 +283,13 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
             return (false, false, 0u64)
         };
         let l104 = *(option::borrow(&l1));
-        let l84 = l104 == l5 && /* block 207 */ l104 == 4u64 || l104 == 10u64;
-        /* block 212 */;
-        if (l84) {
+        if (l104 == l5 && l104 == 4u64 || l104 == 10u64) {
             return (true, false, bet_manager::mul(l2, 1800000000u64))
         };
-        let l8 = l104 == l5 && /* block 235 */ l104 == 5u64 || l104 == 9u64;
-        /* block 240 */;
-        if (l8) {
+        if (l104 == l5 && l104 == 5u64 || l104 == 9u64) {
             return (true, false, bet_manager::mul(l2, 1400000000u64))
         };
-        let l10 = l104 == l5 && /* block 263 */ l104 == 6u64 || l104 == 8u64;
-        /* block 268 */;
-        if (l10) {
+        if (l104 == l5 && l104 == 6u64 || l104 == 8u64) {
             return (true, false, bet_manager::mul(l2, 1166666666u64))
         };
         return (false, true, 0u64)
@@ -347,19 +299,13 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
             return (false, false, 0u64)
         };
         let l105 = *(option::borrow(&l1));
-        let l12 = l105 == l5 && /* block 313 */ l105 == 4u64 || l105 == 10u64;
-        /* block 318 */;
-        if (l12) {
+        if (l105 == l5 && l105 == 4u64 || l105 == 10u64) {
             return (true, false, bet_manager::mul(l2, 2000000000u64))
         };
-        let l14 = l105 == l5 && /* block 341 */ l105 == 5u64 || l105 == 9u64;
-        /* block 346 */;
-        if (l14) {
+        if (l105 == l5 && l105 == 5u64 || l105 == 9u64) {
             return (true, false, bet_manager::mul(l2, 1500000000u64))
         };
-        let l16 = l105 == l5 && /* block 369 */ l105 == 6u64 || l105 == 8u64;
-        /* block 374 */;
-        if (l16) {
+        if (l105 == l5 && l105 == 6u64 || l105 == 8u64) {
             return (true, false, bet_manager::mul(l2, 1200000000u64))
         };
         return (false, true, 0u64)
@@ -367,35 +313,23 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
     if (l0 == C5) {
         if (l5 == 7u64) {
             let l106 = *(option::borrow(&l1));
-            let l19 = l106 == 4u64 || l106 == 10u64;
-            /* block 411 */;
-            if (l19) {
+            if (l106 == 4u64 || l106 == 10u64) {
                 return (true, false, bet_manager::mul(l2, 500000000u64))
             };
-            let l20 = l106 == 5u64 || l106 == 9u64;
-            /* block 430 */;
-            if (l20) {
+            if (l106 == 5u64 || l106 == 9u64) {
                 return (true, false, bet_manager::mul(l2, 666666666u64))
             };
-            let l21 = l106 == 6u64 || l106 == 8u64;
-            /* block 449 */;
-            assert!(l21, C0);
+            assert!(l106 == 6u64 || l106 == 8u64, C0);
             return (true, false, bet_manager::mul(l2, 833333333u64))
         };
         let l107 = *(option::borrow(&l1));
-        let l22 = l107 == l5 && /* block 478 */ l107 == 4u64 || l107 == 10u64;
-        /* block 483 */;
-        if (l22) {
+        if (l107 == l5 && l107 == 4u64 || l107 == 10u64) {
             return (false, false, 0u64)
         };
-        let l24 = l107 == l5 && /* block 504 */ l107 == 5u64 || l107 == 9u64;
-        /* block 509 */;
-        if (l24) {
+        if (l107 == l5 && l107 == 5u64 || l107 == 9u64) {
             return (false, false, 0u64)
         };
-        let l26 = l107 == l5 && /* block 530 */ l107 == 6u64 || l107 == 8u64;
-        /* block 535 */;
-        if (l26) {
+        if (l107 == l5 && l107 == 6u64 || l107 == 8u64) {
             return (false, false, 0u64)
         };
         return (false, true, 0u64)
@@ -405,7 +339,7 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
             return (false, false, 0u64)
         };
         let l38 = 2u64;
-        let l28 = vec_set::contains(l3, &l38) && {
+        if (vec_set::contains(l3, &l38) && {
             let l36 = 3u64;
             vec_set::contains(l3, &l36) && {
                 let l34 = 4u64;
@@ -417,9 +351,7 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
                     }
                 }
             }
-        };
-        /* block 619 */;
-        if (l28) {
+        }) {
             return (true, false, bet_manager::mul(l2, 30000000000u64))
         };
         return (false, true, 0u64)
@@ -429,7 +361,7 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
             return (false, false, 0u64)
         };
         let l50 = 8u64;
-        let l41 = vec_set::contains(l3, &l50) && {
+        if (vec_set::contains(l3, &l50) && {
             let l48 = 9u64;
             vec_set::contains(l3, &l48) && {
                 let l46 = 10u64;
@@ -441,9 +373,7 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
                     }
                 }
             }
-        };
-        /* block 705 */;
-        if (l41) {
+        }) {
             return (true, false, bet_manager::mul(l2, 30000000000u64))
         };
         return (false, true, 0u64)
@@ -453,7 +383,7 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
             return (false, false, 0u64)
         };
         let l74 = 2u64;
-        let l53 = vec_set::contains(l3, &l74) && {
+        if (vec_set::contains(l3, &l74) && {
             let l71 = 3u64;
             vec_set::contains(l3, &l71) && {
                 let l69 = 4u64;
@@ -480,9 +410,7 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
                     }
                 }
             }
-        };
-        /* block 856 */;
-        if (l53) {
+        }) {
             return (true, false, bet_manager::mul(l2, 150000000000u64))
         };
         return (false, true, 0u64)
@@ -497,29 +425,21 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
             if (reg_575 != reg_576) {
                 return (false, false, 0u64)
             };
-            let l76 = l100 == 4u64 || l100 == 10u64;
-            /* block 905 */;
-            if (l76) {
+            if (l100 == 4u64 || l100 == 10u64) {
                 return (true, false, bet_manager::mul(l2, 7000000000u64))
             };
-            /* block 924 */;
             if (l100 == 6u64 || l100 == 8u64) {
                 return (true, false, bet_manager::mul(l2, 9000000000u64))
             }
         };
-        /* block 936 */;
         return (false, true, 0u64)
     };
     if (l0 == C9) {
         if (option::is_none(&l1)) {
-            let l78 = l5 == 7u64 || l5 == 11u64;
-            /* block 958 */;
-            if (l78) {
+            if (l5 == 7u64 || l5 == 11u64) {
                 return (true, false, bet_manager::mul(l2, 1000000000u64))
             };
-            let l79 = l5 == 2u64 || l5 == 3u64 || l5 == 12u64;
-            /* block 984 */;
-            if (l79) {
+            if (l5 == 2u64 || l5 == 3u64 || l5 == 12u64) {
                 return (false, false, 0u64)
             };
             return (false, true, 0u64)
@@ -540,28 +460,20 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
         if (l98 != l5) {
             return (false, true, 0u64)
         };
-        let l80 = l98 == 4u64 || l98 == 10u64;
-        /* block 1053 */;
-        if (l80) {
+        if (l98 == 4u64 || l98 == 10u64) {
             return (true, false, bet_manager::mul(l2, 2000000000u64))
         };
-        let l81 = l98 == 5u64 || l98 == 9u64;
-        /* block 1072 */;
-        if (l81) {
+        if (l98 == 5u64 || l98 == 9u64) {
             return (true, false, bet_manager::mul(l2, 1500000000u64))
         };
         return (true, false, bet_manager::mul(l2, 1200000000u64))
     };
     if (l0 == C10) {
         if (option::is_none(&l1)) {
-            let l82 = l5 == 7u64 || l5 == 11u64;
-            /* block 1104 */;
-            if (l82) {
+            if (l5 == 7u64 || l5 == 11u64) {
                 return (false, false, 0u64)
             };
-            let l83 = l5 == 2u64 || l5 == 3u64;
-            /* block 1121 */;
-            if (l83) {
+            if (l5 == 2u64 || l5 == 3u64) {
                 return (true, false, bet_manager::mul(l2, 1000000000u64))
             };
             if (l5 == 12u64) {
@@ -580,14 +492,10 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
     if (l0 == C17) {
         if (l5 == 7u64) {
             let l101 = *(option::borrow(&l1));
-            let l85 = l101 == 4u64 || l101 == 10u64;
-            /* block 1188 */;
-            if (l85) {
+            if (l101 == 4u64 || l101 == 10u64) {
                 return (true, false, bet_manager::mul(l2, 500000000u64))
             };
-            let l86 = l101 == 5u64 || l101 == 9u64;
-            /* block 1207 */;
-            if (l86) {
+            if (l101 == 5u64 || l101 == 9u64) {
                 return (true, false, bet_manager::mul(l2, 666666666u64))
             };
             return (true, false, bet_manager::mul(l2, 833333333u64))
@@ -601,36 +509,26 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
         if (l5 == 11u64) {
             return (true, false, bet_manager::mul(l2, 7000000000u64))
         };
-        let l87 = l5 == 2u64 || l5 == 3u64 || l5 == 12u64;
-        /* block 1267 */;
-        if (l87) {
+        if (l5 == 2u64 || l5 == 3u64 || l5 == 12u64) {
             return (true, false, bet_manager::mul(l2, 3000000000u64))
         };
         return (false, false, 0u64)
     };
     if (l6 == 0u64) {
         if (l0 == C0) {
-            let l88 = l5 == 7u64 || l5 == 11u64;
-            /* block 1298 */;
-            if (l88) {
+            if (l5 == 7u64 || l5 == 11u64) {
                 return (true, false, bet_manager::mul(l2, 1000000000u64))
             };
-            let l89 = l5 == 2u64 || l5 == 3u64 || l5 == 12u64;
-            /* block 1324 */;
-            if (l89) {
+            if (l5 == 2u64 || l5 == 3u64 || l5 == 12u64) {
                 return (false, false, 0u64)
             };
             return (false, true, 0u64)
         };
         assert!(l0 == C1, C0);
-        let l90 = l5 == 7u64 || l5 == 11u64;
-        /* block 1349 */;
-        if (l90) {
+        if (l5 == 7u64 || l5 == 11u64) {
             return (false, false, 0u64)
         };
-        let l91 = l5 == 2u64 || l5 == 3u64;
-        /* block 1366 */;
-        if (l91) {
+        if (l5 == 2u64 || l5 == 3u64) {
             return (true, false, bet_manager::mul(l2, 1000000000u64))
         };
         if (l5 == 12u64) {
@@ -644,23 +542,17 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
         };
         if (l0 == C15) {
             let l102 = *(option::borrow(&l1));
-            let l92 = l102 == 4u64 || l102 == 10u64;
-            /* block 1421 */;
-            if (l92) {
+            if (l102 == 4u64 || l102 == 10u64) {
                 return (true, false, bet_manager::mul(l2, 500000000u64))
             };
-            let l93 = l102 == 5u64 || l102 == 9u64;
-            /* block 1440 */;
-            if (l93) {
+            if (l102 == 5u64 || l102 == 9u64) {
                 return (true, false, bet_manager::mul(l2, 666666666u64))
             };
             return (true, false, bet_manager::mul(l2, 833333333u64))
         };
         return (false, false, 0u64)
     };
-    let l94 = l0 == C1 || l0 == C15;
-    /* block 1469 */;
-    if (l94) {
+    if (l0 == C1 || l0 == C15) {
         if (l5 == l6) {
             return (false, false, 0u64)
         };
@@ -671,24 +563,18 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
             return (true, false, bet_manager::mul(l2, 1000000000u64))
         }
     };
-    /* block 1497 */;
     if (l0 == C14) {
         if (l5 == l6) {
             let l103 = *(option::borrow(&l1));
-            let l96 = l103 == 4u64 || l103 == 10u64;
-            /* block 1520 */;
-            if (l96) {
+            if (l103 == 4u64 || l103 == 10u64) {
                 return (true, false, bet_manager::mul(l2, 2000000000u64))
             };
-            let l97 = l103 == 5u64 || l103 == 9u64;
-            /* block 1539 */;
-            if (l97) {
+            if (l103 == 5u64 || l103 == 9u64) {
                 return (true, false, bet_manager::mul(l2, 1500000000u64))
             };
             return (true, false, bet_manager::mul(l2, 1200000000u64))
         }
     };
-    /* block 1553 */;
     return (false, true, 0u64)
 }
 
@@ -697,18 +583,12 @@ public fun hard_ways_bet(): u64 {
 }
 
 public fun is_valid_bet(l0: u64, l1: u64, l2: Option<u64>, l3: u64, l4: vector<u64>, l5: &vector<Bet>) {
-    let l6 = l0 < 19u64 && l0 >= 0u64;
-    /* block 11 */;
-    assert!(l6, C0);
-    /* block 29 */;
+    assert!(l0 < 19u64 && l0 >= 0u64, C0);
     if (l0 == C0 || l0 == C1) {
         assert!(l3 == 0u64, C0)
     };
-    /* block 40 */;
     if (l0 == C14) {
-        let l11 = l3 == *(option::borrow(&l2)) && l3 != 0u64;
-        /* block 57 */;
-        assert!(l11, C0);
+        assert!(l3 == *(option::borrow(&l2)) && l3 != 0u64, C0);
         let l26 = 0u64;
         let l25 = false;
         while (l26 < l5.len()) {
@@ -721,11 +601,8 @@ public fun is_valid_bet(l0: u64, l1: u64, l2: Option<u64>, l3: u64, l4: vector<u
         };
         assert!(l25, C0)
     };
-    /* block 113 */;
     if (l0 == C15) {
-        let l12 = l3 == *(option::borrow(&l2)) && l3 != 0u64;
-        /* block 130 */;
-        assert!(l12, C0);
+        assert!(l3 == *(option::borrow(&l2)) && l3 != 0u64, C0);
         let l27 = 0u64;
         let l24 = false;
         while (l27 < l5.len()) {
@@ -738,110 +615,78 @@ public fun is_valid_bet(l0: u64, l1: u64, l2: Option<u64>, l3: u64, l4: vector<u
         };
         assert!(l24, C0)
     };
-    /* block 186 */;
-    let l13 = l0 == C9 || l0 == C10;
-    /* block 197 */;
-    if (l13) {
+    if (l0 == C9 || l0 == C10) {
         assert!(option::is_none(&l2), C0);
         assert!(l3 != 0u64, C0)
     };
-    /* block 216 */;
     if (l0 == C16) {
         let l28 = 0u64;
         let l22 = false;
-        loop {
-            if (l28 >= l5.len()) {
-                
-            } else {
-                let l20 = &l5[l28];
-                if (*(&l20.bet_type) == C9) {
-                    if (option::is_some(&l20.bet_number)) {
-                        if (*(option::borrow(&l20.bet_number)) == *(option::borrow(&l2))) {
-                            assert!(l1 <= *(&l20.bet_size) * 5u64, C0);
-                            l22 = true;
-                        }
+        while (l28 < l5.len()) {
+            let l20 = &l5[l28];
+            if (*(&l20.bet_type) == C9) {
+                if (option::is_some(&l20.bet_number)) {
+                    if (*(option::borrow(&l20.bet_number)) == *(option::borrow(&l2))) {
+                        assert!(l1 <= *(&l20.bet_size) * 5u64, C0);
+                        l22 = true;
                     }
-                };
-                l28 = l28 + 1u64;
-                continue
+                }
             };
-            break
+            l28 = l28 + 1u64;
         };
         assert!(l22, C0)
     };
-    /* block 289 */;
     if (l0 == C17) {
         let l29 = 0u64;
         let l23 = false;
-        loop {
-            if (l29 >= l5.len()) {
-                
-            } else {
-                let l21 = &l5[l29];
-                if (*(&l21.bet_type) == C10) {
-                    if (option::is_some(&l21.bet_number)) {
-                        if (*(option::borrow(&l21.bet_number)) == *(option::borrow(&l2))) {
-                            assert!(l1 <= *(&l21.bet_size) * 5u64, C0);
-                            l23 = true;
-                        }
+        while (l29 < l5.len()) {
+            let l21 = &l5[l29];
+            if (*(&l21.bet_type) == C10) {
+                if (option::is_some(&l21.bet_number)) {
+                    if (*(option::borrow(&l21.bet_number)) == *(option::borrow(&l2))) {
+                        assert!(l1 <= *(&l21.bet_size) * 5u64, C0);
+                        l23 = true;
                     }
-                };
-                l29 = l29 + 1u64;
-                continue
+                }
             };
-            break
+            l29 = l29 + 1u64;
         };
         assert!(l23, C0)
     };
-    /* block 364 */;
     if (l0 == C3) {
         assert!(option::is_some(&l2), C1);
         assert!(vector::contains(&C19, option::borrow(&l2)), C1)
     };
-    /* block 384 */;
     if (l0 == C5) {
         assert!(option::is_some(&l2), C1);
         assert!(vector::contains(&C19, option::borrow(&l2)), C1)
     };
-    /* block 404 */;
     if (l0 == C4) {
         assert!(option::is_some(&l2), C1);
         assert!(vector::contains(&C19, option::borrow(&l2)), C1)
     };
-    /* block 424 */;
     if (l0 == C11) {
         assert!(option::is_some(&l2), C1);
         assert!(vector::contains(&C20, option::borrow(&l2)), C1)
     };
-    /* block 444 */;
     if (l0 == C12) {
         if (option::is_some(&l2)) {
-            /* block 467 */;
             assert!(vector::contains(&C21, option::borrow(&l2)) || *(option::borrow(&l2)) == 11u64, C1)
         }
     };
-    /* block 472 */;
-    let l9 = l0 == C6 || l0 == C7 || l0 == C8;
-    /* block 490 */;
-    if (l9) {
+    if (l0 == C6 || l0 == C7 || l0 == C8) {
         assert!(&l4.len() == 0u64, C0)
-    };
-    /* block 500 */
+    }
 }
 
 public fun is_valid_remove(l0: u64, l1: Option<u64>, l2: u64, l3: u8, l4: vector<u64>, l5: &vector<Bet>) {
     assert!(l3 != 1u8, C2);
-    /* block 18 */;
     if (l0 == C0 || l0 == C1) {
         assert!(l2 == 0u64, C2)
     };
-    /* block 27 */;
-    let l7 = l0 == C9 || l0 == C10;
-    /* block 38 */;
-    if (l7) {
+    if (l0 == C9 || l0 == C10) {
         assert!(option::is_none(&l1), C2)
-    };
-    /* block 46 */
+    }
 }
 
 public fun lay_bet(): u64 {

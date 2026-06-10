@@ -30,38 +30,32 @@ const C4: u64 = 3u64;
 public fun add(l0: &mut BinTree, l1: u32): bool {
     assert!(l1 >> 24u8 == 0u32, C2);
     let l5 = l1 >> 8u8as u256;
-    let l2 = if (vec_map::contains(&l0.level2, &l5)) {
+    let l6 = if (vec_map::contains(&l0.level2, &l5)) {
         *(vec_map::get(&l0.level2, &l5))
     } else {
         0u256
     };
-    /* block 30 */;
-    let l6 = l2;
     let l8 = l6 | 1u256 << l1 & C1as u32as u8;
     if (l6 != l8) {
         if (vec_map::contains(&l0.level2, &l5)) {
             (reg_41, reg_42) = vec_map::remove(&mut l0.level2, &l5);
         };
-        /* block 57 */;
         vec_map::insert(&mut l0.level2, l5, l8);
         if (l6 == 0u256) {
             let l4 = l5 >> 8u8;
-            let l3 = if (vec_map::contains(&l0.level1, &l4)) {
+            let l7 = if (vec_map::contains(&l0.level1, &l4)) {
                 let reg_61;
                 (reg_60, reg_61) = vec_map::remove(&mut l0.level1, &l4);
                 reg_61
             } else {
                 0u256
             };
-            /* block 86 */;
-            let l7 = l3;
             let l9 = l7 | 1u256 << l5 & C1as u256as u8;
             vec_map::insert(&mut l0.level1, l4, l9);
             if (l7 == 0u256) {
                 *(&mut l0.level0) = *(&l0.level0) | 1u256 << l4 & 255u256as u8
             }
         };
-        /* block 126 */;
         return true
     };
     return false
@@ -101,9 +95,7 @@ public fun find_first_left(l0: &BinTree, l1: u32): ( u32, bool) {
             return (l13 << 8u8 | reg_31as u256as u32, true)
         }
     };
-    let l11;
-    /* block 58 */;
-    l11 = l13 >> 8u8;
+    let l11 = l13 >> 8u8;
     let l3 = l13 & C1as u256as u8;
     if (l3 < C1) {
         assert!(vec_map::contains(&l0.level1, &l11), C3);
@@ -117,7 +109,6 @@ public fun find_first_left(l0: &BinTree, l1: u32): ( u32, bool) {
             return (l14 << 8u8 | l16as u256as u32, true)
         }
     };
-    /* block 127 */;
     let l4 = l11 & C1as u256as u8;
     if (l4 < C1) {
         let (reg_108, reg_109) = almm_bin_tree::closest_bit_left(*(&l0.level0), l4);
@@ -135,7 +126,6 @@ public fun find_first_left(l0: &BinTree, l1: u32): ( u32, bool) {
             return (l15 << 8u8 | l18as u256as u32, true)
         }
     };
-    /* block 206 */;
     return (0u32, false)
 }
 
@@ -150,9 +140,7 @@ public fun find_first_right(l0: &BinTree, l1: u32): ( u32, bool) {
             return (l13 << 8u8 | reg_31as u256as u32, true)
         }
     };
-    let l11;
-    /* block 58 */;
-    l11 = l13 >> 8u8;
+    let l11 = l13 >> 8u8;
     let l3 = l13 & C1as u256as u8;
     if (l3 > 0u8) {
         let (reg_60, reg_61) = almm_bin_tree::closest_bit_right(*(vec_map::get(&l0.level1, &l11)), l3);
@@ -165,7 +153,6 @@ public fun find_first_right(l0: &BinTree, l1: u32): ( u32, bool) {
             return (l14 << 8u8 | l16as u256as u32, true)
         }
     };
-    /* block 117 */;
     let l4 = l11 & C1as u256as u8;
     if (l4 > 0u8) {
         let (reg_102, reg_103) = almm_bin_tree::closest_bit_right(*(&l0.level0), l4);
@@ -183,20 +170,17 @@ public fun find_first_right(l0: &BinTree, l1: u32): ( u32, bool) {
             return (l15 << 8u8 | l18as u256as u32, true)
         }
     };
-    /* block 196 */;
     return (0u32, false)
 }
 
 public fun remove(l0: &mut BinTree, l1: u32): bool {
     assert!(l1 >> 24u8 == 0u32, C2);
     let l4 = l1 >> 8u8as u256;
-    let l2 = if (vec_map::contains(&l0.level2, &l4)) {
+    let l5 = if (vec_map::contains(&l0.level2, &l4)) {
         *(vec_map::get(&l0.level2, &l4))
     } else {
         0u256
     };
-    /* block 30 */;
-    let l5 = l2;
     let l7 = l5 & C0 - 1u256 << l1 & 255u32as u8;
     if (l7 != l5) {
         (reg_38, reg_39) = vec_map::remove(&mut l0.level2, &l4);
@@ -211,7 +195,6 @@ public fun remove(l0: &mut BinTree, l1: u32): bool {
                 *(&mut l0.level0) = *(&l0.level0) & C0 - 1u256 << l3 & 255u256as u8
             }
         };
-        /* block 113 */;
         return true
     };
     return false

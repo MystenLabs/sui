@@ -27,8 +27,7 @@ public fun dtor(l0: Temperature) {
         Celcius { pos0: reg_8 } => {
             let Temperature::Celcius { pos0: reg_10 } = l2
         }
-    };
-    /* block 19 */
+    }
 }
 
 public fun f(): Temperature {
@@ -36,15 +35,12 @@ public fun f(): Temperature {
 }
 
 public fun is_temperature_fahrenheit(l0: &Temperature): bool {
-    let l1;
-    match (l0) {
+    return match (l0) {
         Fahrenheit { pos0: reg_3 } => {
-            l1 = true;
+            true
         },
         Celcius => {
-            l1 = false;
+            false
         }
-    };
-    /* block 14 */;
-    return l1
+    }
 }

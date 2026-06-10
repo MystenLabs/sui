@@ -226,7 +226,6 @@ public fun buy_nft_with_request<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Stor
             object::delete(reg_100 : 0x2::object::UID)
         }
     };
-    /* block 168 */;
     let (reg_115, reg_116) = kiosk::purchase_with_cap(l3, reg_17 : 0x2::kiosk::PurchaseCap<T0>, coin::zero(l6));
     object::delete(reg_13 : 0x2::object::UID);
     event::emit(NftBoughtOut { listing_id: l2, seller: l24, buyer: tx_context::sender(freeze(l6)), amount: l10, nft_id: reg_16 : 0x2::object::ID, coin_type: l11 });
@@ -253,7 +252,6 @@ public fun cancel_listing<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1:
             object::delete(reg_72 : 0x2::object::UID)
         }
     };
-    /* block 129 */;
     kiosk::return_purchase_cap(l2, reg_16 : 0x2::kiosk::PurchaseCap<T0>);
     object::delete(reg_12 : 0x2::object::UID);
     event::emit(ListingCancelled { listing_id: l1, seller: l14, nft_id: reg_15 : 0x2::object::ID, coin_type: l8 })
@@ -362,8 +360,7 @@ public entry fun emergency_reset_accepted_bid<T0: key + store>(l0: &mut Kiosk_Bi
         transfer::public_transfer(l8, l4);
         object::delete(reg_17 : 0x2::object::UID);
         event::emit(BidClaimed { listing_id: reg_18 : 0x2::object::ID, bidder: l4, nft_id: l9, timestamp: tx_context::epoch(freeze(l3)) })
-    };
-    /* block 52 */
+    }
 }
 
 public entry fun emergency_reset_listing<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: &AuctionHouse, l2: ID, l3: &mut TxContext) {
@@ -378,8 +375,7 @@ public entry fun emergency_reset_listing<T0: key + store>(l0: &mut Kiosk_Bidding
         event::emit(PurchaseCapOrphaned { nft_id: l8, kiosk_id: l7, timestamp: tx_context::epoch(freeze(l3)) });
         object::delete(reg_17 : 0x2::object::UID);
         event::emit(ListingCancelled { listing_id: l2, seller: reg_18 : address, nft_id: l8, coin_type: reg_29 : 0x1::type_name::TypeName })
-    };
-    /* block 72 */
+    }
 }
 
 public fun get_buyout_price<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): u64 {
@@ -456,14 +452,12 @@ public fun place_bid<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: ID, 
     } else {
         *(&l14.highest_bid) + *(&l14.highest_bid) * C2as u64 / 10000u64
     };
-    /* block 112 */;
     assert!(l7 >= l4, C5);
     let l18 = option::none();
     let l15 = dynamic_object_field::borrow_mut(&mut l0.id, l1);
     if (option::is_some(&l15.highest_bidder)) {
         l18 = option::some(*(option::borrow(&l15.highest_bidder)));
     };
-    /* block 146 */;
     *(&mut l15.highest_bid) = l7;
     *(&mut l15.highest_bidder) = option::some(l10);
     if (option::is_some(&l18)) {
@@ -475,7 +469,6 @@ public fun place_bid<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: ID, 
             object::delete(reg_118 : 0x2::object::UID)
         }
     };
-    /* block 186 */;
     let l6 = Bid { id: object::new(l3), bidder: l10, amount: coin::into_balance(l2), timestamp: l12 };
     let l9 = kiosk_bidding_house_dynamic_coins::create_bid_key(l1, l10);
     dynamic_object_field::add(&mut l0.id, l9, l6);

@@ -27,8 +27,7 @@ public fun destroy_action(l0: Action) {
         ChangeSpeed { pos0: reg_12 } => {
             let Action::ChangeSpeed { pos0: reg_14 } = l2
         }
-    };
-    /* block 26 */
+    }
 }
 
 public fun increase_speed(l0: &mut Action, l1: u64) {
@@ -42,8 +41,7 @@ public fun increase_speed(l0: &mut Action, l1: u64) {
         },
         ChangeSpeed { pos0: reg_13 } => {
             let Action::ChangeSpeed { pos0: reg_15 } = &mut l3;
-            *reg_15 : &mut u64 = l1;
-            return
+            *reg_15 : &mut u64 = l1
         }
     }
 }
@@ -64,6 +62,5 @@ public fun speed(l0: &Action): u64 {
             l1 = *reg_16 : &u64;
         }
     };
-    /* block 29 */;
     return l1
 }

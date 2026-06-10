@@ -81,7 +81,6 @@ fun append_format_piece(l0: &mut vector<u8>, l1: &vector<u8>, l2: u64, l3: &vect
                 l10 = l10 + 1u64;
             }
         };
-        /* block 57 */;
         if (&l12.len() > 0u64) {
             if (metadata::has_chunk(l3, metadata::key(&l12))) {
                 let l5 = x2_format::meta_chunk_to_string(l3, metadata::key(&l12), &l13);
@@ -92,7 +91,6 @@ fun append_format_piece(l0: &mut vector<u8>, l1: &vector<u8>, l2: u64, l3: &vect
             return false
         }
     };
-    /* block 87 */;
     let l8 = metadata::get_chunks_ids(l3);
     if (l2 < &l8.len()) {
         let l7 = *(&(&l8)[l2]);
@@ -164,7 +162,7 @@ public fun format_string(l0: &x1_String, l1: &vector<u8>): x1_String {
 }
 
 public fun is_printable_char(l0: u8): bool {
-    /* block 20 */ return l0 == 10u8 || /* block 18 */ l0 >= 32u8 && l0 < 126u8
+    return l0 == 10u8 || l0 >= 32u8 && l0 < 126u8
 }
 
 public fun looks_like_a_string(l0: &vector<u8>, l1: u32): bool {
@@ -198,25 +196,15 @@ public fun meta_chunk_to_string(l0: &vector<u8>, l1: u32, l2: &vector<u8>): vect
             if (metadata::has_chunk_of_type(l0, l1)) {
                 C2
             } else {
-                /* block 48 */;
-                let l6 = metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1);
-                /* block 57 */;
-                let l7 = l6 || metadata::has_chunk_of_type(l0, l1);
-                /* block 66 */;
-                if (l7) {
+                if (metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1)) {
                     C8
                 } else {
-                    /* block 82 */;
-                    let l9 = metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1);
-                    /* block 91 */;
-                    if (l9) {
+                    if (metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1)) {
                         C6
                     } else {
-                        /* block 107 */;
                         if (metadata::has_chunk_of_type(l0, l1) && x2_format::looks_like_a_string(l0, l1)) {
                             C5
                         } else {
-                            /* block 123 */;
                             if (metadata::has_chunk_of_type(l0, l1) || metadata::has_chunk_of_type(l0, l1)) {
                                 C7
                             } else {
@@ -232,7 +220,6 @@ public fun meta_chunk_to_string(l0: &vector<u8>, l1: u32, l2: &vector<u8>): vect
             l20 = *(&l2[1u64]);
         }
     };
-    /* block 146 */;
     if (l20 == C4) {
         return x2_format::bool_to_string(metadata::get_bool(l0, l1, false))
     };
@@ -339,17 +326,14 @@ public fun vu8_to_hex(l0: &vector<u8>, l1: bool, l2: bool): vector<u8> {
     if (l2) {
         l8 = 55u8;
     };
-    /* block 10 */;
     let l12 = l0.len();
     if (l12 == 0u64) {
         return l11
     };
     let l5 = *(&l0[0u64]);
-    /* block 40 */;
     if (l5 > 0u8 && l5as u64 == l12 - 1u64) {
         l7 = 1u64;
     };
-    /* block 44 */;
     let l10 = !(l1);
     while (l7 < l12) {
         let l4 = *(&l0[l7]);

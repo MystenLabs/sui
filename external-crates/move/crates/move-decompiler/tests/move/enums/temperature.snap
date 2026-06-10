@@ -23,16 +23,13 @@ module temperature {
     }
 
     public fun is_temperature_fahrenheit () {
-        let l1;
-        match(l0: Temperature) {
+        return         match(l0: Temperature) {
             Temperature::Fahrenheit { pos0: reg_3 } => {
-                l1 = true;
-            },
+true            },
             Temperature::Celcius => {
-                l1 = false;
-            },
+false            },
         }
-        return l1
+
     }
 
 }

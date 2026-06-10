@@ -73,9 +73,7 @@ public fun get(l0: &vector<u8>, l1: u32): Option<vector<u8>> {
     let l6 = metadata::get_chunk_offset(l0, l1);
     let l5 = metadata::get_chunk_length_at_offset(l0, l6);
     let l4 = l0.len();
-    let l2 = l5 == 0u32 || l4 < l6 + l5as u64;
-    /* block 25 */;
-    if (l2) {
+    if (l5 == 0u32 || l4 < l6 + l5as u64) {
         return option::none()
     };
     let l8 = vector[];
@@ -183,9 +181,7 @@ public fun get_option_any_vec_u256(l0: &vector<u8>, l1: u32): Option<vector<u256
     let l12 = bcs::peel_vec_length(&mut l3);
     let l9 = bcs::into_remainder_bytes(l3);
     let l4 = &l9.len();
-    let l2 = l12 == 0u64 || l4 == 0u64;
-    /* block 33 */;
-    if (l2) {
+    if (l12 == 0u64 || l4 == 0u64) {
         return option::some(vector[])
     };
     if (l4 % l12 != 0u64) {
@@ -347,9 +343,7 @@ public fun has_chunk(l0: &vector<u8>, l1: u32): bool {
     let l5 = metadata::get_chunk_offset(l0, l1);
     let l4 = metadata::get_chunk_length_at_offset(l0, l5);
     let l3 = l0.len();
-    let l2 = l4 == 0u32 || l3 < l5 + l4as u64;
-    /* block 25 */;
-    if (l2) {
+    if (l4 == 0u32 || l3 < l5 + l4as u64) {
         return false
     };
     return true
@@ -402,18 +396,7 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
                                 return true
                             }
                         } else {
-                            /* block 160 */;
-                            let l7 = l36.len() > 6u64 && *(&l36[0u64]) == 118u8 && *(&l36[1u64]) == 101u8;
-                            /* block 172 */;
-                            let l8 = l7 && *(&l36[2u64]) == 99u8;
-                            /* block 184 */;
-                            let l9 = l8 && *(&l36[3u64]) == 116u8;
-                            /* block 196 */;
-                            let l10 = l9 && *(&l36[4u64]) == 111u8;
-                            /* block 208 */;
-                            let l11 = l10 && *(&l36[5u64]) == 114u8;
-                            /* block 220 */;
-                            if (l11) {
+                            if (l36.len() > 6u64 && *(&l36[0u64]) == 118u8 && *(&l36[1u64]) == 101u8 && *(&l36[2u64]) == 99u8 && *(&l36[3u64]) == 116u8 && *(&l36[4u64]) == 111u8 && *(&l36[5u64]) == 114u8) {
                                 let l43 = 1u64;
                                 let l37 = false;
                                 if (*(&l36[7u64]) == 117u8) {
@@ -458,7 +441,6 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
                                         }
                                     }
                                 };
-                                /* block 334 */;
                                 let l41 = metadata::get_vec_length(l0, l1) * l43;
                                 if (l38as u64 < l41) {
                                     return false
@@ -476,7 +458,6 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
                                         return false
                                     }
                                 };
-                                /* block 377 */;
                                 return true
                             }
                         }
@@ -485,7 +466,6 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
             }
         }
     };
-    /* block 383 */;
     return false
 }
 
@@ -523,11 +503,9 @@ public fun set<T0>(l0: &mut vector<u8>, l1: u32, l2: &T0): bool {
         };
         metadata::clamp(l0, l10, l9as u64)
     };
-    /* block 72 */;
     if (freeze(l0).len() == 0u64) {
         l0.push_back(0u8)
     };
-    /* block 81 */;
     let l6 = bcs::to_bytes(&l1);
     vector::append(l0, l6);
     let l8 = bcs::to_bytes(&l4as u32 + l5as u32);
