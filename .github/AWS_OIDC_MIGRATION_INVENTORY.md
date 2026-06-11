@@ -19,14 +19,14 @@ Keep any new `SCCACHE_ROLE` gate in sync with this exact set.
 
 ## Status
 
-| Workflow             | Call sites | Triggers                                     | Auth today  | Phase |
-| -------------------- | ---------- | -------------------------------------------- | ----------- | ----- |
-| `sccache-warmup.yml` | 2          | schedule, workflow_dispatch                  | **OIDC ✅** | 1 ✅  |
-| `nightly.yml`        | 1          | schedule, workflow_dispatch (disabled)       | **OIDC ✅** | 2 ✅  |
-| `rust.yml`           | 11         | push, pull_request, workflow_dispatch        | static keys | 3/4   |
-| `external.yml`       | 2          | push, pull_request                           | static keys | 3/4   |
-| `bridge.yml`         | 2          | push, pull_request, workflow_dispatch        | static keys | 3/4   |
-| `release.yml`        | 1          | release, workflow_dispatch                   | static keys | 5     |
+| Workflow             | Call sites | Triggers                                     | Auth today                                   | Phase    |
+| -------------------- | ---------- | -------------------------------------------- | -------------------------------------------- | -------- |
+| `sccache-warmup.yml` | 2          | schedule, workflow_dispatch                  | **OIDC ✅**                                  | 1 ✅     |
+| `nightly.yml`        | 1          | schedule, workflow_dispatch (disabled)       | **OIDC ✅**                                  | 2 ✅     |
+| `rust.yml`           | 11         | push, pull_request, workflow_dispatch        | **dual-pass ✅** (OIDC trusted / static PRs) | 3 ✅ → 4 |
+| `external.yml`       | 2          | push, pull_request                           | **dual-pass ✅** (OIDC trusted / static PRs) | 3 ✅ → 4 |
+| `bridge.yml`         | 2          | push, pull_request, workflow_dispatch        | **dual-pass ✅** (PR #26927)                 | 3 ✅ → 4 |
+| `release.yml`        | 1          | release, workflow_dispatch                   | static keys                                  | 5        |
 
 ## How each event/ref classifies
 
