@@ -258,13 +258,14 @@ artifacts to `sui-releases` (Role 2). `configure-aws-credentials` (and therefore
 `setup-sccache`) **overwrites the AWS credential env vars** each time it runs —
 whichever role was configured last wins within a job.
 
-Resolved with a **two-job split**: `release-build` no longer configures AWS
-credentials at all (the existing-archive download uses the bucket's public read
-access; sccache still uses static keys pending Role 1 trust for release-event
-subs), and the `upload-release-archives-to-s3` job — `environment: release`,
-Role 2 — receives the archives as workflow artifacts and performs every
-`sui-releases` write. The two roles never coexist in one job, so there is no
-credential sequencing to manage.
+Resolved with a **two-job split**: `release-build` no longer holds any
+`sui-releases` credentials — its only remaining AWS credentials are the static
+sccache keys `setup-sccache` configures for the cache bucket (pending Role 1
+trust for release-event subs), and the existing-archive download uses the
+bucket's public read access. The `upload-release-archives-to-s3` job —
+`environment: release`, Role 2 — receives the archives as workflow artifacts
+and performs every `sui-releases` write. The two roles never coexist in one
+job, so there is no credential sequencing to manage.
 
 ---
 

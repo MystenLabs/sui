@@ -73,9 +73,11 @@ Note `extensions` push is **not** trusted (branch is 404 → excluded) → local
 `release-build`, prefix `${{ matrix.os }}`. Triggers on `release: created`
 (tag) + `workflow_dispatch`.
 
-**Done — option (b), the job split.** `release-build` no longer configures AWS
-credentials at all: the existing-archive download uses the bucket's public read
-access, and all `sui-releases` writes moved to `upload-release-archives-to-s3`,
+**Done — option (b), the job split.** `release-build` no longer holds any
+`sui-releases` credentials (its only remaining AWS credentials are the static
+sccache keys passed to `setup-sccache`): the existing-archive download uses the
+bucket's public read access, and all `sui-releases` writes moved to
+`upload-release-archives-to-s3`,
 which declares `environment: release` and assumes the `release-s3` role via OIDC
 (roles doc, Role 2). The `release` GitHub Environment exists with a custom
 deployment branch policy (`main` + `devnet-v*`/`testnet-v*`/`mainnet-v*` tags).
