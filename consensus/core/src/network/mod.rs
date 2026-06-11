@@ -254,6 +254,10 @@ pub trait RandomnessSignatureHandler: Send + Sync + 'static {
 /// A single item in the observer block stream, carrying both blocks and auxiliary data.
 pub(crate) struct ObserverStreamItem {
     pub(crate) blocks: Vec<Bytes>,
+    /// Server-side timestamp (ms since epoch) of when each block was accepted into the DAG.
+    /// Parallel to `blocks`: `accepted_timestamps_ms[i]` corresponds to `blocks[i]`.
+    /// A value of 0 means no timestamp is available (e.g. historical catch-up blocks).
+    pub(crate) accepted_timestamps_ms: Vec<u64>,
     pub(crate) auxiliary_data: observer::AuxiliaryData,
 }
 

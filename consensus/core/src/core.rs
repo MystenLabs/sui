@@ -864,10 +864,18 @@ impl Core {
     }
 }
 
+/// A block paired with the timestamp of when it was accepted into the local DAG.
+/// Used by the observer streaming pipeline to let clients measure propagation latency.
+#[derive(Clone, Debug)]
+pub(crate) struct AcceptedBlock {
+    pub(crate) block: VerifiedBlock,
+    pub(crate) accepted_timestamp_ms: u64,
+}
+
 /// Senders of signals from Core, for outputs and events (ex new block produced).
 pub(crate) struct CoreSignals {
     tx_block_broadcast: broadcast::Sender<ExtendedBlock>,
-    tx_accepted_block_broadcast: broadcast::Sender<VerifiedBlock>,
+    tx_accepted_block_broadcast: broadcast::Sender<AcceptedBlock>,
     new_round_sender: watch::Sender<Round>,
     context: Arc<Context>,
 }
@@ -881,7 +889,7 @@ impl CoreSignals {
             context.parameters.dag_state_cached_rounds as usize,
         );
         let (tx_accepted_block_broadcast, rx_accepted_block_broadcast) =
-            broadcast::channel::<VerifiedBlock>(
+            broadcast::channel::<AcceptedBlock>(
                 2 * context.parameters.dag_state_cached_rounds as usize * context.committee.size(),
             );
         let (new_round_sender, new_round_receiver) = watch::channel(0);
@@ -930,8 +938,12 @@ impl CoreSignals {
     /// own proposals.
     /// Silently drops the send when there are no active observer subscribers.
     pub(crate) fn new_accepted_block(&self, block: VerifiedBlock) {
+        let accepted_block = AcceptedBlock {
+            accepted_timestamp_ms: self.context.clock.timestamp_utc_ms(),
+            block,
+        };
         // Ignoring send errors here: it is normal for there to be no observers subscribed.
-        let _ = self.tx_accepted_block_broadcast.send(block);
+        let _ = self.tx_accepted_block_broadcast.send(accepted_block);
     }
 
     /// Sends a signal that threshold clock has advanced to new round. The `round_number` is the round at which the
@@ -945,7 +957,7 @@ impl CoreSignals {
 /// Intentionally un-clonable. Comonents should only subscribe to channels they need.
 pub(crate) struct CoreSignalsReceivers {
     rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
-    rx_accepted_block_broadcast: broadcast::Receiver<VerifiedBlock>,
+    rx_accepted_block_broadcast: broadcast::Receiver<AcceptedBlock>,
     new_round_receiver: watch::Receiver<Round>,
 }
 
@@ -954,7 +966,7 @@ impl CoreSignalsReceivers {
         self.rx_block_broadcast.resubscribe()
     }
 
-    pub(crate) fn accepted_block_broadcast_receiver(&self) -> broadcast::Receiver<VerifiedBlock> {
+    pub(crate) fn accepted_block_broadcast_receiver(&self) -> broadcast::Receiver<AcceptedBlock> {
         self.rx_accepted_block_broadcast.resubscribe()
     }
 

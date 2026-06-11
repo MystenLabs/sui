@@ -149,6 +149,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) subscribed_blocks: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
     pub(crate) observer_stream_quorum_delay_timeouts: IntCounter,
+    pub(crate) observer_block_propagation_latency_ms: Histogram,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
     pub(crate) last_committed_authority_round: IntGaugeVec,
@@ -522,6 +523,12 @@ impl NodeMetrics {
             observer_stream_quorum_delay_timeouts: register_int_counter_with_registry!(
                 "observer_stream_quorum_delay_timeouts",
                 "Number of times the quorum delay timed out and released blocks without reaching quorum",
+                registry,
+            ).unwrap(),
+            observer_block_propagation_latency_ms: register_histogram_with_registry!(
+                "observer_block_propagation_latency_ms",
+                "Latency in ms from server-side block acceptance to client-side receipt",
+                vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10000.0],
                 registry,
             ).unwrap(),
             verified_blocks: register_int_counter_vec_with_registry!(

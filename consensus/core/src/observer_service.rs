@@ -26,6 +26,7 @@ use crate::{
     commit::{CommitRange, TrustedCommit},
     commit_vote_monitor::{CommitVoteMonitor, is_commit_lagging},
     context::Context,
+    core::AcceptedBlock,
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
@@ -51,7 +52,7 @@ struct QuorumDelayedStream<S> {
     inner: S,
     context: Arc<Context>,
     pending: BTreeMap<Round, RoundPendingState>,
-    ready: VecDeque<Vec<VerifiedBlock>>,
+    ready: VecDeque<Vec<AcceptedBlock>>,
     /// Fires when pending blocks have been waiting too long without reaching quorum.
     /// Reset to `None` when the pending map is empty.
     timeout: Option<Pin<Box<tokio::time::Sleep>>>,
@@ -59,10 +60,10 @@ struct QuorumDelayedStream<S> {
 
 struct RoundPendingState {
     stake_aggregator: StakeAggregator<QuorumThreshold>,
-    blocks: Vec<VerifiedBlock>,
+    blocks: Vec<AcceptedBlock>,
 }
 
-impl<S: futures::Stream<Item = Vec<VerifiedBlock>> + Unpin> QuorumDelayedStream<S> {
+impl<S: futures::Stream<Item = Vec<AcceptedBlock>> + Unpin> QuorumDelayedStream<S> {
     fn new(inner: S, context: Arc<Context>) -> Self {
         Self {
             inner,
@@ -73,9 +74,9 @@ impl<S: futures::Stream<Item = Vec<VerifiedBlock>> + Unpin> QuorumDelayedStream<
         }
     }
 
-    fn buffer_block(&mut self, block: VerifiedBlock) {
-        let round = block.round();
-        let author = block.author();
+    fn buffer_block(&mut self, accepted_block: AcceptedBlock) {
+        let round = accepted_block.block.round();
+        let author = accepted_block.block.author();
 
         // Start the timeout when the first block enters the pending buffer.
         if self.pending.is_empty() {
@@ -90,7 +91,7 @@ impl<S: futures::Stream<Item = Vec<VerifiedBlock>> + Unpin> QuorumDelayedStream<
                 blocks: Vec::new(),
             });
         state.stake_aggregator.add(author, &self.context.committee);
-        state.blocks.push(block);
+        state.blocks.push(accepted_block);
     }
 
     /// Checks all pending rounds for quorum. When any round reaches quorum, releases all
@@ -131,10 +132,10 @@ impl<S: futures::Stream<Item = Vec<VerifiedBlock>> + Unpin> QuorumDelayedStream<
     }
 }
 
-impl<S: futures::Stream<Item = Vec<VerifiedBlock>> + Unpin> futures::Stream
+impl<S: futures::Stream<Item = Vec<AcceptedBlock>> + Unpin> futures::Stream
     for QuorumDelayedStream<S>
 {
-    type Item = Vec<VerifiedBlock>;
+    type Item = Vec<AcceptedBlock>;
 
     fn poll_next(
         self: Pin<&mut Self>,
@@ -194,7 +195,7 @@ pub(crate) struct ObserverService {
     context: Arc<Context>,
     core_dispatcher: Arc<dyn CoreThreadDispatcher>,
     dag_state: Arc<RwLock<DagState>>,
-    rx_accepted_block_broadcast: broadcast::Receiver<VerifiedBlock>,
+    rx_accepted_block_broadcast: broadcast::Receiver<AcceptedBlock>,
     subscription_counter: Arc<SubscriptionCounter>,
     block_verifier: Arc<dyn BlockVerifier>,
     commit_vote_monitor: Arc<CommitVoteMonitor>,
@@ -209,7 +210,7 @@ impl ObserverService {
         context: Arc<Context>,
         core_dispatcher: Arc<dyn CoreThreadDispatcher>,
         dag_state: Arc<RwLock<DagState>>,
-        rx_accepted_block_broadcast: broadcast::Receiver<VerifiedBlock>,
+        rx_accepted_block_broadcast: broadcast::Receiver<AcceptedBlock>,
         block_verifier: Arc<dyn BlockVerifier>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         transaction_vote_tracker: TransactionVoteTracker,
@@ -403,30 +404,38 @@ impl ObserverNetworkService for ObserverService {
             past_blocks
         };
 
+        // Past blocks from DAG cache have no server-side acceptance timestamp.
         let past_stream =
             stream::iter(
                 past_blocks
                     .into_iter()
                     .map(move |block| ObserverStreamItem {
                         blocks: vec![block.serialized().clone()],
+                        accepted_timestamps_ms: vec![0],
                         auxiliary_data: Default::default(),
                     }),
             );
 
         const MAX_BLOCKS_PER_POLL: usize = 20;
-        let raw_live_stream = BroadcastStream::<VerifiedBlock>::new(
+        let raw_live_stream = BroadcastStream::<AcceptedBlock>::new(
             PeerId::Observer(Box::new(peer)),
             self.rx_accepted_block_broadcast.resubscribe(),
             MAX_BLOCKS_PER_POLL,
             self.subscription_counter.clone(),
         );
         let live_block_stream = QuorumDelayedStream::new(raw_live_stream, self.context.clone())
-            .map(|blocks| ObserverStreamItem {
-                blocks: blocks
-                    .into_iter()
-                    .map(|block| block.serialized().clone())
-                    .collect(),
-                auxiliary_data: Default::default(),
+            .map(|accepted_blocks| {
+                let mut blocks = Vec::with_capacity(accepted_blocks.len());
+                let mut timestamps = Vec::with_capacity(accepted_blocks.len());
+                for ab in accepted_blocks {
+                    blocks.push(ab.block.serialized().clone());
+                    timestamps.push(ab.accepted_timestamp_ms);
+                }
+                ObserverStreamItem {
+                    blocks,
+                    accepted_timestamps_ms: timestamps,
+                    auxiliary_data: Default::default(),
+                }
             });
 
         let block_stream = past_stream.chain(live_block_stream);
@@ -440,6 +449,7 @@ impl ObserverNetworkService for ObserverService {
             )
             .map(|sigs| ObserverStreamItem {
                 blocks: vec![],
+                accepted_timestamps_ms: vec![],
                 auxiliary_data: AuxiliaryData {
                     randomness_signatures: sigs,
                 },
@@ -500,6 +510,13 @@ mod tests {
         SynchronizerHandle::new_for_test()
     }
 
+    fn accepted(block: VerifiedBlock) -> AcceptedBlock {
+        AcceptedBlock {
+            accepted_timestamp_ms: 0,
+            block,
+        }
+    }
+
     #[tokio::test]
     async fn test_observer_stream_releases_on_quorum() {
         telemetry_subscribers::init_for_testing();
@@ -509,7 +526,7 @@ mod tests {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let (tx_accepted_block, rx_accepted_block) = broadcast::channel::<VerifiedBlock>(100);
+        let (tx_accepted_block, rx_accepted_block) = broadcast::channel::<AcceptedBlock>(100);
 
         // Create mock dependencies
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
@@ -551,9 +568,9 @@ mod tests {
         let block2 = VerifiedBlock::new_for_test(TestBlock::new(5, 1).build());
         let block3 = VerifiedBlock::new_for_test(TestBlock::new(5, 2).build());
 
-        tx_accepted_block.send(block1.clone()).unwrap();
-        tx_accepted_block.send(block2.clone()).unwrap();
-        tx_accepted_block.send(block3.clone()).unwrap();
+        tx_accepted_block.send(accepted(block1)).unwrap();
+        tx_accepted_block.send(accepted(block2)).unwrap();
+        tx_accepted_block.send(accepted(block3)).unwrap();
 
         // All 3 blocks should be released once quorum is reached.
         let mut received_blocks = Vec::new();
@@ -579,7 +596,7 @@ mod tests {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let (tx_accepted_block, rx_accepted_block) = broadcast::channel::<VerifiedBlock>(100);
+        let (tx_accepted_block, rx_accepted_block) = broadcast::channel::<AcceptedBlock>(100);
 
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let block_verifier = Arc::new(NoopBlockVerifier);
@@ -620,10 +637,10 @@ mod tests {
         let block_r10_b = VerifiedBlock::new_for_test(TestBlock::new(10, 1).build());
         let block_r10_c = VerifiedBlock::new_for_test(TestBlock::new(10, 2).build());
 
-        tx_accepted_block.send(early_block.clone()).unwrap();
-        tx_accepted_block.send(block_r10_a.clone()).unwrap();
-        tx_accepted_block.send(block_r10_b.clone()).unwrap();
-        tx_accepted_block.send(block_r10_c.clone()).unwrap();
+        tx_accepted_block.send(accepted(early_block)).unwrap();
+        tx_accepted_block.send(accepted(block_r10_a)).unwrap();
+        tx_accepted_block.send(accepted(block_r10_b)).unwrap();
+        tx_accepted_block.send(accepted(block_r10_c)).unwrap();
 
         // Should receive 4 blocks total: 1 from round 5 + 3 from round 10.
         // Round 5 should come first (lower round released before higher round).
@@ -650,14 +667,14 @@ mod tests {
         let context = Arc::new(context);
 
         // Use a channel-backed stream to have manual control over block delivery.
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Vec<VerifiedBlock>>();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Vec<AcceptedBlock>>();
         let inner_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
 
         let mut stream = QuorumDelayedStream::new(inner_stream, context.clone());
 
         // Send a single block — not enough for quorum (needs 3 out of 4).
         let block = VerifiedBlock::new_for_test(TestBlock::new(5, 0).build());
-        tx.send(vec![block]).unwrap();
+        tx.send(vec![accepted(block)]).unwrap();
 
         // Poll the stream: it should buffer the block but not yield it.
         // Use a short timeout to confirm the stream returns Pending.
@@ -679,7 +696,7 @@ mod tests {
             .expect("Stream should yield after timeout")
             .expect("Stream should not be closed");
         assert_eq!(item.len(), 1);
-        assert_eq!(item[0].round(), 5);
+        assert_eq!(item[0].block.round(), 5);
 
         // Verify the timeout metric was incremented.
         assert_eq!(
@@ -701,7 +718,7 @@ mod tests {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let (_tx_accepted_block, rx_accepted_block) = broadcast::channel::<VerifiedBlock>(100);
+        let (_tx_accepted_block, rx_accepted_block) = broadcast::channel::<AcceptedBlock>(100);
 
         // Create mock dependencies
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());

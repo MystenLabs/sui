@@ -52,6 +52,9 @@ pub(crate) struct BlockStreamResponse {
     pub(crate) blocks: Vec<Bytes>,
     #[prost(message, optional, tag = "2")]
     pub(crate) auxiliary_data: Option<AuxiliaryData>,
+    /// Server-side acceptance timestamps (ms since epoch), parallel to `blocks`.
+    #[prost(uint64, repeated, tag = "3")]
+    pub(crate) accepted_timestamps_ms: Vec<u64>,
 }
 
 // Observer fetch messages
@@ -279,6 +282,7 @@ impl ObserverNetworkClient for TonicObserverClient {
                     match b {
                         Ok(response) => Some(super::ObserverStreamItem {
                             blocks: response.blocks,
+                            accepted_timestamps_ms: response.accepted_timestamps_ms,
                             auxiliary_data: response.auxiliary_data.unwrap_or_default(),
                         }),
                         Err(e) => {
@@ -438,6 +442,7 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
                 } else {
                     Some(item.auxiliary_data)
                 },
+                accepted_timestamps_ms: item.accepted_timestamps_ms,
             })
         });
 

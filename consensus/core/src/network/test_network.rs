@@ -152,6 +152,7 @@ impl ObserverNetworkService for Mutex<TestService> {
                     .into_iter()
                     .map(|extended_block| ObserverStreamItem {
                         blocks: vec![extended_block.block],
+                        accepted_timestamps_ms: vec![0],
                         auxiliary_data: Default::default(),
                     }),
             );

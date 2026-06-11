@@ -187,6 +187,19 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                             }
                         }
 
+                        // Emit propagation latency for blocks with a server-side timestamp.
+                        let now_ms = context.clock.timestamp_utc_ms();
+                        for &ts in &item.accepted_timestamps_ms {
+                            if ts > 0 {
+                                let latency_ms = now_ms.saturating_sub(ts);
+                                context
+                                    .metrics
+                                    .node_metrics
+                                    .observer_block_propagation_latency_ms
+                                    .observe(latency_ms as f64);
+                            }
+                        }
+
                         for block in item.blocks {
                             // Backpressure: wait if we've hit max parallelism
                             while active_tasks.load(Ordering::Acquire) >= max_parallel_tasks {
@@ -324,6 +337,7 @@ mod tests {
                 Some((
                     ObserverStreamItem {
                         blocks: vec![Bytes::from(vec![val; 8])],
+                        accepted_timestamps_ms: vec![0],
                         auxiliary_data: Default::default(),
                     },
                     val,
