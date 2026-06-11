@@ -181,14 +181,14 @@ fork exclusion must drop that permission, not just the role input.)
 `workflow_dispatch`. Keep this **separate** from the cache role (different
 bucket, narrower trust).
 
-> **Status: PROVISIONED 2026-06-08** as
+> **Status: ACTIVE.** Provisioned 2026-06-08 as
 > **`arn:aws:iam::011083325127:role/sui-releases-rw-github`** (inline policy
 > `sui-releases-rw` = exactly the least-privilege policy below). Trust =
 > `repo:MystenLabs/sui:environment:release` (the environment variant), aud
-> pinned, no wildcard. **Not yet assumable** — Phase 5 must still (1) create the
-> `release` GitHub Environment with branch/tag protection + reviewers, and
-> (2) add `environment: release` to the release job. Until both exist, no run can
-> assume it (safe by construction).
+> pinned, no wildcard. The `release` GitHub Environment exists with a custom
+> deployment branch policy (`main` branch + `devnet-v*`/`testnet-v*`/`mainnet-v*`
+> tags), and `release.yml`'s `upload-release-archives-to-s3` job declares
+> `environment: release` and assumes this role.
 
 ### Trust policy — use a `release` environment (do NOT use tag subjects alone)
 
@@ -251,26 +251,21 @@ cover cleanup of interrupted transfers):
 > It can reuse Role 1 (it runs on `main`/scheduled), so no separate role is
 > needed there.
 
-### Credential sequencing — `release.yml` touches BOTH buckets in one job
+### Credential sequencing — `release.yml` touches BOTH buckets
 
 `release.yml` builds with sccache (`mystenlabs-sccache`, Role 1) **and** uploads
-artifacts to `sui-releases` (Role 2) in the same job. `configure-aws-credentials`
-(and therefore `setup-sccache`) **overwrites the AWS credential env vars** each
-time it runs — whichever role was configured last wins. Do **not** assume the
-build-time sccache creds are still active at the `aws s3 cp` upload step.
+artifacts to `sui-releases` (Role 2). `configure-aws-credentials` (and therefore
+`setup-sccache`) **overwrites the AWS credential env vars** each time it runs —
+whichever role was configured last wins within a job.
 
-Manage the switch deliberately. Options:
-
-- **Re-assume `release-s3` immediately before the upload/download steps** — add a
-  dedicated `configure-aws-credentials` (with `role-to-assume: <release-s3 ARN>`,
-  `allowed-account-ids: '011083325127'`) right before the `aws s3 cp` block, so
-  the release creds are the active ones at upload time. Simplest, recommended.
-- **Split into two jobs** — a build job (Role 1, sccache) and an upload job
-  (Role 2, `sui-releases`), passing artifacts between them. Cleaner credential
-  isolation; costs an artifact handoff.
-
-Whichever is chosen, the two roles stay separate (different buckets, different
-trust) — the only question is *when* each set of creds is active in the job.
+Resolved with a **two-job split**: `release-build` no longer holds any
+`sui-releases` credentials — its only remaining AWS credentials are the static
+sccache keys `setup-sccache` configures for the cache bucket (pending Role 1
+trust for release-event subs), and the existing-archive download uses the
+bucket's public read access. The `upload-release-archives-to-s3` job —
+`environment: release`, Role 2 — receives the archives as workflow artifacts
+and performs every `sui-releases` write. The two roles never coexist in one
+job, so there is no credential sequencing to manage.
 
 ---
 
