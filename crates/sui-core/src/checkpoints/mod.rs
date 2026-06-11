@@ -2133,6 +2133,10 @@ impl CheckpointBuilder {
             settlement_key,
         )
         .await;
+        let (accounts_created, accounts_deleted) =
+            accumulators::count_accumulator_object_changes(&settlement_effects);
+        self.metrics
+            .report_accumulator_account_changes(accounts_created, accounts_deleted);
 
         let barrier_digest = *VerifiedTransaction::new_system_transaction(
             accumulators::build_accumulator_barrier_tx(
