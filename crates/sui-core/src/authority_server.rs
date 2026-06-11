@@ -799,6 +799,12 @@ impl ValidatorService {
                     .num_rejected_tx_during_overload
                     .with_label_values(&[error.as_ref()])
                     .inc();
+                if is_gasless {
+                    metrics
+                        .gasless_submission_outcomes
+                        .with_label_values(&["rejected_overload"])
+                        .inc();
+                }
                 results[idx] = Some(SubmitTxResult::Rejected { error });
                 continue;
             }
