@@ -84,10 +84,22 @@ deployment branch policy (`main` + `devnet-v*`/`testnet-v*`/`mainnet-v*` tags).
 
 **Remaining — the sccache call site.** Because of the split, `release-build`'s
 OIDC sub is now a plain tag/branch ref (no environment), so giving sccache OIDC
-needs role #1 to trust the release subs: `refs/tags/{devnet,testnet,mainnet}-v*`
-for `release:` events plus `refs/heads/main` (already trusted) for dispatch.
-Until that trust is added, sccache keeps static keys here — it must stay working
-through Phase 7 or release builds lose the S3 cache.
+needs role #1 to trust the release tag subs:
+`refs/tags/{devnet,testnet,mainnet}-v*` for `release:` events.
+
+**Dispatch hazard — same trusted-sub / chosen-ref problem as rust.yml.** A
+`workflow_dispatch` of this workflow runs with sub `refs/heads/main` (which
+role #1 already trusts) while checking out `inputs.sui_tag` — arbitrary
+attacker-chosen code holding the RW cache role. Before flipping this call site
+to OIDC, BOTH guards are required:
+1. the checkout must use `refs/tags/${sui_tag}` explicitly (never a bare ref
+   that could resolve to a branch), and
+2. the tag-name validation step must reject anything not matching
+   `{devnet,testnet,mainnet}-v*` BEFORE `setup-sccache` runs.
+With those in place, dispatch builds only published release tags (trusted
+lineage), and assuming the RW role under the `main` sub is sound. Until then,
+sccache keeps static keys here — it must stay working through Phase 7 or
+release builds lose the S3 cache.
 
 ## Trust-policy gaps — status
 
@@ -103,8 +115,10 @@ to local cache):
 3. **`release.yml` sccache** — **now a tag-trust gap (post job-split).** With the
    S3 ops moved to their own `environment: release` job, `release-build`'s sub is a
    plain tag/branch ref. Giving its sccache step OIDC requires role #1 to trust
-   `refs/tags/{devnet,testnet,mainnet}-v*` (dispatch-from-main is already covered).
-   Static keys remain on this one call site until then.
+   `refs/tags/{devnet,testnet,mainnet}-v*`. The dispatch path's `main` sub is
+   already trusted but carries the chosen-ref hazard — see the `release.yml`
+   section for the two mandatory guards before flipping. Static keys remain on
+   this one call site until then.
 
 ## Recommended Phase-3 mechanic for mixed-trigger callers
 
@@ -149,5 +163,15 @@ static/local on an override dispatch rather than OIDC. That is the safe directio
 
 **Decision required to finish the mixed callers (Phase 4):** pick PR-cache option
 **A** (all PRs → RO role), **B** (no PR cache), or **C** (same-repo RO, fork none)
-— see `AWS_OIDC_ROLES.md` §"PR read-only cache". The Phase-3 dual-pass above is the
-same regardless; A/B/C only changes the Phase-4 follow-up and when static keys die.
+— see `AWS_OIDC_ROLES.md` §"PR read-only cache" for full trade-offs. Key facts for
+the decision: every PR (same-repo and fork) presents the same OIDC sub
+(`repo:MystenLabs/sui:pull_request`), so AWS trust alone cannot implement C —
+"fork = none" can only be enforced at the GitHub layer (fork PRs cannot get
+`id-token: write` under default repo settings, and C additionally requires the
+workflow to withhold that permission from fork-reachable jobs explicitly, not just
+gate the `role-to-assume` input). Recommendation on record: **A unless cache
+contents are considered sensitive** (simplest, robust, RO cannot poison the
+cache); **C with explicit workflow-layer enforcement** if preserving today's
+fork boundary outweighs fork CI speed; **B** if no PR cache is acceptable. The
+Phase-3 dual-pass above is the same regardless; A/B/C only changes the Phase-4
+follow-up and when static keys die.

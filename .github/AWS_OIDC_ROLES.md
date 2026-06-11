@@ -168,9 +168,14 @@ denying forks. Pick one:
   weaker than (A)/(B) (a future edit that re-adds `id-token: write` to a
   fork-reachable job re-admits forks). Document the dependency if chosen.
 
-(Fork PRs run the **base** repo's workflow and get no repo secrets, but they CAN
-mint an `id-token` if the job grants `id-token: write` — which is exactly why the
-fork exclusion must drop that permission, not just the role input.)
+(Fork PRs run the **base** repo's workflow and get no repo secrets. Under
+default repo settings GitHub downgrades fork-PR token permissions, capping
+`id-token` at `none` — but that cap is a **GitHub repo-setting control**
+("Send write tokens to workflows from pull requests" re-enables write
+permissions), invisible to AWS and changeable without touching IAM. It must
+not be load-bearing for the trust boundary: the fork exclusion has to drop
+`id-token: write` explicitly in the workflow, not rely on the default cap or
+on gating the role input.)
 
 ---
 
