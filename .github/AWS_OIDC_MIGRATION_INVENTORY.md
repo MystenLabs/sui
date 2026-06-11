@@ -26,7 +26,7 @@ Keep any new `SCCACHE_ROLE` gate in sync with this exact set.
 | `rust.yml`           | 11         | push, pull_request, workflow_dispatch        | **dual-pass ✅** (OIDC trusted / static PRs) | 3 ✅ → 4 |
 | `external.yml`       | 2          | push, pull_request                           | **dual-pass ✅** (OIDC trusted / static PRs) | 3 ✅ → 4 |
 | `bridge.yml`         | 2          | push, pull_request, workflow_dispatch        | **dual-pass ✅** (PR #26927)                 | 3 ✅ → 4 |
-| `release.yml`        | 1          | release, workflow_dispatch                   | static keys                                  | 5        |
+| `release.yml`        | 1          | release, workflow_dispatch                   | sccache static; **S3 ops OIDC ✅** (release env) | 5 (S3 ✅) |
 
 ## How each event/ref classifies
 
@@ -68,24 +68,24 @@ Note `extensions` push is **not** trusted (branch is 404 → excluded) → local
 
 `clippy` (L85), `test` (L111). Prefix `ubuntu-ghcloud`.
 
-### `release.yml` — 1 site — **Phase 5, special**
+### `release.yml` — 1 site — **Phase 5: S3 done (job split), sccache remains**
 
-`release-build` (L155), prefix `${{ matrix.os }}`. Triggers on `release: created`
-(tag) + `workflow_dispatch`. **Two reasons it is not part of the Phase-3 batch:**
-1. It also writes to `s3://sui-releases` via the **separate** `release-s3` role in
-   the **same job**, and `configure-aws-credentials` overwrites cred env vars — the
-   job must re-assume the right role before each S3 op (see roles doc §"Credential
-   sequencing"). The `release` GitHub Environment for that role now exists.
-2. **Environment-sub subtlety (not a tag-trust gap).** Once `release-build` declares
-   `environment: release` (required for the `release-s3` role), **every** OIDC assume
-   in that job — the sccache one included — presents
-   `sub=repo:MystenLabs/sui:environment:release`, **not** a tag/branch ref. So adding
-   `*-v*` tag trust to role #1 would do **nothing** for the sccache step. To give it
-   OIDC, pick one in Phase 5:
-   - **(a)** role #1 **also** trusts `repo:MystenLabs/sui:environment:release`; or
-   - **(b)** restructure `release.yml` so the sccache **build** runs in a job
-     *without* `environment: release` (gets a branch/tag sub role #1 trusts) and only
-     the S3 upload/download runs in a job *with* `environment: release`.
+`release-build`, prefix `${{ matrix.os }}`. Triggers on `release: created`
+(tag) + `workflow_dispatch`.
+
+**Done — option (b), the job split.** `release-build` no longer configures AWS
+credentials at all: the existing-archive download uses the bucket's public read
+access, and all `sui-releases` writes moved to `upload-release-archives-to-s3`,
+which declares `environment: release` and assumes the `release-s3` role via OIDC
+(roles doc, Role 2). The `release` GitHub Environment exists with a custom
+deployment branch policy (`main` + `devnet-v*`/`testnet-v*`/`mainnet-v*` tags).
+
+**Remaining — the sccache call site.** Because of the split, `release-build`'s
+OIDC sub is now a plain tag/branch ref (no environment), so giving sccache OIDC
+needs role #1 to trust the release subs: `refs/tags/{devnet,testnet,mainnet}-v*`
+for `release:` events plus `refs/heads/main` (already trusted) for dispatch.
+Until that trust is added, sccache keeps static keys here — it must stay working
+through Phase 7 or release builds lose the S3 cache.
 
 ## Trust-policy gaps — status
 
@@ -98,10 +98,11 @@ to local cache):
 2. **`extensions` branch** — **excluded.** The branch returns 404 (not active), so
    trusting it now is unused attack surface. Add only if it is confirmed active again;
    until then `external.yml` `extensions` pushes fall back to local cache.
-3. **`release.yml` sccache** — **not a tag-trust gap.** Because `release-build` will
-   declare `environment: release`, its OIDC sub is `environment:release`, not a tag
-   ref — adding `*-v*` tag trust would not help. See the `release.yml` section above
-   for the two Phase-5 options.
+3. **`release.yml` sccache** — **now a tag-trust gap (post job-split).** With the
+   S3 ops moved to their own `environment: release` job, `release-build`'s sub is a
+   plain tag/branch ref. Giving its sccache step OIDC requires role #1 to trust
+   `refs/tags/{devnet,testnet,mainnet}-v*` (dispatch-from-main is already covered).
+   Static keys remain on this one call site until then.
 
 ## Recommended Phase-3 mechanic for mixed-trigger callers
 
