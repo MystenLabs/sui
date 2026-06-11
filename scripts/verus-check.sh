@@ -6,6 +6,10 @@
 # `[package.metadata.verus] verify = true`. This script is intended for CI;
 # locally, devs do not need Verus installed for normal `cargo build`.
 #
+# Companion: scripts/verus-expand.sh emits the reviewer-facing "plain code"
+# artifact (the same crates with the verus! macro evaluated). Keep the CRATES
+# list here in sync with that script.
+#
 # Pinning: the Verus binary is tied to a specific rustc version. We pin both
 # here so CI is reproducible. Update `VERUS_RELEASE` and `VERUS_RUSTC` together.
 
