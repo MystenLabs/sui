@@ -225,7 +225,7 @@ pub fn verify_sender_signed_data_message_signatures(
 
     // Importing SenderSignedData into sui-types-verified would be prohibitively
     // difficult, so we pull out the sigs here.
-    let verifiable_sigs: Vec<VerifiableSig> = txn
+    let verifiable_sigs: Vec<VerifiableSig<'_>> = txn
         .tx_signatures()
         .iter()
         .map(|sig| VerifiableSig {
