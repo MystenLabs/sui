@@ -69,13 +69,6 @@ jobs:
         with:
           ref: ${{ env.sui_tag }}          
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-
       - name: Set os/arch variables (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' }}
         shell: bash
@@ -108,7 +101,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
-          aws s3 cp s3://sui-releases/${{ env.s3_existing_archive }} ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz
+          # released archives are publicly readable (the existence check above
+          # relies on that), so no AWS credentials are needed here
+          curl -fSs -o ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz https://sui-releases.s3.us-east-1.amazonaws.com/${{ env.s3_existing_archive }}
           tar -xf ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz -C ${{ env.TMP_BUILD_DIR }}
 
       - name: Install nexttest (Windows)
@@ -197,9 +192,6 @@ jobs:
           mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
           tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .
 
-          # Upload tar balls to s3 so that we don't have to rebuild if they have already built
-          aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
-
       - name: Publish Windows sui binary to Chocolatey
         if: ${{ matrix.os == 'windows-ghcloud' && contains(env.sui_tag, 'testnet') }}
         shell: bash
@@ -244,6 +236,44 @@ jobs:
           token: ${{ secrets.WALRUS_REPO_DISPATCH }}
           event-type: update-walrus-sui-testnet-tag
           client-payload: '{"new_tag": "${{ env.sui_tag }}"}'
+
+  # Copy built archives to s3://sui-releases so future runs skip the rebuild and
+  # node operators can pull binaries by tag. Runs in the protected `release`
+  # environment to assume the dedicated release-s3 OIDC role, credential-isolated
+  # from the build job (see .github/AWS_OIDC_ROLES.md, Role 2). `!cancelled()`
+  # preserves the old per-platform best-effort upload: archives from matrix legs
+  # that succeeded are uploaded even if another leg failed.
+  upload-release-archives-to-s3:
+    name: Upload release archives to S3
+    needs: release-build
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the release-s3 role
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # pin@v6.0.0
+        with:
+          pattern: sui-binaries-*
+          merge-multiple: true
+          path: ./archives
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+        with:
+          role-to-assume: arn:aws:iam::011083325127:role/sui-releases-rw-github
+          allowed-account-ids: '011083325127'
+          aws-region: us-west-2
+
+      - name: Upload archives to s3://sui-releases
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for f in ./archives/*.tgz; do
+            aws s3 cp "$f" "s3://sui-releases/releases/$(basename "$f")" || true
+          done
 
   update-homebrew-formula:
     name: Bump sui formula on Homebrew/homebrew-core
