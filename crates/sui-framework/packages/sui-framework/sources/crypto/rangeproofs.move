@@ -17,8 +17,6 @@ const EInvalidBatchSize: u64 = 3;
 const EUnsupportedVersion: u64 = 4;
 const EDeprecated: u64 = 5;
 const EInvalidDst: u64 = 6;
-
-/// The maximum allowed length of a domain separation tag, in bytes.
 const MAX_DST_LENGTH: u64 = 64;
 
 /// Verify a range proof over the Ristretto255 curve that all committed values are in the range [0, 2^bits).
