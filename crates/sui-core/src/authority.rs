@@ -1499,29 +1499,8 @@ impl AuthorityState {
 
         // Must be placed AFTER the effects-cache check above so it only fires on the first
         // execution attempt, not on re-executions during checkpoint rebuild.
-        #[cfg(msim)]
         if !certificate.data().transaction_data().kind().is_system_tx() {
-            sui_macros::fail_point_if!("crash-with-tx-logging", || {
-                if crate::crash_recovery::should_poison_transaction(&tx_digest) {
-                    // Use catch_unwind to trigger the panic hook without crashing the test process.
-                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        std::panic::panic_any(crate::crash_recovery::CRASH_SIM_PANIC_MSG);
-                    }));
-                    sui_simulator::task::kill_current_node(Some(std::time::Duration::from_millis(
-                        100,
-                    )));
-                }
-            });
-        }
-
-        // Production-compatible crash-recovery test path (no fail points).
-        // Fires in any non-release build (debug_assertions) and in Antithesis.
-        #[cfg(not(msim))]
-        if mysten_common::in_test_configuration()
-            && !certificate.data().transaction_data().kind().is_system_tx()
-            && crate::crash_recovery::should_poison_transaction(&tx_digest)
-        {
-            panic!("crash-recovery: transaction {tx_digest}");
+            crate::crash_recovery::maybe_crash_for_testing(&tx_digest);
         }
 
         let execution_start_time = Instant::now();

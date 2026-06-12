@@ -132,6 +132,33 @@ pub fn should_poison_transaction(digest: &TransactionDigest) -> bool {
     hasher.finish() < threshold
 }
 
+/// Trigger a crash-recovery cycle for `digest` if it is in the poison set.
+///
+/// In simtests: uses a fail point so the test harness controls when crashes fire; the
+/// panic is caught and re-raised via `kill_current_node` so the sim can restart the node.
+/// In other test configurations (debug builds, Antithesis): panics directly; the panic
+/// hook writes the digest to the crash log and the process terminates.
+/// In release builds: no-op (the `not(msim)` branch is compiled out by
+/// `in_test_configuration()` always returning false, and the msim branch is not compiled).
+pub fn maybe_crash_for_testing(digest: &TransactionDigest) {
+    #[cfg(msim)]
+    {
+        sui_macros::fail_point_if!("crash-with-tx-logging", || {
+            if should_poison_transaction(digest) {
+                // Use catch_unwind to trigger the panic hook without crashing the test process.
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    std::panic::panic_any(CRASH_SIM_PANIC_MSG);
+                }));
+                sui_simulator::task::kill_current_node(Some(std::time::Duration::from_millis(100)));
+            }
+        });
+    }
+    #[cfg(not(msim))]
+    if mysten_common::in_test_configuration() && should_poison_transaction(digest) {
+        panic!("crash-recovery: transaction {digest}");
+    }
+}
+
 /// Mine a non-poison digest by adding an unused pure argument to the PTB.
 ///
 /// If no crash probability is set, this is a no-op. Otherwise, iterates until the signed
