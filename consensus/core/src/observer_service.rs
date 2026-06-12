@@ -38,8 +38,10 @@ use crate::{
     synchronizer::SynchronizerHandle,
 };
 
+#[allow(dead_code)]
 const QUORUM_DELAY_TIMEOUT: Duration = Duration::from_secs(1);
 
+#[allow(dead_code)]
 /// A stream adapter that buffers blocks per round and only releases round R blocks once
 /// 2f+1 stake worth of blocks have been accepted for that round. This mitigates front-running
 /// by ensuring that by the time a subscriber sees round R blocks, the R+1 leader has likely
@@ -58,11 +60,13 @@ struct QuorumDelayedStream<S> {
     timeout: Option<Pin<Box<tokio::time::Sleep>>>,
 }
 
+#[allow(dead_code)]
 struct RoundPendingState {
     stake_aggregator: StakeAggregator<QuorumThreshold>,
     blocks: Vec<AcceptedBlock>,
 }
 
+#[allow(dead_code)]
 impl<S: futures::Stream<Item = Vec<AcceptedBlock>> + Unpin> QuorumDelayedStream<S> {
     fn new(inner: S, context: Arc<Context>) -> Self {
         Self {
@@ -423,20 +427,21 @@ impl ObserverNetworkService for ObserverService {
             MAX_BLOCKS_PER_POLL,
             self.subscription_counter.clone(),
         );
-        let live_block_stream = QuorumDelayedStream::new(raw_live_stream, self.context.clone())
-            .map(|accepted_blocks| {
-                let mut blocks = Vec::with_capacity(accepted_blocks.len());
-                let mut timestamps = Vec::with_capacity(accepted_blocks.len());
-                for ab in accepted_blocks {
-                    blocks.push(ab.block.serialized().clone());
-                    timestamps.push(ab.accepted_timestamp_ms);
-                }
-                ObserverStreamItem {
-                    blocks,
-                    accepted_timestamps_ms: timestamps,
-                    auxiliary_data: Default::default(),
-                }
-            });
+        // TODO: re-enable QuorumDelayedStream once experiments confirm latency tradeoffs.
+        // let live_block_stream = QuorumDelayedStream::new(raw_live_stream, self.context.clone())
+        let live_block_stream = raw_live_stream.map(|accepted_blocks| {
+            let mut blocks = Vec::with_capacity(accepted_blocks.len());
+            let mut timestamps = Vec::with_capacity(accepted_blocks.len());
+            for ab in accepted_blocks {
+                blocks.push(ab.block.serialized().clone());
+                timestamps.push(ab.accepted_timestamp_ms);
+            }
+            ObserverStreamItem {
+                blocks,
+                accepted_timestamps_ms: timestamps,
+                auxiliary_data: Default::default(),
+            }
+        });
 
         let block_stream = past_stream.chain(live_block_stream);
 

@@ -148,6 +148,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) rejected_blocks: IntCounterVec,
     pub(crate) subscribed_blocks: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
+    #[allow(dead_code)]
     pub(crate) observer_stream_quorum_delay_timeouts: IntCounter,
     pub(crate) observer_block_propagation_latency_ms: Histogram,
     pub(crate) verified_blocks: IntCounterVec,
