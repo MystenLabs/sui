@@ -2321,6 +2321,13 @@ mod test {
     async fn test_simulated_load_previous_execution_version() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
+        // The consensus handler requires this flag; it is enabled on all chains at the
+        // latest protocol version, but not at the older version this test targets.
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_split_checkpoints_in_consensus_handler_for_testing(true);
+            config
+        });
+
         let target_version = find_previous_execution_version_protocol()
             .expect("no protocol version found with an older execution version");
         info!(
