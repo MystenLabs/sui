@@ -22,7 +22,7 @@ use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use tracing::warn;
 
-use super::render_json;
+use super::{MAX_JSON_MOVE_VALUE_RESPONSE_SIZE, render_json_with_budget};
 use crate::PackageResolver;
 
 pub const MAX_BATCH_REQUESTS: usize = 200;
@@ -73,8 +73,16 @@ pub async fn get_transaction(
     } else {
         HashMap::new()
     };
+    let mut json_budget = MAX_JSON_MOVE_VALUE_RESPONSE_SIZE;
     Ok(GetTransactionResponse::new(
-        transaction_to_response(transaction, &read_mask, &objects, resolver).await?,
+        transaction_to_response(
+            transaction,
+            &read_mask,
+            &objects,
+            resolver,
+            &mut json_budget,
+        )
+        .await?,
     ))
 }
 
@@ -113,9 +121,22 @@ pub async fn batch_get_transactions(
     };
 
     let mut transactions = Vec::with_capacity(digests.len());
+    // Share a single JSON-rendering budget across every transaction in the
+    // batch (and every event within each transaction) so an unauthenticated
+    // request cannot multiply the per-render cap by `MAX_BATCH_REQUESTS *
+    // max_num_event_emit` to exhaust node memory.
+    let mut json_budget = MAX_JSON_MOVE_VALUE_RESPONSE_SIZE;
     for digest in digests {
         if let Some(tx) = response.get(&digest) {
-            match transaction_to_response(tx.clone(), &read_mask, &objects, resolver).await {
+            match transaction_to_response(
+                tx.clone(),
+                &read_mask,
+                &objects,
+                resolver,
+                &mut json_budget,
+            )
+            .await
+            {
                 Ok(tx) => transactions.push(GetTransactionResult::new_transaction(tx)),
                 Err(err) => {
                     transactions.push(GetTransactionResult::new_error(err.into_status_proto()))
@@ -134,6 +155,7 @@ pub(crate) async fn transaction_to_response(
     mask: &FieldMaskTree,
     objects: &HashMap<ObjectKey, Object>,
     resolver: &PackageResolver,
+    json_budget: &mut usize,
 ) -> Result<ExecutedTransaction, RpcError> {
     let mut message = ExecutedTransaction::default();
 
@@ -218,9 +240,14 @@ pub(crate) async fn transaction_to_response(
             for (proto_event, sui_event) in
                 proto_events.events.iter_mut().zip_debug_eq(&events.data)
             {
-                proto_event.json = render_json(resolver, &sui_event.type_, &sui_event.contents)
-                    .await
-                    .map(Box::new);
+                proto_event.json = render_json_with_budget(
+                    resolver,
+                    &sui_event.type_,
+                    &sui_event.contents,
+                    json_budget,
+                )
+                .await
+                .map(Box::new);
             }
         }
     }
@@ -407,9 +434,11 @@ mod tests {
         let mask = FieldMaskTree::from(FieldMask::from_str("balance_changes"));
         let resolver = test_resolver();
 
-        let response = transaction_to_response(source, &mask, &HashMap::new(), &resolver)
-            .await
-            .expect("render should succeed");
+        let mut json_budget = MAX_JSON_MOVE_VALUE_RESPONSE_SIZE;
+        let response =
+            transaction_to_response(source, &mask, &HashMap::new(), &resolver, &mut json_budget)
+                .await
+                .expect("render should succeed");
 
         assert_eq!(
             response.balance_changes,
@@ -439,9 +468,11 @@ mod tests {
         ));
         let resolver = test_resolver();
 
-        let response = transaction_to_response(source, &mask, &HashMap::new(), &resolver)
-            .await
-            .expect("render should succeed");
+        let mut json_budget = MAX_JSON_MOVE_VALUE_RESPONSE_SIZE;
+        let response =
+            transaction_to_response(source, &mask, &HashMap::new(), &resolver, &mut json_budget)
+                .await
+                .expect("render should succeed");
 
         let effects = response.effects.expect("effects should be present");
         assert_eq!(

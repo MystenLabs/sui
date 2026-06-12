@@ -156,10 +156,22 @@ pub async fn execute_transaction(
             objects
         };
 
+        // Share a single JSON-rendering budget across every event and every
+        // rendered object in the response so an unauthenticated request
+        // cannot multiply the per-render cap by `max_num_event_emit + |objects|`.
+        let mut json_budget = service.config.max_json_move_value_response_size();
+
         let events = read_mask
             .subtree(ExecutedTransaction::EVENTS_FIELD)
             .and_then(|mask| {
-                events.map(|events| service.render_events_to_proto(&events, &mask, &objects))
+                events.map(|events| {
+                    service.render_events_to_proto_with_budget(
+                        &events,
+                        &mask,
+                        &objects,
+                        &mut json_budget,
+                    )
+                })
             });
 
         let balance_changes = if read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD) {
@@ -205,7 +217,14 @@ pub async fn execute_transaction(
                 ObjectSet::default().with_objects(
                     objects
                         .iter()
-                        .map(|o| service.render_object_to_proto(o, &mask, &objects))
+                        .map(|o| {
+                            service.render_object_to_proto_with_budget(
+                                o,
+                                &mask,
+                                &objects,
+                                &mut json_budget,
+                            )
+                        })
                         .collect(),
                 )
             });
