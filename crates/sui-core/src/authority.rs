@@ -1514,6 +1514,16 @@ impl AuthorityState {
             });
         }
 
+        // Production-compatible crash-recovery test path (no fail points).
+        // Fires in any non-release build (debug_assertions) and in Antithesis.
+        #[cfg(not(msim))]
+        if mysten_common::in_test_configuration()
+            && !certificate.data().transaction_data().kind().is_system_tx()
+            && crate::crash_recovery::should_poison_transaction(&tx_digest)
+        {
+            panic!("crash-recovery: transaction {tx_digest}");
+        }
+
         let execution_start_time = Instant::now();
 
         // Any caller that verifies the signatures on the certificate will have already checked the
