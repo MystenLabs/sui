@@ -54,6 +54,7 @@ public fun verify_bulletproofs_with_dst_ristretto255(
 #[deprecated(note = b"Use `verify_bulletproofs_with_dst_ristretto255` instead.")]
 /// Disabled. This entry point always aborts; use `verify_bulletproofs_with_dst_ristretto255`
 /// instead.
+// TODO: this should be removed in the next execution version cut.
 public fun verify_bulletproofs_ristretto255(
     _proof: &vector<u8>,
     _bits: u8,
