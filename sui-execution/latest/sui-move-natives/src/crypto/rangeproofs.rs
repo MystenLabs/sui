@@ -45,16 +45,16 @@ fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
 }
 
 pub fn verify_bulletproofs_ristretto255(
-    context: &mut NativeContext,
-    ty_args: Vec<Type>,
-    mut args: VecDeque<Value>,
+    _context: &mut NativeContext,
+    _ty_args: Vec<Type>,
+    _args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
-    let commitments = pop_arg!(args, VectorRef);
-    let range_bits = pop_arg!(args, u8);
-    let proof = pop_arg!(args, VectorRef);
-    verify_bulletproofs_ristretto255_impl(context, commitments, range_bits, proof, vec![])
+    // Disabled: no longer called by the framework. The binding is retained only until the
+    // next execution version cut (see the Move-side TODO).
+    Err(partial_vm_error!(
+        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        "verify_bulletproofs_ristretto255 is disabled",
+    ))
 }
 
 pub fn verify_bulletproofs_with_dst_ristretto255(
@@ -68,16 +68,7 @@ pub fn verify_bulletproofs_with_dst_ristretto255(
     let commitments = pop_arg!(args, VectorRef);
     let range_bits = pop_arg!(args, u8);
     let proof = pop_arg!(args, VectorRef);
-    verify_bulletproofs_ristretto255_impl(context, commitments, range_bits, proof, dst)
-}
 
-fn verify_bulletproofs_ristretto255_impl(
-    context: &mut NativeContext,
-    commitments: VectorRef,
-    range_bits: u8,
-    proof: VectorRef,
-    dst: Vec<u8>,
-) -> PartialVMResult<NativeResult> {
     if !is_supported(context)? {
         return Ok(NativeResult::err(context.gas_used(), NOT_SUPPORTED));
     }
