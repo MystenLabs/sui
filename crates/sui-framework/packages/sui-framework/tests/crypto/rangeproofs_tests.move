@@ -167,6 +167,17 @@ fun test_bulletproof_with_dst() {
 }
 
 #[test]
+#[expected_failure(abort_code = sui::rangeproofs::EInvalidDst)]
+fun test_dst_too_long() {
+    // A DST longer than 64 bytes is rejected before verification.
+    let commitment = ristretto255::g_from_bytes(
+        &x"3881417f033fc69b256df6c73d35ca3f06649d2de98970391e39e6139fd95c44",
+    );
+    let dst = vector::tabulate!(65, |_| 0u8);
+    verify_bulletproofs_with_dst_ristretto255(&vector[], 32, &vector[commitment], &dst, 0);
+}
+
+#[test]
 #[expected_failure(abort_code = sui::rangeproofs::EDeprecated)]
 fun test_deprecated_aborts() {
     // The deprecated entry point is disabled and always aborts.

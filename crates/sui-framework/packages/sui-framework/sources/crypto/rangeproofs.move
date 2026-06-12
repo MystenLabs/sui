@@ -16,6 +16,10 @@ const EInvalidRange: u64 = 2;
 const EInvalidBatchSize: u64 = 3;
 const EUnsupportedVersion: u64 = 4;
 const EDeprecated: u64 = 5;
+const EInvalidDst: u64 = 6;
+
+/// The maximum allowed length of a domain separation tag, in bytes.
+const MAX_DST_LENGTH: u64 = 64;
 
 /// Verify a range proof over the Ristretto255 curve that all committed values are in the range [0, 2^bits).
 /// Currently, the only supported version is 0 which corresponds to the original Bulletproofs construction (https://eprint.iacr.org/2017/1066.pdf).
@@ -30,7 +34,7 @@ const EDeprecated: u64 = 5;
 /// The number of commitments times `bits` can be at most 512.
 ///
 /// The `dst` is a domain separation tag that is bound into the proof transcript. Provers and
-/// verifiers must agree on the same `dst` for verification to succeed.
+/// verifiers must agree on the same `dst` for verification to succeed. It can be at most 64 bytes.
 ///
 /// Enabled only on devnet.
 public fun verify_bulletproofs_with_dst_ristretto255(
@@ -40,6 +44,7 @@ public fun verify_bulletproofs_with_dst_ristretto255(
     dst: &vector<u8>,
     version: u8,
 ): bool {
+    assert!(dst.length() <= MAX_DST_LENGTH, EInvalidDst);
     match (version) {
         0 => verify_bulletproofs_with_dst_ristretto255_internal(
             proof,
