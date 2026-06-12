@@ -62,7 +62,7 @@ const GIT_REVISION: &str = git_revision!();
 static FILE_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 // ---------------------------------------------------------------------------
-// Simtest-only: deterministic crash decision
+// Simtest-only: catch_unwind panic marker
 // ---------------------------------------------------------------------------
 
 /// Panic message used by the crash-simulation fail point in simtests.
@@ -74,17 +74,19 @@ static FILE_WRITE_LOCK: Mutex<()> = Mutex::new(());
 pub const CRASH_SIM_PANIC_MSG: &str = "crash-simulation";
 
 // ---------------------------------------------------------------------------
-// Simtest-only: global crash probability (set once by test setup)
+// Deterministic crash decision (available in all test configurations)
 // ---------------------------------------------------------------------------
 
-#[cfg(msim)]
 static CRASH_RECOVERY_PROBABILITY_1E6: std::sync::atomic::AtomicU32 =
     std::sync::atomic::AtomicU32::new(0);
 
-/// Set the probability used by the crash-with-tx-logging fail point.
-/// Call this before starting the benchmark.  Value must match the probability
-/// used by `should_poison_transaction` in the fail point.
-#[cfg(msim)]
+/// Set the fraction of user transactions that should be treated as poison.
+/// A poison transaction triggers a crash-recovery test cycle: the node panics
+/// while executing it, writes the digest to the crash log, and on restart drops
+/// the transaction so it cannot crash the node again.
+///
+/// Has no effect in release builds because `should_poison_transaction` is only
+/// called when `in_test_configuration()` is true.
 pub fn set_crash_recovery_probability(prob: f64) {
     CRASH_RECOVERY_PROBABILITY_1E6.store(
         (prob.clamp(0.0, 1.0) * 1_000_000.0) as u32,
@@ -94,7 +96,6 @@ pub fn set_crash_recovery_probability(prob: f64) {
 
 /// Returns the probability set by `set_crash_recovery_probability`, or `None`
 /// if it has not been set.
-#[cfg(msim)]
 pub fn crash_recovery_probability() -> Option<f64> {
     let v = CRASH_RECOVERY_PROBABILITY_1E6.load(std::sync::atomic::Ordering::Relaxed);
     if v == 0 {
@@ -104,15 +105,13 @@ pub fn crash_recovery_probability() -> Option<f64> {
     }
 }
 
-/// Return `true` if `digest` should be treated as a poison transaction in a simtest run.
+/// Return `true` if `digest` should be treated as a poison transaction.
 ///
 /// Uses a process-global seed (initialised once from OS entropy via `OnceLock`) so that all
 /// validators — regardless of which OS thread they run on — reach the same decision for a given
-/// digest. This is necessary because the blocking thread-pool workers used by msim each have
-/// distinct thread-local seeds, which would produce divergent crash decisions and checkpoint forks.
+/// digest. This prevents divergent crash decisions from causing checkpoint forks.
 ///
 /// Returns `false` if no crash probability has been set via `set_crash_recovery_probability`.
-#[cfg(msim)]
 pub fn should_poison_transaction(digest: &TransactionDigest) -> bool {
     use std::hash::{Hash, Hasher};
 
