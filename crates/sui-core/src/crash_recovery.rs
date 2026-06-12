@@ -94,14 +94,17 @@ pub fn set_crash_recovery_probability(prob: f64) {
     );
 }
 
-/// Returns the probability set by `set_crash_recovery_probability`, or `None`
-/// if it has not been set.
+/// Returns the crash probability: the explicitly set value if any, otherwise a
+/// default of 0.2 % in Antithesis (where explicit setup is not always possible),
+/// or `None` everywhere else.
 pub fn crash_recovery_probability() -> Option<f64> {
     let v = CRASH_RECOVERY_PROBABILITY_1E6.load(std::sync::atomic::Ordering::Relaxed);
-    if v == 0 {
-        None
-    } else {
+    if v != 0 {
         Some(v as f64 / 1_000_000.0)
+    } else if mysten_common::in_antithesis() {
+        Some(0.002)
+    } else {
+        None
     }
 }
 
