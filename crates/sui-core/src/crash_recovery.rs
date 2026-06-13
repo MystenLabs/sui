@@ -1,32 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Crash-recovery support: detect which transaction was executing when the process panicked.
+//! Crash-recovery support: detect which transaction was executing or being voted on when the
+//! process panicked, and prevent it from crashing the node again on restart.
 //!
-//! # How it works
+//! # Two protected phases
 //!
-//! 1. At process startup, `install_panic_hook` chains a closure into the existing panic hook.
-//!    When a panic fires, the hook reads a thread-local slot.  If that slot holds a transaction
-//!    digest it appends the digest (as hex) to a small log file on disk.
+//! ## Execution phase (`panic-tx.log`)
+//! 1. `register_executing_transaction` registers the digest in `EXECUTING_TX` TLS.
+//! 2. On panic the hook writes to `panic-tx.log`.
+//! 3. On restart `load_crashed_transactions` reads the log; the consensus handler drops the
+//!    transaction before it reaches execution.
 //!
-//! 2. At the start of `try_execute_immediately`, the caller registers the transaction digest with
-//!    `register_executing_transaction`.  The returned `ExecutingTransactionGuard` clears the slot
-//!    on drop, so the registration is always scoped to the execution of that single transaction.
-//!
-//!    The guard is deliberately `!Sync`.  `try_execute_immediately` is now a synchronous function,
-//!    but this marker prevents any future change from accidentally moving the guard (and therefore
-//!    the registration) across threads inside an async context, which would corrupt TLS.
-//!
-//! 3. On the next startup, `load_crashed_transactions` reads the log file and returns the set of
-//!    digests that were active during a past crash.  The consensus handler uses this set to drop
-//!    those transactions before they reach execution again.
+//! ## Voting phase (`panic-vote.log`)
+//! 1. `register_voting_transaction` registers the digest in `VOTING_TX` TLS.
+//! 2. On panic the hook writes to `panic-vote.log`.
+//! 3. On restart `load_voted_crashed_transactions` reads the log; `handle_vote_transaction`
+//!    rejects the transaction at both the RPC admission path and the consensus voting path.
+//!    The transaction is NOT dropped at the execution stage — only voting is affected.
 //!
 //! # Why TLS is correct here
 //!
-//! Rust's `panic` hook runs on the thread that panicked, so `with` on the TLS slot correctly sees
-//! the digest that was registered by that thread's call to `try_execute_immediately`.  Threads that
-//! were not executing a transaction at the time of the panic simply see an empty slot and are
-//! ignored.
+//! Rust's `panic` hook runs on the thread that panicked, so the TLS slot correctly identifies
+//! which transaction was active on that thread.  Voting and execution are never concurrent for
+//! the same transaction on the same thread, so the two slots cannot interfere.
 //!
 //! # Drop guard vs. panic hook
 //!
