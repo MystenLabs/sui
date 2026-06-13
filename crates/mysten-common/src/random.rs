@@ -3,6 +3,21 @@
 
 use crate::in_antithesis;
 
+/// Return `true` with probability `chance` where the decision depends only on `value`.
+///
+/// Unlike `deterministic_probability` in the simulator crate this function uses no per-process
+/// or per-thread seed, so independent processes will always reach the same decision for the
+/// same input bytes.  This makes it suitable for crash-recovery poison decisions in distributed
+/// deployments where every validator must crash on the same transaction.
+pub fn content_addressed_probability(value: &[u8], chance: f32) -> bool {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    value.hash(&mut hasher);
+    let hash = hasher.finish();
+    let threshold = (chance.clamp(0.0, 1.0) as f64 * u64::MAX as f64) as u64;
+    hash < threshold
+}
+
 /// Get a random number generator.
 ///
 /// If we are running in antithesis mode, use the antithesis RNG.

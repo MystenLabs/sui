@@ -111,28 +111,34 @@ pub fn crash_recovery_probability() -> Option<f64> {
 /// Return `true` if `digest` should be treated as a poison transaction.
 ///
 /// Uses a process-global seed (initialised once from OS entropy via `OnceLock`) so that all
-/// validators — regardless of which OS thread they run on — reach the same decision for a given
-/// digest. This prevents divergent crash decisions from causing checkpoint forks.
-///
 /// Returns `false` if no crash probability has been set via `set_crash_recovery_probability`.
+///
+/// In simtests a process-global random seed is mixed in so that different test seeds exercise
+/// different transactions.  Outside simtests (Antithesis, debug builds) the decision is purely
+/// content-addressed so that independent validator processes always agree on which transactions
+/// are poison.
 pub fn should_poison_transaction(digest: &TransactionDigest) -> bool {
-    use std::hash::{Hash, Hasher};
-
     let Some(prob) = crash_recovery_probability() else {
         return false;
     };
 
-    static CRASH_SEED: OnceLock<u64> = OnceLock::new();
-    let seed = *CRASH_SEED.get_or_init(|| {
-        use rand::Rng;
-        rand::thread_rng().r#gen::<u64>()
-    });
+    #[cfg(msim)]
+    {
+        use std::hash::{Hash, Hasher};
+        static CRASH_SEED: OnceLock<u64> = OnceLock::new();
+        let seed = *CRASH_SEED.get_or_init(|| {
+            use rand::Rng;
+            rand::thread_rng().r#gen::<u64>()
+        });
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        seed.hash(&mut hasher);
+        digest.hash(&mut hasher);
+        let threshold = (prob.clamp(0.0, 1.0) * u64::MAX as f64) as u64;
+        return hasher.finish() < threshold;
+    }
 
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    seed.hash(&mut hasher);
-    digest.hash(&mut hasher);
-    let threshold = (prob.clamp(0.0, 1.0) * u64::MAX as f64) as u64;
-    hasher.finish() < threshold
+    #[cfg(not(msim))]
+    mysten_common::random::content_addressed_probability(digest.as_ref(), prob as f32)
 }
 
 /// Trigger a crash-recovery cycle for `digest` if it is in the poison set.
