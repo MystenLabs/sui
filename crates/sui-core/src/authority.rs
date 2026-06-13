@@ -960,6 +960,11 @@ pub struct AuthorityState {
     /// Limits the number of concurrent post-processing tasks to avoid overwhelming
     /// the blocking thread pool. Defaults to the number of available CPUs.
     post_processing_semaphore: Arc<tokio::sync::Semaphore>,
+
+    /// Transactions that panicked during voting in a previous run.  On restart these are
+    /// rejected at vote time (both RPC admission and consensus voting) so the node cannot
+    /// be crashed again by the same transaction.
+    voted_crashed_transactions: std::collections::HashSet<TransactionDigest>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1171,6 +1176,18 @@ impl AuthorityState {
         // Otherwise there can be a race where the transaction is accepted because it has executed,
         // but the executed effects are pruned post consensus, leading to failures.
         let tx_digest = *transaction.digest();
+
+        // Reject transactions that panicked during voting in a previous run.
+        // This covers both the RPC admission path and the consensus voting path.
+        if self.voted_crashed_transactions.contains(&tx_digest) {
+            return Err(SuiErrorKind::InvalidRequest(
+                "crash-recovery: transaction caused a panic during voting in a previous run".into(),
+            )
+            .into());
+        }
+
+        let _vote_guard = crate::crash_recovery::register_voting_transaction(tx_digest, self.name);
+        crate::crash_recovery::maybe_crash_for_testing_voting(&tx_digest);
         if epoch_store.is_recently_finalized(&tx_digest)
             || epoch_store.transactions_executed_in_cur_epoch(&[tx_digest])?[0]
         {
@@ -3628,6 +3645,8 @@ impl AuthorityState {
 
         let object_funds_checker_metrics =
             Arc::new(ObjectFundsCheckerMetrics::new(prometheus_registry));
+        let voted_crashed_transactions =
+            crate::crash_recovery::load_voted_crashed_transactions(&config.db_path);
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3659,6 +3678,7 @@ impl AuthorityState {
             object_funds_checker_metrics,
             pending_post_processing: Arc::new(DashMap::new()),
             post_processing_semaphore: Arc::new(tokio::sync::Semaphore::new(num_cpus::get())),
+            voted_crashed_transactions,
         });
         state.init_object_funds_checker().await;
 

@@ -204,8 +204,10 @@ pub fn mine_non_poison_transaction(
     }
 }
 
-/// File name within the node's db_path where panicking-transaction digests are persisted.
+/// File name within the node's db_path where execution-crash digests are persisted.
 const PANIC_TX_LOG_FILE: &str = "panic-tx.log";
+/// File name within the node's db_path where voting-crash digests are persisted.
+const PANIC_VOTE_LOG_FILE: &str = "panic-vote.log";
 
 // ---------------------------------------------------------------------------
 // Global registry: AuthorityName → db_path
@@ -230,16 +232,12 @@ fn get_db_path(authority_name: &AuthorityName) -> Option<PathBuf> {
 // ---------------------------------------------------------------------------
 
 thread_local! {
-    /// The authority and digest of the transaction currently executing on this thread, if any.
-    ///
-    /// We use `Cell<Option<(AuthorityName, TransactionDigest)>>` so that the panic hook (which
-    /// takes `&PanicInfo`) can read it without needing `&mut` access or a `RefCell` borrow.
-    /// Both `AuthorityName` and `TransactionDigest` are `Copy`, so `Cell` is appropriate.
-    ///
-    /// Storing the authority name alongside the digest lets each validator's panic hook
-    /// identify — purely from TLS — whether it is responsible for writing the crash log,
-    /// without relying on any external node-identity mechanism.
+    /// Transaction currently being executed on this thread, if any.
     static EXECUTING_TX: Cell<Option<(AuthorityName, TransactionDigest)>> =
+        const { Cell::new(None) };
+
+    /// Transaction currently being voted on this thread, if any.
+    static VOTING_TX: Cell<Option<(AuthorityName, TransactionDigest)>> =
         const { Cell::new(None) };
 }
 
@@ -271,25 +269,38 @@ impl Drop for ExecutingTransactionGuard {
     }
 }
 
-/// Register `digest` as the transaction currently executing on this thread.
-///
-/// Returns a guard whose `Drop` implementation removes the registration. The registration lives
-/// exactly as long as the guard, which should be kept in a local variable at the call site.
-///
-/// `authority_name` identifies the node. It is used to look up the crash-log path from the
-/// registry populated by `install_panic_hook`, and to ensure each validator's panic hook writes
-/// only to its own log.
-///
-/// ```ignore
-/// let _guard = register_executing_transaction(digest, authority_name);
-/// // ... execute the transaction ...
-/// // guard is dropped here, clearing the TLS slot
-/// ```
 pub fn register_executing_transaction(
     digest: TransactionDigest,
     authority_name: AuthorityName,
 ) -> ExecutingTransactionGuard {
     ExecutingTransactionGuard::new(digest, authority_name)
+}
+
+/// RAII guard that registers a transaction digest in the voting TLS slot.
+pub struct VotingTransactionGuard {
+    _not_send_sync: PhantomData<*mut ()>,
+}
+
+impl VotingTransactionGuard {
+    fn new(digest: TransactionDigest, authority_name: AuthorityName) -> Self {
+        VOTING_TX.with(|slot| slot.set(Some((authority_name, digest))));
+        Self {
+            _not_send_sync: PhantomData,
+        }
+    }
+}
+
+impl Drop for VotingTransactionGuard {
+    fn drop(&mut self) {
+        VOTING_TX.with(|slot| slot.set(None));
+    }
+}
+
+pub fn register_voting_transaction(
+    digest: TransactionDigest,
+    authority_name: AuthorityName,
+) -> VotingTransactionGuard {
+    VotingTransactionGuard::new(digest, authority_name)
 }
 
 // ---------------------------------------------------------------------------
@@ -340,37 +351,39 @@ pub fn install_panic_hook(authority_name: AuthorityName, db_path: PathBuf) {
         //
         // We also clear the TLS slot after writing so that (in unwind builds) any drop impls
         // that run later see an empty slot.
-        let entry = EXECUTING_TX.with(|slot| slot.get());
-        if let Some((tls_authority, digest)) = entry {
-            if tls_authority == authority_name {
-                // In simtests, only write for intentional crash-simulation panics. Random node
-                // kills from unrelated fail points panic with a PanicWrapper (not a &str), so
-                // this check naturally excludes them.
-                #[cfg(msim)]
-                if info.payload().downcast_ref::<&str>().copied() != Some(CRASH_SIM_PANIC_MSG) {
-                    prev_hook(info);
-                    return;
-                }
+        #[cfg(msim)]
+        let is_crash_sim =
+            info.payload().downcast_ref::<&str>().copied() == Some(CRASH_SIM_PANIC_MSG);
+        #[cfg(not(msim))]
+        let is_crash_sim = true;
 
-                EXECUTING_TX.with(|slot| slot.set(None));
-                if let Some(db_path) = get_db_path(&authority_name) {
-                    let log_path = db_path.join(PANIC_TX_LOG_FILE);
-                    match append_digest_to_log(&log_path, digest) {
-                        Ok(()) => {
-                            // Use eprintln rather than tracing: the subscriber may be in a broken
-                            // state during a panic.
-                            eprintln!(
-                                "[crash-recovery] Panic while executing transaction {digest}; \
-                                 recorded to {}",
-                                log_path.display()
-                            );
-                        }
-                        Err(e) => {
-                            eprintln!(
-                                "[crash-recovery] Failed to write crashed transaction {digest} to \
-                                 {}: {e}",
-                                log_path.display()
-                            );
+        if is_crash_sim {
+            for (tls_slot, log_file, phase) in [
+                (
+                    EXECUTING_TX.with(|s| s.get()),
+                    PANIC_TX_LOG_FILE,
+                    "executing",
+                ),
+                (VOTING_TX.with(|s| s.get()), PANIC_VOTE_LOG_FILE, "voting"),
+            ] {
+                if let Some((tls_authority, digest)) = tls_slot {
+                    if tls_authority == authority_name {
+                        EXECUTING_TX.with(|s| s.set(None));
+                        VOTING_TX.with(|s| s.set(None));
+                        if let Some(db_path) = get_db_path(&authority_name) {
+                            let log_path = db_path.join(log_file);
+                            match append_digest_to_log(&log_path, digest) {
+                                Ok(()) => eprintln!(
+                                    "[crash-recovery] Panic while {phase} transaction {digest}; \
+                                     recorded to {}",
+                                    log_path.display()
+                                ),
+                                Err(e) => eprintln!(
+                                    "[crash-recovery] Failed to write crashed transaction \
+                                     {digest} to {}: {e}",
+                                    log_path.display()
+                                ),
+                            }
                         }
                     }
                 }
@@ -392,22 +405,22 @@ fn append_digest_to_log(path: &Path, digest: TransactionDigest) -> std::io::Resu
 // Startup: read crashed transactions
 // ---------------------------------------------------------------------------
 
-/// Read the panic log and return the set of transaction digests that were active during a past
-/// crash.  Returns an empty set if the log file does not exist.
-///
-/// Lines whose git revision does not match the current binary are skipped and removed from the
-/// log (the file is rewritten with only matching-revision lines).  This prevents stale entries
-/// from a different binary version from poisoning new runs.
-///
-/// `db_path` should be the same path passed to `install_panic_hook`.
+/// Read `panic-tx.log` and return digests that crashed during execution.
 pub fn load_crashed_transactions(db_path: &Path) -> HashSet<TransactionDigest> {
+    load_log(db_path, PANIC_TX_LOG_FILE, "execution")
+}
+
+/// Like `load_crashed_transactions` but reads `panic-vote.log`.
+pub fn load_voted_crashed_transactions(db_path: &Path) -> HashSet<TransactionDigest> {
+    load_log(db_path, PANIC_VOTE_LOG_FILE, "voting")
+}
+
+fn load_log(db_path: &Path, file_name: &str, phase: &str) -> HashSet<TransactionDigest> {
     const LINE_LIMIT: usize = 1024 * 1024;
 
-    let log_path = db_path.join(PANIC_TX_LOG_FILE);
+    let log_path = db_path.join(file_name);
     let file = match fs::File::open(&log_path) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return HashSet::new();
-        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return HashSet::new(),
         Err(e) => {
             error!(
                 "Failed to open crash-recovery log {}: {e}",
@@ -424,16 +437,12 @@ pub fn load_crashed_transactions(db_path: &Path) -> HashSet<TransactionDigest> {
 
     for line in BufReader::new(file).lines().take(LINE_LIMIT) {
         match line {
-            Err(e) => {
-                warn!("Error reading crash-recovery log: {e}");
-            }
+            Err(e) => warn!("Error reading crash-recovery log: {e}"),
             Ok(s) => {
                 let s = s.trim().to_owned();
                 if s.is_empty() {
                     continue;
                 }
-                // Expected format: "<git_revision> <tx_digest>".
-                // Old single-token lines (bare digest) are treated as non-matching.
                 let mut parts = s.splitn(2, ' ');
                 let (rev, digest_str) = match (parts.next(), parts.next()) {
                     (Some(r), Some(d)) => (r, d),
@@ -443,16 +452,18 @@ pub fn load_crashed_transactions(db_path: &Path) -> HashSet<TransactionDigest> {
                         continue;
                     }
                 };
-
                 if rev != GIT_REVISION {
-                    info!("Crash-recovery: skipping entry from different binary revision {rev:?}");
+                    info!(
+                        "Crash-recovery: skipping {phase} entry from different binary revision {rev:?}"
+                    );
                     any_skipped = true;
                     continue;
                 }
-
                 match digest_str.parse::<TransactionDigest>() {
                     Ok(d) => {
-                        info!("Crash-recovery: will drop previously-crashing transaction {d}");
+                        info!(
+                            "Crash-recovery: will skip previously-crashing {phase} transaction {d}"
+                        );
                         digests.insert(d);
                         kept_lines.push(s);
                     }
@@ -489,4 +500,26 @@ pub fn load_crashed_transactions(db_path: &Path) -> HashSet<TransactionDigest> {
     }
 
     digests
+}
+
+/// Like `maybe_crash_for_testing` but for the voting phase.
+///
+/// Uses the `crash-with-vote-logging` fail point in simtests so voting crashes can be
+/// controlled independently of execution crashes.
+pub fn maybe_crash_for_testing_voting(digest: &TransactionDigest) {
+    #[cfg(msim)]
+    {
+        sui_macros::fail_point_if!("crash-with-vote-logging", || {
+            if should_poison_transaction(digest) {
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    std::panic::panic_any(CRASH_SIM_PANIC_MSG);
+                }));
+                sui_simulator::task::kill_current_node(Some(std::time::Duration::from_millis(100)));
+            }
+        });
+    }
+    #[cfg(not(msim))]
+    if mysten_common::in_test_configuration() && should_poison_transaction(digest) {
+        panic!("crash-recovery: voting on transaction {digest}");
+    }
 }
