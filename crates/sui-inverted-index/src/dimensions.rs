@@ -9,6 +9,7 @@ use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::full_checkpoint_content::ObjectSet;
+use sui_types::object::OBJECT_START_VERSION;
 use sui_types::object::Owner;
 use sui_types::storage::ObjectKey;
 use sui_types::transaction::TransactionData;
@@ -65,6 +66,10 @@ pub enum IndexDimension {
     /// on this key, resolving `NOT D` as `range \ D` without an extra
     /// evaluator code path. No write path emits this dimension.
     TxUniverse = 0x09,
+    /// Package publish. Value: `[original_package_id_32]`.
+    PackagePublish = 0x0a,
+    /// Package upgrade. Value: `[original_package_id_32]`.
+    PackageUpgrade = 0x0b,
 }
 
 impl IndexDimension {
@@ -83,6 +88,8 @@ impl IndexDimension {
             tag if tag == Self::EventStreamHead.tag_byte() => Some(Self::EventStreamHead),
             tag if tag == Self::EventExtant.tag_byte() => Some(Self::EventExtant),
             tag if tag == Self::TxUniverse.tag_byte() => Some(Self::TxUniverse),
+            tag if tag == Self::PackagePublish.tag_byte() => Some(Self::PackagePublish),
+            tag if tag == Self::PackageUpgrade.tag_byte() => Some(Self::PackageUpgrade),
             _ => None,
         }
     }
@@ -147,6 +154,28 @@ pub fn for_each_transaction_dimension(
         }
 
         f(IndexDimension::AffectedObject, change.id.as_ref());
+
+        // Move package writes. A package at version 1 is a first publish (user
+        // or genesis system package), keyed by its own id (which is also its
+        // original id). A later version is an upgrade — user upgrades mint a new
+        // id, system upgrades reuse the id — keyed by the stable original
+        // (root) id so every version in a lineage shares one key. Discriminating
+        // on version (rather than `original_package_id() == id`) is what lets
+        // system upgrades be classified correctly, since they keep their id.
+        if let Some(sui_types::object::Data::Package(pkg)) = change
+            .output_version
+            .and_then(|v| object_set.get(&ObjectKey(change.id, v)))
+            .map(|obj| &obj.data)
+        {
+            if pkg.version() == OBJECT_START_VERSION {
+                f(IndexDimension::PackagePublish, pkg.id().as_ref());
+            } else {
+                f(
+                    IndexDimension::PackageUpgrade,
+                    pkg.original_package_id().as_ref(),
+                );
+            }
+        }
     }
 
     for (_, package_id, module, function) in tx_data.move_calls() {
@@ -690,5 +719,94 @@ mod tests {
             IndexDimension::AffectedAddress,
             balance_owner.as_ref()
         )));
+    }
+
+    #[test]
+    fn transaction_visitor_emits_package_publish_and_upgrade() {
+        use std::collections::HashSet;
+        use sui_types::digests::TransactionDigest;
+        use sui_types::effects::TestEffectsBuilder;
+        use sui_types::full_checkpoint_content::ObjectSet;
+        use sui_types::move_package::MovePackage;
+        use sui_types::object::{Data, Object};
+
+        // A BCS-encoded `MovePackage` (id 0x0..0, version 2) holding one module
+        // "DUMMY" whose declared self-address is 0x0..0. We patch the id byte
+        // (offset 31) and version byte (offset 32) to model each write below;
+        // the module's declared address always stays 0x0..0 and so serves as
+        // the original (root) id for the upgrade fixtures.
+        let pkg_bytes = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 5, 68, 85, 77, 77, 89, 63, 161, 28, 235, 11, 7, 0,
+            0, 5, 4, 1, 0, 2, 5, 2, 1, 7, 3, 6, 8, 9, 32, 0, 0, 0, 5, 68, 85, 77, 77, 89, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ];
+
+        let tx = TestCheckpointBuilder::new(0)
+            .start_transaction(1)
+            .finish_transaction()
+            .build_checkpoint()
+            .transactions[0]
+            .transaction
+            .clone();
+        let signed_data = sui_types::transaction::SenderSignedData::new(tx.clone(), vec![]);
+
+        // Run the extractor over a single package write installed at `id_byte`
+        // and `version`. Returns (storage id, original/root id, emitted keys).
+        let run = |id_byte: u8, version: u8| {
+            let mut bytes = pkg_bytes.clone();
+            bytes[31] = id_byte;
+            bytes[32] = version;
+            let pkg: MovePackage = bcs::from_bytes(&bytes).unwrap();
+            let pkg_id = pkg.id();
+            let pkg_version = pkg.version();
+            let original_id = pkg.original_package_id();
+
+            let mut object_set = ObjectSet::default();
+            object_set.insert(Object::new_package_from_data(
+                Data::Package(pkg),
+                TransactionDigest::random(),
+            ));
+
+            let effects = TestEffectsBuilder::new(&signed_data)
+                .with_package_writes(vec![(pkg_id, pkg_version)])
+                .build();
+
+            let mut keys = HashSet::new();
+            for_each_transaction_dimension(&tx, &effects, None, &object_set, |dim, value| {
+                keys.insert(encode_dimension_key(dim, value));
+            });
+            (pkg_id, original_id, keys)
+        };
+
+        // First publish (version 1): original id == storage id.
+        let (id, original_id, keys) = run(0, 1);
+        assert_eq!(id, original_id);
+        assert!(keys.contains(&encode_dimension_key(IndexDimension::PackagePublish, id.as_ref())));
+        assert!(
+            !keys
+                .iter()
+                .any(|k| k[0] == IndexDimension::PackageUpgrade.tag_byte()),
+            "a version-1 write is a publish, never an upgrade"
+        );
+
+        // User upgrade (version 2, new storage id): keyed by the stable root id.
+        let (id, original_id, keys) = run(1, 2);
+        assert_ne!(id, original_id, "user upgrade mints a new id distinct from the root");
+        assert!(keys.contains(&encode_dimension_key(
+            IndexDimension::PackageUpgrade,
+            original_id.as_ref()
+        )));
+        assert!(!keys.contains(&encode_dimension_key(IndexDimension::PackagePublish, id.as_ref())));
+
+        // A version-2 write whose original id equals its own storage id (as a
+        // reused-id / system package upgrade has) must still classify as an
+        // upgrade. This is the case the old `original == id` discriminator got
+        // wrong; the version-based discriminator keys it under PackageUpgrade.
+        let (id, original_id, keys) = run(0, 2);
+        assert_eq!(id, original_id, "fixture models a reused-id upgrade (original == id)");
+        assert!(keys.contains(&encode_dimension_key(IndexDimension::PackageUpgrade, id.as_ref())));
+        assert!(!keys.contains(&encode_dimension_key(IndexDimension::PackagePublish, id.as_ref())));
     }
 }
