@@ -59,7 +59,13 @@ jobs:
         shell: bash
         run: |
           export sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)
-          [[ "${sui_tag}" == "main" ]] && echo "tag cannot be equals to 'main'" && exit 1
+          # only published release tags may be built: a workflow_dispatch runs
+          # with a trusted main OIDC sub while building this input, so an
+          # unconstrained ref here would let arbitrary code run under that sub
+          if [[ ! "${sui_tag}" =~ ^(devnet|testnet|mainnet)-v ]]; then
+            echo "sui_tag must be a release tag (devnet-v*/testnet-v*/mainnet-v*), got: ${sui_tag}"
+            exit 1
+          fi
           echo "sui_tag=${sui_tag}" >> $GITHUB_ENV
           export sui_version=$(echo ${sui_tag} | sed -e 's/mainnet-v//' -e 's/testnet-v//')
           echo "sui_version=${sui_version}" >> $GITHUB_ENV
@@ -67,7 +73,8 @@ jobs:
       - name: Check out ${{ env.sui_tag }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
-          ref: ${{ env.sui_tag }}          
+          # pin to the tag namespace so the input can never resolve to a branch
+          ref: refs/tags/${{ env.sui_tag }}          
 
       - name: Set os/arch variables (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' }}
