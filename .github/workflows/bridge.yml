@@ -50,13 +50,17 @@ env:
   RUST_LOG: error
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
-  # sccache RW role on trusted refs only (protected branches + release branches),
-  # AND only when not building an override ref: a workflow_dispatch with a non-empty
-  # sui_repo_ref checks out arbitrary code, so it must NOT hold the RW cache even
-  # though github.ref (and the OIDC sub) is main. Empty elsewhere → setup-sccache
-  # falls back to static keys (same-repo PRs) or a local cache (forks / overrides).
-  # Keep in sync with the sui-sccache-rw-github trust policy.
-  SCCACHE_ROLE: ${{ (github.event_name != 'workflow_dispatch' || github.event.inputs.sui_repo_ref == '') && (contains(fromJSON('["refs/heads/main","refs/heads/devnet","refs/heads/testnet","refs/heads/mainnet"]'), github.ref) || (startsWith(github.ref, 'refs/heads/releases/sui-') && endsWith(github.ref, '-release'))) && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || '' }}
+  # sccache role selection:
+  #   trusted refs (protected + release branches), NOT a workflow_dispatch building
+  #     an override sui_repo_ref → RW role (read/write cache).
+  #   same-repo pull_request → RO role (read-only; a PR cannot poison the cache).
+  #   forks / overrides / everything else → empty → setup-sccache falls back to a
+  #     local cache. Forks are skipped here because GitHub caps fork id-token to
+  #     none, so role-to-assume would hard-fail the OIDC step. This fork skip is a
+  #     fail-safe accommodation, NOT a security boundary — the RO role still trusts
+  #     pull_request, so a fork reading the cache is acceptable (Decision A).
+  # Keep in sync with the sui-sccache-{rw,ro}-github trust policies.
+  SCCACHE_ROLE: ${{ (github.event_name != 'workflow_dispatch' || github.event.inputs.sui_repo_ref == '') && (contains(fromJSON('["refs/heads/main","refs/heads/devnet","refs/heads/testnet","refs/heads/mainnet"]'), github.ref) || (startsWith(github.ref, 'refs/heads/releases/sui-') && endsWith(github.ref, '-release'))) && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false) && 'arn:aws:iam::011083325127:role/sui-sccache-ro-github' || '' }}
 
 jobs:
   diff:

@@ -36,12 +36,15 @@ env:
   RUST_BACKTRACE: short
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
-  # sccache RW role on trusted refs only. Empty elsewhere → setup-sccache falls
-  # back to static keys (same-repo PRs) or a local cache (forks). The extensions
-  # branch is deliberately not in the role trust (dormant; see
-  # AWS_OIDC_MIGRATION_INVENTORY.md). No workflow_dispatch here, so no
-  # override-ref clause. Keep in sync with the sui-sccache-rw-github trust policy.
-  SCCACHE_ROLE: ${{ (contains(fromJSON('["refs/heads/main","refs/heads/devnet","refs/heads/testnet","refs/heads/mainnet"]'), github.ref) || (startsWith(github.ref, 'refs/heads/releases/sui-') && endsWith(github.ref, '-release'))) && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || '' }}
+  # sccache role selection: trusted refs → RW role; same-repo pull_request → RO
+  # role (read-only, cannot poison the cache); forks / extensions / everything else
+  # → empty → setup-sccache falls back to a local cache. Forks are skipped because
+  # GitHub caps fork id-token to none (role-to-assume would hard-fail OIDC); this
+  # skip is a fail-safe, NOT a security boundary — the RO role still trusts
+  # pull_request (Decision A). The extensions branch is deliberately untrusted
+  # (dormant; see AWS_OIDC_MIGRATION_INVENTORY.md). No workflow_dispatch here, so no
+  # override-ref clause. Keep in sync with the sui-sccache-{rw,ro}-github trusts.
+  SCCACHE_ROLE: ${{ (contains(fromJSON('["refs/heads/main","refs/heads/devnet","refs/heads/testnet","refs/heads/mainnet"]'), github.ref) || (startsWith(github.ref, 'refs/heads/releases/sui-') && endsWith(github.ref, '-release'))) && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false) && 'arn:aws:iam::011083325127:role/sui-sccache-ro-github' || '' }}
 
 jobs:
   diff:

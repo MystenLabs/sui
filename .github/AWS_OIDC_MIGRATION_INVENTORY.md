@@ -23,9 +23,9 @@ Keep any new `SCCACHE_ROLE` gate in sync with this exact set.
 | -------------------- | ---------- | -------------------------------------------- | -------------------------------------------- | -------- |
 | `sccache-warmup.yml` | 2          | schedule, workflow_dispatch                  | **OIDC ✅**                                  | 1 ✅     |
 | `nightly.yml`        | 1          | schedule, workflow_dispatch (disabled)       | **OIDC ✅**                                  | 2 ✅     |
-| `rust.yml`           | 11         | push, pull_request, workflow_dispatch        | **dual-pass ✅** (OIDC trusted / static PRs) | 3 ✅ → 4 |
-| `external.yml`       | 2          | push, pull_request                           | **dual-pass ✅** (OIDC trusted / static PRs) | 3 ✅ → 4 |
-| `bridge.yml`         | 2          | push, pull_request, workflow_dispatch        | **dual-pass ✅** (PR #26927)                 | 3 ✅ → 4 |
+| `rust.yml`           | 11         | push, pull_request, workflow_dispatch        | **OIDC ✅** (RW trusted / RO same-repo PR / local fork) | 3 ✅ 4 ✅ |
+| `external.yml`       | 2          | push, pull_request                           | **OIDC ✅** (RW trusted / RO same-repo PR / local fork) | 3 ✅ 4 ✅ |
+| `bridge.yml`         | 2          | push, pull_request, workflow_dispatch        | **OIDC ✅** (RW trusted / RO same-repo PR / local fork) | 3 ✅ 4 ✅ |
 | `release.yml`        | 1          | release, workflow_dispatch                   | **OIDC ✅** (sccache RW + S3 ops release env) | 5 ✅     |
 
 ## How each event/ref classifies
@@ -40,7 +40,8 @@ The decision is the OIDC `sub` of the run, which depends on the event + ref:
 | `workflow_dispatch`| `main`, **no** `sui_repo_ref`        | `…:ref:refs/heads/main`        | **YES**                  | OIDC RW                               |
 | `workflow_dispatch`| `main` + `sui_repo_ref=<feature>`    | `…:ref:refs/heads/main`        | sub matches, but **gate OFF** | builds the override ref (untrusted code) → must NOT hold RW; gate requires `sui_repo_ref==''` → static/local |
 | `workflow_dispatch`| feature branch                       | `…:ref:refs/heads/<feat>`      | **NO**                   | local-cache fallback (expected)       |
-| `pull_request`     | any (same-repo **and** fork)         | `…:pull_request`               | **NO** (no RW)           | **RO role** (option A) once provisioned |
+| `pull_request` (same-repo) | PR merge ref                 | `…:pull_request`               | **NO** (RO, not RW)      | **RO role ✅** (option A)              |
+| `pull_request` (fork)      | PR merge ref                 | `…:pull_request`               | **NO**                   | empty → local cache (fork `id-token` capped to none; gate skips to avoid a hard-fail — fail-safe, not a security boundary) |
 
 > **Checkout-ref caveat (rust.yml / bridge.yml).** The OIDC `sub` (and thus role
 > assumability) is decided by `github.ref` — but these workflows check out
@@ -155,17 +156,21 @@ static/local on an override dispatch rather than OIDC. That is the safe directio
 - **Phase 4** then resolves the PR path: **option A — all PRs → RO role.**
 - **Phase 7** removes the static-key inputs once no event path needs them.
 
-**Phase 4 decision: option A (2026-06-15).** All PRs, including forks, get
-**read-only** sccache access via a new RO role (`sui-sccache-ro-github`); no PR
-gets write access, so poisoning stays blocked. Chosen over C because the cache
-holds only public-source build artifacts (no identified sensitivity) and C's
-"fork = none" cannot be done in IAM — every PR presents the same sub
-`repo:MystenLabs/sui:pull_request`, so C would require ongoing workflow-layer
-enforcement (withholding `id-token: write` from fork-reachable jobs) that we
-declined to carry preemptively. See `AWS_OIDC_ROLES.md` §"PR read-only cache"
-for the RO role's trust + policy to provision.
+**Phase 4 decision: option A (2026-06-15) — IMPLEMENTED.** The security decision:
+PRs get **read-only** sccache via the RO role (`sui-sccache-ro-github`, trust
+`repo:MystenLabs/sui:pull_request`); no PR gets write access, so poisoning stays
+blocked. Chosen over C because the cache holds only public-source build artifacts
+(no identified sensitivity) and C's "fork = none" cannot be done in IAM — every PR
+presents the same sub `repo:MystenLabs/sui:pull_request`.
 
-**Remaining Phase-4 work (mechanical, after the RO role is provisioned):** extend
-each `SCCACHE_ROLE` expression so `pull_request` resolves the RO ARN (trusted
-refs still → RW; override-dispatch still → empty), then drop the static-key
-inputs per Phase 7.
+**Implementation (the fork nuance).** GitHub caps fork-PR `id-token` to `none`, so
+a fork cannot mint the OIDC token, and `setup-sccache`'s OIDC step has no
+`continue-on-error` — setting `role-to-assume` on a fork would hard-fail the job.
+So each `SCCACHE_ROLE` gate resolves the RO ARN only for **same-repo** PRs
+(`github.event.pull_request.head.repo.fork == false`); **fork** PRs get empty →
+local cache, exactly as before. This fork skip is a **fail-safe accommodation, not
+a security boundary**: the RO role still trusts `pull_request`, so if GitHub
+settings ever let forks mint `id-token`, a fork assuming the RO role is still
+acceptable under Decision A — fork-local must NOT be relied on as a durable
+guarantee. Static-key inputs are retained on all call sites until Phase 7 (the
+RO/RW OIDC paths are verified first, then the static fallback is removed).
