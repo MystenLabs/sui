@@ -63,11 +63,14 @@ not assume this role (they fall back to a local cache).
 > `repo:MystenLabs/sui:ref:refs/heads/{main,devnet,testnet,mainnet}` — `aud`
 > pinned, no wildcard.
 >
-> **Gap to close if needed:** the live trust does **not** yet include
-> `releases/sui-*-release` branches or `*-v*` tags. sccache callers that run on a
-> release branch or tag therefore cannot assume it today; add those `sub` entries
-> (per the "explicit refs" block) before flipping any release-branch/tag-triggered
-> sccache caller.
+> **Gap to close (Phase-5 release flip):** `releases/sui-*-release` branch trust
+> was added 2026-06-08, but the live trust does **not** yet include the release
+> **tags**. Add these three exact subjects (matching the workflow's dispatch guard
+> in `release.yml`, not a broad `*-v*`) before flipping the release.yml sccache
+> caller to OIDC:
+> `repo:MystenLabs/sui:ref:refs/tags/{devnet,testnet,mainnet}-v*`. The
+> dispatch path's `main` sub is already trusted and its chosen-ref hazard is
+> closed by the landed tag-prefix + `refs/tags/` checkout guards (PR #26953).
 
 ### Trust policy
 
@@ -102,7 +105,9 @@ Alternative (explicit refs — use if not adopting an environment):
       "repo:MystenLabs/sui:ref:refs/heads/testnet",
       "repo:MystenLabs/sui:ref:refs/heads/mainnet",
       "repo:MystenLabs/sui:ref:refs/heads/releases/sui-*-release",
-      "repo:MystenLabs/sui:ref:refs/tags/*-v*"
+      "repo:MystenLabs/sui:ref:refs/tags/devnet-v*",
+      "repo:MystenLabs/sui:ref:refs/tags/testnet-v*",
+      "repo:MystenLabs/sui:ref:refs/tags/mainnet-v*"
     ]
   }
 }
@@ -133,18 +138,56 @@ so they are covered by the branch subjects above.)
 }
 ```
 
-### PR read-only cache (follow-up, not this PR)
+### PR read-only cache — **DECISION: option A (2026-06-15)**
 
-Today same-repo PRs get **read/write** cache via the static key. The goal is to
-demote PRs to **read-only** so a PR can't poison the shared cache, using a second
-role `sui-github-actions-sccache-ro` (trust on `pull_request`, policy granting
-only `s3:GetObject` + `s3:ListBucket`, **no `PutObject`**).
+> **Decided: option A.** Allow all PRs, including forks, **read-only** access to
+> the sccache cache through a new RO OIDC role. The cache holds compiled
+> artifacts built from public `sui` source with no identified sensitive material,
+> and PRs get **no write access** so cache poisoning stays blocked. If concrete
+> sensitivity is ever identified in cache contents, revisit option C — but we do
+> not carry the workflow capability-split complexity preemptively. Options B/C
+> are retained below for the record.
 
-**Caveat — "fork = none" is not enforceable by the trust policy.** GitHub's OIDC
-`sub` for *every* PR — same-repo and fork alike — is the same value
-`repo:MystenLabs/sui:pull_request`. AWS cannot tell a fork PR from a same-repo PR
-from that claim, so the trust alone cannot grant RO to same-repo PRs while
-denying forks. Pick one:
+Today same-repo PRs get **read/write** cache via the static key. Option A demotes
+PRs to **read-only** so a PR can't poison the shared cache, using a second role
+**`sui-sccache-ro-github`** (naming parallels the existing
+`sui-sccache-rw-github`; trust on `pull_request`, policy granting only
+`s3:GetObject` + `s3:ListBucket`, **no `PutObject`**).
+
+**To provision (AWS account `011083325127`):**
+
+```json
+// Trust policy — RO role
+"Condition": {
+  "StringEquals": {
+    "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+    "token.actions.githubusercontent.com:sub": "repo:MystenLabs/sui:pull_request"
+  }
+}
+```
+
+```json
+// Permission policy — bucket mystenlabs-sccache, read-only (NO PutObject)
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Sid": "SccacheObjectRO", "Effect": "Allow",
+      "Action": "s3:GetObject", "Resource": "arn:aws:s3:::mystenlabs-sccache/*" },
+    { "Sid": "SccacheListBucket", "Effect": "Allow",
+      "Action": "s3:ListBucket", "Resource": "arn:aws:s3:::mystenlabs-sccache" }
+  ]
+}
+```
+
+Under option A this trust is intentionally PR-wide; no fork/same-repo distinction
+is attempted (it is not expressible in IAM — see below). The workflow flip then
+extends each `SCCACHE_ROLE` expression to resolve the RO ARN on `pull_request`.
+
+**For the record — "fork = none" is not enforceable by the trust policy** (the
+reason A was chosen over C). GitHub's OIDC `sub` for *every* PR — same-repo and
+fork alike — is the same value `repo:MystenLabs/sui:pull_request`. AWS cannot tell
+a fork PR from a same-repo PR from that claim, so the trust alone cannot grant RO
+to same-repo PRs while denying forks. The rejected alternatives:
 
 - **(A) All PRs → read-only** (incl. forks): trust `pull_request` on the RO role.
   Simplest; a read-only cache is low-risk (no poisoning, no exfil beyond cache
