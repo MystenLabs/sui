@@ -404,6 +404,12 @@ When implementing transaction URI support:
 3. **Display metadata to users**: Show the `label`, `iconUrl`, and `message` parameters to users during payment confirmation to provide context.
 4. **Route to correct payment function**: Use `process_registry_payment` when `registry` is provided, otherwise use `process_ephemeral_payment`.
 
+:::tip
+
+Integration checklist: ensure nonce uniqueness for every payment, handle backend payment processing idempotently (so retries and webhook replays do not double-process), and verify the receiver, amount, coin type, and package IDs against your own expected values rather than trusting client-supplied or URI-supplied data. Do not rely on client-only state to determine whether a payment succeeded — confirm against onchain receipts and events. For broader guidance, see [Security Best Practices](/develop/security/best-practices).
+
+:::
+
 ## Key structures
 
 ### `Namespace`

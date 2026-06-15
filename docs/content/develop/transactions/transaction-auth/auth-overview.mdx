@@ -10,6 +10,12 @@ Transaction authentication on Sui involves three core concepts: cryptographic ke
 
 Sui adheres to widely accepted wallet specifications in the cryptocurrency industry, including [BIP-32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and its variation [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010), [BIP-44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki), and [BIP-39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki), to facilitate key management for users. Sui supports pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1, and multisig for signed transactions.
 
+:::caution
+
+The mnemonics and private keys shown on this page are illustrative placeholders. Never paste a real mnemonic or private key into examples, code, or logs. For production deployments, separate keys by role and by network (do not reuse a mainnet key on testnet or across services), and place privileged keys under multisig or hardware (HSM) custody rather than a hot keystore. Always present users a human-readable transaction intent before they sign, so they can verify what they are authorizing instead of blind-signing. See [User and operator key management](/develop/security/best-practices#user-and-operator-key-management) for details.
+
+:::
+
 ### Key derivation schemes
 
 For managing wallets that support the Ed25519 (EdDSA) signing scheme, Sui follows [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010), which enforces wallets to always derive child private keys from parent private keys using the hardened key path.

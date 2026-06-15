@@ -162,6 +162,12 @@ DeepBook Margin implements multiple safeguards against oracle issues:
 - **Confidence interval checks:** The protocol validates that Pyth price confidence intervals are within acceptable bounds
 - **EWMA price verification:** Spot prices are validated against EWMA prices to detect and reject anomalous price spikes
 
+:::caution
+
+These onchain protections do not remove your own data-hygiene responsibility. Monitor oracle freshness and be aware that the prices, risk ratios, and liquidation thresholds shown in a UI, wallet, or indexer can lag the onchain state — never make margin decisions on stale or cached offchain data. Also understand the limits of liquidation automation: keepers and TPSL orders are best-effort and can be delayed or fail during congestion or extreme volatility, so do not assume a position will always be closed at your expected price. See [oracle and offchain data](/develop/security/best-practices#oracle-and-offchain-data).
+
+:::
+
 ## Risk mitigation strategies
 
 ### 1. Use less than maximum leverage

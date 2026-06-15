@@ -32,3 +32,9 @@ See the [TypeScript SDK documentation](https://sdk.mystenlabs.com/typescript/cry
 - Cloud-synced passkey improves accessibility but also creates risks if a cloud provider is compromised or if you lose access to your cloud account. If you prefer full self-custody, you can use hardware-based passkey that does not rely on cloud synchronization.
 
 - You cannot transfer a passkey between different authenticators. For example, a passkey created on a security key cannot move to another device unless it syncs through a cloud provider. To avoid losing access, you should set up authentication on multiple devices.
+
+:::caution
+
+Passkey recovery and availability depend on the vendor. A synced passkey may replicate across the vendor's ecosystem (for example, iCloud Keychain or Google Password Manager), so its security and recoverability are only as strong as the associated vendor account and its second factors. Compromise or lockout of that account can expose or strand the key. Do not rely on a single passkey as the sole custody mechanism for high-value or administrative accounts; place privileged keys under multisig or hardware custody and maintain independent recovery paths. See [User and operator key management](/develop/security/best-practices#user-and-operator-key-management) for details.
+
+:::

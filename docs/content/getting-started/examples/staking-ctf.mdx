@@ -93,6 +93,19 @@ A secure implementation would either:
 
 - **Prevent receipt merging:** Remove `merge_receipts` entirely, or restrict it so merged hours cannot exceed the time between the earliest stake and the current clock.
 
+:::tip
+
+Mitigation checklist for time-accumulation and receipt patterns:
+
+- Derive elapsed time from monotonic onchain sources (`Clock`/timestamps) rather than a client-updatable counter, and never let accounting move backward.
+- Make receipts non-mergeable, or key them by a canonical, unforgeable receipt ID so duplicates and merges cannot inflate accumulated state.
+- Add invariant tests that assert accumulated time and amounts can never exceed real elapsed time across stake, update, merge, and claim paths.
+- Emit events for stake, claim, and merge so the accounting is auditable and anomalies are detectable.
+
+See [Security best practices](/develop/security/best-practices).
+
+:::
+
 ## Prerequisites
 
 <Tabs className="tabsHeadingCentered--small">

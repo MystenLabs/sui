@@ -282,6 +282,12 @@ public fun exchange<CoinX, CoinY>(coin_in: &mut Coin<CoinX>, value: u64): Coin<C
 
 To maintain composability, use capability objects instead of arrays of addresses for access control. For security guidance on capabilities, allowlists, revocation, and shared object authorization, see [Access control](/develop/security/best-practices) in the security best practices guide.
 
+:::tip
+
+For privileged functions, take an explicit capability parameter rather than relying on sender-only authorization. Only use `tx_context::sender()` as the authorization check where the signer is genuinely the only valid actor. When a capability grants rights over a specific object, validate the capability/object relationship (for example, match an ID stored in the capability). Design in a revocation or rotation path from the start, and emit events for privileged actions so they are auditable. See [Access control](/develop/security/best-practices#access-control) for the full guidance.
+
+:::
+
 ```move
 module conventions::access_control;
 

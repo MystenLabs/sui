@@ -202,6 +202,12 @@ let policy_addr: address = namespace.policy_address<Balance<MY_COIN>>();
 
 ## Security model
 
+:::caution
+
+PAS provides the enforcement primitives (closed loop, type-safe approvals, atomic resolution), but it does not enforce your business or compliance policy — deciding who can transfer and under what conditions is your responsibility, implemented in your approval witnesses before calling `request.approve()`. Because the approval witnesses are the only gate on asset movement, audit them carefully: a flawed or overly permissive witness undermines the entire closed loop. See [access control](/develop/security/best-practices#access-control).
+
+:::
+
 PAS guarantees the following:
 
 - **Closed loop:** Managed assets cannot leave the system without going through a request with matching approvals.

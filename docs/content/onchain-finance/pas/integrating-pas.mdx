@@ -83,6 +83,12 @@ Templates are purely an offchain utility. They do not affect onchain execution o
 
 :::
 
+:::caution
+
+Because templates are offchain only, they are not a security boundary — never rely on a template to enforce anything. All enforcement lives in your approval witness function. That function must validate the caller's authority, the source and recipient of the funds, and the freshness of any external state (for example, KYC or compliance registries and any oracle or timestamp inputs) before calling `request.approve()`. Fail closed: if any check is uncertain or any required input is missing or stale, abort rather than approve. See [access control](/develop/security/best-practices#access-control).
+
+:::
+
 Templates are useful because when a transfer happens, the PAS SDK needs to know:
 
 1. Which contract to call for approval

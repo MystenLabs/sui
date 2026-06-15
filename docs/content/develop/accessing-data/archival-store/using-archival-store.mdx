@@ -8,6 +8,12 @@ The Archival Service provides access to historical Sui network data through the 
 
 For core concepts, see the [Archival Store and Service concepts page](/develop/accessing-data/archival-store).
 
+:::info Trust boundary
+
+Treat archival and historical data as a data-access convenience, not as proof. When correctness matters for a high-trust workflow, verify the returned data independently (for example, through checkpoint verification or [authenticated events](/develop/accessing-data/authenticated-events)) rather than trusting the endpoint. See [Security Best Practices](/develop/security/best-practices) for more.
+
+:::
+
 :::info
 
 <ImportContent source="json-rpc-deprecation" mode="snippet" />

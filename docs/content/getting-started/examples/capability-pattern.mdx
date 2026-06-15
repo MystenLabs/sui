@@ -213,6 +213,12 @@ The `new_admin` function lets an existing admin mint a new `AdminCap` for anothe
 
 This function takes a reference to the caller's `AdminCap` (proving they have authority), creates a new `AdminCap`, and transfers it to the target address. The new admin has identical privileges. Unlike an allowlist-based approach, each admin holds their own independent object, so revoking 1 admin (by destroying their cap) does not affect others.
 
+:::caution
+
+Destroying or transferring a capability is not sufficient revocation if the holder is compromised or uncooperative — you cannot force someone else's object to be deleted, and a compromised holder can act before you react. For robust revocation, gate privileged functions on a registry (an allowlist or set of valid capability IDs the module checks) or a version/epoch field that you can bump to invalidate outstanding caps. Also plan for capability rotation, hold high-value caps in multisig custody, and emit events for privileged actions so they are auditable. See [Access control](/develop/security/best-practices#access-control).
+
+:::
+
 ## Common modifications
 
 - **Add a `MintCap` separate from `AdminCap`:** Split creation and administration into 2 capabilities. The deployer holds `AdminCap` for configuration, and minters hold `MintCap` for hero creation. This follows the principle of least privilege.
