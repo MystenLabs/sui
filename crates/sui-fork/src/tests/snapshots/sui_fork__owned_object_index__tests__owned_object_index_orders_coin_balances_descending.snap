@@ -1,0 +1,49 @@
+---
+source: crates/sui-fork/src/tests/owned_object_index.rs
+assertion_line: 200
+expression: infos
+---
+[
+  {
+    "owner": "[owner]",
+    "object_type": {
+      "address": "0000000000000000000000000000000000000000000000000000000000000002",
+      "module": "coin",
+      "name": "Coin",
+      "type_args": [
+        {
+          "struct": {
+            "address": "0000000000000000000000000000000000000000000000000000000000000002",
+            "module": "sui",
+            "name": "SUI",
+            "type_args": []
+          }
+        }
+      ]
+    },
+    "balance": 1000,
+    "object_id": "[high_balance]",
+    "version": 1
+  },
+  {
+    "owner": "[owner]",
+    "object_type": {
+      "address": "0000000000000000000000000000000000000000000000000000000000000002",
+      "module": "coin",
+      "name": "Coin",
+      "type_args": [
+        {
+          "struct": {
+            "address": "0000000000000000000000000000000000000000000000000000000000000002",
+            "module": "sui",
+            "name": "SUI",
+            "type_args": []
+          }
+        }
+      ]
+    },
+    "balance": 10,
+    "object_id": "[low_balance]",
+    "version": 1
+  }
+]

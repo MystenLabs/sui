@@ -1,0 +1,97 @@
+---
+source: crates/sui-fork/src/tests/owned_object_index.rs
+expression: "serde_json::json!({\n    \"exact_gas\": gas_infos, \"exact_custom\": custom_infos, \"wildcard_coin\":\n    wildcard_infos, \"wrong_type\": wrong_type_infos,\n})"
+---
+{
+  "exact_gas": [
+    {
+      "owner": "[owner]",
+      "object_type": {
+        "address": "0000000000000000000000000000000000000000000000000000000000000002",
+        "module": "coin",
+        "name": "Coin",
+        "type_args": [
+          {
+            "struct": {
+              "address": "0000000000000000000000000000000000000000000000000000000000000002",
+              "module": "sui",
+              "name": "SUI",
+              "type_args": []
+            }
+          }
+        ]
+      },
+      "balance": 1000000,
+      "object_id": "[gas]",
+      "version": 1
+    }
+  ],
+  "exact_custom": [
+    {
+      "owner": "[owner]",
+      "object_type": {
+        "address": "0000000000000000000000000000000000000000000000000000000000000002",
+        "module": "coin",
+        "name": "Coin",
+        "type_args": [
+          {
+            "struct": {
+              "address": "0000000000000000000000000000000000000000000000000000000000000042",
+              "module": "custom_coin",
+              "name": "CUSTOM",
+              "type_args": []
+            }
+          }
+        ]
+      },
+      "balance": 7,
+      "object_id": "[custom]",
+      "version": 1
+    }
+  ],
+  "wildcard_coin": [
+    {
+      "owner": "[owner]",
+      "object_type": {
+        "address": "0000000000000000000000000000000000000000000000000000000000000002",
+        "module": "coin",
+        "name": "Coin",
+        "type_args": [
+          {
+            "struct": {
+              "address": "0000000000000000000000000000000000000000000000000000000000000002",
+              "module": "sui",
+              "name": "SUI",
+              "type_args": []
+            }
+          }
+        ]
+      },
+      "balance": 1000000,
+      "object_id": "[gas]",
+      "version": 1
+    },
+    {
+      "owner": "[owner]",
+      "object_type": {
+        "address": "0000000000000000000000000000000000000000000000000000000000000002",
+        "module": "coin",
+        "name": "Coin",
+        "type_args": [
+          {
+            "struct": {
+              "address": "0000000000000000000000000000000000000000000000000000000000000042",
+              "module": "custom_coin",
+              "name": "CUSTOM",
+              "type_args": []
+            }
+          }
+        ]
+      },
+      "balance": 7,
+      "object_id": "[custom]",
+      "version": 1
+    }
+  ],
+  "wrong_type": []
+}

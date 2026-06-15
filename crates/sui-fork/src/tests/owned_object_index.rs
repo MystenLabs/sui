@@ -6,6 +6,8 @@
 //! `src/tests/` but remains a child of the `owned_object_index` module and has full `super::*`
 //! access to crate-private items.
 
+use std::collections::BTreeMap;
+
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use sui_types::base_types::ObjectID;
@@ -66,88 +68,119 @@ fn custom_coin_type() -> TypeTag {
     ))
 }
 
-macro_rules! assert_same_info {
-    ($actual:expr, $expected:expr $(,)?) => {{
-        let actual = $actual;
-        let expected = $expected;
-        assert_eq!(actual.owner, expected.owner);
-        assert_eq!(actual.object_type, expected.object_type);
-        assert_eq!(actual.balance, expected.balance);
-        assert_eq!(actual.object_id, expected.object_id);
-        assert_eq!(actual.version, expected.version);
-    }};
+fn test_object_id(byte: u8) -> ObjectID {
+    ObjectID::from_single_byte(byte)
 }
 
-macro_rules! assert_info_matches_object {
-    ($info:expr, $object:expr $(,)?) => {{
-        assert_same_info!($info, &owned_object_info($object));
-    }};
+fn test_address(byte: u8) -> SuiAddress {
+    SuiAddress::from(test_object_id(byte))
+}
+
+fn owned_object_redactions(
+    owners: &[(SuiAddress, &'static str)],
+    objects: &[(ObjectID, &'static str)],
+) -> insta::Settings {
+    let owner_labels = owners
+        .iter()
+        .map(|(owner, label)| (owner.to_string(), *label))
+        .collect::<BTreeMap<_, _>>();
+    let object_labels = objects
+        .iter()
+        .map(|(object_id, label)| (object_id.to_string(), *label))
+        .collect::<BTreeMap<_, _>>();
+
+    let mut settings = insta::Settings::clone_current();
+    settings.add_dynamic_redaction(".**.owner", move |value, _path| {
+        labeled_redaction("owner", value, &owner_labels)
+    });
+    settings.add_dynamic_redaction(".**.object_id", move |value, _path| {
+        labeled_redaction("object_id", value, &object_labels)
+    });
+    settings
+}
+
+fn labeled_redaction(
+    field: &str,
+    value: insta::internals::Content,
+    labels: &BTreeMap<String, &'static str>,
+) -> insta::internals::Content {
+    let value = value
+        .as_str()
+        .unwrap_or_else(|| panic!("{field} should serialize as a string"));
+    let label = labels
+        .get(value)
+        .unwrap_or_else(|| panic!("unexpected {field}: {value}"));
+    insta::internals::Content::from(*label)
 }
 
 #[tokio::test]
 async fn test_owned_object_index_updates_transfers_and_deletes() {
     let (_dir, store) = test_store();
-    let owner = SuiAddress::random_for_testing_only();
-    let next_owner = SuiAddress::random_for_testing_only();
-    let first_id = ObjectID::random();
-    let second_id = ObjectID::random();
+    let owner = test_address(0x11);
+    let next_owner = test_address(0x12);
+    let first_id = test_object_id(0x21);
+    let second_id = test_object_id(0x22);
     let first = make_gas_object(first_id, 1, Owner::AddressOwner(owner), 1_000_000);
     let second = make_gas_object(second_id, 1, Owner::AddressOwner(owner), 1_000_000);
 
-    assert!(!store.owned_object_index_exists().unwrap());
+    let exists_before = store.owned_object_index_exists().unwrap();
     store
         .apply_owned_object_index_updates(std::iter::empty(), [&second, &first])
         .unwrap();
-    assert!(store.owned_object_index_exists().unwrap());
+    let exists_after_insert = store.owned_object_index_exists().unwrap();
 
-    let infos = store.scan_owner(owner, None, None).unwrap();
-    assert_eq!(infos.len(), 2);
-    assert!(infos[0].object_id < infos[1].object_id);
-    assert!(infos.iter().all(|info| info.owner == owner));
-    assert!(
-        infos
-            .iter()
-            .all(|info| info.object_type == GasCoin::type_())
-    );
-    assert!(infos.iter().all(|info| info.balance == Some(1_000_000)));
+    let after_insert = store.scan_owner(owner, None, None).unwrap();
+    let second_cursor = after_insert
+        .get(1)
+        .expect("inserted rows should include a second cursor")
+        .clone();
 
-    let infos_from_cursor = store
-        .scan_owner(owner, None, Some(infos[1].clone()))
-        .unwrap();
-    assert_eq!(infos_from_cursor.len(), 1);
-    assert_same_info!(&infos_from_cursor[0], &infos[1]);
+    let cursor_from_second = store.scan_owner(owner, None, Some(second_cursor)).unwrap();
 
-    assert!(store.scan_owner(next_owner, None, None).unwrap().is_empty());
+    let next_owner_empty = store.scan_owner(next_owner, None, None).unwrap();
 
     let transferred = make_gas_object(first_id, 2, Owner::AddressOwner(next_owner), 1_000_000);
     store
         .apply_owned_object_index_updates([&first], [&transferred])
         .unwrap();
 
-    let remaining_owner_infos = store.scan_owner(owner, None, None).unwrap();
-    assert_eq!(remaining_owner_infos.len(), 1);
-    assert_eq!(remaining_owner_infos[0].object_id, second_id);
-
-    let next_owner_infos = store
+    let after_transfer_original_owner = store.scan_owner(owner, None, None).unwrap();
+    let after_transfer_next_owner_from_cursor = store
         .scan_owner(next_owner, None, Some(owned_object_info(&transferred)))
         .unwrap();
-    assert_eq!(next_owner_infos.len(), 1);
-    assert_info_matches_object!(&next_owner_infos[0], &transferred);
 
     store
         .apply_owned_object_index_updates([&second], std::iter::empty())
         .unwrap();
-    let infos = store.get_owned_object_infos().unwrap();
-    assert_eq!(infos.len(), 1);
-    assert_info_matches_object!(&infos[0], &transferred);
+    let after_delete_all = store.get_owned_object_infos().unwrap();
+
+    owned_object_redactions(
+        &[(owner, "[owner]"), (next_owner, "[next_owner]")],
+        &[(first_id, "[first]"), (second_id, "[second]")],
+    )
+    .bind(|| {
+        insta::assert_json_snapshot!(
+            "owned_object_index_updates_transfers_and_deletes",
+            serde_json::json!({
+                "exists_before": exists_before,
+                "exists_after_insert": exists_after_insert,
+                "after_insert": after_insert,
+                "cursor_from_second": cursor_from_second,
+                "next_owner_empty": next_owner_empty,
+                "after_transfer_original_owner": after_transfer_original_owner,
+                "after_transfer_next_owner_from_cursor": after_transfer_next_owner_from_cursor,
+                "after_delete_all": after_delete_all,
+            })
+        );
+    });
 }
 
 #[tokio::test]
 async fn test_owned_object_index_orders_coin_balances_descending() {
     let (_dir, store) = test_store();
-    let owner = SuiAddress::random_for_testing_only();
-    let low_id = ObjectID::random();
-    let high_id = ObjectID::random();
+    let owner = test_address(0x31);
+    let low_id = test_object_id(0x41);
+    let high_id = test_object_id(0x42);
     let low = make_gas_object(low_id, 1, Owner::AddressOwner(owner), 10);
     let high = make_gas_object(high_id, 1, Owner::AddressOwner(owner), 1_000);
 
@@ -158,21 +191,22 @@ async fn test_owned_object_index_orders_coin_balances_descending() {
     let infos = store
         .scan_owner(owner, Some(&GasCoin::type_()), None)
         .unwrap();
-    assert_eq!(
-        infos
-            .into_iter()
-            .map(|info| (info.object_id, info.balance))
-            .collect::<Vec<_>>(),
-        vec![(high_id, Some(1_000)), (low_id, Some(10))],
-    );
+
+    owned_object_redactions(
+        &[(owner, "[owner]")],
+        &[(high_id, "[high_balance]"), (low_id, "[low_balance]")],
+    )
+    .bind(|| {
+        insta::assert_json_snapshot!("owned_object_index_orders_coin_balances_descending", infos);
+    });
 }
 
 #[tokio::test]
 async fn test_owned_object_index_filters_exact_and_wildcard_types() {
     let (_dir, store) = test_store();
-    let owner = SuiAddress::random_for_testing_only();
-    let gas_id = ObjectID::random();
-    let custom_id = ObjectID::random();
+    let owner = test_address(0x51);
+    let gas_id = test_object_id(0x61);
+    let custom_id = test_object_id(0x62);
     let gas = make_gas_object(gas_id, 1, Owner::AddressOwner(owner), 1_000_000);
     let custom = make_coin_object(
         custom_id,
@@ -193,46 +227,61 @@ async fn test_owned_object_index_filters_exact_and_wildcard_types() {
     let gas_infos = store
         .scan_owner(owner, Some(&GasCoin::type_()), None)
         .unwrap();
-    assert_eq!(gas_infos.len(), 1);
-    assert_info_matches_object!(&gas_infos[0], &gas);
 
     let custom_infos = store.scan_owner(owner, Some(&custom_type), None).unwrap();
-    assert_eq!(custom_infos.len(), 1);
-    assert_info_matches_object!(&custom_infos[0], &custom);
 
-    let wildcard_infos = store
-        .scan_owner(owner, Some(&wildcard_coin), None)
-        .unwrap()
-        .into_iter()
-        .map(|info| info.object_id)
-        .collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(wildcard_infos, [gas_id, custom_id].into_iter().collect(),);
+    let wildcard_infos = store.scan_owner(owner, Some(&wildcard_coin), None).unwrap();
 
     let wrong_type = "0x2::clock::Clock"
         .parse::<StructTag>()
         .expect("wrong type should parse");
-    assert!(
-        store
-            .scan_owner(owner, Some(&wrong_type), None)
-            .unwrap()
-            .is_empty()
-    );
+    let wrong_type_infos = store.scan_owner(owner, Some(&wrong_type), None).unwrap();
+
+    owned_object_redactions(
+        &[(owner, "[owner]")],
+        &[(gas_id, "[gas]"), (custom_id, "[custom]")],
+    )
+    .bind(|| {
+        insta::assert_json_snapshot!(
+            "owned_object_index_filters_exact_and_wildcard_types",
+            serde_json::json!({
+                "exact_gas": gas_infos,
+                "exact_custom": custom_infos,
+                "wildcard_coin": wildcard_infos,
+                "wrong_type": wrong_type_infos,
+            })
+        );
+    });
 }
 
 #[tokio::test]
 async fn test_replace_from_objects_clears_previous_rows_and_marks_empty() {
     let (_dir, store) = test_store();
-    let owner = SuiAddress::random_for_testing_only();
-    let object = make_gas_object(ObjectID::random(), 1, Owner::AddressOwner(owner), 1);
+    let owner = test_address(0x71);
+    let object_id = test_object_id(0x72);
+    let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner), 1);
 
     store.replace_from_objects([&object]).unwrap();
-    assert_eq!(store.get_owned_object_infos().unwrap().len(), 1);
+    let exists_after_populated = store.owned_object_index_exists().unwrap();
+    let populated = store.get_owned_object_infos().unwrap();
 
     store
         .replace_from_objects(std::iter::empty::<&Object>())
         .unwrap();
-    assert!(store.owned_object_index_exists().unwrap());
-    assert!(store.get_owned_object_infos().unwrap().is_empty());
+    let exists_after_empty = store.owned_object_index_exists().unwrap();
+    let empty = store.get_owned_object_infos().unwrap();
+
+    owned_object_redactions(&[(owner, "[owner]")], &[(object_id, "[object]")]).bind(|| {
+        insta::assert_json_snapshot!(
+            "replace_from_objects_clears_previous_rows_and_marks_empty",
+            serde_json::json!({
+                "exists_after_populated": exists_after_populated,
+                "populated": populated,
+                "exists_after_empty": exists_after_empty,
+                "empty": empty,
+            })
+        );
+    });
 }
 
 fn owned_object_info(object: &Object) -> OwnedObjectInfo {
