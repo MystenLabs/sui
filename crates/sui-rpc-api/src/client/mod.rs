@@ -664,7 +664,6 @@ pub struct ExecutedTransaction {
     pub signatures: Vec<GenericSignature>,
     pub effects: TransactionEffects,
     pub clever_error: Option<proto::CleverError>,
-    #[serde(skip_serializing_if = "execution_error_metadata_is_empty")]
     pub execution_error_metadata: ExecutionErrorMetadata,
     pub events: Option<TransactionEvents>,
     pub event_json: Vec<Option<serde_json::Value>>,
@@ -771,10 +770,6 @@ pub struct SimulateTransactionResponse {
     pub transaction: ExecutedTransaction,
     pub command_outputs: Vec<proto::CommandResult>,
     pub suggested_gas_price: Option<u64>,
-}
-
-fn execution_error_metadata_is_empty(metadata: &ExecutionErrorMetadata) -> bool {
-    metadata.is_empty()
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
