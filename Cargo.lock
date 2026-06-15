@@ -16856,6 +16856,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-rpc-store"
+version = "1.74.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bcs",
+ "bytes",
+ "fdlimit",
+ "futures",
+ "move-core-types",
+ "prometheus",
+ "prost 0.14.1",
+ "roaring",
+ "rocksdb",
+ "serde",
+ "sui-consistent-store",
+ "sui-default-config",
+ "sui-execution",
+ "sui-futures",
+ "sui-indexer-alt-framework",
+ "sui-indexer-alt-framework-store-traits",
+ "sui-inverted-index",
+ "sui-protocol-config",
+ "sui-types",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "typed-store-error",
+]
+
+[[package]]
 name = "sui-sdk"
 version = "1.74.0"
 dependencies = [
