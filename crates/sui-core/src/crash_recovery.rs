@@ -377,6 +377,11 @@ pub fn install_panic_hook(authority_name: AuthorityName, db_path: PathBuf) {
             }
         }
 
+        if mysten_common::in_antithesis() {
+            eprintln!("antithesis: exiting with code 137");
+            std::process::exit(137);
+        }
+
         prev_hook(info);
     }));
 }
