@@ -111,6 +111,16 @@ pub struct NodeConfig {
     /// - 'both' for both a websocket and http based service (deprecated)
     pub jsonrpc_server_type: Option<ServerType>,
 
+    /// When true, the JSON-RPC HTTP service is not started. This only stops the
+    /// node from serving JSON-RPC requests; it is independent of JSON-RPC
+    /// indexing (see `enable_index_processing`), which continues to run. This
+    /// lets a node keep indexing while no longer exposing the JSON-RPC service,
+    /// and it does not affect the gRPC/REST service served on the same address.
+    /// Defaults to false so the service stays enabled unless explicitly turned
+    /// off.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub disable_json_rpc: bool,
+
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
 
@@ -966,6 +976,13 @@ impl NodeConfig {
 
     pub fn jsonrpc_server_type(&self) -> ServerType {
         self.jsonrpc_server_type.unwrap_or(ServerType::Http)
+    }
+
+    /// Whether the JSON-RPC HTTP service should be served. This gates only the
+    /// JSON-RPC endpoints; the gRPC/REST service and JSON-RPC indexing are
+    /// unaffected.
+    pub fn json_rpc_enabled(&self) -> bool {
+        !self.disable_json_rpc
     }
 
     pub fn rpc(&self) -> Option<&crate::RpcConfig> {
