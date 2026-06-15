@@ -128,10 +128,7 @@ async fn test_double_spend_detection_emits_metrics() {
 
     // The winner that contested an owned object is counted exactly once.
     assert_eq!(
-        setup
-            .metrics
-            .consensus_handler_double_spend_deferrals
-            .get(),
+        setup.metrics.consensus_handler_double_spend_deferrals.get(),
         1,
         "Expected one detected double-spend winner"
     );
@@ -169,10 +166,7 @@ async fn test_no_contention_no_metrics() {
     // prologue + the single transaction (no contention).
     assert_eq!(count, 2, "Expected prologue + user tx (no contention)");
     assert_eq!(
-        setup
-            .metrics
-            .consensus_handler_double_spend_deferrals
-            .get(),
+        setup.metrics.consensus_handler_double_spend_deferrals.get(),
         0,
         "Expected no detected double-spend without contention"
     );
