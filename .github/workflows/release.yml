@@ -68,10 +68,11 @@ jobs:
         shell: bash
         run: |
           # Read TAG_NAME as a shell variable (it is a workflow-level env, above).
-          # NEVER interpolate the raw input into the script via ${{ }}: a
-          # workflow_dispatch sui_tag is attacker-controllable, and this job holds
-          # id-token: write for the trusted `main` sub, so injected shell here
-          # could mint the RW cache token before the guard below runs.
+          # NEVER splice the raw input into this script through GitHub Actions
+          # expression interpolation: a workflow_dispatch sui_tag is
+          # attacker-controllable, and this job holds id-token: write for the
+          # trusted `main` sub, so injected shell here could mint the RW cache
+          # token before the guard below runs.
           sui_tag="${TAG_NAME#refs/tags/}"
           # Only published release tags may be built. Fully anchored (^...$) with a
           # restricted charset so the value also cannot smuggle a newline into the
