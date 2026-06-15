@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod base;
-pub mod prompt;
 pub mod sandbox;
 
 use std::path::PathBuf;
@@ -13,7 +12,6 @@ use clap::Parser;
 use move_unit_test::vm_test_setup::VMTestSetup;
 
 use crate::base::test::Test;
-use crate::prompt::Prompt;
 use base::{
     build::Build, coverage::Coverage, decompile::Decompile, disassemble::Disassemble,
     docgen::Docgen, lint::Lint, migrate::Migrate, new::New, profile::Profile, summary::Summary,
@@ -68,7 +66,6 @@ pub enum Command {
     New(New),
     Test(Test),
     Profile(Profile),
-    Prompt(Prompt),
     /// Execute a sandbox command.
     #[clap(name = "sandbox")]
     Sandbox {
@@ -145,7 +142,6 @@ pub async fn run_cli<F: MoveFlavor, V: VMTestSetup + Sync>(
         }
         Command::New(c) => c.execute_with_defaults(move_args.package_path.as_deref()),
         Command::Profile(c) => c.execute(),
-        Command::Prompt(c) => c.execute(),
         Command::Test(c) => {
             c.execute::<F, V>(
                 move_args.package_path.as_deref(),

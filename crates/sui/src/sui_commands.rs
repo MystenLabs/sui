@@ -65,6 +65,7 @@ use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, External, FileBasedKeystore, Keystore};
 use sui_move::summary::PackageSummaryMetadata;
 use sui_move::{self, execute_move_command};
+use sui_prompt::{self, execute_prompt_command};
 use sui_move_build::BuildConfig as SuiBuildConfig;
 use sui_package_alt::{SuiFlavor, find_environment};
 use sui_pg_db::DbArgs;
@@ -378,6 +379,10 @@ pub enum SuiCommand {
         #[clap(subcommand)]
         cmd: sui_move::Command,
     },
+
+    /// Expert Move knowledge for AI agents (agent-agnostic).
+    #[clap(name = "prompt")]
+    Prompt(sui_prompt::Prompt),
 
     /// Command to initialize the bridge committee, usually used when
     /// running local bridge cluster.
@@ -713,6 +718,10 @@ impl SuiCommand {
                         .await
                     }
                 }
+            }
+            SuiCommand::Prompt(prompt) => {
+                execute_prompt_command(prompt)?;
+                Ok(())
             }
             SuiCommand::BridgeInitialize {
                 network_config,

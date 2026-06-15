@@ -15,8 +15,8 @@ struct CategoryFrontmatter {
 }
 
 fn main() {
-    // Embed every skill markdown file under `src/prompt/skills/` and every category
-    // under `src/prompt/categories/` into the binary so `move prompt skill <bundle>` and
+    // Embed every skill markdown file under `src/skills/` and every category
+    // under `src/categories/` into the binary so `move prompt skill <bundle>` and
     // `move prompt category <name>` can return their contents at runtime without touching
     // the filesystem. Walks both directories and emits `$OUT_DIR/embedded.rs`: a single
     // generated file holding the `SKILL_FILES` and `CATEGORIES` slices, whose textual
@@ -28,17 +28,17 @@ fn main() {
     // graph and extract category descriptions for `move prompt categories`.
 
     let manifest = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set by cargo");
-    let skills_dir = PathBuf::from(&manifest).join("src/prompt/skills");
-    let categories_dir = PathBuf::from(&manifest).join("src/prompt/categories");
+    let skills_dir = PathBuf::from(&manifest).join("src/skills");
+    let categories_dir = PathBuf::from(&manifest).join("src/categories");
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR not set by cargo");
     let dst = PathBuf::from(&out_dir).join("embedded.rs");
 
     // Rebuild if any skill or category markdown changes (or is added/removed).
-    println!("cargo:rerun-if-changed=src/prompt/skills");
-    println!("cargo:rerun-if-changed=src/prompt/categories");
+    println!("cargo:rerun-if-changed=src/skills");
+    println!("cargo:rerun-if-changed=src/categories");
     println!("cargo:rerun-if-changed=build.rs");
 
-    // 1. Collect skills. Walk `src/prompt/skills/<bundle>/` and turn every `.md` file
+    // 1. Collect skills. Walk `src/skills/<bundle>/` and turn every `.md` file
     //    (at any depth) into one `SKILL_FILES` entry. `collect_md` recurses so a bundle
     //    can group its reference files into subdirectories if its author wants. No file
     //    content is read at build time — each file is `include_str!`'d at compile time
@@ -47,7 +47,7 @@ fn main() {
     let mut skill_bundles: BTreeSet<String> = BTreeSet::new();
     if skills_dir.exists() {
         for bundle_entry in fs::read_dir(&skills_dir)
-            .expect("read src/prompt/skills/")
+            .expect("read src/skills/")
             .filter_map(Result::ok)
         {
             let bundle_path = bundle_entry.path();
@@ -72,7 +72,7 @@ fn main() {
         }
     }
 
-    // 2. Collect categories. Each `src/prompt/categories/<name>/CATEGORY.md` becomes one
+    // 2. Collect categories. Each `src/categories/<name>/CATEGORY.md` becomes one
     //    `CATEGORIES` entry. The category `name` is taken from the directory; the
     //    frontmatter is parsed once to validate its name, description, and skill bundle
     //    references. Everything else in `CATEGORY.md` — the whole file, frontmatter
@@ -81,7 +81,7 @@ fn main() {
     let mut category_entries: Vec<(String, String, PathBuf)> = Vec::new();
     if categories_dir.exists() {
         for entry in fs::read_dir(&categories_dir)
-            .expect("read src/prompt/categories/")
+            .expect("read src/categories/")
             .filter_map(Result::ok)
         {
             let dir = entry.path();
