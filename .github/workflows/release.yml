@@ -37,11 +37,20 @@ env:
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
   TMP_BUILD_DIR: './tmp/release'
+  # release.yml only runs trusted release builds: `release: created` (OIDC sub =
+  # the release tag, trusted via refs/tags/{devnet,testnet,mainnet}-v*) and
+  # workflow_dispatch (sub = refs/heads/main, trusted; the tag-prefix + refs/tags
+  # checkout guards restrict it to published release tags). There is no
+  # pull_request trigger, so sccache always uses the RW role.
+  SCCACHE_ROLE: arn:aws:iam::011083325127:role/sui-sccache-rw-github
 
 jobs:
   release-build:
     name: Build & Publish Binaries
     timeout-minutes: 240
+    permissions:
+      contents: write # attach built archives to the GitHub release
+      id-token: write # OIDC token to assume the sccache RW role
     strategy:
       matrix:
         os:
@@ -55,20 +64,25 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Clean up and validate ${{ env.TAG_NAME }} tag name
+      - name: Validate the release tag
         shell: bash
         run: |
-          export sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)
-          # only published release tags may be built: a workflow_dispatch runs
-          # with a trusted main OIDC sub while building this input, so an
-          # unconstrained ref here would let arbitrary code run under that sub
-          if [[ ! "${sui_tag}" =~ ^(devnet|testnet|mainnet)-v ]]; then
-            echo "sui_tag must be a release tag (devnet-v*/testnet-v*/mainnet-v*), got: ${sui_tag}"
+          # Read TAG_NAME as a shell variable (it is a workflow-level env, above).
+          # NEVER interpolate the raw input into the script via ${{ }}: a
+          # workflow_dispatch sui_tag is attacker-controllable, and this job holds
+          # id-token: write for the trusted `main` sub, so injected shell here
+          # could mint the RW cache token before the guard below runs.
+          sui_tag="${TAG_NAME#refs/tags/}"
+          # Only published release tags may be built. Fully anchored (^...$) with a
+          # restricted charset so the value also cannot smuggle a newline into the
+          # GITHUB_ENV writes below.
+          if [[ ! "$sui_tag" =~ ^(devnet|testnet|mainnet)-v[0-9A-Za-z.-]+$ ]]; then
+            echo "sui_tag must be a release tag (devnet-v*/testnet-v*/mainnet-v*), got: $sui_tag"
             exit 1
           fi
-          echo "sui_tag=${sui_tag}" >> $GITHUB_ENV
-          export sui_version=$(echo ${sui_tag} | sed -e 's/mainnet-v//' -e 's/testnet-v//')
-          echo "sui_version=${sui_version}" >> $GITHUB_ENV
+          echo "sui_tag=$sui_tag" >> "$GITHUB_ENV"
+          sui_version=$(echo "$sui_tag" | sed -e 's/mainnet-v//' -e 's/testnet-v//')
+          echo "sui_version=$sui_version" >> "$GITHUB_ENV"
 
       - name: Check out ${{ env.sui_tag }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
@@ -157,6 +171,7 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         if: ${{ env.s3_existing_archive == '' }}
         with:
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ${{ matrix.os }}
