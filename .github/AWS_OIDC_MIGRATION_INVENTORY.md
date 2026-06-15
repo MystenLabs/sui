@@ -172,5 +172,17 @@ local cache, exactly as before. This fork skip is a **fail-safe accommodation, n
 a security boundary**: the RO role still trusts `pull_request`, so if GitHub
 settings ever let forks mint `id-token`, a fork assuming the RO role is still
 acceptable under Decision A — fork-local must NOT be relied on as a durable
-guarantee. Static-key inputs are retained on all call sites until Phase 7 (the
-RO/RW OIDC paths are verified first, then the static fallback is removed).
+guarantee.
+
+**Static keys removed from these three workflows (not deferred to Phase 7).**
+`rust.yml`/`external.yml`/`bridge.yml` no longer pass `aws-access-key-id` /
+`aws-secret-access-key` to `setup-sccache`. Keeping them would have been an active
+hole, not just dead weight: (1) `setup-sccache` is a **local** action loaded from
+the checked-out workspace, so a same-repo PR could edit it to consume the RW
+static keys directly, defeating the RO boundary; and (2) on an override dispatch
+(`sui_repo_ref` set, `SCCACHE_ROLE` empty) the static-key path would have handed
+**RW** creds to the untrusted override build. With the keys gone, forks and
+override dispatches get a local cache (no creds). The RW/RO OIDC paths are
+verified (RO: same-repo PR 100% hit; RW: protected-push soak). `release.yml` still
+passes static keys (no `pull_request` trigger → not PR-exposed); the repo secrets
+themselves are deleted in Phase 7 once release.yml is also off them.

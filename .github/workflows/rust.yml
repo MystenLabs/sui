@@ -114,8 +114,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -167,8 +165,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -236,8 +232,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -305,8 +299,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
@@ -367,8 +359,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: windows-ghcloud
 
       - uses: taiki-e/install-action@nextest
@@ -398,8 +388,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: windows-ghcloud
 
       - uses: taiki-e/install-action@nextest
@@ -427,8 +415,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -467,8 +453,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -507,8 +491,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - name: Run move tests
@@ -607,8 +589,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - run: rustup component add clippy
       # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
@@ -692,8 +672,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - name: Install cargo-hakari, and cache the binary
         uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
