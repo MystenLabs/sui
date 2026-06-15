@@ -1851,6 +1851,16 @@
       "permanent": true
     },
     {
+      "source": "/concepts/cryptography/system/validator-signatures",
+      "destination": "/develop/transactions/transaction-auth/auth-overview",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/cryptography/system/intents-for-validators",
+      "destination": "/develop/transactions/transaction-auth/intent-signing",
+      "permanent": true
+    },
+    {
       "source": "/concepts/data-access/custom-indexers",
       "destination": "/develop/accessing-data/custom-indexer/custom-indexers",
       "permanent": true
