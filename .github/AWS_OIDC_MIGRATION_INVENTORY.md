@@ -40,7 +40,7 @@ The decision is the OIDC `sub` of the run, which depends on the event + ref:
 | `workflow_dispatch`| `main`, **no** `sui_repo_ref`        | `…:ref:refs/heads/main`        | **YES**                  | OIDC RW                               |
 | `workflow_dispatch`| `main` + `sui_repo_ref=<feature>`    | `…:ref:refs/heads/main`        | sub matches, but **gate OFF** | builds the override ref (untrusted code) → must NOT hold RW; gate requires `sui_repo_ref==''` → static/local |
 | `workflow_dispatch`| feature branch                       | `…:ref:refs/heads/<feat>`      | **NO**                   | local-cache fallback (expected)       |
-| `pull_request`     | any (same-repo **and** fork)         | `…:pull_request`               | **NO — by design**       | **blocked on A/B/C** (see roles doc)  |
+| `pull_request`     | any (same-repo **and** fork)         | `…:pull_request`               | **NO** (no RW)           | **RO role** (option A) once provisioned |
 
 > **Checkout-ref caveat (rust.yml / bridge.yml).** The OIDC `sub` (and thus role
 > assumability) is decided by `github.ref` — but these workflows check out
@@ -157,21 +157,21 @@ The `sui_repo_ref` guard is **conservative** for jobs that ignore that input
 static/local on an override dispatch rather than OIDC. That is the safe direction.
 
 - **Trusted push / dispatch-from-main** → OIDC RW (no static keys used).
-- **`pull_request`** → empty role → static-key fallback = **unchanged behavior**.
-- **Phase 4** then resolves the PR path per A/B/C (RO role, no-cache, or fork split).
+- **`pull_request`** → empty role → static-key fallback (until Phase 4 lands).
+- **Phase 4** then resolves the PR path: **option A — all PRs → RO role.**
 - **Phase 7** removes the static-key inputs once no event path needs them.
 
-**Decision required to finish the mixed callers (Phase 4):** pick PR-cache option
-**A** (all PRs → RO role), **B** (no PR cache), or **C** (same-repo RO, fork none)
-— see `AWS_OIDC_ROLES.md` §"PR read-only cache" for full trade-offs. Key facts for
-the decision: every PR (same-repo and fork) presents the same OIDC sub
-(`repo:MystenLabs/sui:pull_request`), so AWS trust alone cannot implement C —
-"fork = none" can only be enforced at the GitHub layer (fork PRs cannot get
-`id-token: write` under default repo settings, and C additionally requires the
-workflow to withhold that permission from fork-reachable jobs explicitly, not just
-gate the `role-to-assume` input). Recommendation on record: **A unless cache
-contents are considered sensitive** (simplest, robust, RO cannot poison the
-cache); **C with explicit workflow-layer enforcement** if preserving today's
-fork boundary outweighs fork CI speed; **B** if no PR cache is acceptable. The
-Phase-3 dual-pass above is the same regardless; A/B/C only changes the Phase-4
-follow-up and when static keys die.
+**Phase 4 decision: option A (2026-06-15).** All PRs, including forks, get
+**read-only** sccache access via a new RO role (`sui-sccache-ro-github`); no PR
+gets write access, so poisoning stays blocked. Chosen over C because the cache
+holds only public-source build artifacts (no identified sensitivity) and C's
+"fork = none" cannot be done in IAM — every PR presents the same sub
+`repo:MystenLabs/sui:pull_request`, so C would require ongoing workflow-layer
+enforcement (withholding `id-token: write` from fork-reachable jobs) that we
+declined to carry preemptively. See `AWS_OIDC_ROLES.md` §"PR read-only cache"
+for the RO role's trust + policy to provision.
+
+**Remaining Phase-4 work (mechanical, after the RO role is provisioned):** extend
+each `SCCACHE_ROLE` expression so `pull_request` resolves the RO ARN (trusted
+refs still → RW; override-dispatch still → empty), then drop the static-key
+inputs per Phase 7.
