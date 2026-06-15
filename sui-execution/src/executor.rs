@@ -110,6 +110,7 @@ pub trait Executor {
         SuiGasStatus,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
+        Option<ExecutionErrorMetadata>,
     );
 
     fn update_genesis_state(

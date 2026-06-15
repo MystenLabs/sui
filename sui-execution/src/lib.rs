@@ -14,6 +14,8 @@ pub use verifier::Verifier;
 pub mod executor;
 pub mod verifier;
 
+mod error_context;
+
 mod latest;
 mod v0;
 mod v1;
@@ -22,7 +24,6 @@ mod v3;
 
 #[cfg(test)]
 mod tests;
-mod error_context;
 
 pub fn executor(
     protocol_config: &ProtocolConfig,

@@ -1170,7 +1170,7 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 /// Additional fullnode execution details captured for failed transactions.
 /// This metadata is stored as a non-consensus sidecar and can be different across fullnode versions.
 /// Not a part of chain state.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ExecutionErrorMetadata {
     /// Human-readable execution error detail intended for diagnostics and user-facing APIs.
     pub message: Option<String>,

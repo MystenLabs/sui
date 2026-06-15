@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use sui_sdk_types::{EpochId, ValidatorCommittee};
+use sui_types::error::ExecutionErrorMetadata;
 use sui_types::storage::ObjectKey;
 use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::{Error as StorageError, Result};
@@ -131,6 +132,7 @@ impl StateReader {
         let unchanged_loaded_runtime_objects = self
             .inner()
             .get_unchanged_loaded_runtime_objects(&(digest.into()));
+        let execution_error_metadata = self.inner().get_execution_error_metadata(&(digest.into()));
 
         Ok(TransactionRead {
             digest,
@@ -141,6 +143,7 @@ impl StateReader {
             checkpoint,
             timestamp_ms,
             unchanged_loaded_runtime_objects,
+            execution_error_metadata,
         })
     }
 
@@ -192,6 +195,7 @@ pub struct TransactionRead {
     pub checkpoint: Option<u64>,
     pub timestamp_ms: Option<u64>,
     pub unchanged_loaded_runtime_objects: Option<Vec<ObjectKey>>,
+    pub execution_error_metadata: Option<ExecutionErrorMetadata>,
 }
 
 #[derive(Debug)]

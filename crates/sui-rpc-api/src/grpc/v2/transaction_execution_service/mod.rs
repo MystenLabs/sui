@@ -172,7 +172,7 @@ pub async fn execute_transaction(
 
         let effects = read_mask
             .subtree(ExecutedTransaction::EFFECTS_FIELD)
-            .map(|mask| service.render_effects_to_proto(&effects, &[], &objects, &mask));
+            .map(|mask| service.render_effects_to_proto(&effects, &[], None, &objects, &mask));
 
         let mut message = ExecutedTransaction::default();
         message.digest = read_mask

@@ -116,6 +116,20 @@ impl Merge<&crate::full_checkpoint_content::ExecutedTransaction> for ExecutedTra
                         .collect(),
                 );
             }
+            if submask.contains(
+                TransactionEffects::path_builder()
+                    .status()
+                    .error()
+                    .metadata()
+                    .finish(),
+            ) && let Some(metadata) = &source.execution_error_metadata
+                && let Some(error) = effects
+                    .status
+                    .as_mut()
+                    .and_then(|status| status.error.as_mut())
+            {
+                error.metadata = Some(metadata.into());
+            }
             self.effects = Some(effects);
         }
 
@@ -220,7 +234,12 @@ impl TryFrom<&ExecutedTransaction> for crate::full_checkpoint_content::ExecutedT
                 .iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
-            execution_error_metadata: None,
+            execution_error_metadata: value
+                .effects()
+                .status()
+                .error_opt()
+                .map(|error| error.metadata().into())
+                .filter(|metadata: &crate::error::ExecutionErrorMetadata| !metadata.is_empty()),
         })
     }
 }
@@ -1180,7 +1199,6 @@ impl From<crate::execution_status::ExecutionStatus> for ExecutionStatus {
         message
     }
 }
-
 
 //
 // ExecutionError
