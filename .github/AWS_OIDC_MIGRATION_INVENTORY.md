@@ -26,7 +26,7 @@ Keep any new `SCCACHE_ROLE` gate in sync with this exact set.
 | `rust.yml`           | 11         | push, pull_request, workflow_dispatch        | **dual-pass ✅** (OIDC trusted / static PRs) | 3 ✅ → 4 |
 | `external.yml`       | 2          | push, pull_request                           | **dual-pass ✅** (OIDC trusted / static PRs) | 3 ✅ → 4 |
 | `bridge.yml`         | 2          | push, pull_request, workflow_dispatch        | **dual-pass ✅** (PR #26927)                 | 3 ✅ → 4 |
-| `release.yml`        | 1          | release, workflow_dispatch                   | sccache static; **S3 ops OIDC ✅** (release env) | 5 (S3 ✅) |
+| `release.yml`        | 1          | release, workflow_dispatch                   | **OIDC ✅** (sccache RW + S3 ops release env) | 5 ✅     |
 
 ## How each event/ref classifies
 
@@ -68,38 +68,32 @@ Note `extensions` push is **not** trusted (branch is 404 → excluded) → local
 
 `clippy` (L85), `test` (L111). Prefix `ubuntu-ghcloud`.
 
-### `release.yml` — 1 site — **Phase 5: S3 done (job split), sccache remains**
+### `release.yml` — 1 site — **Phase 5: S3 + sccache both OIDC ✅**
 
 `release-build`, prefix `${{ matrix.os }}`. Triggers on `release: created`
 (tag) + `workflow_dispatch`.
 
-**Done — option (b), the job split.** `release-build` no longer holds any
-`sui-releases` credentials (its only remaining AWS credentials are the static
-sccache keys passed to `setup-sccache`): the existing-archive download uses the
-bucket's public read access, and all `sui-releases` writes moved to
-`upload-release-archives-to-s3`,
-which declares `environment: release` and assumes the `release-s3` role via OIDC
-(roles doc, Role 2). The `release` GitHub Environment exists with a custom
-deployment branch policy (`main` + `devnet-v*`/`testnet-v*`/`mainnet-v*` tags).
+**S3 ops — option (b) job split.** `release-build` holds no `sui-releases`
+credentials: the existing-archive download uses the bucket's public read access,
+and all `sui-releases` writes moved to `upload-release-archives-to-s3`, which
+declares `environment: release` and assumes the `release-s3` role via OIDC (roles
+doc, Role 2). The `release` GitHub Environment exists with a custom deployment
+branch policy (`main` + `devnet-v*`/`testnet-v*`/`mainnet-v*` tags).
 
-**Remaining — the sccache call site.** Because of the split, `release-build`'s
-OIDC sub is now a plain tag/branch ref (no environment), so giving sccache OIDC
-needs role #1 to trust the release tag subs:
-`refs/tags/{devnet,testnet,mainnet}-v*` for `release:` events.
+**sccache — flipped to OIDC RW.** Role 1 now trusts the release tag subs
+`refs/tags/{devnet,testnet,mainnet}-v*` (for `release:` events) in addition to
+`refs/heads/main` (for dispatch). `release-build` declares
+`permissions: {contents: write, id-token: write}` (contents:write is for the GH
+release attach, not new — it had it via the default token) and passes the RW ARN
+to `setup-sccache`. The role is unconditional here: there is no `pull_request`
+trigger, and both event paths run under trusted subs.
 
-**Dispatch hazard — same trusted-sub / chosen-ref problem as rust.yml.** A
-`workflow_dispatch` of this workflow runs with sub `refs/heads/main` (which
-role #1 already trusts) while checking out `inputs.sui_tag` — arbitrary
-attacker-chosen code holding the RW cache role. Before flipping this call site
-to OIDC, BOTH guards are required:
-1. the checkout must use `refs/tags/${sui_tag}` explicitly (never a bare ref
-   that could resolve to a branch), and
-2. the tag-name validation step must reject anything not matching
-   `{devnet,testnet,mainnet}-v*` BEFORE `setup-sccache` runs.
-With those in place, dispatch builds only published release tags (trusted
-lineage), and assuming the RW role under the `main` sub is sound. Until then,
-sccache keeps static keys here — it must stay working through Phase 7 or
-release builds lose the S3 cache.
+**Dispatch hazard — closed.** A `workflow_dispatch` runs with sub
+`refs/heads/main` (trusted) while checking out `inputs.sui_tag`. The two guards
+that make this sound landed in PR #26953: the checkout uses `refs/tags/${sui_tag}`
+explicitly, and the tag-name validation rejects anything not matching
+`{devnet,testnet,mainnet}-v*` before `setup-sccache` runs — so dispatch only ever
+builds published release tags. Static-key inputs are retained until Phase 7.
 
 ## Trust-policy gaps — status
 

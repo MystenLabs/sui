@@ -37,11 +37,20 @@ env:
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
   TMP_BUILD_DIR: './tmp/release'
+  # release.yml only runs trusted release builds: `release: created` (OIDC sub =
+  # the release tag, trusted via refs/tags/{devnet,testnet,mainnet}-v*) and
+  # workflow_dispatch (sub = refs/heads/main, trusted; the tag-prefix + refs/tags
+  # checkout guards restrict it to published release tags). There is no
+  # pull_request trigger, so sccache always uses the RW role.
+  SCCACHE_ROLE: arn:aws:iam::011083325127:role/sui-sccache-rw-github
 
 jobs:
   release-build:
     name: Build & Publish Binaries
     timeout-minutes: 240
+    permissions:
+      contents: write # attach built archives to the GitHub release
+      id-token: write # OIDC token to assume the sccache RW role
     strategy:
       matrix:
         os:
@@ -157,6 +166,7 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         if: ${{ env.s3_existing_archive == '' }}
         with:
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ${{ matrix.os }}
