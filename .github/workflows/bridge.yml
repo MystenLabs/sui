@@ -101,9 +101,6 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: ./.github/actions/setup-sccache
         with:
-          # OIDC only: RW on trusted refs, RO on same-repo PRs, empty (→ local
-          # cache) on forks / override dispatches. No static-key fallback — those
-          # were removed so a PR-controlled local action cannot reach the RW keys.
           role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: ubuntu-ghcloud
       - run: rustup component add clippy
@@ -132,9 +129,6 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
       - uses: ./.github/actions/setup-sccache
         with:
-          # OIDC only: RW on trusted refs, RO on same-repo PRs, empty (→ local
-          # cache) on forks / override dispatches. No static-key fallback — those
-          # were removed so a PR-controlled local action cannot reach the RW keys.
           role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
