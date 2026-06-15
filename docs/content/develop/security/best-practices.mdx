@@ -17,11 +17,11 @@ Ensure transactions operate on smart contracts you trust and have audited. Sui p
 
 An upgradeable package can publish a new onchain version at any time, and the new version controls all future behavior. Treat the `UpgradeCap` as a security-critical capability:
 
-- Protect the `UpgradeCap` with the same care as an admin capability. Whoever holds it can change your package.
+- Protect the `UpgradeCap` with the same care as an admin capability. Whoever holds it can change your package, as far as its [upgrade policy](/develop/publish-upgrade-packages/upgrade) allows.
 
 - Apply a [custom upgrade policy](/develop/publish-upgrade-packages/custom-policies), a multisig, or a timelock so that no single key can ship an [upgrade](/develop/publish-upgrade-packages/upgrade) silently.
 
-- Call `make_immutable` on the `UpgradeCap` when you no longer need upgrades. This permanently freezes the package.
+- Call `make_immutable` on the `UpgradeCap` when you no longer need upgrades. This is irreversible: it permanently freezes the package, and you can never upgrade it again, so be certain before you do it.
 
 #### Verify packages and dependencies
 
@@ -47,7 +47,7 @@ Sui restricts which commands can follow a `MoveCall` that consumes `Random` in t
 
 #### Mark randomness-consuming functions as private `entry`
 
-Declare functions that consume randomness as private `entry` functions. A private `entry` function can be called directly from a transaction but not from another Move module. This prevents other modules from composing your randomness-consuming function into a larger call that enables a test-and-abort attack.
+Declare functions that consume randomness as private `entry` functions. A private `entry` function can be called directly from a transaction but not from another Move module, which prevents other modules from composing your randomness-consuming function into a larger call that enables a test-and-abort attack. This is not optional: the Move compiler enforces it by rejecting `public` functions that take `Random` or `RandomGenerator` as an argument.
 
 #### Never accept `RandomGenerator` as a parameter
 
@@ -55,7 +55,7 @@ Always create the generator internally to prevent manipulation.
 
 #### Balance gas across outcome paths
 
-Design functions so all outcomes consume similar gas. Otherwise an attacker can set a gas budget that only succeeds on favorable outcomes.
+Design functions so that the outcome favorable to the transaction sender consumes the same amount of gas as, or more gas than, an unfavorable outcome. Otherwise an attacker can set a gas budget that has enough gas for the favorable outcome but not the unfavorable one, aborting the transaction whenever the result is not in their favor.
 
 #### Consider a two-transaction commit-reveal pattern
 
@@ -129,7 +129,7 @@ A capability object is a struct with the `key` ability that acts as a permission
 
 #### Manage address allowlists deliberately
 
-Some designs still need an address allowlist, for example a set of accounts that can claim an airdrop. When you use one, store it in a well-defined object, restrict updates to a privileged function, and emit an [event](/develop/accessing-data/using-events) whenever an entry changes. Events give offchain services and auditors a record of every membership change. Without them, allowlist changes are difficult to monitor.
+Some designs still need an address allowlist, for example a set of accounts that can claim an airdrop. When you use one, store it in a well-defined object, restrict updates to a privileged function, and emit an [event](/develop/accessing-data/using-events) whenever an entry changes. Consider adding a time-lock on updates so that membership changes take effect only after a delay, giving observers time to react to an unexpected change. Events give offchain services and auditors a record of every membership change. Without them, allowlist changes are difficult to monitor.
 
 #### Do not rely on `tx_context::sender()` alone
 

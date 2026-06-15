@@ -47,7 +47,7 @@ The serialization of an `IntentMessage<T>` is the 3 bytes of the intent concaten
 
 ## User signature
 
-To create a user signature, construct an intent message first, then sign the 32-byte Blake2b-256 hash of its BCS serialization. The signer does not sign the raw transaction bytes. It signs the hash of the structured `IntentMessage`, whose BCS serialization is the 3-byte intent followed by the BCS bytes of the transaction data. The signed digest therefore commits to both the intent and the message.
+To create a user signature, construct an intent message first, then sign the 32-byte Blake2b-256 hash of its BCS serialization (`hash(intent || message)`). The signer does not sign the raw transaction bytes. It signs the hash of the structured `IntentMessage`, whose BCS serialization is the 3-byte intent followed by the BCS bytes of the transaction data. The signed digest therefore commits to both the intent and the message.
 
 The following examples demonstrate this:
 
