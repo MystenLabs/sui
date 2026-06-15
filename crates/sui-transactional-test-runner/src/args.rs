@@ -19,6 +19,7 @@ use move_core_types::runtime_value::{MoveStruct, MoveValue};
 use move_core_types::u256::U256;
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::tasks::{RunCommand, SyntaxChoice};
+use sui_protocol_config::Chain;
 use sui_types::balance::Balance;
 use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::move_package::UpgradePolicy;
@@ -61,6 +62,10 @@ pub struct SuiInitArgs {
     pub accounts: Option<Vec<String>>,
     #[clap(long = "protocol-version")]
     pub protocol_version: Option<u64>,
+    /// Chain to build the protocol config for (mainnet, testnet, unknown).
+    /// Affects chain-gated feature flags. Defaults to `unknown`.
+    #[clap(long = "chain", value_enum)]
+    pub chain: Option<Chain>,
     #[clap(long = "max-gas")]
     pub max_gas: Option<u64>,
     #[clap(long = "shared-object-deletion")]
