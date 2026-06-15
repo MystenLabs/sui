@@ -63,11 +63,14 @@ not assume this role (they fall back to a local cache).
 > `repo:MystenLabs/sui:ref:refs/heads/{main,devnet,testnet,mainnet}` — `aud`
 > pinned, no wildcard.
 >
-> **Gap to close if needed:** the live trust does **not** yet include
-> `releases/sui-*-release` branches or `*-v*` tags. sccache callers that run on a
-> release branch or tag therefore cannot assume it today; add those `sub` entries
-> (per the "explicit refs" block) before flipping any release-branch/tag-triggered
-> sccache caller.
+> **Gap to close (Phase-5 release flip):** `releases/sui-*-release` branch trust
+> was added 2026-06-08, but the live trust does **not** yet include the release
+> **tags**. Add these three exact subjects (matching the workflow's dispatch guard
+> in `release.yml`, not a broad `*-v*`) before flipping the release.yml sccache
+> caller to OIDC:
+> `repo:MystenLabs/sui:ref:refs/tags/{devnet,testnet,mainnet}-v*`. The
+> dispatch path's `main` sub is already trusted and its chosen-ref hazard is
+> closed by the landed tag-prefix + `refs/tags/` checkout guards (PR #26953).
 
 ### Trust policy
 
@@ -102,7 +105,9 @@ Alternative (explicit refs — use if not adopting an environment):
       "repo:MystenLabs/sui:ref:refs/heads/testnet",
       "repo:MystenLabs/sui:ref:refs/heads/mainnet",
       "repo:MystenLabs/sui:ref:refs/heads/releases/sui-*-release",
-      "repo:MystenLabs/sui:ref:refs/tags/*-v*"
+      "repo:MystenLabs/sui:ref:refs/tags/devnet-v*",
+      "repo:MystenLabs/sui:ref:refs/tags/testnet-v*",
+      "repo:MystenLabs/sui:ref:refs/tags/mainnet-v*"
     ]
   }
 }
