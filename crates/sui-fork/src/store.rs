@@ -74,6 +74,7 @@ use crate::ObjectRead;
 use crate::TransactionInfo;
 use crate::TransactionRead;
 use crate::VersionQuery;
+use crate::filesystem::BoundedObjectLookup;
 use crate::filesystem::FilesystemStore;
 use crate::filesystem::ObjectLatestState;
 use crate::filesystem::OwnedObjectEntry;
@@ -333,6 +334,36 @@ impl DataStore {
 
         let object =
             self.get_object_from_remote(object_id, Some(version), self.forked_at_checkpoint())?;
+
+        if let Some(ref object) = object {
+            let _local_snapshot_guard = self.write_local_snapshot()?;
+            self.inner.local.write_object(object)?;
+        }
+
+        Ok(object)
+    }
+
+    /// Get the latest object version at or below the given root version.
+    fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version_bound: SequenceNumber,
+    ) -> anyhow::Result<Option<Object>> {
+        match self
+            .inner
+            .local
+            .get_object_lt_or_eq_version(object_id, version_bound.value())?
+        {
+            BoundedObjectLookup::Hit(object) => return Ok(Some(object)),
+            BoundedObjectLookup::NegativeHit => return Ok(None),
+            BoundedObjectLookup::Miss => {}
+        }
+
+        let mut objects = self.inner.gql.get_objects(&[ObjectKey {
+            object_id: *object_id,
+            version_query: VersionQuery::RootVersion(version_bound.value()),
+        }])?;
+        let object = objects.pop().flatten().map(|(object, _)| object);
 
         if let Some(ref object) = object {
             let _local_snapshot_guard = self.write_local_snapshot()?;
@@ -847,7 +878,11 @@ impl ChildObjectResolver for DataStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        let child_object = match self.get_object(child).ok().flatten() {
+        let child_object = match self
+            .get_object_lt_or_eq_version(child, child_version_upper_bound)
+            .ok()
+            .flatten()
+        {
             None => return Ok(None),
             Some(obj) => obj,
         };
@@ -857,13 +892,6 @@ impl ChildObjectResolver for DataStore {
                 object: *child,
                 given_parent: *parent,
                 actual_owner: child_object.owner.clone(),
-            }
-            .into());
-        }
-
-        if child_object.version() > child_version_upper_bound {
-            return Err(sui_types::error::SuiErrorKind::UnsupportedFeatureError {
-                error: "DataStore::read_child_object does not yet support bounded reads".to_owned(),
             }
             .into());
         }

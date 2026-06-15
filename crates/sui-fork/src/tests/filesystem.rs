@@ -223,6 +223,72 @@ fn test_get_object_at_version_returns_none_for_unknown_version() {
 }
 
 #[test]
+fn test_object_lt_or_eq_returns_highest_version_within_bound() {
+    let (_dir, store) = test_store();
+    let id = ObjectID::random();
+    let v1 = make_object(id, 1);
+    let v3 = make_object(id, 3);
+    let v5 = make_object(id, 5);
+
+    store.write_object(&v1).unwrap();
+    store.write_object(&v3).unwrap();
+    store.write_object(&v5).unwrap();
+
+    let bounded = store.get_object_lt_or_eq_version(&id, 4).unwrap();
+    let BoundedObjectLookup::Hit(object) = bounded else {
+        panic!("expected bounded object hit");
+    };
+    assert_eq!(object, v3);
+
+    let exact = store.get_object_lt_or_eq_version(&id, 5).unwrap();
+    let BoundedObjectLookup::Hit(object) = exact else {
+        panic!("expected exact-bound object hit");
+    };
+    assert_eq!(object, v5);
+}
+
+#[test]
+fn test_object_lt_or_eq_misses_when_no_local_version_within_bound() {
+    let (_dir, store) = test_store();
+    let id = ObjectID::random();
+    let object = make_object(id, 5);
+
+    store.write_object(&object).unwrap();
+
+    assert!(matches!(
+        store.get_object_lt_or_eq_version(&id, 4).unwrap(),
+        BoundedObjectLookup::Miss,
+    ));
+}
+
+#[test]
+fn test_removed_latest_at_or_below_bound_is_negative_hit() {
+    let (_dir, store) = test_store();
+    let id = ObjectID::random();
+    let object = make_object(id, 3);
+
+    store.write_object(&object).unwrap();
+    store
+        .mark_object_as_wrapped(id, SequenceNumber::from_u64(5))
+        .unwrap();
+
+    assert!(matches!(
+        store.get_object_lt_or_eq_version(&id, 5).unwrap(),
+        BoundedObjectLookup::NegativeHit,
+    ));
+    assert!(matches!(
+        store.get_object_lt_or_eq_version(&id, 6).unwrap(),
+        BoundedObjectLookup::NegativeHit,
+    ));
+
+    let before_wrap = store.get_object_lt_or_eq_version(&id, 4).unwrap();
+    let BoundedObjectLookup::Hit(before_wrap) = before_wrap else {
+        panic!("expected object version before wrap");
+    };
+    assert_eq!(before_wrap, object);
+}
+
+#[test]
 fn test_latest_tracks_highest_written_version() {
     let (_dir, store) = test_store();
     let id = ObjectID::random();
