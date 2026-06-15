@@ -51,13 +51,17 @@ env:
   # Set log level in CI to error. If you need more information to debug a CI
   # failure, change this temporarily and rerun your tests
   RUST_LOG: error
-  # sccache RW role on trusted refs only (protected branches + release branches),
-  # AND only when not building an override ref: a workflow_dispatch with a non-empty
-  # sui_repo_ref checks out arbitrary code, so it must NOT hold the RW cache even
-  # though github.ref (and the OIDC sub) is main. Empty elsewhere → setup-sccache
-  # falls back to static keys (same-repo PRs) or a local cache (forks / overrides).
-  # Keep in sync with the sui-sccache-rw-github trust policy.
-  SCCACHE_ROLE: ${{ (github.event_name != 'workflow_dispatch' || github.event.inputs.sui_repo_ref == '') && (contains(fromJSON('["refs/heads/main","refs/heads/devnet","refs/heads/testnet","refs/heads/mainnet"]'), github.ref) || (startsWith(github.ref, 'refs/heads/releases/sui-') && endsWith(github.ref, '-release'))) && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || '' }}
+  # sccache role selection:
+  #   trusted refs (protected + release branches), NOT a workflow_dispatch building
+  #     an override sui_repo_ref → RW role (read/write cache).
+  #   same-repo pull_request → RO role (read-only; a PR cannot poison the cache).
+  #   forks / overrides / everything else → empty → setup-sccache falls back to a
+  #     local cache. Forks are skipped here because GitHub caps fork id-token to
+  #     none, so role-to-assume would hard-fail the OIDC step. This fork skip is a
+  #     fail-safe accommodation, NOT a security boundary — the RO role still trusts
+  #     pull_request, so a fork reading the cache is acceptable (Decision A).
+  # Keep in sync with the sui-sccache-{rw,ro}-github trust policies.
+  SCCACHE_ROLE: ${{ (github.event_name != 'workflow_dispatch' || github.event.inputs.sui_repo_ref == '') && (contains(fromJSON('["refs/heads/main","refs/heads/devnet","refs/heads/testnet","refs/heads/mainnet"]'), github.ref) || (startsWith(github.ref, 'refs/heads/releases/sui-') && endsWith(github.ref, '-release'))) && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false) && 'arn:aws:iam::011083325127:role/sui-sccache-ro-github' || '' }}
 
 jobs:
   diff:
@@ -110,8 +114,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -163,8 +165,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -232,8 +232,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -301,8 +299,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
@@ -363,8 +359,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: windows-ghcloud
 
       - uses: taiki-e/install-action@nextest
@@ -394,8 +388,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: windows-ghcloud
 
       - uses: taiki-e/install-action@nextest
@@ -423,8 +415,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -463,8 +453,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -503,8 +491,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - name: Run move tests
@@ -603,8 +589,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - run: rustup component add clippy
       # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
@@ -688,8 +672,6 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ubuntu-ghcloud
       - name: Install cargo-hakari, and cache the binary
         uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
