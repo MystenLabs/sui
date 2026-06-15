@@ -66,6 +66,24 @@ fn custom_coin_type() -> TypeTag {
     ))
 }
 
+macro_rules! assert_same_info {
+    ($actual:expr, $expected:expr $(,)?) => {{
+        let actual = $actual;
+        let expected = $expected;
+        assert_eq!(actual.owner, expected.owner);
+        assert_eq!(actual.object_type, expected.object_type);
+        assert_eq!(actual.balance, expected.balance);
+        assert_eq!(actual.object_id, expected.object_id);
+        assert_eq!(actual.version, expected.version);
+    }};
+}
+
+macro_rules! assert_info_matches_object {
+    ($info:expr, $object:expr $(,)?) => {{
+        assert_same_info!($info, &owned_object_info($object));
+    }};
+}
+
 #[tokio::test]
 async fn test_owned_object_index_updates_transfers_and_deletes() {
     let (_dir, store) = test_store();
@@ -97,7 +115,7 @@ async fn test_owned_object_index_updates_transfers_and_deletes() {
         .scan_owner(owner, None, Some(infos[1].clone()))
         .unwrap();
     assert_eq!(infos_from_cursor.len(), 1);
-    assert_same_info(&infos_from_cursor[0], &infos[1]);
+    assert_same_info!(&infos_from_cursor[0], &infos[1]);
 
     assert!(store.scan_owner(next_owner, None, None).unwrap().is_empty());
 
@@ -114,14 +132,14 @@ async fn test_owned_object_index_updates_transfers_and_deletes() {
         .scan_owner(next_owner, None, Some(owned_object_info(&transferred)))
         .unwrap();
     assert_eq!(next_owner_infos.len(), 1);
-    assert_info_matches_object(&next_owner_infos[0], &transferred);
+    assert_info_matches_object!(&next_owner_infos[0], &transferred);
 
     store
         .apply_owned_object_index_updates([&second], std::iter::empty())
         .unwrap();
     let infos = store.get_owned_object_infos().unwrap();
     assert_eq!(infos.len(), 1);
-    assert_info_matches_object(&infos[0], &transferred);
+    assert_info_matches_object!(&infos[0], &transferred);
 }
 
 #[tokio::test]
@@ -176,11 +194,11 @@ async fn test_owned_object_index_filters_exact_and_wildcard_types() {
         .scan_owner(owner, Some(&GasCoin::type_()), None)
         .unwrap();
     assert_eq!(gas_infos.len(), 1);
-    assert_info_matches_object(&gas_infos[0], &gas);
+    assert_info_matches_object!(&gas_infos[0], &gas);
 
     let custom_infos = store.scan_owner(owner, Some(&custom_type), None).unwrap();
     assert_eq!(custom_infos.len(), 1);
-    assert_info_matches_object(&custom_infos[0], &custom);
+    assert_info_matches_object!(&custom_infos[0], &custom);
 
     let wildcard_infos = store
         .scan_owner(owner, Some(&wildcard_coin), None)
@@ -229,16 +247,4 @@ fn owned_object_info(object: &Object) -> OwnedObjectInfo {
         object_id: object.id(),
         version: object.version(),
     }
-}
-
-fn assert_info_matches_object(info: &OwnedObjectInfo, object: &Object) {
-    assert_same_info(info, &owned_object_info(object));
-}
-
-fn assert_same_info(actual: &OwnedObjectInfo, expected: &OwnedObjectInfo) {
-    assert_eq!(actual.owner, expected.owner);
-    assert_eq!(actual.object_type, expected.object_type);
-    assert_eq!(actual.balance, expected.balance);
-    assert_eq!(actual.object_id, expected.object_id);
-    assert_eq!(actual.version, expected.version);
 }

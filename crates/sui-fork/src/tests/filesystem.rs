@@ -132,10 +132,13 @@ fn object_latest_path(store: &FilesystemStore, object_id: &ObjectID) -> std::pat
     object_dir(store, object_id).join(LATEST_FILE)
 }
 
-fn assert_no_old_removal_marker_files(dir: &Path) {
-    assert!(!dir.join("removed").exists());
-    assert!(!dir.join("deleted").exists());
-    assert!(!dir.join("wrapped").exists());
+macro_rules! assert_no_old_removal_marker_files {
+    ($dir:expr $(,)?) => {{
+        let dir = $dir;
+        assert!(!dir.join("removed").exists());
+        assert!(!dir.join("deleted").exists());
+        assert!(!dir.join("wrapped").exists());
+    }};
 }
 
 #[test]
@@ -259,7 +262,7 @@ fn test_deleted_latest_blocks_latest_but_preserves_exact_versions() {
         fs::read_to_string(dir.join(LATEST_FILE)).unwrap(),
         "5,deleted"
     );
-    assert_no_old_removal_marker_files(&dir);
+    assert_no_old_removal_marker_files!(&dir);
 
     let exact = store.get_object_at_version(&id, 5).unwrap();
     assert_eq!(exact.unwrap(), obj);
@@ -297,7 +300,7 @@ fn test_wrapped_latest_blocks_latest_preserves_exact_and_clears_on_live_write() 
         fs::read_to_string(dir.join(LATEST_FILE)).unwrap(),
         "5,wrapped"
     );
-    assert_no_old_removal_marker_files(&dir);
+    assert_no_old_removal_marker_files!(&dir);
 
     let exact = store.get_object_at_version(&id, 5).unwrap();
     assert_eq!(exact.unwrap(), obj);
