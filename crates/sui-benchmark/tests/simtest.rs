@@ -2282,10 +2282,69 @@ mod test {
 
         info!("Waiting for the network to advance...");
 
-        // Let the network run longer to verify Observer stability
+        // Let the network run longer so it produces a meaningful number of checkpoints.
         tokio::time::sleep(Duration::from_secs(40)).await;
 
-        // Check that the Observer node is still running and has the correct role
+        // Snapshot the latest checkpoint that the network has executed, as observed by the
+        // cluster's regular fullnode (which catches up via checkpoint sync). The Observer
+        // node instead catches up by streaming consensus blocks and finalizing checkpoints
+        // locally, so reaching this same sequence number proves block streaming keeps the
+        // Observer up to date with the rest of the network.
+        let target_checkpoint = test_cluster.fullnode_handle.sui_node.with(|node| {
+            node.state()
+                .get_checkpoint_store()
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("checkpoint store read failed")
+                .expect("fullnode should have executed checkpoints")
+        });
+        assert!(
+            target_checkpoint > 0,
+            "network should have produced checkpoints for the catch-up check to be meaningful"
+        );
+
+        info!(
+            "Waiting for Observer node to catch up to checkpoint {} via block streaming",
+            target_checkpoint
+        );
+
+        // Poll the Observer's checkpoint store until it has finalized at least the target
+        // checkpoint. The Observer streams blocks continuously, so it should reach this
+        // snapshot quickly; failing within the timeout means block streaming did not keep
+        // the Observer caught up to the latest checkpoint.
+        let catch_up_timeout = Duration::from_secs(60);
+        let read_observer_checkpoint = || {
+            observer_state
+                .get_checkpoint_store()
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("checkpoint store read failed")
+        };
+        let observer_checkpoint = tokio::time::timeout(catch_up_timeout, async {
+            loop {
+                if let Some(seq) = read_observer_checkpoint()
+                    && seq >= target_checkpoint
+                {
+                    return seq;
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Observer node failed to catch up to checkpoint {} via block streaming within \
+                 {:?}; highest finalized checkpoint was {:?}",
+                target_checkpoint,
+                catch_up_timeout,
+                read_observer_checkpoint(),
+            )
+        });
+
+        info!(
+            "Observer node caught up to checkpoint {} (target {}) via block streaming",
+            observer_checkpoint, target_checkpoint
+        );
+
+        // The Observer must still be running with the Observer role after catching up.
         let final_node_role = observer_state.epoch_store_for_testing().node_role();
         info!(
             "Observer node final check - node_role: {:?}, runs_consensus: {}",
@@ -2293,7 +2352,7 @@ mod test {
             final_node_role.runs_consensus()
         );
 
-        info!("Observer node test completed successfully - node ran without crashing");
+        info!("Observer node test completed successfully - caught up via block streaming");
     }
 
     /// Finds the most recent protocol version that uses an older execution version
