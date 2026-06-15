@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 129;
+const MAX_PROTOCOL_VERSION: u64 = 130;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -361,6 +361,7 @@ const MAINNET_USDB: &str =
 // Version 128: Make some additional bounds to binary tables explicit.
 // Version 129: Add `insert_before` and `insert_after` to `sui::linked_table`
 //              Enable unified linkage in PTBs
+// Version 130: Enable defer_owned_object_double_spend on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1081,6 +1082,11 @@ struct FeatureFlags {
     // (where duplicate count exceeds gas_price / RGP + 1)
     #[serde(skip_serializing_if = "is_false")]
     defer_unpaid_amplification: bool,
+
+    // If true, defer transactions that won an owned object lock when other transactions
+    // in the same commit attempted to lock the same object (double-spend attempt).
+    #[serde(skip_serializing_if = "is_false")]
+    defer_owned_object_double_spend: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
@@ -2829,6 +2835,10 @@ impl ProtocolConfig {
 
     pub fn defer_unpaid_amplification(&self) -> bool {
         self.feature_flags.defer_unpaid_amplification
+    }
+
+    pub fn defer_owned_object_double_spend(&self) -> bool {
+        self.feature_flags.defer_owned_object_double_spend
     }
 
     pub fn gasless_transaction_drop_safety(&self) -> bool {
@@ -5070,6 +5080,11 @@ impl ProtocolConfig {
                 }
                 129 => {
                     cfg.feature_flags.enable_unified_linkage = true;
+                    }
+                130 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.defer_owned_object_double_spend = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -5490,6 +5505,10 @@ impl ProtocolConfig {
 
     pub fn enable_multi_epoch_transaction_expiration_for_testing(&mut self) {
         self.feature_flags.enable_multi_epoch_transaction_expiration = true;
+    }
+
+    pub fn set_defer_owned_object_double_spend_for_testing(&mut self, val: bool) {
+        self.feature_flags.defer_owned_object_double_spend = val;
     }
 
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {

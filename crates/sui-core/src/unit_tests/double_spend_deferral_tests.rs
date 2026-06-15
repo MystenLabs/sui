@@ -104,26 +104,31 @@ impl DoubleSpendTestSetup {
     }
 }
 
-fn base_protocol_config() -> ProtocolConfig {
-    ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown)
+fn protocol_config_with_double_spend_deferral() -> ProtocolConfig {
+    let mut config = ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    config.set_defer_owned_object_double_spend_for_testing(true);
+    config
 }
 
-/// Two transactions in the same commit compete for the same owned object. The first
-/// to acquire the lock wins and is scheduled; the second is dropped (failed lock).
-/// Deferral is not yet enabled on this branch, so the winner runs immediately - but
-/// the contention must be detected and surfaced through the double-spend metrics.
+/// Detection + metrics fire regardless of the deferral feature flag: two transactions
+/// in the same commit compete for the same owned object, the winner is scheduled (since
+/// deferral is disabled here) and the contention is recorded through the metrics.
 #[tokio::test]
 async fn test_double_spend_detection_emits_metrics() {
     telemetry_subscribers::init_for_testing();
 
-    let mut setup = DoubleSpendTestSetup::new(base_protocol_config(), 2).await;
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config.set_defer_owned_object_double_spend_for_testing(false);
+
+    let mut setup = DoubleSpendTestSetup::new(protocol_config, 2).await;
     let consensus_txns = setup.build_competing_consensus_txns().await;
 
     let count = setup
         .submit_commit_and_count_scheduled(TestConsensusCommit::new(consensus_txns, 1, 0, 0))
         .await;
 
-    // prologue + winner (loser dropped due to lock conflict). No deferral on this branch.
+    // prologue + winner (loser dropped due to lock conflict), deferral disabled.
     assert_eq!(count, 2, "Expected prologue + winner (detection only)");
 
     // The winner that contested an owned object is counted exactly once.
@@ -153,27 +158,126 @@ async fn test_double_spend_detection_emits_metrics() {
     assert_eq!(gas.get_sample_sum(), 0.0);
 }
 
-/// When only one transaction uses an owned object there is no contention, so no
-/// double-spend metrics should be recorded.
+/// Two transactions in the same commit compete for the same owned object.
+/// The first to acquire the lock wins but gets deferred (penalty for being contested).
+/// The second is dropped (failed lock).
+/// Verifying: only the prologue transaction is scheduled in the first commit;
+/// the winner is deferred and scheduled in the second commit.
 #[tokio::test]
-async fn test_no_contention_no_metrics() {
+async fn test_double_spend_winner_deferred() {
     telemetry_subscribers::init_for_testing();
 
-    let mut setup = DoubleSpendTestSetup::new(base_protocol_config(), 1).await;
+    let mut setup =
+        DoubleSpendTestSetup::new(protocol_config_with_double_spend_deferral(), 2).await;
+    let consensus_txns = setup.build_competing_consensus_txns().await;
+
+    // Round 1: both transactions in the same commit.
+    let count = setup
+        .submit_commit_and_count_scheduled(TestConsensusCommit::new(consensus_txns, 1, 0, 0))
+        .await;
+
+    // Only the prologue should be scheduled (winner deferred, loser dropped).
+    assert_eq!(count, 1, "Expected only the prologue in round 1");
+
+    // Round 2: empty commit picks up the deferred transaction.
+    let count = setup
+        .submit_commit_and_count_scheduled(TestConsensusCommit::empty(2, 100, 1))
+        .await;
+
+    // prologue + the previously deferred winner.
+    assert_eq!(count, 2, "Expected prologue + deferred winner in round 2");
+}
+
+/// Same setup but with the feature flag disabled.
+/// The winner should NOT be deferred - it should be scheduled immediately.
+#[tokio::test]
+async fn test_double_spend_no_deferral_when_disabled() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config.set_defer_owned_object_double_spend_for_testing(false);
+
+    let mut setup = DoubleSpendTestSetup::new(protocol_config, 2).await;
     let consensus_txns = setup.build_competing_consensus_txns().await;
 
     let count = setup
         .submit_commit_and_count_scheduled(TestConsensusCommit::new(consensus_txns, 1, 0, 0))
         .await;
 
-    // prologue + the single transaction (no contention).
-    assert_eq!(count, 2, "Expected prologue + user tx (no contention)");
+    // Without the feature, the winner is scheduled immediately.
+    // prologue + winner = 2 (loser is still dropped due to lock conflict).
     assert_eq!(
-        setup
-            .metrics
-            .consensus_handler_double_spend_deferrals
-            .get(),
-        0,
-        "Expected no detected double-spend without contention"
+        count, 2,
+        "Expected prologue + winner when deferral is disabled"
     );
+}
+
+/// When max deferral rounds is 0 and the feature is enabled, the winner should NOT
+/// be deferred (exceeds the deferral limit) and should be scheduled immediately.
+#[tokio::test]
+async fn test_double_spend_not_deferred_when_max_rounds_zero() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config.set_defer_owned_object_double_spend_for_testing(true);
+    protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(0);
+
+    let mut setup = DoubleSpendTestSetup::new(protocol_config, 2).await;
+    let consensus_txns = setup.build_competing_consensus_txns().await;
+
+    let count = setup
+        .submit_commit_and_count_scheduled(TestConsensusCommit::new(consensus_txns, 1, 0, 0))
+        .await;
+
+    // With max_deferral_rounds=0, the deferral limit check fails so the winner
+    // is scheduled immediately.
+    assert_eq!(
+        count, 2,
+        "Expected prologue + winner (no deferral with max_rounds=0)"
+    );
+}
+
+/// When only one transaction uses an owned object and there's no contention,
+/// no deferral should happen even with the feature enabled.
+#[tokio::test]
+async fn test_no_deferral_without_contention() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut setup =
+        DoubleSpendTestSetup::new(protocol_config_with_double_spend_deferral(), 1).await;
+    let consensus_txns = setup.build_competing_consensus_txns().await;
+
+    let count = setup
+        .submit_commit_and_count_scheduled(TestConsensusCommit::new(consensus_txns, 1, 0, 0))
+        .await;
+
+    // prologue + the single transaction (no contention, no deferral).
+    assert_eq!(count, 2, "Expected prologue + user tx (no contention)");
+}
+
+/// Three transactions compete for the same owned object. The first wins and gets
+/// deferred. The other two are dropped. In round 2, the deferred winner is scheduled.
+#[tokio::test]
+async fn test_double_spend_multiple_contestants() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut setup =
+        DoubleSpendTestSetup::new(protocol_config_with_double_spend_deferral(), 3).await;
+    let consensus_txns = setup.build_competing_consensus_txns().await;
+
+    let count = setup
+        .submit_commit_and_count_scheduled(TestConsensusCommit::new(consensus_txns, 1, 0, 0))
+        .await;
+
+    // Only the prologue (winner deferred, two losers dropped).
+    assert_eq!(count, 1, "Expected only prologue with 3 contestants");
+
+    // Round 2: the deferred winner should now be scheduled.
+    let count = setup
+        .submit_commit_and_count_scheduled(TestConsensusCommit::empty(2, 100, 1))
+        .await;
+
+    assert_eq!(count, 2, "Expected prologue + deferred winner in round 2");
 }
