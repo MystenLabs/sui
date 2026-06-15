@@ -14,13 +14,14 @@ pub use verifier::Verifier;
 pub mod executor;
 pub mod verifier;
 
+mod error_context;
+
 mod latest;
 mod v0;
 mod v1;
 mod v2;
 mod v3;
 
-mod error_context;
 #[cfg(test)]
 mod tests;
 
