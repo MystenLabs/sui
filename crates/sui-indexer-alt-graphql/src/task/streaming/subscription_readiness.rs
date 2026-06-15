@@ -17,30 +17,39 @@ use crate::task::watermark::Watermarks;
 /// streaming tip needs those earlier packages resolvable, so subscriptions must wait
 /// until `kv_packages` has caught up to at least C - 1 before starting.
 pub(crate) struct SubscriptionReadiness {
-    first_checkpoint: OnceLock<u64>,
+    /// Sequence number of the first checkpoint received from the live upstream gRPC stream
+    /// (the broadcast tip at startup). Not from the kv-rpc resume fallback.
+    first_live_checkpoint: OnceLock<u64>,
     watermarks_rx: watch::Receiver<Arc<Watermarks>>,
 }
 
 impl SubscriptionReadiness {
     pub(crate) fn new(watermarks_rx: watch::Receiver<Arc<Watermarks>>) -> Arc<Self> {
         Arc::new(Self {
-            first_checkpoint: OnceLock::new(),
+            first_live_checkpoint: OnceLock::new(),
             watermarks_rx,
         })
     }
 
-    /// Record the first streamed checkpoint. Idempotent — only the first call has effect.
-    pub(crate) fn record_first_checkpoint(&self, checkpoint_seq: u64) {
-        let _ = self.first_checkpoint.set(checkpoint_seq);
+    /// Record the first checkpoint received from the live upstream stream. Idempotent — only
+    /// the first call has effect.
+    pub(crate) fn record_first_live_checkpoint(&self, checkpoint_seq: u64) {
+        let _ = self.first_live_checkpoint.set(checkpoint_seq);
     }
 
-    /// Wait until the service is ready to serve subscriptions: the first checkpoint has
+    /// The first live checkpoint, once recorded. Guaranteed to be `Some` after
+    /// `wait_for_ready()` returns `Ok`.
+    pub(crate) fn first_live_checkpoint(&self) -> Option<u64> {
+        self.first_live_checkpoint.get().copied()
+    }
+
+    /// Wait until the service is ready to serve subscriptions: the first live checkpoint has
     /// been streamed AND `kv_packages` has indexed everything before it.
     pub(crate) async fn wait_for_ready(&self) -> anyhow::Result<()> {
         let mut watermarks_rx = self.watermarks_rx.clone();
         watermarks_rx
             .wait_for(|w| {
-                let Some(&first_cp) = self.first_checkpoint.get() else {
+                let Some(&first_cp) = self.first_live_checkpoint.get() else {
                     return false;
                 };
                 let target = first_cp.saturating_sub(1);

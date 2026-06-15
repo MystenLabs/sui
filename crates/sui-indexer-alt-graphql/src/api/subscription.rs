@@ -50,7 +50,7 @@ impl Subscription {
         let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
         let config: &SubscriptionConfig = ctx.data()?;
-        let broadcast: &SubscriptionBroadcast = ctx.data()?;
+        let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let fetcher: &LedgerGrpcReader = ctx.data()?;
 
         let resume_from: Option<u64> = match (after.map(|c| *c), after_checkpoint.map(u64::from)) {
@@ -60,7 +60,9 @@ impl Subscription {
         let package_store = package_store.clone();
         let resolver_limits = limits.package_resolver();
 
-        let stream = broadcast.subscribe(resume_from, fetcher.clone(), config);
+        let stream = broadcast
+            .clone()
+            .subscribe(resume_from, fetcher.clone(), config);
 
         Ok(stream.map(move |item| {
             item.map(|processed| {
@@ -100,7 +102,7 @@ impl Subscription {
     > {
         let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
-        let broadcast: &SubscriptionBroadcast = ctx.data()?;
+        let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
 
         let package_store = package_store.clone();
         let resolver_limits = limits.package_resolver();
@@ -154,7 +156,7 @@ impl Subscription {
     > {
         let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
-        let broadcast: &SubscriptionBroadcast = ctx.data()?;
+        let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
 
         let package_store = package_store.clone();
         let resolver_limits = limits.package_resolver();

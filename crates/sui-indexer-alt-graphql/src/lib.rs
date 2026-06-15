@@ -391,7 +391,7 @@ pub async fn start_rpc(
             let (package_eviction_tx, package_eviction_rx) = tokio::sync::mpsc::unbounded_channel();
             let readiness =
                 task::streaming::SubscriptionReadiness::new(watermark_task.watermarks_rx());
-            let stream_task = task::streaming::CheckpointStreamTask::new(
+            let (stream_task, broadcaster) = task::streaming::CheckpointStreamTask::new(
                 uri,
                 &config.subscription,
                 streaming_packages.clone(),
@@ -408,10 +408,10 @@ pub async fn start_rpc(
             );
             Some((
                 stream_task,
+                broadcaster,
                 eviction_task,
                 streaming_packages,
                 readiness,
-                ledger_grpc,
             ))
         }
         None => None,
@@ -449,6 +449,10 @@ pub async fn start_rpc(
         rpc = rpc.data(fullnode_client);
     }
 
+    if let Some(ledger_grpc_reader) = ledger_grpc_reader.clone() {
+        rpc = rpc.data(ledger_grpc_reader);
+    }
+
     let subscriptions_enabled = streaming_setup.is_some();
     rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
 
@@ -459,17 +463,23 @@ pub async fn start_rpc(
     // binding the listener, so the schema is only advertised once `kv_packages`
     // has caught up to the first streamed checkpoint.
     let streaming_handles =
-        if let Some((stream_task, eviction_task, streaming_packages, readiness, ledger_grpc)) =
+        if let Some((stream_task, broadcaster, eviction_task, streaming_packages, readiness)) =
             streaming_setup
         {
-            rpc = rpc
-                .data(stream_task.subscription_broadcast())
-                .data(ledger_grpc)
-                .data(streaming_packages)
-                .data(config.subscription);
+            rpc = rpc.data(streaming_packages).data(config.subscription);
             let s_stream = stream_task.run();
             let s_eviction = eviction_task.run();
             readiness.wait_for_ready().await?;
+            // `first_live_checkpoint` is the first checkpoint the live upstream stream broadcast,
+            // recorded as readiness fires.
+            let first_live_checkpoint = readiness
+                .first_live_checkpoint()
+                .expect("first_live_checkpoint is set before wait_for_ready returns Ok");
+            let subscription_broadcast = Arc::new(task::streaming::SubscriptionBroadcast::new(
+                broadcaster,
+                first_live_checkpoint,
+            ));
+            rpc = rpc.data(subscription_broadcast);
             Some((s_stream, s_eviction))
         } else {
             None

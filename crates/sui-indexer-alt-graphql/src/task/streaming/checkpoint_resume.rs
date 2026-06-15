@@ -21,8 +21,6 @@
 //! the throttle and `buffered` adapter naturally back-pressure upstream fetches.
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use futures::Stream;
@@ -30,6 +28,7 @@ use futures::StreamExt;
 use futures::stream;
 
 use super::ProcessedCheckpoint;
+use super::checkpoint_stream_task::SubscriptionBroadcast;
 use super::checkpoint_stream_task::checkpoint_field_mask;
 use super::checkpoint_stream_task::process_checkpoint;
 use super::gap_recovery::CheckpointFetcher;
@@ -44,7 +43,7 @@ use crate::error::RpcError;
 /// before this scan starts).
 pub(super) fn scan_checkpoints<F: CheckpointFetcher + 'static>(
     fetcher: Arc<F>,
-    network_tip: Arc<AtomicU64>,
+    broadcast: Arc<SubscriptionBroadcast>,
     start_after: u64,
     config: &SubscriptionConfig,
 ) -> impl Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>> + 'static {
@@ -56,19 +55,22 @@ pub(super) fn scan_checkpoints<F: CheckpointFetcher + 'static>(
     // `transition_threshold`, handing off to the live broadcast that the caller is already
     // consuming.
     let seq_stream = stream::unfold(
-        (start_after, network_tip),
-        move |(last, tip_handle)| async move {
-            let tip = tip_handle.load(Ordering::Relaxed);
+        (start_after, broadcast),
+        move |(last, broadcast)| async move {
+            let tip = broadcast.network_tip();
             if tip.saturating_sub(last) <= transition_threshold {
                 None
             } else {
                 let next = last + 1;
-                Some((next, (next, tip_handle)))
+                Some((next, (next, broadcast)))
             }
         },
     );
 
     let mask = checkpoint_field_mask();
+    // `buffered` runs fetches concurrently but processes each checkpoint one at a time on the
+    // polling task. Fine while the throttle is what caps throughput; if processing becomes the
+    // bottleneck, spawn each item instead.
     tokio_stream::StreamExt::throttle(
         seq_stream
             .map(move |seq| {

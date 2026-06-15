@@ -57,8 +57,6 @@
 //! fires again.
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -173,15 +171,38 @@ pub(super) fn checkpoint_field_mask() -> FieldMask {
 /// the GraphQL context as a nominal type so its members do not clash with other context entries
 /// that may be added later.
 pub(crate) struct SubscriptionBroadcast {
+    /// Receiver created with the channel and never `.recv()`'d. Subscribers call `resubscribe()`
+    /// on it to get their own receivers; we also read `broadcaster.len()` to count how many
+    /// checkpoints the live stream has broadcast since channel creation, which combined with
+    /// `first_live_checkpoint` gives the current network tip without a separate atomic.
     broadcaster: CheckpointBroadcaster,
-    network_tip: Arc<AtomicU64>,
+    /// Sequence number of the first checkpoint the live upstream stream broadcast through this
+    /// channel. Distinct from any `resume_from` arg passed by subscribers (those refer to the
+    /// kv-rpc resume fallback, not the live broadcast).
+    first_live_checkpoint: u64,
 }
 
 impl SubscriptionBroadcast {
+    pub(crate) fn new(broadcaster: CheckpointBroadcaster, first_live_checkpoint: u64) -> Self {
+        Self {
+            broadcaster,
+            first_live_checkpoint,
+        }
+    }
+
     /// Direct access to the broadcast receiver template. Subscribers should call
     /// `.resubscribe()` to get their own receiver.
     pub(crate) fn broadcaster(&self) -> &CheckpointBroadcaster {
         &self.broadcaster
+    }
+
+    /// Sequence number of the most recently broadcast checkpoint. Derived from the tokio-managed
+    /// `broadcaster.len()` plus the immutable `first_live_checkpoint`, so there is no separate
+    /// shared counter that could race with the broadcast `send`.
+    pub(crate) fn network_tip(&self) -> u64 {
+        self.first_live_checkpoint
+            .saturating_add(self.broadcaster.len() as u64)
+            .saturating_sub(1)
     }
 
     /// Subscribe to broadcasted checkpoints, optionally resuming from `resume_from + 1`.
@@ -194,18 +215,17 @@ impl SubscriptionBroadcast {
     /// Broadcast `Lagged` returns an error so the load balancer can redistribute the slow
     /// subscriber. The scan-to-live transition is bounded by `MAX_GAP_RESCANS` re-scans.
     pub(crate) fn subscribe(
-        &self,
+        self: Arc<Self>,
         resume_from: Option<u64>,
         fetcher: LedgerGrpcReader,
         config: &SubscriptionConfig,
     ) -> impl Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>> + 'static {
-        // Bounded re-entries into Phase 1 to bridge the scan-to-live transition gap (when
-        // `network_tip` advances between scan end and Phase 2's first broadcast item). Two
+        // Bounded re-entries into Phase 1 to bridge the scan-to-live transition gap (when the
+        // network tip advances between scan end and Phase 2's first broadcast item). Two
         // leaves headroom since scan throughput dominates live rate. `Lagged` is not retried.
         const MAX_GAP_RESCANS: u32 = 2;
 
         let mut receiver = self.broadcaster.resubscribe();
-        let network_tip = self.network_tip.clone();
         let fetcher = Arc::new(fetcher);
         let config = config.clone();
 
@@ -218,7 +238,7 @@ impl SubscriptionBroadcast {
                 if let Some(start_after) = last_yielded {
                     for await item in scan_checkpoints(
                         fetcher.clone(),
-                        network_tip.clone(),
+                        self.clone(),
                         start_after,
                         &config,
                     ) {
@@ -288,9 +308,6 @@ pub(crate) fn broadcast_error(e: broadcast::error::RecvError) -> RpcError {
 pub(crate) struct CheckpointStreamTask {
     uri: Uri,
     sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
-    broadcaster: CheckpointBroadcaster,
-    /// Sequence number of the most recent checkpoint this task has broadcast.
-    network_tip: Arc<AtomicU64>,
     streaming_packages: Arc<StreamingPackageStore>,
     package_eviction_tx: UnboundedSender<(u64, Vec<AccountAddress>)>,
     readiness: Arc<SubscriptionReadiness>,
@@ -305,6 +322,10 @@ pub(crate) struct CheckpointStreamTask {
 }
 
 impl CheckpointStreamTask {
+    /// Returns the task and the anchor receiver created with the broadcast channel. The
+    /// receiver must outlive `run()` (which consumes the task), so the caller holds onto it
+    /// and pairs it with the first streamed checkpoint (from `SubscriptionReadiness`) to
+    /// build a `SubscriptionBroadcast` once readiness fires.
     pub(crate) fn new(
         uri: Uri,
         config: &SubscriptionConfig,
@@ -313,27 +334,19 @@ impl CheckpointStreamTask {
         readiness: Arc<SubscriptionReadiness>,
         ledger_grpc_reader: LedgerGrpcReader,
         watermarks_rx: watch::Receiver<Arc<Watermarks>>,
-    ) -> Self {
+    ) -> (Self, CheckpointBroadcaster) {
         let (sender, broadcaster) = broadcast::channel(config.broadcast_buffer);
-        Self {
+        let task = Self {
             uri,
             sender,
-            broadcaster,
-            network_tip: Arc::new(AtomicU64::new(0)),
             streaming_packages,
             package_eviction_tx,
             readiness,
             ledger_grpc_reader,
             watermarks_rx,
             gap_recovery_chunk_size: config.gap_recovery_chunk_size,
-        }
-    }
-
-    pub(crate) fn subscription_broadcast(&self) -> SubscriptionBroadcast {
-        SubscriptionBroadcast {
-            broadcaster: self.broadcaster.resubscribe(),
-            network_tip: self.network_tip.clone(),
-        }
+        };
+        (task, broadcaster)
     }
 
     /// Connect to the fullnode's gRPC SubscribeCheckpoints endpoint.
@@ -364,7 +377,7 @@ impl CheckpointStreamTask {
     pub(crate) fn run(self) -> Service {
         Service::new().spawn_aborting(async move {
             let mut last_broadcast: Option<u64> = None;
-            let mut first_recorded = false;
+            let mut first_live_recorded = false;
 
             loop {
                 info!("Connecting to checkpoint stream at {}...", self.uri);
@@ -374,7 +387,7 @@ impl CheckpointStreamTask {
                 .await?;
                 info!("Connected to checkpoint stream at {}", self.uri);
 
-                self.consume_stream(stream, &mut last_broadcast, &mut first_recorded)
+                self.consume_stream(stream, &mut last_broadcast, &mut first_live_recorded)
                     .await?;
                 warn!("Checkpoint stream ended, reconnecting");
             }
@@ -392,7 +405,7 @@ impl CheckpointStreamTask {
         &self,
         mut stream: S,
         last_broadcast: &mut Option<u64>,
-        first_recorded: &mut bool,
+        first_live_recorded: &mut bool,
     ) -> anyhow::Result<()>
     where
         S: futures::Stream<Item = Result<SubscribeCheckpointsResponse, tonic::Status>> + Unpin,
@@ -413,9 +426,9 @@ impl CheckpointStreamTask {
                 .sequence_number
                 .context("Checkpoint without sequence_number")?;
 
-            if !*first_recorded {
-                self.readiness.record_first_checkpoint(seq);
-                *first_recorded = true;
+            if !*first_live_recorded {
+                self.readiness.record_first_live_checkpoint(seq);
+                *first_live_recorded = true;
             }
 
             // Gap detection: synchronously fill any hole between last_broadcast and this
@@ -457,8 +470,6 @@ impl CheckpointStreamTask {
             let _ = self.package_eviction_tx.send((seq, ids));
         }
         let processed = process_checkpoint(checkpoint)?;
-        self.network_tip
-            .store(processed.summary.sequence_number, Ordering::Relaxed);
         // Ignore send errors: no active subscribers is a normal state.
         let _ = self.sender.send(Arc::new(processed));
         Ok(())
