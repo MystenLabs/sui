@@ -3,6 +3,8 @@ source: crates/move-decompiler/tests/tests.rs
 ---
 if (0) {
     { }
+} else {
+    jump<AOS> NodeIndex(3);
 }
 'loop_1: loop {
     { 1 }

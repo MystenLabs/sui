@@ -249,11 +249,7 @@ pub enum Exp {
         /* enum */ TypeRef,
         /* variant x pattern-fields x rhs */ Vec<(Symbol, Vec<(Symbol, String)>, Exp)>,
     ),
-    /// Integer-literal `match` on a synthetic dispatch local. Emitted by `structure_loop`
-    /// for multi-succ loops: the loop's exits each set the scrutinee to a tag and break;
-    /// this match dispatches on the tag after the loop. Each arm is `(literal, body)`;
-    /// arms are emitted in tag order and cover every value the loop could have assigned
-    /// (the decompiler controls every assignment site).
+    /// Integer-literal `match` on a synthetic dispatch local.
     MatchLit(Box<Exp>, Vec<(DispatchTag, Exp)>),
     Return(Vec<Exp>),
     // --------------------------------
