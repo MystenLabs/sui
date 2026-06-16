@@ -2806,43 +2806,6 @@ html[data-theme='dark'] .protoUnionNote {
   transition: none !important;
 }
 
-/* ---- Kapa AI side panel (navbar button) ---- */
-/* When opened from the navbar "Ask Sui AI" button, Kapa slides in as
-   a right-side panel so users can read docs alongside the AI output. */
-
-.kapa-widget-container [class*="ModalOverlay"] {
-  background: rgba(0, 0, 0, 0.15) !important;
-}
-
-.kapa-widget-container [class*="ModalInner"] {
-  justify-content: flex-end !important;
-  padding: 0 !important;
-}
-
-.kapa-widget-container [class*="ModalContent"] {
-  position: fixed !important;
-  right: 0 !important;
-  top: 0 !important;
-  height: 100vh !important;
-  max-height: 100vh !important;
-  width: 440px !important;
-  max-width: 100vw !important;
-  border-radius: 0 !important;
-  margin: 0 !important;
-  animation: kapa-slide-in 0.2s ease-out !important;
-}
-
-@keyframes kapa-slide-in {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
-}
-
-@media (max-width: 520px) {
-  .kapa-widget-container [class*="ModalContent"] {
-    width: 100vw !important;
-  }
-}
-
 /* ---- Getting Started landing page ---- */
 
 /* Remove Docusaurus doc page padding and copy-page button on the landing page */
