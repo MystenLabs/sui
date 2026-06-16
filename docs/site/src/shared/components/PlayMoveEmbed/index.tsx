@@ -141,17 +141,17 @@ function OpenInAgentButton({ code }: { code: string }) {
 /* ---- Main embed ---- */
 
 function PlayMoveIframe({ code, title, height }: PlayMoveEmbedProps) {
-  const isDark =
-    typeof document !== "undefined" &&
-    document.documentElement.getAttribute("data-theme") === "dark";
-  const theme = isDark ? "dark" : "light";
-
   // Scale height to code length: ~24px per line + 120px for PlayMove toolbar/padding.
   // Clamp between 250px (small snippets) and 650px (large files).
   const lineCount = code.split("\n").length;
   const computed = height ?? `${Math.min(Math.max(lineCount * 24 + 120, 250), 650)}px`;
 
-  const src = `https://www.playmove.dev/?theme=${theme}#${encodeURIComponent(code)}`;
+  // PlayMove currently always renders in dark mode (hardcoded in App.tsx).
+  // Pass ?theme= so it works automatically once PlayMove adds support.
+  const isDark =
+    typeof document !== "undefined" &&
+    document.documentElement.getAttribute("data-theme") === "dark";
+  const src = `https://www.playmove.dev/?theme=${isDark ? "dark" : "light"}#${encodeURIComponent(code)}`;
 
   return (
     <div className="playmove-embed">

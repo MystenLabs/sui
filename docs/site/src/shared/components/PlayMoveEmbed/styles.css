@@ -133,15 +133,21 @@
 .playmove-iframe {
   border: none;
   display: block;
+  /* Always dark — PlayMove renders in dark mode regardless of site theme.
+     Matches PlayMove's background to prevent a light flash while loading. */
   background: #1e1e1e;
+  color-scheme: dark;
 }
 
-/* ---- Loading placeholder ---- */
+/* ---- Loading placeholder ---- matches iframe dark bg */
+
 .playmove-loading {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 250px;
-  color: var(--ifm-color-emphasis-500);
+  background: #1e1e1e;
+  color: #888;
   font-size: 0.9rem;
+  border-radius: var(--ifm-code-border-radius);
 }
