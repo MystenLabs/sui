@@ -23,7 +23,7 @@ type Meta = {
 
 function useDescriptionsSafe(): Meta[] | null {
   try {
-    const raw = usePluginData("sui-description-plugin") as any;
+    const raw = usePluginData("hashi-description-plugin") as any;
     if (!raw) return null;
     if (Array.isArray(raw)) return raw as Meta[];
     if (Array.isArray(raw?.items)) return raw.items as Meta[];

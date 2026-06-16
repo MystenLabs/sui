@@ -66,14 +66,26 @@
 }
 
 .copyBtn {
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--ifm-color-emphasis-500);
   background: transparent;
-  color: var(--ifm-color-emphasis-800);
+  color: var(--ifm-color-emphasis-900);
+}
+
+:global([data-theme='dark']) .copyBtn {
+  color: #faf8f5;
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .copyBtn:hover {
-  border-color: var(--ifm-color-emphasis-500);
-  color: var(--ifm-heading-color);
+  border-color: var(--ifm-color-emphasis-600);
+  background: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-900);
+}
+
+:global([data-theme='dark']) .copyBtn:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .agentBtn {
@@ -82,9 +94,17 @@
   color: #ffffff;
 }
 
+:global([data-theme='dark']) .agentBtn {
+  color: #1c2228;
+}
+
 .agentBtn:hover {
   background: var(--ifm-color-primary-dark);
   border-color: var(--ifm-color-primary-dark);
+}
+
+:global([data-theme='dark']) .agentBtn:hover {
+  color: #1c2228;
 }
 
 .caret {
