@@ -2815,6 +2815,12 @@ html.kapa-sidebar-open body {
   transition: width 0.3s ease;
 }
 
+html.kapa-sidebar-open [class*="tableOfContents"],
+html.kapa-sidebar-open [class*="tocCollapsible"] {
+  max-width: 100%;
+  overflow: hidden;
+}
+
 body {
   transition: width 0.3s ease;
 }
