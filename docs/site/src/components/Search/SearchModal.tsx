@@ -192,23 +192,41 @@ export default function MultiIndexSearchModal({
   if (!isOpen) return null;
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-50 flex justify-center items-start pt-[10vh]"
+      className="fixed inset-0 bg-black/50 z-50 flex justify-center items-start pt-[8vh]"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white dark:bg-sui-gray-90 w-full max-w-4xl rounded-xl shadow-2xl max-h-[min(600px,80vh)] flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-sui-gray-90 w-full max-w-2xl rounded-2xl shadow-2xl max-h-[min(640px,82vh)] flex flex-col overflow-hidden mx-4">
+        {/* Ask Sui AI banner */}
+        <button
+          type="button"
+          className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-[#298DFF] to-[#1B6FD1] text-white border-none cursor-pointer transition-opacity hover:opacity-90 shrink-0"
+          onClick={() => {
+            onClose();
+            if (typeof window !== "undefined" && window.Kapa) {
+              setTimeout(() => window.Kapa.open(query || undefined), 100);
+            }
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <path d="M15 4V2" /><path d="M15 16v-2" /><path d="M8 9h2" /><path d="M20 9h2" />
+            <path d="M17.8 11.8L19 13" /><path d="M15 9h.01" /><path d="M17.8 6.2L19 5" />
+            <path d="M11 6.2L9.7 5" /><path d="M11 11.8L9.7 13" />
+            <path d="M8 15h8a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2z" />
+            <path d="M9 18h6" /><path d="M10 22h4" /><path d="M10 18v4" /><path d="M14 18v4" />
+          </svg>
+          <div className="text-left">
+            <div className="font-semibold text-sm">Ask Sui AI</div>
+            <div className="text-xs opacity-80">Get answers from the Sui knowledge base</div>
+          </div>
+          <span className="ml-auto text-white/70 text-lg">→</span>
+        </button>
+
+        {/* Search section */}
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
           <InstantSearch searchClient={searchClient} indexName={activeIndex}>
-            <div className="bg-white dark:bg-sui-gray-90 rounded-t sticky top-0 z-10 px-6">
-              <div className="bg-white dark:bg-sui-gray-90 h-8 flex justify-end">
-                <button
-                  onClick={onClose}
-                  className="bg-transparent border-none outline-none text-xs text-gray-400 dark:text-sui-gray-60 hover:text-gray-600 cursor-pointer"
-                >
-                  ESC
-                </button>
-              </div>
+            <div className="bg-white dark:bg-sui-gray-90 sticky top-0 z-10 px-6 pt-4">
               <ControlledSearchBox
-                placeholder={`Search`}
+                placeholder="Search documentation..."
                 query={query}
                 onChange={setQuery}
                 inputRef={searchBoxRef}
@@ -248,43 +266,28 @@ export default function MultiIndexSearchModal({
             </div>
           </InstantSearch>
         </div>
-        <div className="h-12 px-6 bg-white dark:bg-sui-gray-90 flex items-center justify-between text-xs border-t border-solid border-sui-gray-50 dark:border-sui-gray-80 border-b-transparent border-l-transparent border-r-transparent shrink-0">
-          <div className="flex items-center gap-4">
-            <a
-              href={`/search?q=${encodeURIComponent(query)}`}
-              className="text-gray-500 dark:text-sui-gray-50 hover:text-sui-blue dark:hover:text-sui-blue-light no-underline"
-            >
-              View all results
-            </a>
-            <button
-              type="button"
-              className="bg-transparent border-none outline-none text-xs text-sui-blue dark:text-sui-blue-light hover:underline cursor-pointer font-medium flex items-center gap-1"
-              onClick={() => {
-                onClose();
-                if (typeof window !== "undefined" && window.Kapa) {
-                  setTimeout(() => window.Kapa.open(query || undefined), 100);
-                }
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M15 4V2" /><path d="M15 16v-2" /><path d="M8 9h2" /><path d="M20 9h2" />
-                <path d="M17.8 11.8L19 13" /><path d="M15 9h.01" /><path d="M17.8 6.2L19 5" />
-                <path d="M11 6.2L9.7 5" /><path d="M11 11.8L9.7 13" />
-                <path d="M8 15h8a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2z" />
-              </svg>
-              Ask Sui AI
-            </button>
+
+        {/* Footer */}
+        <div className="h-11 px-6 bg-white dark:bg-sui-gray-90 flex items-center justify-between text-xs border-t border-solid border-sui-gray-50 dark:border-sui-gray-80 border-b-transparent border-l-transparent border-r-transparent shrink-0">
+          <a
+            href={`/search?q=${encodeURIComponent(query)}`}
+            className="text-gray-500 dark:text-sui-gray-50 hover:text-sui-blue dark:hover:text-sui-blue-light no-underline"
+          >
+            View all results
+          </a>
+          <div className="flex items-center gap-3">
+            {activeMeta && (
+              <a
+                href={activeMeta.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-500 dark:text-sui-gray-50 hover:text-sui-blue dark:hover:text-sui-blue-light no-underline"
+              >
+                {activeMeta.label} →
+              </a>
+            )}
+            <span className="text-gray-300 dark:text-sui-gray-70">ESC to close</span>
           </div>
-          {activeMeta && (
-            <a
-              href={activeMeta.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-500 dark:text-sui-gray-50 hover:text-sui-blue dark:hover:text-sui-blue-light no-underline"
-            >
-              {activeMeta.label} &rarr;
-            </a>
-          )}
         </div>
       </div>
     </div>
