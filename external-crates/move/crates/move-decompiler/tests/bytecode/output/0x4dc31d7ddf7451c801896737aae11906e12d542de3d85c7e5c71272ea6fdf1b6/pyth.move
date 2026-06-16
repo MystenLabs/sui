@@ -51,10 +51,16 @@ public fun update_2(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l16 > l13) {
         if (l16 - l13 >= l18) {
             l15 = false;
+            unstructured {
+                goto 'label_76;
+            }
         }
     } else {
         if (l13 - l16 >= l18) {
             l15 = false;
+            unstructured {
+                goto 'label_76;
+            }
         }
     };
     l16 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
@@ -68,6 +74,7 @@ public fun update_2(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             l15 = false;
         }
     };
+    /* block 76 */;
     if (l15) {
         
     } else {
@@ -87,10 +94,16 @@ public fun update_3(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l19 > l16) {
         if (l19 - l16 >= l21) {
             l18 = false;
+            unstructured {
+                goto 'label_109;
+            }
         }
     } else {
         if (l16 - l19 >= l21) {
             l18 = false;
+            unstructured {
+                goto 'label_109;
+            }
         }
     };
     l19 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
@@ -142,10 +155,16 @@ public fun update_4(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l22 > l19) {
         if (l22 - l19 >= l24) {
             l21 = false;
+            unstructured {
+                goto 'label_142;
+            }
         }
     } else {
         if (l19 - l22 >= l24) {
             l21 = false;
+            unstructured {
+                goto 'label_142;
+            }
         }
     };
     l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
@@ -215,10 +234,16 @@ public fun update_5(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l25 > l22) {
         if (l25 - l22 >= l27) {
             l24 = false;
+            unstructured {
+                goto 'label_175;
+            }
         }
     } else {
         if (l22 - l25 >= l27) {
             l24 = false;
+            unstructured {
+                goto 'label_175;
+            }
         }
     };
     l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
@@ -306,10 +331,16 @@ public fun update_6(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l28 > l25) {
         if (l28 - l25 >= l30) {
             l27 = false;
+            unstructured {
+                goto 'label_208;
+            }
         }
     } else {
         if (l25 - l28 >= l30) {
             l27 = false;
+            unstructured {
+                goto 'label_208;
+            }
         }
     };
     l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
@@ -415,10 +446,16 @@ public fun update_7(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l31 > l28) {
         if (l31 - l28 >= l33) {
             l30 = false;
+            unstructured {
+                goto 'label_241;
+            }
         }
     } else {
         if (l28 - l31 >= l33) {
             l30 = false;
+            unstructured {
+                goto 'label_241;
+            }
         }
     };
     l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l12)));
@@ -542,10 +579,16 @@ public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
     if (l34 > l31) {
         if (l34 - l31 >= l36) {
             l33 = false;
+            unstructured {
+                goto 'label_274;
+            }
         }
     } else {
         if (l31 - l34 >= l36) {
             l33 = false;
+            unstructured {
+                goto 'label_274;
+            }
         }
     };
     l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l14)));

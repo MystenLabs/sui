@@ -661,10 +661,6 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             ));
             Out::Exp::Block(code, Box::new(Out::Exp::Seq(seq)))
         }
-        // Dispatch synthesis: `Let(name)` → `let name;`, `Assign(name, k)` → `name = k;`,
-        // `SelectorMatch(name, arms)` → `match (name) { k => ..., }`. All three are emitted
-        // as a group by `structure_loop`'s multi-succ branch and meet up in the surrounding
-        // `Seq`. Tag width is `crate::ast::DispatchTag` (= u32) at every layer.
         D::Structured::Let(name) => Out::Exp::Declare(vec![name]),
         D::Structured::Assign(name, value) => Out::Exp::Assign(
             vec![name],

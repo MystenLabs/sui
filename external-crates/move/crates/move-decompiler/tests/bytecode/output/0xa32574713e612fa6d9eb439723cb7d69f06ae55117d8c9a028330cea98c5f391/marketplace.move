@@ -630,10 +630,8 @@ public fun accept_trait_bid_settle<T0: key + store, T1: key + store>(l0: &mut Ma
         let l38 = l15;
         let l25 = l14;
         if (l38 > 0u64) {
-            marketplace::award_ion_points_with_referral(l37, l0, l7, l38, l8, l9);
-            break
+            marketplace::award_ion_points_with_referral(l37, l0, l7, l38, l8, l9)
         };
-        break;
         let l24 = linked_table::borrow_mut(&mut l0.user_activity, l22);
         *(&mut l24.claimable_points) = *(&l24.claimable_points) + l25;
         event::emit(TraitBidAcceptedEvent { nft_type: l33, nft_id: l32, seller: l37, buyer: l22, price: l36, commission: l29, buyer_ion_points: l25, seller_ion_points: l38 });
