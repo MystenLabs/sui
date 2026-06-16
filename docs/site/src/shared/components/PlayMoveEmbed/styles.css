@@ -141,7 +141,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 300px;
+  height: 250px;
   color: var(--ifm-color-emphasis-500);
   font-size: 0.9rem;
 }
