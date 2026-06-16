@@ -45,16 +45,13 @@ fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
 }
 
 pub fn verify_bulletproofs_ristretto255(
-    _context: &mut NativeContext,
+    context: &mut NativeContext,
     _ty_args: Vec<Type>,
     _args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     // Disabled: no longer called by the framework. The binding is retained only until the
-    // next execution version cut (see the Move-side TODO).
-    Err(partial_vm_error!(
-        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-        "verify_bulletproofs_ristretto255 is disabled",
-    ))
+    // next execution version cut and can be removed as part of the next execution version cut.
+    Ok(NativeResult::err(context.gas_used(), NOT_SUPPORTED))
 }
 
 pub fn verify_bulletproofs_with_dst_ristretto255(
@@ -64,14 +61,15 @@ pub fn verify_bulletproofs_with_dst_ristretto255(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 4);
-    let dst = pop_arg!(args, VectorRef).as_bytes_ref()?.to_vec();
-    let commitments = pop_arg!(args, VectorRef);
-    let range_bits = pop_arg!(args, u8);
-    let proof = pop_arg!(args, VectorRef);
 
     if !is_supported(context)? {
         return Ok(NativeResult::err(context.gas_used(), NOT_SUPPORTED));
     }
+
+    let dst = pop_arg!(args, VectorRef).as_bytes_ref()?.to_vec();
+    let commitments = pop_arg!(args, VectorRef);
+    let range_bits = pop_arg!(args, u8);
+    let proof = pop_arg!(args, VectorRef);
 
     // Load the cost parameters from the protocol config
     let cost_parameters = get_extension!(context, NativesCostTable)?

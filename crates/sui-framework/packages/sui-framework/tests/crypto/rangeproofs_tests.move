@@ -178,7 +178,7 @@ fun test_dst_too_long() {
 }
 
 #[test]
-#[expected_failure(abort_code = sui::rangeproofs::EDeprecated)]
+#[expected_failure(abort_code = sui::rangeproofs::ENotSupported)]
 fun test_deprecated_aborts() {
     // The deprecated entry point is disabled and always aborts.
     let commitment = ristretto255::g_from_bytes(

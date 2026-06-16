@@ -15,8 +15,7 @@ const EInvalidRange: u64 = 2;
 #[allow(unused_const)]
 const EInvalidBatchSize: u64 = 3;
 const EUnsupportedVersion: u64 = 4;
-const EDeprecated: u64 = 5;
-const EInvalidDst: u64 = 6;
+const EInvalidDst: u64 = 5;
 const MAX_DST_LENGTH: u64 = 64;
 
 /// Verify a range proof over the Ristretto255 curve that all committed values are in the range [0, 2^bits).
@@ -63,7 +62,7 @@ public fun verify_bulletproofs_ristretto255(
     _commitments: &vector<Element<ristretto255::G>>,
     _version: u8,
 ): bool {
-    abort EDeprecated
+    abort ENotSupported
 }
 
 native fun verify_bulletproofs_with_dst_ristretto255_internal(
@@ -71,12 +70,4 @@ native fun verify_bulletproofs_with_dst_ristretto255_internal(
     bits: u8,
     commitments: &vector<vector<u8>>,
     dst: &vector<u8>,
-): bool;
-
-// TODO: this should be removed in the next execution version cut.
-#[allow(unused_function)]
-native fun verify_bulletproofs_ristretto255_internal(
-    proof: &vector<u8>,
-    bits: u8,
-    commitments: &vector<vector<u8>>,
 ): bool;
