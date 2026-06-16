@@ -2807,17 +2807,9 @@ html[data-theme='dark'] .protoUnionNote {
 }
 
 /* ---- Kapa sidebar content shift ---- */
-/* Pure CSS: when Kapa's sidebar is open (container has children),
-   shrink everything including the fixed navbar. No JS needed.
-   Note: kapa-widget-container is an ID, not a class. */
-html:has(#kapa-widget-container [aria-modal]) body {
-  width: calc(100vw - 500px) !important;
-  overflow-x: hidden;
-  transition: width 0.3s ease;
-}
-
-/* Also try without aria-modal in case sidebar mode uses different attrs */
-html:has(#kapa-widget-container > div > div) body {
+/* Kapa renders in Shadow DOM so CSS :has() can't detect it.
+   A client module (kapa-sidebar.js) toggles .kapa-sidebar-open on <html>. */
+html.kapa-sidebar-open body {
   width: calc(100vw - 500px) !important;
   overflow-x: hidden;
   transition: width 0.3s ease;
@@ -2828,8 +2820,7 @@ body {
 }
 
 @media (max-width: 768px) {
-  html:has(#kapa-widget-container [aria-modal]) body,
-  html:has(#kapa-widget-container > div > div) body {
+  html.kapa-sidebar-open body {
     width: 100vw !important;
   }
 }
