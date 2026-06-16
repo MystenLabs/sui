@@ -726,7 +726,7 @@ impl CheckpointQueue {
         });
 
         self.execution_scheduler_sender
-            .send(schedulables, settlement_info);
+            .send(schedulables, settlement_info, timestamp);
 
         self.pending_tx_count += user_tx_count;
         self.pending_roots.push_back(QueuedCheckpointRoots {
@@ -2953,6 +2953,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 pub(crate) type SchedulerMessage = (
     Vec<(Schedulable, AssignedVersions)>,
     Option<SettlementBatchInfo>,
+    // Timestamp in milliseconds of the consensus commit that ordered these transactions.
+    u64,
 );
 
 #[derive(Clone)]
@@ -2980,8 +2982,11 @@ impl ExecutionSchedulerSender {
         &self,
         transactions: Vec<(Schedulable, AssignedVersions)>,
         settlement: Option<SettlementBatchInfo>,
+        commit_timestamp_ms: u64,
     ) {
-        let _ = self.sender.send((transactions, settlement));
+        let _ = self
+            .sender
+            .send((transactions, settlement, commit_timestamp_ms));
     }
 
     async fn run(
@@ -2989,11 +2994,18 @@ impl ExecutionSchedulerSender {
         settlement_scheduler: SettlementScheduler,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
-        while let Some((transactions, settlement)) = recv.recv().await {
+        while let Some((transactions, settlement, commit_timestamp_ms)) = recv.recv().await {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
             let txns = transactions
                 .into_iter()
-                .map(|(txn, versions)| (txn, ExecutionEnv::new().with_assigned_versions(versions)))
+                .map(|(txn, versions)| {
+                    (
+                        txn,
+                        ExecutionEnv::new()
+                            .with_assigned_versions(versions)
+                            .with_tx_timestamp_ms(commit_timestamp_ms),
+                    )
+                })
                 .collect();
             if let Some(settlement) = settlement {
                 settlement_scheduler.enqueue_v2(txns, settlement, &epoch_store);

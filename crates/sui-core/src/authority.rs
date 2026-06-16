@@ -791,6 +791,10 @@ pub struct ExecutionEnv {
     /// Transactions that must finish before this transaction can be executed.
     /// Used to schedule barrier transactions after non-exclusive writes.
     pub barrier_dependencies: Vec<TransactionDigest>,
+    /// Timestamp in milliseconds of the consensus commit that ordered the transaction.
+    /// Defaults to 0 for transactions that are not scheduled from a consensus commit
+    /// (e.g. genesis, change-epoch, and test-only execution paths).
+    pub tx_timestamp_ms: u64,
 }
 
 impl Default for ExecutionEnv {
@@ -800,6 +804,7 @@ impl Default for ExecutionEnv {
             expected_effects_digest: None,
             funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
+            tx_timestamp_ms: 0,
         }
     }
 }
@@ -832,6 +837,11 @@ impl ExecutionEnv {
         barrier_dependencies: BTreeSet<TransactionDigest>,
     ) -> Self {
         self.barrier_dependencies = barrier_dependencies.into_iter().collect();
+        self
+    }
+
+    pub fn with_tx_timestamp_ms(mut self, tx_timestamp_ms: u64) -> Self {
+        self.tx_timestamp_ms = tx_timestamp_ms;
         self
     }
 }
