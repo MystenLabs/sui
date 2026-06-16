@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 127;
+const MAX_PROTOCOL_VERSION: u64 = 128;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -356,6 +356,9 @@ const MAINNET_USDB: &str =
 //              shipped to mainnet out-of-band in #26816).
 // Version 127: Enable always_advance_dkg_to_resolution.
 //              Update gas prices for range proofs and ristretto group operations.
+// Version 128: Enable u128_gas_and_accumulator_accumulation: fold gas/conservation/
+//              accumulator-merge sums into u128 so u64+u64 overflow is impossible, and
+//              replace the pre-gas representability check with a slim net-based gate.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1131,6 +1134,12 @@ struct FeatureFlags {
     // If true, exit early for IFWW transactions.
     #[serde(skip_serializing_if = "is_false")]
     early_exit_on_iffw: bool,
+
+    // If true, accumulate gas-charging, SUI-conservation, and accumulator-merge sums into
+    // u128 (so u64+u64 overflow is impossible) and use a slim net-based representability gate
+    // in place of the gross-based pre-gas check.
+    #[serde(skip_serializing_if = "is_false")]
+    u128_gas_and_accumulator_accumulation: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2876,6 +2885,10 @@ impl ProtocolConfig {
 
     pub fn early_exit_on_iffw(&self) -> bool {
         self.feature_flags.early_exit_on_iffw
+    }
+
+    pub fn u128_gas_and_accumulator_accumulation(&self) -> bool {
+        self.feature_flags.u128_gas_and_accumulator_accumulation
     }
 }
 
@@ -5018,6 +5031,9 @@ impl ProtocolConfig {
                     cfg.group_ops_ristretto_point_mul_cost = Some(1763);
                     cfg.group_ops_ristretto_scalar_div_cost = Some(557);
                     cfg.group_ops_ristretto_point_div_cost = Some(2244);
+                }
+                128 => {
+                    cfg.feature_flags.u128_gas_and_accumulator_accumulation = true;
                 }
                 // Use this template when making changes:
                 //
