@@ -7,8 +7,8 @@ workflow that points an AI agent (or a human) at the skills relevant to a kind o
 work.
 
 This README is the developer-facing entry point for the subcommand. The text printed at
-runtime by `sui prompt` (no args) lives in `prompt-output.md` next to this file and is
-embedded into the binary at build time via `include_str!`.
+runtime by `sui prompt` (no args) lives in `src/prompt-output.md` and is embedded into
+the binary at build time via `include_str!`.
 
 ## What this subcommand is
 

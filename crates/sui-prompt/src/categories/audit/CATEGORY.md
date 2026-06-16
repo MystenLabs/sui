@@ -2,9 +2,9 @@
 name: audit
 description: Security-review entry point for deployed Sui Move packages; choose for audits, vulnerabilities, suspicious behavior, suspected bugs, or "is this package safe?".
 skills:
-  - sui-move-security-review
   - sui-and-move-tools
   - move-bytecode-comprehension
+  - sui-move-security-review
 ---
 
 # Auditing Move packages on Sui

@@ -1,4 +1,4 @@
-# move-prompt skills
+# sui prompt skills
 
 Skill bundles embedded into the `sui` binary at build time. Each bundle is a directory
 holding a `SKILL.md` (the routing/summary entry point) and one or more reference files
@@ -49,16 +49,3 @@ provenance metadata.
   binary at compile time by `crates/sui-prompt/build.rs`. To distribute changes, rebuild the binary.
 - A skill's content is agent-model-agnostic — no references to a specific AI model or
   vendor; generic "the agent" wording is the convention.
-
-## Appendix — optional Claude Code skill auto-discovery
-
-For users running Claude Code who prefer native skill auto-discovery (instead of pulling
-each file via `sui prompt skill`), the bundles in this directory can also be installed
-via the standard `skills` CLI:
-
-```sh
-npx skills add path/to/crates/sui-prompt/src/skills --skill '*' --agent claude-code --global -y
-```
-
-This is purely optional convenience. The primary, agent-agnostic interface is
-`sui prompt skill <bundle>` — that's how the surface is designed to work for any agent.
