@@ -41,6 +41,7 @@ sui-swarm-config.workspace = true
 sui-types.workspace = true
 
 [dev-dependencies]
+insta.workspace = true
 wiremock.workspace = true
 
 [build-dependencies]
