@@ -1,12 +1,12 @@
-# `move prompt` maintenance content
+# `sui prompt` maintenance content
 
-This directory holds **all content related to maintaining `move prompt`** — for example,
+This directory holds **all content related to maintaining `sui prompt`** — for example,
 agentic skills that help a maintainer (or a maintenance-bot agent) refresh or extend the
 embedded bundles, and any artifacts those workflows need.
 
-**Not embedded in the binary.** `move-cli/build.rs` walks `src/prompt/skills/` and
-`src/prompt/categories/` only, so anything under `maintenance/` is invisible to runtime
-agents using `move prompt`. The exclusion is by directory location — no skip-lists or
+**Not embedded in the binary.** `crates/sui-prompt/build.rs` walks `src/skills/` and
+`src/categories/` only, so anything under `maintenance/` is invisible to runtime
+agents using `sui prompt`. The exclusion is by directory location — no skip-lists or
 filters.
 
 ## What's currently here

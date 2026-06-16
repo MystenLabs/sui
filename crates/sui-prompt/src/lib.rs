@@ -1,16 +1,16 @@
-// Copyright (c) The Move Contributors
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! `move prompt` — entry point to expert Move knowledge (agent-agnostic CLI).
+//! `sui prompt` — the agent-agnostic entry point to expert Move knowledge, shipped as part of the Sui CLI.
 //!
-//! See `move-cli/src/prompt/README.md` for usage with worked examples.
+//! See `crates/sui-prompt/README.md` for usage with worked examples.
 //!
 //! ## Architecture
 //!
 //! - **Skills** and **categories** are embedded at **build time** (see
-//!   `move-cli/build.rs`). The generated `$OUT_DIR/embedded.rs` defines [`SKILL_FILES`]
-//!   (one entry per `.md` file under `src/prompt/skills/<bundle>/`) and [`CATEGORIES`]
-//!   (one entry per `src/prompt/categories/<name>/CATEGORY.md`). Both static slices'
+//!   `crates/sui-prompt/build.rs`). The generated `$OUT_DIR/embedded.rs` defines [`SKILL_FILES`]
+//!   (one entry per `.md` file under `src/skills/<bundle>/`) and [`CATEGORIES`]
+//!   (one entry per `src/categories/<name>/CATEGORY.md`). Both static slices'
 //!   text is `include_str!`'d at compile time; no runtime filesystem access.
 //! - The CLI surface routes between three concerns: the no-args overview
 //!   (`prompt-output.md`), skill access (flat — `skills` / `skill <name>`), and
@@ -24,13 +24,13 @@ use std::collections::BTreeSet;
 // `CATEGORIES: &[PromptCategory]`.
 include!(concat!(env!("OUT_DIR"), "/embedded.rs"));
 
-/// The `move prompt` no-args overview rendered to the agent. Source is
+/// The `sui prompt` no-args overview rendered to the agent. Source is
 /// `prompt-output.md` next to this file, embedded at build time via `include_str!`.
 const OVERVIEW: &str = include_str!("prompt-output.md");
 
 /// One markdown file from a skill bundle, embedded in the binary at build time.
 pub struct PromptSkillFile {
-    /// Skill bundle name (top-level directory under `move-cli/src/prompt/skills/`).
+    /// Skill bundle name (top-level directory under `crates/sui-prompt/src/skills/`).
     pub bundle: &'static str,
     /// Path of the markdown file within the bundle, with `.md` extension.
     /// Example: `"SKILL.md"` or `"access-control.md"`.
@@ -40,23 +40,23 @@ pub struct PromptSkillFile {
 }
 
 /// One category, embedded in the binary at build time. The `content` is the full
-/// `CATEGORY.md` (frontmatter included) — that is what `move prompt category <name>`
+/// `CATEGORY.md` (frontmatter included) — that is what `sui prompt category <name>`
 /// prints, consistent with how skills are served.
 pub struct PromptCategory {
     /// Category name — comes from the directory under `categories/<name>/`.
     pub name: &'static str,
     /// One-line description, extracted from the `description:` frontmatter line at
-    /// build time. Used by `move prompt categories` for the listing.
+    /// build time. Used by `sui prompt categories` for the listing.
     pub description: &'static str,
     /// Full `CATEGORY.md` content (frontmatter + body).
     pub content: &'static str,
 }
 
-/// `move prompt` — entry point to expert Move knowledge (agent-agnostic CLI).
+/// `sui prompt` — the agent-agnostic entry point to expert Move knowledge, shipped as part of the Sui CLI.
 #[derive(Parser)]
 #[clap(
     name = "prompt",
-    about = "Entry point to expert Move knowledge (agent-agnostic). \
+    about = "Expert Move knowledge for AI agents (agent-agnostic). \
              Call with no subcommand to print the discoverability overview."
 )]
 pub struct Prompt {
@@ -65,7 +65,7 @@ pub struct Prompt {
     cmd: Option<PromptCommand>,
 }
 
-/// Subcommands of `move prompt`. Each variant maps 1:1 to a `print_*` helper below.
+/// Subcommands of `sui prompt`. Each variant maps 1:1 to a `print_*` helper below.
 #[derive(Subcommand)]
 pub enum PromptCommand {
     /// List embedded categories with one-line descriptions.
@@ -73,7 +73,7 @@ pub enum PromptCommand {
 
     /// Read a category's content (workflow, skills, references).
     Category {
-        /// Category name (e.g. `audit`). See `move prompt categories`.
+        /// Category name (e.g. `audit`). See `sui prompt categories`.
         name: String,
     },
 
@@ -148,9 +148,9 @@ fn print_skills() {
     println!();
     println!("## Commands");
     println!();
-    println!("- `move prompt skill <bundle>` — read `SKILL.md`");
-    println!("- `move prompt skill <bundle> --list` — list reference files");
-    println!("- `move prompt skill <bundle> --file <r>` — read a specific reference file");
+    println!("- `sui prompt skill <bundle>` — read `SKILL.md`");
+    println!("- `sui prompt skill <bundle> --list` — list reference files");
+    println!("- `sui prompt skill <bundle> --file <r>` — read a specific reference file");
 }
 
 /// Read from a named skill bundle. Behaviour depends on the flags:
@@ -166,7 +166,7 @@ fn print_skill(bundle: &str, list: bool, file: Option<&str>) -> anyhow::Result<(
     let bundle_exists = SKILL_FILES.iter().any(|s| s.bundle == bundle);
     if !bundle_exists {
         anyhow::bail!(
-            "no embedded skill bundle named '{}'. Run `move prompt skills` to list bundles.",
+            "no embedded skill bundle named '{}'. Run `sui prompt skills` to list bundles.",
             bundle
         );
     }
@@ -198,7 +198,7 @@ fn print_skill(bundle: &str, list: bool, file: Option<&str>) -> anyhow::Result<(
             Ok(())
         }
         None => anyhow::bail!(
-            "no file '{}' in skill bundle '{}'. Run `move prompt skill {} --list` to enumerate.",
+            "no file '{}' in skill bundle '{}'. Run `sui prompt skill {} --list` to enumerate.",
             target_file,
             bundle,
             bundle
@@ -236,9 +236,9 @@ fn print_categories() {
     println!();
     println!("## Commands");
     println!();
-    println!("- `move prompt category <name>` — read the category's content");
-    println!("- `move prompt skills` — list all skill bundles (flat)");
-    println!("- `move prompt skill <bundle>` — read a skill bundle's `SKILL.md`");
+    println!("- `sui prompt category <name>` — read the category's content");
+    println!("- `sui prompt skills` — list all skill bundles (flat)");
+    println!("- `sui prompt skill <bundle>` — read a skill bundle's `SKILL.md`");
 }
 
 /// Print the named category's content (frontmatter + body) verbatim — the same convention
@@ -321,7 +321,7 @@ mod tests {
         let err = print_skill("__missing_skill_for_prompt_test__", false, None)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("move prompt skills"));
+        assert!(err.contains("sui prompt skills"));
     }
 
     #[test]

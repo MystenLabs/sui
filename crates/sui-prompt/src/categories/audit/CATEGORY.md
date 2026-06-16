@@ -20,14 +20,14 @@ and a set of reference files where the actual content lives. Enumerate (`--list`
 every reference file in each bundle before walking its rules.
 
 1. **`sui-and-move-tools`** — get the package decompiled: one Sui GraphQL call returns
-   every module's bytes, and `move decompile` (already on the system, running
-   `move prompt`) produces readable `.move` files (the working view for the catalog
+   every module's bytes, and `sui move decompile` (already on the system, running
+   `sui prompt`) produces readable `.move` files (the working view for the catalog
    walk). Disassembly is fetched per-module on demand only for specific verification.
 
    ```sh
-   move prompt skill sui-and-move-tools
-   move prompt skill sui-and-move-tools --list
-   move prompt skill sui-and-move-tools --file <ref>
+   sui prompt skill sui-and-move-tools
+   sui prompt skill sui-and-move-tools --list
+   sui prompt skill sui-and-move-tools --file <ref>
    ```
 
 2. **`move-bytecode-comprehension`** — what survives compilation. Abilities, visibility,
@@ -37,9 +37,9 @@ every reference file in each bundle before walking its rules.
    `dummy_field` on OTWs) and reasoning through them rather than dropping to disassembly.
 
    ```sh
-   move prompt skill move-bytecode-comprehension
-   move prompt skill move-bytecode-comprehension --list
-   move prompt skill move-bytecode-comprehension --file <ref>
+   sui prompt skill move-bytecode-comprehension
+   sui prompt skill move-bytecode-comprehension --list
+   sui prompt skill move-bytecode-comprehension --file <ref>
    ```
 
 3. **`sui-move-security-review`** — the `SM-*` rule catalog. The SKILL.md is a routing
@@ -49,13 +49,13 @@ every reference file in each bundle before walking its rules.
    decompiled-source signals.
 
    ```sh
-   move prompt skill sui-move-security-review
-   move prompt skill sui-move-security-review --list
-   move prompt skill sui-move-security-review --file <ref>
+   sui prompt skill sui-move-security-review
+   sui prompt skill sui-move-security-review --list
+   sui prompt skill sui-move-security-review --file <ref>
    ```
 
    For the audit workflow itself (apply SM-* rules to the decompiled view; reach for
-   disassembly only for specific verification cases), start with `move prompt skill
+   disassembly only for specific verification cases), start with `sui prompt skill
    sui-move-security-review --file auditing-bytecode`.
 
 ## Triage discipline
@@ -73,7 +73,7 @@ Record with every audit report:
 
 - Target package id and network.
 - GraphQL endpoint used (e.g. `https://graphql.mainnet.sui.io/graphql`).
-- `move --version` (the binary that ran `move prompt`).
+- `sui --version` (the binary that ran `sui prompt`).
 
 ## External references
 

@@ -1,4 +1,4 @@
-// Copyright (c) The Move Contributors
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
@@ -16,8 +16,8 @@ struct CategoryFrontmatter {
 
 fn main() {
     // Embed every skill markdown file under `src/skills/` and every category
-    // under `src/categories/` into the binary so `move prompt skill <bundle>` and
-    // `move prompt category <name>` can return their contents at runtime without touching
+    // under `src/categories/` into the binary so `sui prompt skill <bundle>` and
+    // `sui prompt category <name>` can return their contents at runtime without touching
     // the filesystem. Walks both directories and emits `$OUT_DIR/embedded.rs`: a single
     // generated file holding the `SKILL_FILES` and `CATEGORIES` slices, whose textual
     // content is `include_str!`'d at compile time. The `cargo:rerun-if-changed`
@@ -25,7 +25,7 @@ fn main() {
     //
     // Both skills and categories are embedded raw — frontmatter is part of the content
     // an agent reads. Build-time frontmatter parsing exists only to validate the prompt
-    // graph and extract category descriptions for `move prompt categories`.
+    // graph and extract category descriptions for `sui prompt categories`.
 
     let manifest = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set by cargo");
     let skills_dir = PathBuf::from(&manifest).join("src/skills");
@@ -76,7 +76,7 @@ fn main() {
     //    `CATEGORIES` entry. The category `name` is taken from the directory; the
     //    frontmatter is parsed once to validate its name, description, and skill bundle
     //    references. Everything else in `CATEGORY.md` — the whole file, frontmatter
-    //    included — is embedded raw and served verbatim by `move prompt category <name>`,
+    //    included — is embedded raw and served verbatim by `sui prompt category <name>`,
     //    the same convention as skills.
     let mut category_entries: Vec<(String, String, PathBuf)> = Vec::new();
     if categories_dir.exists() {

@@ -20,21 +20,21 @@ plus the tools to turn `.mv` files into something a human can read.
    survives compilation.
 
    ```sh
-   move prompt skill move-bytecode-comprehension
-   move prompt skill move-bytecode-comprehension --list
-   move prompt skill move-bytecode-comprehension --file <ref>
+   sui prompt skill move-bytecode-comprehension
+   sui prompt skill move-bytecode-comprehension --list
+   sui prompt skill move-bytecode-comprehension --file <ref>
    ```
 
 2. **`sui-and-move-tools`** — once you have a target in mind, this skill produces the
-   working view: one Sui GraphQL call returns every module's bytes, and `move decompile`
-   (already on the system, running `move prompt`) produces readable `.move` files.
+   working view: one Sui GraphQL call returns every module's bytes, and `sui move decompile`
+   (already on the system, running `sui prompt`) produces readable `.move` files.
    Disassembly is fetched per-module on demand only when a specific question can't be
    answered from decompiled.
 
    ```sh
-   move prompt skill sui-and-move-tools
-   move prompt skill sui-and-move-tools --list
-   move prompt skill sui-and-move-tools --file <ref>
+   sui prompt skill sui-and-move-tools
+   sui prompt skill sui-and-move-tools --list
+   sui prompt skill sui-and-move-tools --file <ref>
    ```
 
 ## Decompilation vs disassembly — a single rule

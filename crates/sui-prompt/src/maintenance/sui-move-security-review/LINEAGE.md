@@ -57,9 +57,9 @@ To refresh the SM-* catalog against an updated `MystenLabs/skills` snapshot:
    prescriptions that imply a new SM-* rule.
 4. **Update** the affected SM-* reference file(s); bump the pinned ref in this `LINEAGE.md`.
 5. **Large changes** (>5 affected rules) — re-run the original 3-agent thorough scan that
-   built v1 (the prompt template lives in the v1 archive of `~/vuln_discovery/skills/`).
-6. **Update the binary** — rebuild move-cli so the embedded skill content reflects the
-   refreshed catalog.
+   built v1 (the prompt template isn't checked into this repo; reconstruct from the v1
+   commit history or contact the catalog author).
+6. **Rebuild the Sui CLI** so the embedded skill content reflects the refreshed catalog.
 
 ## Why this matters
 

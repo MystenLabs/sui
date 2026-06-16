@@ -1,7 +1,7 @@
 # Auditing on-chain (bytecode) targets
 
 The `SM-*` rules are written against source, but on-chain packages are compiled bytecode.
-**The decompiled view (`move decompile` output) is the working substrate for SM-* rule
+**The decompiled view (`sui move decompile` output) is the working substrate for SM-* rule
 application** — abilities, visibility, the `entry` flag, signatures, struct shapes, control
 flow, and call patterns are byte-for-byte faithful (see
 `move-bytecode-comprehension/decompilation.md`). Disassembly is reserved for **post-finding
@@ -164,7 +164,7 @@ For every audit, record alongside the findings:
 
 - Target package id + network (`mainnet` / `testnet` / `devnet`)
 - GraphQL endpoint used (e.g. `https://graphql.mainnet.sui.io/graphql`)
-- `move --version` (the binary that ran `move prompt`)
+- `sui --version` (the binary that ran `sui prompt`)
 
 Recording the tool version matters because textual disassembly and decompilation can
 change across `move` versions even when the underlying package bytecode is the same.

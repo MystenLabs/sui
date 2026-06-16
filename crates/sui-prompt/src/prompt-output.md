@@ -1,6 +1,6 @@
-# move prompt — entry point to expert Move knowledge
+# sui prompt — entry point to expert Move knowledge
 
-`move prompt` is the entry point — for AI agents and humans alike — to a self-contained,
+`sui prompt` is the entry point — for AI agents and humans alike — to a self-contained,
 agent-agnostic source of expert Move knowledge. Content is organized into **categories**.
 Each category bundles the skills relevant to a kind of work — auditing a deployed package,
 reading its bytecode, etc. — and a category preamble walks you (or your AI agent) through
@@ -9,7 +9,7 @@ that workflow.
 ## Contract
 
 - **Out:** markdown only (categories, skills, overview).
-- **Read-only command:** `move prompt` only prints embedded markdown; it never builds,
+- **Read-only command:** `sui prompt` only prints embedded markdown; it never builds,
   fetches, or writes artifacts. Some workflows may instruct follow-up commands when the
   task requires them.
 - **Self-contained:** every category and skill is embedded in this binary at build time.
@@ -24,17 +24,17 @@ plus reference files that hold the actual content; you should `--list` and read 
 reference file before applying the skill.
 
 ```sh
-move prompt categories                    # see the available categories
-move prompt category <name>               # read a category's workflow + skill list
+sui prompt categories                    # see the available categories
+sui prompt category <name>               # read a category's workflow + skill list
 ```
 
 You can also reach skills directly when their category context isn't needed:
 
 ```sh
-move prompt skills                        # list all skill bundles, flat
-move prompt skill <bundle>                # read a bundle's SKILL.md
-move prompt skill <bundle> --list         # enumerate the bundle's reference files
-move prompt skill <bundle> --file <ref>   # read a specific reference file
+sui prompt skills                        # list all skill bundles, flat
+sui prompt skill <bundle>                # read a bundle's SKILL.md
+sui prompt skill <bundle> --list         # enumerate the bundle's reference files
+sui prompt skill <bundle> --file <ref>   # read a specific reference file
 ```
 
 A skill can belong to more than one category; reaching it directly is fine.
@@ -51,16 +51,16 @@ bytecode analysis" verbatim; pattern-match on what they want to *achieve*.
   understand its **bytecode**, or inspect a `.mv` without a security framing →
   **`bytecode`** is the entry point.
 
-If still unsure, run `move prompt categories` and read every description before
+If still unsure, run `sui prompt categories` and read every description before
 picking — the descriptions are written with common intents in mind, not just the
 literal category name.
 
 ## Universal commands
 
-- `move prompt`                                          — this overview
-- `move prompt categories`                               — list categories
-- `move prompt category <name>`                          — read a category's content
-- `move prompt skills`                                   — list skill bundles (flat)
-- `move prompt skill <bundle>`                           — read a bundle's `SKILL.md`
-- `move prompt skill <bundle> --list`                    — list reference files in a bundle
-- `move prompt skill <bundle> --file <ref>`              — read a specific reference file
+- `sui prompt`                                          — this overview
+- `sui prompt categories`                               — list categories
+- `sui prompt category <name>`                          — read a category's content
+- `sui prompt skills`                                   — list skill bundles (flat)
+- `sui prompt skill <bundle>`                           — read a bundle's `SKILL.md`
+- `sui prompt skill <bundle> --list`                    — list reference files in a bundle
+- `sui prompt skill <bundle> --file <ref>`              — read a specific reference file

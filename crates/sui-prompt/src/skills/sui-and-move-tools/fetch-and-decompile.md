@@ -48,7 +48,7 @@ done
 ## 4. Decompile for the working view
 
 ```sh
-move decompile --input "$OUT/mv" --output "$OUT/decompiled"
+sui move decompile --input "$OUT/mv" --output "$OUT/decompiled"
 ```
 
 The decompiled `.move` is a heuristic reconstruction; see

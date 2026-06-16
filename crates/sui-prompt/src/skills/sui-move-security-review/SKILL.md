@@ -14,14 +14,14 @@ description: >
 
 # Move Security Review (on Sui)
 
-> **Self-bootstrap (any AI agent):** this skill is bundled inside the `move` binary. **For
-> comprehensive audits, enumerate every reference file in this bundle (`move prompt skill
+> **Self-bootstrap (any AI agent):** this skill is bundled inside the `sui` binary. **For
+> comprehensive audits, enumerate every reference file in this bundle (`sui prompt skill
 > sui-move-security-review --list`) and read each one before applying the routing table
 > below.** The detection heuristics, severity ratings, exploit sketches, and bytecode
 > signals live in those per-category files; the routing table is a summary only. Read a
-> specific reference file with `move prompt skill sui-move-security-review --file <ref>`.
-> This skill belongs to one or more categories — run `move prompt categories` to see them
-> and `move prompt category <name>` to read the category's workflow. No filesystem install
+> specific reference file with `sui prompt skill sui-move-security-review --file <ref>`.
+> This skill belongs to one or more categories — run `sui prompt categories` to see them
+> and `sui prompt category <name>` to read the category's workflow. No filesystem install
 > is required — the binary is self-contained.
 
 > Offensive counterpart to the constructive Move skills. Each constructive "must / never /

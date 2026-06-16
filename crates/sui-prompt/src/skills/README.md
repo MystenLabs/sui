@@ -1,10 +1,10 @@
 # move-prompt skills
 
-Skill bundles embedded into the `move` binary at build time. Each bundle is a directory
+Skill bundles embedded into the `sui` binary at build time. Each bundle is a directory
 holding a `SKILL.md` (the routing/summary entry point) and one or more reference files
 (`<topic>.md`) that hold the actual content. Skills are the unit of expert content; they
 are organized by use case via **categories** (see `../categories/` and
-`move prompt categories`).
+`sui prompt categories`).
 
 A skill can belong to more than one category — categories reference skills by name, and
 skills live here in one canonical location.
@@ -16,7 +16,7 @@ skills live here in one canonical location.
   for applying the rules to decompiled `.move` files, with disassembly reserved for
   targeted verification.
 - **`sui-and-move-tools`** — obtain bytecode + readable views for a deployed Sui package.
-  One Sui GraphQL call returns every module's raw bytes; `move decompile` produces the
+  One Sui GraphQL call returns every module's raw bytes; `sui move decompile` produces the
   decompiled-source working view. Disassembly is fetched per-module only for specific
   verification questions.
 - **`move-bytecode-comprehension`** — Move binary format essentials + the survival table
@@ -25,13 +25,13 @@ skills live here in one canonical location.
 ## Access (any AI agent)
 
 ```sh
-move prompt skills                                                # list bundles
-move prompt skill <bundle>                                        # read SKILL.md
-move prompt skill <bundle> --list                                 # list reference files
-move prompt skill <bundle> --file <ref>                           # read a reference file
+sui prompt skills                                                # list bundles
+sui prompt skill <bundle>                                        # read SKILL.md
+sui prompt skill <bundle> --list                                 # list reference files
+sui prompt skill <bundle> --file <ref>                           # read a reference file
 ```
 
-Categories (`move prompt categories` / `move prompt category <name>`) guide the agent
+Categories (`sui prompt categories` / `sui prompt category <name>`) guide the agent
 through a workflow that names the right skills in order; direct skill access stays
 available when the category context isn't needed.
 
@@ -46,19 +46,19 @@ provenance metadata.
 ## Editing notes
 
 - This directory is the canonical home for skills. Files here are embedded into the
-  binary at compile time by `move-cli/build.rs`. To distribute changes, rebuild the binary.
+  binary at compile time by `crates/sui-prompt/build.rs`. To distribute changes, rebuild the binary.
 - A skill's content is agent-model-agnostic — no references to a specific AI model or
   vendor; generic "the agent" wording is the convention.
 
 ## Appendix — optional Claude Code skill auto-discovery
 
 For users running Claude Code who prefer native skill auto-discovery (instead of pulling
-each file via `move prompt skill`), the bundles in this directory can also be installed
+each file via `sui prompt skill`), the bundles in this directory can also be installed
 via the standard `skills` CLI:
 
 ```sh
-npx skills add path/to/move-cli/src/prompt/skills --skill '*' --agent claude-code --global -y
+npx skills add path/to/crates/sui-prompt/src/skills --skill '*' --agent claude-code --global -y
 ```
 
 This is purely optional convenience. The primary, agent-agnostic interface is
-`move prompt skill <bundle>` — that's how the surface is designed to work for any agent.
+`sui prompt skill <bundle>` — that's how the surface is designed to work for any agent.

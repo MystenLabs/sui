@@ -1,8 +1,8 @@
 ---
 name: move-bytecode-comprehension
 description: >
-  Use when reading or reasoning about compiled Move bytecode, `move disassemble`
-  output, or decompiled Move source (from `move decompile`). Mental model for the binary
+  Use when reading or reasoning about compiled Move bytecode, `sui move disassemble`
+  output, or decompiled Move source (from `sui move decompile`). Mental model for the binary
   format, what survives compilation (and what's lost), and how to read each output
   soundly. Trigger on "what does this package do?", "read this .mv module", "interpret
   this disassembly", "is the decompiled source trustworthy?", or whenever an analysis
@@ -11,17 +11,17 @@ description: >
 
 # Move Bytecode Comprehension
 
-> **Self-bootstrap (any AI agent):** this skill is bundled inside the `move` binary. **Before
-> relying on the routing in this SKILL.md, enumerate the reference files (`move prompt skill
+> **Self-bootstrap (any AI agent):** this skill is bundled inside the `sui` binary. **Before
+> relying on the routing in this SKILL.md, enumerate the reference files (`sui prompt skill
 > move-bytecode-comprehension --list`) and read each (`--file <ref>`).** They cover the
 > bytecode format and the practice of reading disassembly / decompiled output; this SKILL.md
 > is the mental-model wrapper. This skill belongs to one or more categories — run
-> `move prompt categories` to see them and `move prompt category <name>` to read the
+> `sui prompt categories` to see them and `sui prompt category <name>` to read the
 > category's workflow. No filesystem install is required — the binary is self-contained.
 
 On-chain Sui packages are compiled **Move bytecode** (`.mv`, magic `0xA11CEB0B`). You analyze it
-two ways: **disassembly** (stack-machine assembly, via `move disassemble`) and
-**decompilation** (reconstructed Move source, via `move decompile`). This skill is the mental model
+two ways: **disassembly** (stack-machine assembly, via `sui move disassemble`) and
+**decompilation** (reconstructed Move source, via `sui move decompile`). This skill is the mental model
 for both: the binary format, what survives, and how to read each output.
 
 The single most important fact when reading Move bytecode: **abilities, visibility, the
