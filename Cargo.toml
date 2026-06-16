@@ -638,10 +638,10 @@ p384 = { version = "0.13.0", default-features = false, features = [
 ciborium = "0.2"
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "487f8bc739e535391a56e1aa1193084da9d64ce8" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "487f8bc739e535391a56e1aa1193084da9d64ce8" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "487f8bc739e535391a56e1aa1193084da9d64ce8" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "487f8bc739e535391a56e1aa1193084da9d64ce8" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f8555c5594a4966e850170cc11ecfcf557" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f8555c5594a4966e850170cc11ecfcf557" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f8555c5594a4966e850170cc11ecfcf557" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f8555c5594a4966e850170cc11ecfcf557" }
 
 # core-types from the new sdk for use in gRPC
 sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5b41bc701525f1b94f1fe63008d4841bc6fb1065", features = [ "hash", "serde" ] }

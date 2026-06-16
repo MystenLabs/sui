@@ -877,7 +877,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=487f8bc739e535391a56e1aa1193084da9d64ce8#487f8bc739e535391a56e1aa1193084da9d64ce8"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=b1bda3f8555c5594a4966e850170cc11ecfcf557#b1bda3f8555c5594a4966e850170cc11ecfcf557"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -925,7 +925,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=487f8bc739e535391a56e1aa1193084da9d64ce8#487f8bc739e535391a56e1aa1193084da9d64ce8"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=b1bda3f8555c5594a4966e850170cc11ecfcf557#b1bda3f8555c5594a4966e850170cc11ecfcf557"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -936,7 +936,7 @@ dependencies = [
 [[package]]
 name = "anemo-cli"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=487f8bc739e535391a56e1aa1193084da9d64ce8#487f8bc739e535391a56e1aa1193084da9d64ce8"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=b1bda3f8555c5594a4966e850170cc11ecfcf557#b1bda3f8555c5594a4966e850170cc11ecfcf557"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -952,7 +952,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=487f8bc739e535391a56e1aa1193084da9d64ce8#487f8bc739e535391a56e1aa1193084da9d64ce8"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=b1bda3f8555c5594a4966e850170cc11ecfcf557#b1bda3f8555c5594a4966e850170cc11ecfcf557"
 dependencies = [
  "anemo",
  "bytes",
@@ -9932,7 +9932,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
