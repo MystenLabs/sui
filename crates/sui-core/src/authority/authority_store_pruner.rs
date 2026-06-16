@@ -21,6 +21,7 @@ use std::sync::atomic::AtomicU64;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
+use sui_rpc_store::Store as RpcStore;
 use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
@@ -144,6 +145,7 @@ impl AuthorityStorePruner {
         metrics: Arc<AuthorityStorePruningMetrics>,
         pruned_tx_seq_exclusive: u64,
         rpc_index: Option<&RpcIndexStore>,
+        rpc_store: Option<&RpcStore>,
         enable_pruning_tombstones: bool,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
@@ -219,6 +221,16 @@ impl AuthorityStorePruner {
         if let Some(rpc_index) = rpc_index {
             rpc_index.prune(checkpoint_number, pruned_tx_seq_exclusive)?;
         }
+        if let Some(rpc_store) = rpc_store {
+            // Prune the embedded rpc-store's history cohort on the same
+            // floor, in lockstep with the legacy index above.
+            sui_rpc_store::prune_history_cohort(
+                rpc_store.db(),
+                rpc_store.schema(),
+                checkpoint_number,
+                pruned_tx_seq_exclusive,
+            )?;
+        }
 
         Ok(())
     }
@@ -231,6 +243,7 @@ impl AuthorityStorePruner {
         metrics: Arc<AuthorityStorePruningMetrics>,
         pruned_tx_seq_exclusive: u64,
         rpc_index: Option<&RpcIndexStore>,
+        rpc_store: Option<&RpcStore>,
         _: bool,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
@@ -258,6 +271,16 @@ impl AuthorityStorePruner {
 
         if let Some(rpc_index) = rpc_index {
             rpc_index.prune(checkpoint_number, pruned_tx_seq_exclusive)?;
+        }
+        if let Some(rpc_store) = rpc_store {
+            // Prune the embedded rpc-store's history cohort on the same
+            // floor, in lockstep with the legacy index above.
+            sui_rpc_store::prune_history_cohort(
+                rpc_store.db(),
+                rpc_store.schema(),
+                checkpoint_number,
+                pruned_tx_seq_exclusive,
+            )?;
         }
 
         Ok(())
@@ -344,6 +367,7 @@ impl AuthorityStorePruner {
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
         rpc_index: Option<&RpcIndexStore>,
+        rpc_store: Option<&RpcStore>,
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
         epoch_duration_ms: u64,
@@ -370,6 +394,7 @@ impl AuthorityStorePruner {
             perpetual_db,
             checkpoint_store,
             rpc_index,
+            rpc_store,
             PruningMode::Objects,
             config.num_epochs_to_retain,
             pruned_checkpoint_number,
@@ -384,6 +409,7 @@ impl AuthorityStorePruner {
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
         rpc_index: Option<&RpcIndexStore>,
+        rpc_store: Option<&RpcStore>,
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
         epoch_duration_ms: u64,
@@ -422,6 +448,7 @@ impl AuthorityStorePruner {
             perpetual_db,
             checkpoint_store,
             rpc_index,
+            rpc_store,
             PruningMode::Checkpoints,
             config
                 .num_epochs_to_retain_for_checkpoints()
@@ -450,6 +477,7 @@ impl AuthorityStorePruner {
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
         rpc_index: Option<&RpcIndexStore>,
+        rpc_store: Option<&RpcStore>,
         mode: PruningMode,
         num_epochs_to_retain: u64,
         starting_checkpoint_number: CheckpointSequenceNumber,
@@ -524,6 +552,7 @@ impl AuthorityStorePruner {
                             metrics.clone(),
                             pruned_tx_seq_exclusive,
                             rpc_index,
+                            rpc_store,
                             !config.killswitch_tombstone_pruning,
                         )
                         .await?
@@ -556,6 +585,7 @@ impl AuthorityStorePruner {
                         metrics.clone(),
                         pruned_tx_seq_exclusive,
                         rpc_index,
+                        rpc_store,
                         !config.killswitch_tombstone_pruning,
                     )
                     .await?
@@ -829,6 +859,7 @@ impl AuthorityStorePruner {
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
         rpc_index: Option<Arc<RpcIndexStore>>,
+        rpc_store: Option<RpcStore>,
         jsonrpc_index: Option<Arc<IndexStore>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
         pruner_watermarks: Arc<PrunerWatermarks>,
@@ -868,7 +899,7 @@ impl AuthorityStorePruner {
                     loop {
                         tokio::select! {
                             _ = objects_prune_interval.tick(), if prune_objects => {
-                                if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
+                                if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), rpc_store.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
                                     error!("Failed to prune objects: {:?}", err);
                                 }
                             },
@@ -916,7 +947,7 @@ impl AuthorityStorePruner {
                 loop {
                     tokio::select! {
                         _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
-                            if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
+                            if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), rpc_store.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
                                 error!("Failed to prune objects: {:?}", err);
                             }
                             if let Err(err) = Self::prune_executed_tx_digests(&perpetual_db, &checkpoint_store).await {
@@ -924,7 +955,7 @@ impl AuthorityStorePruner {
                             }
                         },
                         _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
-                            if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), config.clone(), metrics.clone(), epoch_duration_ms, &pruner_watermarks).await {
+                            if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), rpc_store.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms, &pruner_watermarks).await {
                                 error!("Failed to prune checkpoints: {:?}", err);
                             }
                         },
@@ -945,6 +976,7 @@ impl AuthorityStorePruner {
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
         rpc_index: Option<Arc<RpcIndexStore>>,
+        rpc_store: Option<RpcStore>,
         jsonrpc_index: Option<Arc<IndexStore>>,
         mut pruning_config: AuthorityStorePruningConfig,
         is_validator: bool,
@@ -992,6 +1024,7 @@ impl AuthorityStorePruner {
                 perpetual_db,
                 checkpoint_store,
                 rpc_index,
+                rpc_store,
                 jsonrpc_index,
                 AuthorityStorePruningMetrics::new(registry),
                 pruner_watermarks,
@@ -1189,6 +1222,7 @@ mod tests {
                 metrics,
                 0,
                 None,
+                None,
                 true,
             )
             .await
@@ -1286,6 +1320,7 @@ mod tests {
             0,
             metrics,
             0,
+            None,
             None,
             true,
         )

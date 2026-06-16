@@ -12,6 +12,7 @@ use crate::rpc_index::RpcIndexStore;
 use move_core_types::language_storage::StructTag;
 use parking_lot::Mutex;
 use std::sync::Arc;
+use sui_rpc_store::RpcStoreReader;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
@@ -802,5 +803,343 @@ impl RpcIndexes for RestReadStore {
                 descending,
             )
             .map_err(Into::into)
+    }
+}
+
+/// Read store backed by the embedded [`sui_rpc_store`] indexer instead
+/// of the built-in [`RpcIndexStore`].
+///
+/// The two read stores serve the same `sui-rpc-api` trait stack; the
+/// difference is where the *index* surface comes from. This wrapper
+/// composes two backends:
+///
+/// - **Raw chain data** — objects, transactions, effects, events,
+///   checkpoints, committees, and child-object resolution — is served
+///   from the validator's perpetual / checkpoint stores
+///   ([`RocksDbStore`]), exactly like [`RestReadStore`]. The embedded
+///   rpc-store does not duplicate this data.
+/// - **The index surface** ([`RpcIndexes`]) — owner / type / balance /
+///   coin / package-version listings, epoch info, and the
+///   ledger-history bitmaps — is served from the
+///   [`RpcStoreReader`].
+///
+/// The object/state available range is the intersection of the two
+/// backends' ranges (`max` of their lower bounds): a consistent read
+/// at checkpoint `C` needs both the object bytes (perpetual store) and
+/// the index rows (rpc-store) at `C`. Ledger-history-specific
+/// availability (bounded by the history backfill watermark) is exposed
+/// separately.
+pub struct RpcStoreReadStore {
+    state: Arc<AuthorityState>,
+    rocks: RocksDbStore,
+    reader: RpcStoreReader,
+}
+
+impl RpcStoreReadStore {
+    pub fn new(state: Arc<AuthorityState>, rocks: RocksDbStore, reader: RpcStoreReader) -> Self {
+        Self {
+            state,
+            rocks,
+            reader,
+        }
+    }
+}
+
+impl ObjectStore for RpcStoreReadStore {
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.rocks.get_object(object_id)
+    }
+
+    fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
+        self.rocks.get_object_by_key(object_id, version)
+    }
+}
+
+impl ReadStore for RpcStoreReadStore {
+    fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
+        self.rocks.get_committee(epoch)
+    }
+
+    fn get_latest_checkpoint(&self) -> Result<VerifiedCheckpoint> {
+        self.rocks.get_latest_checkpoint()
+    }
+
+    fn get_highest_verified_checkpoint(&self) -> Result<VerifiedCheckpoint> {
+        self.rocks.get_highest_verified_checkpoint()
+    }
+
+    fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint> {
+        self.rocks.get_highest_synced_checkpoint()
+    }
+
+    fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber> {
+        // A consistent read needs both the raw chain data (perpetual
+        // store) and the index rows (rpc-store), so the available range
+        // starts at the higher of the two lower bounds.
+        let perpetual = self.rocks.get_lowest_available_checkpoint()?;
+        let rpc_store = self.reader.get_lowest_available_checkpoint()?;
+        Ok(perpetual.max(rpc_store))
+    }
+
+    fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
+        self.rocks.get_checkpoint_by_digest(digest)
+    }
+
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Option<VerifiedCheckpoint> {
+        self.rocks
+            .get_checkpoint_by_sequence_number(sequence_number)
+    }
+
+    fn get_checkpoint_contents_by_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Option<sui_types::messages_checkpoint::CheckpointContents> {
+        self.rocks.get_checkpoint_contents_by_digest(digest)
+    }
+
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Option<sui_types::messages_checkpoint::CheckpointContents> {
+        self.rocks
+            .get_checkpoint_contents_by_sequence_number(sequence_number)
+    }
+
+    fn get_transaction(&self, digest: &TransactionDigest) -> Option<Arc<VerifiedTransaction>> {
+        self.rocks.get_transaction(digest)
+    }
+
+    fn multi_get_transactions(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Arc<VerifiedTransaction>>> {
+        self.rocks.multi_get_transactions(digests)
+    }
+
+    fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
+        self.rocks.get_transaction_effects(digest)
+    }
+
+    fn multi_get_transaction_effects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<TransactionEffects>> {
+        self.rocks.multi_get_transaction_effects(digests)
+    }
+
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
+        self.rocks.get_events(digest)
+    }
+
+    fn multi_get_events(&self, digests: &[TransactionDigest]) -> Vec<Option<TransactionEvents>> {
+        self.rocks.multi_get_events(digests)
+    }
+
+    fn get_full_checkpoint_contents(
+        &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
+        digest: &CheckpointContentsDigest,
+    ) -> Option<VersionedFullCheckpointContents> {
+        self.rocks
+            .get_full_checkpoint_contents(sequence_number, digest)
+    }
+
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<Vec<ObjectKey>> {
+        self.rocks.get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<CheckpointSequenceNumber> {
+        self.rocks.get_transaction_checkpoint(digest)
+    }
+}
+
+impl ChildObjectResolver for RpcStoreReadStore {
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        Ok(self.get_object(child).and_then(|o| {
+            if o.version() <= child_version_upper_bound
+                && o.owner == Owner::ObjectOwner((*parent).into())
+            {
+                Some(o)
+            } else {
+                None
+            }
+        }))
+    }
+
+    fn get_object_received_at_version(
+        &self,
+        _owner: &ObjectID,
+        _receiving_object_id: &ObjectID,
+        _receive_object_at_version: SequenceNumber,
+        _epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        Err(SuiErrorKind::UnsupportedFeatureError {
+            error: "RpcStoreReadStore does not support receiving objects".to_string(),
+        }
+        .into())
+    }
+}
+
+impl RpcStateReader for RpcStoreReadStore {
+    fn get_lowest_available_checkpoint_objects(&self) -> Result<CheckpointSequenceNumber> {
+        let perpetual = self
+            .state
+            .get_object_cache_reader()
+            .get_highest_pruned_checkpoint()
+            .map(|cp| cp + 1)
+            .unwrap_or(0);
+        let rpc_store = self.reader.get_lowest_available_checkpoint_objects()?;
+        Ok(perpetual.max(rpc_store))
+    }
+
+    fn get_chain_identifier(&self) -> Result<sui_types::digests::ChainIdentifier> {
+        Ok(self.state.get_chain_identifier())
+    }
+
+    fn indexes(&self) -> Option<&dyn RpcIndexes> {
+        Some(self)
+    }
+
+    fn get_struct_layout_with_overlay(
+        &self,
+        struct_tag: &move_core_types::language_storage::StructTag,
+        overlay: &ObjectSet,
+    ) -> Result<Option<move_core_types::annotated_value::MoveTypeLayout>> {
+        // Resolve through the authority's live executor and backing
+        // package store, matching `RestReadStore`: the perpetual store
+        // backs the package reads and the loaded epoch store carries
+        // the current protocol config.
+        let backing_store = self.state.get_backing_package_store();
+        let overlay_store = OverlayBackingPackageStore::new(overlay, backing_store.as_ref());
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        epoch_store
+            .executor()
+            .type_layout_resolver(epoch_store.protocol_config(), Box::new(overlay_store))
+            .get_annotated_layout(struct_tag)
+            .map(|layout| layout.into_layout())
+            .map(Some)
+            .map_err(StorageError::custom)
+    }
+}
+
+impl RpcIndexes for RpcStoreReadStore {
+    fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<sui_types::storage::EpochInfo>> {
+        self.reader.get_epoch_info(epoch)
+    }
+
+    fn owned_objects_iter(
+        &self,
+        owner: SuiAddress,
+        object_type: Option<StructTag>,
+        cursor: Option<OwnedObjectInfo>,
+    ) -> Result<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>> {
+        self.reader.owned_objects_iter(owner, object_type, cursor)
+    }
+
+    fn dynamic_field_iter(
+        &self,
+        parent: ObjectID,
+        cursor: Option<ObjectID>,
+    ) -> Result<Box<dyn Iterator<Item = Result<DynamicFieldKey, TypedStoreError>> + '_>> {
+        self.reader.dynamic_field_iter(parent, cursor)
+    }
+
+    fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>> {
+        self.reader.get_coin_info(coin_type)
+    }
+
+    fn get_balance(
+        &self,
+        owner: &SuiAddress,
+        coin_type: &StructTag,
+    ) -> Result<Option<BalanceInfo>> {
+        self.reader.get_balance(owner, coin_type)
+    }
+
+    fn balance_iter(
+        &self,
+        owner: &SuiAddress,
+        cursor: Option<(SuiAddress, StructTag)>,
+    ) -> Result<BalanceIterator<'_>> {
+        self.reader.balance_iter(owner, cursor)
+    }
+
+    fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> Result<Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>> {
+        self.reader.package_versions_iter(original_id, cursor)
+    }
+
+    fn get_highest_indexed_checkpoint_seq_number(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>> {
+        self.reader.get_highest_indexed_checkpoint_seq_number()
+    }
+
+    fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>> {
+        self.reader.ledger_tx_seq_digest(tx_seq)
+    }
+
+    fn ledger_tx_seq_digest_multi_get(
+        &self,
+        tx_seqs: &[u64],
+    ) -> Result<Vec<Option<LedgerTxSeqDigest>>> {
+        self.reader.ledger_tx_seq_digest_multi_get(tx_seqs)
+    }
+
+    fn ledger_tx_seq_digest_iter(
+        &self,
+        start: u64,
+        end_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerTxSeqDigestIterator<'_>> {
+        self.reader
+            .ledger_tx_seq_digest_iter(start, end_exclusive, descending)
+    }
+
+    fn transaction_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>> {
+        self.reader.transaction_bitmap_bucket_iter(
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
+    }
+
+    fn event_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>> {
+        self.reader.event_bitmap_bucket_iter(
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
     }
 }

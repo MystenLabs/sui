@@ -9,7 +9,7 @@ use anyhow::anyhow;
 use rand::rngs::OsRng;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
-use tokio::sync::mpsc;
+use tokio::sync::broadcast;
 
 use simulacrum::Simulacrum;
 use sui_protocol_config::Chain;
@@ -44,7 +44,7 @@ struct CheckpointPublication {
 pub struct Context {
     simulacrum: Arc<RwLock<ForkedSimulacrum>>,
     chain_identifier: Chain,
-    checkpoint_sender: mpsc::Sender<Checkpoint>,
+    checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
     checkpoint_publication_lock: Mutex<()>,
 }
 
@@ -52,7 +52,7 @@ impl Context {
     pub(crate) fn new(
         simulacrum: Simulacrum<OsRng, DataStore>,
         chain_identifier: Chain,
-        checkpoint_sender: mpsc::Sender<Checkpoint>,
+        checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
     ) -> Self {
         Self {
             simulacrum: Arc::new(RwLock::new(simulacrum)),
@@ -122,7 +122,7 @@ impl Context {
         };
 
         let metadata = publication.metadata;
-        self.publish_checkpoint(publication).await;
+        self.publish_checkpoint(publication);
 
         Ok((output, metadata))
     }
@@ -161,11 +161,12 @@ impl Context {
         Ok(sim.get_checkpoint_data(verified, contents)?)
     }
 
-    async fn publish_checkpoint(&self, publication: CheckpointPublication) {
+    fn publish_checkpoint(&self, publication: CheckpointPublication) {
+        // The broadcast send is non-blocking; an error just means there are no
+        // live subscribers, which is fine.
         if let Err(err) = self
             .checkpoint_sender
-            .send(publication.payload)
-            .await
+            .send(Arc::new(publication.payload))
             .context("failed to enqueue checkpoint to subscription service")
         {
             tracing::warn!(
