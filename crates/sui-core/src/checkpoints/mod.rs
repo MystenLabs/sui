@@ -1673,6 +1673,20 @@ impl CheckpointBuilder {
         )
         .await;
 
+        // Assert success here, in the builder task, before these effects are included in
+        // the checkpoint. The settlement scheduler also asserts this, but it runs in a
+        // separate task, so its assertion does not order against checkpoint persistence -
+        // checking it here is what prevents a checkpoint from being built over the effects
+        // of a failed settlement transaction.
+        for fx in settlement_effects.iter().chain(barrier_effects.iter()) {
+            assert!(
+                fx.status().is_ok(),
+                "settlement transaction cannot fail (digest: {:?}) {:#?}",
+                fx.transaction_digest(),
+                fx
+            );
+        }
+
         settlement_effects
             .into_iter()
             .chain(barrier_effects)
