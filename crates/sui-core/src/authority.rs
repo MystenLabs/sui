@@ -166,8 +166,9 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::{SuiSystemState, get_sui_system_state};
 use sui_types::supported_protocol_versions::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::{
-    SUI_SYSTEM_ADDRESS,
+    SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_ADDRESS,
     base_types::*,
+    clock::Clock,
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
@@ -791,6 +792,15 @@ pub struct ExecutionEnv {
     /// Transactions that must finish before this transaction can be executed.
     /// Used to schedule barrier transactions after non-exclusive writes.
     pub barrier_dependencies: Vec<TransactionDigest>,
+    /// Timestamp in milliseconds of the consensus commit that included the transaction.
+    /// This value will be used for reading timestamp in Move directly from TxContext without involving
+    /// Clock object.
+    ///
+    /// For almost all transactions, this value will be the same as if the transaction reads
+    /// the Clock object according to the consensus ordering. The only exception is the prologue
+    /// transaction itself, which reads the old Clock object that still contains the previous
+    /// commit's timestamp.
+    pub tx_timestamp_ms: Option<u64>,
 }
 
 impl Default for ExecutionEnv {
@@ -800,6 +810,7 @@ impl Default for ExecutionEnv {
             expected_effects_digest: None,
             funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
+            tx_timestamp_ms: None,
         }
     }
 }
@@ -832,6 +843,11 @@ impl ExecutionEnv {
         barrier_dependencies: BTreeSet<TransactionDigest>,
     ) -> Self {
         self.barrier_dependencies = barrier_dependencies.into_iter().collect();
+        self
+    }
+
+    pub fn with_tx_timestamp_ms(mut self, tx_timestamp_ms: u64) -> Self {
+        self.tx_timestamp_ms = Some(tx_timestamp_ms);
         self
     }
 }
@@ -1989,6 +2005,13 @@ impl AuthorityState {
             return ExecutionOutput::Fatal(e);
         }
         let tx_digest = *certificate.digest();
+
+        check_clock_timestamp_matches_commit(
+            &tx_digest,
+            &input_objects,
+            execution_env.tx_timestamp_ms,
+        );
+
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
         let sender = transaction_data.sender();
@@ -6795,5 +6818,41 @@ impl NodeStateDump {
     pub fn read_from_file(path: &PathBuf) -> Result<Self, anyhow::Error> {
         let file = File::open(path)?;
         serde_json::from_reader(file).map_err(|e| anyhow::anyhow!(e))
+    }
+}
+
+/// The consensus commit timestamp threaded through the execution env is sourced from the consensus
+/// commit prologue, which is also the transaction that writes the Clock object. Hence any
+/// transaction that reads the Clock must observe a matching timestamp. This guards the wiring while
+/// nothing reads the value yet.
+///
+/// The prologue itself is excluded: it takes the Clock as a *mutable* input still holding the
+/// previous commit's timestamp and overwrites it, so only immutable Clock reads are checked.
+fn check_clock_timestamp_matches_commit(
+    tx_digest: &TransactionDigest,
+    input_objects: &CheckedInputObjects,
+    tx_timestamp_ms: Option<u64>,
+) {
+    let Some(tx_timestamp_ms) = tx_timestamp_ms else {
+        return;
+    };
+    let Some(clock_timestamp_ms) = input_objects
+        .inner()
+        .iter()
+        .find(|obj| obj.id() == SUI_CLOCK_OBJECT_ID && !obj.is_mutable())
+        .and_then(|obj| obj.as_object())
+        .and_then(|obj| obj.data.try_as_move())
+        .and_then(|move_obj| bcs::from_bytes::<Clock>(move_obj.contents()).ok())
+        .map(|clock| clock.timestamp_ms)
+    else {
+        return;
+    };
+    if clock_timestamp_ms != tx_timestamp_ms {
+        debug_fatal!(
+            "Clock timestamp {} does not match consensus commit timestamp {} for tx {:?}",
+            clock_timestamp_ms,
+            tx_timestamp_ms,
+            tx_digest
+        );
     }
 }
