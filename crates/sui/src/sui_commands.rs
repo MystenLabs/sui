@@ -65,11 +65,12 @@ use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, External, FileBasedKeystore, Keystore};
 use sui_move::summary::PackageSummaryMetadata;
 use sui_move::{self, execute_move_command};
-use sui_prompt::{self, execute_prompt_command};
 use sui_move_build::BuildConfig as SuiBuildConfig;
 use sui_package_alt::{SuiFlavor, find_environment};
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::{LocalDatabase, get_available_port};
+#[cfg(debug_assertions)]
+use sui_prompt::{self, execute_prompt_command};
 use sui_protocol_config::Chain;
 use sui_replay_2 as SR2;
 use sui_rpc_api::Client;
@@ -381,6 +382,7 @@ pub enum SuiCommand {
     },
 
     /// Expert Move knowledge for AI agents (agent-agnostic).
+    #[cfg(debug_assertions)]
     #[clap(name = "prompt")]
     Prompt(sui_prompt::Prompt),
 
@@ -719,6 +721,7 @@ impl SuiCommand {
                     }
                 }
             }
+            #[cfg(debug_assertions)]
             SuiCommand::Prompt(prompt) => {
                 execute_prompt_command(prompt)?;
                 Ok(())
