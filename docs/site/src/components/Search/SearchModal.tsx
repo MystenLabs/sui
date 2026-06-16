@@ -249,12 +249,32 @@ export default function MultiIndexSearchModal({
           </InstantSearch>
         </div>
         <div className="h-12 px-6 bg-white dark:bg-sui-gray-90 flex items-center justify-between text-xs border-t border-solid border-sui-gray-50 dark:border-sui-gray-80 border-b-transparent border-l-transparent border-r-transparent shrink-0">
-          <a
-            href={`/search?q=${encodeURIComponent(query)}`}
-            className="text-gray-500 dark:text-sui-gray-50 hover:text-sui-blue dark:hover:text-sui-blue-light no-underline"
-          >
-            View all results
-          </a>
+          <div className="flex items-center gap-4">
+            <a
+              href={`/search?q=${encodeURIComponent(query)}`}
+              className="text-gray-500 dark:text-sui-gray-50 hover:text-sui-blue dark:hover:text-sui-blue-light no-underline"
+            >
+              View all results
+            </a>
+            <button
+              type="button"
+              className="bg-transparent border-none outline-none text-xs text-sui-blue dark:text-sui-blue-light hover:underline cursor-pointer font-medium flex items-center gap-1"
+              onClick={() => {
+                onClose();
+                if (typeof window !== "undefined" && window.Kapa) {
+                  setTimeout(() => window.Kapa.open(query || undefined), 100);
+                }
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 4V2" /><path d="M15 16v-2" /><path d="M8 9h2" /><path d="M20 9h2" />
+                <path d="M17.8 11.8L19 13" /><path d="M15 9h.01" /><path d="M17.8 6.2L19 5" />
+                <path d="M11 6.2L9.7 5" /><path d="M11 11.8L9.7 13" />
+                <path d="M8 15h8a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2z" />
+              </svg>
+              Ask Sui AI
+            </button>
+          </div>
           {activeMeta && (
             <a
               href={activeMeta.url}
