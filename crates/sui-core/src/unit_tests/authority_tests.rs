@@ -1797,7 +1797,7 @@ async fn test_package_size_limit() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object =
-        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, u64::MAX);
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, i64::MAX as u64);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     let mut package = Vec::new();
     let mut modules_size = 0;

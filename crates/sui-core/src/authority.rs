@@ -2452,6 +2452,7 @@ impl AuthorityState {
         // Full validity check including gas budget and price.
         transaction.validity_check(&epoch_store.tx_validity_check_context())?;
 
+
         let declared_withdrawals = self.pre_object_load_checks(
             &transaction,
             &[],

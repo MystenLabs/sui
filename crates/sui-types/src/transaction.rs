@@ -3465,6 +3465,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         Ok(())
     }
 
+
     /// Check if the transaction is sponsored (namely gas owner != sender)
     fn is_sponsored_tx(&self) -> bool {
         self.gas_owner() != self.sender

@@ -209,7 +209,7 @@ mod checked {
                 .collect();
             PaymentKind::smash(payment_methods).expect(
                 "unable to create a payment kind from payment methods. \
-                 Should not be possible wit ha non-empty vector",
+                 Should not be possible with a non-empty vector",
             )
         }
     }

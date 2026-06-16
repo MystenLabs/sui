@@ -1,9 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(deprecated)]
+
 use move_core_types::ident_str;
 use sui_macros::*;
 use sui_simulator::has_mainnet_protocol_config_override;
+use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
@@ -2166,25 +2169,14 @@ async fn test_fake_coin_reservation_dry_run_does_not_panic() {
         .fullnode_handle
         .sui_node
         .with(|node| node.state().clone());
-    let join = tokio::task::spawn(async move { state.dry_exec_transaction(tx_data).await });
-
-    match join.await {
-        Ok(Ok(_)) => panic!("dry-run with fake coin reservation should have errored"),
-        Ok(Err(e)) => {
-            let msg = e.to_string();
-            assert!(
-                msg.contains("InvalidWithdrawReservation") || msg.contains("not found"),
-                "unexpected error: {msg}"
-            );
-        }
-        Err(join_err) if join_err.is_panic() => {
-            panic!(
-                "dryRunTransactionBlock panicked on fake coin reservation: {:?}",
-                join_err
-            );
-        }
-        Err(e) => panic!("unexpected join error: {e:?}"),
-    }
+    let result = state.dry_exec_transaction(tx_data).await;
+    let msg = result
+        .expect_err("dry-run with fake coin reservation should have errored")
+        .to_string();
+    assert!(
+        msg.contains("InvalidWithdrawReservation") || msg.contains("not found"),
+        "unexpected error: {msg}"
+    );
 }
 
 #[sim_test]
@@ -2208,38 +2200,25 @@ async fn test_fake_coin_reservation_dev_inspect_does_not_panic() {
         .fullnode_handle
         .sui_node
         .with(|node| node.state().clone());
-    let join = tokio::task::spawn(async move {
-        state
-            .dev_inspect_transaction_block(
-                sender,
-                tx_kind,
-                None,
-                None,
-                None,
-                None,
-                None,
-                /* skip_checks */ Some(true),
-            )
-            .await
-    });
-
-    match join.await {
-        Ok(Ok(_)) => panic!("dev-inspect with fake coin reservation should have errored"),
-        Ok(Err(e)) => {
-            let msg = e.to_string();
-            assert!(
-                msg.contains("InvalidWithdrawReservation") || msg.contains("not found"),
-                "unexpected error: {msg}"
-            );
-        }
-        Err(join_err) if join_err.is_panic() => {
-            panic!(
-                "devInspectTransactionBlock panicked on fake coin reservation: {:?}",
-                join_err
-            );
-        }
-        Err(e) => panic!("unexpected join error: {e:?}"),
-    }
+    let result = state
+        .dev_inspect_transaction_block(
+            sender,
+            tx_kind,
+            None,
+            None,
+            None,
+            None,
+            None,
+            /* skip_checks */ Some(true),
+        )
+        .await;
+    let msg = result
+        .expect_err("dev-inspect with fake coin reservation should have errored")
+        .to_string();
+    assert!(
+        msg.contains("InvalidWithdrawReservation") || msg.contains("not found"),
+        "unexpected error: {msg}"
+    );
 }
 
 #[sim_test]
@@ -2274,25 +2253,13 @@ async fn test_fake_coin_reservation_dry_run_safe_when_flag_disabled() {
         .fullnode_handle
         .sui_node
         .with(|node| node.state().clone());
-    let join = tokio::task::spawn(async move { state.dry_exec_transaction(tx_data).await });
-
-    match join.await {
-        Ok(Ok(_)) => panic!("dry-run with fake coin reservation should have errored"),
-        Ok(Err(e)) => {
-            assert!(
-                e.to_string()
-                    .contains("coin reservation backward compatibility layer is not enabled"),
-                "expected gating rejection, got: {e}"
-            );
-        }
-        Err(join_err) if join_err.is_panic() => {
-            panic!(
-                "dryRunTransactionBlock panicked with coin reservation flag disabled: {:?}",
-                join_err
-            );
-        }
-        Err(e) => panic!("unexpected join error: {e:?}"),
-    }
+    let result = state.dry_exec_transaction(tx_data).await;
+    let e = result.expect_err("dry-run with fake coin reservation should have errored");
+    assert!(
+        e.to_string()
+            .contains("coin reservation backward compatibility layer is not enabled"),
+        "expected gating rejection, got: {e}"
+    );
 }
 
 #[sim_test]
@@ -2316,36 +2283,427 @@ async fn test_fake_coin_reservation_dev_inspect_safe_when_flag_disabled() {
         .fullnode_handle
         .sui_node
         .with(|node| node.state().clone());
-    let join = tokio::task::spawn(async move {
-        state
-            .dev_inspect_transaction_block(
-                sender,
-                tx_kind,
-                None,
-                None,
-                None,
-                None,
-                None,
-                /* skip_checks */ Some(true),
-            )
-            .await
+    let result = state
+        .dev_inspect_transaction_block(
+            sender,
+            tx_kind,
+            None,
+            None,
+            None,
+            None,
+            None,
+            /* skip_checks */ Some(true),
+        )
+        .await;
+    let e = result.expect_err("dev-inspect with fake coin reservation should have errored");
+    assert!(
+        e.to_string()
+            .contains("coin reservation backward compatibility layer is not enabled"),
+        "expected gating rejection, got: {e}"
+    );
+}
+
+// When a gas payment includes a coin reservation whose encoded amount exceeds i64::MAX,
+// smash_gas would call i64::try_from(*reservation).unwrap() and panic.
+// check_gas rejects the transaction once coin objects are loaded: the combined total of
+// all gas payment values (coins + reservations) must fit in i64. In the common case where
+// the accumulator object does not exist pre_object_load_checks fires first.
+#[sim_test]
+async fn test_poc_oversized_address_balance_gas_reservation_panics() {
+    let test_env = TestEnvBuilder::new().build().await;
+
+    let (sender, real_gas_coin) = test_env.get_sender_and_gas(0);
+    let oversized_reservation = test_env.encode_coin_reservation(sender, 0, i64::MAX as u64 + 1);
+
+    let tx_data = test_env
+        .tx_builder_with_gas_objects(sender, vec![real_gas_coin, oversized_reservation])
+        .build();
+
+    // Both dry-run and execution are rejected. Without a funded balance the
+    // accumulator object does not exist so pre_object_load_checks fires first;
+    // with sufficient balance check_gas catches it via the combined total bound.
+    test_env
+        .cluster
+        .sui_client()
+        .read_api()
+        .dry_run_transaction_block(tx_data.clone())
+        .await
+        .expect_err("dry-run should reject oversized reservation");
+
+    let signed_tx = test_env.cluster.sign_transaction(&tx_data).await;
+    test_env
+        .cluster
+        .wallet
+        .execute_transaction_may_fail(signed_tx)
+        .await
+        .expect_err("execution should reject oversized reservation");
+}
+
+// When two gas-payment coin reservations for the same (sender, SUI) key are present,
+// PaymentKind::smash deduplicates them by summing their amounts. With amounts i64::MAX
+// and 1 the merged total is i64::MAX+1, which fits in u64 but not i64. smash_gas would
+// call i64::try_from(i64::MAX+1).unwrap() and panic.
+// check_gas rejects the transaction via the combined total bound once coins are loaded.
+// In the common case the accumulator object does not exist and pre_object_load_checks
+// fires first.
+#[sim_test]
+async fn test_poc_gas_reservation_dedup_overflow_panics() {
+    let test_env = TestEnvBuilder::new().build().await;
+
+    let (sender, real_gas_coin) = test_env.get_sender_and_gas(0);
+    let reservation_0 = test_env.encode_coin_reservation(sender, 0, i64::MAX as u64);
+    let reservation_1 = test_env.encode_coin_reservation(sender, 0, 1);
+    let tx_data = test_env
+        .tx_builder_with_gas_objects(sender, vec![real_gas_coin, reservation_0, reservation_1])
+        .build();
+
+    // Both dry-run and execution are rejected. The accumulated reservation total
+    // (i64::MAX + 1) exceeds any realistic on-chain balance, so pre_object_load_checks
+    // fires first ("not found" or "less than requested"); check_gas would catch it
+    // via the combined total bound if the balance were sufficient.
+    test_env
+        .cluster
+        .sui_client()
+        .read_api()
+        .dry_run_transaction_block(tx_data.clone())
+        .await
+        .expect_err("dry-run should reject dedup-overflow reservations");
+
+    let signed_tx = test_env.cluster.sign_transaction(&tx_data).await;
+    test_env
+        .cluster
+        .wallet
+        .execute_transaction_may_fail(signed_tx)
+        .await
+        .expect_err("execution should reject dedup-overflow reservations");
+}
+
+// When a coin reservation comes first in gas_data.payment it becomes the
+// AddressBalance smash target. smash_gas then computes:
+//
+//   deposit = total_smashed - reservation_amount
+//           = (reservation_amount + real_coin_value) - reservation_amount
+//           = real_coin_value
+//
+// and calls i64::try_from(deposit).unwrap(), which panics if the real gas
+// coin's value exceeds i64::MAX. The reservation amount can be as small as
+// 1 MIST; only the coin value needs to exceed the bound.
+// check_gas rejects this via the combined total (coin + reservation) bound.
+#[sim_test]
+async fn test_poc_smash_target_deposit_overflow_panics() {
+    // Coin value must exceed i64::MAX to make deposit overflow.
+    // Leave 100M MIST spare so there is enough for the setup transaction's gas.
+    let huge_gas: u64 = i64::MAX as u64 + 100_000_000;
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_test_cluster_builder_cb(Box::new(move |b| {
+            b.with_accounts(vec![
+                AccountConfig {
+                    address: None,
+                    gas_amounts: vec![huge_gas],
+                },
+                AccountConfig {
+                    address: None,
+                    gas_amounts: vec![DEFAULT_GAS_AMOUNT, DEFAULT_GAS_AMOUNT],
+                },
+                AccountConfig {
+                    address: None,
+                    gas_amounts: vec![DEFAULT_GAS_AMOUNT, DEFAULT_GAS_AMOUNT],
+                },
+            ])
+        }))
+        .build()
+        .await;
+
+    // `gas_objects` is a BTreeMap, so positional lookup by `get_sender_and_gas(i)` returns
+    // accounts in SuiAddress sort order rather than the order they were configured. Identify
+    // accounts by their gas-object layout instead: the huge-gas account has exactly 1 coin,
+    // the funding accounts have 2.
+    let sender = *test_env
+        .gas_objects
+        .iter()
+        .find(|(_, gas)| gas.len() == 1)
+        .expect("huge-gas account should have 1 gas object")
+        .0;
+    let (funder, funder_gas) = test_env
+        .gas_objects
+        .iter()
+        .find(|(_, gas)| gas.len() == 2)
+        .map(|(addr, gas)| (*addr, gas[0]))
+        .expect("default-gas account should have 2 gas objects");
+    let funding_tx = test_env
+        .tx_builder_with_gas_objects(funder, vec![funder_gas])
+        .transfer_sui_to_address_balance(FundSource::coin(funder_gas), vec![(1, sender)])
+        .build();
+    test_env.exec_tx_directly(funding_tx).await.unwrap();
+
+    let huge_gas_coin = test_env.gas_objects[&sender][0];
+    let small_reservation = test_env.encode_coin_reservation(sender, 0, 1);
+
+    // gas_data.payment = [small_reservation (smash target), huge_gas_coin (smashed)]
+    // check_gas: total = 1 + huge_coin_value > i64::MAX → rejected by combined total bound.
+    let tx_data = test_env
+        .tx_builder_with_gas_objects(sender, vec![small_reservation, huge_gas_coin])
+        .build();
+
+    let total_msg = "Total gas payment (coins + reservations) exceeds i64::MAX";
+
+    // Dry-run via JSON-RPC — check_gas rejects the combined total before execution.
+    let err = test_env
+        .cluster
+        .sui_client()
+        .read_api()
+        .dry_run_transaction_block(tx_data.clone())
+        .await
+        .expect_err("dry-run should reject total gas exceeding i64::MAX");
+    assert!(
+        err.to_string().contains(total_msg),
+        "unexpected error: {err}"
+    );
+
+    // Real execution via gRPC — check_gas rejects at signing time.
+    let signed_tx = test_env.cluster.sign_transaction(&tx_data).await;
+    let err = test_env
+        .cluster
+        .wallet
+        .execute_transaction_may_fail(signed_tx)
+        .await
+        .expect_err("execution should reject total gas exceeding i64::MAX");
+    assert!(
+        err.to_string().contains(total_msg),
+        "unexpected error: {err}"
+    );
+}
+
+// A gas budget exceeding i64::MAX would cause smash_gas to set the gas coin's value
+// to a u128 total that overflows i64 when computing the signed accumulator delta,
+// but it is always rejected by check_gas_data (GasBudgetTooHigh) before reaching
+// smash_gas. max_tx_gas in the protocol config is far below i64::MAX.
+#[sim_test]
+async fn test_gas_budget_exceeding_i64_max_is_rejected() {
+    let test_env = TestEnvBuilder::new().build().await;
+
+    let (sender, real_gas_coin) = test_env.get_sender_and_gas(0);
+
+    let tx_data = TransactionData::V1(TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(
+            ProgrammableTransactionBuilder::new().finish(),
+        ),
+        sender,
+        gas_data: GasData {
+            payment: vec![real_gas_coin],
+            owner: sender,
+            price: test_env.rgp,
+            budget: i64::MAX as u64 + 1,
+        },
+        expiration: TransactionExpiration::None,
     });
 
-    match join.await {
-        Ok(Ok(_)) => panic!("dev-inspect with fake coin reservation should have errored"),
-        Ok(Err(e)) => {
-            assert!(
-                e.to_string()
-                    .contains("coin reservation backward compatibility layer is not enabled"),
-                "expected gating rejection, got: {e}"
-            );
-        }
-        Err(join_err) if join_err.is_panic() => {
-            panic!(
-                "devInspectTransactionBlock panicked with coin reservation flag disabled: {:?}",
-                join_err
-            );
-        }
-        Err(e) => panic!("unexpected join error: {e:?}"),
-    }
+    // Dry-run via JSON-RPC.
+    test_env
+        .cluster
+        .sui_client()
+        .read_api()
+        .dry_run_transaction_block(tx_data.clone())
+        .await
+        .expect_err("gas budget > i64::MAX should be rejected");
+
+    // Real execution via gRPC.
+    let signed_tx = test_env.cluster.sign_transaction(&tx_data).await;
+    test_env
+        .cluster
+        .wallet
+        .execute_transaction_may_fail(signed_tx)
+        .await
+        .expect_err("gas budget > i64::MAX should be rejected");
+}
+
+// Address-balance-paid gas with gas_budget > i64::MAX executes successfully.
+//
+// When gas_data.payment = [], payment_kind() builds a single
+// `PaymentMethod::AddressBalance(owner, gas_budget)` smash_target. smash_gas
+// never converts the smash_target reservation to i64: the smashed_payments loop
+// at gas_charger.rs:609 is empty, and the smash_target branch at line 632
+// computes `deposit = total_smashed - reservation = 0` and skips the conversion.
+// The gas charge at the end of the tx uses `net_gas_usage` (actual usage), which
+// is bounded far below i64::MAX. So check_gas's combined-total bound does not
+// need to include the budget here — the path is safe even when budget > i64::MAX.
+//
+// max_tx_gas / max_gas_price are raised so check_gas_data doesn't short-circuit
+// the path on GasBudgetTooHigh / GasPriceTooHigh, exercising the actual
+// execution behavior.
+#[sim_test]
+async fn test_address_balance_paid_budget_above_i64_max_succeeds() {
+    // Use two coins: a huge one whose value we move into address balance, and a
+    // normal one to pay gas for the funding tx (otherwise the funding tx's own
+    // i64::MAX check would reject the huge gas coin).
+    let huge_coin_value: u64 = i64::MAX as u64 + 1;
+    let small_gas_value: u64 = 1_000_000_000_000;
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_max_tx_gas_for_testing(u64::MAX);
+            cfg.set_max_gas_price_for_testing(u64::MAX);
+            cfg
+        }))
+        .with_test_cluster_builder_cb(Box::new(move |b| {
+            b.with_accounts(vec![AccountConfig {
+                address: None,
+                gas_amounts: vec![huge_coin_value, small_gas_value],
+            }])
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    // gas_objects is BTreeMap-ordered and gas-coin order within an account is
+    // wallet-list order — neither tracks the AccountConfig ordering. Pick the
+    // huge vs small coin by value via wallet.gas_objects.
+    let mut owned = test_env.cluster.wallet.gas_objects(sender).await.unwrap();
+    owned.sort_by_key(|(value, _)| std::cmp::Reverse(*value));
+    let huge_coin = owned[0].1.compute_object_reference();
+    let small_gas_coin = owned[1].1.compute_object_reference();
+
+    // Move (i64::MAX + 1) MIST from the huge coin into sender's address balance,
+    // paying funding-tx gas from the small coin.
+    let funding_tx = test_env
+        .tx_builder_with_gas_objects(sender, vec![small_gas_coin])
+        .transfer_sui_to_address_balance(
+            FundSource::coin(huge_coin),
+            vec![(huge_coin_value, sender)],
+        )
+        .build();
+    test_env.exec_tx_directly(funding_tx).await.unwrap();
+
+    // Address-balance-paid tx: gas.payment = [], price > 0, PT kind. The budget
+    // becomes the AddressBalance reservation amount in payment_kind(). Validators
+    // execute this successfully; no overflow occurs in smash_gas.
+    let tx = test_env
+        .tx_builder_with_gas_objects(sender, vec![])
+        .with_address_balance_gas(test_env.chain_id, 0, 0)
+        .with_gas_budget(i64::MAX as u64 + 1)
+        .build();
+    let signed_tx = test_env.cluster.sign_transaction(&tx).await;
+    let executed = test_env
+        .cluster
+        .wallet
+        .execute_transaction_may_fail(signed_tx)
+        .await
+        .expect("execution should succeed");
+    assert!(
+        executed.effects.status().is_ok(),
+        "tx should succeed, got: {:?}",
+        executed.effects.status()
+    );
+}
+
+// Gas-payment coin reservations must be for SUI. A reservation for a custom coin type
+// (even one with an oversized balance) must be rejected before reaching smash_gas.
+// check_gas enforces the SUI-type constraint on all paths including simulate/dry-run,
+// so the error is consistent regardless of whether the total also exceeds i64::MAX.
+#[sim_test]
+async fn dryrun_rejects_non_sui_gas_coin_reservation() {
+    let mut test_env = TestEnvBuilder::new().build().await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    let oversized: u64 = (i64::MAX as u64) + 1;
+
+    // Single mint of `oversized` into a Coin<TRUSTED_COIN>, then move the whole
+    // coin into the sender's address balance for that type. Avoids the helper
+    // path which mints twice and would overflow total supply.
+    let (package_id, coin_type, treasury_cap) = test_env.publish_trusted_coin(sender).await;
+    let (custom_coin, _new_cap) = test_env
+        .mint_trusted_coin(sender, package_id, treasury_cap, oversized)
+        .await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_funds_to_address_balance(
+            FundSource::Coin(custom_coin),
+            vec![(oversized, sender)],
+            coin_type.clone(),
+        )
+        .build();
+    test_env.exec_tx_directly(tx).await.unwrap();
+
+    let (sender, real_gas_coin) = test_env.get_sender_and_gas(0);
+    let custom_reservation =
+        test_env.encode_coin_reservation_for_type(sender, 0, oversized, coin_type);
+
+    let tx_data = test_env
+        .tx_builder_with_gas_objects(sender, vec![real_gas_coin, custom_reservation])
+        .build();
+
+    let state = test_env
+        .cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.state().clone());
+    let result = state.dry_exec_transaction(tx_data).await;
+    let msg = result
+        .expect_err("dry-run should reject non-SUI gas reservation")
+        .to_string();
+    assert!(
+        msg.contains("Gas object is not an owned object"),
+        "expected non-SUI gas reservation to be rejected, got: {msg}"
+    );
+}
+
+// Same scenario as `dryrun_rejects_non_sui_gas_coin_reservation`, exercised through
+// `dev_inspect_transaction_block` with `skip_checks=true`.
+#[sim_test]
+async fn dev_inspect_rejects_non_sui_gas_coin_reservation() {
+    let mut test_env = TestEnvBuilder::new().build().await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    let oversized: u64 = (i64::MAX as u64) + 1;
+
+    let (package_id, coin_type, treasury_cap) = test_env.publish_trusted_coin(sender).await;
+    let (custom_coin, _new_cap) = test_env
+        .mint_trusted_coin(sender, package_id, treasury_cap, oversized)
+        .await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_funds_to_address_balance(
+            FundSource::Coin(custom_coin),
+            vec![(oversized, sender)],
+            coin_type.clone(),
+        )
+        .build();
+    test_env.exec_tx_directly(tx).await.unwrap();
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    let custom_reservation =
+        test_env.encode_coin_reservation_for_type(sender, 0, oversized, coin_type);
+
+    // Build a trivial PTB and submit via dev_inspect with the custom-coin
+    // reservation as gas.
+    let kind = {
+        let builder = ProgrammableTransactionBuilder::new();
+        TransactionKind::ProgrammableTransaction(builder.finish())
+    };
+
+    let state = test_env
+        .cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.state().clone());
+    let result = state
+        .dev_inspect_transaction_block(
+            sender,
+            kind,
+            None,
+            None,
+            None,
+            Some(vec![custom_reservation]),
+            None,
+            /* skip_checks */ Some(true),
+        )
+        .await;
+    let msg = result
+        .expect_err("dev_inspect should reject non-SUI gas reservation")
+        .to_string();
+    assert!(
+        msg.contains("Gas object is not an owned object"),
+        "expected non-SUI gas reservation to be rejected, got: {msg}"
+    );
 }

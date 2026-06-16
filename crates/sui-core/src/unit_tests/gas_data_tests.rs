@@ -807,10 +807,8 @@ async fn test_bad_gas_payment_all_paths() {
     }
 
     // Package object as sole payment.
-    // All entry points return GasObjectNotOwnedObject { owner: Immutable }: even
-    // dev-inspect paths that pass gas_ownership_checks=false still hit the ownership
-    // check, because check_gas_balance in gas_v2.rs calls check_gas_objects
-    // unconditionally.
+    // All entry points return GasObjectNotOwnedObject { owner: Immutable }: the
+    // early is_address_owned() check in check_gas catches it before balance computation.
     let package_ref = env
         .validator
         .get_object(&SUI_FRAMEWORK_PACKAGE_ID)

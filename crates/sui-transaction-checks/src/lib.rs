@@ -57,7 +57,6 @@ mod checked {
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         transaction: &TransactionData,
-        gas_ownership_checks: bool,
     ) -> SuiResult<SuiGasStatus> {
         if transaction.kind().is_system_tx() {
             Ok(SuiGasStatus::new_unmetered())
@@ -70,7 +69,6 @@ mod checked {
                 reference_gas_price,
                 gas,
                 transaction,
-                gas_ownership_checks,
                 is_gasless,
             )
         }
@@ -201,11 +199,10 @@ mod checked {
 
         let gas_status = get_gas_status(
             &input_objects,
-            &transaction.gas_data().payment, //gas,
+            &transaction.gas_data().payment,
             config,
             reference_gas_price,
             transaction,
-            false, // gas_ownership_checks - false means mostly transaction level checks
         )?;
 
         Ok((gas_status, input_objects.into_checked()))
@@ -232,7 +229,6 @@ mod checked {
             protocol_config,
             reference_gas_price,
             transaction,
-            true, // gas_ownership_checks
         )?;
         check_objects(transaction, input_objects, protocol_config)?;
         check_replay_protection(transaction, input_objects)?;
@@ -401,7 +397,6 @@ mod checked {
         reference_gas_price: u64,
         gas: &[ObjectRef],
         transaction: &TransactionData,
-        gas_ownership_checks: bool,
         is_gasless: bool,
     ) -> SuiResult<SuiGasStatus> {
         let gas_budget = transaction.gas_budget();
@@ -421,13 +416,57 @@ mod checked {
         // load all gas coins (skip coin reservations - they're not loaded as input objects)
         let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();
 
+        // Total of coin balances + reservation amounts. Limit to i64::MAX so smash_gas's
+        // i64 conversion doesn't overflow. (Not summed for address-balance-paid gas; that
+        // path never converts the budget to i64.)
+        let mut total: u128 = 0;
+
+        let extra_gas_checks = protocol_config.additional_gas_input_checks();
+
         let (gas_objects, available_address_balance_gas) = if gas_paid_from_address_balance {
             // When paying from address balance via gas_data.payment = [], the budget is reserved by the scheduler
             // and guaranteed to be available.
             (vec![], gas_budget)
-        } else {
+        } else if extra_gas_checks {
             // Gas payment may include a mix of coin objects and coin reservations (withdrawals).
             // Sum up the reservation amounts separately since they don't have input objects.
+            let mut available_address_balance_gas: u64 = 0;
+            let mut gas_objects = vec![];
+            for obj_ref in gas {
+                if let Ok(parsed) = ParsedDigest::try_from(obj_ref.2) {
+                    let amount = parsed.reservation_amount();
+                    available_address_balance_gas =
+                        available_address_balance_gas.saturating_add(amount);
+                    total += amount as u128;
+                } else {
+                    let obj = *objects
+                        .get(&obj_ref.0)
+                        .ok_or(UserInputError::ObjectNotFound {
+                            object_id: obj_ref.0,
+                            version: Some(obj_ref.1),
+                        })?;
+                    let object = obj.as_object().ok_or(UserInputError::MissingGasPayment)?;
+                    if !object.is_gas_coin() {
+                        return Err(UserInputError::InvalidGasObject {
+                            object_id: object.id(),
+                        }
+                        .into());
+                    }
+                    if !object.is_address_owned() {
+                        return Err(UserInputError::GasObjectNotOwnedObject {
+                            owner: object.owner.clone(),
+                        }
+                        .into());
+                    }
+                    total += sui_types::gas::get_gas_balance(object)? as u128;
+                    gas_objects.push(obj);
+                }
+            }
+            (gas_objects, available_address_balance_gas)
+        } else {
+            // Pre-additional_gas_input_checks behavior: build gas_objects without
+            // the is_gas_coin / is_address_owned / balance-summing checks. Owner
+            // and balance are still enforced downstream by check_gas_balance.
             let mut available_address_balance_gas: u64 = 0;
             let mut gas_objects = vec![];
             for obj_ref in gas {
@@ -435,11 +474,12 @@ mod checked {
                     available_address_balance_gas =
                         available_address_balance_gas.saturating_add(parsed.reservation_amount());
                 } else {
-                    let obj = objects.get(&obj_ref.0);
-                    let obj = *obj.ok_or(UserInputError::ObjectNotFound {
-                        object_id: obj_ref.0,
-                        version: Some(obj_ref.1),
-                    })?;
+                    let obj = *objects
+                        .get(&obj_ref.0)
+                        .ok_or(UserInputError::ObjectNotFound {
+                            object_id: obj_ref.0,
+                            version: Some(obj_ref.1),
+                        })?;
                     gas_objects.push(obj);
                 }
             }
@@ -447,9 +487,13 @@ mod checked {
         };
 
         if !is_gasless {
-            if gas_ownership_checks {
-                gas_status.check_gas_objects(&gas_objects)?;
+            if extra_gas_checks && i64::try_from(total).is_err() {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: "Total gas payment (coins + reservations) exceeds i64::MAX".to_string(),
+                }
+                .into());
             }
+
             gas_status.check_gas_balance(
                 &gas_objects,
                 gas_budget,
