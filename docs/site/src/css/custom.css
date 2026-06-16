@@ -2837,18 +2837,34 @@ html:not(.kapa-sidebar-open) #__docusaurus {
   display: none !important;
 }
 
-/* Reduce Docusaurus article/container padding when landing is present */
+/* Strip all Docusaurus wrapper padding on the landing page */
 :has(.gs-landing) .theme-doc-markdown {
   padding: 0;
+  margin: 0;
 }
 
 :has(.gs-landing) article {
   padding: 0 !important;
+  max-width: 100% !important;
+}
+
+:has(.gs-landing) .col,
+:has(.gs-landing) [class*="docItemCol"],
+:has(.gs-landing) [class*="docMainContainer"],
+:has(.gs-landing) .container {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  max-width: 100% !important;
+}
+
+:has(.gs-landing) .row {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
 }
 
 .gs-hero {
   text-align: center;
-  padding: 3rem 0 2rem;
+  padding: 1.5rem 0 1.5rem;
   max-width: 640px;
   margin: 0 auto;
 }
