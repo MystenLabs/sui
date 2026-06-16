@@ -2808,6 +2808,26 @@ html[data-theme='dark'] .protoUnionNote {
 
 /* ---- Getting Started landing page ---- */
 
+/* Remove Docusaurus doc page padding and copy-page button on the landing page */
+.gs-landing {
+  margin: 0 auto;
+  max-width: 960px;
+}
+
+/* Hide the copy-page-button on this page */
+:has(.gs-landing) [class*="copyPage"] {
+  display: none !important;
+}
+
+/* Reduce Docusaurus article/container padding when landing is present */
+:has(.gs-landing) .theme-doc-markdown {
+  padding: 0;
+}
+
+:has(.gs-landing) article {
+  padding: 0 !important;
+}
+
 .gs-hero {
   text-align: center;
   padding: 3rem 0 2rem;
