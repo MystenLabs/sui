@@ -2,15 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Tracks Kapa sidebar open/close state and toggles a CSS class on <html>.
-// Kapa renders in Shadow DOM so CSS :has() can't detect it.
-// We hook window.Kapa.open/close and re-hook on every interval tick
-// in case Kapa re-initializes (e.g. after script reload).
+// Kapa renders in Shadow DOM so we can't query its internal DOM.
+// Strategy: hook Kapa.open to detect open, then poll for close by checking
+// if the Kapa container's Shadow DOM has any visible content.
 
 if (typeof window !== "undefined") {
   const OPEN_CLASS = "kapa-sidebar-open";
   let kapaOpen = false;
-  let lastOpenRef = null;
-  let lastCloseRef = null;
+  let hookedOpenRef = null;
 
   function syncClass() {
     document.documentElement.classList.toggle(OPEN_CLASS, kapaOpen);
@@ -18,9 +17,7 @@ if (typeof window !== "undefined") {
 
   function hookKapa() {
     if (!window.Kapa || !window.Kapa.open) return;
-
-    // Only re-hook if Kapa.open has changed (was re-initialized)
-    if (window.Kapa.open === lastOpenRef) return;
+    if (window.Kapa.open === hookedOpenRef) return;
 
     const origOpen = window.Kapa.open;
     const origClose = window.Kapa.close;
@@ -37,12 +34,46 @@ if (typeof window !== "undefined") {
       return origClose.apply(this, args);
     };
 
-    lastOpenRef = window.Kapa.open;
-    lastCloseRef = window.Kapa.close;
+    hookedOpenRef = window.Kapa.open;
   }
 
-  // Re-sync class on every SPA navigation so new pages adjust immediately
-  // Docusaurus uses History API for client-side routing
+  // Detect close: Kapa's sidebar creates a fixed-position element that's
+  // visible on screen when open. Check if any direct child of body (after
+  // #kapa-widget-container) has substantial dimensions — that's the sidebar.
+  function isKapaSidebarVisible() {
+    const container = document.getElementById("kapa-widget-container");
+    if (!container) return false;
+
+    // Check all siblings after the container for Kapa's portal
+    let sibling = container.nextElementSibling;
+    while (sibling) {
+      // Skip known non-Kapa elements (recaptcha, textarea, etc.)
+      if (sibling.id === "__docusaurus") { sibling = sibling.nextElementSibling; continue; }
+
+      // Look for a fixed/absolute positioned element with substantial size
+      const style = window.getComputedStyle(sibling);
+      const rect = sibling.getBoundingClientRect();
+      if (
+        (style.position === "fixed" || style.position === "absolute") &&
+        rect.width > 100 &&
+        rect.height > 100
+      ) {
+        return true;
+      }
+      sibling = sibling.nextElementSibling;
+    }
+
+    // Also check the container itself (closed shadow DOM won't expose children
+    // but the container might get dimensions when open)
+    const containerRect = container.getBoundingClientRect();
+    if (containerRect.width > 100 && containerRect.height > 100) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // Navigation hooks
   const origPushState = history.pushState.bind(history);
   const origReplaceState = history.replaceState.bind(history);
   history.pushState = function (...args) {
@@ -57,38 +88,16 @@ if (typeof window !== "undefined") {
   };
   window.addEventListener("popstate", syncClass);
 
-  // Check every 500ms: re-hook if needed, and also detect close via
-  // Shadow DOM heuristic (container height changes when sidebar closes)
+  // Poll every 300ms
   setInterval(() => {
     hookKapa();
-    // Always re-sync class in case something cleared it
-    syncClass();
 
-    // Fallback: if kapa is supposedly open but the container has no
-    // visible shadow content, it was closed via overlay/ESC/X
     if (kapaOpen) {
-      const container = document.getElementById("kapa-widget-container");
-      if (container) {
-        const shadow = container.shadowRoot;
-        if (shadow) {
-          // Check if the shadow DOM has a visible dialog
-          const dialog = shadow.querySelector("[role='dialog']") ||
-                         shadow.querySelector("[class*='Modal']") ||
-                         shadow.querySelector("[class*='modal']");
-          if (!dialog) {
-            kapaOpen = false;
-            syncClass();
-          }
-        } else {
-          // No shadow root accessible — check container dimensions
-          // Kapa sidebar is ~500px wide when open, 0 when closed
-          const rect = container.getBoundingClientRect();
-          if (rect.width < 10 && rect.height < 10) {
-            kapaOpen = false;
-            syncClass();
-          }
-        }
+      // Verify it's actually still visible
+      if (!isKapaSidebarVisible()) {
+        kapaOpen = false;
       }
     }
-  }, 500);
+    syncClass();
+  }, 300);
 }
