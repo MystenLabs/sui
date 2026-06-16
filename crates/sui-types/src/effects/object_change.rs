@@ -513,4 +513,88 @@ mod tests {
 
         AccumulatorWriteV1::merge(writes, false);
     }
+
+    /// Gross Merge and Split totals that each exceed `u64::MAX` but net to a representable value.
+    /// The u128 fold (flag on) computes the net exactly without overflow.
+    #[test]
+    fn test_merge_u128_nets_out() {
+        let addr = test_accumulator_address();
+        let writes = vec![
+            AccumulatorWriteV1 {
+                address: addr.clone(),
+                operation: AccumulatorOperation::Merge,
+                value: AccumulatorValue::Integer(u64::MAX),
+            },
+            AccumulatorWriteV1 {
+                address: addr.clone(),
+                operation: AccumulatorOperation::Split,
+                value: AccumulatorValue::Integer(u64::MAX),
+            },
+            AccumulatorWriteV1 {
+                address: addr.clone(),
+                operation: AccumulatorOperation::Merge,
+                value: AccumulatorValue::Integer(u64::MAX),
+            },
+            AccumulatorWriteV1 {
+                address: addr.clone(),
+                operation: AccumulatorOperation::Split,
+                value: AccumulatorValue::Integer(u64::MAX - 30),
+            },
+        ];
+
+        let result = AccumulatorWriteV1::merge(writes, true);
+        assert_eq!(result.operation, AccumulatorOperation::Merge);
+        assert_eq!(result.value, AccumulatorValue::Integer(30));
+    }
+
+    /// A net Merge of exactly `u64::MAX` (gross Merge above `u64::MAX`, partially offset) narrows
+    /// back to `u64` under the u128 fold.
+    #[test]
+    fn test_merge_u128_max_net_merge() {
+        let addr = test_accumulator_address();
+        let writes = vec![
+            AccumulatorWriteV1 {
+                address: addr.clone(),
+                operation: AccumulatorOperation::Merge,
+                value: AccumulatorValue::Integer(u64::MAX),
+            },
+            AccumulatorWriteV1 {
+                address: addr.clone(),
+                operation: AccumulatorOperation::Merge,
+                value: AccumulatorValue::Integer(100),
+            },
+            AccumulatorWriteV1 {
+                address: addr.clone(),
+                operation: AccumulatorOperation::Split,
+                value: AccumulatorValue::Integer(100),
+            },
+        ];
+
+        let result = AccumulatorWriteV1::merge(writes, true);
+        assert_eq!(result.operation, AccumulatorOperation::Merge);
+        assert_eq!(result.value, AccumulatorValue::Integer(u64::MAX));
+    }
+
+    /// The legacy u64 fold (flag off) panics when the gross Merge total overflows `u64`, even though
+    /// the writes net out. This is the overflow the u128 path removes (and the slim gate would
+    /// reject up front when the flag is on).
+    #[test]
+    #[should_panic(expected = "validated in object runtime")]
+    fn test_merge_u64_fold_overflows_on_gross() {
+        let addr = test_accumulator_address();
+        let writes = vec![
+            AccumulatorWriteV1 {
+                address: addr.clone(),
+                operation: AccumulatorOperation::Merge,
+                value: AccumulatorValue::Integer(u64::MAX),
+            },
+            AccumulatorWriteV1 {
+                address: addr.clone(),
+                operation: AccumulatorOperation::Merge,
+                value: AccumulatorValue::Integer(1),
+            },
+        ];
+
+        AccumulatorWriteV1::merge(writes, false);
+    }
 }
