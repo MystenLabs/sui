@@ -238,31 +238,17 @@ Open `http://localhost:5173` in a browser. You see a feed of posts, some with lo
 
 ## Key code highlights
 
-The following snippets are the parts of the code worth reading carefully.
-
-### Post creation with optional encryption
-
-The `create_post` entry function creates a shared `Post` object with an optional encryption ID.
-
-<ImportContent source="frontend/move/posts/sources/posts.move" mode="code" org="MystenLabs" repo="onlyfins-example-app" fun="create_post" />
-
-When `encryption_id` contains a value, the post requires a `ViewerToken` to decrypt. When it contains `none`, the image is publicly viewable. The function shares the post so any user can read its metadata.
-
-### Seal access control gate
-
-The `seal_approve_access` function is the onchain gate that Seal calls before releasing decryption keys.
-
-<ImportContent source="frontend/move/posts/sources/posts.move" mode="code" org="MystenLabs" repo="onlyfins-example-app" fun="seal_approve_access" />
-
-This function checks 2 conditions: the caller is the post author, or the caller holds a `ViewerToken` linked to this post. It also verifies the requested `encryption_id` matches the post. If any check fails, the transaction aborts and Seal refuses to release the key.
-
-### Granting access with viewer tokens
-
-The `grant_access` function mints a new `ViewerToken` and returns it.
-
-<ImportContent source="frontend/move/posts/sources/posts.move" mode="code" org="MystenLabs" repo="onlyfins-example-app" fun="grant_access" />
-
-The function creates an owned object and transfers it to the viewer. The token links the viewer address to a specific post ID, which `seal_approve_access` checks later.
+<CodeWalkthrough source="frontend/move/posts/sources/posts.move" org="MystenLabs" repo="onlyfins-example-app" language="move">
+  <Step lines="25-41" title="Post creation with optional encryption">
+    The `create_post` entry function creates a shared `Post` object with an optional encryption ID. When `encryption_id` contains a value, the post requires a `ViewerToken` to decrypt. When it contains `none`, the image is publicly viewable. The function shares the post so any user can read its metadata.
+  </Step>
+  <Step lines="43-48" title="Granting access with viewer tokens">
+    The `grant_access` function mints a new `ViewerToken` and returns it. The token links the viewer address to a specific post ID, which `seal_approve_access` checks later.
+  </Step>
+  <Step lines="50-67" title="Seal access control gate">
+    The `seal_approve_access` function is the onchain gate that Seal calls before releasing decryption keys. It checks two conditions: the caller is the post author, or the caller holds a `ViewerToken` linked to this post. It also verifies the requested `encryption_id` matches the post. If any check fails, the transaction aborts and Seal refuses to release the key.
+  </Step>
+</CodeWalkthrough>
 
 ### Paying for content
 
