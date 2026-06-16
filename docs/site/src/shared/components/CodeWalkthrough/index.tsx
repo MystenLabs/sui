@@ -146,16 +146,34 @@ export default function CodeWalkthrough({
     return () => observers.forEach((o) => o.disconnect());
   }, [steps.length, code]);
 
-  // Scroll code panel to keep highlighted lines visible
+  // Scroll code panel to keep the full highlighted range visible
   useEffect(() => {
     if (!codeRef.current || highlightedLines.size === 0) return;
     const firstLine = Math.min(...highlightedLines);
-    const lineEl = codeRef.current.querySelector(
+    const lastLine = Math.max(...highlightedLines);
+    const firstEl = codeRef.current.querySelector(
       `[data-line="${firstLine}"]`,
     ) as HTMLElement | null;
-    if (lineEl) {
-      lineEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
+    const lastEl = codeRef.current.querySelector(
+      `[data-line="${lastLine}"]`,
+    ) as HTMLElement | null;
+    if (!firstEl) return;
+
+    const container = codeRef.current;
+    const containerRect = container.getBoundingClientRect();
+    const firstRect = firstEl.getBoundingClientRect();
+    const lastRect = (lastEl ?? firstEl).getBoundingClientRect();
+
+    const rangeTop = firstRect.top - containerRect.top + container.scrollTop;
+    const rangeBottom = lastRect.bottom - containerRect.top + container.scrollTop;
+    const rangeHeight = rangeBottom - rangeTop;
+
+    // Center the range in the container, or align to top if range is taller than container
+    const targetScroll = rangeHeight > containerRect.height
+      ? rangeTop
+      : rangeTop - (containerRect.height - rangeHeight) / 2;
+
+    container.scrollTo({ top: Math.max(0, targetScroll), behavior: "smooth" });
   }, [highlightedLines]);
 
   if (!code) {
