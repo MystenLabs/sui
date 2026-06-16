@@ -8,7 +8,7 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{SUI_FRAMEWORK_ADDRESS, id::UID};
+use crate::{SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, id::UID, storage::ObjectStore};
 
 pub const CLOCK_MODULE_NAME: &IdentStr = ident_str!("clock");
 pub const CLOCK_STRUCT_NAME: &IdentStr = ident_str!("Clock");
@@ -46,4 +46,16 @@ impl Clock {
             _ => false,
         }
     }
+}
+
+/// Reads the current `timestamp_ms` from the on-chain `Clock` object (`0x6`). Returns `None` if the
+/// object is missing or cannot be decoded. Used to source a consensus commit timestamp in contexts
+/// that are not ordered by real consensus (dev-inspect/dry-run, test execution).
+pub fn current_clock_timestamp_ms(store: &dyn ObjectStore) -> Option<u64> {
+    store
+        .get_object(&SUI_CLOCK_OBJECT_ID)?
+        .data
+        .try_as_move()?
+        .to_rust::<Clock>()
+        .map(|clock| clock.timestamp_ms)
 }

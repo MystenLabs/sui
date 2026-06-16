@@ -72,6 +72,7 @@ impl executor::Executor for Executor {
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        tx_timestamp_ms: Option<u64>,
         input_objects: CheckedInputObjects,
         gas: GasData,
         gas_status: SuiGasStatus,
@@ -100,6 +101,7 @@ impl executor::Executor for Executor {
                 &self.0,
                 epoch_id,
                 epoch_timestamp_ms,
+                tx_timestamp_ms,
                 protocol_config,
                 metrics,
                 enable_expensive_checks,
@@ -121,6 +123,7 @@ impl executor::Executor for Executor {
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        tx_timestamp_ms: Option<u64>,
         input_objects: CheckedInputObjects,
         gas: GasData,
         gas_status: SuiGasStatus,
@@ -149,6 +152,7 @@ impl executor::Executor for Executor {
                 &self.0,
                 epoch_id,
                 epoch_timestamp_ms,
+                tx_timestamp_ms,
                 protocol_config,
                 metrics,
                 enable_expensive_checks,
@@ -184,6 +188,10 @@ impl executor::Executor for Executor {
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
+        // Dev-inspect/dry-run are not ordered by consensus, so there is no real commit timestamp.
+        // Source it from the current on-chain `Clock` so a simulated transaction observes the same
+        // value it would read via the `Clock`.
+        let tx_timestamp_ms = current_clock_timestamp_ms(store);
         let (inner_temp_store, gas_status, effects, _timings, result) = if skip_all_checks {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
@@ -197,6 +205,7 @@ impl executor::Executor for Executor {
                 &self.0,
                 epoch_id,
                 epoch_timestamp_ms,
+                tx_timestamp_ms,
                 protocol_config,
                 metrics,
                 enable_expensive_checks,
@@ -216,6 +225,7 @@ impl executor::Executor for Executor {
                 &self.0,
                 epoch_id,
                 epoch_timestamp_ms,
+                tx_timestamp_ms,
                 protocol_config,
                 metrics,
                 enable_expensive_checks,
@@ -245,6 +255,8 @@ impl executor::Executor for Executor {
             transaction_digest,
             &epoch_id,
             epoch_timestamp_ms,
+            // genesis transaction is not ordered by consensus, so there is no commit timestamp.
+            None,
             // genesis transaction: RGP: 1, budget: 1M, sponsor: None
             1,
             1,
@@ -324,4 +336,17 @@ where
         }
         _ => (),
     }
+}
+
+/// Reads the current `timestamp_ms` from the on-chain `Clock`. Used by dev-inspect/dry-run, which
+/// have no consensus commit timestamp, so a simulated transaction observes the same value it would
+/// read from the `Clock`. The Clock always exists and is well-formed, so a `None` here is an
+/// invariant violation — we report it but still fall back to `None` rather than panic on the RPC
+/// path.
+fn current_clock_timestamp_ms(store: &dyn BackingStore) -> Option<u64> {
+    let timestamp_ms = sui_types::clock::current_clock_timestamp_ms(store.as_object_store());
+    if timestamp_ms.is_none() {
+        debug_fatal!("Failed to read the Clock object during dev-inspect/dry-run");
+    }
+    timestamp_ms
 }

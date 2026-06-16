@@ -801,6 +801,9 @@ impl LocalExec {
                 execution_params,
                 &tx_info.executed_epoch,
                 tx_info.epoch_start_timestamp,
+                // The JSON-RPC effects representation does not carry the consensus commit
+                // timestamp, so this replay path cannot recover it.
+                None,
                 checked_input_objects,
                 gas_data,
                 gas_status,
@@ -997,6 +1000,9 @@ impl LocalExec {
                 execution_params,
                 &executed_epoch,
                 epoch_start_timestamp,
+                // The JSON-RPC effects representation does not carry the consensus commit
+                // timestamp, so this replay path cannot recover it.
+                None,
                 input_objects,
                 gas_data,
                 gas_status,

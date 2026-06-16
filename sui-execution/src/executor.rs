@@ -36,6 +36,8 @@ pub trait Executor {
         // Epoch
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        // Timestamp of the consensus commit that ordered the transaction.
+        tx_timestamp_ms: Option<u64>,
         // Transaction Inputs
         input_objects: CheckedInputObjects,
         // Gas related
@@ -66,6 +68,7 @@ pub trait Executor {
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        tx_timestamp_ms: Option<u64>,
         input_objects: CheckedInputObjects,
         gas: GasData,
         gas_status: SuiGasStatus,

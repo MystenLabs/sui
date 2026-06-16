@@ -216,6 +216,7 @@ impl SingleValidator {
                 ExecutionOrEarlyError::ok(None),
                 &self.epoch_store.epoch(),
                 0,
+                None,
                 input_objects,
                 gas_data,
                 gas_status,

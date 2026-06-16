@@ -72,6 +72,7 @@ impl executor::Executor for Executor {
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        tx_timestamp_ms: Option<u64>,
         input_objects: CheckedInputObjects,
         gas: GasData,
         gas_status: SuiGasStatus,
@@ -99,6 +100,7 @@ impl executor::Executor for Executor {
                 &self.0,
                 epoch_id,
                 epoch_timestamp_ms,
+                tx_timestamp_ms,
                 protocol_config,
                 metrics,
                 enable_expensive_checks,
@@ -126,6 +128,7 @@ impl executor::Executor for Executor {
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        tx_timestamp_ms: Option<u64>,
         input_objects: CheckedInputObjects,
         gas: GasData,
         gas_status: SuiGasStatus,
@@ -153,6 +156,7 @@ impl executor::Executor for Executor {
                 &self.0,
                 epoch_id,
                 epoch_timestamp_ms,
+                tx_timestamp_ms,
                 protocol_config,
                 metrics,
                 enable_expensive_checks,
@@ -200,6 +204,9 @@ impl executor::Executor for Executor {
                 &self.0,
                 epoch_id,
                 epoch_timestamp_ms,
+                // Older execution versions don't read the consensus commit timestamp from the
+                // TxContext, so there is nothing to source here.
+                None,
                 protocol_config,
                 metrics,
                 enable_expensive_checks,
@@ -218,6 +225,9 @@ impl executor::Executor for Executor {
                 &self.0,
                 epoch_id,
                 epoch_timestamp_ms,
+                // Older execution versions don't read the consensus commit timestamp from the
+                // TxContext, so there is nothing to source here.
+                None,
                 protocol_config,
                 metrics,
                 enable_expensive_checks,
@@ -247,6 +257,9 @@ impl executor::Executor for Executor {
             transaction_digest,
             &epoch_id,
             epoch_timestamp_ms,
+            // Older execution versions don't read the consensus commit timestamp from the
+            // TxContext, so there is nothing to source here.
+            None,
             // genesis transaction: RGP: 1, budget: 1M, sponsor: None
             1,
             1,

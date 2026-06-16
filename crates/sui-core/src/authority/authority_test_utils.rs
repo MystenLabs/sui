@@ -104,13 +104,30 @@ pub async fn submit_to_consensus(
     Ok((executable, versions))
 }
 
+/// Builds an `ExecutionEnv` for test execution, seeding the consensus commit timestamp from the
+/// current `Clock`. Test execution is not ordered by real consensus, so (mirroring dev-inspect) we
+/// source the timestamp from the Clock; tests drive it via the `consensus-commit-prologue` /
+/// `advance-clock` flows.
+fn execution_env_with_clock_timestamp(
+    authority: &AuthorityState,
+    assigned_versions: AssignedVersions,
+) -> ExecutionEnv {
+    let env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
+    match sui_types::clock::current_clock_timestamp_ms(
+        authority.get_backing_store().as_object_store(),
+    ) {
+        Some(timestamp_ms) => env.with_tx_timestamp_ms(timestamp_ms),
+        None => env,
+    }
+}
+
 /// Executes a transaction that has already been sequenced through consensus.
 pub async fn execute_from_consensus(
     authority: &AuthorityState,
     executable: VerifiedExecutableTransaction,
     assigned_versions: AssignedVersions,
 ) -> (TransactionEffects, Option<ExecutionError>) {
-    let env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
+    let env = execution_env_with_clock_timestamp(authority, assigned_versions);
     authority.execution_scheduler.enqueue(
         vec![(executable.clone().into(), env.clone())],
         &authority.epoch_store_for_testing(),
@@ -198,7 +215,7 @@ pub async fn submit_and_execute_with_error(
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
 
     // Execute
-    let env = ExecutionEnv::new().with_assigned_versions(assigned_versions.clone());
+    let env = execution_env_with_clock_timestamp(authority, assigned_versions.clone());
     let (result, mut execution_error_opt) = authority
         .try_execute_executable_for_test(&executable, env.clone())
         .await;
@@ -254,7 +271,7 @@ pub async fn submit_and_schedule(
 ) -> Result<AssignedVersions, SuiError> {
     let (executable, versions) = submit_to_consensus(authority, transaction).await?;
 
-    let env = ExecutionEnv::new().with_assigned_versions(versions.clone());
+    let env = execution_env_with_clock_timestamp(authority, versions.clone());
     authority.execution_scheduler().enqueue_transactions(
         vec![(executable, env)],
         &authority.epoch_store_for_testing(),
@@ -462,7 +479,7 @@ pub async fn assign_versions_and_schedule(
         .cloned()
         .unwrap_or_else(|| AssignedVersions::new(vec![], None));
 
-    let env = ExecutionEnv::new().with_assigned_versions(versions.clone());
+    let env = execution_env_with_clock_timestamp(authority, versions.clone());
     authority.execution_scheduler().enqueue_transactions(
         vec![(executable.clone(), env)],
         &authority.epoch_store_for_testing(),

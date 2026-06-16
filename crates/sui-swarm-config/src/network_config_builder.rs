@@ -732,6 +732,8 @@ mod test {
                 ExecutionOrEarlyError::ok(None),
                 &epoch.epoch_id(),
                 epoch.epoch_start_timestamp(),
+                // Genesis is not ordered by consensus, so there is no commit timestamp.
+                None,
                 input_objects,
                 gas_data,
                 SuiGasStatus::new_unmetered(),

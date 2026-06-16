@@ -1911,6 +1911,7 @@ impl AuthorityState {
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        tx_timestamp_ms: Option<u64>,
         input_objects: CheckedInputObjects,
         gas_data: GasData,
         gas_status: SuiGasStatus,
@@ -1935,6 +1936,7 @@ impl AuthorityState {
                 execution_params,
                 epoch_id,
                 epoch_timestamp_ms,
+                tx_timestamp_ms,
                 input_objects,
                 gas_data,
                 gas_status,
@@ -2069,6 +2071,7 @@ impl AuthorityState {
                     .epoch_start_config()
                     .epoch_data()
                     .epoch_start_timestamp(),
+                execution_env.tx_timestamp_ms,
                 input_objects,
                 gas_data,
                 gas_status,

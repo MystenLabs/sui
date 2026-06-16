@@ -928,6 +928,8 @@ fn create_genesis_transaction(
                 ExecutionOrEarlyError::ok(None),
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
+                // Genesis is not ordered by consensus, so there is no commit timestamp.
+                None,
                 input_objects,
                 gas_data,
                 SuiGasStatus::new_unmetered(),

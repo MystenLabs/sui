@@ -63,6 +63,7 @@ mod checked {
         move_vm: &Arc<MoveVM>,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        tx_timestamp_ms: Option<u64>,
         protocol_config: &ProtocolConfig,
         metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
@@ -86,6 +87,7 @@ mod checked {
             &transaction_digest,
             epoch_id,
             epoch_timestamp_ms,
+            tx_timestamp_ms,
             // Those values are unused in execution versions before 3 (or latest)
             1,
             1,

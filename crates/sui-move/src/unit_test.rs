@@ -232,6 +232,7 @@ impl VMTestSetup for SuiVMTestSetup {
             &TransactionDigest::default(),
             &0,
             0,
+            None,
             0,
             0,
             0,

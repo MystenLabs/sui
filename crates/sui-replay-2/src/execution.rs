@@ -139,6 +139,9 @@ pub fn execute_transaction_to_effects(
             execution_params,
             &epoch,
             epoch_start_timestamp,
+            // Recover the consensus commit timestamp the original execution observed (recorded in
+            // the effects) so re-execution reproduces the same value.
+            expected_effects.consensus_commit_timestamp(),
             input_objects,
             txn_data.gas_data().clone(),
             gas_status,

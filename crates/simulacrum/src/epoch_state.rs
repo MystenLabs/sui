@@ -161,6 +161,12 @@ impl EpochState {
                 ExecutionOrEarlyError::ok(None),
                 &self.epoch_start_state.epoch(),
                 self.epoch_start_state.epoch_start_timestamp_ms(),
+                // Simulacrum is not ordered by real consensus, so (like dev-inspect and the other
+                // test paths) source the commit timestamp from the current `Clock`, which tests
+                // drive via `advance_clock`.
+                sui_types::clock::current_clock_timestamp_ms(
+                    store.backing_store().as_object_store(),
+                ),
                 checked_input_objects,
                 gas_data,
                 gas_status,

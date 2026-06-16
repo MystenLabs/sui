@@ -1259,7 +1259,28 @@ pub struct TxContext {
     // whether the `TxContext` is native or not
     // (TODO: once we version execution we could drop this field)
     is_native: bool,
+    // Timestamp (ms) of the consensus commit that ordered the transaction, plus whether execution
+    // read it. `None` when not executing from a consensus commit (genesis, dev-inspect, etc.).
+    consensus_commit_timestamp: Option<ConsensusCommitTimestamp>,
 }
+
+/// The consensus commit timestamp (ms) available to a transaction, together with a flag tracking
+/// whether execution actually observed it. The flag lets the effects builder persist the value
+/// only for transactions that read it (so replay can reproduce it deterministically).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct ConsensusCommitTimestamp {
+    timestamp_ms: u64,
+    // Set when execution reads the timestamp. Transient: excluded from serialization and equality.
+    #[serde(skip)]
+    read: bool,
+}
+
+impl PartialEq for ConsensusCommitTimestamp {
+    fn eq(&self, other: &Self) -> bool {
+        self.timestamp_ms == other.timestamp_ms
+    }
+}
+impl Eq for ConsensusCommitTimestamp {}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TxContextKind {
@@ -1276,6 +1297,7 @@ impl TxContext {
         sender: &SuiAddress,
         digest: &TransactionDigest,
         epoch_data: &EpochData,
+        consensus_commit_timestamp: Option<u64>,
         rgp: u64,
         gas_price: u64,
         gas_budget: u64,
@@ -1287,6 +1309,7 @@ impl TxContext {
             digest,
             &epoch_data.epoch_id(),
             epoch_data.epoch_start_timestamp(),
+            consensus_commit_timestamp,
             rgp,
             gas_price,
             gas_budget,
@@ -1300,6 +1323,7 @@ impl TxContext {
         digest: &TransactionDigest,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        consensus_commit_timestamp: Option<u64>,
         rgp: u64,
         gas_price: u64,
         gas_budget: u64,
@@ -1317,6 +1341,12 @@ impl TxContext {
             gas_budget,
             sponsor: sponsor.map(|s| s.into()),
             is_native: protocol_config.move_native_context(),
+            consensus_commit_timestamp: consensus_commit_timestamp.map(|timestamp_ms| {
+                ConsensusCommitTimestamp {
+                    timestamp_ms,
+                    read: false,
+                }
+            }),
         }
     }
 
@@ -1359,6 +1389,28 @@ impl TxContext {
 
     pub fn epoch_timestamp_ms(&self) -> u64 {
         self.epoch_timestamp_ms
+    }
+
+    /// Timestamp of the transaction in milliseconds, derived from the consensus commit that
+    /// ordered the transaction.
+    /// Returns the consensus commit timestamp (ms) and records that execution observed it, so the
+    /// effects builder can persist it for replay. Returns `None` when executing outside a consensus
+    /// commit (genesis, dev-inspect, etc.). This is the accessor the Move native will use.
+    pub fn consensus_commit_timestamp_ms(&mut self) -> Option<u64> {
+        self.consensus_commit_timestamp.as_mut().map(|t| {
+            t.read = true;
+            t.timestamp_ms
+        })
+    }
+
+    /// The consensus commit timestamp to persist in the transaction effects: `Some(ms)` iff
+    /// execution actually read it via [`Self::consensus_commit_timestamp_ms`]. Does not mark it
+    /// as read.
+    pub fn consensus_commit_timestamp_to_record(&self) -> Option<u64> {
+        self.consensus_commit_timestamp
+            .as_ref()
+            .filter(|t| t.read)
+            .map(|t| t.timestamp_ms)
     }
 
     /// Return the transaction digest, to include in new objects
@@ -1407,6 +1459,7 @@ impl TxContext {
                 gas_budget: 0,
                 sponsor: None,
                 is_native: true,
+                consensus_commit_timestamp: None,
             };
             tx_context.into()
         } else {
