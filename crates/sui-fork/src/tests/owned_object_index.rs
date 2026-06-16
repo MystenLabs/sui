@@ -30,6 +30,12 @@ fn test_store() -> (tempfile::TempDir, OwnedObjectIndexStore) {
     (dir, store)
 }
 
+fn initialize_empty_index(store: &OwnedObjectIndexStore) {
+    store
+        .replace_from_objects(std::iter::empty::<&Object>())
+        .expect("empty owned-object index should initialize");
+}
+
 fn make_gas_object(id: ObjectID, version: u64, owner: Owner, value: u64) -> Object {
     make_move_object(
         MoveObject::new_gas_coin(SequenceNumber::from_u64(version), id, value),
@@ -124,6 +130,9 @@ async fn test_owned_object_index_updates_transfers_and_deletes() {
     let second = make_gas_object(second_id, 1, Owner::AddressOwner(owner), 1_000_000);
 
     let exists_before = store.owned_object_index_exists().unwrap();
+    initialize_empty_index(&store);
+    let exists_after_initialization = store.owned_object_index_exists().unwrap();
+
     store
         .apply_owned_object_index_updates(std::iter::empty(), [&second, &first])
         .unwrap();
@@ -163,6 +172,7 @@ async fn test_owned_object_index_updates_transfers_and_deletes() {
             "owned_object_index_updates_transfers_and_deletes",
             serde_json::json!({
                 "exists_before": exists_before,
+                "exists_after_initialization": exists_after_initialization,
                 "exists_after_insert": exists_after_insert,
                 "after_insert": after_insert,
                 "cursor_from_second": cursor_from_second,
@@ -184,6 +194,7 @@ async fn test_owned_object_index_orders_coin_balances_descending() {
     let low = make_gas_object(low_id, 1, Owner::AddressOwner(owner), 10);
     let high = make_gas_object(high_id, 1, Owner::AddressOwner(owner), 1_000);
 
+    initialize_empty_index(&store);
     store
         .apply_owned_object_index_updates(std::iter::empty(), [&low, &high])
         .unwrap();
@@ -220,6 +231,7 @@ async fn test_owned_object_index_filters_exact_and_wildcard_types() {
         .parse::<StructTag>()
         .expect("wildcard coin type should parse");
 
+    initialize_empty_index(&store);
     store
         .apply_owned_object_index_updates(std::iter::empty(), [&gas, &custom])
         .unwrap();

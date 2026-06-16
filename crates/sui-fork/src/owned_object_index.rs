@@ -225,7 +225,10 @@ impl OwnedObjectIndexStore {
             .collect()
     }
 
-    /// Apply local execution ownership changes to the owned-object index.
+    /// Apply local execution ownership changes to an initialized owned-object index.
+    ///
+    /// Callers must initialize the index first with `replace_from_objects` or
+    /// `DataStore::ensure_owned_object_index_initialized`.
     pub(crate) fn apply_owned_object_index_updates<'a>(
         &self,
         old_objects: impl IntoIterator<Item = &'a Object>,
@@ -236,7 +239,6 @@ impl OwnedObjectIndexStore {
         self.delete_owned_objects(&mut batch, old_objects)?;
         self.insert_owned_objects(&mut batch, new_objects)?;
 
-        self.mark_owned_object_index_initialized(&mut batch)?;
         batch.write()?;
         Ok(())
     }
