@@ -178,39 +178,20 @@ You should see a `flag::Flag` object with `source: "staking"`.
 
 ## Key code highlights
 
-The following snippets are the parts of the code worth reading carefully.
-
-### `StakeReceipt` struct
-
-The receipt tracks staking state as an owned object the staker controls.
-
-<ImportContent source="contracts/sources/staking.move" mode="code" org="MystenLabs" repo="CTF" struct="StakeReceipt" />
-
-The `hours_staked` field is the vulnerability target. It starts at `0` when the receipt is created and accumulates through `update_receipt` and `merge_receipts` calls. Because the receipt has `store` ability, it can be transferred and wrapped.
-
-### `merge_receipts` function
-
-This function adds the `hours_staked` of 2 receipts together without validating the sum.
-
-<ImportContent source="contracts/sources/staking.move" mode="code" org="MystenLabs" repo="CTF" fun="merge_receipts" />
-
-The function destructs both receipts, sums their `amount` and `hours_staked` fields, and creates a new receipt with `last_update_timestamp` set to the current clock time. The new receipt has no link to the original stake times. This is where the exploit happens: merge enough receipts and the `hours_staked` exceeds 168 without any real time passing.
-
-### `claim_flag` guard
-
-The `claim_flag` function checks the time and amount thresholds before minting the flag.
-
-<ImportContent source="contracts/sources/staking.move" mode="code" org="MystenLabs" repo="CTF" fun="claim_flag" />
-
-The function computes `total_hours = receipt.hours_staked + hours_passed` (where `hours_passed` is the time since the last update). It asserts `total_hours >= 168` and `receipt.amount >= 1_000_000_000`. If both pass, it splits the staked amount from the pool, destroys the receipt, and mints a `Flag`.
-
-### Staking to create a receipt
-
-The `stake` function deposits SUI into the pool and returns a fresh receipt.
-
-<ImportContent source="contracts/sources/staking.move" mode="code" org="MystenLabs" repo="CTF" fun="stake" />
-
-Each call creates a new `StakeReceipt` with `hours_staked: 0` and `last_update_timestamp` set to the current clock. The `amount` field records how much SUI the receipt represents. The exploit creates multiple receipts with small amounts that sum to at least 1 SUI when merged.
+<CodeWalkthrough source="contracts/sources/staking.move" org="MystenLabs" repo="CTF" language="move">
+  <Step lines="21-26" title="StakeReceipt struct">
+    The receipt tracks staking state as an owned object the staker controls. The `hours_staked` field is the vulnerability target. It starts at `0` when the receipt is created and accumulates through `update_receipt` and `merge_receipts` calls. Because the receipt has `store` ability, it can be transferred and wrapped.
+  </Step>
+  <Step lines="35-51" title="Staking to create a receipt">
+    The `stake` function deposits SUI into the pool and returns a fresh receipt. Each call creates a new `StakeReceipt` with `hours_staked: 0` and `last_update_timestamp` set to the current clock. The `amount` field records how much SUI the receipt represents. The exploit creates multiple receipts with small amounts that sum to at least 1 SUI when merged.
+  </Step>
+  <Step lines="73-102" title="merge_receipts vulnerability">
+    This function adds the `hours_staked` of two receipts together without validating the sum. It destructs both receipts, sums their `amount` and `hours_staked` fields, and creates a new receipt with `last_update_timestamp` set to the current clock time. The new receipt has no link to the original stake times. This is where the exploit happens: merge enough receipts and the `hours_staked` exceeds 168 without any real time passing.
+  </Step>
+  <Step lines="104-126" title="claim_flag guard">
+    The `claim_flag` function checks the time and amount thresholds before minting the flag. It computes `total_hours = receipt.hours_staked + hours_passed` (where `hours_passed` is the time since the last update). It asserts `total_hours >= 168` and `receipt.amount >= 1_000_000_000`. If both pass, it splits the staked amount from the pool, destroys the receipt, and mints a `Flag`.
+  </Step>
+</CodeWalkthrough>
 
 ## Common modifications
 
