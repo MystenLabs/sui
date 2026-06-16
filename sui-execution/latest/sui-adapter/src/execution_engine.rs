@@ -672,18 +672,12 @@ mod checked {
             ));
         }
 
-        // Reject transactions whose per-key accumulator totals are not representable *before*
-        // charging gas. For SUI this bounds each per-key gross Merge/Split total to the total supply;
-        // for other balances it bounds them to u64. Doing so here means the rejected PTB-emitted
-        // accumulator events are dropped during the gas reset on the error path (only the bounded gas
-        // events remain). Bounding SUI to the supply (which is ~8.4B SUI below u64::MAX) leaves enough
-        // headroom that the gas-smash deposit / gas-charge events emitted *after* this point cannot
-        // push any per-key total past u64::MAX, so the fold in AccumulatorWriteV1::merge cannot
-        // overflow even though those gas events are not re-checked here.
-        //
-        // Ungated: this only ever turns a would-be arithmetic failure into a deterministic abort,
-        // which produces no committed effects and so cannot diverge from any previously-committed
-        // result, and it applies uniformly across protocol versions.
+        // Reject transactions whose accumulator changes would not be representable *before* charging
+        // gas, so the rejected PTB-emitted events are dropped on the gas-reset error path (only the
+        // bounded gas events remain). The check dispatches on the
+        // `u128_gas_and_accumulator_accumulation` flag: flag-off keeps the deployed gross-based
+        // bound; flag-on uses a slim net-based gate that pairs with the u128 arithmetic paths. See
+        // `check_accumulator_amounts_representable`.
         if result.is_ok()
             && let Err(e) = temporary_store.check_accumulator_amounts_representable()
         {

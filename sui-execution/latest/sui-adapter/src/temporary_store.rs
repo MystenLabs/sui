@@ -203,9 +203,93 @@ impl<'backing> TemporaryStore<'backing> {
         running_max_withdraws
     }
 
-    /// Ensure that, per accumulator object, the gross Merge total and gross Split total are
-    /// representable: bounded by the total SUI supply for `Balance<SUI>` keys, and by `u64::MAX`
-    /// otherwise.
+    /// Reject, *before* charging gas, any transaction whose accumulator changes would not be
+    /// representable once merged and applied. Dispatches on the
+    /// `u128_gas_and_accumulator_accumulation` protocol flag:
+    ///
+    /// - Flag off (deployed behavior): bound each per-key *gross* Merge/Split total, because the
+    ///   merge fold and gas/conservation paths add into `u64` and would otherwise overflow.
+    /// - Flag on: those paths now fold into `u128`, so intermediate overflow is impossible. The
+    ///   gate shrinks to the minimal load-bearing checks that guarantee the remaining `u64`
+    ///   narrows (the net accumulator write and the gas-coin refund) still fit.
+    pub fn check_accumulator_amounts_representable(&self) -> Result<(), ExecutionError> {
+        if self.protocol_config.u128_gas_and_accumulator_accumulation() {
+            self.check_accumulator_amounts_representable_net()
+        } else {
+            self.check_accumulator_amounts_representable_gross()
+        }
+    }
+
+    /// Slim net-based gate (flag on). The gate runs before gas events are emitted, so it sees only
+    /// the PTB-emitted accumulator events. It enforces exactly what the later `u64` narrows need:
+    ///
+    /// - Per key, the *net* PTB change `|merge - split|` must be representable: `<= TOTAL_SUPPLY_MIST`
+    ///   for `Balance<SUI>` keys, `<= u64::MAX` otherwise. The SUI supply (~1e19) sits ~8.4e18 below
+    ///   `u64::MAX`, leaving headroom so the not-yet-emitted gas deposit/charge events (bounded by the
+    ///   gas budget) cannot push the final net — the one `AccumulatorWriteV1::merge` narrows to
+    ///   `u64` — past `u64::MAX`. Non-SUI keys receive no gas events, so their net is final.
+    /// - The *cross-key* gross SUI Split (total withdrawn) must be `<= TOTAL_SUPPLY_MIST`. Withdrawn
+    ///   SUI can be redeemed to `Coin<SUI>` and recombined (e.g. merged into the gas coin) outside the
+    ///   accumulator; bounding the gross keeps any single coin below the supply so the `u128` refund
+    ///   add in `deduct_gas` narrows back to `u64`.
+    ///
+    /// This is strictly more permissive than the gross-based gate: a transaction whose large per-key
+    /// Merge and Split totals net out to a representable value is now accepted. That result-affecting
+    /// difference is why the new path is gated.
+    fn check_accumulator_amounts_representable_net(&self) -> Result<(), ExecutionError> {
+        let supply = sui_types::gas_coin::TOTAL_SUPPLY_MIST as u128;
+        // Per key: (gross merge, gross split, is_sui). u128 cannot overflow for any realistic
+        // event count, so the running sums here are exact.
+        let mut per_key: BTreeMap<AccumulatorObjId, (u128, u128, bool)> = BTreeMap::new();
+        // Cross-key total of SUI withdrawn (gross Split), bounded to the supply (see above).
+        let mut total_sui_split: u128 = 0;
+        for event in &self.execution_results.accumulator_events {
+            let AccumulatorValue::Integer(amount) = event.write.value else {
+                continue;
+            };
+            let amount = amount as u128;
+            let is_sui = sui_types::gas_coin::GasCoin::is_gas_balance_type(&event.write.address.ty);
+            let entry = per_key
+                .entry(event.accumulator_obj)
+                .or_insert((0, 0, is_sui));
+            match event.write.operation {
+                AccumulatorOperation::Merge => entry.0 += amount,
+                AccumulatorOperation::Split => {
+                    entry.1 += amount;
+                    if is_sui {
+                        total_sui_split += amount;
+                        if total_sui_split > supply {
+                            return Err(ExecutionError::new_with_source(
+                                ExecutionErrorKind::CoinBalanceOverflow,
+                                format!(
+                                    "total SUI withdrawn across all accumulators \
+                                     ({total_sui_split}) exceeds the total supply ({supply})"
+                                ),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        for (obj, (merge, split, is_sui)) in per_key {
+            let net = merge.abs_diff(split);
+            let limit = if is_sui { supply } else { u64::MAX as u128 };
+            if net > limit {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::CoinBalanceOverflow,
+                    format!(
+                        "net accumulator balance change for {obj:?} exceeds the representable \
+                         limit (net {net}, limit {limit})"
+                    ),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Gross-based gate (flag off; the deployed PR #26955 behavior). Bounds each per-key gross
+    /// Merge total and gross Split total, plus the cross-key gross SUI Split, because the
+    /// flag-off arithmetic paths fold into `u64`.
     ///
     /// `AccumulatorWriteV1::merge` folds all writes for a key by summing Merge amounts and Split
     /// amounts separately into `u64`s. The object runtime caps Move-native merges per key at
@@ -230,7 +314,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// can then reach `u64::MAX` and overflow `deduct_gas` on a refund. So we also bound the
     /// *cross-key* total SUI withdrawn (gross Split) to the supply, capping the total SUI a single
     /// transaction can withdraw regardless of how it is later recombined.
-    pub fn check_accumulator_amounts_representable(&self) -> Result<(), ExecutionError> {
+    fn check_accumulator_amounts_representable_gross(&self) -> Result<(), ExecutionError> {
         let supply = sui_types::gas_coin::TOTAL_SUPPLY_MIST as u128;
         let mut merge_totals: BTreeMap<AccumulatorObjId, u128> = BTreeMap::new();
         let mut split_totals: BTreeMap<AccumulatorObjId, u128> = BTreeMap::new();
@@ -282,6 +366,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     /// Ensure that there is one entry for each accumulator object in the accumulator events.
     fn merge_accumulator_events(&mut self) {
+        let accumulate_in_u128 = self.protocol_config.u128_gas_and_accumulator_accumulation();
         self.execution_results.accumulator_events = self
             .execution_results
             .accumulator_events
@@ -297,7 +382,10 @@ impl<'backing> TemporaryStore<'backing> {
             )
             .into_iter()
             .map(|(obj_id, writes)| {
-                AccumulatorEvent::new(obj_id, AccumulatorWriteV1::merge(writes))
+                AccumulatorEvent::new(
+                    obj_id,
+                    AccumulatorWriteV1::merge(writes, accumulate_in_u128),
+                )
             })
             .collect();
     }

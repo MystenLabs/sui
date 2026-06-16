@@ -118,7 +118,16 @@ pub struct AccumulatorWriteV1 {
 }
 
 impl AccumulatorWriteV1 {
-    pub fn merge(mut writes: Vec<Self>) -> Self {
+    /// Merge all writes for a single accumulator object into one net write.
+    ///
+    /// When `accumulate_in_u128` is set (protocol flag
+    /// `u128_gas_and_accumulator_accumulation`), the gross Merge and Split totals are folded into
+    /// `u128`, so the fold itself can never overflow. The net `|merge - split|` is then narrowed
+    /// back to `u64` for the resulting `AccumulatorValue::Integer`; the slim pre-gas
+    /// representability gate guarantees this narrow fits, so a failure here is an invariant
+    /// violation. When the flag is off, the legacy `u64` `checked_add` fold is used (which relies
+    /// on the deployed gross-based pre-gas check to avoid overflowing).
+    pub fn merge(mut writes: Vec<Self>, accumulate_in_u128: bool) -> Self {
         if writes.len() == 1 {
             return writes.pop().unwrap();
         }
@@ -144,6 +153,33 @@ impl AccumulatorWriteV1 {
             }
         }
         let (merged_value, net_operation) = match &writes[0].value {
+            AccumulatorValue::Integer(_) if accumulate_in_u128 => {
+                let (merge_amount, split_amount) =
+                    writes.iter().fold((0u128, 0u128), |(merge, split), w| {
+                        if let AccumulatorValue::Integer(v) = w.value {
+                            match w.operation {
+                                AccumulatorOperation::Merge => (merge + v as u128, split),
+                                AccumulatorOperation::Split => (merge, split + v as u128),
+                            }
+                        } else {
+                            mysten_common::fatal!(
+                                "mismatched accumulator value types for same object"
+                            );
+                        }
+                    });
+                let (net, operation) = if merge_amount >= split_amount {
+                    (merge_amount - split_amount, AccumulatorOperation::Merge)
+                } else {
+                    (split_amount - merge_amount, AccumulatorOperation::Split)
+                };
+                let amount = u64::try_from(net).unwrap_or_else(|_| {
+                    mysten_common::fatal!(
+                        "net accumulator change {net} exceeds u64::MAX; \
+                         representability gate should have rejected this transaction"
+                    )
+                });
+                (AccumulatorValue::Integer(amount), operation)
+            }
             AccumulatorValue::Integer(_) => {
                 let (merge_amount, split_amount) =
                     writes.iter().fold((0u64, 0u64), |(merge, split), w| {
@@ -241,7 +277,7 @@ mod tests {
             value: AccumulatorValue::Integer(100),
         };
 
-        let result = AccumulatorWriteV1::merge(vec![write.clone()]);
+        let result = AccumulatorWriteV1::merge(vec![write.clone()], false);
         assert_eq!(result, write);
     }
 
@@ -266,7 +302,7 @@ mod tests {
             },
         ];
 
-        let result = AccumulatorWriteV1::merge(writes);
+        let result = AccumulatorWriteV1::merge(writes, false);
         assert_eq!(result.operation, AccumulatorOperation::Merge);
         assert_eq!(result.value, AccumulatorValue::Integer(120));
     }
@@ -292,7 +328,7 @@ mod tests {
             },
         ];
 
-        let result = AccumulatorWriteV1::merge(writes);
+        let result = AccumulatorWriteV1::merge(writes, false);
         assert_eq!(result.operation, AccumulatorOperation::Split);
         assert_eq!(result.value, AccumulatorValue::Integer(80));
     }
@@ -313,7 +349,7 @@ mod tests {
             },
         ];
 
-        let result = AccumulatorWriteV1::merge(writes);
+        let result = AccumulatorWriteV1::merge(writes, false);
         assert_eq!(result.operation, AccumulatorOperation::Merge);
         assert_eq!(result.value, AccumulatorValue::Integer(0));
     }
@@ -339,7 +375,7 @@ mod tests {
             },
         ];
 
-        let result = AccumulatorWriteV1::merge(writes);
+        let result = AccumulatorWriteV1::merge(writes, false);
         assert_eq!(result.operation, AccumulatorOperation::Merge);
         assert_eq!(result.value, AccumulatorValue::Integer(600));
     }
@@ -365,7 +401,7 @@ mod tests {
             },
         ];
 
-        let result = AccumulatorWriteV1::merge(writes);
+        let result = AccumulatorWriteV1::merge(writes, false);
         assert_eq!(result.operation, AccumulatorOperation::Split);
         assert_eq!(result.value, AccumulatorValue::Integer(350));
     }
@@ -382,7 +418,7 @@ mod tests {
             value: AccumulatorValue::EventDigest(nonempty![(0, digest1), (1, digest2)]),
         };
 
-        let result = AccumulatorWriteV1::merge(vec![write.clone()]);
+        let result = AccumulatorWriteV1::merge(vec![write.clone()], false);
         assert_eq!(result, write);
     }
 
@@ -412,7 +448,7 @@ mod tests {
             },
         ];
 
-        let result = AccumulatorWriteV1::merge(writes);
+        let result = AccumulatorWriteV1::merge(writes, false);
         assert_eq!(result.operation, AccumulatorOperation::Merge);
         if let AccumulatorValue::EventDigest(digests) = result.value {
             assert_eq!(digests.len(), 4);
@@ -444,7 +480,7 @@ mod tests {
             },
         ];
 
-        AccumulatorWriteV1::merge(writes);
+        AccumulatorWriteV1::merge(writes, false);
     }
 
     #[test]
@@ -475,6 +511,6 @@ mod tests {
             },
         ];
 
-        AccumulatorWriteV1::merge(writes);
+        AccumulatorWriteV1::merge(writes, false);
     }
 }

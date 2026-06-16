@@ -207,7 +207,7 @@ impl<'backing> TemporaryStore<'backing> {
             )
             .into_iter()
             .map(|(obj_id, writes)| {
-                AccumulatorEvent::new(obj_id, AccumulatorWriteV1::merge(writes))
+                AccumulatorEvent::new(obj_id, AccumulatorWriteV1::merge(writes, false))
             })
             .collect();
     }
