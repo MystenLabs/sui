@@ -184,13 +184,13 @@ Open `http://localhost:5173` in a browser and click **Mint Hero** to create a he
 ## Key code highlights
 
 <CodeWalkthrough source="F1/move/hero/sources/hero.move" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" language="move">
-  <Step lines="13-18" title="Hero with optional weapon">
+  <Step lines="13-18" title="`Hero` with optional weapon">
     The `Hero` struct stores an optional `Weapon` object. The `weapon: Option<Weapon>` field starts as `option::none()` when the hero is created. The `equip_weapon` function fills it with a `Weapon` object, and `unequip_weapon` extracts and returns the weapon. Both functions assert the option is in the expected state.
   </Step>
-  <Step lines="81-84" title="Equipping a weapon with error handling">
+  <Step lines="81-84" title="Equipping a weapon with `equip_weapon`">
     The `equip_weapon` function fills the hero's weapon slot, aborting if a weapon is already equipped. It asserts `hero.weapon.is_none()` before filling. If the hero already has a weapon, the transaction aborts with `EAlreadyEquippedWeapon`. The `option::fill` call moves the weapon into the hero's option field, transferring ownership.
   </Step>
-  <Step lines="52-67" title="Shared registry for hero discovery">
+  <Step lines="52-67" title="Shared registry with `new_hero`">
     The `new_hero` function creates a hero and registers its ID in the shared `HeroRegistry`. It pushes the hero's ID into the registry's `ids` vector, increments the counter, and returns the hero. Because the registry is a shared object, any client can read it to discover all hero IDs without an indexer.
   </Step>
 </CodeWalkthrough>

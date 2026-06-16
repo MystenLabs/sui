@@ -131,6 +131,14 @@
   font-weight: 600;
 }
 
+.cw-step-title code {
+  font-size: 0.9em;
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  background: var(--ifm-color-emphasis-200);
+  font-weight: 500;
+}
+
 .cw-step-content {
   font-size: 0.9rem;
   line-height: 1.6;

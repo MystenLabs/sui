@@ -246,13 +246,13 @@ You should see a `flag::Flag` object.
 ## Key code highlights
 
 <CodeWalkthrough source="contracts/sources/lootboxes.move" org="MystenLabs" repo="CTF" language="move">
-  <Step lines="8-11" title="MaybeFlag wrapper struct">
+  <Step lines="8-11" title="`MaybeFlag` wrapper struct">
     The `MaybeFlag` struct wraps an optional flag in an owned object. The `Option<flag::Flag>` field is `Some` on a win and `None` on a loss. Because `MaybeFlag` has `key` and `store` abilities, it can be returned from `open_lootbox`, passed to `extract_flag`, and manipulated across function boundaries within a single transaction.
   </Step>
-  <Step lines="19-36" title="open_lootbox function">
+  <Step lines="19-36" title="`open_lootbox` function">
     The function is `public` instead of `entry`, which allows other modules to call it and react to the outcome. The `#[allow(lint(public_random))]` annotation suppresses the compiler warning about `public` functions consuming `&Random`. The function takes exactly 12 USDC, transfers it to a fixed address, generates a random value between 1 and 100, and returns a `MaybeFlag` with a flag if `random_value % 4 == 0` (25% chance). Because it is `public`, your wrapper module can call it, check the result, and abort if empty.
   </Step>
-  <Step lines="38-49" title="extract_flag abort mechanism">
+  <Step lines="38-49" title="`extract_flag` abort mechanism">
     The `extract_flag` function aborts if the `MaybeFlag` does not contain a flag, which is what makes the exploit free. It destructs the `MaybeFlag`, asserts the `Option` is `Some`, and extracts the flag. When the option is `None`, it aborts with `ENoFlag`. In your wrapper module, calling `extract_flag` right after `open_lootbox` turns the 75% losing outcome into a transaction abort, reverting the USDC payment.
   </Step>
 </CodeWalkthrough>

@@ -25,6 +25,17 @@ export function Step(_props: StepProps) {
   return null;
 }
 
+/* ---- Render inline code in titles ---- */
+
+function renderTitle(text: string): React.ReactNode {
+  const parts = text.split(/(`[^`]+`)/g);
+  return parts.map((part, i) =>
+    part.startsWith("`") && part.endsWith("`")
+      ? <code key={i}>{part.slice(1, -1)}</code>
+      : part,
+  );
+}
+
 /* ---- Line range parsing ---- */
 
 function parseLines(spec: string): Set<number> {
@@ -195,7 +206,7 @@ export default function CodeWalkthrough({
             className={`cw-step ${i === activeStep ? "cw-step--active" : ""}`}
             onClick={() => setActiveStep(i)}
           >
-            {step.title && <h4 className="cw-step-title">{step.title}</h4>}
+            {step.title && <h4 className="cw-step-title">{renderTitle(step.title)}</h4>}
             <div className="cw-step-content">{step.children}</div>
           </div>
         ))}
