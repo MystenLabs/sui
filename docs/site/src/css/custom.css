@@ -2810,7 +2810,7 @@ html[data-theme='dark'] .protoUnionNote {
 
 .gs-hero {
   text-align: center;
-  padding: 3rem 1rem 2rem;
+  padding: 3rem 0 2rem;
   max-width: 640px;
   margin: 0 auto;
 }
@@ -2868,7 +2868,7 @@ html[data-theme='dark'] .protoUnionNote {
 .gs-section {
   max-width: 900px;
   margin: 0 auto 2rem;
-  padding: 0 1rem;
+  padding: 0;
 }
 
 .gs-section-title {
