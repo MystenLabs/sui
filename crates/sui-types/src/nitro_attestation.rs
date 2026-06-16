@@ -11,10 +11,9 @@ use x509_parser::x509::SubjectPublicKeyInfo;
 
 use crate::error::{SuiError, SuiErrorKind, SuiResult};
 
+use crate::ecdsa_p384::{P384Hash, P384VerifyError, verify_secp384r1};
 use ciborium::value::{Integer, Value};
 use once_cell::sync::Lazy;
-use p384::ecdsa::signature::Verifier;
-use p384::ecdsa::{Signature, VerifyingKey};
 use rustls_pki_types::{CertificateDer, pem::PemObject};
 use x509_parser::{certificate::X509Certificate, prelude::FromDer};
 
@@ -121,22 +120,28 @@ pub fn verify_nitro_attestation(
     payload: &AttestationDocument,
     timestamp: u64,
 ) -> SuiResult<()> {
-    // Extract public key from cert and signature as P384.
-    let signature = Signature::from_slice(signature)
-        .map_err(|_| NitroAttestationVerifyError::InvalidSignature)?;
+    // Extract the P-384 public key from the certificate.
     let cert = X509Certificate::from_der(payload.certificate.as_slice())
         .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?;
     let pk_bytes = SubjectPublicKeyInfo::parsed(cert.1.public_key())
         .map_err(|err| NitroAttestationVerifyError::InvalidCertificate(err.to_string()))?;
 
-    // Verify the signature against the public key and the message.
+    // Nitro attestation documents are signed with ECDSA over P-384 using SHA-384.
     match pk_bytes {
         PublicKey::EC(ec) => {
-            let verifying_key = VerifyingKey::from_sec1_bytes(ec.data())
-                .map_err(|_| NitroAttestationVerifyError::InvalidPublicKey)?;
-            verifying_key
-                .verify(signed_message, &signature)
-                .map_err(|_| NitroAttestationVerifyError::SignatureFailedToVerify)?;
+            verify_secp384r1(signature, ec.data(), signed_message, P384Hash::Sha384).map_err(
+                |e| match e {
+                    P384VerifyError::InvalidSignature => {
+                        NitroAttestationVerifyError::InvalidSignature
+                    }
+                    P384VerifyError::InvalidPublicKey => {
+                        NitroAttestationVerifyError::InvalidPublicKey
+                    }
+                    P384VerifyError::VerificationFailed => {
+                        NitroAttestationVerifyError::SignatureFailedToVerify
+                    }
+                },
+            )?;
         }
         _ => {
             return Err(NitroAttestationVerifyError::InvalidPublicKey.into());

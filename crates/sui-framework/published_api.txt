@@ -1096,6 +1096,9 @@ decompress_pubkey
 secp256k1_verify
 	public fun
 	0x2::ecdsa_k1
+secp384r1_verify
+	public fun
+	0x2::ecdsa_p384
 secp256r1_ecrecover
 	public fun
 	0x2::ecdsa_r1
