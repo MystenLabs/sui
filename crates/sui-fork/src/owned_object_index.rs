@@ -179,6 +179,7 @@ impl OwnedObjectIndexStore {
     }
 
     /// Read all object infos from the owned-object index.
+    #[cfg(test)]
     pub(crate) fn get_owned_object_infos(&self) -> anyhow::Result<Vec<OwnedObjectInfo>> {
         self.tables
             .objects
