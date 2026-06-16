@@ -2807,21 +2807,21 @@ html[data-theme='dark'] .protoUnionNote {
 }
 
 /* ---- Kapa sidebar content shift ---- */
-/* When the Kapa AI sidebar is open (500px), shrink everything —
-   including the fixed navbar — so nothing is hidden behind it. */
-html.kapa-sidebar-open body {
-  width: calc(100vw - 500px);
+/* Pure CSS: when Kapa's sidebar is open (contains a dialog), shrink
+   everything including the fixed navbar. No JS needed. */
+html:has(.kapa-widget-container [aria-modal]) body {
+  width: calc(100vw - 500px) !important;
   overflow-x: hidden;
   transition: width 0.3s ease;
 }
 
-html:not(.kapa-sidebar-open) body {
+body {
   transition: width 0.3s ease;
 }
 
 @media (max-width: 768px) {
-  html.kapa-sidebar-open body {
-    width: 100vw;
+  html:has(.kapa-widget-container [aria-modal]) body {
+    width: 100vw !important;
   }
 }
 
