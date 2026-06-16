@@ -2815,10 +2815,15 @@ html.kapa-sidebar-open body {
   transition: width 0.3s ease;
 }
 
-html.kapa-sidebar-open [class*="tableOfContents"],
-html.kapa-sidebar-open [class*="tocCollapsible"] {
-  max-width: 100%;
-  overflow: hidden;
+/* Hide the desktop TOC column when sidebar is open to free space */
+html.kapa-sidebar-open .col.col--3:has(.theme-doc-toc-desktop) {
+  display: none;
+}
+
+/* Let the main content column expand to fill the freed space */
+html.kapa-sidebar-open .col[class*="docItemCol"] {
+  max-width: 100% !important;
+  flex: 1 !important;
 }
 
 body {
