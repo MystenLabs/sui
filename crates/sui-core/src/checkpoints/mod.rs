@@ -2023,7 +2023,7 @@ impl CheckpointBuilder {
             let epoch_commitments = if self
                 .epoch_store
                 .protocol_config()
-                .check_commit_root_state_digest_supported()
+                .commit_root_state_digest()
             {
                 vec![root_state_digest.into()]
             } else {

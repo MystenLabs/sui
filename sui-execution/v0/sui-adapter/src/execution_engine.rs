@@ -568,7 +568,7 @@ mod checked {
             CallArg::Pure(bcs::to_bytes(&params.non_refundable_storage_fee).unwrap()),
         ];
 
-        if protocol_config.get_advance_epoch_start_time_in_safe_mode() {
+        if protocol_config.advance_epoch_start_time_in_safe_mode() {
             args.push(CallArg::Pure(
                 bcs::to_bytes(&params.epoch_start_timestamp_ms).unwrap(),
             ));
@@ -644,7 +644,7 @@ mod checked {
             // Must reset the storage rebate since we are re-executing.
             gas_charger.reset_storage_cost_and_rebate();
 
-            if protocol_config.get_advance_epoch_start_time_in_safe_mode() {
+            if protocol_config.advance_epoch_start_time_in_safe_mode() {
                 temporary_store.advance_epoch_safe_mode(&params, protocol_config);
             } else {
                 let advance_epoch_safe_mode_pt =
