@@ -355,6 +355,7 @@ const MAINNET_USDB: &str =
 // Version 126: Enable early_exit_on_iffw (gates the gas-underflow fix
 //              shipped to mainnet out-of-band in #26816).
 // Version 127: Enable always_advance_dkg_to_resolution.
+//              Update gas prices for range proofs and ristretto group operations.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5004,6 +5005,19 @@ impl ProtocolConfig {
                 }
                 127 => {
                     cfg.feature_flags.always_advance_dkg_to_resolution = true;
+
+                    cfg.verify_bulletproofs_ristretto255_base_cost = Some(23866);
+                    cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(1324);
+                    cfg.group_ops_ristretto_decode_scalar_cost = Some(5);
+                    cfg.group_ops_ristretto_decode_point_cost = Some(216);
+                    cfg.group_ops_ristretto_scalar_add_cost = Some(2);
+                    cfg.group_ops_ristretto_point_add_cost = Some(8);
+                    cfg.group_ops_ristretto_scalar_sub_cost = Some(2);
+                    cfg.group_ops_ristretto_point_sub_cost = Some(8);
+                    cfg.group_ops_ristretto_scalar_mul_cost = Some(5);
+                    cfg.group_ops_ristretto_point_mul_cost = Some(1763);
+                    cfg.group_ops_ristretto_scalar_div_cost = Some(557);
+                    cfg.group_ops_ristretto_point_div_cost = Some(2244);
                 }
                 // Use this template when making changes:
                 //
