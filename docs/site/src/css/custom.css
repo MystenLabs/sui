@@ -2818,7 +2818,15 @@ html.kapa-sidebar-open body {
 html.kapa-sidebar-open .navbar,
 html.kapa-sidebar-open .navbar--fixed-top {
   right: 500px !important;
+  overflow: hidden;
   transition: right 0.3s ease;
+}
+
+/* Hide the Ask Sui AI and Search buttons in navbar when sidebar is open
+   since Kapa is already visible */
+html.kapa-sidebar-open .kapa-trigger-btn,
+html.kapa-sidebar-open .DocSearch-Button {
+  display: none !important;
 }
 
 .navbar,
