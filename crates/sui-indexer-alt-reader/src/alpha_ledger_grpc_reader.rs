@@ -8,7 +8,7 @@ use futures::Stream;
 use futures::StreamExt;
 use prometheus::Registry;
 use sui_rpc::proto::sui::rpc::v2alpha as grpc_alpha;
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as V2alphaLedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
 use tonic::transport::Uri;
@@ -24,7 +24,7 @@ const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
 /// A reader backed by the gRPC LedgerService's v2alpha experimental query APIs.
 #[derive(Clone)]
 pub struct AlphaLedgerGrpcReader {
-    client: V2alphaLedgerServiceClient<GrpcMetricsService<Channel>>,
+    client: LedgerServiceClient<GrpcMetricsService<Channel>>,
     timeout: Option<Duration>,
 }
 
@@ -77,7 +77,7 @@ impl AlphaLedgerGrpcReader {
         let max_decoding_message_size = args
             .ledger_grpc_max_decoding_message_size
             .unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE);
-        let client = V2alphaLedgerServiceClient::new(layered.clone())
+        let client = LedgerServiceClient::new(layered.clone())
             .max_decoding_message_size(max_decoding_message_size);
 
         Ok(Self { client, timeout })
