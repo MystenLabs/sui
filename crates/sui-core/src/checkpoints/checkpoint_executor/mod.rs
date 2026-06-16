@@ -23,7 +23,9 @@ use mysten_common::{ZipDebugEqIteratorExt, debug_fatal, fatal, izip_debug_eq};
 use parking_lot::Mutex;
 use std::{sync::Arc, time::Instant};
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
+use sui_types::SUI_CLOCK_OBJECT_ID;
 use sui_types::base_types::SequenceNumber;
+use sui_types::clock::Clock;
 use sui_types::crypto::RandomnessRound;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::transaction::{TransactionDataAPI, TransactionKind};
@@ -178,6 +180,18 @@ macro_rules! finish_stage {
     };
 }
 
+/// Returns the consensus commit timestamp carried by a `ConsensusCommitPrologue` transaction
+/// (any version), or `None` for any other transaction kind.
+fn consensus_commit_timestamp_ms(kind: &TransactionKind) -> Option<u64> {
+    match kind {
+        TransactionKind::ConsensusCommitPrologue(p) => Some(p.commit_timestamp_ms),
+        TransactionKind::ConsensusCommitPrologueV2(p) => Some(p.commit_timestamp_ms),
+        TransactionKind::ConsensusCommitPrologueV3(p) => Some(p.commit_timestamp_ms),
+        TransactionKind::ConsensusCommitPrologueV4(p) => Some(p.commit_timestamp_ms),
+        _ => None,
+    }
+}
+
 pub struct CheckpointExecutor {
     epoch_store: Arc<AuthorityPerEpochStore>,
     state: Arc<AuthorityState>,
@@ -193,6 +207,13 @@ pub struct CheckpointExecutor {
     metrics: Arc<CheckpointExecutorMetrics>,
     tps_estimator: Mutex<TPSEstimator>,
     subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<Checkpoint>>,
+    // Commit timestamp (ms) carried across checkpoints so that transactions belonging to a
+    // consensus commit that was split across checkpoints inherit the timestamp from their
+    // `ConsensusCommitPrologue`, which only appears in the first checkpoint of the split.
+    // `schedule_transaction_execution` runs strictly in checkpoint-sequence order (the
+    // `ExecuteTransactions` pipeline stage gates on seq-1), so a plain in-memory value is
+    // sufficient and race-free. `None` until seeded from the on-chain `Clock` on first use.
+    last_commit_timestamp_ms: Mutex<Option<u64>>,
 }
 
 impl CheckpointExecutor {
@@ -219,6 +240,7 @@ impl CheckpointExecutor {
             metrics,
             tps_estimator: Mutex::new(TPSEstimator::default()),
             subscription_service_checkpoint_sender,
+            last_commit_timestamp_ms: Mutex::new(None),
         }
     }
 
@@ -858,6 +880,19 @@ impl CheckpointExecutor {
     ) -> Vec<TransactionDigest> {
         let mut barrier_deps_builder = BarrierDependencyBuilder::new();
 
+        // Timestamp applied to each transaction's `TxContext`. A checkpoint may contain several
+        // whole consensus commits (each led by its `ConsensusCommitPrologue`) and may also begin
+        // mid-commit when a large commit was split across checkpoints. We therefore walk the
+        // checkpoint in order, updating `commit_timestamp_ms` at every prologue (which carries the
+        // commit timestamp that also sets the on-chain `Clock`), and carry the value across
+        // checkpoints for split commits whose prologue lives in an earlier checkpoint. This
+        // reproduces exactly the value the validator fed into `ExecutionEnv` from consensus, so
+        // both execution paths agree.
+        let mut commit_timestamp_ms = {
+            let carried = self.last_commit_timestamp_ms.lock();
+            carried.unwrap_or_else(|| self.read_clock_timestamp_ms())
+        };
+
         // Find unexecuted transactions and their expected effects digests
         let (unexecuted_tx_digests, unexecuted_txns): (Vec<_>, Vec<_>) = itertools::multiunzip(
             izip_debug_eq!(
@@ -877,6 +912,13 @@ impl CheckpointExecutor {
                     executed_fx_digest,
                     accumulator_version,
                 )| {
+                    // Update the running commit timestamp on every prologue, including ones that
+                    // are already executed (filtered out below) — later transactions in the same
+                    // checkpoint still depend on it.
+                    if let Some(ts) = consensus_commit_timestamp_ms(txn.transaction_data().kind()) {
+                        commit_timestamp_ms = ts;
+                    }
+
                     let barrier_deps =
                         barrier_deps_builder.process_tx(*tx_digest, txn.transaction_data());
 
@@ -905,7 +947,8 @@ impl CheckpointExecutor {
                         let mut env = ExecutionEnv::new()
                             .with_assigned_versions(assigned_versions)
                             .with_expected_effects_digest(*expected_fx_digest)
-                            .with_barrier_dependencies(barrier_deps);
+                            .with_barrier_dependencies(barrier_deps)
+                            .with_tx_timestamp_ms(commit_timestamp_ms);
 
                         // Check if the expected effects indicate insufficient balance
                         if let &ExecutionStatus::Failure(ExecutionFailure {
@@ -922,11 +965,33 @@ impl CheckpointExecutor {
             ),
         );
 
+        // Persist the last commit timestamp seen so the next checkpoint (executed strictly after
+        // this one) can carry it into a split commit's continuation transactions.
+        *self.last_commit_timestamp_ms.lock() = Some(commit_timestamp_ms);
+
         // Enqueue unexecuted transactions with their expected effects digests
         self.execution_scheduler
             .enqueue_transactions(unexecuted_txns, &self.epoch_store);
 
         unexecuted_tx_digests
+    }
+
+    /// Read the current `timestamp_ms` of the on-chain `Clock` object, used to seed the carried
+    /// commit timestamp on cold start / restart. After a restart, the first scheduled checkpoint
+    /// may begin with the continuation of a split commit whose prologue — and the matching `Clock`
+    /// update — already executed in an earlier checkpoint, so the `Clock` holds the right value.
+    /// Returns 0 if the `Clock` object is absent (e.g. at genesis), matching the genesis path.
+    fn read_clock_timestamp_ms(&self) -> u64 {
+        self.object_cache_reader
+            .get_object(&SUI_CLOCK_OBJECT_ID)
+            .and_then(|obj| {
+                obj.data.try_as_move().map(|move_obj| {
+                    bcs::from_bytes::<Clock>(move_obj.contents())
+                        .expect("Clock object must deserialize")
+                        .timestamp_ms()
+                })
+            })
+            .unwrap_or(0)
     }
 
     // Execute the change epoch txn
