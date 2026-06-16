@@ -2806,6 +2806,24 @@ html[data-theme='dark'] .protoUnionNote {
   transition: none !important;
 }
 
+/* ---- Kapa sidebar content shift ---- */
+/* When the Kapa AI sidebar is open, shrink the main content so it
+   doesn't get hidden behind the 500px side panel. */
+html.kapa-sidebar-open #__docusaurus {
+  margin-right: 500px;
+  transition: margin-right 0.3s ease;
+}
+
+html:not(.kapa-sidebar-open) #__docusaurus {
+  transition: margin-right 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  html.kapa-sidebar-open #__docusaurus {
+    margin-right: 0;
+  }
+}
+
 /* ---- Getting Started landing page ---- */
 
 /* Remove Docusaurus doc page padding and copy-page button on the landing page */

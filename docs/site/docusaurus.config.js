@@ -93,6 +93,7 @@ const config = {
   clientModules: [
     require.resolve("./src/client/pushfeedback-toc.js"),
     require.resolve("./src/client/webmcp.js"),
+    require.resolve("./src/client/kapa-sidebar.js"),
   ],
   plugins: [
     function llmsTxtDirectivePlugin() {
