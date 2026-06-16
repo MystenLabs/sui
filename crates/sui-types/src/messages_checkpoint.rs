@@ -891,10 +891,7 @@ impl std::ops::Index<usize> for CheckpointContentsView<'_> {
 
 /// Same as CheckpointContents, but contains full contents of all transactions, effects,
 /// and user signatures associated with the checkpoint.
-// NOTE: This data structure is used for state sync of checkpoints. Therefore we attempt
-// to estimate its size in CheckpointBuilder in order to limit the maximum serialized
-// size of a checkpoint sent over the network. If this struct is modified,
-// CheckpointBuilder::split_checkpoint_chunks should also be updated accordingly.
+// NOTE: This data structure is used for state sync of checkpoints.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VersionedFullCheckpointContents {
     V1(FullCheckpointContents),

@@ -25,9 +25,8 @@ use mysten_common::assert_reachable;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_common::{debug_fatal, fatal, in_test_configuration};
+use mysten_common::{debug_fatal, in_test_configuration};
 use mysten_metrics::monitored_scope;
-use nonempty::NonEmpty;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
@@ -78,7 +77,7 @@ use sui_types::transaction::{
     VerifiedSignedTransaction, VerifiedTransaction, VerifiedTransactionWithAliases, WithAliases,
 };
 use tap::TapOptional;
-use tokio::sync::{OnceCell, mpsc, oneshot};
+use tokio::sync::{OnceCell, mpsc};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -110,7 +109,7 @@ use crate::authority::shared_object_version_manager::{
     AsTx, AssignedTxAndVersions, ConsensusSharedObjVerAssignment, Schedulable, SharedObjVerManager,
 };
 use crate::checkpoints::{
-    BuilderCheckpointSummary, CheckpointHeight, EpochStats, PendingCheckpoint, PendingCheckpointV2,
+    BuilderCheckpointSummary, CheckpointHeight, EpochStats, PendingCheckpoint,
 };
 use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
@@ -465,26 +464,9 @@ pub struct AuthorityPerEpochStore {
     /// A cache which tracks recently finalized transactions.
     pub(crate) finalized_transactions_cache: MokaCache<TransactionDigest, ()>,
 
-    /// Waiters for settlement transactions. Used by execution scheduler to wait for
-    /// settlement transaction keys to resolve to transactions.
-    /// Stored in AuthorityPerEpochStore so that it is automatically cleaned up at the end of the epoch.
-    settlement_registrations: Arc<Mutex<HashMap<TransactionKey, SettlementRegistration>>>,
-
-    /// Waiters for barrier transactions. Used by execution scheduler to wait for
-    /// barrier transaction (keyed by the same AccumulatorSettlement key as settlements).
-    barrier_registrations: Arc<Mutex<HashMap<TransactionKey, BarrierRegistration>>>,
-
     /// The node's role for this epoch, derived from committee membership and
     /// the configured sync mode. Computed once at construction.
     node_role: NodeRole,
-}
-enum SettlementRegistration {
-    Ready(Vec<VerifiedExecutableTransaction>),
-    Waiting(oneshot::Sender<Vec<VerifiedExecutableTransaction>>),
-}
-enum BarrierRegistration {
-    Ready(Box<VerifiedExecutableTransaction>),
-    Waiting(oneshot::Sender<VerifiedExecutableTransaction>),
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -1289,8 +1271,6 @@ impl AuthorityPerEpochStore {
             tx_reject_reason_cache,
             submitted_transaction_cache,
             finalized_transactions_cache,
-            settlement_registrations: Default::default(),
-            barrier_registrations: Default::default(),
             node_role: NodeRole::from_committee(&committee, &name, fullnode_sync_mode),
         });
 
@@ -1972,86 +1952,6 @@ impl AuthorityPerEpochStore {
         } else {
             Ok(tables.transaction_key_to_digest.get(key).expect("db error"))
         }
-    }
-
-    pub(crate) fn notify_settlement_transactions_ready(
-        &self,
-        tx_key: TransactionKey,
-        txns: Vec<VerifiedExecutableTransaction>,
-    ) {
-        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
-        let mut registrations = self.settlement_registrations.lock();
-        if let Some(registration) = registrations.remove(&tx_key) {
-            let SettlementRegistration::Waiting(tx) = registration else {
-                fatal!("Settlement registration should be waiting");
-            };
-            // Receiver is held in a `within_alive_epoch` task, so it may have
-            // been dropped already.
-            tx.send(txns).ok();
-        } else {
-            registrations.insert(tx_key, SettlementRegistration::Ready(txns));
-        }
-    }
-
-    pub(crate) async fn wait_for_settlement_transactions(
-        &self,
-        key: TransactionKey,
-    ) -> Vec<VerifiedExecutableTransaction> {
-        let rx = {
-            let mut registrations = self.settlement_registrations.lock();
-            if let Some(registration) = registrations.remove(&key) {
-                let SettlementRegistration::Ready(txns) = registration else {
-                    fatal!("Settlement registration should be ready");
-                };
-                return txns;
-            } else {
-                let (tx, rx) = oneshot::channel();
-                registrations.insert(key, SettlementRegistration::Waiting(tx));
-                rx
-            }
-        };
-
-        rx.await.unwrap()
-    }
-
-    pub(crate) fn notify_barrier_transaction_ready(
-        &self,
-        tx_key: TransactionKey,
-        txn: VerifiedExecutableTransaction,
-    ) {
-        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
-        let mut registrations = self.barrier_registrations.lock();
-        if let Some(registration) = registrations.remove(&tx_key) {
-            let BarrierRegistration::Waiting(tx) = registration else {
-                fatal!("Barrier registration should be waiting");
-            };
-            // Receiver may have been dropped if the scheduler cancelled its wait
-            // (e.g. checkpoint executor already executed this transaction).
-            tx.send(txn).ok();
-        } else {
-            registrations.insert(tx_key, BarrierRegistration::Ready(Box::new(txn)));
-        }
-    }
-
-    pub(crate) async fn wait_for_barrier_transaction(
-        &self,
-        key: TransactionKey,
-    ) -> VerifiedExecutableTransaction {
-        let rx = {
-            let mut registrations = self.barrier_registrations.lock();
-            if let Some(registration) = registrations.remove(&key) {
-                let BarrierRegistration::Ready(txn) = registration else {
-                    fatal!("Barrier registration should be ready");
-                };
-                return *txn;
-            } else {
-                let (tx, rx) = oneshot::channel();
-                registrations.insert(key, BarrierRegistration::Waiting(tx));
-                rx
-            }
-        };
-
-        rx.await.unwrap()
     }
 
     pub fn insert_effects_digest_and_signature(
@@ -3365,14 +3265,6 @@ impl AuthorityPerEpochStore {
             .expect("test should not be write past end of epoch")
     }
 
-    pub(crate) fn calculate_pending_checkpoint_height(&self, consensus_round: u64) -> u64 {
-        if self.randomness_state_enabled() {
-            consensus_round * 2
-        } else {
-            consensus_round
-        }
-    }
-
     // Assigns shared object versions to transactions and updates the next shared object version state.
     // Shared object versions in cancelled transactions are assigned to special versions that will
     // cause the transactions to be cancelled in execution engine.
@@ -3480,12 +3372,7 @@ impl AuthorityPerEpochStore {
         debug!(
             checkpoint_commit_height = checkpoint.height(),
             "Pending checkpoint has {} roots",
-            checkpoint.roots().len(),
-        );
-        trace!(
-            checkpoint_commit_height = checkpoint.height(),
-            "Transaction roots for pending checkpoint: {:?}",
-            checkpoint.roots()
+            checkpoint.num_roots(),
         );
 
         output.insert_pending_checkpoint(checkpoint.clone());
@@ -3510,61 +3397,21 @@ impl AuthorityPerEpochStore {
             .pending_checkpoint_exists(index))
     }
 
-    pub(crate) fn write_pending_checkpoint_v2(
-        &self,
-        output: &mut ConsensusCommitOutput,
-        checkpoint: &PendingCheckpointV2,
-    ) -> SuiResult {
-        assert!(
-            !self.pending_checkpoint_exists_v2(&checkpoint.height())?,
-            "Duplicate pending checkpoint notification at height {:?}",
-            checkpoint.height()
-        );
-
-        debug!(
-            checkpoint_commit_height = checkpoint.height(),
-            "Pending checkpoint has {} roots",
-            checkpoint.num_roots(),
-        );
-
-        output.insert_pending_checkpoint_v2(checkpoint.clone());
-
-        Ok(())
-    }
-
-    pub fn get_pending_checkpoints_v2(
-        &self,
-        last: Option<CheckpointHeight>,
-    ) -> SuiResult<Vec<(CheckpointHeight, PendingCheckpointV2)>> {
-        Ok(self
-            .consensus_quarantine
-            .read()
-            .get_pending_checkpoints_v2(last))
-    }
-
-    fn pending_checkpoint_exists_v2(&self, index: &CheckpointHeight) -> SuiResult<bool> {
-        Ok(self
-            .consensus_quarantine
-            .read()
-            .pending_checkpoint_exists_v2(index))
-    }
-
     pub fn process_constructed_checkpoint(
         &self,
         commit_height: CheckpointHeight,
-        content_info: NonEmpty<(CheckpointSummary, CheckpointContents)>,
+        content_info: (CheckpointSummary, CheckpointContents),
     ) {
         let mut consensus_quarantine = self.consensus_quarantine.write();
-        for (position_in_commit, (summary, transactions)) in content_info.into_iter().enumerate() {
-            let sequence_number = summary.sequence_number;
-            let summary = BuilderCheckpointSummary {
-                summary,
-                checkpoint_height: Some(commit_height),
-                position_in_commit,
-            };
+        let (summary, transactions) = content_info;
+        let sequence_number = summary.sequence_number;
+        let summary = BuilderCheckpointSummary {
+            summary,
+            checkpoint_height: Some(commit_height),
+            position_in_commit: 0,
+        };
 
-            consensus_quarantine.insert_builder_summary(sequence_number, summary, transactions);
-        }
+        consensus_quarantine.insert_builder_summary(sequence_number, summary, transactions);
 
         // Because builder can run behind state sync, the data may be immediately ready to be committed.
         consensus_quarantine
