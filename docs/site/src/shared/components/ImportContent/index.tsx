@@ -9,6 +9,7 @@ import { MDXProvider } from "@mdx-js/react";
 import MDXComponents from "@theme/MDXComponents";
 import utils from "./utils";
 import MarkdownIt from "markdown-it";
+import PlayMoveEmbed from "@site/src/shared/components/PlayMoveEmbed";
 
 import { importContentMap } from "@generated-imports/ImportContentMap";
 
@@ -428,6 +429,10 @@ export default function ImportContent({
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );
+  }
+
+  if (resolvedLanguage === "move") {
+    return <PlayMoveEmbed code={out} title={noTitle ? undefined : title} />;
   }
 
   return (

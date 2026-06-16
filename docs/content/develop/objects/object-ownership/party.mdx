@@ -28,7 +28,14 @@ public fun public_party_transfer<T: key + store>(obj: T, party: sui::party::Part
 
 A party object's ownership can change over its lifetime, either by adding it as a [dynamic object field](/develop/objects/dynamic-fields), transferring it to a different address or ownership type, or making it [immutable](/develop/objects/object-ownership/immutable). However, after you create an object and set its ownership, it cannot be [shared](/develop/objects/object-ownership/shared).
 
-<ImportContent source="examples/move/basics/sources/object_basics.move" mode="code" fun="create_party" noComments />
+<CodeWalkthrough source="examples/move/basics/sources/object_basics.move" language="move">
+  <Step lines="28-34" title="Create a party object">
+    The `create_party` function creates a new `Object` and transfers it using `public_party_transfer` with a `party::single_owner` party. This makes the object a party object owned by `recipient` — it is versioned by consensus but owned by a single address.
+  </Step>
+  <Step lines="40-43" title="Transfer a party object">
+    To transfer a party object owned by an account address, use `public_party_transfer` with a new `party::single_owner`. The `party_transfer_single_owner` function transfers an existing party object to a new recipient while keeping it as a party object.
+  </Step>
+</CodeWalkthrough>
 
 ## When to use party objects
 
@@ -41,11 +48,3 @@ Party objects can be used by multiple inflight [transactions](/develop/transacti
 `Coin`s can be party objects, including `Coin<SUI>`. However, you cannot use a party object `Coin<SUI>` for gas payment. To use a party object `Coin<SUI>` for gas, you must first transfer it back to address-owned.
 
 :::
-
-## Interact with party objects
-
-You can specify party objects as input to a transaction in the same way as shared objects. Sui validators ensure that the sender of the transaction can access the object. The validator might abort a transaction at execution time if the owner of an input party object has changed because of an earlier, conflicting transaction.
-
-Party objects whose owning address corresponds to an object ID are not supported for access through the [transfer to object](/develop/objects/transfers/transfer-to-object) mechanism. To transfer a party object owned by an account address:
-
-<ImportContent source="examples/move/basics/sources/object_basics.move" mode="code" fun="party_transfer_single_owner" noComments />

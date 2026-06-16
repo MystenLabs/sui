@@ -34,19 +34,16 @@ public struct Bar has key, store {
 
 If you put the object of type `Bar` into an object of type `Foo`, the object type `Foo` wraps the object type `Bar`. The object type `Foo` is the wrapper or wrapping object.
 
-## Create a wrapped object 
+## Wrapping and unwrapping
 
-This example shows a basic function used to wrap an object:
-
-<ImportContent source="examples/move/basics/sources/object_basics.move" mode="code" fun="wrap" noComments />
-
-## Unwrap a wrapped object 
-
-You can take out the wrapped object and transfer it to an address, modify it, delete it, or freeze it. This is called unwrapping. When an object is unwrapped, it becomes an independent object again and can be accessed directly onchain. The object's ID stays the same across wrapping and unwrapping.
-
-This example shows a basic function used to unwrap an object:
-
-<ImportContent source="examples/move/basics/sources/object_basics.move" mode="code" fun="unwrap" noComments />
+<CodeWalkthrough source="examples/move/basics/sources/object_basics.move" language="move">
+  <Step lines="69-71" title="Create a wrapped object">
+    The `wrap` function takes an `Object` by value and places it inside a new `Wrapper` struct. The `Wrapper` is then transferred to the sender. After wrapping, the original object is no longer directly accessible onchain — it can only be reached through the wrapper.
+  </Step>
+  <Step lines="73-78" title="Unwrap a wrapped object">
+    You can take out the wrapped object and transfer it to an address, modify it, delete it, or freeze it. This is called unwrapping. The `unwrap` function destructs the `Wrapper`, deletes its UID, and transfers the inner `Object` back to the sender. The object's ID stays the same across wrapping and unwrapping.
+  </Step>
+</CodeWalkthrough>
 
 ## Direct wrapping
 

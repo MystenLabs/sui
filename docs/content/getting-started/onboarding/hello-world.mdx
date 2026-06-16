@@ -94,28 +94,22 @@ Open the `greeting.move` file in your IDE of choice. You can see the following M
 
 <ImportContent source="/move/hello-world/sources/greeting.move" mode="code" org="MystenLabs" repo="sui-stack-hello-world" />
 
-### Code explanation 
+### Code explanation
 
-First, this code defines a module called `greeting`:
-
-```move 
-module hello_world::greeting {
-  use std::string;
-  ...
-}
-```
-
-Then, it defines a public struct called `Greeting` that contains a unique object ID and text. A struct is a type of resource:
-
-<ImportContent source="/move/hello-world/sources/greeting.move" mode="code" struct="Greeting" org="MystenLabs" repo="sui-stack-hello-world" />
-
-Then, it defines the function `new` that makes an API call to the `Greeting` struct and initializes it with the text `"Hello world!"`, storing it in a new shared object:
-
-<ImportContent source="/move/hello-world/sources/greeting.move" mode="code" fun="new" org="MystenLabs" repo="sui-stack-hello-world" />
-
-Lastly, the package defines a function called `update_text` that can be called to update the text stored in `Greeting`:
-
-<ImportContent source="/move/hello-world/sources/greeting.move" mode="code" fun="update_text" org="MystenLabs" repo="sui-stack-hello-world" />
+<CodeWalkthrough source="/move/hello-world/sources/greeting.move" org="MystenLabs" repo="sui-stack-hello-world" language="move">
+  <Step lines="5-6" title="Module declaration">
+    This code defines a module called `greeting` inside the `hello_world` package and imports the `string` library from the standard library.
+  </Step>
+  <Step lines="8-12" title="Greeting struct">
+    The `Greeting` struct is a Sui object (it has the `key` ability and a `UID` field). It contains a `text` field that stores a string. A struct with `key` is a resource type — it cannot be copied and must be explicitly moved or destroyed.
+  </Step>
+  <Step lines="14-21" title="Constructor: new">
+    The `new` function creates a `Greeting` object initialized with the text "Hello world!" and shares it as a public object via `transfer::share_object`. Shared objects are accessible to anyone on the network — any address can read or mutate them in a transaction.
+  </Step>
+  <Step lines="23-26" title="Mutator: update_text">
+    The `update_text` function takes a mutable reference (`&mut Greeting`) rather than the object itself. This satisfies Move's resource safety — the object is not copied or consumed, only mutated through a reference. Anyone with access to the shared `Greeting` can call this function to change its text.
+  </Step>
+</CodeWalkthrough>
 
 ### Resource safety 
 
