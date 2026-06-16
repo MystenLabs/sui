@@ -124,19 +124,18 @@ impl<I> StreamPage<I> {
         )
     }
 
-    /// The cursor to continue paginating, or `None` if the requested range has been exhausted and
-    /// no further pagination is possible.
-    ///
-    /// Invariant: `has_more()` ⇒ `end_cursor.is_some()`. Enforced at the page boundary by
-    /// `drain_list_stream` (returns `data_loss` on violation) and preserved by any caller that
-    /// re-synthesizes a `StreamPage` from a previously-validated one's `end_reason` +
-    /// `end_cursor` fields together.
+    /// The latest cursor seen for resuming pagination. If more items are expected, e.g.
+    /// `has_more()` is true, `next_cursor` must yield a cursor.
     pub fn next_cursor(&self) -> Option<&Bytes> {
-        self.has_more().then(|| {
-            self.end_cursor
-                .as_ref()
-                .expect("invariant: has_more implies end_cursor is Some")
-        })
+        if self.has_more() {
+            Some(
+                self.end_cursor
+                    .as_ref()
+                    .expect("invariant: has_more implies end_cursor is Some"),
+            )
+        } else {
+            self.end_cursor.as_ref()
+        }
     }
 
     /// Fold one frame into the page. `start_cursor` latches on the first cursor seen; `end_cursor`
