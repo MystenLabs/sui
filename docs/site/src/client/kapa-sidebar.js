@@ -1,20 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Toggles a CSS class on <html> when the Kapa sidebar opens/closes
-// so the main content can shrink to avoid being hidden behind it.
+// Toggles .kapa-sidebar-open on <html> when the Kapa sidebar is visible.
+// Uses a persistent interval check so the class survives client-side
+// navigation (Docusaurus SPA routing).
 
 if (typeof window !== "undefined") {
   const OPEN_CLASS = "kapa-sidebar-open";
+  let hooked = false;
 
-  function watchKapa() {
-    // Kapa may not be loaded yet — poll until it is
-    if (!window.Kapa) {
-      setTimeout(watchKapa, 500);
-      return;
-    }
+  function hookKapaApi() {
+    if (hooked || !window.Kapa) return;
+    hooked = true;
 
-    // Wrap Kapa.open and Kapa.close to toggle the class
     const origOpen = window.Kapa.open.bind(window.Kapa);
     const origClose = window.Kapa.close.bind(window.Kapa);
 
@@ -27,28 +25,24 @@ if (typeof window !== "undefined") {
       document.documentElement.classList.remove(OPEN_CLASS);
       return origClose(...args);
     };
-
-    // Also watch for clicks on the overlay/close button via MutationObserver
-    // as a fallback in case Kapa.close isn't called directly
-    const observer = new MutationObserver(() => {
-      const container = document.querySelector(".kapa-widget-container");
-      if (!container) return;
-      const hasModal = container.innerHTML.length > 100;
-      if (!hasModal) {
-        document.documentElement.classList.remove(OPEN_CLASS);
-      }
-    });
-
-    // Start observing once body is ready
-    if (document.body) {
-      observer.observe(document.body, { childList: true, subtree: true });
-    } else {
-      document.addEventListener("DOMContentLoaded", () => {
-        observer.observe(document.body, { childList: true, subtree: true });
-      });
-    }
   }
 
-  // Kick off after a short delay to let Kapa script load
-  setTimeout(watchKapa, 1000);
+  // Persistent check: detect Kapa sidebar open/close state by looking
+  // for the widget's modal in the DOM. Runs every 300ms so it survives
+  // page navigations and catches close via overlay/ESC/X button.
+  setInterval(() => {
+    // Try to hook the API if not done yet
+    if (!hooked) hookKapaApi();
+
+    const container = document.querySelector(".kapa-widget-container");
+    // Kapa's sidebar mode renders a ModalRoot inside the container when open
+    const isOpen = !!(container && container.querySelector("[role='dialog']"));
+    const hasClass = document.documentElement.classList.contains(OPEN_CLASS);
+
+    if (isOpen && !hasClass) {
+      document.documentElement.classList.add(OPEN_CLASS);
+    } else if (!isOpen && hasClass) {
+      document.documentElement.classList.remove(OPEN_CLASS);
+    }
+  }, 300);
 }

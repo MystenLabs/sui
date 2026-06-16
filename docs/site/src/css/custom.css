@@ -2807,20 +2807,21 @@ html[data-theme='dark'] .protoUnionNote {
 }
 
 /* ---- Kapa sidebar content shift ---- */
-/* When the Kapa AI sidebar is open, shrink the main content so it
-   doesn't get hidden behind the 500px side panel. */
-html.kapa-sidebar-open #__docusaurus {
-  margin-right: 500px;
-  transition: margin-right 0.3s ease;
+/* When the Kapa AI sidebar is open (500px), shrink everything —
+   including the fixed navbar — so nothing is hidden behind it. */
+html.kapa-sidebar-open body {
+  width: calc(100vw - 500px);
+  overflow-x: hidden;
+  transition: width 0.3s ease;
 }
 
-html:not(.kapa-sidebar-open) #__docusaurus {
-  transition: margin-right 0.3s ease;
+html:not(.kapa-sidebar-open) body {
+  transition: width 0.3s ease;
 }
 
 @media (max-width: 768px) {
-  html.kapa-sidebar-open #__docusaurus {
-    margin-right: 0;
+  html.kapa-sidebar-open body {
+    width: 100vw;
   }
 }
 
