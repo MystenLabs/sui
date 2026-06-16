@@ -41,10 +41,28 @@ if (typeof window !== "undefined") {
     lastCloseRef = window.Kapa.close;
   }
 
+  // Re-sync class on every SPA navigation so new pages adjust immediately
+  // Docusaurus uses History API for client-side routing
+  const origPushState = history.pushState.bind(history);
+  const origReplaceState = history.replaceState.bind(history);
+  history.pushState = function (...args) {
+    const result = origPushState(...args);
+    syncClass();
+    return result;
+  };
+  history.replaceState = function (...args) {
+    const result = origReplaceState(...args);
+    syncClass();
+    return result;
+  };
+  window.addEventListener("popstate", syncClass);
+
   // Check every 500ms: re-hook if needed, and also detect close via
   // Shadow DOM heuristic (container height changes when sidebar closes)
   setInterval(() => {
     hookKapa();
+    // Always re-sync class in case something cleared it
+    syncClass();
 
     // Fallback: if kapa is supposedly open but the container has no
     // visible shadow content, it was closed via overlay/ESC/X
