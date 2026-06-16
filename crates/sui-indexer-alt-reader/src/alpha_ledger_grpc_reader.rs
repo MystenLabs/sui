@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+use anyhow::Context;
 use bytes::Bytes;
 use futures::Stream;
 use futures::StreamExt;
@@ -94,7 +95,7 @@ impl AlphaLedgerGrpcReader {
         let stream = client
             .list_transactions(self.request(request))
             .await
-            .map_err(|s| anyhow::anyhow!("ListTransactions stream open failed: {}", s.message()))?
+            .context("ListTransactions stream open failed")?
             .into_inner();
 
         drain_list_stream("ListTransactions", stream).await
