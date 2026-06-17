@@ -1294,6 +1294,16 @@ async fn authenticated_events_multiple_commits_per_checkpoint() {
     );
     test_cluster.sign_and_execute_transaction(&deposit_tx).await;
 
+    // The 6T deposit becomes spendable from the sender's address balance only after the
+    // per-checkpoint settlement transaction creates the account object on each node. Awaiting
+    // the deposit's execution above is not sufficient: the soft bundles below are submitted to
+    // a randomly chosen validator, and a validator that has not yet applied the settlement
+    // would see a zero balance in its pre-consensus funds check and reject the transaction
+    // with InvalidWithdrawReservation. Wait for the deposit to settle on every node first.
+    test_cluster
+        .wait_for_tx_settlement_all_nodes(&[deposit_tx.digest()])
+        .await;
+
     let event_count = 100;
 
     let tx_data_vec: Vec<_> = (0..event_count)
