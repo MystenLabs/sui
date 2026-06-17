@@ -431,7 +431,7 @@ impl TransactionContents {
 }
 
 impl TransactionConnection {
-    pub fn empty() -> Self {
+    fn empty() -> Self {
         Self {
             edges: vec![],
             page_info: PageInfo {
