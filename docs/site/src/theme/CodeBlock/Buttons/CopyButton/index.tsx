@@ -71,6 +71,53 @@ function useCopyButton(buttonRef: React.RefObject<HTMLElement>) {
   return { copyCode, isCopied };
 }
 
+function OpenInPlayMoveButton({ className }: { className?: string }) {
+  const ref = useRef<HTMLButtonElement | null>(null);
+
+  const handleClick = useCallback(() => {
+    const code = getNearestCodeText(ref.current);
+    if (!code) return;
+    const isDark =
+      typeof document !== "undefined" &&
+      document.documentElement.getAttribute("data-theme") === "dark";
+    const url = `https://www.playmove.dev/?theme=${isDark ? "dark" : "light"}#${encodeURIComponent(code)}`;
+    window.open(url, "_blank", "noopener");
+  }, []);
+
+  // Only render for Move code blocks
+  const [isMove, setIsMove] = useState(false);
+  useEffect(() => {
+    let el: HTMLElement | null = ref.current;
+    while (el) {
+      const code = el.querySelector?.("code") as HTMLElement | null;
+      if (code?.className?.includes("language-move")) {
+        setIsMove(true);
+        return;
+      }
+      el = el.parentElement;
+    }
+  }, []);
+
+  if (!isMove) return null;
+
+  return (
+    <Button
+      ref={ref}
+      aria-label="Open in Move Playground"
+      title="Open in Move Playground"
+      className={clsx(
+        className,
+        "!opacity-50 !hover:opacity-100 text-xs !pb-2 justify-center",
+      )}
+      onClick={handleClick}
+    >
+      <span className="p-1">
+        <i className="fa-solid fa-play leading-[0] pr-1" style={{ fontSize: 9 }}></i>Playground
+      </span>
+    </Button>
+  );
+}
+
 export default function CopyButton({ className }: Props): ReactNode {
   const buttonRef = useRef<HTMLSpanElement | null>(null);
   const { copyCode, isCopied } = useCopyButton(buttonRef);
@@ -99,6 +146,7 @@ export default function CopyButton({ className }: Props): ReactNode {
         </span>
       </Button>
       <OpenInAgentButton className={className} />
+      <OpenInPlayMoveButton className={className} />
     </span>
   );
 }
