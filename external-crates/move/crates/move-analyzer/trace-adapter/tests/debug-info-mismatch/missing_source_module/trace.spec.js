@@ -5,17 +5,14 @@ let action = (runtime) => {
     // Models a source-mapped caller entering a module absent from source debug info.
     let res = '';
 
-    res += warnings_to_string(runtime);
-    res += runtime.toString();
+    res += snapshot(runtime);
 
     runtime.step(false);
-    res += warnings_to_string(runtime);
-    res += runtime.toString();
+    res += snapshot(runtime);
 
     // Return from the bytecode-only module to source-level debugging in the caller.
     runtime.step(false);
-    res += warnings_to_string(runtime);
-    res += runtime.toString();
+    res += snapshot(runtime);
     return res;
 };
 run_spec(__dirname, action);

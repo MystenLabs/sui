@@ -211,6 +211,11 @@ interface IMoveCallStackFrame {
      * showing disasembled bytecode.
      */
     disassemblyView: boolean;
+    /**
+     * Force bytecode view due to source being unavailable
+     * or unsafe for this frame.
+     */
+    forceDisassembly: boolean;
 }
 
 /**
@@ -863,16 +868,22 @@ export class Runtime extends EventEmitter {
                         currentEvent.optimizedSrcLines,
                         currentEvent.optimizedBcodeLines
                     );
-                // when creating a new frame maintain the invariant
-                // that all frames that belong to modules in the same
-                // file get the same view
+                // When creating a new frame, maintain the invariant that all
+                // frames for modules in the same source/bytecode file pair use
+                // the same user-selected view.
+                //
+                // Do not inherit from frames whose source is unavailable. Their
+                // disassembly view is a forced fallback for that specific frame,
+                // not a user-selected view that should propagate to other frames.
                 newFrame.disassemblyModeTriggered = moveCallStack.frames.find(
-                    frame => frame.disassemblyModeTriggered
+                    frame => !frame.forceDisassembly
+                        && frame.disassemblyModeTriggered
                         && frame.bcodeFilePath === newFrame.bcodeFilePath
                         && frame.srcFilePath === newFrame.srcFilePath
                 ) !== undefined;
                 newFrame.disassemblyView = moveCallStack.frames.find(
-                    frame => frame.disassemblyView
+                    frame => !frame.forceDisassembly
+                        && frame.disassemblyView
                         && frame.bcodeFilePath === newFrame.bcodeFilePath
                         && frame.srcFilePath === newFrame.srcFilePath
                 ) !== undefined;
@@ -1225,18 +1236,21 @@ export class Runtime extends EventEmitter {
 
     /**
      * Applies OpenFrame fallback behavior for trace/source debug-info mismatches.
-     * Currently used when a traced function is missing from source debug info.
      */
     private handleOpenFrameDebugInfoMismatch(
         event: Extract<TraceEvent, { type: TraceEventKind.OpenFrame }>,
         frame: IMoveCallStackFrame
     ): void {
         this.emitDiagnostics(event.diagnostics);
-        if (event.forceDisassembly) {
+        frame.forceDisassembly = event.forceDisassembly === true;
+        if (frame.forceDisassembly) {
             // If bcodeFilePath is unavailable, srcFilePath already points at
-            // the bytecode file and there is no source view to switch back to.
+            // the bytecode file or there is no alternate bytecode view. In that
+            // case, do not force disassemblyView because it affects local-name rendering.
             frame.disassemblyModeTriggered = frame.bcodeFilePath !== undefined;
-            frame.disassemblyView = true;
+            if (frame.disassemblyModeTriggered) {
+                frame.disassemblyView = true;
+            }
         }
     }
 
@@ -1400,6 +1414,9 @@ export class Runtime extends EventEmitter {
             const moveCallStack = eventFrame as IMoveCallStack;
             moveCallStack.frames.forEach(frame => {
                 if (frame.bcodeFilePath === this.currentMoveFile) {
+                    if (frame.forceDisassembly) {
+                        return;
+                    }
                     frame.disassemblyModeTriggered = false;
                     frame.disassemblyView = false;
                 }
@@ -1470,6 +1487,7 @@ export class Runtime extends EventEmitter {
             // as this function is executed in different contexts
             disassemblyModeTriggered: false,
             disassemblyView: false,
+            forceDisassembly: false,
         };
 
         if (this.trace.events.length <= this.eventIndex + 1 ||

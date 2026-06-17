@@ -65,6 +65,13 @@ global.warnings_to_string = function(runtime) {
     return res;
 };
 
+/**
+ * Captures warnings and current runtime state for snapshot comparison.
+ */
+global.snapshot = function(runtime) {
+    return warnings_to_string(runtime) + runtime.toString();
+};
+
 function findTraceFilePath(dirname) {
     const traceFileName = 'trace.json.zst';
     const entries = fs.readdirSync(dirname, { withFileTypes: true });

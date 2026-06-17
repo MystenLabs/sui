@@ -45,7 +45,7 @@ import {
     ILoc,
     IDebugInfoFunction,
 } from './debug_info_utils';
-import { logger } from "@vscode/debugadapter"
+import { logger } from "@vscode/debugadapter";
 
 
 // Data types corresponding to trace file JSON schema.
@@ -292,6 +292,7 @@ enum TraceDiagnosticKind {
     MissingSourceModule = 'MissingSourceModule',
     MissingSourceFunction = 'MissingSourceFunction',
     MissingCodeMapSourceFile = 'MissingCodeMapSourceFile',
+    MissingInlinedSourceMap = 'MissingInlinedSourceMap',
 }
 
 /**
@@ -322,6 +323,11 @@ export type TraceEvent =
     | {
         type: TraceEventKind.OpenFrame,
         id: number,
+        /**
+         * Owning real frame for virtual inlined frames; used when a real frame is
+         * forced to disassembly after some virtual frames have already been emitted.
+         */
+        containingRealFrameID?: number,
         name: string,
         srcFileHash: string
         bcodeFileHash?: string,
@@ -332,7 +338,8 @@ export type TraceEvent =
         optimizedSrcLines: number[]
         optimizedBcodeLines?: number[]
         /**
-         * Source is unavailable or unsafe for this frame; show bytecode.
+         * Source is unavailable or unsafe for this frame; force bytecode view
+         * and do not allow switching back to source while this frame is active.
          */
         forceDisassembly?: boolean
         /**
@@ -454,6 +461,14 @@ interface ITraceGenFrameInfo {
      */
     funName: string;
     /**
+     * Module containing the function represented by the frame.
+     */
+    modInfo: ModuleInfo;
+    /**
+     * Whether this real frame's source view has been disabled.
+     */
+    forceDisassembly?: boolean;
+    /**
     * Information for a given function in a source file.
     */
     srcFunEntry: IDebugInfoFunction;
@@ -461,6 +476,20 @@ interface ITraceGenFrameInfo {
     * Information for a given function in a disassembled byc file.
     */
     bcodeFunEntry?: IDebugInfoFunction;
+}
+
+/**
+ * Result of one inlined-frame transition step for an instruction.
+ */
+interface IProcessInstructionMacroStepResult {
+    /**
+     * Whether this instruction popped a virtual frame for a macro defined in a different file.
+     */
+    differentFileVirtualFramePop: boolean;
+    /**
+     * File hash whose source debug info is unavailable for inlined frame handling.
+     */
+    missingSourceMapFileHash?: string;
 }
 
 /**
@@ -652,13 +681,17 @@ export async function readTrace(
                 type: TraceEventKind.CloseFrame,
                 id: event.CloseFrame.frame_id
             });
+            const closingFrameInfo = frameInfoStack[frameInfoStack.length - 1];
+            if (closingFrameInfo.forceDisassembly) {
+                // Cover virtual frames emitted after the mismatch by applying the
+                // final frame policy when the owning real frame closes.
+                markVirtualOpenFramesForceDisassembly(events, event.CloseFrame.frame_id);
+            }
             frameInfoStack.pop();
         } else if (event.Instruction) {
             const name = event.Instruction.instruction;
             let frameInfo = frameInfoStack[frameInfoStack.length - 1];
             const srcPCLocs = frameInfo.srcFunEntry.pcLocs;
-            // if map does not contain an entry for a PC that can be found in the trace file,
-            // it means that the position of the last PC in the source map should be used
             const instSrcFileLoc = event.Instruction.pc >= srcPCLocs.length
                 ? srcPCLocs[srcPCLocs.length - 1]
                 : srcPCLocs[event.Instruction.pc];
@@ -669,29 +702,44 @@ export async function readTrace(
                     ? bcodePCLocs[bcodePCLocs.length - 1]
                     : bcodePCLocs[event.Instruction.pc];
             }
-
-            const differentFileVirtualFramePop = processInstructionIfMacro(
+            const missingSourceMapFileHash = processInstructionIfMacro(
                 srcDebugInfosHashMap,
                 events,
                 frameInfoStack,
-                event.Instruction.pc,
                 instSrcFileLoc
             );
 
-            if (differentFileVirtualFramePop) {
-                // if we pop a virtual frame for a macro defined in a different file,
-                // we may still land in a macro defined in the same file, in which case
-                // we need to push another virtual frame for this instruction right away
-                processInstructionIfMacro(
-                    srcDebugInfosHashMap,
+            if (missingSourceMapFileHash) {
+                if (!instBcodeFileLoc || !frameInfo.bcodeFunEntry) {
+                    // if we have neither source nor bytecode available,
+                    // then it's a real unrecoverable error
+                    const modID = frameInfo.modInfo.addr + '::' + frameInfo.modInfo.name;
+                    throw new Error('Cannot fall back to bytecode for missing inlined source map with hash: '
+                        + missingSourceMapFileHash
+                        + ' in function '
+                        + modID
+                        + '::'
+                        + frameInfo.funName
+                        + ' at PC '
+                        + event.Instruction.pc);
+                }
+                // Attribute the mismatch to the real frame owning this instruction.
+                const realFrameInfo = containingRealFrameInfo(frameInfoStack);
+                // Bytecode remains safe, but source/inline locations for this real
+                // frame are no longer reliable enough to select.
+                markFrameForceDisassembly(
                     events,
-                    frameInfoStack,
-                    event.Instruction.pc,
-                    instSrcFileLoc
+                    realFrameInfo,
+                    TraceDiagnosticKind.MissingInlinedSourceMap,
                 );
             }
 
-            recordTracedLine(filesMap, tracedSrcLines, instSrcFileLoc);
+            if (!missingSourceMapFileHash) {
+                // Source is confirmed to be available, so we can record the line,
+                // otherwise calling this function makes no sense and it would
+                // immediately throw an error
+                recordTracedLine(filesMap, tracedSrcLines, instSrcFileLoc);
+            }
             if (instBcodeFileLoc) {
                 recordTracedLine(filesMap, tracedBcodeLines, instBcodeFileLoc);
             }
@@ -932,7 +980,7 @@ function translateOpenFrame(
         }
     }
 
-    let forceDisassembly = false;
+    let forceDisassembly = sourceDebugInfoMissing;
     let diagnostics: TraceDiagnostic[] | undefined = undefined;
     if (sourceDebugInfoMissing) {
         diagnostics = [openFrameDiagnostic(
@@ -956,14 +1004,10 @@ function translateOpenFrame(
                 + ' when processing OpenFrame event');
         }
 
-        // Source debug info is stale or incomplete; use bytecode as the only safe view.
+        // Source debug info is stale or incomplete. The frame remains forced to disassembly,
+        // but trace translation still needs PC/local metadata, so use bytecode metadata
+        // as the primary function entry for this frame.
         srcFunEntry = bcodeFunEntry;
-        srcFileHash = bcodeMap.fileHash;
-        optimizedSrcLines = bcodeMap.optimizedLines;
-        currentSrcFile = filesMap.get(bcodeMap.fileHash);
-        bcodeFileHash = undefined;
-        optimizedBcodeLines = undefined;
-        bcodeFilePath = undefined;
         forceDisassembly = true;
         const diagnosticKind = debugInfo.functionsWithMissingCodeMapSourceFiles.has(frame.function_name)
             ? TraceDiagnosticKind.MissingCodeMapSourceFile
@@ -1002,8 +1046,10 @@ function translateOpenFrame(
             optimizedSrcLines,
             optimizedBcodeLines,
             funName: frame.function_name,
+            modInfo,
+            forceDisassembly,
             srcFunEntry,
-            bcodeFunEntry
+            bcodeFunEntry,
         }
     };
 }
@@ -1047,6 +1093,10 @@ function openFrameDiagnosticMessage(
             return 'Source debug info for '
                 + functionID
                 + ' does not match the trace; showing disassembly for this frame.';
+        case TraceDiagnosticKind.MissingInlinedSourceMap:
+            return 'Source debug info for '
+                + functionID
+                + ' references inlined source debug info that is unavailable; showing disassembly for this frame.';
     }
 }
 
@@ -1109,27 +1159,164 @@ function recordTracedLine(
 }
 
 /**
- * Additional processing of an instruction if it's detected that it belongs
- * to an inlined macro. If this is the case, then virtual frames may be pushed
- * to the stack or popped from it.
+ * Returns the nearest non-virtual frame in the trace-generation stack.
+ */
+function containingRealFrameInfo(frameInfoStack: ITraceGenFrameInfo[]): ITraceGenFrameInfo {
+    for (let i = frameInfoStack.length - 1; i >= 0; i--) {
+        const id = frameInfoStack[i].ID;
+        if (id !== INLINED_FRAME_ID_SAME_FILE && id !== INLINED_FRAME_ID_DIFFERENT_FILE) {
+            return frameInfoStack[i];
+        }
+    }
+    throw new Error('Cannot find real frame in trace-generation stack');
+}
+
+/**
+ * Returns whether a real frame has source function metadata for inlined-frame handling.
+ */
+function hasSourceFunctionDebugInfo(
+    sourceMapsHashMap: Map<string, IDebugInfo>,
+    realFrameInfo: ITraceGenFrameInfo,
+): boolean {
+    return sourceMapsHashMap.has(realFrameInfo.srcFileHash)
+        && realFrameInfo.srcFunEntry !== realFrameInfo.bcodeFunEntry;
+}
+
+/**
+ * Marks a real frame as forced to disassembly for the whole frame lifetime.
+ */
+function markFrameForceDisassembly(
+    events: TraceEvent[],
+    realFrameInfo: ITraceGenFrameInfo,
+    diagnosticKind: TraceDiagnosticKind,
+): void {
+    const openFrameEvent = findOpenFrameEvent(events, realFrameInfo.ID);
+    if (!openFrameEvent) {
+        throw new Error('Cannot find OpenFrame event for frame ID: ' + realFrameInfo.ID);
+    }
+    if (!openFrameEvent.forceDisassembly) {
+        openFrameEvent.forceDisassembly = true;
+        realFrameInfo.forceDisassembly = true;
+        openFrameEvent.diagnostics = [
+            ...(openFrameEvent.diagnostics ?? []),
+            openFrameDiagnostic(diagnosticKind, realFrameInfo.modInfo, realFrameInfo.funName, undefined, undefined),
+        ];
+    }
+}
+
+/**
+ * Finds the nearest OpenFrame event with the given frame ID.
+ */
+function findOpenFrameEvent(
+    events: TraceEvent[],
+    frameID: number,
+): Extract<TraceEvent, { type: TraceEventKind.OpenFrame }> | undefined {
+    for (let i = events.length - 1; i >= 0; i--) {
+        const event = events[i];
+        if (event.type === TraceEventKind.OpenFrame && event.id === frameID) {
+            return event;
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Returns whether a frame ID belongs to a synthetic inlined frame.
+ */
+function isVirtualFrameID(frameID: number): boolean {
+    return frameID === INLINED_FRAME_ID_SAME_FILE || frameID === INLINED_FRAME_ID_DIFFERENT_FILE;
+}
+
+/**
+ * After a forced real frame closes, marks all virtual OpenFrames it owned.
+ */
+function markVirtualOpenFramesForceDisassembly(events: TraceEvent[], realFrameID: number): void {
+    for (let i = events.length - 1; i >= 0; i--) {
+        const event = events[i];
+        if (event.type === TraceEventKind.OpenFrame && event.id === realFrameID) {
+            return;
+        }
+        if (isVirtualOpenFrameForFrame(event, realFrameID)) {
+            event.forceDisassembly = true;
+        }
+    }
+    throw new Error('Cannot find OpenFrame event for frame ID: ' + realFrameID);
+}
+
+/**
+ * Returns whether a virtual OpenFrame event belongs to the given real frame.
+ */
+function isVirtualOpenFrameForFrame(
+    event: TraceEvent,
+    realFrameID: number,
+): event is Extract<TraceEvent, { type: TraceEventKind.OpenFrame }> {
+    return event.type === TraceEventKind.OpenFrame
+        && isVirtualFrameID(event.id)
+        && event.containingRealFrameID === realFrameID;
+}
+
+/**
+ * Processes inlined-frame transitions for one instruction, if it maps to macro
+ * code. A transition that pops a different-file virtual frame may require one
+ * follow-up pass for the same instruction.
  *
  * @param sourceMapsHashMap a map from file hash to a source map.
  * @param events trace events.
  * @param frameInfoStack stack of frame infos used during trace generation.
- * @param instPC PC of the instruction.
  * @param instSrcFileLoc location of the instruction in the source file.
- * @returns `true` if this instruction caused a pop of a virtual frame for
- * an inlined macro defined in a different file, `false` otherwise.
+ * @returns file hash whose source debug info is unavailable, if fallback is needed.
  */
 function processInstructionIfMacro(
     sourceMapsHashMap: Map<string, IDebugInfo>,
     events: TraceEvent[],
     frameInfoStack: ITraceGenFrameInfo[],
-    instPC: number,
     instSrcFileLoc: IFileLoc
-): boolean {
+): string | undefined {
+    const realFrameInfo = containingRealFrameInfo(frameInfoStack);
+    // Inlined-frame synthesis uses source function bounds. Frames translated
+    // from bytecode fallback metadata cannot safely drive macro frame changes.
+    if (!hasSourceFunctionDebugInfo(sourceMapsHashMap, realFrameInfo)) {
+        return undefined;
+    }
+
+    const firstResult = processSingleInstructionIfMacro(
+        sourceMapsHashMap,
+        events,
+        frameInfoStack,
+        instSrcFileLoc,
+    );
+    if (firstResult.missingSourceMapFileHash) {
+        return firstResult.missingSourceMapFileHash;
+    }
+    if (firstResult.differentFileVirtualFramePop) {
+        // After popping back from a different-file macro, the same instruction
+        // may still need a same-file virtual frame opened immediately.
+        return processSingleInstructionIfMacro(
+            sourceMapsHashMap,
+            events,
+            frameInfoStack,
+            instSrcFileLoc,
+        ).missingSourceMapFileHash;
+    }
+    return undefined;
+}
+
+/**
+ * Performs one inlined-frame transition check for one instruction.
+ */
+function processSingleInstructionIfMacro(
+    sourceMapsHashMap: Map<string, IDebugInfo>,
+    events: TraceEvent[],
+    frameInfoStack: ITraceGenFrameInfo[],
+    instSrcFileLoc: IFileLoc
+): IProcessInstructionMacroStepResult {
     let frameInfo = frameInfoStack[frameInfoStack.length - 1];
     const fid = frameInfo.ID;
+    const realFrameID = containingRealFrameInfo(frameInfoStack).ID;
+    const result: IProcessInstructionMacroStepResult = {
+        differentFileVirtualFramePop: false,
+        missingSourceMapFileHash: undefined,
+    };
     if (instSrcFileLoc.fileHash !== frameInfo.srcFileHash) {
         // This indicates that we are going to an instruction in the same function
         // but in a different file, which can happen due to macro inlining.
@@ -1177,16 +1364,13 @@ function processInstructionIfMacro(
                 type: TraceEventKind.CloseFrame,
                 id: fid
             });
-            return true;
+            result.differentFileVirtualFramePop = true;
+            return result;
         } else {
             const sourceMap = sourceMapsHashMap.get(instSrcFileLoc.fileHash);
             if (!sourceMap) {
-                throw new Error('Cannot find source map for file with hash: '
-                    + instSrcFileLoc.fileHash
-                    + ' when frame switching within frame '
-                    + fid
-                    + ' at PC '
-                    + instPC);
+                result.missingSourceMapFileHash = instSrcFileLoc.fileHash;
+                return result;
             }
             if (frameInfo.ID === INLINED_FRAME_ID_DIFFERENT_FILE) {
                 events.push({
@@ -1201,6 +1385,7 @@ function processInstructionIfMacro(
                 events.push({
                     type: TraceEventKind.OpenFrame,
                     id: INLINED_FRAME_ID_DIFFERENT_FILE,
+                    containingRealFrameID: realFrameID,
                     name: '__inlined__',
                     srcFileHash: instSrcFileLoc.fileHash,
                     // bytecode file hash stays the same for inlined frames
@@ -1225,8 +1410,9 @@ function processInstructionIfMacro(
                 optimizedBcodeLines: frameInfo.optimizedBcodeLines,
                 // same function name and source map as before since we are in the same function
                 funName: frameInfo.funName,
+                modInfo: frameInfo.modInfo,
                 srcFunEntry: frameInfo.srcFunEntry,
-                bcodeFunEntry: frameInfo.bcodeFunEntry
+                bcodeFunEntry: frameInfo.bcodeFunEntry,
             });
         }
     } else if (frameInfo.ID !== INLINED_FRAME_ID_DIFFERENT_FILE) {
@@ -1261,6 +1447,7 @@ function processInstructionIfMacro(
                 events.push({
                     type: TraceEventKind.OpenFrame,
                     id: INLINED_FRAME_ID_SAME_FILE,
+                    containingRealFrameID: realFrameID,
                     name: '__inlined__',
                     srcFileHash: instSrcFileLoc.fileHash,
                     bcodeFileHash: frameInfo.bcodeFileHash,
@@ -1282,8 +1469,9 @@ function processInstructionIfMacro(
                     optimizedSrcLines: frameInfo.optimizedSrcLines,
                     optimizedBcodeLines: frameInfo.optimizedBcodeLines,
                     funName: frameInfo.funName,
+                    modInfo: frameInfo.modInfo,
                     srcFunEntry: frameInfo.srcFunEntry,
-                    bcodeFunEntry: frameInfo.bcodeFunEntry
+                    bcodeFunEntry: frameInfo.bcodeFunEntry,
                 });
             } // else we are already in an inlined frame, so we don't need to do anything
         } else {
@@ -1305,7 +1493,7 @@ function processInstructionIfMacro(
             } // else we are not in an inlined frame, so we don't need to do anything
         }
     }
-    return false;
+    return result;
 }
 
 
