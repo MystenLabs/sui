@@ -862,14 +862,10 @@ async fn start_archival(
         .await
         .context("Failed to start BigTable indexer")?;
 
-    let kv_rpc_server = KvRpcServer::new_local(
-        emulator.host().to_string(),
-        INSTANCE_ID.to_string(),
-        None,
-        None,
-    )
-    .await
-    .context("Failed to create KvRpcServer")?;
+    let kv_rpc_server =
+        KvRpcServer::new_local(emulator.host().to_string(), INSTANCE_ID.to_string(), None)
+            .await
+            .context("Failed to create KvRpcServer")?;
     let kv_rpc_service = kv_rpc_server
         .start_service(
             kv_rpc_address,

@@ -15,28 +15,25 @@ use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc_api::RpcError;
 use sui_types::digests::TransactionDigest;
-use sui_types::storage::ObjectKey;
 use tracing::Instrument;
 use tracing::debug_span;
 use tracing::info;
 
 use crate::bigtable_client::BigTableClient;
 use crate::config::PipelineStage;
-use crate::object_cache::BigTableObjectFetcher;
-use crate::object_cache::ObjectCache;
 use crate::object_cache::ObjectMap;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
 use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
-use crate::pipeline::pipelined_keyed_batches;
 use crate::pipeline::resolve_watermarks;
 use crate::pipeline::take_items;
-use crate::v2::get_transaction::compute_object_keys;
-use crate::v2::get_transaction::needs_object_types;
-use crate::v2::get_transaction::transaction_columns;
-use crate::v2::get_transaction::transaction_to_response;
+use crate::render::transaction_to_response;
+use crate::resolve;
+use crate::resolve::compute_object_keys;
+use crate::resolve::needs_object_types;
+use crate::resolve::transaction_columns;
 use crate::v2::get_transaction::validate_read_mask;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::error_contains;
@@ -73,9 +70,9 @@ pub(crate) async fn list_transactions(
     let checkpoint_hi_exclusive = ctx.checkpoint_hi_exclusive();
     let lh = ctx.ledger_history();
     let endpoint = lh.list_transactions();
-    let tx_seq_digest_stage = lh.stage(PipelineStage::TxSeqDigest);
-    let transactions_stage = lh.stage(PipelineStage::Transactions);
-    let objects_stage = lh.stage(PipelineStage::Objects);
+    let tx_seq_digest_stage = ctx.stage(PipelineStage::TxSeqDigest);
+    let transactions_stage = ctx.stage(PipelineStage::Transactions);
+    let objects_stage = ctx.stage(PipelineStage::Objects);
 
     let checkpoint_range = CheckpointRange::from_request(
         request.start_checkpoint,
@@ -236,44 +233,15 @@ pub(crate) async fn list_transactions(
     let txn_with_objects_stream: BoxStream<
         'static,
         Result<Watermarked<TransactionWithObjectsStreamItem>, anyhow::Error>,
-    > = if needs_objects {
-        let object_cache = ObjectCache::new(Arc::new(BigTableObjectFetcher::new(client.clone())));
-        let tx_with_keys = tx_stream
-            .map_ok(|m| {
-                m.map_item(|(seq, offset, tx)| {
-                    let keys: Vec<ObjectKey> = compute_object_keys(&tx).into_iter().collect();
-                    ((seq, offset, tx), keys)
-                })
-            })
-            .boxed();
-
-        pipelined_keyed_batches(
-            tx_with_keys,
-            objects_stage.chunk_size,
-            objects_stage.chunk_size,
-            objects_stage.concurrency,
-            move |keys| {
-                let object_cache = object_cache.clone();
-                async move {
-                    object_cache
-                        .get_many(keys)
-                        .await
-                        .map_err(anyhow::Error::new)
-                }
-            },
-        )
-        .map_ok(|m| m.map_item(|((seq, offset, tx), objects)| (seq, offset, tx, objects)))
-        .boxed()
-    } else {
-        // No object lookup needed — emit each tx with an empty ObjectMap.
-        tx_stream
-            .map_ok(|m| {
-                m.map_item(|(seq, offset, tx)| {
-                    (seq, offset, tx, Arc::new(HashMap::new()) as ObjectMap)
-                })
-            })
-            .boxed()
-    };
+    > = resolve::with_object_maps(
+        tx_stream,
+        client.clone(),
+        objects_stage,
+        needs_objects,
+        |(_, _, tx): &(u64, u32, TransactionData)| compute_object_keys(tx).into_iter().collect(),
+    )
+    .map_ok(|m| m.map_item(|((seq, offset, tx), objects)| (seq, offset, tx, objects)))
+    .boxed();
 
     let txn_with_objects_stream =
         resolve_watermarks(txn_with_objects_stream, client.tx_wm_resolver(direction));

@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -13,22 +11,14 @@ use futures::stream;
 use futures::stream::BoxStream;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
-use sui_kvstore::TransactionData;
 use sui_kvstore::tables;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
-use sui_types::digests::TransactionDigest;
-use sui_types::full_checkpoint_content::Checkpoint as FullCheckpoint;
-use sui_types::full_checkpoint_content::ExecutedTransaction as FullExecutedTransaction;
-use sui_types::full_checkpoint_content::ObjectSet;
-use sui_types::messages_checkpoint::CertifiedCheckpointSummary;
-use sui_types::storage::ObjectKey;
 use tracing::Instrument;
 use tracing::debug_span;
 use tracing::info;
@@ -36,20 +26,17 @@ use tracing::info;
 use crate::bigtable_client::BigTableClient;
 use crate::bigtable_client::stage;
 use crate::config::PipelineStage;
-use crate::object_cache::BigTableObjectFetcher;
-use crate::object_cache::ObjectCache;
-use crate::object_cache::ObjectMap;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
 use crate::pipeline::ResolvedWatermarked;
 use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
-use crate::pipeline::pipelined_keyed_batches;
 use crate::pipeline::resolve_watermarks;
 use crate::pipeline::take_items;
-use crate::v2::get_checkpoint::checkpoint_columns;
-use crate::v2::get_transaction::compute_object_keys;
-use crate::v2::get_transaction::transaction_columns;
+use crate::render::render_full_checkpoint;
+use crate::resolve;
+use crate::resolve::list_checkpoint_columns;
+use crate::resolve::needs_transactions_or_objects;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::error_contains;
@@ -73,9 +60,6 @@ use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
 
 const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::CHECKPOINT;
 
-type CpWithTxs = (u64, CheckpointData, Vec<TransactionData>);
-type ResolvedCp = (u64, CheckpointData, Vec<TransactionData>, ObjectMap);
-
 pub(crate) type ListCheckpointsStream =
     BoxStream<'static, Result<ListCheckpointsResponse, RpcError>>;
 
@@ -89,9 +73,9 @@ pub(crate) async fn list_checkpoints(
     let checkpoint_hi_exclusive = ctx.checkpoint_hi_exclusive();
     let lh = ctx.ledger_history();
     let endpoint = lh.list_checkpoints();
-    let checkpoints_stage = lh.stage(PipelineStage::Checkpoints);
-    let transactions_stage = lh.stage(PipelineStage::Transactions);
-    let objects_stage = lh.stage(PipelineStage::Objects);
+    let checkpoints_stage = ctx.stage(PipelineStage::Checkpoints);
+    let transactions_stage = ctx.stage(PipelineStage::Transactions);
+    let objects_stage = ctx.stage(PipelineStage::Objects);
 
     let checkpoint_range = CheckpointRange::from_request(
         request.start_checkpoint,
@@ -201,8 +185,7 @@ pub(crate) async fn list_checkpoints(
     };
 
     // Fast path: read_mask doesn't request transactions or objects → render
-    // directly from CheckpointData via the existing `checkpoint_to_response`
-    // (with `checkpoint_bucket = None`, the GCS branch is a no-op).
+    // directly from CheckpointData via the existing `checkpoint_to_response`.
     if !needs_full {
         let cp_data_stream = resolve_watermarks(cp_data_stream, client.tx_wm_resolver(direction));
         return Ok(async_stream::try_stream! {
@@ -217,8 +200,7 @@ pub(crate) async fn list_checkpoints(
                         let wm = item_watermark(&options, cp_seq, cp_seq, checkpoint_boundary);
                         emitted += 1;
                         let message =
-                            crate::v2::get_checkpoint::checkpoint_to_response(cp_data, &read_mask, None)
-                                .await?;
+                            crate::render::checkpoint_to_response(cp_data, &read_mask)?;
                         yield response_for(wm, message);
                     }
                     Ok(ResolvedWatermarked::Watermark { position: _, cp: raw_cp }) => {
@@ -275,85 +257,18 @@ pub(crate) async fn list_checkpoints(
     }
 
     // Heavy path: needs transactions and/or objects.
-    let tx_columns: Arc<[&'static str]> = list_transactions_columns(&read_mask).into();
-    let needs_objects = read_mask.contains(Checkpoint::OBJECTS_FIELD);
-
-    // Stage C: (cp_seq, CheckpointData) -> + Vec<TransactionData>. Batched
-    // across the chunk: gather ALL tx_digests across all cps in the chunk
-    // into one multi_get, route results back per-cp, then emit in input
-    // cp_seq order after the chunk drains.
-    let cp_with_txs_stream = pipelined_chunks(
+    let cp_full_stream = resolve::resolve_checkpoints(
+        client.clone(),
+        &read_mask,
+        transactions_stage,
+        objects_stage,
         cp_data_stream,
-        transactions_stage.chunk_size,
-        transactions_stage.concurrency,
-        {
-            let client = client.clone();
-            let columns = tx_columns.clone();
-            move |items| fetch_transactions_for_cps(client.clone(), columns.clone(), items)
-        },
     );
-
-    // Stage D: + ObjectMap. Per-cp object refs are precomputed, then
-    // `pipelined_keyed_batches` packs consecutive cps into batches whose
-    // deduped key union fits within `chunk_max`. The helper splits the per-batch fetch result back out
-    // per cp — `render_full_checkpoint` builds an `ObjectSet` by
-    // iterating the whole map, so each cp must see only its own keys.
-    let object_cache = ObjectCache::new(Arc::new(BigTableObjectFetcher::new(client.clone())));
-    let cp_full_stream: BoxStream<'static, Result<Watermarked<ResolvedCp>, anyhow::Error>> =
-        if needs_objects {
-            let cp_with_keys = cp_with_txs_stream
-                .map_ok(|m: Watermarked<CpWithTxs>| {
-                    m.map_item(|(cp_seq, cp_data, txs)| {
-                        let keys: Vec<ObjectKey> = txs
-                            .iter()
-                            .flat_map(compute_object_keys)
-                            .collect::<BTreeSet<_>>()
-                            .into_iter()
-                            .collect();
-                        ((cp_seq, cp_data, txs), keys)
-                    })
-                })
-                .boxed();
-            pipelined_keyed_batches(
-                cp_with_keys,
-                objects_stage.chunk_size,
-                objects_stage.chunk_size,
-                objects_stage.concurrency,
-                {
-                    let object_cache = object_cache.clone();
-                    move |keys| {
-                        let object_cache = object_cache.clone();
-                        async move {
-                            object_cache
-                                .get_many(keys)
-                                .await
-                                .map_err(anyhow::Error::new)
-                        }
-                    }
-                },
-            )
-            .map_ok(|m| {
-                m.map_item(|((cp_seq, cp_data, txs), objects)| (cp_seq, cp_data, txs, objects))
-            })
-            .boxed()
-        } else {
-            let empty: ObjectMap = Arc::new(HashMap::new());
-            cp_with_txs_stream
-                .map_ok(move |m: Watermarked<CpWithTxs>| {
-                    let empty = empty.clone();
-                    m.map_item(move |(cp_seq, cp_data, txs)| (cp_seq, cp_data, txs, empty.clone()))
-                })
-                .boxed()
-        };
-
     let cp_full_stream = resolve_watermarks(cp_full_stream, client.tx_wm_resolver(direction));
 
     // Stage E: sync render — build full_checkpoint_content::Checkpoint and
     // merge into the proto Checkpoint (CPU-only, no further IO).
     Ok(async_stream::try_stream! {
-        // Hold the cache for the lifetime of the response stream so in-flight
-        // object dispatches are aborted if the consumer drops the stream.
-        let _object_cache = object_cache;
         futures::pin_mut!(cp_full_stream);
         let mut emitted = 0usize;
         let mut checkpoint_boundary: Option<u64> = None;
@@ -363,13 +278,10 @@ pub(crate) async fn list_checkpoints(
                 Ok(ResolvedWatermarked::Item((cp_seq, cp_data, txs, objects))) => {
                     checkpoint_boundary = advance_checkpoint_boundary(checkpoint_boundary, cp_seq, &options);
                     let wm = item_watermark(&options, cp_seq, cp_seq, checkpoint_boundary);
-                    let response = render_full_checkpoint(
-                        (cp_seq, cp_data, txs, objects),
-                        &read_mask,
-                        wm,
-                    )?;
+                    let message =
+                        render_full_checkpoint(cp_data, txs, objects.as_ref(), &read_mask)?;
                     emitted += 1;
-                    yield response;
+                    yield response_for(wm, message);
                 }
                 Ok(ResolvedWatermarked::Watermark { position: _, cp: raw_cp }) => {
                     // See light-path arm — same clamp + boundary logic.
@@ -510,206 +422,6 @@ async fn fetch_checkpoint_data(
     .boxed())
 }
 
-async fn fetch_transactions_for_cps(
-    client: BigTableClient,
-    columns: Arc<[&'static str]>,
-    items: Vec<(u64, CheckpointData)>,
-) -> Result<BoxStream<'static, Result<CpWithTxs, anyhow::Error>>, anyhow::Error> {
-    if items.is_empty() {
-        return Ok(stream::empty().boxed());
-    }
-
-    let mut input_order: Vec<u64> = Vec::with_capacity(items.len());
-    let mut cp_data_by_seq: HashMap<u64, CheckpointData> = HashMap::with_capacity(items.len());
-    let mut expected_count: HashMap<u64, usize> = HashMap::with_capacity(items.len());
-    let mut digest_to_cp: HashMap<TransactionDigest, u64> = HashMap::new();
-    let mut txs_by_seq: HashMap<u64, Vec<TransactionData>> = HashMap::with_capacity(items.len());
-    let mut flat_digests: Vec<TransactionDigest> = Vec::new();
-
-    for (cp_seq, cp_data) in items {
-        let contents = cp_data
-            .contents
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("checkpoint {cp_seq} contents column missing"))?;
-        let cp_digests: Vec<_> = contents.iter().map(|d| d.transaction).collect();
-        expected_count.insert(cp_seq, cp_digests.len());
-        txs_by_seq.insert(cp_seq, Vec::with_capacity(cp_digests.len()));
-        for digest in &cp_digests {
-            digest_to_cp.insert(*digest, cp_seq);
-        }
-        flat_digests.extend(cp_digests);
-        input_order.push(cp_seq);
-        cp_data_by_seq.insert(cp_seq, cp_data);
-    }
-
-    // Empty checkpoints (zero transactions) generate no BigTable rows, so
-    // pre-collect them and release through the emitter before draining the
-    // tx stream — otherwise they'd never get emitted.
-    let empty_cps: Vec<u64> = input_order
-        .iter()
-        .copied()
-        .filter(|cp_seq| expected_count[cp_seq] == 0)
-        .collect();
-
-    // CRITICAL: never call `get_transactions_stream` with an empty digest
-    // list. `multi_get_stream` builds a ReadRowsRequest with
-    // `rows_limit = keys.len()`, and BigTable interprets `rows_limit = 0`
-    // as "no limit" — i.e. a full transactions-table scan. When every cp
-    // in this chunk is empty, fall back to an empty stream and let the
-    // pre-emit loop alone drive emission.
-    let tx_stream: BoxStream<'static, Result<(TransactionDigest, TransactionData), anyhow::Error>> =
-        if flat_digests.is_empty() {
-            stream::empty().boxed()
-        } else {
-            let column_filter = BigTableClient::column_filter(&columns);
-            client
-                .get_transactions_stream(flat_digests, Some(column_filter))
-                .await?
-                .boxed()
-        };
-
-    Ok(async_stream::try_stream! {
-        let mut emitter: InputOrderEmitter<u64, CpWithTxs> = InputOrderEmitter::new(input_order);
-        for cp_seq in empty_cps {
-            let cp_data = cp_data_by_seq.remove(&cp_seq).expect("cp_data entry present");
-            for v in emitter.push(
-                cp_seq,
-                (cp_seq, cp_data, Vec::new()),
-                "list_checkpoints: checkpoint transaction lookup",
-            )? {
-                yield v;
-            }
-        }
-        futures::pin_mut!(tx_stream);
-        while let Some(row) = tx_stream.next().await {
-            let (digest, tx) = row?;
-            let cp_seq = digest_to_cp.remove(&digest).ok_or_else(|| {
-                anyhow::anyhow!("list_checkpoints: unexpected transaction body row {digest}")
-            })?;
-            let cp_txs = txs_by_seq
-                .get_mut(&cp_seq)
-                .expect("txs_by_seq entry present");
-            cp_txs.push(tx);
-            if cp_txs.len() == expected_count[&cp_seq] {
-                let txs = txs_by_seq.remove(&cp_seq).expect("txs_by_seq entry");
-                let cp_data = cp_data_by_seq
-                    .remove(&cp_seq)
-                    .expect("cp_data entry present");
-                for v in emitter.push(
-                    cp_seq,
-                    (cp_seq, cp_data, txs),
-                    "list_checkpoints: checkpoint transaction lookup",
-                )? {
-                    yield v;
-                }
-            }
-        }
-        // Defensive: if BigTable returned fewer rows than requested, surface
-        // the missing digests as an internal error rather than emit a
-        // partial checkpoint downstream. cp_data_by_seq still containing
-        // entries means at least one cp's tx set was incomplete.
-        if !cp_data_by_seq.is_empty() {
-            // Build a per-cp report (got vs expected) to make production
-            // triage tractable — without it the error message alone gives
-            // no signal about which cps or how big the gap was.
-            let mut incomplete: Vec<(u64, usize, usize)> = cp_data_by_seq
-                .keys()
-                .map(|cp_seq| {
-                    let got = txs_by_seq.get(cp_seq).map(|v| v.len()).unwrap_or(0);
-                    let expected = expected_count.get(cp_seq).copied().unwrap_or(0);
-                    (*cp_seq, got, expected)
-                })
-                .collect();
-            incomplete.sort_unstable();
-            tracing::warn!(
-                incomplete_count = incomplete.len(),
-                ?incomplete,
-                "list_checkpoints: BigTable returned fewer transactions than requested (cp_seq, got, expected)"
-            );
-            Err(RpcError::new(
-                tonic::Code::Internal,
-                format!(
-                    "list_checkpoints: BigTable returned fewer transactions than requested for {} checkpoint(s)",
-                    incomplete.len()
-                ),
-            ))?;
-        }
-        for v in emitter.finish("list_checkpoints: missing selected checkpoint transactions")? {
-            yield v;
-        }
-    }
-    .boxed())
-}
-
-fn render_full_checkpoint(
-    item: ResolvedCp,
-    read_mask: &FieldMaskTree,
-    watermark: Watermark,
-) -> Result<ListCheckpointsResponse, RpcError> {
-    let (cp_seq, cp_data, txs, objects) = item;
-
-    let summary = cp_data.summary.ok_or_else(|| {
-        RpcError::new(
-            tonic::Code::Internal,
-            format!("checkpoint {cp_seq} summary column missing"),
-        )
-    })?;
-    let signatures = cp_data.signatures.ok_or_else(|| {
-        RpcError::new(
-            tonic::Code::Internal,
-            format!("checkpoint {cp_seq} signatures column missing"),
-        )
-    })?;
-    let contents = cp_data.contents.ok_or_else(|| {
-        RpcError::new(
-            tonic::Code::Internal,
-            format!("checkpoint {cp_seq} contents column missing"),
-        )
-    })?;
-
-    let executed_transactions = txs
-        .into_iter()
-        .map(|tx| {
-            let transaction = tx.transaction_data.ok_or_else(|| {
-                RpcError::new(
-                    tonic::Code::Internal,
-                    format!("transaction {} data column missing", tx.digest),
-                )
-            })?;
-            let effects = tx.effects.ok_or_else(|| {
-                RpcError::new(
-                    tonic::Code::Internal,
-                    format!("transaction {} effects column missing", tx.digest),
-                )
-            })?;
-            Ok::<_, RpcError>(FullExecutedTransaction {
-                transaction,
-                signatures: tx.signatures.unwrap_or_default(),
-                effects,
-                events: tx.events,
-                unchanged_loaded_runtime_objects: tx.unchanged_loaded_runtime_objects,
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let mut object_set = ObjectSet::default();
-    for (_, obj) in objects.iter() {
-        object_set.insert(obj.clone());
-    }
-
-    let full_checkpoint = FullCheckpoint {
-        summary: CertifiedCheckpointSummary::new_from_data_and_sig(summary, signatures),
-        contents,
-        transactions: executed_transactions,
-        object_set,
-    };
-
-    let mut message = Checkpoint::default();
-    message.merge(&full_checkpoint, read_mask);
-
-    Ok(response_for(watermark, message))
-}
-
 fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {
     let mut item = CheckpointItem::default();
     item.checkpoint = Some(message);
@@ -727,64 +439,6 @@ fn end_response(reason: QueryEndReason) -> ListCheckpointsResponse {
     let mut response = ListCheckpointsResponse::default();
     response.response = Some(list_checkpoints_response::Response::End(end));
     response
-}
-
-fn needs_transactions_or_objects(mask: &FieldMaskTree) -> bool {
-    mask.contains(Checkpoint::TRANSACTIONS_FIELD) || mask.contains(Checkpoint::OBJECTS_FIELD)
-}
-
-/// Columns to fetch from the checkpoints table. When transactions or
-/// objects are in the read mask we additionally need `signatures` (to
-/// reconstruct `CertifiedCheckpointSummary`) and `contents` (to enumerate
-/// each checkpoint's transaction digests).
-fn list_checkpoint_columns(mask: &FieldMaskTree, needs_full: bool) -> Vec<&'static str> {
-    let mut columns = checkpoint_columns(mask);
-    if needs_full {
-        if !columns.contains(&tables::checkpoints::col::CONTENTS) {
-            columns.push(tables::checkpoints::col::CONTENTS);
-        }
-        if !columns.contains(&tables::checkpoints::col::SIGNATURES) {
-            columns.push(tables::checkpoints::col::SIGNATURES);
-        }
-    }
-    columns
-}
-
-/// Columns to fetch from the transactions table for the heavy path. The
-/// merge target is `full_checkpoint_content::ExecutedTransaction`, whose
-/// `transaction: TransactionData` and `effects: TransactionEffects` fields
-/// are non-`Option` — even when the read mask only asks for
-/// `transactions.digest`, the merge reads `source.transaction.digest()` to
-/// produce the response, so we must always have data + effects available.
-/// Object resolution likewise needs data + effects + unchanged_loaded to
-/// derive `compute_object_keys`. Optional source fields (signatures,
-/// events, unchanged_loaded) are gated by the mask.
-fn list_transactions_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
-    let mut columns = if let Some(submask) = mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name) {
-        transaction_columns(&submask)
-    } else {
-        // Baseline metadata columns even if the proto `transactions` field
-        // isn't requested; we still need the rows to compute object keys.
-        vec![
-            tables::transactions::col::CHECKPOINT_NUMBER,
-            tables::transactions::col::TIMESTAMP,
-        ]
-    };
-    // Required to construct the merge target faithfully — see fn doc.
-    for col in [
-        tables::transactions::col::DATA,
-        tables::transactions::col::EFFECTS,
-    ] {
-        if !columns.contains(&col) {
-            columns.push(col);
-        }
-    }
-    if mask.contains(Checkpoint::OBJECTS_FIELD)
-        && !columns.contains(&tables::transactions::col::UNCHANGED_LOADED)
-    {
-        columns.push(tables::transactions::col::UNCHANGED_LOADED);
-    }
-    columns
 }
 
 /// Filtered cp_seq discovery for `ListCheckpoints`. The tx-bitmap scan and
@@ -810,10 +464,7 @@ async fn filtered_checkpoint_seq_stream(
 
     let client = ctx.client();
     let query = ctx.transaction_filter_query(filter)?;
-    let chunk_max = ctx
-        .ledger_history()
-        .stage(PipelineStage::TxSeqDigest)
-        .chunk_size;
+    let chunk_max = ctx.stage(PipelineStage::TxSeqDigest).chunk_size;
 
     let tx_seq_stream = client.eval_bitmap_query_stream(
         query,
