@@ -736,21 +736,6 @@ impl AuthorityPerpetualTables {
         Ok(self.executed_transactions_to_checkpoint.get(digest)?)
     }
 
-    pub fn get_newer_object_keys(
-        &self,
-        object: &(ObjectID, SequenceNumber),
-    ) -> SuiResult<Vec<ObjectKey>> {
-        let mut objects = vec![];
-        for result in self.objects.safe_iter_with_bounds(
-            Some(ObjectKey(object.0, object.1.next())),
-            Some(ObjectKey(object.0, VersionNumber::MAX)),
-        ) {
-            let (key, _) = result?;
-            objects.push(key);
-        }
-        Ok(objects)
-    }
-
     pub fn set_highest_pruned_checkpoint_without_wb(
         &self,
         checkpoint_number: CheckpointSequenceNumber,
@@ -794,13 +779,6 @@ impl AuthorityPerpetualTables {
     pub fn checkpoint_db(&self, path: &Path) -> SuiResult {
         // This checkpoints the entire db and not just objects table
         self.objects.checkpoint_db(path).map_err(Into::into)
-    }
-
-    pub fn get_root_state_hash(
-        &self,
-        epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>> {
-        Ok(self.root_state_hash_by_epoch.get(&epoch)?)
     }
 
     pub fn insert_root_state_hash(
@@ -901,13 +879,6 @@ impl LiveObject {
         match self {
             LiveObject::Normal(obj) => obj.compute_object_reference(),
             LiveObject::Wrapped(key) => (key.0, key.1, ObjectDigest::OBJECT_DIGEST_WRAPPED),
-        }
-    }
-
-    pub fn to_normal(self) -> Option<Object> {
-        match self {
-            LiveObject::Normal(object) => Some(object),
-            LiveObject::Wrapped(_) => None,
         }
     }
 }
