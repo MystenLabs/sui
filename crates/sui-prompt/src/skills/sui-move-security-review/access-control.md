@@ -42,6 +42,28 @@ Detect: cap-gated fn taking `&SomeCap` + a target object, where `SomeCap` has no
 field, or has one but it is never compared to the target.
 _Absence rule:_ walk every fn taking `&*Cap` + target object; a
 `cap.<id> == object::id(target)` comparison *elsewhere* does not clear an unchecked fn.
+Example (decompiled-source):
+```move
+// Vulnerable: AdminCap has no pool binding; every Pool accepts it.
+public fun withdraw(cap: &AdminCap, pool: &mut Pool, amount: u64, ctx: &mut TxContext) {
+    let coins = balance::split(&mut pool.reserves, amount);
+    transfer::public_transfer(coin::from_balance(coins, ctx), tx_context::sender(ctx));
+}
+
+// Patched: PoolCap carries the pool_id it governs.
+public fun withdraw(cap: &PoolCap, pool: &mut Pool, amount: u64, ctx: &mut TxContext) {
+    assert!(cap.pool_id == object::id(pool), EWrongPool);
+    let coins = balance::split(&mut pool.reserves, amount);
+    transfer::public_transfer(coin::from_balance(coins, ctx), tx_context::sender(ctx));
+}
+```
+*This is one shape, not the only shape.* SM-A3 fires on any fn taking an
+authority-bearing struct + the resource it governs without asserting their
+binding. The authority's **name doesn't matter** — it may not contain "Cap"
+(e.g., `Admin`, `Manager`, `License`, or any project-specific name). Other
+variants: id stored in a differently-named field, cap wrapped in a shared
+object, one cap governing several resources. The absence rule above is
+authoritative; identify authorities by *role*, not by name.
 Exploit: obtain (or legitimately own) one cap for your own object, then pass someone else's
 object to the same function — operate on / drain a resource you don't control.
 Source: [+domain] (classic cross-pool / cross-vault authority bug).

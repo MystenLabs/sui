@@ -37,8 +37,9 @@ All `*.md` files under the following skill bundles in the upstream repo:
 Every SM-* rule's `Source:` line cites the upstream file(s) it was derived from, written
 in the form `Source: MystenLabs/skills → <relative-path>`. Rules tagged `[+domain]` come from
 established Sui/Move auditing practice and are NOT directly from the upstream skills (notable
-examples: SM-A3 capability–resource binding, SM-B4 type-confusion / fake-object injection, and
-the value-reveal nuance in SM-L2 randomness).
+examples: SM-A3 capability–resource binding, SM-B4 type-confusion / fake-object injection,
+SM-B5 generic-type substitution / unconstrained witness, and the value-reveal nuance in
+SM-L2 randomness).
 
 ## Refresh protocol
 
