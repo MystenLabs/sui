@@ -338,6 +338,8 @@ mod checked {
                 status,
                 &mut gas_meter,
                 *epoch_id,
+                // The transaction never executed, so it never read the consensus commit timestamp.
+                None,
             );
 
             return (
@@ -407,7 +409,7 @@ mod checked {
             transaction_kind,
             rewritten_inputs,
             &mut gas_charger,
-            tx_ctx,
+            tx_ctx.clone(),
             move_vm,
             protocol_config,
             metrics.clone(),
@@ -452,6 +454,10 @@ mod checked {
                 .unwrap()
         } // else, in dev inspect mode and anything goes--don't check
 
+        // Persist the consensus commit timestamp in the effects only if execution actually read it
+        // (via the tx-context native), so re-execution/replay can reproduce the same value.
+        let consensus_commit_timestamp_ms = tx_ctx.borrow().consensus_commit_timestamp_to_record();
+
         let (inner, effects) = temporary_store.into_effects(
             shared_object_refs,
             &transaction_digest,
@@ -460,6 +466,7 @@ mod checked {
             status,
             &mut gas_charger,
             *epoch_id,
+            consensus_commit_timestamp_ms,
         );
 
         // Skip VM telemetry on simulation paths (dev-inspect / dry-run) since a new runtime is

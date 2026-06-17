@@ -32,10 +32,11 @@ use self::{
         TransferFreezeObjectCostParams, TransferInternalCostParams, TransferShareObjectCostParams,
     },
     tx_context::{
-        TxContextDeriveIdCostParams, TxContextEpochCostParams, TxContextEpochTimestampMsCostParams,
-        TxContextFreshIdCostParams, TxContextGasBudgetCostParams, TxContextGasPriceCostParams,
-        TxContextIdsCreatedCostParams, TxContextRGPCostParams, TxContextReplaceCostParams,
-        TxContextSenderCostParams, TxContextSponsorCostParams,
+        TxContextConsensusCommitTimestampMsCostParams, TxContextDeriveIdCostParams,
+        TxContextEpochCostParams, TxContextEpochTimestampMsCostParams, TxContextFreshIdCostParams,
+        TxContextGasBudgetCostParams, TxContextGasPriceCostParams, TxContextIdsCreatedCostParams,
+        TxContextRGPCostParams, TxContextReplaceCostParams, TxContextSenderCostParams,
+        TxContextSponsorCostParams,
     },
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
@@ -137,6 +138,8 @@ pub struct NativesCostTable {
     pub tx_context_sender_cost_params: TxContextSenderCostParams,
     pub tx_context_epoch_cost_params: TxContextEpochCostParams,
     pub tx_context_epoch_timestamp_ms_cost_params: TxContextEpochTimestampMsCostParams,
+    pub tx_context_consensus_commit_timestamp_ms_cost_params:
+        TxContextConsensusCommitTimestampMsCostParams,
     pub tx_context_sponsor_cost_params: TxContextSponsorCostParams,
     pub tx_context_rgp_cost_params: TxContextRGPCostParams,
     pub tx_context_gas_price_cost_params: TxContextGasPriceCostParams,
@@ -403,6 +406,12 @@ impl NativesCostTable {
                     .tx_context_epoch_timestamp_ms_cost_base()
                     .into(),
             },
+            tx_context_consensus_commit_timestamp_ms_cost_params:
+                TxContextConsensusCommitTimestampMsCostParams {
+                    tx_context_consensus_commit_timestamp_ms_cost_base: protocol_config
+                        .tx_context_consensus_commit_timestamp_ms_cost_base_as_option()
+                        .map(Into::into),
+                },
             tx_context_sponsor_cost_params: TxContextSponsorCostParams {
                 tx_context_sponsor_cost_base: protocol_config.tx_context_sponsor_cost_base().into(),
             },
@@ -1218,6 +1227,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "tx_context",
             "native_epoch_timestamp_ms",
             make_native!(tx_context::epoch_timestamp_ms),
+        ),
+        (
+            "tx_context",
+            "native_timestamp_ms",
+            make_native!(tx_context::consensus_commit_timestamp_ms),
         ),
         (
             "tx_context",

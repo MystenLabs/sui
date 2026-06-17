@@ -54,6 +54,14 @@ public fun epoch_timestamp_ms(_self: &TxContext): u64 {
 }
 native fun native_epoch_timestamp_ms(): u64;
 
+/// Return the timestamp (unix time in milliseconds) of the consensus commit that ordered this
+/// transaction, without taking the `Clock` object as input. This matches the value a transaction
+/// would observe by reading the `Clock`. Aborts if this feature is not enabled on the network.
+public fun timestamp_ms(_self: &TxContext): u64 {
+    native_timestamp_ms()
+}
+native fun native_timestamp_ms(): u64;
+
 /// Return the adress of the transaction sponsor or `None` if there was no sponsor.
 public fun sponsor(_self: &TxContext): Option<address> {
     option_sponsor()

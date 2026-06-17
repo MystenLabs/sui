@@ -133,6 +133,7 @@ impl TransactionEffects {
         gas_object: Option<ObjectID>,
         events_digest: Option<TransactionEventsDigest>,
         dependencies: Vec<TransactionDigest>,
+        consensus_commit_timestamp_ms: Option<u64>,
     ) -> Self {
         Self::V2(TransactionEffectsV2::new(
             status,
@@ -146,6 +147,7 @@ impl TransactionEffects {
             gas_object,
             events_digest,
             dependencies,
+            consensus_commit_timestamp_ms,
         ))
     }
 

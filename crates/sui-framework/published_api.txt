@@ -1144,6 +1144,12 @@ epoch_timestamp_ms
 native_epoch_timestamp_ms
 	fun
 	0x2::tx_context
+timestamp_ms
+	public fun
+	0x2::tx_context
+native_timestamp_ms
+	fun
+	0x2::tx_context
 sponsor
 	public fun
 	0x2::tx_context

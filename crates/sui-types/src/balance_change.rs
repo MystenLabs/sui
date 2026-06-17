@@ -294,6 +294,7 @@ mod tests {
             None,
             None,
             vec![],
+            None,
         )
     }
 

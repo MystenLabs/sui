@@ -12,6 +12,8 @@ title: Module `sui::tx_context`
 -  [Function `native_epoch`](#sui_tx_context_native_epoch)
 -  [Function `epoch_timestamp_ms`](#sui_tx_context_epoch_timestamp_ms)
 -  [Function `native_epoch_timestamp_ms`](#sui_tx_context_native_epoch_timestamp_ms)
+-  [Function `timestamp_ms`](#sui_tx_context_timestamp_ms)
+-  [Function `native_timestamp_ms`](#sui_tx_context_native_timestamp_ms)
 -  [Function `sponsor`](#sui_tx_context_sponsor)
 -  [Function `fresh_object_address`](#sui_tx_context_fresh_object_address)
 -  [Function `fresh_id`](#sui_tx_context_fresh_id)
@@ -249,6 +251,55 @@ Return the epoch start time as a unix timestamp in milliseconds.
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_native_epoch_timestamp_ms">native_epoch_timestamp_ms</a>(): u64;
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_tx_context_timestamp_ms"></a>
+
+## Function `timestamp_ms`
+
+Return the timestamp (unix time in milliseconds) of the consensus commit that ordered this
+transaction, without taking the <code>Clock</code> object as input. This matches the value a transaction
+would observe by reading the <code>Clock</code>. Aborts if this feature is not enabled on the network.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_timestamp_ms">timestamp_ms</a>(_self: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_timestamp_ms">timestamp_ms</a>(_self: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">TxContext</a>): u64 {
+    <a href="../sui/tx_context.md#sui_tx_context_native_timestamp_ms">native_timestamp_ms</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_tx_context_native_timestamp_ms"></a>
+
+## Function `native_timestamp_ms`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_native_timestamp_ms">native_timestamp_ms</a>(): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_native_timestamp_ms">native_timestamp_ms</a>(): u64;
 </code></pre>
 
 

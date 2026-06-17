@@ -2417,6 +2417,7 @@ async fn test_address_balance_gas_payment_parsing() {
         None,                               // gas_object: None = address-balance gas payment
         None,                               // events_digest
         vec![],                             // dependencies
+        None,
     );
 
     let tx_data_bcs = bcs::to_bytes(&tx_data).unwrap();

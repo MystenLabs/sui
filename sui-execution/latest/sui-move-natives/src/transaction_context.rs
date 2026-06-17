@@ -50,6 +50,12 @@ impl TransactionContext {
         self.tx_context.borrow().epoch_timestamp_ms()
     }
 
+    /// Reads the consensus commit timestamp and records that execution observed it (so the effects
+    /// builder persists it for replay). `None` when executing outside a consensus commit.
+    pub fn consensus_commit_timestamp_ms(&self) -> Option<u64> {
+        self.tx_context.borrow_mut().consensus_commit_timestamp_ms()
+    }
+
     pub fn digest(&self) -> TransactionDigest {
         self.tx_context.borrow().digest()
     }

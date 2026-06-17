@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_binary_format::safe_unwrap;
-use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
+use move_core_types::{
+    account_address::AccountAddress, gas_algebra::InternalGas, vm_status::StatusCode,
+};
 use move_vm_runtime::{
     execution::{Type, values::Value},
     natives::functions::NativeResult,
@@ -189,6 +191,62 @@ pub fn epoch_timestamp_ms(
         context.gas_used(),
         smallvec![Value::u64(timestamp)],
     ))
+}
+
+/// Abort code: the `consensus_commit_timestamp_ms` native is not enabled on this network.
+const E_CONSENSUS_COMMIT_TIMESTAMP_NOT_ENABLED: u64 = 0;
+/// Abort code: no consensus commit timestamp is available for this transaction. This is not
+/// expected to be reachable when the feature is enabled (consensus and dev-inspect both supply one).
+const E_NO_CONSENSUS_COMMIT_TIMESTAMP: u64 = 1;
+
+#[derive(Clone)]
+pub struct TxContextConsensusCommitTimestampMsCostParams {
+    // `Option` because the feature (and its cost) only exists on recent protocol versions; the cost
+    // table is built for every version, so this must not panic when the cost is unset.
+    pub tx_context_consensus_commit_timestamp_ms_cost_base: Option<InternalGas>,
+}
+/***************************************************************************************************
+ * native fun native_consensus_commit_timestamp_ms
+ * Implementation of the Move native function `fun native_consensus_commit_timestamp_ms(): u64`
+ **************************************************************************************************/
+pub fn consensus_commit_timestamp_ms(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.is_empty());
+
+    // Gate on the feature flag before charging gas: the cost is only configured on protocol
+    // versions where the feature is enabled, so it may be unset otherwise.
+    if !get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .enable_consensus_commit_timestamp_native()
+    {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_CONSENSUS_COMMIT_TIMESTAMP_NOT_ENABLED,
+        ));
+    }
+
+    let cost_params = get_extension!(context, NativesCostTable)?
+        .tx_context_consensus_commit_timestamp_ms_cost_params
+        .clone();
+    let cost_base = cost_params
+        .tx_context_consensus_commit_timestamp_ms_cost_base
+        .ok_or_else(|| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("Gas cost for consensus_commit_timestamp_ms is missing".to_string())
+        })?;
+    native_charge_gas_early_exit!(context, cost_base);
+
+    let cost = context.gas_used();
+    let transaction_context: &mut TransactionContext = get_extension_mut!(context)?;
+    let Some(timestamp) = transaction_context.consensus_commit_timestamp_ms() else {
+        return Ok(NativeResult::err(cost, E_NO_CONSENSUS_COMMIT_TIMESTAMP));
+    };
+
+    Ok(NativeResult::ok(cost, smallvec![Value::u64(timestamp)]))
 }
 
 #[derive(Clone)]

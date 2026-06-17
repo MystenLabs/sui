@@ -606,6 +606,7 @@ impl TransactionEffectsV2 {
         gas_object: Option<ObjectID>,
         events_digest: Option<TransactionEventsDigest>,
         dependencies: Vec<TransactionDigest>,
+        consensus_commit_timestamp_ms: Option<u64>,
     ) -> Self {
         let unchanged_consensus_objects = shared_objects
             .into_iter()
@@ -646,6 +647,15 @@ impl TransactionEffectsV2 {
                     .into_iter()
                     .map(|id| (id, UnchangedConsensusKind::PerEpochConfig)),
             )
+            // The consensus commit timestamp is transaction metadata, not an object; it is keyed by
+            // a sentinel id (see CONSENSUS_COMMIT_TIMESTAMP_EFFECTS_KEY). Only present when the
+            // transaction read the timestamp from the TxContext.
+            .chain(consensus_commit_timestamp_ms.map(|ts| {
+                (
+                    CONSENSUS_COMMIT_TIMESTAMP_EFFECTS_KEY,
+                    UnchangedConsensusKind::ConsensusCommitTimestamp(ts),
+                )
+            }))
             .collect();
         let changed_objects: Vec<_> = changed_objects.into_iter().collect();
 
@@ -794,6 +804,13 @@ impl Default for TransactionEffectsV2 {
         }
     }
 }
+
+/// Sentinel `ObjectID` used as the key for the [`UnchangedConsensusKind::ConsensusCommitTimestamp`]
+/// effects entry. The consensus commit timestamp is transaction metadata, not an object, but it is
+/// stored in `unchanged_consensus_objects` (keyed by `ObjectID`) so the effects format stays
+/// additive. This key is never read back — lookups match on the variant — and `ObjectID::ZERO`
+/// never collides with a real or system object.
+pub const CONSENSUS_COMMIT_TIMESTAMP_EFFECTS_KEY: ObjectID = ObjectID::ZERO;
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum UnchangedConsensusKind {

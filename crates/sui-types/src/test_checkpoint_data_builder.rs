@@ -763,6 +763,7 @@ impl TestCheckpointBuilder {
             None,
             events_digest,
             vec![],
+            None,
         );
         self.checkpoint_builder
             .transactions

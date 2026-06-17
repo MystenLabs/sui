@@ -349,6 +349,7 @@ mod tests {
             Some(gas_id),
             None,
             vec![],
+            None,
         );
 
         let mut provider = MockObjectProvider::new();
@@ -404,6 +405,7 @@ mod tests {
             None,
             None,
             vec![],
+            None,
         )
     }
 
@@ -462,6 +464,7 @@ mod tests {
             Some(gas_id),
             None,
             vec![],
+            None,
         );
 
         let mut provider = MockObjectProvider::new();
@@ -530,6 +533,7 @@ mod tests {
             None,
             None,
             vec![],
+            None,
         );
         let provider = MockObjectProvider::new();
 

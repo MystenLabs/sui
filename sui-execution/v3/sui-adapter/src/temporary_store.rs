@@ -358,6 +358,8 @@ impl<'backing> TemporaryStore<'backing> {
                 Some(inner.events.digest())
             },
             transaction_dependencies.into_iter().collect(),
+            // Older execution versions don't record the consensus commit timestamp.
+            None,
         );
 
         (inner, effects)

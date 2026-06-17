@@ -13,3 +13,7 @@ public struct TimeEvent has copy, drop, store {
 entry fun access(clock: &Clock) {
     event::emit(TimeEvent { timestamp_ms: clock.timestamp_ms() });
 }
+
+entry fun access_consensus_commit_timestamp(ctx: &TxContext) {
+    event::emit(TimeEvent { timestamp_ms: ctx.timestamp_ms() });
+}

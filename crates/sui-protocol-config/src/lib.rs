@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 127;
+const MAX_PROTOCOL_VERSION: u64 = 128;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -356,6 +356,8 @@ const MAINNET_USDB: &str =
 //              shipped to mainnet out-of-band in #26816).
 // Version 127: Enable always_advance_dkg_to_resolution.
 //              Update gas prices for range proofs and ristretto group operations.
+// Version 128: Enable enable_consensus_commit_timestamp_native (non-mainnet): a tx_context native
+//              to read the consensus commit timestamp without the Clock, recorded into effects.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1131,6 +1133,12 @@ struct FeatureFlags {
     // If true, exit early for IFWW transactions.
     #[serde(skip_serializing_if = "is_false")]
     early_exit_on_iffw: bool,
+
+    // If true, allow Move to read the consensus commit timestamp directly from the `TxContext`
+    // via a native, without taking the `Clock` object as input. Experimental; not enabled on
+    // production networks.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_consensus_commit_timestamp_native: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1661,6 +1669,7 @@ pub struct ProtocolConfig {
     tx_context_gas_budget_cost_base: Option<u64>,
     tx_context_ids_created_cost_base: Option<u64>,
     tx_context_replace_cost_base: Option<u64>,
+    tx_context_consensus_commit_timestamp_ms_cost_base: Option<u64>,
 
     // Types
     // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
@@ -2877,6 +2886,10 @@ impl ProtocolConfig {
     pub fn early_exit_on_iffw(&self) -> bool {
         self.feature_flags.early_exit_on_iffw
     }
+
+    pub fn enable_consensus_commit_timestamp_native(&self) -> bool {
+        self.feature_flags.enable_consensus_commit_timestamp_native
+    }
 }
 
 #[cfg(not(msim))]
@@ -3181,6 +3194,7 @@ impl ProtocolConfig {
             tx_context_gas_budget_cost_base: None,
             tx_context_ids_created_cost_base: None,
             tx_context_replace_cost_base: None,
+            tx_context_consensus_commit_timestamp_ms_cost_base: None,
 
             // `types` module
             // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
@@ -5018,6 +5032,14 @@ impl ProtocolConfig {
                     cfg.group_ops_ristretto_point_mul_cost = Some(1763);
                     cfg.group_ops_ristretto_scalar_div_cost = Some(557);
                     cfg.group_ops_ristretto_point_div_cost = Some(2244);
+                }
+                128 => {
+                    // Reading the timestamp is an in-memory lookup, so it is free.
+                    cfg.tx_context_consensus_commit_timestamp_ms_cost_base = Some(0);
+                    // Experimental: keep off production networks for now.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_consensus_commit_timestamp_native = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

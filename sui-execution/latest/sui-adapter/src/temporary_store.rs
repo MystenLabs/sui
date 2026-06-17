@@ -391,6 +391,7 @@ impl<'backing> TemporaryStore<'backing> {
         status: ExecutionStatus,
         gas_charger: &mut GasCharger,
         epoch: EpochId,
+        consensus_commit_timestamp_ms: Option<u64>,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         // Defense-in-depth: Owner::Party is not yet supported as an effect output. There are
         // no constructions of `Owner::Party` yet so a hard assert should be safe.
@@ -462,6 +463,7 @@ impl<'backing> TemporaryStore<'backing> {
                 Some(inner.events.digest())
             },
             transaction_dependencies.into_iter().collect(),
+            consensus_commit_timestamp_ms,
         );
 
         (inner, effects)

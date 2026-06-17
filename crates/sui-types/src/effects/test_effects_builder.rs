@@ -297,6 +297,7 @@ impl TestEffectsBuilder {
             Some(gas_object_id),
             event_digest,
             dependencies,
+            None,
         )
     }
 

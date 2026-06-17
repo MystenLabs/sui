@@ -510,6 +510,50 @@ async fn access_clock_object_test() {
     }
 }
 
+/// A transaction that reads the consensus commit timestamp via the `tx_context` native (without
+/// taking the `Clock` as input) observes the commit timestamp, and that value is recorded in the
+/// transaction effects so it can be recovered for replay.
+#[sim_test]
+async fn access_consensus_commit_timestamp_test() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let package_id = publish_basics_package(&test_cluster.wallet).await.0;
+
+    let transaction = test_cluster
+        .wallet
+        .sign_transaction(
+            &test_cluster
+                .test_transaction_builder()
+                .await
+                .move_call(
+                    package_id,
+                    "clock",
+                    "access_consensus_commit_timestamp",
+                    vec![],
+                )
+                .build(),
+        )
+        .await;
+    let (effects, events) = test_cluster
+        .execute_transaction_return_raw_effects(transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
+
+    // The native read the timestamp, so the effects must record it.
+    let recorded = effects
+        .consensus_commit_timestamp()
+        .expect("consensus commit timestamp should be recorded in effects when the native is read");
+
+    // The value emitted from Move (returned by the native) matches what the effects recorded.
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct TimeEvent {
+        timestamp_ms: u64,
+    }
+    assert_eq!(1, events.data.len());
+    let event = bcs::from_bytes::<TimeEvent>(&events.data.first().unwrap().contents).unwrap();
+    assert_eq!(event.timestamp_ms, recorded);
+}
+
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
 async fn replay_shared_object_transaction() {
