@@ -4,6 +4,8 @@
 use std::time::Duration;
 
 use anyhow::Context;
+use anyhow::bail;
+use anyhow::ensure;
 use bytes::Bytes;
 use futures::Stream;
 use futures::StreamExt;
@@ -112,20 +114,24 @@ impl AlphaLedgerGrpcReader {
 }
 
 impl<I> StreamPage<I> {
-    /// True while the server has not exhausted the requested range.
+    /// Whether the caller can continue paginating from `next_cursor()`.
     pub fn has_more(&self) -> bool {
-        !matches!(
-            self.end_reason,
-            Some(
-                grpc_alpha::QueryEndReason::CheckpointBound
-                    | grpc_alpha::QueryEndReason::CursorBound
-                    | grpc_alpha::QueryEndReason::LedgerTip
-            )
-        )
+        use grpc_alpha::QueryEndReason as R;
+        match self.end_reason {
+            None => true,
+            Some(R::Unspecified | R::ItemLimit | R::ScanLimit) => true,
+            Some(R::LedgerTip | R::CheckpointBound) => false,
+            // Terminal only when no cursor was reported from gRPC, such as when the client's
+            // cursors fall outside the available range of the server. Otherwise, additional data
+            // may exist past the client's cursors until a terminal bound.
+            Some(R::CursorBound) => self.end_cursor.is_some(),
+            // `QueryEndReason` is non exhaustive.
+            Some(_) => true,
+        }
     }
 
-    /// The latest cursor seen for resuming pagination. If more items are expected, e.g.
-    /// `has_more()` is true, `next_cursor` must yield a cursor.
+    /// The latest cursor observed in the direction of pagination. A cursor is expected to exist if
+    /// `has_more()` is true.
     pub fn next_cursor(&self) -> Option<&Bytes> {
         if self.has_more() {
             Some(
@@ -138,7 +144,7 @@ impl<I> StreamPage<I> {
         }
     }
 
-    /// Fold one frame into the page. `start_cursor` latches on the first cursor seen; `end_cursor`
+    /// Fold one frame into the page. Sets `start_cursor` to the first cursor seen; `end_cursor`
     /// tracks the latest.
     ///
     /// Returns `true` when the frame is the terminal `QueryEnd`.
@@ -234,7 +240,8 @@ where
                     break;
                 }
             }
-            // We expect the server to yield an `End` frame before reaching this branch.
+            // Server closed the stream before sending an `End` frame. Fall-through to the post-loop
+            // check.
             None => break,
             // `DeadlineExceeded`: server-side `grpc-timeout` header fired.
             // `Cancelled`: client-side channel timeout fired (or upstream cancel).
@@ -246,31 +253,25 @@ where
                     tonic::Code::DeadlineExceeded | tonic::Code::Cancelled
                 ) =>
             {
-                if page.items.is_empty() && page.end_cursor.is_none() {
-                    return Err(anyhow::anyhow!(
-                        "{rpc_name} stream {:?} with no progress: {}",
-                        status.code(),
-                        status.message()
-                    ));
-                }
+                ensure!(
+                    !page.items.is_empty() || page.end_cursor.is_some(),
+                    "{rpc_name} stream {:?} with no progress: {}",
+                    status.code(),
+                    status.message(),
+                );
                 break;
             }
             Some(Err(status)) => {
-                return Err(anyhow::anyhow!(
-                    "{rpc_name} stream error: {}",
-                    status.message()
-                ));
+                bail!("{rpc_name} stream error: {}", status.message());
             }
         }
     }
 
-    // Pagination is considered unresumable if there is more server-side work, but no valid cursor
-    // was yielded (either from a standalone `Watermark` or the last `Item`'s watermark.)
-    if page.has_more() && page.end_cursor.is_none() {
-        return Err(anyhow::anyhow!(
-            "{rpc_name}: server reported more results but did not advance cursor — cannot resume"
-        ));
-    }
+    // Either there's no more to paginate, or we must have a cursor to resume from
+    ensure!(
+        !page.has_more() || page.end_cursor.is_some(),
+        "{rpc_name}: server reported more results but did not advance cursor — cannot resume",
+    );
 
     Ok(page)
 }
@@ -397,16 +398,32 @@ mod tests {
     }
 
     #[test]
-    fn has_more_false_when_range_exhausted() {
+    fn has_more_false_on_authoritative_terminals() {
+        // `LedgerTip` and `CheckpointBound` are unconditional terminals — no data past tip /
+        // outside the client's cp scope. `CursorBound` with no tracked cursor is the
+        // short-circuit case (range collapsed at request resolution).
         for reason in [
             grpc_alpha::QueryEndReason::CheckpointBound,
-            grpc_alpha::QueryEndReason::CursorBound,
             grpc_alpha::QueryEndReason::LedgerTip,
+            grpc_alpha::QueryEndReason::CursorBound,
         ] {
             let mut page: StreamPage<grpc_alpha::TransactionItem> = StreamPage::default();
             page.apply(end_response(reason).into());
             assert!(!page.has_more(), "expected !has_more for {reason:?}");
         }
+    }
+
+    #[test]
+    fn has_more_true_on_cursor_bound_with_tracked_cursor() {
+        let mut page: StreamPage<grpc_alpha::TransactionItem> = StreamPage::default();
+        page.apply(item_response(b"c1").into());
+        page.apply(end_response(grpc_alpha::QueryEndReason::CursorBound).into());
+
+        assert_eq!(page.end_cursor.as_deref(), Some(b"c1".as_ref()));
+        assert!(
+            page.has_more(),
+            "CursorBound with tracked cursor should not be terminal"
+        );
     }
 
     #[test]
