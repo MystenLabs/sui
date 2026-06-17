@@ -202,11 +202,13 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
                 LinterDiagnosticCode::UncallableFunction as u8,
             )],
         ),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::UnusedObjWithFields as u8,
-            Some(UNUSED_OBJECT_WITH_FIELDS_FILTER_NAME),
+        (
+            Symbol::from(UNUSED_OBJECT_WITH_FIELDS_FILTER_NAME),
+            vec![DiagnosticsID::exact(
+                Some(LINT_WARNING_PREFIX),
+                sui,
+                LinterDiagnosticCode::UnusedObjWithFields as u8,
+            )],
         ),
     ];
 
