@@ -78,8 +78,8 @@ function OpenInPlayMoveButton({ className }: { className?: string }) {
   useEffect(() => {
     let el: HTMLElement | null = wrapperRef.current;
     while (el) {
-      const code = el.querySelector?.("code") as HTMLElement | null;
-      if (code?.className?.includes("language-move")) {
+      const code = el.querySelector?.("pre code[class*='language-move']") as HTMLElement | null;
+      if (code) {
         setIsMove(true);
         return;
       }
