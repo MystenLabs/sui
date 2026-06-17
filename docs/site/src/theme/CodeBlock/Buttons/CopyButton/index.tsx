@@ -72,22 +72,11 @@ function useCopyButton(buttonRef: React.RefObject<HTMLElement>) {
 }
 
 function OpenInPlayMoveButton({ className }: { className?: string }) {
-  const ref = useRef<HTMLButtonElement | null>(null);
-
-  const handleClick = useCallback(() => {
-    const code = getNearestCodeText(ref.current);
-    if (!code) return;
-    const isDark =
-      typeof document !== "undefined" &&
-      document.documentElement.getAttribute("data-theme") === "dark";
-    const url = `https://www.playmove.dev/?theme=${isDark ? "dark" : "light"}#${encodeURIComponent(code)}`;
-    window.open(url, "_blank", "noopener");
-  }, []);
-
-  // Only render for Move code blocks
+  const wrapperRef = useRef<HTMLSpanElement | null>(null);
   const [isMove, setIsMove] = useState(false);
+
   useEffect(() => {
-    let el: HTMLElement | null = ref.current;
+    let el: HTMLElement | null = wrapperRef.current;
     while (el) {
       const code = el.querySelector?.("code") as HTMLElement | null;
       if (code?.className?.includes("language-move")) {
@@ -98,23 +87,32 @@ function OpenInPlayMoveButton({ className }: { className?: string }) {
     }
   }, []);
 
-  if (!isMove) return null;
+  const handleClick = useCallback(() => {
+    const code = getNearestCodeText(wrapperRef.current);
+    if (!code) return;
+    const isDark =
+      typeof document !== "undefined" &&
+      document.documentElement.getAttribute("data-theme") === "dark";
+    const url = `https://www.playmove.dev/?theme=${isDark ? "dark" : "light"}#${encodeURIComponent(code)}`;
+    window.open(url, "_blank", "noopener");
+  }, []);
 
   return (
-    <Button
-      ref={ref}
-      aria-label="Open in Move Playground"
-      title="Open in Move Playground"
-      className={clsx(
-        className,
-        "!opacity-50 !hover:opacity-100 text-xs !pb-2 justify-center",
-      )}
-      onClick={handleClick}
-    >
-      <span className="p-1">
-        <i className="fa-solid fa-play leading-[0] pr-1" style={{ fontSize: 9 }}></i>Playground
-      </span>
-    </Button>
+    <span ref={wrapperRef} style={{ display: isMove ? "contents" : "none" }}>
+      <Button
+        aria-label="Open in Move Playground"
+        title="Open in Move Playground"
+        className={clsx(
+          className,
+          "!opacity-50 !hover:opacity-100 text-xs !pb-2 justify-center",
+        )}
+        onClick={handleClick}
+      >
+        <span className="p-1">
+          <i className="fa-solid fa-play leading-[0] pr-1" style={{ fontSize: 9 }}></i>Playground
+        </span>
+      </Button>
+    </span>
   );
 }
 
