@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 */
 
-/* Wrapper around the CodeBlock + Open in PlayMove button */
+/* Wrapper around the CodeBlock + Open in Move Playground button */
 .playmove-wrapper {
   position: relative;
   margin-bottom: var(--ifm-leading);
@@ -14,43 +14,40 @@
   margin-bottom: 0 !important;
 }
 
-/* Open in PlayMove button */
+/* Open in Move Playground button */
 .playmove-open-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  width: 100%;
-  justify-content: center;
-  padding: 8px 16px;
-  border: 1px solid var(--ifm-color-emphasis-200);
-  border-top: none;
-  border-radius: 0 0 var(--ifm-code-border-radius) var(--ifm-code-border-radius);
-  background: var(--ifm-code-background);
+  gap: 8px;
+  margin-top: 8px;
+  padding: 7px 16px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  background: transparent;
   color: var(--ifm-color-emphasis-700);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: all 0.15s ease;
 }
 
 .playmove-open-btn:hover {
-  background: var(--ifm-color-emphasis-200);
-  color: var(--ifm-color-emphasis-900);
+  background: var(--ifm-color-primary);
+  color: #fff;
+  border-color: var(--ifm-color-primary);
 }
 
 .playmove-open-btn svg {
-  opacity: 0.6;
+  opacity: 0.5;
+  transition: opacity 0.15s;
 }
 
 .playmove-open-btn:hover svg {
   opacity: 1;
+  stroke: #fff;
 }
 
 [data-theme="light"] .playmove-open-btn {
   border-color: #d0d7de;
-}
-
-[data-theme="light"] .playmove-open-btn:hover {
-  background: #e8ecf0;
 }
