@@ -356,6 +356,7 @@ const MAINNET_USDB: &str =
 //              shipped to mainnet out-of-band in #26816).
 // Version 127: Enable always_advance_dkg_to_resolution.
 //              Update gas prices for range proofs and ristretto group operations.
+//              Enable Ristretto255 group operations and bulletproofs verification on testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5018,6 +5019,11 @@ impl ProtocolConfig {
                     cfg.group_ops_ristretto_point_mul_cost = Some(1763);
                     cfg.group_ops_ristretto_scalar_div_cost = Some(557);
                     cfg.group_ops_ristretto_point_div_cost = Some(2244);
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_ristretto255_group_ops = true;
+                        cfg.feature_flags.enable_verify_bulletproofs_ristretto255 = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
