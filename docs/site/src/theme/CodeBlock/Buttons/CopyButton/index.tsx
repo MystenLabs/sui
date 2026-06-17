@@ -90,10 +90,7 @@ function OpenInPlayMoveButton({ className }: { className?: string }) {
   const handleClick = useCallback(() => {
     const code = getNearestCodeText(wrapperRef.current);
     if (!code) return;
-    const isDark =
-      typeof document !== "undefined" &&
-      document.documentElement.getAttribute("data-theme") === "dark";
-    const url = `https://www.playmove.dev/?theme=${isDark ? "dark" : "light"}#${encodeURIComponent(code)}`;
+    const url = `https://www.playmove.dev/#${encodeURIComponent(code)}`;
     window.open(url, "_blank", "noopener");
   }, []);
 

@@ -38,7 +38,7 @@ If you put the object of type `Bar` into an object of type `Foo`, the object typ
 
 <CodeWalkthrough source="examples/move/basics/sources/object_basics.move" language="move">
   <Step lines="69-71" title="Create a wrapped object">
-    The `wrap` function takes an `Object` by value and places it inside a new `Wrapper` struct. The `Wrapper` is then transferred to the sender. After wrapping, the original object is no longer directly accessible onchain — it can only be reached through the wrapper.
+    The `wrap` function takes an `Object` by value and places it inside a new `Wrapper` struct. The `Wrapper` is then transferred to the sender. After wrapping, the original object is no longer directly accessible onchain and can only be reached through the wrapper.
   </Step>
   <Step lines="73-78" title="Unwrap a wrapped object">
     You can take out the wrapped object and transfer it to an address, modify it, delete it, or freeze it. This is called unwrapping. The `unwrap` function destructs the `Wrapper`, deletes its UID, and transfers the inner `Object` back to the sender. The object's ID stays the same across wrapping and unwrapping.

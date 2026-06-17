@@ -30,7 +30,7 @@ A party object's ownership can change over its lifetime, either by adding it as 
 
 <CodeWalkthrough source="examples/move/basics/sources/object_basics.move" language="move">
   <Step lines="28-34" title="Create a party object">
-    The `create_party` function creates a new `Object` and transfers it using `public_party_transfer` with a `party::single_owner` party. This makes the object a party object owned by `recipient` — it is versioned by consensus but owned by a single address.
+    The `create_party` function creates a new `Object` and transfers it using `public_party_transfer` with a `party::single_owner` party. This makes the object a party object owned by `recipient`, versioned by consensus but owned by a single address.
   </Step>
   <Step lines="40-43" title="Transfer a party object">
     To transfer a party object owned by an account address, use `public_party_transfer` with a new `party::single_owner`. The `party_transfer_single_owner` function transfers an existing party object to a new recipient while keeping it as a party object.
