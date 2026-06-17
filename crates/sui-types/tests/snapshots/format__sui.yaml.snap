@@ -1440,6 +1440,9 @@ UnchangedConsensusKind:
           TYPENAME: SequenceNumber
     4:
       PerEpochConfig: UNIT
+    5:
+      ConsensusCommitTimestamp:
+        NEWTYPE: U64
 UpgradeInfo:
   STRUCT:
     - upgraded_id:

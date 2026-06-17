@@ -149,6 +149,8 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                         // since it does not require sequencing, and hence shall not be considered
                         // as a normal input consensus object.
                         UnchangedConsensusKind::PerEpochConfig => None,
+                        // The consensus commit timestamp is not tied to an input object.
+                        UnchangedConsensusKind::ConsensusCommitTimestamp(_) => None,
                     }),
             )
             .collect()
@@ -491,6 +493,16 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             .collect()
     }
 
+    fn consensus_commit_timestamp(&self) -> Option<u64> {
+        self.unchanged_consensus_objects
+            .iter()
+            .filter_map(|(_, kind)| match kind {
+                UnchangedConsensusKind::ConsensusCommitTimestamp(timestamp) => Some(*timestamp),
+                _ => None,
+            })
+            .next()
+    }
+
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
         &mut self.status
     }
@@ -796,4 +808,7 @@ pub enum UnchangedConsensusKind {
     Cancelled(SequenceNumber),
     /// Read of a per-epoch config object that should remain the same during an epoch.
     PerEpochConfig,
+    /// Timestamp of the consensus commit that included the transaction. This entry is added
+    /// when the transaction reads the timestamp directly from the TxContext.
+    ConsensusCommitTimestamp(u64),
 }

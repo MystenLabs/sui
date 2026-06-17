@@ -609,6 +609,8 @@ impl From<crate::effects::UnchangedConsensusKind> for UnchangedConsensusKind {
                 version: version.into(),
             },
             crate::effects::UnchangedConsensusKind::PerEpochConfig => Self::PerEpochConfig,
+            // Requires a new variant in the external rust sdk types.
+            crate::effects::UnchangedConsensusKind::ConsensusCommitTimestamp(_) => todo!(),
         }
     }
 }

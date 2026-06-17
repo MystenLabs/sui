@@ -382,6 +382,11 @@ pub trait TransactionEffectsAPI {
     /// Returns all accumulator updates in the transaction.
     fn accumulator_updates(&self) -> Vec<(ObjectID, AccumulatorWriteV1)>;
 
+    /// Returns the timestamp of the consensus commit that included the transaction.
+    /// This is available only if during transaction execution, the transaction reads the timestamp
+    /// directly from the TxContext without involving the Clock object.
+    fn consensus_commit_timestamp(&self) -> Option<u64>;
+
     // All of these should be #[cfg(test)], but they are used by tests in other crates, and
     // dependencies don't get built with cfg(test) set as far as I can tell.
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus;

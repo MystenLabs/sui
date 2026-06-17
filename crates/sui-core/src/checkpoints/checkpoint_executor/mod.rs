@@ -916,6 +916,10 @@ impl CheckpointExecutor {
                             env = env.with_insufficient_funds();
                         }
 
+                        if let Some(timestamp) = effects.consensus_commit_timestamp() {
+                            env = env.with_tx_timestamp_ms(timestamp);
+                        }
+
                         Some((tx_digest, (txn.clone(), env)))
                     }
                 },

@@ -177,6 +177,9 @@ impl UnchangedConsensusObject {
                 object_id,
                 epoch,
             }),
+            // The consensus commit timestamp is not an object; exposing it through GraphQL is
+            // deferred until the timestamp surface is designed.
+            NativeUnchangedConsensusKind::ConsensusCommitTimestamp(_) => todo!(),
         }
     }
 }

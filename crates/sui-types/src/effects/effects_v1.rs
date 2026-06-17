@@ -347,6 +347,10 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         vec![]
     }
 
+    fn consensus_commit_timestamp(&self) -> Option<u64> {
+        None
+    }
+
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
         &mut self.status
     }

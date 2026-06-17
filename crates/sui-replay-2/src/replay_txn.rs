@@ -533,7 +533,7 @@ fn load_objects(
     object_store: &dyn ObjectStore,
 ) -> Result<
     (
-        BTreeMap<ObjectID, BTreeMap<ObjectVersion, Object>>, // objets loaded
+        BTreeMap<ObjectID, BTreeMap<ObjectVersion, Object>>, // objects loaded
         BTreeSet<ObjectID>,                                  // packages referenced
     ),
     Error,
@@ -696,7 +696,8 @@ fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<ObjectKey>, 
             UnchangedConsensusKind::MutateConsensusStreamEnded(_)
             | UnchangedConsensusKind::ReadConsensusStreamEnded(_)
             | UnchangedConsensusKind::Cancelled(_)
-            | UnchangedConsensusKind::PerEpochConfig => {
+            | UnchangedConsensusKind::PerEpochConfig
+            | UnchangedConsensusKind::ConsensusCommitTimestamp(_) => {
                 trace!("Ignored `UnchangedConsensusKind`: {:?}", kind);
             }
         });

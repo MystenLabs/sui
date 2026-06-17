@@ -3395,6 +3395,8 @@ impl From<crate::effects::UnchangedConsensusKind> for UnchangedConsensusObject {
                 UnchangedConsensusObjectKind::Canceled
             }
             K::PerEpochConfig => UnchangedConsensusObjectKind::PerEpochConfig,
+            // Requires a new variant in the external rust sdk proto definitions.
+            K::ConsensusCommitTimestamp(_) => todo!(),
             // PerEpochConfigWithSequenceNumber { version } => {
             //     message.version = Some(version);
             //     UnchangedSharedObjectKind::PerEpochConfig
