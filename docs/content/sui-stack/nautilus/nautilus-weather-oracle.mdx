@@ -232,23 +232,14 @@ $ sui client tx-block TX_DIGEST --json | jq '.objectChanges[] | select(.type == 
 
 ## Key code highlights
 
-The following snippets are the parts of the code worth reading carefully.
-
-### Verified weather NFT minting
-
-The `update_weather` entry function verifies the enclave signature and mints a `WeatherNFT` from the verified data.
-
-<ImportContent source="K4/example/move/weather.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="update_weather" />
-
-The function takes the weather data (location, temperature, timestamp), the enclave signature, and a reference to the `Enclave` object that holds the public key. It reconstructs the expected signed payload, calls `enclave::verify` to check the signature, and mints the NFT only if verification succeeds. The `WEATHER_INTENT` constant scopes the signature to prevent cross-intent replay.
-
-### Weather data structures
-
-The `WeatherNFT` struct stores verified weather data as a transferable Sui object.
-
-<ImportContent source="K4/example/move/weather.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" struct="WeatherNFT" />
-
-The `WeatherNFT` has `key` and `store` abilities. The `location`, `temperature`, and `timestamp_ms` fields are all verified by the enclave signature before the contract creates the object.
+<CodeWalkthrough source="K4/example/move/weather.move" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" language="move">
+  <Step lines="13-18" title="`WeatherNFT` data struct">
+    The `WeatherNFT` struct stores verified weather data as a transferable Sui object. It has `key` and `store` abilities. The `location`, `temperature`, and `timestamp_ms` fields are all verified by the enclave signature before the contract creates the object.
+  </Step>
+  <Step lines="42-64" title="Verified minting with `update_weather`">
+    The `update_weather` function takes the weather data (location, temperature, timestamp), the enclave signature, and a reference to the `Enclave` object that holds the public key. It reconstructs the expected signed payload, calls `enclave::verify` to check the signature, and mints the NFT only if verification succeeds. The `WEATHER_INTENT` constant scopes the signature to prevent cross-intent replay.
+  </Step>
+</CodeWalkthrough>
 
 ## Common modifications
 

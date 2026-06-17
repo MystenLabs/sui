@@ -179,39 +179,20 @@ The transaction creates a `Hero` object owned by your address, then delegates ad
 
 ## Key code highlights
 
-The following snippets are the parts of the code worth reading carefully.
-
-### The `AdminCap` capability struct
-
-The `AdminCap` struct is the authorization token. Owning it proves you have admin privileges.
-
-<ImportContent source="C1/capability/sources/hero.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" struct="AdminCap" />
-
-The struct has only the `key` ability (not `store`), which means it can exist as a Sui object but cannot be wrapped inside another object. It has a single `id` field. The struct carries no data because its purpose is purely authorization: if you can pass a `&AdminCap` reference, you have permission.
-
-### Issuing the first capability in `init`
-
-The `init` function creates the initial `AdminCap` and transfers it to the module deployer.
-
-<ImportContent source="C1/capability/sources/hero.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="init" />
-
-This function runs once when the module is published. It creates a new `AdminCap` with a fresh UID and transfers it to `ctx.sender()` (the deployer). This is the only way the first capability enters the system.
-
-### Gating a function with a capability reference
-
-The `create_hero` function requires an `&AdminCap` reference as its first parameter.
-
-<ImportContent source="C1/capability/sources/hero.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="create_hero" />
-
-The parameter `_: &AdminCap` is an immutable reference that the function does not use (hence the underscore). Its purpose is purely as a gate: the caller must own an `AdminCap` to produce this reference. The function creates and returns a new `Hero` with the given name.
-
-### Delegating authority
-
-The `new_admin` function lets an existing admin mint a new `AdminCap` for another address.
-
-<ImportContent source="C1/capability/sources/hero.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="new_admin" />
-
-This function takes a reference to the caller's `AdminCap` (proving they have authority), creates a new `AdminCap`, and transfers it to the target address. The new admin has identical privileges. Unlike an allowlist-based approach, each admin holds their own independent object, so revoking 1 admin (by destroying their cap) does not affect others.
+<CodeWalkthrough source="C1/capability/sources/hero.move" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" language="move">
+  <Step lines="9-11" title="The `AdminCap` capability struct">
+    The `AdminCap` struct is the authorization token. Owning it proves you have admin privileges. It has only the `key` ability (not `store`), so it can exist as a Sui object but cannot be wrapped inside another object. The struct carries no data because its purpose is purely authorization: if you can pass a `&AdminCap` reference, you have permission.
+  </Step>
+  <Step lines="13-21" title="Issuing the first capability in `init`">
+    The `init` function creates the initial `AdminCap` and transfers it to the module deployer. This function runs once when the module is published. It creates a new `AdminCap` with a fresh UID and transfers it to `ctx.sender()` (the deployer). This is the only way the first capability enters the system.
+  </Step>
+  <Step lines="23-31" title="Gating a function with a capability reference">
+    The `create_hero` function requires an `&AdminCap` reference as its first parameter. The parameter `_: &AdminCap` is an immutable reference that the function does not use (hence the underscore). Its purpose is purely as a gate: the caller must own an `AdminCap` to produce this reference. The function creates and returns a new `Hero` with the given name.
+  </Step>
+  <Step lines="38-44" title="Delegating authority">
+    The `new_admin` function lets an existing admin mint a new `AdminCap` for another address. It takes a reference to the caller's `AdminCap` (proving they have authority), creates a new `AdminCap`, and transfers it to the target address. Unlike an allowlist-based approach, each admin holds their own independent object, so revoking one admin (by destroying their cap) does not affect others.
+  </Step>
+</CodeWalkthrough>
 
 :::caution
 
