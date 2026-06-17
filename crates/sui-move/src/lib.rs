@@ -11,6 +11,7 @@ use sui_sdk::wallet_context::WalletContext;
 pub mod build;
 pub mod cache_package;
 pub mod coverage;
+pub mod decompile;
 pub mod disassemble;
 pub mod format;
 pub mod migrate;
@@ -25,6 +26,7 @@ pub enum Command {
     Coverage(coverage::Coverage),
     #[command(hide = true)]
     CachePackage(cache_package::CachePackage),
+    Decompile(decompile::Decompile),
     Disassemble(disassemble::Disassemble),
     Format(format::Format),
     Migrate(migrate::Migrate),
@@ -52,6 +54,7 @@ pub async fn execute_move_command(
         Command::Build(c) => c.execute(package_path, build_config, wallet).await,
         Command::CachePackage(c) => c.execute(flavor).await,
         Command::Coverage(c) => c.execute(package_path, build_config, flavor).await,
+        Command::Decompile(c) => c.execute(package_path, build_config),
         Command::Disassemble(c) => c.execute(package_path, build_config, flavor).await,
         Command::Format(c) => c.execute().await,
         Command::Migrate(c) => c.execute(package_path, build_config, flavor).await,
