@@ -777,9 +777,18 @@ impl RandomnessEventLoop {
         }
 
         let sig_bytes = bcs::to_bytes(&sig).expect("signature serialization should not fail");
-        self.randomness_tx
-            .try_send((epoch, round, sig_bytes))
-            .expect("RandomnessRoundReceiver mailbox should not overflow or be closed");
+        if let Err(e) = self.randomness_tx.try_send((epoch, round, sig_bytes)) {
+            match e {
+                // Receiver is torn down during node shutdown; dropping the round is harmless.
+                mpsc::error::TrySendError::Closed(_) => {
+                    info!("dropping completed randomness round {round}: receiver channel closed");
+                }
+                // Mailbox capacity is huge (default 1M); a full mailbox means a real bug.
+                mpsc::error::TrySendError::Full(_) => {
+                    panic!("RandomnessRoundReceiver mailbox should not overflow");
+                }
+            }
+        }
     }
 
     fn maybe_ignore_byzantine_peer(&mut self, epoch: EpochId, peer_id: PeerId) {
