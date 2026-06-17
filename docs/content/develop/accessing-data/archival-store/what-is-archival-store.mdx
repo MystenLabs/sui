@@ -12,6 +12,12 @@ Long-term access to historical onchain data is essential for developers, althoug
 
 :::
 
+:::info Trust boundary
+
+Archival endpoints are retention and availability tools, not inherently trustless proof: data they return is only as trustworthy as the operator serving it. For high-trust workflows, verify the data cryptographically (for example, through checkpoint verification or [authenticated events](/develop/accessing-data/authenticated-events)) rather than relying on the archival response alone. See [Security Best Practices](/develop/security/best-practices) for more.
+
+:::
+
 ## When to use
 
 Both developers and RPC and data providers benefit from using the Archival Store and Service, though their goals and usage patterns differ.

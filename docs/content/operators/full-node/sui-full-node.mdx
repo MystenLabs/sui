@@ -125,6 +125,21 @@ authority-store-pruning-config:
 
 Adjust the gRPC data retention period based on your full node's resource profile and whether you've disabled JSON-RPC or not. In any case, test the longer retention period for performance and scalability before using gRPC in your application or offering it to other developers.
 
+:::tip
+
+When you expose a full node endpoint publicly, harden it before you serve traffic:
+
+- **Enable TLS.** Terminate TLS for the RPC server (`https-address` and `tls` in the `rpc` config block) or at a proxy in front of the node.
+- **Restrict with a firewall.** Allow only the ports you intend to serve, and block everything else at the host and network level.
+- **Apply rate limits.** Put a rate limit in front of the public endpoint to protect against abuse and resource-exhaustion attacks.
+- **Keep admin interfaces private.** Bind the admin API (port 1337 by default) to `127.0.0.1` and never expose it to untrusted networks.
+- **Enable monitoring.** Configure [metrics monitoring](/operators/full-node/monitoring) so you can detect lag, abuse, or failures quickly.
+- **Consider archival fallback.** Use the [Archival Fallback](/operators/data-management/archives) to serve historical data the network `seed-peers` no longer retain.
+
+For the full set of operator controls, see [general network security](/develop/security/best-practices#general-network-security).
+
+:::
+
 ## Running a full node {#running-a-full-node}
 
 Instructions for building, installing, or downloading the `sui-node` binary are available in the [Install from Binaries](/getting-started/onboarding/install-binaries) guide. 

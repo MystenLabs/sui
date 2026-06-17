@@ -1,11 +1,87 @@
 ---
 title: Getting Started
-description: Get started building on Sui with one of the Sui agent skills, the Hello, world! example, or one of the other example apps.  
+description: Get started building on Sui with one of the Sui agent skills, the Hello, world! example, or one of the other example apps.
 keywords: ['Sui getting started', 'Hello World', 'Sui examples', 'agent skills', 'developer onboarding', 'Sui tooling', 'Ethereum migration', 'Solana migration']
+hide_table_of_contents: true
+hide_title: true
+pagination_prev: null
+pagination_next: null
 ---
 
-Get started building on Sui with one of the Sui agent skills, the Hello World example, or one of the other example apps.
+<div className="gs-landing">
 
-import DocCardList from '@theme/DocCardList';
+<div className="gs-hero">
+  <h1 className="gs-hero-title">Sui Documentation</h1>
+  <p className="gs-hero-desc">
+    Sui delivers the full stack for a new global economy. Assets, data, and permissions can be owned, programmed, and verified.
+  </p>
+  <button
+    className="gs-search-bar plausible-event-name=getting-started+search"
+    onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new Event('open-search-modal')); }}
+  >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+    <span>Search docs or ask Sui AI...</span>
+  </button>
+</div>
 
-<DocCardList />
+<div className="gs-section">
+  <h2 className="gs-section-title">Start building</h2>
+  <Cards>
+    <Card title="Sui Agent Skills" href="/skills">
+      Drop pre-built skills into Claude Code, Cursor, Codex, and other AI coding agents to build on Sui.
+    </Card>
+    <Card title="Hello, World!" href="/getting-started/onboarding">
+      Build and publish your first Move package on Sui with a step-by-step walkthrough.
+    </Card>
+    <Card title="Example Apps" href="/getting-started/examples">
+      End-to-end examples demonstrating Move contracts, React frontends, and onchain patterns.
+    </Card>
+  </Cards>
+</div>
+
+<div className="gs-section">
+  <h2 className="gs-section-title">Learn the fundamentals</h2>
+  <Cards>
+    <Card title="Sui Architecture" href="/develop/sui-architecture">
+      Understand the object model, consensus, and transaction pipeline.
+    </Card>
+    <Card title="Writing Move Packages" href="/develop/write-move">
+      Learn Move on Sui — structs, abilities, modules, and patterns.
+    </Card>
+    <Card title="Building Transactions" href="/develop/transactions">
+      Construct programmable transaction blocks (PTBs) for complex operations.
+    </Card>
+  </Cards>
+</div>
+
+<div className="gs-section">
+  <h2 className="gs-section-title">Tools and references</h2>
+  <Cards>
+    <Card title="Developer Tools" href="/getting-started/tooling">
+      CLI, IDE extensions, debuggers, linters, and deployment tools.
+    </Card>
+    <Card title="Developer Cheat Sheet" href="/getting-started/dev-cheat-sheet">
+      Quick reference on best practices for Sui developers.
+    </Card>
+    <Card title="Sui SDKs" href="/references/sui-sdks">
+      TypeScript, Rust, Python, Go, and community SDKs.
+    </Card>
+  </Cards>
+</div>
+
+<div className="gs-section">
+  <h2 className="gs-section-title">Coming from another chain?</h2>
+  <Cards>
+    <Card title="Ethereum → Sui" href="/getting-started/sui-for-ethereum">
+      Map EVM concepts to Sui's object model and Move language.
+    </Card>
+    <Card title="Solana → Sui" href="/getting-started/sui-for-solana">
+      Compare Solana's account model with Sui's object-centric approach.
+    </Card>
+  </Cards>
+</div>
+
+</div>

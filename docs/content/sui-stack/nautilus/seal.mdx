@@ -67,6 +67,12 @@ The admin builds and runs the enclave with the exposed `/get_attestation` endpoi
 
 ## Security guarantees
 
+:::caution
+
+Treat the secret lifecycle carefully when adapting this example. The `/admin` endpoints are bound to localhost on the EC2 host, so anyone with host access can drive key loading; in production, restrict and audit that access. Cached Seal keys live only in enclave memory, which means they are lost on restart and must be reloaded through the 2-step flow, so plan for restart and zeroization behavior rather than persisting secrets. The `seal_approve` signature commits to the wallet public key and a timestamp; for replay protection, combine a fresh timestamp with a nonce and domain separation so a captured PTB cannot be reused. See the [Nautilus](/develop/security/best-practices#nautilus) section of the Security Best Practices guide.
+
+:::
+
 The enclave generates 3 keys on startup, all kept only in enclave memory:
 
 1. Enclave ephemeral key pair (`state.eph_kp`): Ed25519 key pair. Used to sign `/process_data` responses and to create the signature argument in `seal_approve` PTB. Its public key is registered onchain in the Enclave object.

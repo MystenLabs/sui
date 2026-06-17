@@ -1412,11 +1412,6 @@ pub struct AuthorityOverloadConfig {
     #[serde(default = "default_check_system_overload_at_signing")]
     pub check_system_overload_at_signing: bool,
 
-    // When set to true, transaction execution may be rejected when the validator
-    // is overloaded.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub check_system_overload_at_execution: bool,
-
     // Reject a transaction if transaction manager queue length is above this threshold.
     // 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
     #[serde(default = "default_max_transaction_manager_queue_length")]
@@ -1521,7 +1516,6 @@ impl Default for AuthorityOverloadConfig {
                 default_min_load_shedding_percentage_above_hard_limit(),
             safe_transaction_ready_rate: default_safe_transaction_ready_rate(),
             check_system_overload_at_signing: true,
-            check_system_overload_at_execution: false,
             max_transaction_manager_queue_length: default_max_transaction_manager_queue_length(),
             max_transaction_manager_per_object_queue_length:
                 default_max_transaction_manager_per_object_queue_length(),

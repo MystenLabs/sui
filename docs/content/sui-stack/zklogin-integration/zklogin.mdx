@@ -28,6 +28,12 @@ The key differentiators that zkLogin brings to Sui are:
 
 If you are a builder who wants to integrate zkLogin into your application or wallet, see the [zkLogin integration guide](/sui-stack/zklogin-integration).
 
+:::info
+
+zkLogin access depends on two factors: the OpenID provider (IdP) that authenticates the user and the salt service that supplies the per-user salt. A user needs both a current JWT from the IdP and the correct salt to derive their address and sign transactions. If the salt is lost, the user permanently loses access to that address, even with a valid OAuth login; if the salt is compromised, an attacker can link the user's OAuth identifier to their Sui address (though they still cannot move funds without the OAuth credential). Plan salt persistence, backup, and recovery accordingly. See [Security Best Practices](/develop/security/best-practices).
+
+:::
+
 ## OpenID providers
 
 <ImportContent source="openid-providers" mode="snippet" />

@@ -17,6 +17,12 @@ Every object has an owner that determines who can use it in transactions and whe
 
 APIs expose consensus-address-owned objects with a `ConsensusAddressOwner` owner variant. Party objects are the public Move-facing way to create this ownership form with `sui::party::Party` and `sui::transfer::party_transfer` or `sui::transfer::public_party_transfer`. Use them when you want single-address ownership with consensus sequencing, for example to allow multiple inflight transactions against the same logical object without fastpath locks.
 
+:::caution
+
+Anyone can submit a transaction that references a shared object. Shared-object access is *not* restricted by ownership, so secure it in Move with explicit authorization checks (such as a capability argument, a `tx_context::sender()` check, or validating object ownership). Do not assume that referencing a shared object implies the caller is authorized. See [Access control](/develop/security/best-practices#access-control).
+
+:::
+
 Learn about different types of object ownership on Sui.
 
 import DocCardList from '@theme/DocCardList';

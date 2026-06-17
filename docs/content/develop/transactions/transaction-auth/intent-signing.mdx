@@ -132,6 +132,12 @@ const { signature } = await wallet.signPersonalMessage({
 });
 ```
 
+:::tip
+
+When you sign application or offchain messages (for example, login challenges or authorization payloads), structure the message so it cannot be replayed or misused in another context. Include a domain or app identifier, a chain or package identifier, the explicit purpose of the message, a nonce or request ID, and a timestamp or maximum age so the verifier can reject stale or replayed messages. See [Frontend and transaction signing](/develop/security/best-practices#frontend-and-transaction-signing) for details.
+
+:::
+
 :::info
 
 This page covers Sui transaction intent signing (the cryptographic envelope format). For cross-chain bridge integrations, see the [Wormhole](https://wormhole.com/docs/) or [Axelar](https://docs.axelar.dev/) documentation.

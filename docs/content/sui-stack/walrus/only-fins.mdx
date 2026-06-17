@@ -17,6 +17,12 @@ concepts:
 
 OnlyFins is a Web3 social platform that demonstrates encrypted content sharing with onchain access control. Creators publish posts with images they store on [Walrus](https://docs.wal.app) and encrypt through [Seal](https://seal-docs.wal.app), while viewers purchase `ViewerToken` capability objects to decrypt and view content. The app uses [Enoki](https://docs.enoki.mystenlabs.com/) for [zkLogin](/sui-stack/zklogin-integration/zklogin) authentication and [sponsored transactions](/develop/transaction-payment/sponsor-txn) so users interact without holding SUI for gas.
 
+:::caution
+
+OnlyFins is a demo pattern, not production-ready code. Before adapting it, work through this checklist: rate-limit and authorize sponsored transactions so an attacker cannot drain your gas budget; enforce Seal session-key expiry rather than holding long-lived sessions; understand the transfer semantics of the `ViewerToken` object (a transferable token grants access to whoever holds it); and remember that all post metadata, blob IDs, and onchain activity are public even when the image bytes are encrypted. See the [Security Best Practices](/develop/security/best-practices) guide.
+
+:::
+
 ## When to use this pattern
 
 Use this pattern when you need to:
@@ -238,31 +244,17 @@ Open `http://localhost:5173` in a browser. You see a feed of posts, some with lo
 
 ## Key code highlights
 
-The following snippets are the parts of the code worth reading carefully.
-
-### Post creation with optional encryption
-
-The `create_post` entry function creates a shared `Post` object with an optional encryption ID.
-
-<ImportContent source="frontend/move/posts/sources/posts.move" mode="code" org="MystenLabs" repo="onlyfins-example-app" fun="create_post" />
-
-When `encryption_id` contains a value, the post requires a `ViewerToken` to decrypt. When it contains `none`, the image is publicly viewable. The function shares the post so any user can read its metadata.
-
-### Seal access control gate
-
-The `seal_approve_access` function is the onchain gate that Seal calls before releasing decryption keys.
-
-<ImportContent source="frontend/move/posts/sources/posts.move" mode="code" org="MystenLabs" repo="onlyfins-example-app" fun="seal_approve_access" />
-
-This function checks 2 conditions: the caller is the post author, or the caller holds a `ViewerToken` linked to this post. It also verifies the requested `encryption_id` matches the post. If any check fails, the transaction aborts and Seal refuses to release the key.
-
-### Granting access with viewer tokens
-
-The `grant_access` function mints a new `ViewerToken` and returns it.
-
-<ImportContent source="frontend/move/posts/sources/posts.move" mode="code" org="MystenLabs" repo="onlyfins-example-app" fun="grant_access" />
-
-The function creates an owned object and transfers it to the viewer. The token links the viewer address to a specific post ID, which `seal_approve_access` checks later.
+<CodeWalkthrough source="frontend/move/posts/sources/posts.move" org="MystenLabs" repo="onlyfins-example-app" language="move">
+  <Step lines="25-41" title="`create_post` with optional encryption">
+    The `create_post` entry function creates a shared `Post` object with an optional encryption ID. When `encryption_id` contains a value, the post requires a `ViewerToken` to decrypt. When it contains `none`, the image is publicly viewable. The function shares the post so any user can read its metadata.
+  </Step>
+  <Step lines="43-48" title="`grant_access` with viewer tokens">
+    The `grant_access` function mints a new `ViewerToken` and returns it. The token links the viewer address to a specific post ID, which `seal_approve_access` checks later.
+  </Step>
+  <Step lines="50-67" title="`seal_approve_access` gate">
+    The `seal_approve_access` function is the onchain gate that Seal calls before releasing decryption keys. It checks two conditions: the caller is the post author, or the caller holds a `ViewerToken` linked to this post. It also verifies the requested `encryption_id` matches the post. If any check fails, the transaction aborts and Seal refuses to release the key.
+  </Step>
+</CodeWalkthrough>
 
 ### Paying for content
 

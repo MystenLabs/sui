@@ -17,6 +17,11 @@ Regular Sui events are indexed and queryable, but verifying them requires trusti
 This enables cryptographic verification of event completeness and correctness, with no full node required, and is lightweight enough to run in a browser or on mobile.
 
 ## Quick start
+:::tip When to use authenticated events
+
+Use regular events for indexing, telemetry, and dashboards where trusting an RPC provider or indexer is acceptable. Use authenticated events when a consumer needs cryptographic proof of event completeness and correctness rather than trusting an intermediary, such as a light client, bridge, or cross-chain workflow. See [Security Best Practices](/develop/security/best-practices) for guidance on choosing trust boundaries.
+
+:::
 
 Use the following examples to emit authenticated events from a Move contract and consume them from a client.
 

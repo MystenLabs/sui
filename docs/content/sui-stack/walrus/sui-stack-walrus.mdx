@@ -53,7 +53,9 @@ flowchart LR
 Walrus stores data as blobs, which are arbitrary binary objects. All blobs stored on Walrus are public and discoverable by anyone.
 
 :::caution
-Do not use Walrus to store secrets or private data without additional measures to protect confidentiality. See [Data encryption](#data-encryption) for how to encrypt content before upload.
+
+Both blob contents and their metadata are public. Blob IDs, blob attributes, and the onchain blob registration are all discoverable by anyone, so an attacker can enumerate and read everything you store. Never store secrets or private data unencrypted. For sensitive content, encrypt before upload using [Seal](/sui-stack/seal/sui-stack-seal) or envelope encryption, and treat blob IDs and attributes as public. See [Data encryption](#data-encryption) and the [Security Best Practices](/develop/security/best-practices) guide.
+
 :::
 
 Walrus uses [erasure coding](https://docs.wal.app/docs/system-overview) to distribute encoded parts of each blob across all [storage nodes](https://docs.wal.app/docs/operator-guide/storage-nodes), maintaining storage costs at approximately 5 times the size of the original blob. This is significantly more cost-efficient than full replication and more resilient than partial replication.

@@ -6,6 +6,12 @@ keywords: [ wallet, self-custodial, phantom, ledger, hardware wallet, wallet sta
 
 A self-custodial wallet stores your private key on a device you control. No third party holds the key, and no third party can authorize transactions on your behalf. If you lose the device and your recovery passphrase, access to your assets is permanently lost. Every self-custodial wallet compatible with Sui implements the [Wallet Standard](/onchain-finance/asset-custody/wallets/wallet-standard), which means [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) and other apps can discover and connect to them automatically, without any wallet-specific code.
 
+:::tip
+
+Because you are the sole custodian, have a recovery and key rotation plan before funding the wallet. Store your seed phrase securely offline (never in plaintext, cloud notes, or screenshots), prefer hardware-wallet signing so the key never touches an internet-connected device, and send a small test transfer to confirm the address before moving large amounts. See [user and operator key management](/develop/security/best-practices#user-and-operator-key-management).
+
+:::
+
 ## Phantom
 
 [Phantom](https://phantom.com/) is a self-custodial, multi-chain browser extension wallet available for Chrome, Firefox, Edge, and Brave, as well as a mobile app for iOS and Android. It stores your private key on your device and encrypts it with a password.

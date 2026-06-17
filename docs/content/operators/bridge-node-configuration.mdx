@@ -62,6 +62,17 @@ Create a new key pair in a secure environment (for example, on the same machine 
 
 :::
 
+:::caution
+
+Treat bridge node key custody as a production requirement. Before you go live, confirm the following:
+
+- **Generate keys securely.** Create the `BridgeAuthorityKey`, network key, and any admin keys in a secure environment, offline where possible, and never reuse a key across roles. See [user and operator key management](/develop/security/best-practices#user-and-operator-key-management).
+- **Separate keys by role.** Keep the bridge authority key, network key, and administrative/account keys distinct. Provide a dedicated `bridge-client-key-path` rather than defaulting to the validator key, so a compromise of one key does not expose the others.
+- **Document rotation and recovery.** Maintain a written procedure for rotating and recovering each key, including who holds custody and how compromised keys are replaced.
+- **Treat WAF and rate limiting as required.** The [WAF protection](#web-application-firewall-waf-protection-for-bridge-node) and rate limiting described later on this page are production requirements, not optional hardening.
+
+:::
+
 ### Registration
 
 After you have both authority key file and REST API URL ready, you can register them by using Sui CLI:
