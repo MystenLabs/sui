@@ -3,11 +3,13 @@
 
 use std::fmt::Write;
 
+use anyhow::Context as _;
 use async_graphql::Object;
 use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
 use sui_package_resolver::CleverError;
 use sui_package_resolver::ErrorConstants;
+use sui_types::error::ExecutionErrorMetadata;
 use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::execution_status::MoveLocation;
 use sui_types::execution_status::{ExecutionFailure, ExecutionStatus as NativeExecutionStatus};
@@ -15,6 +17,7 @@ use sui_types::transaction::ProgrammableTransaction;
 use tokio::sync::OnceCell;
 
 use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::json::Json;
 use crate::api::types::move_function::MoveFunction;
 use crate::api::types::move_module::MoveModule;
 use crate::api::types::move_package::MovePackage;
@@ -25,6 +28,7 @@ use crate::scope::Scope;
 pub(crate) struct ExecutionError {
     native: ExecutionErrorKind,
     command: Option<usize>,
+    metadata: Option<ExecutionErrorMetadata>,
     clever: OnceCell<Option<CleverError>>,
     scope: Scope,
 }
@@ -91,6 +95,17 @@ impl ExecutionError {
         }
     }
 
+    /// Additional error metadata, when available.
+    async fn metadata(&self) -> Option<Result<Json, RpcError>> {
+        let metadata = self.metadata.as_ref()?;
+        Some(
+            serde_json::to_value(metadata)
+                .context("Failed to serialize execution error metadata")
+                .map_err(RpcError::from)
+                .and_then(Json::try_from),
+        )
+    }
+
     /// The module that the abort originated from. Only populated for Move aborts and primitive runtime errors.
     async fn module(&self) -> Option<MoveModule> {
         let location = match &self.native {
@@ -144,6 +159,7 @@ impl ExecutionError {
         scope: &Scope,
         status: &NativeExecutionStatus,
         programmable_tx: Option<&ProgrammableTransaction>,
+        metadata: Option<ExecutionErrorMetadata>,
     ) -> Result<Option<Self>, RpcError> {
         let NativeExecutionStatus::Failure(ExecutionFailure { error, command }) = status else {
             return Ok(None);
@@ -160,6 +176,7 @@ impl ExecutionError {
         Ok(Some(Self {
             native: native_error,
             command: *command,
+            metadata,
             clever: OnceCell::new(),
             scope: scope.clone(),
         }))

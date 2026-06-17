@@ -84,6 +84,7 @@ use sui_types::crypto::ToFromBytes;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
+use sui_types::error::ExecutionErrorMetadata;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::object::Object as NativeObject;
@@ -482,6 +483,14 @@ fn process_transaction(
         .collect::<anyhow::Result<_>>()?;
 
     let digest = *effects.transaction_digest();
+    let execution_error_metadata = proto
+        .effects
+        .as_ref()
+        .and_then(|effects| effects.status.as_ref())
+        .and_then(|status| status.error.as_ref())
+        .and_then(|error| error.metadata.as_ref())
+        .map(ExecutionErrorMetadata::from)
+        .filter(|metadata| !metadata.is_empty());
 
     let contents = NativeTransactionContents::ExecutedTransaction(
         sui_indexer_alt_reader::kv_loader::ExecutedTransactionData {
@@ -491,6 +500,7 @@ fn process_transaction(
             signatures,
             balance_changes: proto.balance_changes.clone(),
             proto_effects: proto.effects.clone(),
+            execution_error_metadata,
             proto_transaction: proto.transaction.clone(),
             timestamp_ms: Some(timestamp_ms),
             cp_sequence_number: Some(cp_sequence_number),

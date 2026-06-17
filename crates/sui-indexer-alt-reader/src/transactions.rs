@@ -107,6 +107,7 @@ impl Loader<TransactionKey> for LedgerGrpcReader {
         request.read_mask = Some(FieldMask::from_paths([
             "transaction.bcs",
             "effects.bcs",
+            "effects.status.error.metadata",
             "events.bcs",
             "signatures.bcs",
             "checkpoint",
@@ -139,6 +140,7 @@ impl Loader<TransactionKey> for LedgerGrpcReader {
                     timestamp_ms,
                     cp_sequence_number: executed.checkpoint,
                     balance_changes: executed.balance_changes,
+                    execution_error_metadata: full_tx.execution_error_metadata,
                 };
                 results.insert(
                     TransactionKey(transaction.transaction_data.digest()),

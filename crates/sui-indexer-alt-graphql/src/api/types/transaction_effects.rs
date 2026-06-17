@@ -11,6 +11,7 @@ use async_graphql::connection::Connection;
 use async_graphql::dataloader::DataLoader;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
+use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_indexer_alt_reader::kv_loader::BalanceChangeContents as KvBalanceChangeContents;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
@@ -22,6 +23,7 @@ use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects as NativeTransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::error::ExecutionErrorMetadata;
 use sui_types::execution_status::ExecutionStatus as NativeExecutionStatus;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
@@ -68,6 +70,7 @@ pub(crate) struct TransactionEffects {
 pub(crate) struct EffectsContents {
     pub(crate) scope: Scope,
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
+    pub(crate) error_metadata: Option<ExecutionErrorMetadata>,
 }
 
 type CObjectChange = JsonCursor<usize>;
@@ -172,8 +175,13 @@ impl EffectsContents {
                         _ => None,
                     });
 
-            ExecutionError::from_execution_status(&self.scope, status, programmable_tx.as_ref())
-                .await
+            ExecutionError::from_execution_status(
+                &self.scope,
+                status,
+                programmable_tx.as_ref(),
+                self.error_metadata.clone(),
+            )
+            .await
         }
         .await;
 
@@ -363,6 +371,18 @@ impl EffectsContents {
         Some(
             async {
                 let mut proto_effects = content.proto_effects()?;
+                if let Some(metadata) = &self.error_metadata
+                    && let Some(error) = proto_effects
+                        .status
+                        .as_mut()
+                        .and_then(|status| status.error.as_mut())
+                    && error
+                        .metadata
+                        .as_ref()
+                        .is_none_or(|metadata| ExecutionErrorMetadata::from(metadata).is_empty())
+                {
+                    error.metadata = Some(metadata.into());
+                }
                 // Clear the bcs field as effectsJson is intended to provide a full structured output
                 proto_effects.bcs = None;
                 let json_value = serde_json::to_value(&proto_effects)
@@ -505,12 +525,14 @@ impl TransactionEffects {
         let digest = contents
             .digest()
             .context("Failed to get digest from transaction contents")?;
+        let error_metadata = contents.execution_error_metadata();
 
         Ok(Self {
             digest,
             contents: EffectsContents {
                 scope,
                 contents: Some(Arc::new(contents)),
+                error_metadata,
             },
         })
     }
@@ -543,6 +565,7 @@ impl EffectsContents {
         Self {
             scope,
             contents: None,
+            error_metadata: None,
         }
     }
 
@@ -555,15 +578,30 @@ impl EffectsContents {
         digest: TransactionDigest,
     ) -> Result<Self, RpcError> {
         if self.contents.is_some() {
-            return Ok(self.clone());
+            let mut contents = self.clone();
+            if contents.error_metadata.is_none()
+                && let Some(transaction) = &contents.contents
+            {
+                contents.error_metadata = transaction.execution_error_metadata();
+                if contents.error_metadata.is_none() && transaction.effects()?.status().is_err() {
+                    contents.error_metadata =
+                        execution_error_metadata_from_fullnode(ctx, digest).await;
+                }
+            }
+            return Ok(contents);
         }
 
         // Streaming fast path: if the scope is backed by a streamed checkpoint containing this
         // transaction, hydrate from the in-memory payload instead of hitting the DB.
         if let Some(tx) = self.scope.streamed_transaction_by_digest(digest) {
+            let mut error_metadata = tx.contents.execution_error_metadata();
+            if error_metadata.is_none() && tx.contents.effects()?.status().is_err() {
+                error_metadata = execution_error_metadata_from_fullnode(ctx, digest).await;
+            }
             return Ok(Self {
                 scope: self.scope.clone(),
                 contents: Some(Arc::new(tx.contents.clone())),
+                error_metadata,
             });
         }
 
@@ -588,10 +626,34 @@ impl EffectsContents {
             return Ok(self.clone());
         }
 
+        let mut error_metadata = transaction.execution_error_metadata();
+        if error_metadata.is_none() && transaction.effects()?.status().is_err() {
+            error_metadata = execution_error_metadata_from_fullnode(ctx, digest).await;
+        }
+
         Ok(Self {
             scope: self.scope.clone(),
             contents: Some(Arc::new(transaction)),
+            error_metadata,
         })
+    }
+}
+
+async fn execution_error_metadata_from_fullnode(
+    ctx: &Context<'_>,
+    digest: TransactionDigest,
+) -> Option<ExecutionErrorMetadata> {
+    let fullnode_client = ctx.data_opt::<FullnodeClient>()?;
+
+    match fullnode_client.execution_error_metadata(digest).await {
+        Ok(metadata) => metadata,
+        Err(error) => {
+            tracing::debug!(
+                ?digest,
+                "Failed to fetch execution error metadata from fullnode: {error}"
+            );
+            None
+        }
     }
 }
 
@@ -601,7 +663,11 @@ impl From<Transaction> for TransactionEffects {
 
         Self {
             digest: tx.digest,
-            contents: EffectsContents { scope, contents },
+            contents: EffectsContents {
+                scope,
+                contents,
+                error_metadata: None,
+            },
         }
     }
 }
