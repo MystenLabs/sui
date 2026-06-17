@@ -356,6 +356,7 @@ const MAINNET_USDB: &str =
 //              shipped to mainnet out-of-band in #26816).
 // Version 127: Enable always_advance_dkg_to_resolution.
 //              Update gas prices for range proofs and ristretto group operations.
+//              Enable timestamp_based_epoch_close on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5018,6 +5019,8 @@ impl ProtocolConfig {
                     cfg.group_ops_ristretto_point_mul_cost = Some(1763);
                     cfg.group_ops_ristretto_scalar_div_cost = Some(557);
                     cfg.group_ops_ristretto_point_div_cost = Some(2244);
+
+                    cfg.feature_flags.timestamp_based_epoch_close = true;
                 }
                 // Use this template when making changes:
                 //
