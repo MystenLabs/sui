@@ -15,6 +15,8 @@ const EInvalidRange: u64 = 2;
 #[allow(unused_const)]
 const EInvalidBatchSize: u64 = 3;
 const EUnsupportedVersion: u64 = 4;
+const EInvalidDst: u64 = 5;
+const MAX_DST_LENGTH: u64 = 64;
 
 /// Verify a range proof over the Ristretto255 curve that all committed values are in the range [0, 2^bits).
 /// Currently, the only supported version is 0 which corresponds to the original Bulletproofs construction (https://eprint.iacr.org/2017/1066.pdf).
@@ -28,25 +30,44 @@ const EUnsupportedVersion: u64 = 4;
 /// The number of commitments must be a power of two, but if needed, the input to the prover can be padded with trivial commitments to zero.
 /// The number of commitments times `bits` can be at most 512.
 ///
+/// The `dst` is a domain separation tag that is bound into the proof transcript. Provers and
+/// verifiers must agree on the same `dst` for verification to succeed. It can be at most 64 bytes.
+///
 /// Enabled only on devnet.
-public fun verify_bulletproofs_ristretto255(
+public fun verify_bulletproofs_with_dst_ristretto255(
     proof: &vector<u8>,
     bits: u8,
     commitments: &vector<Element<ristretto255::G>>,
+    dst: &vector<u8>,
     version: u8,
 ): bool {
+    assert!(dst.length() <= MAX_DST_LENGTH, EInvalidDst);
     match (version) {
-        0 => verify_bulletproofs_ristretto255_internal(
+        0 => verify_bulletproofs_with_dst_ristretto255_internal(
             proof,
             bits,
             &commitments.map_ref!(|c| *c.bytes()),
+            dst,
         ),
         _ => abort EUnsupportedVersion,
     }
 }
 
-native fun verify_bulletproofs_ristretto255_internal(
+#[deprecated(note = b"Use `verify_bulletproofs_with_dst_ristretto255` instead.")]
+/// Disabled. This entry point always aborts; use `verify_bulletproofs_with_dst_ristretto255`
+/// instead.
+public fun verify_bulletproofs_ristretto255(
+    _proof: &vector<u8>,
+    _bits: u8,
+    _commitments: &vector<Element<ristretto255::G>>,
+    _version: u8,
+): bool {
+    abort ENotSupported
+}
+
+native fun verify_bulletproofs_with_dst_ristretto255_internal(
     proof: &vector<u8>,
     bits: u8,
     commitments: &vector<vector<u8>>,
+    dst: &vector<u8>,
 ): bool;
