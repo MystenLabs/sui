@@ -9,7 +9,7 @@ Review security best practices for building on Sui to help protect your smart co
 
 :::caution
 
-Shared objects are not an authorization boundary. Anyone can submit a transaction that references a shared object, so any privileged code path that touches a shared object must enforce authorization with Move-level checks — for example, requiring a capability argument, validating `tx_context::sender()`, or checking object ownership. Never assume that access to a shared object is restricted. See [Access control](/develop/security/best-practices#access-control).
+Shared objects are not an authorization boundary. Anyone can submit a transaction that references a shared object, so any privileged code path that touches a shared object must enforce authorization with Move-level checks. For example, require a capability argument, validate `tx_context::sender()`, or check object ownership. Never assume that access to a shared object is restricted. See [Access control](/develop/security/best-practices#access-control).
 
 :::
 

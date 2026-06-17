@@ -215,7 +215,7 @@ Strengthen operation-capability delegation with these practices:
 
 - **Delegate with least privilege.** Hand the operation cap only to the address that needs it for a specific task, and keep account keys offline and uninvolved in routine operations.
 - **Revoke after the task completes.** Once a delegated task is done, rotate the cap with `sui_system::rotate_operation_cap` to invalidate the old one, and rotate immediately if a delegatee key is lost or compromised.
-- **Keep an audit trail.** Record who held each cap, when it was delegated, and when it was revoked, so you can review operational actions after the fact.
+- **Keep an audit trail.** Record who held each cap, when you delegated it, and when you revoked it, so you can review operational actions after the fact.
 - **Roll out security fixes confidentially.** Apply urgent fixes through the [private security fixes](#private-security-fixes) process rather than disclosing them publicly before validators have patched.
 
 See [Security Best Practices](/develop/security/best-practices) for the canonical operator guidance.

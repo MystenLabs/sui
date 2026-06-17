@@ -19,7 +19,7 @@ APIs expose consensus-address-owned objects with a `ConsensusAddressOwner` owner
 
 :::caution
 
-Anyone can submit a transaction that references a shared object. Shared-object access is *not* restricted by ownership — secure it in Move with explicit authorization checks (such as a capability argument, a `tx_context::sender()` check, or validating object ownership). Do not assume that referencing a shared object implies the caller is authorized. See [Access control](/develop/security/best-practices#access-control).
+Anyone can submit a transaction that references a shared object. Shared-object access is *not* restricted by ownership, so secure it in Move with explicit authorization checks (such as a capability argument, a `tx_context::sender()` check, or validating object ownership). Do not assume that referencing a shared object implies the caller is authorized. See [Access control](/develop/security/best-practices#access-control).
 
 :::
 

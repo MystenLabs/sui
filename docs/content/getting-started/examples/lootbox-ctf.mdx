@@ -115,7 +115,7 @@ When writing your own randomness-consuming code, apply the full checklist:
 
 - Keep the randomness-consuming function `entry` (private) so it cannot be composed and abort-filtered.
 - Always create the `RandomGenerator` internally from `&Random`; never accept a `RandomGenerator` as a function parameter.
-- Balance gas usage across all outcome paths so the winning and losing branches cost roughly the same — otherwise gas differences leak the result and enable filtering.
+- Balance gas usage across all outcome paths so the winning and losing branches cost roughly the same. Otherwise gas differences leak the result and enable filtering.
 - Remember the `PostRandomCommandRestrictions`: only a limited set of commands can follow a random call in a PTB, so do the full draw-and-resolve in one Move call.
 - For high-stakes flows, use a commit-reveal pattern (commit and pay first, reveal later) so outcomes cannot be inspected and reverted in the same transaction.
 

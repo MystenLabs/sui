@@ -164,7 +164,7 @@ DeepBook Margin implements multiple safeguards against oracle issues:
 
 :::caution
 
-These onchain protections do not remove your own data-hygiene responsibility. Monitor oracle freshness and be aware that the prices, risk ratios, and liquidation thresholds shown in a UI, wallet, or indexer can lag the onchain state — never make margin decisions on stale or cached offchain data. Also understand the limits of liquidation automation: keepers and TPSL orders are best-effort and can be delayed or fail during congestion or extreme volatility, so do not assume a position will always be closed at your expected price. See [oracle and offchain data](/develop/security/best-practices#oracle-and-offchain-data).
+These onchain protections do not remove your own data-hygiene responsibility. Monitor oracle freshness and be aware that the prices, risk ratios, and liquidation thresholds shown in a UI, wallet, or indexer can lag the onchain state. Never make margin decisions on stale or cached offchain data. Also understand the limits of liquidation automation: keepers and TPSL orders are best-effort and can be delayed or fail during congestion or extreme volatility, so do not assume a position always closes at your expected price. See [oracle and offchain data](/develop/security/best-practices#oracle-and-offchain-data).
 
 :::
 

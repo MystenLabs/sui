@@ -192,8 +192,8 @@ To securely access randomness:
 
 - Balance gas usage across all outcome paths so that winning and losing branches cost roughly the same and an attacker cannot infer the result from gas before the transaction commits.
 
-- Account for the PTB restriction: only `TransferObjects` and `MergeCoins` commands may follow a `MoveCall` that consumes `Random`, so complete the draw-and-resolve in a single Move call.
+- Account for the PTB restriction: only `TransferObjects` and `MergeCoins` commands can follow a `MoveCall` that consumes `Random`, so complete the draw-and-resolve in a single Move call.
 
-- For high-stakes flows, use a commit-reveal pattern (commit and pay in one transaction, reveal the outcome in a later transaction) so outcomes cannot be inspected and reverted atomically.
+- For high-stakes flows, use a commit-reveal pattern (commit and pay in one transaction, reveal the outcome in a later transaction) so no one can inspect and revert outcomes atomically.
 
 For the canonical guidance, see [Onchain randomness](/develop/security/best-practices#onchain-randomness).

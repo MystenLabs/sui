@@ -215,7 +215,7 @@ This function takes a reference to the caller's `AdminCap` (proving they have au
 
 :::caution
 
-Destroying or transferring a capability is not sufficient revocation if the holder is compromised or uncooperative — you cannot force someone else's object to be deleted, and a compromised holder can act before you react. For robust revocation, gate privileged functions on a registry (an allowlist or set of valid capability IDs the module checks) or a version/epoch field that you can bump to invalidate outstanding caps. Also plan for capability rotation, hold high-value caps in multisig custody, and emit events for privileged actions so they are auditable. See [Access control](/develop/security/best-practices#access-control).
+Destroying or transferring a capability is not sufficient revocation if the holder is compromised or uncooperative. You cannot force someone else's object to be deleted, and a compromised holder can act before you react. For robust revocation, gate privileged functions on a registry (an allowlist or set of valid capability IDs the module checks) or a version/epoch field that you can bump to invalidate outstanding caps. Also plan for capability rotation, hold high-value caps in multisig custody, and emit events for privileged actions so you can audit them. See [Access control](/develop/security/best-practices#access-control).
 
 :::
 
