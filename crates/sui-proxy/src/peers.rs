@@ -10,13 +10,17 @@ use once_cell::sync::Lazy;
 use prometheus::{CounterVec, HistogramVec, IntGaugeVec};
 use prometheus::{register_counter_vec, register_histogram_vec, register_int_gauge_vec};
 use serde::Deserialize;
-use serde_json::Value;
 use std::collections::BTreeMap;
+use std::str::FromStr;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
     time::Duration,
 };
+use sui_rpc::Client as SuiRpcClient;
+use sui_rpc::field::{FieldMask, FieldMaskUtil};
+use sui_rpc::proto::sui::rpc::v2::{GetObjectRequest, Object};
+use sui_sdk_types::{Address, TypeTag};
 use sui_tls::Allower;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeSummary;
@@ -635,30 +639,307 @@ fn append_path_segment(mut url: Url, segment: &str) -> Option<Url> {
     Some(url)
 }
 
-// On-chain shape we depend on (see hashi/packages/hashi/sources/core/committee/
-// committee_set.move and hashi.move):
+// Hashi committee resolver
 //
+// Reads on-chain hashi state via Sui's gRPC API (sui-rpc). The `Hashi` shared
+// object is fetched once per poll cycle to extract the committee_set's epoch
+// info and the `members`/`committees` Bag UIDs. Each Committee and MemberInfo
+// is then a leaf dynamic-field fetch under those bags, BCS-decoded into the
+// `move_types` mirror structs below.
+//
+// On-chain layout (mirrored in `move_types`):
 //   Hashi (shared object, key)
 //     committee_set: CommitteeSet (store)
-//       epoch: u64
-//       pending_epoch_change: Option<u64>
 //       members: Bag<address, MemberInfo>
+//       epoch: u64
 //       committees: Bag<u64, Committee>
+//       pending_epoch_change: Option<u64>
+//     config / treasury / proposals / tob / num_consumed_presigs (ignored
+//     after BCS decode but mirrored for field-counting)
 //
-//   MemberInfo
-//     validator_address: address
-//     tls_public_key: vector<u8>         // 32-byte raw ed25519; empty until set
-//
+//   MemberInfo.tls_public_key: vector<u8>   // 32-byte raw Ed25519; empty until set
 //   Committee.members: vector<CommitteeMember>
 //   CommitteeMember.validator_address: address
+//
+// BCS is positional and not self-describing, so to read a single inline field
+// out of `Hashi` we have to mirror every sibling struct. The `move_types`
+// module below defines exactly enough to satisfy field-counting; only fields
+// the resolver reads carry meaningful documentation.
 
-/// Snapshot of the CommitteeSet metadata pulled from one `sui_getObject` call.
+mod move_types {
+    use serde::Deserialize;
+    use sui_sdk_types::Address;
+
+    // Many of these fields are never read by the resolver — they exist so BCS
+    // can advance past them. `#[derive(Debug)]` keeps the compiler treating
+    // every field as "used" via the generated formatter.
+
+    /// Mirror of `hashi::hashi::Hashi`. Only `committee_set` is read.
+    #[derive(Debug, Deserialize)]
+    pub struct Hashi {
+        pub id: Address,
+        pub committee_set: CommitteeSet,
+        pub config: Config,
+        pub treasury: Treasury,
+        pub proposals: Proposals,
+        pub tob: Bag,
+        pub num_consumed_presigs: u64,
+    }
+
+    /// Mirror of `hashi::committee_set::CommitteeSet`.
+    #[derive(Debug, Deserialize)]
+    pub struct CommitteeSet {
+        pub members: Bag,
+        pub epoch: u64,
+        pub committees: Bag,
+        pub pending_epoch_change: Option<u64>,
+        pub mpc_public_key: Vec<u8>,
+    }
+
+    /// Mirror of `sui::bag::Bag`. The `id` doubles as the UID we feed back into
+    /// `derive_dynamic_child_id` to look up entries.
+    #[derive(Debug, Deserialize)]
+    pub struct Bag {
+        pub id: Address,
+        pub size: u64,
+    }
+
+    /// Mirror of the dynamic-field wrapper `sui::dynamic_field::Field<N, V>`.
+    /// Dynamic-field objects returned by `get_object` BCS-deserialize as this
+    /// shape with `value` carrying the actual Move struct (Committee, MemberInfo).
+    #[derive(Debug, Deserialize)]
+    pub struct Field<N, V> {
+        pub id: Address,
+        pub name: N,
+        pub value: V,
+    }
+
+    /// Mirror of `hashi::committee_set::MemberInfo`.
+    #[derive(Debug, Deserialize)]
+    pub struct MemberInfo {
+        pub validator_address: Address,
+        pub operator_address: Address,
+        pub next_epoch_public_key: Vec<u8>,
+        pub endpoint_url: String,
+        /// 32-byte raw Ed25519 public key; empty until the operator calls
+        /// `set_tls_public_key` on chain.
+        pub tls_public_key: Vec<u8>,
+        pub next_epoch_encryption_public_key: Vec<u8>,
+    }
+
+    /// Mirror of `hashi::committee::Committee`.
+    #[derive(Debug, Deserialize)]
+    pub struct Committee {
+        pub epoch: u64,
+        pub members: Vec<CommitteeMember>,
+        pub total_weight: u64,
+        pub mpc_threshold_in_basis_points: u64,
+        pub mpc_weight_reduction_allowed_delta: u64,
+        pub mpc_max_faulty_in_basis_points: u64,
+    }
+
+    /// Mirror of `hashi::committee::CommitteeMember`.
+    #[derive(Debug, Deserialize)]
+    pub struct CommitteeMember {
+        pub validator_address: Address,
+        pub public_key: Vec<u8>,
+        pub encryption_public_key: Vec<u8>,
+        pub weight: u64,
+    }
+
+    // The remaining mirror types are pure BCS-skip — only their field shape
+    // matters so the deserializer can advance the cursor past Hashi's tail.
+
+    #[derive(Debug, Deserialize)]
+    pub struct Config {
+        pub config: VecMap<String, ConfigValue>,
+        pub enabled_versions: VecSet<u64>,
+        pub upgrade_cap: Option<UpgradeCap>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct Treasury {
+        pub objects: Bag,
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct Proposals {
+        pub active: Bag,
+        pub executed: Bag,
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct VecMap<K, V> {
+        pub contents: Vec<VecMapEntry<K, V>>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct VecMapEntry<K, V> {
+        pub key: K,
+        pub value: V,
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct VecSet<T> {
+        pub contents: Vec<T>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct UpgradeCap {
+        pub id: Address,
+        pub package: Address,
+        pub version: u64,
+        pub policy: u8,
+    }
+
+    /// Mirror of `hashi::config_value::Value`. Move enum variants serialize as
+    /// (ULEB128 tag, payload), so all variants must be present in declaration
+    /// order to satisfy BCS.
+    #[derive(Debug, Deserialize)]
+    pub enum ConfigValue {
+        U64(u64),
+        Address(Address),
+        String(String),
+        Bool(bool),
+        Bytes(Vec<u8>),
+    }
+
+    /// Loadbearing field anchor. Many fields above exist only so BCS can
+    /// advance past them; the resolver never reads them at runtime. To keep
+    /// dead-code analysis honest (and `RUSTFLAGS=-Dwarnings` clean) without
+    /// `#[allow(dead_code)]`, this function pattern-matches every field into
+    /// a named local. Calling it once per resolver invocation is effectively
+    /// free and pins the layout discipline at compile time.
+    pub(super) fn acknowledge_layout(hashi: &Hashi) {
+        let Hashi {
+            id,
+            committee_set,
+            config,
+            treasury,
+            proposals,
+            tob,
+            num_consumed_presigs,
+        } = hashi;
+        let _ = (id, num_consumed_presigs);
+        let CommitteeSet {
+            members,
+            epoch,
+            committees,
+            pending_epoch_change,
+            mpc_public_key,
+        } = committee_set;
+        let _ = (epoch, pending_epoch_change, mpc_public_key);
+        for bag in [members, committees, tob] {
+            let Bag { id, size } = bag;
+            let _ = (id, size);
+        }
+        let Config {
+            config,
+            enabled_versions,
+            upgrade_cap,
+        } = config;
+        let VecMap { contents } = config;
+        for VecMapEntry { key, value } in contents {
+            let _ = key;
+            match value {
+                ConfigValue::U64(v) => {
+                    let _ = v;
+                }
+                ConfigValue::Address(v) => {
+                    let _ = v;
+                }
+                ConfigValue::String(v) => {
+                    let _ = v;
+                }
+                ConfigValue::Bool(v) => {
+                    let _ = v;
+                }
+                ConfigValue::Bytes(v) => {
+                    let _ = v;
+                }
+            }
+        }
+        let VecSet { contents } = enabled_versions;
+        let _ = contents;
+        if let Some(UpgradeCap {
+            id,
+            package,
+            version,
+            policy,
+        }) = upgrade_cap
+        {
+            let _ = (id, package, version, policy);
+        }
+        let Treasury { objects } = treasury;
+        let Bag { id, size } = objects;
+        let _ = (id, size);
+        let Proposals { active, executed } = proposals;
+        for bag in [active, executed] {
+            let Bag { id, size } = bag;
+            let _ = (id, size);
+        }
+    }
+
+    /// Same idea as `acknowledge_layout`, but for the dynamic-field-wrapped
+    /// `Committee` and `MemberInfo` payloads the resolver decodes per member.
+    pub(super) fn acknowledge_committee_field(field: &Field<u64, Committee>) {
+        let Field { id, name, value } = field;
+        let _ = (id, name);
+        let Committee {
+            epoch,
+            members,
+            total_weight,
+            mpc_threshold_in_basis_points,
+            mpc_weight_reduction_allowed_delta,
+            mpc_max_faulty_in_basis_points,
+        } = value;
+        let _ = (
+            epoch,
+            total_weight,
+            mpc_threshold_in_basis_points,
+            mpc_weight_reduction_allowed_delta,
+            mpc_max_faulty_in_basis_points,
+        );
+        for CommitteeMember {
+            validator_address,
+            public_key,
+            encryption_public_key,
+            weight,
+        } in members
+        {
+            let _ = (validator_address, public_key, encryption_public_key, weight);
+        }
+    }
+
+    pub(super) fn acknowledge_member_field(field: &Field<Address, MemberInfo>) {
+        let Field { id, name, value } = field;
+        let _ = (id, name);
+        let MemberInfo {
+            validator_address,
+            operator_address,
+            next_epoch_public_key,
+            endpoint_url,
+            tls_public_key,
+            next_epoch_encryption_public_key,
+        } = value;
+        let _ = (
+            validator_address,
+            operator_address,
+            next_epoch_public_key,
+            endpoint_url,
+            tls_public_key,
+            next_epoch_encryption_public_key,
+        );
+    }
+}
+
+/// Snapshot of the CommitteeSet metadata pulled from one Hashi `get_object` call.
 #[derive(Debug, Clone)]
 struct CommitteeSetSnapshot {
     epoch: u64,
     pending_epoch: Option<u64>,
-    members_bag_id: String,
-    committees_bag_id: String,
+    members_bag_id: Address,
+    committees_bag_id: Address,
 }
 
 /// A single hashi member resolved from the on-chain `members` Bag. The
@@ -679,13 +960,18 @@ struct HashiResolution {
     peers: Vec<(Ed25519PublicKey, AllowedPeer)>,
 }
 
-/// End-to-end resolve: RPC -> peer allowlist entries.
+/// End-to-end resolve: gRPC reads + BCS decode -> peer allowlist entries.
 async fn resolve_hashi_committee(
     rpc_url: &str,
     hashi_object_id: &str,
     validator_names: &BTreeMap<SuiAddress, String>,
 ) -> Result<HashiResolution> {
-    let snapshot = get_hashi_committee_snapshot(rpc_url, hashi_object_id).await?;
+    let hashi_object_id = Address::from_str(hashi_object_id)
+        .with_context(|| format!("invalid hashi-object-id '{hashi_object_id}'"))?;
+    let mut client = SuiRpcClient::new(rpc_url.to_owned())
+        .with_context(|| format!("creating sui-rpc client for {rpc_url}"))?;
+
+    let snapshot = get_hashi_committee_snapshot(&mut client, hashi_object_id).await?;
     debug!(
         epoch = snapshot.epoch,
         pending_epoch = ?snapshot.pending_epoch,
@@ -698,8 +984,8 @@ async fn resolve_hashi_committee(
     // until the first `start_reconfig` runs.
     let mut active_addrs: std::collections::HashSet<SuiAddress> =
         match get_committee_validator_addresses(
-            rpc_url,
-            &snapshot.committees_bag_id,
+            &mut client,
+            snapshot.committees_bag_id,
             snapshot.epoch,
         )
         .await
@@ -714,7 +1000,8 @@ async fn resolve_hashi_committee(
             }
         };
     if let Some(next) = snapshot.pending_epoch {
-        match get_committee_validator_addresses(rpc_url, &snapshot.committees_bag_id, next).await {
+        match get_committee_validator_addresses(&mut client, snapshot.committees_bag_id, next).await
+        {
             Ok(addrs) => active_addrs.extend(addrs),
             Err(e) => warn!(
                 pending_epoch = next,
@@ -723,14 +1010,16 @@ async fn resolve_hashi_committee(
         }
     }
 
-    // Fetch each member's MemberInfo concurrently. 100ish validators per chain,
+    // Fetch each member's MemberInfo concurrently. ~100 validators per chain,
     // bounded concurrency keeps RPC load reasonable without serializing.
+    // sui_rpc::Client is cheap to clone — each clone shares the underlying
+    // tonic Channel so we don't open per-task connections.
     let members: Vec<ResolvedHashiMember> = stream::iter(active_addrs)
         .map(|addr| {
-            let url = rpc_url.to_owned();
-            let bag = snapshot.members_bag_id.clone();
+            let mut client = client.clone();
+            let bag = snapshot.members_bag_id;
             async move {
-                match get_hashi_member_info(&url, &bag, addr).await {
+                match get_hashi_member_info(&mut client, bag, addr).await {
                     Ok(m) => Some(m),
                     Err(e) => {
                         warn!(addr =% addr, "could not fetch hashi MemberInfo: {e:#}");
@@ -802,230 +1091,172 @@ fn extract_hashi(
 }
 
 async fn get_hashi_committee_snapshot(
-    rpc_url: &str,
-    hashi_object_id: &str,
+    client: &mut SuiRpcClient,
+    hashi_object_id: Address,
 ) -> Result<CommitteeSetSnapshot> {
-    let rpc_method = "sui_getObject";
+    let rpc_method = "sui_rpc.LedgerService.GetObject:Hashi";
     let _timer = JSON_RPC_DURATION
         .with_label_values(&[rpc_method])
         .start_timer();
 
-    let body = sui_rpc_call(
-        rpc_url,
-        rpc_method,
-        serde_json::json!([
-            hashi_object_id,
-            {"showContent": true}
-        ]),
-    )
-    .await?;
+    let response =
+        client
+            .ledger_client()
+            .get_object(GetObjectRequest::new(&hashi_object_id).with_read_mask(
+                FieldMask::from_paths([Object::path_builder().contents().finish()]),
+            ))
+            .await
+            .with_context(|| {
+                JSON_RPC_STATE
+                    .with_label_values(&[rpc_method, "failed_get"])
+                    .inc();
+                format!("get_object failed for Hashi {hashi_object_id}")
+            })?;
 
-    let fields = body
-        .pointer("/result/data/content/fields/committee_set/fields")
-        .context("missing committee_set fields in Hashi object response")?;
+    let hashi: move_types::Hashi = response
+        .into_inner()
+        .object()
+        .contents()
+        .deserialize()
+        .with_context(|| {
+            JSON_RPC_STATE
+                .with_label_values(&[rpc_method, "failed_bcs_decode"])
+                .inc();
+            format!("BCS-decode Hashi {hashi_object_id}")
+        })?;
+    move_types::acknowledge_layout(&hashi);
 
-    let epoch = parse_u64_field(fields.get("epoch"), "committee_set.epoch")?;
-    let pending_epoch = match fields.get("pending_epoch_change") {
-        // Move's `Option<u64>` serializes as either null or {"vec": ["<n>"]}
-        // depending on display path; tolerate both.
-        Some(Value::Null) | None => None,
-        Some(other) => parse_optional_u64(other)?,
-    };
-    let members_bag_id = parse_bag_id(fields.get("members"), "committee_set.members")?;
-    let committees_bag_id = parse_bag_id(fields.get("committees"), "committee_set.committees")?;
+    JSON_RPC_STATE
+        .with_label_values(&[rpc_method, "success"])
+        .inc();
 
+    let cs = hashi.committee_set;
     Ok(CommitteeSetSnapshot {
-        epoch,
-        pending_epoch,
-        members_bag_id,
-        committees_bag_id,
+        epoch: cs.epoch,
+        pending_epoch: cs.pending_epoch_change,
+        members_bag_id: cs.members.id,
+        committees_bag_id: cs.committees.id,
     })
 }
 
 async fn get_committee_validator_addresses(
-    rpc_url: &str,
-    committees_bag_id: &str,
+    client: &mut SuiRpcClient,
+    committees_bag_id: Address,
     epoch: u64,
 ) -> Result<Vec<SuiAddress>> {
-    let rpc_method = "suix_getDynamicFieldObject";
+    let rpc_method = "sui_rpc.LedgerService.GetObject:Committee";
     let _timer = JSON_RPC_DURATION
         .with_label_values(&[rpc_method])
         .start_timer();
 
-    let body = sui_rpc_call(
-        rpc_url,
-        rpc_method,
-        serde_json::json!([
-            committees_bag_id,
-            {"type": "u64", "value": epoch.to_string()}
-        ]),
-    )
-    .await?;
+    let field_id = committees_bag_id.derive_dynamic_child_id(
+        &TypeTag::U64,
+        &bcs::to_bytes(&epoch).expect("u64 always BCS-encodes"),
+    );
 
-    // Dynamic-field objects wrap their value as a Move Field<K, V>; the value
-    // field name is "value" and its contents are the Committee fields.
-    let committee_fields = body
-        .pointer("/result/data/content/fields/value/fields")
-        .with_context(|| {
-            format!("missing Committee fields for epoch {epoch} under {committees_bag_id}")
-        })?;
-
-    let members = committee_fields
-        .get("members")
-        .and_then(Value::as_array)
-        .with_context(|| format!("Committee.members is not an array for epoch {epoch}"))?;
-
-    let mut out = Vec::with_capacity(members.len());
-    for m in members {
-        let addr_str = m
-            .pointer("/fields/validator_address")
-            .and_then(Value::as_str)
-            .context("missing CommitteeMember.validator_address")?;
-        let addr: SuiAddress = addr_str
-            .parse()
-            .with_context(|| format!("parsing CommitteeMember.validator_address: {addr_str}"))?;
-        out.push(addr);
-    }
-    Ok(out)
-}
-
-async fn get_hashi_member_info(
-    rpc_url: &str,
-    members_bag_id: &str,
-    validator_address: SuiAddress,
-) -> Result<ResolvedHashiMember> {
-    let rpc_method = "suix_getDynamicFieldObject";
-    let _timer = JSON_RPC_DURATION
-        .with_label_values(&[rpc_method])
-        .start_timer();
-
-    let body = sui_rpc_call(
-        rpc_url,
-        rpc_method,
-        serde_json::json!([
-            members_bag_id,
-            {"type": "address", "value": validator_address.to_string()}
-        ]),
-    )
-    .await?;
-
-    let member_fields = body
-        .pointer("/result/data/content/fields/value/fields")
-        .with_context(|| {
-            format!(
-                "missing MemberInfo fields for validator {validator_address} under {members_bag_id}"
-            )
-        })?;
-
-    // `tls_public_key` is `vector<u8>` in Move; over JSON-RPC it surfaces as an
-    // array of numbers.
-    let tls_public_key = member_fields
-        .get("tls_public_key")
-        .and_then(Value::as_array)
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_u64().map(|n| n as u8))
-                .collect::<Vec<u8>>()
-        })
-        .unwrap_or_default();
-
-    Ok(ResolvedHashiMember {
-        validator_address,
-        tls_public_key,
-    })
-}
-
-/// Parses Move's `Bag { id: UID { id: <ObjectID> }, size: u64 }` shape from a
-/// Sui JSON-RPC display response and returns the inner ObjectID as a String.
-fn parse_bag_id(field: Option<&Value>, name: &str) -> Result<String> {
-    field
-        .and_then(|f| f.pointer("/fields/id/id"))
-        .and_then(Value::as_str)
-        .map(|s| s.to_owned())
-        .with_context(|| format!("could not extract {name}.id from JSON-RPC response"))
-}
-
-fn parse_u64_field(field: Option<&Value>, name: &str) -> Result<u64> {
-    // Sui JSON-RPC display path serializes u64 as a string to preserve precision.
-    field
-        .and_then(Value::as_str)
-        .with_context(|| format!("missing or non-string {name}"))?
-        .parse()
-        .with_context(|| format!("parsing {name} as u64"))
-}
-
-fn parse_optional_u64(value: &Value) -> Result<Option<u64>> {
-    // Move's Option<u64> arrives as either null, or {"vec": ["<n>"]} (some) /
-    // {"vec": []} (none) depending on the JSON-RPC display format. Handle both.
-    if value.is_null() {
-        return Ok(None);
-    }
-    if let Some(arr) = value.pointer("/vec").and_then(Value::as_array) {
-        return match arr.first() {
-            Some(v) => {
-                let s = v.as_str().context("Option<u64>.vec[0] not a string")?;
-                Ok(Some(s.parse().context("parsing Option<u64> inner value")?))
-            }
-            None => Ok(None),
-        };
-    }
-    // Some display paths render Some(n) as a bare string instead of {"vec":[…]}.
-    if let Some(s) = value.as_str() {
-        return Ok(Some(s.parse().context("parsing Option<u64> bare value")?));
-    }
-    bail!("unrecognized Option<u64> JSON shape: {value}")
-}
-
-/// JSON-RPC helper that returns the raw response `Value` so callers can
-/// pointer-walk into nested fields without imposing a fixed schema (the Move
-/// display layout differs per type).
-async fn sui_rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value> {
-    let client = reqwest::Client::builder().build().unwrap();
-    let request = serde_json::json!({
-        "jsonrpc": "2.0",
-        "method": method,
-        "params": params,
-        "id": 1,
-    });
     let response = client
-        .post(rpc_url)
-        .header(reqwest::header::CONTENT_TYPE, "application/json")
-        .body(request.to_string())
-        .send()
+        .ledger_client()
+        .get_object(
+            GetObjectRequest::new(&field_id).with_read_mask(FieldMask::from_paths([
+                Object::path_builder().contents().finish(),
+            ])),
+        )
         .await
         .with_context(|| {
             JSON_RPC_STATE
-                .with_label_values(&[method, "failed_get"])
+                .with_label_values(&[rpc_method, "failed_get"])
                 .inc();
-            format!("rpc call {method} failed")
+            format!("get_object failed for Committee epoch={epoch} under {committees_bag_id}")
         })?;
 
-    let raw = response.bytes().await.with_context(|| {
-        JSON_RPC_STATE
-            .with_label_values(&[method, "failed_body_extract"])
-            .inc();
-        format!("unable to read body of {method}")
-    })?;
-
-    let body: Value = match serde_json::from_slice(&raw) {
-        Ok(v) => v,
-        Err(error) => {
+    let field: move_types::Field<u64, move_types::Committee> = response
+        .into_inner()
+        .object()
+        .contents()
+        .deserialize()
+        .with_context(|| {
             JSON_RPC_STATE
-                .with_label_values(&[method, "failed_json_decode"])
+                .with_label_values(&[rpc_method, "failed_bcs_decode"])
                 .inc();
-            bail!("unable to decode {method} response: {error}: {raw:?}");
-        }
-    };
+            format!("BCS-decode Committee for epoch {epoch}")
+        })?;
+    move_types::acknowledge_committee_field(&field);
 
-    if let Some(error) = body.get("error") {
-        JSON_RPC_STATE
-            .with_label_values(&[method, "rpc_error"])
-            .inc();
-        bail!("rpc {method} returned error: {error}");
-    }
+    JSON_RPC_STATE
+        .with_label_values(&[rpc_method, "success"])
+        .inc();
 
-    JSON_RPC_STATE.with_label_values(&[method, "success"]).inc();
-    Ok(body)
+    Ok(field
+        .value
+        .members
+        .into_iter()
+        .map(|m| sdk_address_to_sui_address(m.validator_address))
+        .collect())
+}
+
+async fn get_hashi_member_info(
+    client: &mut SuiRpcClient,
+    members_bag_id: Address,
+    validator_address: SuiAddress,
+) -> Result<ResolvedHashiMember> {
+    let rpc_method = "sui_rpc.LedgerService.GetObject:MemberInfo";
+    let _timer = JSON_RPC_DURATION
+        .with_label_values(&[rpc_method])
+        .start_timer();
+
+    let key = sui_address_to_sdk_address(validator_address);
+    let field_id = members_bag_id.derive_dynamic_child_id(
+        &TypeTag::Address,
+        &bcs::to_bytes(&key).expect("Address always BCS-encodes"),
+    );
+
+    let response = client
+        .ledger_client()
+        .get_object(
+            GetObjectRequest::new(&field_id).with_read_mask(FieldMask::from_paths([
+                Object::path_builder().contents().finish(),
+            ])),
+        )
+        .await
+        .with_context(|| {
+            JSON_RPC_STATE
+                .with_label_values(&[rpc_method, "failed_get"])
+                .inc();
+            format!("get_object failed for MemberInfo {validator_address}")
+        })?;
+
+    let field: move_types::Field<Address, move_types::MemberInfo> = response
+        .into_inner()
+        .object()
+        .contents()
+        .deserialize()
+        .with_context(|| {
+            JSON_RPC_STATE
+                .with_label_values(&[rpc_method, "failed_bcs_decode"])
+                .inc();
+            format!("BCS-decode MemberInfo for {validator_address}")
+        })?;
+    move_types::acknowledge_member_field(&field);
+
+    JSON_RPC_STATE
+        .with_label_values(&[rpc_method, "success"])
+        .inc();
+
+    Ok(ResolvedHashiMember {
+        validator_address,
+        tls_public_key: field.value.tls_public_key,
+    })
+}
+
+/// Both sui-types and sui-sdk-types use 32-byte addresses; these helpers swap
+/// between them since sui-rpc returns `sdk_types::Address` but the rest of
+/// sui-proxy speaks `sui_types::base_types::SuiAddress`.
+fn sdk_address_to_sui_address(addr: Address) -> SuiAddress {
+    SuiAddress::from_bytes(addr.into_inner()).expect("Address is 32 bytes")
+}
+
+fn sui_address_to_sdk_address(addr: SuiAddress) -> Address {
+    Address::new(addr.to_inner())
 }
 
 #[cfg(test)]
@@ -1337,43 +1568,5 @@ mod tests {
         // the consumer side; we confirm shared key here so the test fails loudly
         // if we ever silently change that behavior.
         assert_eq!(peers[0].0, peers[1].0);
-    }
-
-    #[test]
-    fn parse_bag_id_extracts_inner_id() {
-        let v: Value =
-            serde_json::from_str(r#"{ "fields": { "id": { "id": "0xdeadbeef" }, "size": "5" } }"#)
-                .unwrap();
-        let bag_id = parse_bag_id(Some(&v), "test.bag").unwrap();
-        assert_eq!(bag_id, "0xdeadbeef");
-    }
-
-    #[test]
-    fn parse_bag_id_errors_on_missing_field() {
-        assert!(parse_bag_id(None, "test.bag").is_err());
-        let v: Value = serde_json::json!({"fields": {"size": "5"}});
-        assert!(parse_bag_id(Some(&v), "test.bag").is_err());
-    }
-
-    #[test]
-    fn parse_u64_field_handles_string_encoding() {
-        // Sui JSON-RPC display path returns u64 as a string to avoid JS precision loss.
-        let v: Value = serde_json::json!("12345");
-        assert_eq!(parse_u64_field(Some(&v), "test").unwrap(), 12345);
-    }
-
-    #[test]
-    fn parse_optional_u64_handles_all_shapes() {
-        // null → None
-        assert_eq!(parse_optional_u64(&Value::Null).unwrap(), None);
-        // {"vec": []} → None  (Move Option<T> empty)
-        let none_vec: Value = serde_json::json!({"vec": []});
-        assert_eq!(parse_optional_u64(&none_vec).unwrap(), None);
-        // {"vec": ["7"]} → Some(7)
-        let some_vec: Value = serde_json::json!({"vec": ["7"]});
-        assert_eq!(parse_optional_u64(&some_vec).unwrap(), Some(7));
-        // Bare "7" → Some(7) (some display paths skip the vec wrapper)
-        let bare: Value = serde_json::json!("7");
-        assert_eq!(parse_optional_u64(&bare).unwrap(), Some(7));
     }
 }
