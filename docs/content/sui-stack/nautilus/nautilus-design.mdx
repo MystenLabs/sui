@@ -114,3 +114,9 @@ This approach provides the following benefits:
 Nautilus uses cloud-based enclaves designed to protect against software-level attacks. Focusing on cloud-hosted TEEs, like AWS Nitro Enclaves, is intentional because cloud providers respond quickly to vulnerabilities. They receive early signals about security issues and can patch them efficiently. They also maintain strong physical security. Access to cloud data centers is tightly controlled, reducing the risk of physical hardware attacks. Lastly, they operate under strict compliance standards. Providers like AWS and GCP are regularly audited against frameworks like SOC 2, ISO 27001, CSA STAR, and others, ensuring operational integrity.
 
 You are encouraged to evaluate whether this trust model aligns with the threat profile and security needs of your application.
+
+:::tip
+
+A TEE is not magic: it attests to what code runs, not that the code is correct or safe. Minimize the code and dependencies inside the enclave to shrink the trusted computing base, audit those dependencies, rate-limit and guard the endpoints that reach the enclave, and alert on PCR drift so you catch unexpected changes to enclave measurements immediately. See the [Nautilus](/develop/security/best-practices#nautilus) section of the Security Best Practices guide.
+
+:::

@@ -135,6 +135,12 @@ When writing custom upgrade policies, prefer:
 
 These best practices help uphold informed user consent and bounded risk by making it clear what a package's upgrade policy is at the moment a user locks value into it, ensuring that the policy does not evolve to be more permissive with time without the package user realizing and choosing to accept the new terms.
 
+:::tip Custody and runbook
+
+Treat the `UpgradeCap` owner as a privileged admin. Hold it under a multisig or timelock rather than a single key, emit an event on every upgrade, monitor onchain for upgrades to packages you depend on, and document an emergency process (including when to make the package immutable). See [Security Best Practices](/develop/security/best-practices) for more.
+
+:::
+
 ## Example: Day of the week upgrade policy {#example-upgrade}
 
 Start by creating a new Move package for the upgrade policy:

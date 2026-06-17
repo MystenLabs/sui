@@ -18,6 +18,12 @@ At a high level, a zkLogin wallet works as follows:
 
 Because zkLogin is a two-factor scheme, an attacker who compromises an OAuth account cannot sign transactions unless they also compromise the per-user salt.
 
+:::caution
+
+The per-user salt must be persisted and recoverable: if a user loses their salt, they permanently lose access to the derived address, even with a valid OAuth login. Store and back up salts reliably, and never log or expose JWTs or ZK proofs, as these are sensitive credentials. Manage the ephemeral key pair's max epoch and session lifetime carefully so sessions expire as intended. See [Security Best Practices](/develop/security/best-practices).
+
+:::
+
 ## Enoki
 
 [Enoki](https://enoki.mystenlabs.com/) is a Mysten Labs platform that wraps zkLogin and sponsored transactions behind a straightforward API. Rather than managing proof generation, salt storage, and OAuth configuration yourself, you register your app on the Enoki Developer Portal, configure your OAuth providers, and use the [`@mysten/enoki` SDK](https://docs.enoki.mystenlabs.com/) to handle the rest.

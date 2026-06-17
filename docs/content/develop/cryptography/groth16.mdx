@@ -14,6 +14,12 @@ There are high-level languages for expressing these statements, such as [Circom]
 
 Groth16 requires a trusted setup for each circuit to generate the verification key. The API is not pinning any particular verification key and each user can generate their own parameters or use an existing verification to their apps.
 
+:::danger
+
+The randomly generated proving and verifying keys used in the following example (through `generate_random_parameters_with_reduction` with a fixed seed) are for testing only and are **not secure**. In production, proving and verifying keys must come from a proper trusted setup ceremony. Because the Sui API does not pin any verification key, your contract must pin or verifiably identify the expected verifying key it accepts; otherwise a proof generated against an attacker-chosen key could be accepted as valid.
+
+:::
+
 ## Usage
 
 The following example demonstrates how to create a Groth16 proof from a statement written in Circom and then verify it using the Sui Move API. The API currently supports up to eight public inputs.
