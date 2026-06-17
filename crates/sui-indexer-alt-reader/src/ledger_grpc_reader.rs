@@ -9,6 +9,7 @@ use prometheus::Registry;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_types::effects::TransactionEffects;
+use sui_types::error::ExecutionErrorMetadata;
 use sui_types::event::Event;
 use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::signature::GenericSignature;
@@ -43,6 +44,7 @@ pub struct CheckpointedTransaction {
     pub timestamp_ms: Option<u64>,
     pub cp_sequence_number: Option<u64>,
     pub balance_changes: Vec<grpc::BalanceChange>,
+    pub execution_error_metadata: Option<ExecutionErrorMetadata>,
 }
 
 /// A reader backed by gRPC LedgerService (sui-kv-rpc).

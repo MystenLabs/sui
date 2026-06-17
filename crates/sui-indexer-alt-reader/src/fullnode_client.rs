@@ -8,8 +8,11 @@ use prometheus::Registry;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
+use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_sdk_types::Address;
+use sui_types::digests::TransactionDigest;
+use sui_types::error::ExecutionErrorMetadata;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
@@ -34,6 +37,7 @@ pub struct FullnodeArgs {
 #[derive(Clone)]
 pub struct FullnodeClient {
     execution_client: TransactionExecutionServiceClient<GrpcMetricsService<Channel>>,
+    ledger_client: LedgerServiceClient<GrpcMetricsService<Channel>>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -74,11 +78,16 @@ impl FullnodeClient {
 
         let channel = endpoint.connect_lazy();
 
-        let layered = GrpcMetricsLayer::new(prefix.unwrap_or("fullnode"), registry).layer(channel);
+        let layer = GrpcMetricsLayer::new(prefix.unwrap_or("fullnode"), registry);
 
-        let execution_client = TransactionExecutionServiceClient::new(layered);
+        let execution_client =
+            TransactionExecutionServiceClient::new(layer.clone().layer(channel.clone()));
+        let ledger_client = LedgerServiceClient::new(layer.layer(channel));
 
-        Ok(Some(Self { execution_client }))
+        Ok(Some(Self {
+            execution_client,
+            ledger_client,
+        }))
     }
 
     pub fn as_data_loader(&self) -> DataLoader<Self> {
@@ -123,6 +132,35 @@ impl FullnodeClient {
             .await
             .map(|r| r.into_inner())
             .map_err(Into::into)
+    }
+
+    /// Fetch execution error metadata from the full node ledger service.
+    #[instrument(skip(self), level = "debug")]
+    pub async fn execution_error_metadata(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<Option<ExecutionErrorMetadata>, Error> {
+        let request = proto::GetTransactionRequest::default()
+            .with_digest(digest.to_string())
+            .with_read_mask(FieldMask::from_paths(["effects.status.error.metadata"]));
+
+        let response = self
+            .ledger_client
+            .clone()
+            .get_transaction(request)
+            .await?
+            .into_inner();
+
+        let metadata = response
+            .transaction
+            .and_then(|transaction| transaction.effects)
+            .and_then(|effects| effects.status)
+            .and_then(|status| status.error)
+            .and_then(|error| error.metadata)
+            .map(|metadata| ExecutionErrorMetadata::from(&metadata))
+            .filter(|metadata| !metadata.is_empty());
+
+        Ok(metadata)
     }
 
     /// Simulate a transaction on the Sui network via gRPC.

@@ -406,7 +406,9 @@ impl TxBoundsCursor for CTransaction {
 
 impl From<TransactionEffects> for Transaction {
     fn from(fx: TransactionEffects) -> Self {
-        let EffectsContents { scope, contents } = fx.contents;
+        let EffectsContents {
+            scope, contents, ..
+        } = fx.contents;
 
         Self {
             digest: fx.digest,

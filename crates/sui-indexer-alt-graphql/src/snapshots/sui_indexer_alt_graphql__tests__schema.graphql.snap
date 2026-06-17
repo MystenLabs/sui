@@ -1504,6 +1504,10 @@ type ExecutionError {
 	"""
 	message: String!
 	"""
+	Additional error metadata, when available.
+	"""
+	metadata: JSON
+	"""
 	The module that the abort originated from. Only populated for Move aborts and primitive runtime errors.
 	"""
 	module: MoveModule

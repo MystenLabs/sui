@@ -21,6 +21,7 @@ use sui_types::digests::TransactionEffectsDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
+use sui_types::error::ExecutionErrorMetadata;
 use sui_types::event::Event;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointContents;
@@ -120,6 +121,7 @@ pub struct ExecutedTransactionData {
     /// The proto TransactionEffects from gRPC, if available.
     /// Contains fully-rendered effects with object types and clever errors.
     pub proto_effects: Option<grpc::TransactionEffects>,
+    pub execution_error_metadata: Option<ExecutionErrorMetadata>,
     /// The proto Transaction from gRPC, if available.
     /// Contains the fully-rendered transaction.
     pub proto_transaction: Option<grpc::Transaction>,
@@ -441,6 +443,9 @@ impl TransactionContents {
 
         // Store the proto effects and transaction for JSON serialization
         let proto_effects = executed_transaction.effects.clone();
+        let execution_error_metadata = proto_effects
+            .as_ref()
+            .and_then(execution_error_metadata_from_proto_effects);
         let proto_transaction = executed_transaction.transaction.clone();
 
         Ok(Self::ExecutedTransaction(ExecutedTransactionData {
@@ -450,6 +455,7 @@ impl TransactionContents {
             signatures,
             balance_changes,
             proto_effects,
+            execution_error_metadata,
             proto_transaction,
             timestamp_ms: None,
             cp_sequence_number: None,
@@ -567,6 +573,15 @@ impl TransactionContents {
         }
     }
 
+    /// Returns execution error metadata when this source carried it.
+    pub fn execution_error_metadata(&self) -> Option<ExecutionErrorMetadata> {
+        match self {
+            Self::ExecutedTransaction(tx) => tx.execution_error_metadata.clone(),
+            Self::LedgerGrpc(txn) => txn.execution_error_metadata.clone(),
+            Self::Pg(_) | Self::Bigtable(_) => None,
+        }
+    }
+
     /// Returns the proto TransactionEffects.
     ///
     /// For ExecutedTransaction, returns the cached proto from gRPC (with object types, clever errors).
@@ -656,6 +671,13 @@ impl TransactionContents {
             Self::ExecutedTransaction(tx) => tx.cp_sequence_number,
         }
     }
+}
+
+fn execution_error_metadata_from_proto_effects(
+    effects: &grpc::TransactionEffects,
+) -> Option<ExecutionErrorMetadata> {
+    let metadata = ExecutionErrorMetadata::from(effects.status().error_opt()?.metadata());
+    (!metadata.is_empty()).then_some(metadata)
 }
 
 impl TransactionEventsContents {

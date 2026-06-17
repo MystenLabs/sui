@@ -629,6 +629,9 @@ ExecutionError.identifier
 ExecutionError.constant
   => {}
 
+ExecutionError.metadata
+  => {}
+
 ExecutionError.module
   => {}
 
