@@ -1,43 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::IpAddr;
-use std::net::Ipv4Addr;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use anyhow::Context;
 use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
-use prometheus::Registry;
-use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
-use sui_futures::service::Service;
-use sui_indexer_alt::config::IndexerConfig;
-use sui_indexer_alt::setup_indexer;
-use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_framework::ingestion::ClientArgs;
-use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
-use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
-use sui_indexer_alt_graphql::args::SubscriptionArgs;
+use sui_indexer_alt_e2e_tests::graphql::IndexedGraphQlCluster;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
-use sui_indexer_alt_graphql::start_rpc as start_graphql;
-use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
-use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
-use sui_indexer_alt_reader::kv_loader::KvArgs;
-use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
-use sui_pg_db::DbArgs;
-use sui_pg_db::temp::TempDb;
-use sui_pg_db::temp::get_available_port;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GasCoin;
-use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
-use url::Url;
 
 // Structs for parsing command results
 #[derive(Debug, Deserialize)]
@@ -141,111 +118,11 @@ struct FieldLayout {
     layout: Value,
 }
 
-struct GraphQlTestCluster {
-    url: Url,
-    /// Hold on to the service so it doesn't get dropped (and therefore aborted) until the cluster
-    /// goes out of scope.
-    #[allow(unused)]
-    service: Service,
-    /// Hold on to the database so it doesn't get dropped until the cluster is stopped.
-    #[allow(unused)]
-    database: TempDb,
-}
-
-impl GraphQlTestCluster {
-    async fn new(validator_cluster: &TestCluster) -> Self {
-        let graphql_port = get_available_port();
-        let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
-
-        let database = TempDb::new().expect("Failed to create temp database");
-        let database_url = database.database().url().clone();
-
-        let fullnode_args = FullnodeArgs::new(validator_cluster.rpc_url().parse().unwrap());
-
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                rpc_api_url: Some(
-                    Url::parse(validator_cluster.rpc_url()).expect("Invalid RPC URL"),
-                ),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let indexer = setup_indexer(
-            database_url.clone(),
-            DbArgs::default(),
-            IndexerArgs::default(),
-            client_args,
-            IndexerConfig::for_test(),
-            None,
-            &Registry::new(),
-        )
-        .await
-        .expect("Failed to setup indexer");
-
-        let pipelines: Vec<String> = indexer.pipelines().map(|s| s.to_string()).collect();
-        let s_indexer = indexer.run().await.expect("Failed to start indexer");
-
-        let s_graphql = start_graphql(
-            Some(database_url),
-            fullnode_args,
-            DbArgs::default(),
-            KvArgs::default(),
-            ConsistentReaderArgs::default(),
-            GraphQlArgs {
-                rpc_listen_address: graphql_listen_address,
-                no_ide: true,
-            },
-            SystemPackageTaskArgs::default(),
-            SubscriptionArgs::default(),
-            "0.0.0",
-            GraphQlConfig::default(),
-            pipelines,
-            &Registry::new(),
-        )
-        .await
-        .expect("Failed to start GraphQL server");
-
-        let url = Url::parse(&format!("http://{}/graphql", graphql_listen_address))
-            .expect("Failed to parse GraphQL URL");
-
-        Self {
-            url,
-            service: s_graphql.merge(s_indexer),
-            database,
-        }
-    }
-
-    /// Execute a GraphQL mutation or query
-    async fn execute_graphql(&self, query: &str, variables: Value) -> anyhow::Result<Value> {
-        let request_body = json!({
-            "query": query,
-            "variables": variables
-        });
-
-        let client = Client::new();
-        let response = client
-            .post(self.url.clone())
-            .json(&request_body)
-            .send()
-            .await
-            .context("GraphQL request failed")?;
-
-        let body: Value = response
-            .json()
-            .await
-            .context("Failed to parse GraphQL response")?;
-
-        Ok(body)
-    }
-}
-
 #[tokio::test]
 async fn test_simulate_transaction_basic() {
     let validator_cluster = TestClusterBuilder::new().build().await;
 
-    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+    let graphql_cluster = IndexedGraphQlCluster::new(&validator_cluster).await;
 
     // Create a simple transfer transaction for simulation (no signatures needed!)
     let recipient = SuiAddress::random_for_testing_only();
@@ -307,7 +184,7 @@ async fn test_simulate_transaction_basic() {
 #[tokio::test]
 async fn test_simulate_transaction_with_events() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+    let graphql_cluster = IndexedGraphQlCluster::new(&validator_cluster).await;
 
     // Publish our test package which emits events in its init function
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("packages/emit_event");
@@ -400,7 +277,7 @@ async fn test_simulate_transaction_with_events() {
 #[tokio::test]
 async fn test_simulate_transaction_input_validation() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+    let graphql_cluster = IndexedGraphQlCluster::new(&validator_cluster).await;
 
     // Test invalid Base64 transaction data
     let result = graphql_cluster
@@ -430,7 +307,7 @@ async fn test_simulate_transaction_input_validation() {
 #[tokio::test]
 async fn test_simulate_transaction_object_changes() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+    let graphql_cluster = IndexedGraphQlCluster::new(&validator_cluster).await;
 
     // Create a transfer transaction that will modify objects
     let recipient = SuiAddress::random_for_testing_only();
@@ -556,7 +433,7 @@ async fn test_simulate_transaction_object_changes() {
 #[tokio::test]
 async fn test_simulate_transaction_command_results() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+    let graphql_cluster = IndexedGraphQlCluster::new(&validator_cluster).await;
 
     // First, publish the command_results package
     let package_path =
@@ -766,7 +643,7 @@ async fn test_simulate_transaction_command_results() {
 #[tokio::test]
 async fn test_simulate_transaction_json_transfer() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+    let graphql_cluster = IndexedGraphQlCluster::new(&validator_cluster).await;
 
     let sender = validator_cluster.get_address_0();
     let recipient = SuiAddress::random_for_testing_only();
@@ -871,7 +748,7 @@ async fn test_simulate_transaction_json_transfer() {
 #[tokio::test]
 async fn test_package_resolver_finds_newly_published_package() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+    let graphql_cluster = IndexedGraphQlCluster::new(&validator_cluster).await;
 
     // Publish the test package
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -982,7 +859,7 @@ async fn test_package_resolver_finds_newly_published_package() {
 #[tokio::test]
 async fn test_simulate_transaction_balance_changes() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+    let graphql_cluster = IndexedGraphQlCluster::new(&validator_cluster).await;
 
     // Create a transfer transaction that will cause balance changes
     let recipient = SuiAddress::random_for_testing_only();
@@ -1063,13 +940,86 @@ async fn test_simulate_transaction_balance_changes() {
     );
 }
 
+#[tokio::test]
+async fn test_simulate_transaction_insufficient_funds_error_metadata() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = IndexedGraphQlCluster::new(&validator_cluster).await;
+
+    let recipient = SuiAddress::random_for_testing_only();
+    // Split more SUI than the gas coin can hold so execution fails with InsufficientCoinBalance.
+    let signed_tx =
+        make_transfer_sui_transaction(&validator_cluster.wallet, Some(recipient), Some(u64::MAX))
+            .await;
+    let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
+                    effects {
+                        status
+                        executionError {
+                            message
+                            metadata
+                        }
+                        effectsJson
+                    }
+                }
+            }
+        "#,
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    assert!(
+        result.get("errors").is_none(),
+        "Unexpected GraphQL errors: {result:#}"
+    );
+    assert_eq!(
+        result.pointer("/data/simulateTransaction/effects/status"),
+        Some(&json!("FAILURE"))
+    );
+
+    let metadata = result
+        .pointer("/data/simulateTransaction/effects/executionError/metadata")
+        .expect("executionError.metadata should be present");
+    let metadata_message = metadata
+        .pointer("/message")
+        .and_then(Value::as_str)
+        .expect("executionError.metadata.message should be present");
+
+    assert!(
+        metadata_message.contains("balance:"),
+        "unexpected metadata message: {metadata_message}"
+    );
+    assert!(
+        metadata_message.contains("required:"),
+        "unexpected metadata message: {metadata_message}"
+    );
+
+    assert_eq!(
+        result
+            .pointer("/data/simulateTransaction/effects/effectsJson/status/error/metadata")
+            .expect("effectsJson status error metadata should be present"),
+        metadata
+    );
+}
+
 /// Test that `doGasSelection: true` allows simulating a transaction without specifying gas_payment.
 /// The server auto-selects gas coins and estimates the budget.
 /// This E2E test verifies the simulation output can be signed, executed, and the transfer succeeds.
 #[tokio::test]
 async fn test_simulate_transaction_with_gas_selection() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+    let graphql_cluster = IndexedGraphQlCluster::new(&validator_cluster).await;
 
     let sender = validator_cluster.get_address_0();
     let recipient = SuiAddress::random_for_testing_only();
@@ -1165,7 +1115,7 @@ async fn test_simulate_transaction_with_gas_selection() {
 #[tokio::test]
 async fn test_simulate_transaction_effects_json() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+    let graphql_cluster = IndexedGraphQlCluster::new(&validator_cluster).await;
 
     // Create a transfer transaction
     let recipient = SuiAddress::random_for_testing_only();
@@ -1225,7 +1175,7 @@ async fn test_simulate_transaction_effects_json() {
 #[tokio::test]
 async fn test_simulate_transaction_payload_bypasses_query_limit() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+    let graphql_cluster = IndexedGraphQlCluster::new(&validator_cluster).await;
 
     let mut tx_builder = validator_cluster.test_transaction_builder().await;
     let payload_size = GraphQlConfig::default().limits.max_query_payload_size;
@@ -1266,7 +1216,7 @@ async fn test_simulate_transaction_payload_bypasses_query_limit() {
 #[tokio::test]
 async fn test_simulate_transaction_transaction_json() {
     let validator_cluster = TestClusterBuilder::new().build().await;
-    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+    let graphql_cluster = IndexedGraphQlCluster::new(&validator_cluster).await;
 
     // Create a transfer transaction
     let recipient = SuiAddress::random_for_testing_only();
