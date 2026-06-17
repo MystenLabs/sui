@@ -178,14 +178,32 @@ fn collect_md(bundle: &str, root: &Path, dir: &Path, out: &mut Vec<(String, Stri
         let p = e.path();
         if p.is_dir() {
             collect_md(bundle, root, &p, out);
-        } else if p.extension().and_then(|s| s.to_str()) == Some("md") {
-            let rel = p
-                .strip_prefix(root)
-                .expect("path under bundle root")
-                .to_string_lossy()
-                .into_owned();
-            out.push((bundle.to_owned(), rel, p));
+            continue;
         }
+        // Embed only files matching `<prefix>.md` where `<prefix>` is ASCII letters,
+        // dashes, or underscores; the `md` extension is case-insensitive. Anything
+        // else is ignored so `include_str!` always operates on a regular, stable
+        // markdown file at compile time.
+        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let Some((prefix, ext)) = name.rsplit_once('.') else {
+            continue;
+        };
+        if prefix.is_empty()
+            || !prefix
+                .chars()
+                .all(|c| c.is_ascii_alphabetic() || c == '-' || c == '_')
+            || !ext.eq_ignore_ascii_case("md")
+        {
+            continue;
+        }
+        let rel = p
+            .strip_prefix(root)
+            .expect("path under bundle root")
+            .to_string_lossy()
+            .into_owned();
+        out.push((bundle.to_owned(), rel, p));
     }
 }
 
