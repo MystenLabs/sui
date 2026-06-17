@@ -13,15 +13,10 @@ use thiserror::Error;
 use crate::{
     git::GitError,
     package::paths::{PackagePath, PackagePathError},
-    schema::LocalDepInfo,
+    schema::{EnvironmentID, LocalDepInfo},
 };
 
-use super::{Dependency, Pinned};
-
-/// Once a dependency has been fetched, it is simply represented by a [PackagePath]
-type Fetched = PackagePath;
-
-pub struct FetchedDependency(pub(super) Dependency<Fetched>);
+use super::Pinned;
 
 #[derive(Error, Debug)]
 pub enum FetchError {
@@ -30,33 +25,34 @@ pub enum FetchError {
 
     #[error("Error while fetching `{1}`: {0}")]
     GitFailure(GitError, String),
+
+    #[error("On-chain dependencies are not yet supported")]
+    OnChainNotSupported,
 }
 
 pub type FetchResult<T> = Result<T, FetchError>;
 
-impl FetchedDependency {
-    /// Ensure that the dependency's files are present on the disk and return a path to them
-    /// Assumes that `pinned` is already normalized - paths of any local dependencies are relative
-    /// to the current working directory, and local dependencies of git dependencies have been
-    /// transformed into git dependencies
-    pub async fn fetch(pinned: &Pinned, allow_dirty: bool) -> FetchResult<PackagePath> {
-        let path = match &pinned {
-            Pinned::Git(dep) => dep
-                .inner
-                .checkout_repo(allow_dirty)
-                .await
-                .map_err(FetchError::from_git(pinned))?,
-            _ => pinned.unfetched_path(),
-        };
+/// Ensure that the dependency's files are present on the disk and return a path to them.
+/// Assumes that `pinned` is already normalized - paths of any local dependencies are relative
+/// to the current working directory, and local dependencies of git dependencies have been
+/// transformed into git dependencies. `chain_id` is used to determine the cache location for
+/// on-chain dependencies.
+pub async fn fetch(
+    pinned: &Pinned,
+    allow_dirty: bool,
+    chain_id: &EnvironmentID,
+) -> FetchResult<PackagePath> {
+    let path = match &pinned {
+        Pinned::OnChain { .. } => return Err(FetchError::OnChainNotSupported),
+        Pinned::Git(dep) => dep
+            .inner
+            .checkout_repo(allow_dirty)
+            .await
+            .map_err(FetchError::from_git(pinned))?,
+        _ => pinned.unfetched_path(chain_id),
+    };
 
-        PackagePath::new(path).map_err(FetchError::from_package(pinned))
-    }
-}
-
-impl From<FetchedDependency> for PackagePath {
-    fn from(value: FetchedDependency) -> Self {
-        value.0.dep_info
-    }
+    PackagePath::new(path).map_err(FetchError::from_package(pinned))
 }
 
 impl LocalDepInfo {

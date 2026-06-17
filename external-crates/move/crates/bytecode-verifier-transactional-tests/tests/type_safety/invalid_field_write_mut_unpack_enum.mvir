@@ -1,13 +1,13 @@
 //# publish
-module 0x42::Test {
-    enum T{V { fr: bool} }
+mvir 0x42::Test {
+    public enum T{V { fr: bool} }
 
-    public new(): Self::T {
+    public fun new(): Self::T {
     label b0:
         return T::V{fr: false};
     }
 
-    public no(this: &mut Self::T) {
+    public fun no(this: &mut Self::T) {
         let x: &mut bool;
     label b0:
         &mut T::V {fr: x} = move(this);
@@ -18,15 +18,15 @@ module 0x42::Test {
 }
 
 //# publish
-module 0x42::Test {
-    enum T<B> {V { fr: B } }
+mvir 0x42::Test {
+    public enum T<B> {V { fr: B } }
 
-    public new(): Self::T<bool> {
+    public fun new(): Self::T<bool> {
     label b0:
         return T::V<bool> {fr: false};
     }
 
-    public no(this: &mut Self::T<bool>) {
+    public fun no(this: &mut Self::T<bool>) {
         let x: &mut bool;
     label b0:
         &mut T::V<bool> {fr: x} = move(this);

@@ -31,7 +31,7 @@ error[E03006]: unexpected name in this position
   │         Could not resolve the name 'x'
   │         Did you mean: '$f'
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_2024/typing/use_lambda_outside_call_invalid.move:7:23
   │
 7 │     macro fun bar(mut f: || -> u64) {

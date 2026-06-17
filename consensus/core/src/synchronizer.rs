@@ -34,7 +34,7 @@ use crate::{
     block::{ExtendedBlock, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit::CommitIndex,
-    commit_vote_monitor::CommitVoteMonitor,
+    commit_vote_monitor::{CommitVoteMonitor, is_commit_lagging},
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
@@ -42,10 +42,7 @@ use crate::{
     peers_pool::PeersPool,
     round_tracker::RoundTracker,
 };
-use crate::{
-    authority_service::COMMIT_LAG_MULTIPLIER, core_thread::CoreThreadDispatcher,
-    transaction_vote_tracker::TransactionVoteTracker,
-};
+use crate::{core_thread::CoreThreadDispatcher, transaction_vote_tracker::TransactionVoteTracker};
 
 /// The number of concurrent fetch blocks requests per authority
 const FETCH_BLOCKS_CONCURRENCY: usize = 5;
@@ -1054,13 +1051,15 @@ where
     fn should_run_periodic_sync(&mut self) -> bool {
         let current_commit_index = self.dag_state.read().last_commit_index();
         let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
-        let commit_threshold = current_commit_index
-            + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER;
         let now = Instant::now();
         let metrics = &self.context.metrics.node_metrics;
 
         // Commit is not lagging.
-        if quorum_commit_index <= commit_threshold {
+        if !is_commit_lagging(
+            self.context.as_ref(),
+            current_commit_index,
+            quorum_commit_index,
+        ) {
             metrics
                 .synchronizer_periodic_sync_decision
                 .with_label_values(&["true", "default"])
@@ -1412,7 +1411,7 @@ mod tests {
         },
     };
     use crate::{
-        authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher,
+        commit_vote_monitor::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher,
         peers_pool::PeersPool, round_tracker::RoundTracker,
         transaction_vote_tracker::TransactionVoteTracker,
     };
@@ -1590,6 +1589,8 @@ mod tests {
             &self,
             _peer: crate::network::PeerId,
             _block_refs: Vec<BlockRef>,
+            _fetch_after_rounds: Vec<Round>,
+            _fetch_missing_ancestors: bool,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Observer fetch_blocks not implemented in mock")

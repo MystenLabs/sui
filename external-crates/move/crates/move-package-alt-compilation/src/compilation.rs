@@ -21,7 +21,7 @@ use colored::Colorize;
 use move_compiler::{
     Compiler, Flags,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::warning_filters::WarningFiltersBuilder,
+    diagnostics::filter::empty_filter_scope,
     editions::{Edition, Flavor},
     linters,
     shared::{
@@ -44,9 +44,13 @@ pub async fn compile_package<W: Write + Send, F: MoveFlavor>(
     path: &Path,
     build_config: &BuildConfig,
     env: &Environment,
+    flavor: F,
     writer: &mut W,
 ) -> anyhow::Result<CompiledPackage> {
-    let root_pkg: RootPackage<F> = build_config.package_loader(path, env).load().await?;
+    let root_pkg: RootPackage<F> = build_config
+        .package_loader(path, env, flavor)
+        .load()
+        .await?;
     BuildPlan::create(&root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 
@@ -387,7 +391,7 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
                 .or(build_config.default_edition)
                 .unwrap_or(Edition::LEGACY), // TODO require edition
             flavor: Flavor::from_str(pkg.flavor().unwrap_or("sui"))?,
-            warning_filter: WarningFiltersBuilder::new_for_source(),
+            warning_filter: empty_filter_scope(),
         };
 
         // Assign a unique name for the compiler for each package.

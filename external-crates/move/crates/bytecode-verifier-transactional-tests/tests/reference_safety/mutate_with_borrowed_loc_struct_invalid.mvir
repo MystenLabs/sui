@@ -1,8 +1,8 @@
 //# publish
-module 0x1::M {
-    struct X { b: bool }
-    struct S { z: u64 }
-    t1() {
+mvir 0x1::M {
+    public struct X { b: bool }
+    public struct S { z: u64 }
+    fun t1() {
         let x: Self::X;
         let y: &Self::X;
         let b: bool;
@@ -17,10 +17,10 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::N {
-    struct X { b: bool }
-    struct S { z: u64 }
-    t2() {
+mvir 0x1::N {
+    public struct X { b: bool }
+    public struct S { z: u64 }
+    fun t2() {
         let s: Self::S;
         let y: &Self::S;
         let z: &u64;

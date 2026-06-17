@@ -9,10 +9,11 @@ use futures::future::join_all;
 use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::fmt::Write;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use std::{fs, io};
 use sui_config::{NodeConfig, genesis::Genesis};
@@ -24,10 +25,10 @@ use sui_rpc_api::Client;
 use sui_storage::object_store::http::HttpDownloaderBuilder;
 use sui_storage::object_store::util::MANIFEST_FILENAME;
 use sui_storage::object_store::util::Manifest;
-use sui_storage::object_store::util::PerEpochManifest;
 use sui_storage::object_store::util::{build_object_store, end_of_epoch_data, fetch_checkpoint};
 use sui_types::committee::QUORUM_THRESHOLD;
 use sui_types::crypto::AuthorityPublicKeyBytes;
+use sui_types::digests::ChainIdentifier;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::messages_grpc::LayoutGenerationOption;
 use sui_types::multiaddr::Multiaddr;
@@ -53,7 +54,7 @@ use sui_core::storage::RocksDbStore;
 use sui_snapshot::reader::StateSnapshotReaderV1;
 use sui_snapshot::setup_db_state;
 use sui_storage::object_store::ObjectStoreGetExt;
-use sui_storage::object_store::util::{copy_file, exists, get_path};
+use sui_storage::object_store::util::{exists, get_path};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::{CheckpointCommitment, ECMHLiveObjectSetDigest};
 use sui_types::messages_grpc::{
@@ -68,8 +69,11 @@ use tracing::info;
 use typed_store::DBMetrics;
 
 pub mod commands;
+pub mod db_shell;
 pub mod db_tool;
 mod formal_snapshot_util;
+#[cfg(all(feature = "tideconsole", not(windows)))]
+pub mod tideconsole_cmd;
 
 #[derive(
     Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum, Default,
@@ -789,6 +793,7 @@ pub async fn download_formal_snapshot(
     network: Chain,
     verify: SnapshotVerifyMode,
     max_retries: usize,
+    metrics_port: u16,
 ) -> Result<(), anyhow::Error> {
     let m = MultiProgress::new();
     let msg = format!(
@@ -804,8 +809,8 @@ pub async fn download_formal_snapshot(
     }
 
     // Start prometheus server so that we can serve metrics during snapshot download
-    let registry_service =
-        mysten_metrics::start_prometheus_server("127.0.0.1:9184".parse().unwrap());
+    let metrics_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), metrics_port);
+    let registry_service = mysten_metrics::start_prometheus_server(metrics_addr);
     let prometheus_registry = registry_service.default_registry();
     DBMetrics::init(registry_service.clone());
     mysten_metrics::init_metrics(&prometheus_registry);
@@ -815,7 +820,16 @@ pub async fn download_formal_snapshot(
         None,
         None,
     ));
-    let genesis = Genesis::load(genesis).unwrap();
+    let genesis = Genesis::load(genesis)?;
+    let genesis_chain = ChainIdentifier::from(*genesis.checkpoint().digest()).chain();
+    if genesis_chain != network {
+        return Err(anyhow!(
+            "Genesis file is for chain {}, but formal snapshot download is configured for --network {}. \
+            Use the matching genesis.blob or pass the correct --network flag.",
+            genesis_chain.as_str(),
+            network.as_str(),
+        ));
+    }
     let genesis_committee = genesis.committee();
     let committee_store = Arc::new(CommitteeStore::new(
         path.join("epochs"),
@@ -1024,9 +1038,20 @@ pub async fn download_formal_snapshot(
     // After a large backfill, rebuild the tidehunter control region to reclaim disk space
     // and reduce startup time. No-op when compiled without tidehunter.
     #[cfg(tidehunter)]
-    perpetual_db
-        .force_rebuild_control_region()
-        .expect("Failed to rebuild tidehunter control region after snapshot restore");
+    {
+        perpetual_db
+            .force_rebuild_control_region()
+            .expect("Failed to rebuild tidehunter control region after snapshot restore");
+        // The tidehunter Db spawns background threads (periodic snapshot, relocator,
+        // flusher pool, etc.) that own file handles inside the staging directory.
+        // Wait for them to exit before renaming staging -> live, otherwise a
+        // periodic timer could try to open a new file under the (now missing) path.
+        println!(
+            "Waiting for tidehunter background threads to finish before renaming staging to live"
+        );
+        perpetual_db.wait_for_tidehunter_background_threads();
+        println!("Tidehunter background threads finished, proceeding with rename");
+    }
 
     let new_path = path.parent().unwrap().join("live");
     if new_path.exists() {
@@ -1158,145 +1183,5 @@ async fn backfill_epoch_transaction_digests(
         checkpoint_counter.load(Ordering::Relaxed)
     );
 
-    Ok(())
-}
-
-pub async fn download_db_snapshot(
-    path: &Path,
-    epoch: u64,
-    snapshot_store_config: ObjectStoreConfig,
-    skip_indexes: bool,
-    num_parallel_downloads: usize,
-    max_retries: usize,
-) -> Result<(), anyhow::Error> {
-    let remote_store = if snapshot_store_config.no_sign_request {
-        snapshot_store_config.make_http()?
-    } else {
-        snapshot_store_config.make().map(Arc::new)?
-    };
-
-    // We rely on the top level MANIFEST file which contains all valid epochs
-    let manifest_contents = remote_store.get_bytes(&get_path(MANIFEST_FILENAME)).await?;
-    let root_manifest: Manifest = serde_json::from_slice(&manifest_contents)
-        .map_err(|err| anyhow!("Error parsing MANIFEST from bytes: {}", err))?;
-
-    if !root_manifest.epoch_exists(epoch) {
-        return Err(anyhow!(
-            "Epoch dir {} doesn't exist on the remote store",
-            epoch
-        ));
-    }
-
-    let epoch_path = format!("epoch_{}", epoch);
-    let epoch_dir = get_path(&epoch_path);
-
-    let manifest_file = epoch_dir.child(MANIFEST_FILENAME);
-    let epoch_manifest_contents =
-        String::from_utf8(remote_store.get_bytes(&manifest_file).await?.to_vec())
-            .map_err(|err| anyhow!("Error parsing {}/MANIFEST from bytes: {}", epoch_path, err))?;
-
-    let epoch_manifest =
-        PerEpochManifest::deserialize_from_newline_delimited(&epoch_manifest_contents);
-
-    let mut files: Vec<String> = vec![];
-    files.extend(epoch_manifest.filter_by_prefix("store/perpetual").lines);
-    files.extend(epoch_manifest.filter_by_prefix("epochs").lines);
-    files.extend(epoch_manifest.filter_by_prefix("checkpoints").lines);
-    if !skip_indexes {
-        files.extend(epoch_manifest.filter_by_prefix("indexes").lines)
-    }
-    let local_store = ObjectStoreConfig {
-        object_store: Some(ObjectStoreType::File),
-        directory: Some(path.to_path_buf()),
-        ..Default::default()
-    }
-    .make()?;
-    let m = MultiProgress::new();
-    let path = path.to_path_buf();
-    let snapshot_handle = tokio::spawn(async move {
-        let progress_bar = m.add(
-            ProgressBar::new(files.len() as u64).with_style(
-                ProgressStyle::with_template(
-                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} files done ({msg})",
-                )
-                .unwrap(),
-            ),
-        );
-        let cloned_progress_bar = progress_bar.clone();
-        let file_counter = Arc::new(AtomicUsize::new(0));
-        futures::stream::iter(files.iter())
-            .map(|file| {
-                let local_store = local_store.clone();
-                let remote_store = remote_store.clone();
-                let counter_cloned = file_counter.clone();
-                async move {
-                    counter_cloned.fetch_add(1, Ordering::Relaxed);
-                    let file_path = get_path(format!("epoch_{}/{}", epoch, file).as_str());
-
-                    let mut attempts = 0;
-                    let max_attempts = max_retries + 1;
-                    loop {
-                        attempts += 1;
-                        match copy_file(&file_path, &file_path, &remote_store, &local_store).await {
-                            Ok(()) => break,
-                            Err(e) if attempts >= max_attempts => {
-                                return Err(anyhow::anyhow!(
-                                    "Failed to download {} after {} attempts: {}",
-                                    file_path,
-                                    attempts,
-                                    e
-                                ));
-                            }
-                            Err(e) => {
-                                tracing::warn!(
-                                    "Failed to download {} (attempt {}/{}): {}, retrying in {}ms",
-                                    file_path,
-                                    attempts,
-                                    max_attempts,
-                                    e,
-                                    1000 * attempts
-                                );
-                                tokio::time::sleep(Duration::from_millis(1000 * attempts as u64))
-                                    .await;
-                            }
-                        }
-                    }
-
-                    Ok::<::object_store::path::Path, anyhow::Error>(file_path.clone())
-                }
-            })
-            .boxed()
-            .buffer_unordered(num_parallel_downloads)
-            .try_for_each(|path| {
-                file_counter.fetch_sub(1, Ordering::Relaxed);
-                cloned_progress_bar.inc(1);
-                cloned_progress_bar.set_message(format!(
-                    "Downloading file: {}, #downloads_in_progress: {}",
-                    path,
-                    file_counter.load(Ordering::Relaxed)
-                ));
-                futures::future::ready(Ok(()))
-            })
-            .await?;
-        progress_bar.finish_with_message("Snapshot file download is complete");
-        Ok::<(), anyhow::Error>(())
-    });
-
-    let tasks: Vec<_> = vec![Box::pin(snapshot_handle)];
-    join_all(tasks)
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .for_each(|result| result.expect("Task failed"));
-
-    let store_dir = path.join("store");
-    if store_dir.exists() {
-        fs::remove_dir_all(&store_dir)?;
-    }
-    let epochs_dir = path.join("epochs");
-    if epochs_dir.exists() {
-        fs::remove_dir_all(&epochs_dir)?;
-    }
     Ok(())
 }

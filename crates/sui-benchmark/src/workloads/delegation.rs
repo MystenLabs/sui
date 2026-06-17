@@ -67,6 +67,7 @@ impl Payload for DelegationTestPayload {
                     .reference_gas_price,
             )
             .call_staking(coin, self.validator)
+            .ensure_unique()
             .build_and_sign(self.keypair.as_ref()),
             None => make_transfer_sui_transaction(
                 self.gas,

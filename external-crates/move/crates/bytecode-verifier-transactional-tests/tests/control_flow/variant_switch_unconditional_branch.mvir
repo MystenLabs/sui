@@ -1,8 +1,8 @@
 //# publish
-module 0x42::m { 
-    enum X { V1 { x: u64 }, V2 { } }
+mvir 0x42::m { 
+    public enum X { V1 { x: u64 }, V2 { } }
 
-    entry foo(x: Self::X) {
+    entry fun foo(x: Self::X) {
         let y: u64;
     label bv:
         variant_switch X (&x) {

@@ -235,6 +235,7 @@ pub struct TrafficTally {
     pub error_info: Option<(Weight, String)>,
     pub spam_weight: Weight,
     pub timestamp: SystemTime,
+    pub method: Option<String>,
 }
 
 impl TrafficTally {
@@ -250,7 +251,13 @@ impl TrafficTally {
             error_info,
             spam_weight,
             timestamp: SystemTime::now(),
+            method: None,
         }
+    }
+
+    pub fn with_method(mut self, method: String) -> Self {
+        self.method = Some(method);
+        self
     }
 }
 
@@ -548,6 +555,7 @@ mod tests {
             error_info: None,
             spam_weight: Weight::one(),
             timestamp: SystemTime::now(),
+            method: None,
         };
         let bob = TrafficTally {
             direct: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
@@ -555,6 +563,7 @@ mod tests {
             error_info: None,
             spam_weight: Weight::one(),
             timestamp: SystemTime::now(),
+            method: None,
         };
         let charlie = TrafficTally {
             direct: Some(IpAddr::V4(Ipv4Addr::new(8, 7, 6, 5))),
@@ -562,6 +571,7 @@ mod tests {
             error_info: None,
             spam_weight: Weight::one(),
             timestamp: SystemTime::now(),
+            method: None,
         };
 
         // initial 2 tallies for alice, should not block

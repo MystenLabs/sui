@@ -83,7 +83,7 @@ cmake
 
 ### Considerations to enable gRPC
 
-You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. See [Sui's data serving roadmap](/develop/accessing-data/data-serving#grpc-api) for guidance on the overall transition plan.
+You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. See [Sui's data serving roadmap](/develop/accessing-data/data-serving) for guidance on the overall transition plan.
 
 To serve the [gRPC API](/develop/accessing-data/grpc), you must enable it on your full node by indexing gRPC-specific data. During the initial gRPC indexing phase, your full node might not be able to handle other traffic, including the [**deprecated** JSON-RPC](/references/sui-api) requests. Plan your rollout carefully (such as using the `rolling upgrade` mechanism), and communicate any downtime to your customers and partners in advance. The time required to sync gRPC indexes depends on your full node's hardware and software configuration.
 
@@ -96,7 +96,16 @@ rpc:
 
 ```
 
-Running gRPC alongside JSON-RPC increases your full node’s storage usage. You can reclaim this storage by disabling JSON-RPC after all your client applications have migrated from JSON-RPC. All applications must gradually migrate to gRPC or [GraphQL RPC](/develop/accessing-data/custom-indexer/custom-indexers). You can also run gRPC and JSON-RPC on separate nodes to optimize resource usage and provide a performant and resilient RPC experience to client applications. Add the following to the `fullnode.yaml` configuration of your full node to selectively disable JSON-RPC on it:
+The `rpc` configuration block supports additional settings. The most important options are:
+
+- `enable-indexing`: Set to `true` to enable gRPC-specific data indexing.
+- `https-address`: The HTTPS address for the RPC server, if TLS termination is handled by the node.
+- `tls`: TLS configuration for the RPC server.
+- `max-json-move-value-size`: Maximum size in bytes for JSON Move values returned by the RPC server.
+
+Refer to the [`RpcConfig` source](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/src/rpc_config.rs) for the complete list of available `rpc` options.
+
+You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. All applications must migrate to gRPC or [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) by July 2026. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
 
 ```sh
 
@@ -114,7 +123,7 @@ authority-store-pruning-config:
 
 ```
 
-Adjust the gRPC data retention period based on your full node’s resource profile and whether you've disabled JSON-RPC or not. In any case, test the longer retention period for performance and scalability before using gRPC in your application or offering it to other developers.
+Adjust the gRPC data retention period based on your full node's resource profile and whether you've disabled JSON-RPC or not. In any case, test the longer retention period for performance and scalability before using gRPC in your application or offering it to other developers.
 
 ## Running a full node {#running-a-full-node}
 
@@ -138,6 +147,70 @@ The Sui repository includes a guide on running a full node through [Docker Compo
 This alone is not suitable for a production environment, but you can use it to get a full node up and running quickly on a virtual machine or local machine for development purposes.
 See [Running a full node](#running-a-full-node) for instructions relevant to production use cases.
 
+Run the commands in this section from the same folder. Replace `branch-name` in URLs with the branch that matches your target network, such as `mainnet`, `testnet`, or `devnet`.
+
+1. Install [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/). Docker Desktop includes Docker Compose.
+
+1. On Linux, install the build prerequisites:
+
+    ```sh
+    $ apt update \
+    && apt install -y --no-install-recommends \
+    tzdata \
+    ca-certificates \
+    build-essential \
+    pkg-config \
+    cmake
+    ```
+
+1. Download the `docker-compose.yaml` file:
+
+    ```sh
+    $ curl -fLO https://raw.githubusercontent.com/MystenLabs/sui/branch-name/docker/fullnode/docker-compose.yaml
+    ```
+
+    The compose file pins a specific `mysten/sui-node` image tag. Update that tag to the version and network you target before you start the node.
+
+1. Download the `fullnode-template.yaml` file:
+
+    ```sh
+    $ curl -fLO https://github.com/MystenLabs/sui/raw/branch-name/crates/sui-config/data/fullnode-template.yaml
+    ```
+
+1. Download the `genesis.blob` file for your target network. Replace `<network>` with `mainnet`, `testnet`, or `devnet`:
+
+    ```sh
+    $ curl -fLO https://github.com/MystenLabs/sui-genesis/raw/main/<network>/genesis.blob
+    ```
+
+1. Start the full node in detached mode:
+
+    ```sh
+    $ docker compose up -d
+    ```
+
+    Use `docker compose` (Compose v2). On hosts that still run the standalone Compose v1 binary, the command is `docker-compose up -d`.
+
+### Building from source
+
+You can also build `sui-node` directly from the Sui repository using [Cargo](https://doc.rust-lang.org/cargo/), the Rust package manager.
+
+1. Install the prerequisites listed in [Software requirements](#software-requirements).
+
+1. Clone the Sui repository, replacing `branch-name` with the branch for your target network:
+
+    ```sh
+    $ git clone https://github.com/MystenLabs/sui.git -b branch-name
+    $ cd sui
+    ```
+
+1. Follow [Setting up a full node](#setting-up-a-full-node) to prepare `fullnode.yaml` and download the genesis blob.
+
+1. Build and run `sui-node` from source:
+
+    ```sh
+    $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
+    ```
 
 ### Setting up a full node
 
@@ -147,18 +220,19 @@ When you are ready to run `sui-node` in your production environment, you can set
     ```sh
     $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
     ```
+    The template may include a legacy `enable-event-processing` field. This field is no longer active and has no effect on node behavior. You can safely remove it from your configuration.
 1. Download the genesis blob for the network to use:
     - [Devnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob):
         ```sh
-        $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
+        $ curl -fLO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
         ```
     - [Testnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob):
         ```sh
-        $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
+        $ curl -fLO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
         ```
     - [Mainnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob):
         ```sh
-        $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob
+        $ curl -fLO https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob
         ```
 1. For Testnet or Mainnet: Edit the `fullnode.yaml` file to include peer nodes for state synchronization. Append the following to the end of the current configuration:
 
@@ -254,3 +328,109 @@ Then update the metrics address in your `fullnode.yaml` file to use port `9180`.
 ```sh
 metrics-address: "0.0.0.0:9180"
 ```
+
+## Full node logging
+
+By default, `sui-node` writes its logs to standard error. When you run the node under systemd and do not override the output settings, `journalctl` captures these logs.
+
+The `RUST_LOG` environment variable controls the log filter. The default level is `info`. You can raise or lower the level for individual components, for example `sui_core=debug`. For more on filter syntax, see [Logging levels](/operators/observability#logging-levels) in the observability guide.
+
+### Recommended systemd unit
+
+The following unit file runs `sui-node` and sends its output to the systemd journal. Adjust the binary path, configuration path, user, and `RUST_LOG` filter for your environment.
+
+```ini title='/etc/systemd/system/sui-node.service'
+[Unit]
+Description=Sui Full Node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=sui
+ExecStart=/usr/local/bin/sui-node --config-path /opt/sui/fullnode.yaml
+Environment=RUST_LOG=info,sui_core=debug,consensus=debug,jsonrpsee=error
+StandardOutput=journal
+StandardError=journal
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+After you create or change the unit file, reload systemd and start the service:
+
+```sh
+$ sudo systemctl daemon-reload
+$ sudo systemctl enable --now sui-node
+```
+
+Follow the live log output with `journalctl`:
+
+```sh
+$ journalctl -u sui-node -f
+```
+
+### Optional file logging
+
+To write logs to a file instead of standard error, set the `RUST_LOG_FILE` environment variable to the target path:
+
+```ini
+Environment=RUST_LOG_FILE=/var/log/sui/sui-node.log
+```
+
+The `sui` user that runs the node must own the log directory and have write permission:
+
+```sh
+$ sudo mkdir -p /var/log/sui
+$ sudo chown sui:sui /var/log/sui
+```
+
+`sui-node` rotates the log file daily and appends a date suffix to the file name. Daily rotation is built in, but the node does not delete, compress, or cap the number of old files. Handle retention and compression with `journald`, `logrotate`, or your operations tooling.
+
+### Optional structured logs
+
+To emit logs as newline-delimited JSON instead of plain text, set `RUST_LOG_JSON`:
+
+```ini
+Environment=RUST_LOG_JSON=1
+```
+
+Structured logs are useful when you forward output to a log aggregation system that parses JSON.
+
+### View and update the log filter at runtime
+
+`sui-node` exposes a private admin API that reports and updates the active log filter without a restart. The admin server binds to `127.0.0.1` on port 1337 by default. You can change the port with the `admin-interface-port` field in the node configuration file.
+
+To view the current filter, send a GET request:
+
+```sh
+$ curl http://127.0.0.1:1337/logging
+```
+
+To update the filter, send a POST request with the new filter string as the request body:
+
+```sh
+$ curl -X POST http://127.0.0.1:1337/logging --data 'info,sui_core=debug'
+```
+
+A runtime update applies until the process restarts. To make a change permanent, also update `RUST_LOG` in the unit file.
+
+:::caution
+
+The admin API has no authentication. Keep it bound to `127.0.0.1` and do not expose port 1337 to untrusted networks.
+
+:::
+
+### Troubleshooting empty logs
+
+If `journalctl` or your log file shows no output, check the following:
+
+- Confirm the systemd unit name. The service might not be named `sui-node`. List the service units with `systemctl list-units --type=service | grep -i sui`.
+
+- Check the service state with `systemctl status <unit>`. Look for a failed start, a crash loop, or a missing binary.
+
+- Verify the `StandardOutput` and `StandardError` settings in the unit file. If they are not set to `journal`, `journalctl` does not capture the output.
+
+- If you expect file logging, confirm the process environment includes `RUST_LOG_FILE`. Run `systemctl show <unit> --property=Environment` to see the effective environment.
+
+- Confirm the log directory exists and the node user can write to it. A missing or unwritable directory prevents file logging.

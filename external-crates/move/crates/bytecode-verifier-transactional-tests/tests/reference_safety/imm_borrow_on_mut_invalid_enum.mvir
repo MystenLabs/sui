@@ -1,11 +1,11 @@
 //# publish
-module 0x42::Tester {
+mvir 0x42::Tester {
 
-    enum Initializer { V { x: u64, y: u64 } }
-    enum Point { V { x: u64, y: u64 } }
+    public enum Initializer { V { x: u64, y: u64 } }
+    public enum Point { V { x: u64, y: u64 } }
 
     // the key struct is here to just give a feeling why the computation might not be reorderable
-    set_and_pick(init: &mut Self::Initializer, p: &mut Self::Point): &mut u64 {
+    fun set_and_pick(init: &mut Self::Initializer, p: &mut Self::Point): &mut u64 {
     let ix: &mut u64;
     let iy: &mut u64;
     let px: &mut u64;
@@ -24,13 +24,13 @@ module 0x42::Tester {
         return move(px);
     }
 
-    bump_and_give(u: &mut u64): &u64 {
+    fun bump_and_give(u: &mut u64): &u64 {
     label b0:
         *copy(u) = *copy(u) + 1;
         return freeze(move(u));
     }
 
-    larger_field_1(init: &mut Self::Initializer, point_ref: &mut Self::Point): &u64 {
+    fun larger_field_1(init: &mut Self::Initializer, point_ref: &mut Self::Point): &u64 {
         let field_ref: &mut u64;
         let returned_ref: &u64;
         let x_val: u64;
@@ -46,13 +46,13 @@ module 0x42::Tester {
 }
 
 //# publish
-module 0x43::Tester {
+mvir 0x43::Tester {
 
-    enum Initializer { V { x: u64, y: u64 } }
-    enum Point { V { x: u64, y: u64 } }
+    public enum Initializer { V { x: u64, y: u64 } }
+    public enum Point { V { x: u64, y: u64 } }
 
     // the key struct is here to just give a feeling why the computation might not be reorderable
-    set_and_pick(init: &mut Self::Initializer, p: &mut Self::Point): &mut u64 {
+    fun set_and_pick(init: &mut Self::Initializer, p: &mut Self::Point): &mut u64 {
     let ix: &mut u64;
     let iy: &mut u64;
     let px: &mut u64;
@@ -71,13 +71,13 @@ module 0x43::Tester {
         return move(px);
     }
 
-    bump_and_give(u: &mut u64): &u64 {
+    fun bump_and_give(u: &mut u64): &u64 {
     label b0:
         *copy(u) = *copy(u) + 1;
         return freeze(move(u));
     }
 
-    larger_field_1(init: &mut Self::Initializer, point_ref: &mut Self::Point): &u64 {
+    fun larger_field_1(init: &mut Self::Initializer, point_ref: &mut Self::Point): &u64 {
         let field_ref: &mut u64;
         let returned_ref: &u64;
         let x_val: u64;

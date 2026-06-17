@@ -5,8 +5,9 @@ use std::convert::Infallible;
 use tonic::server::NamedService;
 use tower::Service;
 
-pub mod alpha;
+pub mod deadline;
 pub mod v2;
+pub mod v2alpha;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 

@@ -1,7 +1,7 @@
 ---
 source: crates/move-decompiler/tests/tests.rs
 ---
-loop {
+'loop_0: loop {
     { 0 }
-    continue;
+    continue 'loop_0;
 }

@@ -1,14 +1,14 @@
 //# publish
 
-module 0x2::borrow_owned_enum {
+mvir 0x2::borrow_owned_enum {
 
-enum E has drop {
+public enum E has drop {
     A { a: u64, b: u64, c: u64, d: u64, e: u64, f: u64, g: u64, h: u64,
         i: u64, j: u64, k: u64, l: u64, m: u64, n: u64, o: u64, p: u64 },
     B {}
 }
 
-public test(owned_enum: Self::E, test: bool) {
+public fun test(owned_enum: Self::E, test: bool) {
     let a: &u64;
     let b: &u64;
     let c: &u64;

@@ -1,8 +1,8 @@
 //# publish
-module 0x1::M {
-    enum S { V { b: bool } }
+mvir 0x1::M {
+    public enum S { V { b: bool } }
 
-    foo() {
+    fun foo() {
         // type arg mismatch
         let x: Self::S<u64>;
     label b0:

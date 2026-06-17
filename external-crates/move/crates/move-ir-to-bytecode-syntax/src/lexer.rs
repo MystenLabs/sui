@@ -67,7 +67,10 @@ pub enum Tok {
     JumpIfFalse,
     Label,
     Let,
-    Module,
+    /// IR-side equivalent of Move source's `module` keyword. The distinct
+    /// spelling makes it visually obvious whether a snippet is Move source
+    /// or Move IR.
+    Mvir,
     Move,
     Native,
     Public,
@@ -76,13 +79,11 @@ pub enum Tok {
     Return,
     Struct,
     True,
-    VecPack(u64),
     VecLen,
     VecImmBorrow,
     VecMutBorrow,
     VecPushBack,
     VecPopBack,
-    VecUnpack(u64),
     VecSwap,
     LBrace,
     Pipe,
@@ -245,21 +246,7 @@ impl<'input> Lexer<'input> {
                             "vec_push_back" => (Tok::VecPushBack, len),
                             "vec_pop_back" => (Tok::VecPopBack, len),
                             "vec_swap" => (Tok::VecSwap, len),
-                            _ => {
-                                if let Some(stripped) = name.strip_prefix("vec_pack_") {
-                                    match stripped.parse::<u64>() {
-                                        Ok(num) => (Tok::VecPack(num), len),
-                                        Err(_) => (Tok::NameBeginTyValue, len + 1),
-                                    }
-                                } else if let Some(stripped) = name.strip_prefix("vec_unpack_") {
-                                    match stripped.parse::<u64>() {
-                                        Ok(num) => (Tok::VecUnpack(num), len),
-                                        Err(_) => (Tok::NameBeginTyValue, len + 1),
-                                    }
-                                } else {
-                                    (Tok::NameBeginTyValue, len + 1)
-                                }
-                            }
+                            _ => (Tok::NameBeginTyValue, len + 1),
                         },
                         Some('(') => match name {
                             "assert" => (Tok::Assert, len + 1),
@@ -434,7 +421,7 @@ fn get_name_token(name: &str) -> Tok {
         "jump_if_false" => Tok::JumpIfFalse,
         "label" => Tok::Label,
         "let" => Tok::Let,
-        "module" => Tok::Module,
+        "mvir" => Tok::Mvir,
         "native" => Tok::Native,
         "public" => Tok::Public,
         "return" => Tok::Return,

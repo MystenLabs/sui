@@ -1,12 +1,12 @@
 // mutable borrows are not unique
 
 //# publish
-module 0x2::fields {
+mvir 0x2::fields {
 
-    struct S has copy, drop { f: u64 }
-    struct Pair has copy, drop { s1: Self::S, s2: Self::S }
+    public struct S has copy, drop { f: u64 }
+    public struct Pair has copy, drop { s1: Self::S, s2: Self::S }
 
-    create(p: &mut Self::Pair) {
+    fun create(p: &mut Self::Pair) {
         // mutable variables are not unique. Nor do they take ownership over their memory
         // We only care about preventing the creation of dangling references
         let p2: &mut Self::Pair;
@@ -35,12 +35,12 @@ module 0x2::fields {
 }
 
 //# publish
-module 0x3::fields_write {
+mvir 0x3::fields_write {
 
-    struct S has copy, drop { f: u64 }
-    struct Pair has copy, drop { s1: Self::S, s2: Self::S }
+    public struct S has copy, drop { f: u64 }
+    public struct Pair has copy, drop { s1: Self::S, s2: Self::S }
 
-    write(p: &mut Self::Pair) {
+    fun write(p: &mut Self::Pair) {
         // We can do the same thing, and write to them
         let p2: &mut Self::Pair;
         let s1_1: &mut Self::S;

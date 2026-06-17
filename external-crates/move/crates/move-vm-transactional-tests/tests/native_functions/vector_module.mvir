@@ -1,15 +1,15 @@
 //# publish
-module 0x5::Coin {
-    struct Coin has store { value: u64 }
-    public value(c: &Self::Coin): u64 {
+mvir 0x5::Coin {
+    public struct Coin has store { value: u64 }
+    public fun value(c: &Self::Coin): u64 {
     label b0:
         return *&move(c).Coin::value;
     }
-    public zero(): Self::Coin {
+    public fun zero(): Self::Coin {
     label b0:
         return Coin { value: 0 };
     }
-    public destroy(c: Self::Coin) {
+    public fun destroy(c: Self::Coin) {
     label b0:
         Coin {} = move(c);
         _ = ();
@@ -18,13 +18,13 @@ module 0x5::Coin {
 }
 
 //# publish
-module 0x42::M {
+mvir 0x42::M {
     import 0x5::Coin;
     import 0x1::vector;
 
-    struct Coins has key { f: vector<Coin::Coin> }
+    public struct Coins has key { f: vector<Coin::Coin> }
 
-    public new(): Self::Coins {
+    public fun new(): Self::Coins {
         let coin_vec: vector<Coin::Coin>;
         let coins: Self::Coins;
     label b0:
@@ -32,7 +32,7 @@ module 0x42::M {
         return Coins { f: move(coin_vec) };
     }
 
-    public put_coin(coins: &mut Self::Coins, coin: Coin::Coin) {
+    public fun put_coin(coins: &mut Self::Coins, coin: Coin::Coin) {
         let v_ref: &mut vector<Coin::Coin>;
     label b0:
         v_ref = &mut move(coins).Coins::f;
@@ -40,7 +40,7 @@ module 0x42::M {
         return;
     }
 
-    public destroy(coins: Self::Coins) {
+    public fun destroy(coins: Self::Coins) {
         let f: vector<Coin::Coin>;
     label b0:
         Coins { f: f } = move(coins);
@@ -49,17 +49,17 @@ module 0x42::M {
         Coin::destroy(vec_pop_back<Coin::Coin>(&mut f));
         jump loop;
     label end:
-        vec_unpack_0<Coin::Coin>(move(f));
+        vector<Coin::Coin; 0>() = move(f);
         return;
     }
 
 }
 
 //# publish
-module 0x43::Test {
+mvir 0x43::Test {
     import 0x42::M;
     import 0x5::Coin;
-    test() {
+    fun test() {
         let coins: M::Coins;
     label b0:
         coins = M::new();

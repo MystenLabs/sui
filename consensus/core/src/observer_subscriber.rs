@@ -20,38 +20,43 @@ use tracing::{debug, info, warn};
 
 use crate::{
     block::BlockAPI,
+    commit_vote_monitor::{CommitVoteMonitor, is_commit_lagging},
     context::Context,
     dag_state::DagState,
     error::ConsensusError,
-    network::{ObserverNetworkClient, ObserverNetworkService, PeerId},
+    network::{ObserverNetworkClient, ObserverNetworkService, PeerId, RandomnessSignatureHandler},
 };
 
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
 /// taking care of retrying when subscription streams break. Blocks returned from peers are sent
 /// to the observer service for processing. The `ObserverSubscriber` can only subscribe to one peer at a time.
-#[allow(unused)]
 pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetworkService> {
     context: Arc<Context>,
     network_client: Arc<C>,
     observer_service: Arc<S>,
+    commit_vote_monitor: Arc<CommitVoteMonitor>,
     dag_state: Arc<parking_lot::RwLock<DagState>>,
     subscription: Arc<Mutex<Option<JoinHandle<()>>>>,
+    randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
 }
 
-#[allow(unused)]
 impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, S> {
     pub(crate) fn new(
         context: Arc<Context>,
         network_client: Arc<C>,
         observer_service: Arc<S>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         dag_state: Arc<parking_lot::RwLock<DagState>>,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) -> Self {
         Self {
             context,
             network_client,
             observer_service,
+            commit_vote_monitor,
             dag_state,
             subscription: Arc::new(Mutex::new(None)),
+            randomness_signature_handler,
         }
     }
 
@@ -61,7 +66,9 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         let context = self.context.clone();
         let network_client = self.network_client.clone();
         let observer_service = self.observer_service.clone();
+        let commit_vote_monitor = self.commit_vote_monitor.clone();
         let dag_state = self.dag_state.clone();
+        let randomness_signature_handler = self.randomness_signature_handler.clone();
 
         let mut subscription = self.subscription.lock();
         if let Some(handle) = subscription.take() {
@@ -71,8 +78,10 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             context,
             network_client,
             observer_service,
+            commit_vote_monitor,
             dag_state,
             peer,
+            randomness_signature_handler,
         )));
     }
 
@@ -88,8 +97,10 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         context: Arc<Context>,
         network_client: Arc<C>,
         observer_service: Arc<S>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         dag_state: Arc<parking_lot::RwLock<DagState>>,
         peer: PeerId,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
         const MIN_TIMEOUT: Duration = Duration::from_millis(500);
@@ -153,63 +164,83 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                 let _scope = monitored_scope("ObserverSubscriberStreamConsumer");
 
                 match blocks.next().await {
-                    Some(block) => {
+                    Some(item) => {
                         context
                             .metrics
                             .node_metrics
-                            .observer_subscribed_blocks
-                            .inc();
+                            .observer_subscribed_blocks_batch_size
+                            .observe(item.blocks.len() as f64);
 
-                        // Backpressure: wait if we've hit max parallelism
-                        while active_tasks.load(Ordering::Acquire) >= max_parallel_tasks {
-                            // Block until a task completes instead of busy-waiting
-                            match tasks.join_next().await {
-                                Some(Ok(_)) => {
-                                    // Task completed successfully, counter already decremented
-                                }
-                                Some(Err(e)) => {
-                                    warn!("Task failed with error: {}", e);
-                                }
-                                None => {
-                                    // This shouldn't happen if our counter is accurate
-                                    warn!(
-                                        "No tasks to join but counter shows {} active tasks",
-                                        active_tasks.load(Ordering::Acquire)
-                                    );
-                                    break;
-                                }
+                        // During catch-up (commit lagging behind quorum), drop silently --
+                        // those rounds will arrive via checkpoint sync, same as lagging validators.
+                        if let Some(handler) = &randomness_signature_handler
+                            && !is_commit_lagging(
+                                &context,
+                                dag_state.read().last_commit_index(),
+                                commit_vote_monitor.quorum_commit_index(),
+                            )
+                        {
+                            for sig in item.auxiliary_data.randomness_signatures {
+                                handler.handle_randomness_signature(sig);
                             }
                         }
 
-                        // Spawn a new task to handle this block
-                        active_tasks.fetch_add(1, Ordering::AcqRel);
-                        let counter = active_tasks.clone();
-                        let observer_service = observer_service.clone();
-                        let peer_cloned = peer.clone();
-
-                        tasks.spawn(async move {
-                            let _scope = monitored_scope("ObserverSubscriberTask::handle_block");
-
-                            let result = observer_service
-                                .handle_block(peer_cloned.clone(), block)
-                                .await;
-                            if let Err(e) = result {
-                                match e {
-                                    ConsensusError::BlockRejected { block_ref, reason } => {
-                                        debug!(
-                                            "Failed to process block from peer for block {:?}: {}",
-                                            block_ref, reason
-                                        );
+                        for block in item.blocks {
+                            // Backpressure: wait if we've hit max parallelism
+                            while active_tasks.load(Ordering::Acquire) >= max_parallel_tasks {
+                                // Block until a task completes instead of busy-waiting
+                                match tasks.join_next().await {
+                                    Some(Ok(_)) => {
+                                        // Task completed successfully, counter already decremented
                                     }
-                                    _ => {
-                                        info!("Received invalid block from peer: {}", e);
+                                    Some(Err(e)) => {
+                                        warn!("Task failed with error: {}", e);
+                                    }
+                                    None => {
+                                        // This shouldn't happen if our counter is accurate
+                                        warn!(
+                                            "No tasks to join but counter shows {} active tasks",
+                                            active_tasks.load(Ordering::Acquire)
+                                        );
+                                        break;
                                     }
                                 }
                             }
 
-                            // Decrement counter when done
-                            counter.fetch_sub(1, Ordering::AcqRel);
-                        });
+                            // Spawn a new task to handle this block
+                            active_tasks.fetch_add(1, Ordering::AcqRel);
+                            let counter = active_tasks.clone();
+                            let observer_service = observer_service.clone();
+                            let peer_cloned = peer.clone();
+
+                            tasks.spawn(async move {
+                                let _scope =
+                                    monitored_scope("ObserverSubscriberTask::handle_block");
+
+                                let result = observer_service
+                                    .handle_block(peer_cloned.clone(), block)
+                                    .await;
+                                if let Err(e) = result {
+                                    match e {
+                                        ConsensusError::BlockRejected {
+                                            block_ref,
+                                            reason,
+                                        } => {
+                                            debug!(
+                                                "Failed to process block from peer for block {:?}: {}",
+                                                block_ref, reason
+                                            );
+                                        }
+                                        _ => {
+                                            info!("Received invalid block from peer: {}", e);
+                                        }
+                                    }
+                                }
+
+                                // Decrement counter when done
+                                counter.fetch_sub(1, Ordering::AcqRel);
+                            });
+                        }
 
                         // Reset retries when a block is received and also reset the backoff.
                         retries = 0;
@@ -249,7 +280,7 @@ mod tests {
 
     use async_trait::async_trait;
     use bytes::Bytes;
-    use consensus_types::block::BlockRef;
+    use consensus_types::block::{BlockRef, Round};
     use futures::stream;
     use parking_lot::{Mutex, RwLock};
     use tokio::time::sleep;
@@ -260,7 +291,7 @@ mod tests {
         commit::{CommitRange, TrustedCommit},
         context::Context,
         error::ConsensusResult,
-        network::{NodeId, ObserverBlockStream, ObserverBlockStreamItem},
+        network::{NodeId, ObserverBlockStream, ObserverStreamItem},
         storage::mem_store::MemStore,
     };
 
@@ -288,11 +319,13 @@ mod tests {
 
             let block_stream = stream::unfold(block_value, move |val| async move {
                 sleep(Duration::from_millis(1)).await;
-                let item = ObserverBlockStreamItem {
-                    block: Bytes::from(vec![val; 8]),
-                    highest_commit_index: 42,
-                };
-                Some((item, val))
+                Some((
+                    ObserverStreamItem {
+                        blocks: vec![Bytes::from(vec![val; 8])],
+                        auxiliary_data: Default::default(),
+                    },
+                    val,
+                ))
             })
             .take(10);
             Ok(Box::pin(block_stream))
@@ -302,6 +335,8 @@ mod tests {
             &self,
             _peer: PeerId,
             _block_refs: Vec<BlockRef>,
+            _fetch_after_rounds: Vec<Round>,
+            _fetch_missing_ancestors: bool,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
@@ -318,7 +353,7 @@ mod tests {
     }
 
     struct ObserverSubscriberTestService {
-        handle_block_calls: Mutex<Vec<(PeerId, ObserverBlockStreamItem)>>,
+        handle_block_calls: Mutex<Vec<(PeerId, Bytes)>>,
     }
 
     impl ObserverSubscriberTestService {
@@ -331,12 +366,8 @@ mod tests {
 
     #[async_trait]
     impl ObserverNetworkService for ObserverSubscriberTestService {
-        async fn handle_block(
-            &self,
-            peer: PeerId,
-            item: ObserverBlockStreamItem,
-        ) -> ConsensusResult<()> {
-            self.handle_block_calls.lock().push((peer, item));
+        async fn handle_block(&self, peer: PeerId, block: Bytes) -> ConsensusResult<()> {
+            self.handle_block_calls.lock().push((peer, block));
             Ok(())
         }
 
@@ -352,6 +383,8 @@ mod tests {
             &self,
             _peer: NodeId,
             _block_refs: Vec<BlockRef>,
+            _fetch_after_rounds: Vec<Round>,
+            _fetch_missing_ancestors: bool,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
         }
@@ -373,13 +406,16 @@ mod tests {
         let observer_service = Arc::new(ObserverSubscriberTestService::new());
         let network_client = Arc::new(ObserverSubscriberTestClient::new());
         let store = Arc::new(MemStore::new());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
 
         let subscriber = ObserverSubscriber::new(
             context.clone(),
             network_client,
             observer_service.clone(),
+            commit_vote_monitor,
             dag_state,
+            None,
         );
 
         // Subscribe to a validator peer
@@ -399,10 +435,9 @@ mod tests {
         // blocks eventually.
         let calls = observer_service.handle_block_calls.lock();
         assert!(calls.len() >= 100);
-        for (p, item) in calls.iter() {
+        for (p, block) in calls.iter() {
             assert_eq!(*p, peer);
-            assert_eq!(item.block, Bytes::from(vec![3u8; 8])); // Peer index 2 + 1 = 3
-            assert_eq!(item.highest_commit_index, 42);
+            assert_eq!(*block, Bytes::from(vec![3u8; 8])); // Peer index 2 + 1 = 3
         }
     }
 
@@ -414,13 +449,16 @@ mod tests {
         let observer_service = Arc::new(ObserverSubscriberTestService::new());
         let network_client = Arc::new(ObserverSubscriberTestClient::new());
         let store = Arc::new(MemStore::new());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
 
         let subscriber = ObserverSubscriber::new(
             context.clone(),
             network_client,
             observer_service.clone(),
+            commit_vote_monitor,
             dag_state,
+            None,
         );
 
         // Subscribe to first peer (validator 0)
@@ -433,9 +471,9 @@ mod tests {
             let calls = observer_service.handle_block_calls.lock();
             assert!(!calls.is_empty(), "Should have received blocks from peer1");
             // Verify blocks are from peer1 (value = 0 + 1 = 1)
-            for (p, item) in calls.iter() {
+            for (p, block) in calls.iter() {
                 assert_eq!(*p, peer1);
-                assert_eq!(item.block, Bytes::from(vec![1u8; 8]));
+                assert_eq!(*block, Bytes::from(vec![1u8; 8]));
             }
         }
 
@@ -452,10 +490,10 @@ mod tests {
             let calls = observer_service.handle_block_calls.lock();
             assert!(!calls.is_empty(), "Should have received blocks from peer2");
             // Verify ALL blocks are from peer2 (value = 2 + 1 = 3), none from peer1
-            for (p, item) in calls.iter() {
+            for (p, block) in calls.iter() {
                 assert_eq!(*p, peer2, "All blocks should be from peer2 after override");
                 assert_eq!(
-                    item.block,
+                    *block,
                     Bytes::from(vec![3u8; 8]),
                     "Block content should match peer2"
                 );

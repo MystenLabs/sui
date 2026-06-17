@@ -8,7 +8,10 @@ use strum_macros::IntoStaticStr;
 use thiserror::Error;
 use typed_store::TypedStoreError;
 
-use crate::commit::{Commit, CommitIndex};
+use crate::{
+    commit::{Commit, CommitIndex},
+    network::PeerId,
+};
 
 /// Errors that can occur when processing blocks, reading from storage, or encountering shutdown.
 #[derive(Clone, Debug, Error, IntoStaticStr)]
@@ -43,11 +46,9 @@ pub enum ConsensusError {
     #[error("Genesis blocks should not be queried!")]
     UnexpectedGenesisBlockRequested,
 
-    #[error(
-        "Expected {requested} but received {received} blocks returned from authority {authority}"
-    )]
+    #[error("Expected {requested} but received {received} blocks returned from peer {peer}")]
     UnexpectedNumberOfBlocksFetched {
-        authority: AuthorityIndex,
+        peer: PeerId,
         requested: usize,
         received: usize,
     },
@@ -131,13 +132,13 @@ pub enum ConsensusError {
     InvalidTransaction(String),
 
     #[error("Received no commit from peer {peer}")]
-    NoCommitReceived { peer: AuthorityIndex },
+    NoCommitReceived { peer: PeerId },
 
     #[error(
         "Received unexpected start commit from peer {peer}: requested {start}, received {commit:?}"
     )]
     UnexpectedStartCommit {
-        peer: AuthorityIndex,
+        peer: PeerId,
         start: CommitIndex,
         commit: Box<Commit>,
     },
@@ -146,7 +147,7 @@ pub enum ConsensusError {
         "Received unexpected commit sequence from peer {peer}: {prev_commit:?}, {curr_commit:?}"
     )]
     UnexpectedCommitSequence {
-        peer: AuthorityIndex,
+        peer: PeerId,
         prev_commit: Box<Commit>,
         curr_commit: Box<Commit>,
     },
@@ -154,13 +155,13 @@ pub enum ConsensusError {
     #[error("Not enough votes ({stake}) on end commit from peer {peer}: {commit:?}")]
     NotEnoughCommitVotes {
         stake: Stake,
-        peer: AuthorityIndex,
+        peer: PeerId,
         commit: Box<Commit>,
     },
 
     #[error("Received unexpected block from peer {peer}: {requested:?} vs {received:?}")]
     UnexpectedBlockForCommit {
-        peer: AuthorityIndex,
+        peer: PeerId,
         requested: BlockRef,
         received: BlockRef,
     },

@@ -17,16 +17,11 @@ use async_graphql::SchemaBuilder;
 use async_graphql::SubscriptionType;
 use async_graphql::extensions::ExtensionFactory;
 use async_graphql::extensions::Tracing;
-use async_graphql::http::ALL_WEBSOCKET_PROTOCOLS;
-use async_graphql::http::GraphiQLSource;
-use async_graphql_axum::GraphQLProtocol;
 use async_graphql_axum::GraphQLRequest;
 use async_graphql_axum::GraphQLResponse;
-use async_graphql_axum::GraphQLWebSocket;
 use axum::Extension;
 use axum::Router;
 use axum::extract::ConnectInfo;
-use axum::extract::WebSocketUpgrade;
 use axum::http::Method;
 use axum::response::Html;
 use axum::response::IntoResponse;
@@ -34,11 +29,13 @@ use axum::routing::MethodRouter;
 use axum::routing::get;
 use axum::routing::post;
 use axum_extra::TypedHeader;
+use config::LoggingConfig;
 use config::RpcConfig;
 use extensions::query_limits::QueryLimitsChecker;
 use extensions::query_limits::rich;
 use extensions::query_limits::show_usage::ShowUsage;
 use extensions::timeout::Timeout;
+use futures::StreamExt;
 use headers::ContentLength;
 use health::DbProbe;
 use prometheus::Registry;
@@ -70,6 +67,7 @@ use crate::api::query::Query;
 #[cfg(feature = "staging")]
 use crate::api::subscription::Subscription;
 use crate::error::PanicHandler;
+use crate::extensions::logging::ClientInfo;
 use crate::extensions::logging::Logging;
 use crate::extensions::logging::Session;
 use crate::metrics::RpcMetrics;
@@ -78,6 +76,7 @@ use crate::middleware::version::Version;
 use async_graphql::EmptySubscription as Subscription;
 
 const GRAPHQL_PATH: &str = "/graphql";
+const GRAPHQL_SUBSCRIPTIONS_PATH: &str = "/graphql/subscriptions";
 const HEALTH_PATH: &str = "/graphql/health";
 
 mod api;
@@ -362,42 +361,54 @@ pub async fn start_rpc(
         pg_pipelines,
         pg_reader.clone(),
         bigtable_reader,
-        ledger_grpc_reader,
+        ledger_grpc_reader.clone(),
         consistent_reader.clone(),
         metrics.clone(),
     );
 
-    let streaming_setup = subscription_args.checkpoint_stream_url.map(|uri| {
-        let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(
-            package_store.clone(),
-        ));
-        // Unbounded is intentional: if `kv_packages` lags long enough for this queue to
-        // grow without bound, the indexer infrastructure itself has a bigger problem and
-        // OOM on this service is one failure mode among many. Monitor via metrics.
-        #[allow(clippy::disallowed_methods)]
-        let (package_eviction_tx, package_eviction_rx) = tokio::sync::mpsc::unbounded_channel();
-        let readiness = task::streaming::SubscriptionReadiness::new(watermark_task.watermarks_rx());
-        let stream_task = task::streaming::CheckpointStreamTask::new(
-            uri,
-            &config.subscription,
-            streaming_packages.clone(),
-            package_eviction_tx,
-            readiness.clone(),
-        );
-        let eviction_task = task::streaming::PackageEvictionTask::new(
-            streaming_packages.clone(),
-            package_eviction_rx,
-            watermark_task.watermarks(),
-            Duration::from_millis(config.subscription.package_eviction_interval_ms),
-        );
-        (stream_task, eviction_task, streaming_packages, readiness)
-    });
+    let streaming_setup = match subscription_args.checkpoint_stream_url {
+        Some(uri) => {
+            let ledger_grpc = ledger_grpc_reader
+                .clone()
+                .context("Ledger gRPC reader is required when streaming is enabled")?;
+
+            let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(
+                package_store.clone(),
+            ));
+            // Unbounded is intentional: if `kv_packages` lags long enough for this queue to
+            // grow without bound, the indexer infrastructure itself has a bigger problem and
+            // OOM on this service is one failure mode among many. Monitor via metrics.
+            #[allow(clippy::disallowed_methods)]
+            let (package_eviction_tx, package_eviction_rx) = tokio::sync::mpsc::unbounded_channel();
+            let readiness =
+                task::streaming::SubscriptionReadiness::new(watermark_task.watermarks_rx());
+            let stream_task = task::streaming::CheckpointStreamTask::new(
+                uri,
+                &config.subscription,
+                streaming_packages.clone(),
+                package_eviction_tx,
+                readiness.clone(),
+                ledger_grpc,
+                watermark_task.watermarks_rx(),
+            );
+            let eviction_task = task::streaming::PackageEvictionTask::new(
+                streaming_packages.clone(),
+                package_eviction_rx,
+                watermark_task.watermarks(),
+                Duration::from_millis(config.subscription.package_eviction_interval_ms),
+            );
+            Some((stream_task, eviction_task, streaming_packages, readiness))
+        }
+        None => None,
+    };
 
     let mut rpc = rpc
-        .route(GRAPHQL_PATH, post(graphql).get(graphql_get))
+        .route(GRAPHQL_PATH, post(graphql).get(graphiql))
+        .route(GRAPHQL_SUBSCRIPTIONS_PATH, post(graphql_subscriptions))
         .route(HEALTH_PATH, get(health::check))
         .layer(watermark_task.watermarks())
         .layer(config.health)
+        .layer(config.logging)
         .layer(DbProbe(database_url))
         .extension(Timeout::new(config.limits.timeouts()))
         .extension(QueryLimitsChecker::new(
@@ -463,14 +474,16 @@ async fn graphql(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Extension(schema): Extension<Schema<Query, Mutation, Subscription>>,
     Extension(watermark): Extension<WatermarksLock>,
+    Extension(logging): Extension<LoggingConfig>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
+    headers: axum::http::HeaderMap,
     request: GraphQLRequest,
 ) -> GraphQLResponse {
     let mut request = request
         .into_inner()
         .data(content_length)
-        .data(Session::new(addr))
+        .data(Session::new(addr).with_client_info(ClientInfo::from_headers(&headers, &logging)))
         .data(watermark.read().await.clone())
         .data(rich::Meter::default());
 
@@ -481,56 +494,62 @@ async fn graphql(
     schema.execute(request).await.into()
 }
 
-/// Handler for GET requests on the GraphQL path. WebSocket upgrade requests are handled as
-/// subscription connections; regular GET requests serve the GraphiQL IDE (if enabled).
-async fn graphql_get(
+/// Handler for GET requests on the GraphQL path. Serves the GraphiQL IDE when enabled,
+/// otherwise responds 404. Subscriptions are served separately over SSE at
+/// `GRAPHQL_SUBSCRIPTIONS_PATH`.
+async fn graphiql(
+    Extension(IdeEnabled(ide_enabled)): Extension<IdeEnabled>,
+) -> axum::response::Response {
+    if !ide_enabled {
+        return axum::http::StatusCode::NOT_FOUND.into_response();
+    }
+
+    Html(
+        include_str!("../assets/graphiql.html")
+            .replace("__GRAPHQL_PATH__", GRAPHQL_PATH)
+            .replace("__GRAPHQL_SUBSCRIPTIONS_PATH__", GRAPHQL_SUBSCRIPTIONS_PATH),
+    )
+    .into_response()
+}
+
+async fn graphql_subscriptions(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Extension(schema): Extension<Schema<Query, Mutation, Subscription>>,
     Extension(SubscriptionsEnabled(subscriptions_enabled)): Extension<SubscriptionsEnabled>,
-    Extension(IdeEnabled(ide_enabled)): Extension<IdeEnabled>,
-    ws: Option<WebSocketUpgrade>,
-    protocol: Option<GraphQLProtocol>,
-) -> impl IntoResponse {
-    match (ws, protocol) {
-        (Some(ws), Some(protocol)) => {
-            handle_ws(ws, protocol, schema, addr, subscriptions_enabled).into_response()
-        }
-        _ if ide_enabled => graphiql().into_response(),
-        _ => axum::http::StatusCode::NOT_FOUND.into_response(),
+    Extension(watermark): Extension<WatermarksLock>,
+    request: GraphQLRequest,
+) -> axum::response::Response {
+    if !subscriptions_enabled {
+        return (
+            axum::http::StatusCode::NOT_FOUND,
+            "Subscriptions are not enabled on this instance.",
+        )
+            .into_response();
     }
-}
 
-fn graphiql() -> Html<String> {
-    Html(
-        GraphiQLSource::build()
-            .endpoint(GRAPHQL_PATH)
-            .subscription_endpoint(GRAPHQL_PATH)
-            .finish(),
-    )
-}
+    let watermarks = watermark.read().await.clone();
+    let req = request
+        .into_inner()
+        .data(Session::new(addr))
+        .data(watermarks)
+        .data(rich::Meter::default());
 
-fn handle_ws(
-    ws: WebSocketUpgrade,
-    protocol: GraphQLProtocol,
-    schema: Schema<Query, Mutation, Subscription>,
-    addr: SocketAddr,
-    subscriptions_enabled: bool,
-) -> impl IntoResponse {
-    ws.protocols(ALL_WEBSOCKET_PROTOCOLS)
-        .on_upgrade(move |stream| {
-            let mut data = async_graphql::Data::default();
-            data.insert(Session::new(addr));
+    let stream = schema.execute_stream(req).map(|response| {
+        let payload = serde_json::to_string(&response).unwrap_or_else(|_| "null".into());
+        Ok::<_, std::convert::Infallible>(
+            axum::response::sse::Event::default()
+                .event("next")
+                .data(payload),
+        )
+    });
 
-            GraphQLWebSocket::new(stream, schema, protocol)
-                .with_data(data)
-                .on_connection_init(move |_| async move {
-                    if !subscriptions_enabled {
-                        return Err("Subscriptions are not enabled on this instance.".into());
-                    }
-                    Ok(async_graphql::Data::default())
-                })
-                .serve()
-        })
+    axum::response::sse::Sse::new(stream)
+        .keep_alive(
+            axum::response::sse::KeepAlive::default()
+                .interval(Duration::from_secs(15))
+                .text("keep-alive"),
+        )
+        .into_response()
 }
 
 #[cfg(test)]

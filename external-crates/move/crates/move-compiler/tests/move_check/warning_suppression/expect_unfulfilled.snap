@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W10009]: unfulfilled '#[expect(...)]'
+  ┌─ tests/move_check/warning_suppression/expect_unfulfilled.move:2:10
+  │
+2 │ #[expect(unused_variable)]
+  │          ^^^^^^^^^^^^^^^ Expected this warning to be emitted, but it was not
+  │
+  = The '#[expect(...)]' attribute will only suppress a warning that actually occurs. Remove the attribute if the warning is intentionally fixed.
+
+warning[W10009]: unfulfilled '#[expect(...)]'
+   ┌─ tests/move_check/warning_suppression/expect_unfulfilled.move:10:14
+   │
+10 │     #[expect(unused_variable)]
+   │              ^^^^^^^^^^^^^^^ Expected this warning to be emitted, but it was not
+   │
+   = The '#[expect(...)]' attribute will only suppress a warning that actually occurs. Remove the attribute if the warning is intentionally fixed.

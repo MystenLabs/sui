@@ -1,17 +1,17 @@
 //# print-bytecode
 // This module defines several public functions with complex bodies.
 // This can be thought of as a smoke test that tests many different aspects of bytecode generation.
-module 0x3d10::Example {
-    struct Coin { value: u64 }
+mvir 0x3d10::Example {
+    public struct Coin { value: u64 }
 
-    public value(this: &Self::Coin): u64 {
+    public fun value(this: &Self::Coin): u64 {
         let value_ref: &u64;
     label b0:
         value_ref = &move(this).Coin::value;
         return *move(value_ref);
     }
 
-    public deposit(this: &mut Self::Coin, check: Self::Coin) {
+    public fun deposit(this: &mut Self::Coin, check: Self::Coin) {
         let value_ref: &mut u64;
         let value: u64;
         let check_ref: &Self::Coin;
@@ -32,13 +32,13 @@ module 0x3d10::Example {
 
 //# print-bytecode
 // Functions may be declared with entry modifier
-module 0x4d10::M {
-    public entry f() {
+mvir 0x4d10::M {
+    public entry fun f() {
     label b0:
         return;
     }
 
-    public entry g() {
+    public entry fun g() {
     label b0:
         Self::f();
         return;

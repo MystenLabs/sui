@@ -1,7 +1,7 @@
 
 //# publish
-module 0x42::m {
-foo() {
+mvir 0x42::m {
+fun foo() {
     let x: u64;
     let r: &u64;
     label l0:

@@ -1,8 +1,8 @@
 //# publish
-module 0x1::M {
-    id<T>(x: T) { label b0: return move(x); }
+mvir 0x1::M {
+    fun id<T>(x: T) { label b0: return move(x); }
 
-    foo() {
+    fun foo() {
         let x: u64;
         let y: &u64;
     label b0:

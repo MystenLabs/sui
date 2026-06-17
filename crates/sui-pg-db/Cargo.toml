@@ -32,4 +32,5 @@ sui-indexer-alt-framework-store-traits.workspace = true
 sui-sql-macro.workspace = true
 
 [dev-dependencies]
+sui-indexer-alt-framework-store-traits = { workspace = true, features = ["testing"] }
 telemetry-subscribers.workspace = true

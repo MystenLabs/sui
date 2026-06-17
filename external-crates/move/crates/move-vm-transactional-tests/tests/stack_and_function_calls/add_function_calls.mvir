@@ -1,6 +1,6 @@
 //# publish
-module 0x5::M {
-    public foo(u: u64): u64 * u64 * u64 {
+mvir 0x5::M {
+    public fun foo(u: u64): u64 * u64 * u64 {
         let twice: u64;
         let quadruple: u64;
     label b0:
@@ -9,7 +9,7 @@ module 0x5::M {
         return move(u), move(twice), move(quadruple);
     }
 
-    public bar(): u64 {
+    public fun bar(): u64 {
     label b0:
         return 2;
     }
@@ -17,10 +17,10 @@ module 0x5::M {
 
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x5::M;
 
-entry foo() {
+entry fun foo() {
     let x: u64;
     let y: u64;
     let z: u64;

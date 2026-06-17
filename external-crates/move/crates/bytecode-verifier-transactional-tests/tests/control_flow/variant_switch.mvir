@@ -1,11 +1,11 @@
 //# publish
-module 0x1::PolymorphicEnums {
-    enum EnumWithTwoVariants<T> {
+mvir 0x1::PolymorphicEnums {
+    public enum EnumWithTwoVariants<T> {
         One { },
         Two { x: T }
     }
 
-    public f<T>(t: T, e: T): T {
+    public fun f<T>(t: T, e: T): T {
         let x: Self::EnumWithTwoVariants<T>;
         let y: T;
         label b0:
@@ -25,13 +25,13 @@ module 0x1::PolymorphicEnums {
 }
 
 //# publish
-module 0x2::MonomorphicEnums {
-    enum EnumWithTwoVariants {
+mvir 0x2::MonomorphicEnums {
+    public enum EnumWithTwoVariants {
         One { },
         Two { x: u64 }
     }
 
-    public f(): u64 {
+    public fun f(): u64 {
         let x: Self::EnumWithTwoVariants;
         let y: u64;
         label b0:

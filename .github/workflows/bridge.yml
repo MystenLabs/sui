@@ -18,6 +18,9 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -47,6 +50,17 @@ env:
   RUST_LOG: error
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
+  # sccache role selection:
+  #   trusted refs (protected + release branches), NOT a workflow_dispatch building
+  #     an override sui_repo_ref → RW role (read/write cache).
+  #   same-repo pull_request → RO role (read-only; a PR cannot poison the cache).
+  #   forks / overrides / everything else → empty → setup-sccache falls back to a
+  #     local cache. Forks are skipped here because GitHub caps fork id-token to
+  #     none, so role-to-assume would hard-fail the OIDC step. This fork skip is a
+  #     fail-safe accommodation, NOT a security boundary — the RO role still trusts
+  #     pull_request, so a fork reading the cache is acceptable (Decision A).
+  # Keep in sync with the sui-sccache-{rw,ro}-github trust policies.
+  SCCACHE_ROLE: ${{ (github.event_name != 'workflow_dispatch' || github.event.inputs.sui_repo_ref == '') && (contains(fromJSON('["refs/heads/main","refs/heads/devnet","refs/heads/testnet","refs/heads/mainnet"]'), github.ref) || (startsWith(github.ref, 'refs/heads/releases/sui-') && endsWith(github.ref, '-release'))) && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false) && 'arn:aws:iam::011083325127:role/sui-sccache-ro-github' || '' }}
 
 jobs:
   diff:
@@ -78,10 +92,17 @@ jobs:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-ghcloud ]
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: ./.github/actions/setup-sccache
+        with:
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
+          key-prefix: ubuntu-ghcloud
       - run: rustup component add clippy
       - name: cargo clippy
         run: cargo xclippy -D warnings
@@ -96,6 +117,9 @@ jobs:
       # non-deterministic `test` job.
       SUI_SKIP_SIMTESTS: 1
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     strategy:
       matrix:
         os:
@@ -103,6 +127,10 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+      - uses: ./.github/actions/setup-sccache
+        with:
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
+          key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master

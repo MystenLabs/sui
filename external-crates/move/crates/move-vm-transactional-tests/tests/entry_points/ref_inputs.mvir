@@ -2,61 +2,61 @@
 
 // ref arguments are now allowed
 
-module 0x42::M {
-    struct S has drop { f: u64 }
+mvir 0x42::M {
+    public struct S has drop { f: u64 }
 
-    public t1(r1: &u64) {
+    public fun t1(r1: &u64) {
         label l0:
         return;
     }
 
-    public t2(r1: &mut bool) {
+    public fun t2(r1: &mut bool) {
         label l0:
         return;
     }
 
-    public t3(r1: &u64, r2: &mut bool, r3: &Self::S, r4: &mut Self::S) {
+    public fun t3(r1: &u64, r2: &mut bool, r3: &Self::S, r4: &mut Self::S) {
         label l0:
         return;
     }
 
-    public tgen<T1, T2, T3, T4>(r1: &T1, r2: &mut T2, r3: &T3, r4: &mut T4) {
+    public fun tgen<T1, T2, T3, T4>(r1: &T1, r2: &mut T2, r3: &T3, r4: &mut T4) {
         label l0:
         return;
     }
 }
 
 //# run --args 0
-module 0x6::m {
+mvir 0x6::m {
 
-entry foo(r1: &u64) {
+entry fun foo(r1: &u64) {
     label l0:
     return;
 }
 
 }
 //# run --args false
-module 0x7::m {
+mvir 0x7::m {
 
-entry foo(r1: &mut bool) {
+entry fun foo(r1: &mut bool) {
     label l0:
     return;
 }
 
 }
 //# run --args 0 false 0 0
-module 0x8::m {
+mvir 0x8::m {
 import 0x42::M;
-entry foo(r1: &u64, r2: &mut bool, r3: &M::S, r4: &mut M::S) {
+entry fun foo(r1: &u64, r2: &mut bool, r3: &M::S, r4: &mut M::S) {
     label l0:
     return;
 }
 }
 
 //# run --type-args u64 bool 0x42::M::S 0x42::M::S --args 0 false 0 0
-module 0x9::m {
+mvir 0x9::m {
 
-entry foo<T1, T2, T3, T4>(r1: &T1, r2: &mut T2, r3: &T3, r4: &mut T4) {
+entry fun foo<T1, T2, T3, T4>(r1: &T1, r2: &mut T2, r3: &T3, r4: &mut T4) {
     label l0:
     return;
 }

@@ -63,7 +63,6 @@ pub fn program(
 ) -> T::Program {
     let N::Program {
         mut info,
-        warning_filters_table,
         inner: N::Program_ { modules: nmodules },
     } = prog;
 
@@ -83,7 +82,6 @@ pub fn program(
         TypingProgramInfo::new(compilation_env, pre_compiled_lib, &modules, module_use_funs);
     let prog = T::Program {
         modules,
-        warning_filters_table,
         info: Arc::new(program_info),
     };
     compilation_env
@@ -354,7 +352,7 @@ fn module<'env>(
 
     context.current_module = Some(ident);
     context.current_package = package_name;
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     context.add_use_funs_scope(use_funs);
     context.add_stdlib_definitions(stdlib_definitions);
 
@@ -463,7 +461,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         mut signature,
         body: n_body,
     } = f;
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     assert!(context.constraints.is_empty());
     context.current_function = Some(name);
     context.in_macro_function = macro_.is_some();
@@ -562,7 +560,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         signature,
         value: nvalue,
     } = nconstant;
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
 
     process_attributes(context, &attributes);
 
@@ -868,7 +866,7 @@ mod check_valid_constant {
 
 fn struct_def(context: &mut Context, _sloc: Loc, s: &mut N::StructDefinition) {
     assert!(context.constraints.is_empty());
-    context.push_warning_filter_scope(s.warning_filter);
+    context.push_warning_filter_scope(s.warning_filter.clone());
 
     let field_map = match &mut s.fields {
         N::StructFields::Native(_) => return,
@@ -920,7 +918,7 @@ fn struct_def(context: &mut Context, _sloc: Loc, s: &mut N::StructDefinition) {
 fn enum_def(context: &mut Context, enum_: &mut N::EnumDefinition) {
     assert!(context.constraints.is_empty());
 
-    context.push_warning_filter_scope(enum_.warning_filter);
+    context.push_warning_filter_scope(enum_.warning_filter.clone());
 
     let enum_abilities = &enum_.abilities;
     let enum_type_params = &enum_.type_parameters;
@@ -2378,15 +2376,15 @@ fn match_arm(
     let ploc = pattern.loc;
     let mut pattern = match_pattern(context, pattern, ref_mut, &rhs_binders);
 
-    if subtype_opt(
+    if let Some(pat_ty) = subtype_opt(
         context,
         ploc,
         || "Invalid pattern",
         &pattern.ty,
         subject_type,
-    )
-    .is_none()
-    {
+    ) {
+        pattern.ty = pat_ty;
+    } else {
         pattern.ty = context.error_type(ploc);
         pattern.pat.value = T::UnannotatedPat_::ErrorPat;
     }
@@ -2452,6 +2450,29 @@ fn match_pattern(
     )
 }
 
+// Wraps `subtype_opt` for use during pattern typing. Returns `None` (without
+// emitting a diagnostic) when either side is a top-level `UnresolvedError`, so
+// no unification is attempted. `UnresolvedError` is absorbing in the type
+// substitution: once a metavariable is bound to it, no further unification can
+// re-bind it. Or-pattern branches share binder metavariables via
+// `make_expr_list_tvars` in `match_arm`, so letting one malformed branch bind
+// `tvar_x := UnresolvedError` would silently corrupt typing in the other
+// branches.
+fn pattern_subtype_opt<T: ToString, F: FnOnce() -> T>(
+    context: &mut Context,
+    loc: Loc,
+    msg: F,
+    lhs: &Type,
+    rhs: &Type,
+) -> Option<Type> {
+    if matches!(lhs.value.inner(), TI::UnresolvedError)
+        || matches!(rhs.value.inner(), TI::UnresolvedError)
+    {
+        return None;
+    }
+    subtype_opt(context, loc, msg, lhs, rhs)
+}
+
 fn match_pattern_(
     context: &mut Context,
     sp!(loc, pat_): N::MatchPattern,
@@ -2503,7 +2524,7 @@ fn match_pattern_(
                     match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
                 // This double-clone should not be necessary, but the borrow checker is unhappy.
                 let fty_ref = rtype!(tpat.pat.loc, fty.clone());
-                if let Some(pat_ty) = subtype_opt(
+                if let Some(pat_ty) = pattern_subtype_opt(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
@@ -2559,7 +2580,7 @@ fn match_pattern_(
                     match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
                 // This double-clone should not be necessary, but the borrow checker is unhappy.
                 let fty_ref = rtype!(tpat.pat.loc, fty.clone());
-                if let Some(pat_ty) = subtype_opt(
+                if let Some(pat_ty) = pattern_subtype_opt(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
@@ -2736,13 +2757,17 @@ fn match_pattern_(
                 inner_wildcards_need_drop,
             );
             let x_ty = context.get_local_type(&x);
-            let ty = subtype(
+            // If unification is skipped (one side is `UnresolvedError`), keep the at-pattern
+            // structure with `x_ty` as the type so binders downstream remain typed via `x_ty`'s
+            // metavariable rather than being lost to a top-level `ErrorPat` rewrite.
+            let ty = pattern_subtype_opt(
                 context,
                 inner.pat.loc,
                 || "Invalid inner pattern type".to_string(),
                 &inner.ty,
                 &x_ty,
-            );
+            )
+            .unwrap_or(x_ty);
             if type_needs_copy && mut_ref.is_none() {
                 context.add_ability_constraint(
                     loc,
@@ -2766,7 +2791,7 @@ fn match_pattern_(
             );
             let x_ty = context.get_local_type(&x);
             // ensure subtype for posterity
-            subtype(
+            pattern_subtype_opt(
                 context,
                 inner.pat.loc,
                 || "Invalid inner pattern type".to_string(),
@@ -4815,12 +4840,25 @@ fn expand_macro(
             let use_funs = N::UseFuns::new(context.current_call_color());
             let block = TE::Block((use_funs, seq));
             if context.env().ide_mode() {
+                // The first stack entry is the outermost macro call. Argument
+                // frames can appear inside that call stack, but never as the
+                // root.
+                let root_expansion = context.macro_expansion.first();
+                debug_assert!(
+                    matches!(root_expansion, Some(core::MacroExpansion::Call(_))),
+                    "macro expansion stack root should be a call"
+                );
+                let root_call_loc = match root_expansion {
+                    Some(core::MacroExpansion::Call(c)) => c.invocation,
+                    Some(core::MacroExpansion::Argument { .. }) | None => call_loc,
+                };
                 let macro_call_info = MacroCallInfo {
                     module: m,
                     name: f,
                     method_name,
                     type_arguments: type_args.clone(),
                     by_value_args,
+                    root_call_loc,
                 };
                 let info = IDEAnnotation::MacroCallInfo(Box::new(macro_call_info));
                 context.add_ide_info(call_loc, info);
@@ -5061,10 +5099,10 @@ fn unused_module_members(
 
     let mut reporter = env.diagnostic_reporter_at_top_level();
     let is_sui_mode = env.package_config(mdef.package_name).flavor == Flavor::Sui;
-    reporter.push_warning_filter_scope(mdef.warning_filter);
+    reporter.push_warning_filter_scope(mdef.warning_filter.clone());
 
     for (loc, name, c) in &mdef.constants {
-        reporter.push_warning_filter_scope(c.warning_filter);
+        reporter.push_warning_filter_scope(c.warning_filter.clone());
 
         let members = used_module_members.get(mident);
         if members.is_none() || !members.unwrap().contains(name) {
@@ -5086,7 +5124,7 @@ fn unused_module_members(
             // a Sui-specific filter to avoid signaling that the init function is unused
             continue;
         }
-        reporter.push_warning_filter_scope(fun.warning_filter);
+        reporter.push_warning_filter_scope(fun.warning_filter.clone());
 
         let members = used_module_members.get(mident);
         if fun.entry.is_none()

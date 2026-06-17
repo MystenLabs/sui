@@ -523,9 +523,6 @@ advance_epoch
 update_validator_positions_and_calculate_total_stake
 	fun
 	0x3::validator_set
-effectuate_staged_metadata
-	fun
-	0x3::validator_set
 derive_reference_gas_price
 	public fun
 	0x3::validator_set
@@ -565,16 +562,7 @@ is_active_validator_by_sui_address
 is_duplicate_with_active_validator
 	fun
 	0x3::validator_set
-is_duplicate_validator
-	public(package) fun
-	0x3::validator_set
-count_duplicates_vec
-	fun
-	0x3::validator_set
 is_duplicate_with_pending_validator
-	fun
-	0x3::validator_set
-count_duplicates_tablevec
 	fun
 	0x3::validator_set
 get_candidate_or_active_validator_mut
@@ -631,17 +619,8 @@ process_validator_departure
 clean_report_records_leaving_validator
 	fun
 	0x3::validator_set
-sort_removal_list
-	fun
-	0x3::validator_set
-process_pending_stakes_and_withdraws
-	fun
-	0x3::validator_set
 calculate_total_stakes
 	public(package) fun
-	0x3::validator_set
-adjust_stake_and_gas_price
-	fun
 	0x3::validator_set
 compute_reward_adjustments
 	fun

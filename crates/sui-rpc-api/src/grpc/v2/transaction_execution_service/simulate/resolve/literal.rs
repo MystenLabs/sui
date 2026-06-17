@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::ArgUses;
 use super::NormalizedPackages;
 use crate::Result;
 use crate::RpcError;
@@ -21,11 +22,11 @@ type Type = normalized::Type<normalized::RcIdentifier>;
 
 pub(super) fn resolve_literal(
     called_packages: &mut NormalizedPackages,
-    commands: &[Command],
+    arg_uses: &ArgUses,
     arg_idx: usize,
     value: &Value,
 ) -> Result<Vec<u8>> {
-    let literal_type = determine_literal_type(called_packages, commands, arg_idx)?;
+    let literal_type = determine_literal_type(called_packages, arg_uses, arg_idx)?;
 
     let mut buf = Vec::new();
 
@@ -36,7 +37,7 @@ pub(super) fn resolve_literal(
 
 fn determine_literal_type(
     called_packages: &mut NormalizedPackages,
-    commands: &[Command],
+    arg_uses: &ArgUses,
     arg_idx: usize,
 ) -> Result<Type> {
     fn set_type(maybe_type: &mut Option<Type>, ty: Type) -> Result<()> {
@@ -57,7 +58,7 @@ fn determine_literal_type(
     }
     let mut literal_type = None;
 
-    for (command, idx) in super::find_arg_uses(arg_idx, commands) {
+    for (command, idx) in arg_uses.uses_of(arg_idx) {
         match (command, idx) {
             (Command::MoveCall(move_call), Some(idx)) => {
                 let arg_type = super::arg_type_of_move_call_input(called_packages, move_call, idx)?;

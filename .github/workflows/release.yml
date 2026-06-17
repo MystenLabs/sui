@@ -37,11 +37,20 @@ env:
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
   TMP_BUILD_DIR: './tmp/release'
+  # release.yml only runs trusted release builds: `release: created` (OIDC sub =
+  # the release tag, trusted via refs/tags/{devnet,testnet,mainnet}-v*) and
+  # workflow_dispatch (sub = refs/heads/main, trusted; the tag-prefix + refs/tags
+  # checkout guards restrict it to published release tags). There is no
+  # pull_request trigger, so sccache always uses the RW role.
+  SCCACHE_ROLE: arn:aws:iam::011083325127:role/sui-sccache-rw-github
 
 jobs:
   release-build:
     name: Build & Publish Binaries
     timeout-minutes: 240
+    permissions:
+      contents: write # attach built archives to the GitHub release
+      id-token: write # OIDC token to assume the sccache RW role
     strategy:
       matrix:
         os:
@@ -55,26 +64,32 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Clean up and validate ${{ env.TAG_NAME }} tag name
+      - name: Validate the release tag
         shell: bash
         run: |
-          export sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)
-          [[ "${sui_tag}" == "main" ]] && echo "tag cannot be equals to 'main'" && exit 1
-          echo "sui_tag=${sui_tag}" >> $GITHUB_ENV
-          export sui_version=$(echo ${sui_tag} | sed -e 's/mainnet-v//' -e 's/testnet-v//')
-          echo "sui_version=${sui_version}" >> $GITHUB_ENV
+          # Read TAG_NAME as a shell variable (it is a workflow-level env, above).
+          # NEVER splice the raw input into this script through GitHub Actions
+          # expression interpolation: a workflow_dispatch sui_tag is
+          # attacker-controllable, and this job holds id-token: write for the
+          # trusted `main` sub, so injected shell here could mint the RW cache
+          # token before the guard below runs.
+          sui_tag="${TAG_NAME#refs/tags/}"
+          # Only published release tags may be built. Fully anchored (^...$) with a
+          # restricted charset so the value also cannot smuggle a newline into the
+          # GITHUB_ENV writes below.
+          if [[ ! "$sui_tag" =~ ^(devnet|testnet|mainnet)-v[0-9A-Za-z.-]+$ ]]; then
+            echo "sui_tag must be a release tag (devnet-v*/testnet-v*/mainnet-v*), got: $sui_tag"
+            exit 1
+          fi
+          echo "sui_tag=$sui_tag" >> "$GITHUB_ENV"
+          sui_version=$(echo "$sui_tag" | sed -e 's/mainnet-v//' -e 's/testnet-v//')
+          echo "sui_version=$sui_version" >> "$GITHUB_ENV"
 
       - name: Check out ${{ env.sui_tag }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
-          ref: ${{ env.sui_tag }}          
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
+          # pin to the tag namespace so the input can never resolve to a branch
+          ref: refs/tags/${{ env.sui_tag }}          
 
       - name: Set os/arch variables (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' }}
@@ -108,7 +123,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
-          aws s3 cp s3://sui-releases/${{ env.s3_existing_archive }} ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz
+          # released archives are publicly readable (the existence check above
+          # relies on that), so no AWS credentials are needed here
+          curl -fSs -o ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz https://sui-releases.s3.us-east-1.amazonaws.com/${{ env.s3_existing_archive }}
           tar -xf ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz -C ${{ env.TMP_BUILD_DIR }}
 
       - name: Install nexttest (Windows)
@@ -139,12 +156,6 @@ jobs:
         run: |
           brew install postgresql
 
-      - name: Install postgres (Ubuntu arm64)
-        if: ${{ matrix.os == 'ubuntu-arm64' && env.s3_existing_archive == '' }}
-        shell: bash
-        run: |
-          sudo apt update && sudo apt install libpq-dev
-
       - name: Remove unused apps (MacOS arm64)
         if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_existing_archive == '' }}
         continue-on-error: true
@@ -161,18 +172,33 @@ jobs:
       - uses: ./.github/actions/setup-sccache
         if: ${{ env.s3_existing_archive == '' }}
         with:
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ${{ matrix.os }}
 
       - name: Register cargo problem matcher
+        if: ${{ env.s3_existing_archive == '' }}
         run: echo "::add-matcher::.github/matchers/cargo.json"
 
       - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_existing_archive == '' }}
         shell: bash
         run: |
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --release --features tracing --bin sui && cargo build --profile=dev --bin sui --features tracing
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          # Build only the binaries we actually package (the release_binaries in
+          # binary-build-list.json — the same list the rename step below moves),
+          # not the whole workspace. `sui` is built separately, once, with the
+          # tracing feature: a plain `cargo build --release` compiled `sui` without
+          # tracing and the next step overwrote it, wasting a compile+link of `sui`
+          # on every platform.
+          sui_bins=""
+          for b in $(jq -r '.release_binaries[] | select(. != "sui")' "${{ env.BINARY_LIST_FILE }}"); do
+            sui_bins="$sui_bins --bin $(echo "$b" | tr -d $'\r')"
+          done
+          cargo build --release $sui_bins
+          cargo build --release --features tracing --bin sui
+          cargo build --profile=dev --bin sui --features tracing
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.s3_existing_archive == '' }}
@@ -188,9 +214,6 @@ jobs:
 
           mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
           tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .
-
-          # Upload tar balls to s3 so that we don't have to rebuild if they have already built
-          aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
 
       - name: Publish Windows sui binary to Chocolatey
         if: ${{ matrix.os == 'windows-ghcloud' && contains(env.sui_tag, 'testnet') }}
@@ -237,45 +260,78 @@ jobs:
           event-type: update-walrus-sui-testnet-tag
           client-payload: '{"new_tag": "${{ env.sui_tag }}"}'
 
-  update-homebrew-formula:
-    name: Run brew bump-formula-pr for sui on testnet releases
+  # Copy built archives to s3://sui-releases so future runs skip the rebuild and
+  # node operators can pull binaries by tag. Runs in the protected `release`
+  # environment to assume the dedicated release-s3 OIDC role, credential-isolated
+  # from the build job (see .github/AWS_OIDC_ROLES.md, Role 2). `!cancelled()`
+  # preserves the old per-platform best-effort upload: archives from matrix legs
+  # that succeeded are uploaded even if another leg failed.
+  upload-release-archives-to-s3:
+    name: Upload release archives to S3
     needs: release-build
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
-    # releasing sui cli on testnet releases because it lags `main` less than mainnet, but is more likely to be stable than devnet
-    if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref_name, 'testnet') }}
+    environment: release
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the release-s3 role
     steps:
-      - name: Clean up tag name ${{ env.TAG_NAME }}
+      - name: Download build artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # pin@v6.0.0
+        with:
+          pattern: sui-binaries-*
+          merge-multiple: true
+          path: ./archives
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+        with:
+          role-to-assume: arn:aws:iam::011083325127:role/sui-releases-rw-github
+          allowed-account-ids: '011083325127'
+          aws-region: us-west-2
+
+      - name: Upload archives to s3://sui-releases
         shell: bash
         run: |
-          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
-          echo "versionless_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'// | sed s/'testnet\-v'//)" >> $GITHUB_ENV
-      - uses: mislav/bump-homebrew-formula-action@b3327118b2153c82da63fd9cbf58942146ee99f0 # pin@v3
-        with:
-          formula-name: sui
-          create-pullrequest: true
-          tag-name: "${{ env.sui_tag }}"
-          commit-message: |
-            {{formulaName}} ${{ env.versionless_tag }}
+          shopt -s nullglob
+          for f in ./archives/*.tgz; do
+            aws s3 cp "$f" "s3://sui-releases/releases/$(basename "$f")" || true
+          done
 
-            Created by https://github.com/mislav/bump-homebrew-formula-action
-
-            From release: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        env:
-          # https://github.com/settings/tokens/new?scopes=public_repo,workflow
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
+  update-homebrew-formula:
+    name: Bump sui formula on Homebrew/homebrew-core
+    needs: release-build
+    # releasing sui cli on testnet releases because it lags `main` less than mainnet, but is more likely to be stable than devnet
+    if: ${{ contains( github.event.inputs.sui_tag, 'testnet') || contains( github.ref_name, 'testnet') }}
+    uses: ./.github/workflows/homebrew-bump.yml
+    with:
+      sui_tag: ${{ github.event.inputs.sui_tag || github.ref_name }}
+    secrets:
+      HOMEBREW_GH_FORMULA_BUMP: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
 
   # Tag all sui images with release tag, so that they can be easily found
   tag-docker-hub-images:
     name: Tag sui docker images in DockerHub
     runs-on: ubuntu-latest
     steps:
+      - name: Derive cache_family from release tag
+        id: cf
+        shell: bash
+        run: |
+          sui_tag="${{ env.TAG_NAME }}"
+          sui_version=$(echo "${sui_tag}" | sed -e 's|^refs/tags/||' -e 's/^mainnet-v//' -e 's/^testnet-v//' -e 's/^devnet-v//')
+          # Release branches are cut per minor version at patch .0; patches (e.g. v1.73.1)
+          # land as commits on that branch, so bucket the cache by the .0 branch that exists.
+          release_branch_version=$(echo "${sui_version}" | awk -F. '{print $1"."$2".0"}')
+          echo "cache_family=releases/sui-v${release_branch_version}-release" >> "$GITHUB_OUTPUT"
+
       - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
         uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
         with:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
           event-type: tag-docker-images
-          client-payload: '{"sui_commit": "${{ github.sha }}", "tag": "${{ env.TAG_NAME }}"}'
+          client-payload: '{"sui_commit": "${{ github.sha }}", "tag": "${{ env.TAG_NAME }}", "cache_family": "${{ steps.cf.outputs.cache_family }}"}'
 
   # Tag sui binaries in S3 under the release alias so node operators that pull
   # by tag name (e.g. `release: testnet-v1.70.2` in ansible) find them.
@@ -283,10 +339,21 @@ jobs:
     name: Tag sui binaries in s3
     runs-on: ubuntu-latest
     steps:
+      - name: Derive cache_family from release tag
+        id: cf
+        shell: bash
+        run: |
+          sui_tag="${{ env.TAG_NAME }}"
+          sui_version=$(echo "${sui_tag}" | sed -e 's|^refs/tags/||' -e 's/^mainnet-v//' -e 's/^testnet-v//' -e 's/^devnet-v//')
+          # Release branches are cut per minor version at patch .0; patches (e.g. v1.73.1)
+          # land as commits on that branch, so bucket the cache by the .0 branch that exists.
+          release_branch_version=$(echo "${sui_version}" | awk -F. '{print $1"."$2".0"}')
+          echo "cache_family=releases/sui-v${release_branch_version}-release" >> "$GITHUB_OUTPUT"
+
       - name: Dispatch ensure-sui-binaries in MystenLabs/sui-operations
         uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
         with:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
           event-type: ensure-sui-binaries
-          client-payload: '{"sui_commit": "${{ github.sha }}", "tag_name": "${{ env.TAG_NAME }}"}'
+          client-payload: '{"sui_commit": "${{ github.sha }}", "tag_name": "${{ env.TAG_NAME }}", "cache_family": "${{ steps.cf.outputs.cache_family }}"}'

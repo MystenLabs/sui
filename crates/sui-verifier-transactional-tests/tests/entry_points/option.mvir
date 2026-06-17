@@ -4,11 +4,11 @@
 // valid, option of primitives is allowed
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     import 0x1::option;
 
-    public entry yes<T>(
+    public entry fun yes<T>(
         l0: option::Option<u64>,
         l1: option::Option<option::Option<u64>>,
         l2: option::Option<vector<u64>>,

@@ -1,16 +1,16 @@
 //# publish
-module 0x42::M {
-    universal_truth(): u64 {
+mvir 0x42::M {
+    fun universal_truth(): u64 {
     label b0:
         return 42;
     }
 }
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x42::M;
 
-entry foo() {
+entry fun foo() {
     let x: u64;
 label b0:
     // cannot call private/internal functions

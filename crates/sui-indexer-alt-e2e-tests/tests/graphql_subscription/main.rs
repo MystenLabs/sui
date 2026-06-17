@@ -6,3 +6,5 @@
 mod testing;
 
 mod checkpoint_subscription;
+mod event_subscription;
+mod transaction_subscription;

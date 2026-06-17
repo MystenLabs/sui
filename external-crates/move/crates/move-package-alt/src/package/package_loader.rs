@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use crate::{
     errors::PackageResult,
@@ -8,12 +11,13 @@ use crate::{
 };
 
 /// A Builder for the [RootPackage] type
-pub struct PackageLoader {
-    config: PackageConfig,
+pub struct PackageLoader<F: MoveFlavor> {
+    config: PackageConfig<F>,
 }
 
-#[derive(Clone, Debug)]
-pub struct PackageConfig {
+#[derive(Debug)]
+#[derive_where::derive_where(Clone)]
+pub struct PackageConfig<F: MoveFlavor> {
     /// The path to read all input files from (e.g. lockfiles, pubfiles, etc). If this path is
     /// different from `output_path`, the package system won't touch any files here Note that in
     /// the case of ephemeral loads, `self.load_type.ephemeral_file` may also be read
@@ -41,6 +45,9 @@ pub struct PackageConfig {
 
     /// Don't fail if git cache is dirty
     pub allow_dirty: bool,
+
+    /// The flavor instance for flavor-specific operations (system deps, on-chain fetching, etc.)
+    pub flavor: Arc<F>,
 }
 
 #[derive(Clone, Debug)]
@@ -61,11 +68,12 @@ pub enum LoadType {
     },
 }
 
-impl PackageLoader {
-    /// A loader that loads the root package from `root_dir` for `env`
-    pub fn new(root_dir: impl AsRef<Path>, env: Environment) -> Self {
+impl<F: MoveFlavor> PackageLoader<F> {
+    /// A loader that loads the root package from `root_dir` for `env`.
+    /// Accepts either a flavor value or an `Arc<F>`.
+    pub fn new(root_dir: impl AsRef<Path>, env: Environment, flavor: impl Into<Arc<F>>) -> Self {
         Self {
-            config: PackageConfig::persistent(root_dir, env, vec![]),
+            config: PackageConfig::persistent(root_dir, env, vec![], flavor.into()),
         }
     }
 
@@ -80,6 +88,7 @@ impl PackageLoader {
         build_env: Option<EnvironmentName>,
         chain_id: EnvironmentID,
         pubfile_path: impl AsRef<Path>,
+        flavor: impl Into<Arc<F>>,
     ) -> Self {
         let config = PackageConfig {
             input_path: root_dir.as_ref().to_path_buf(),
@@ -93,6 +102,7 @@ impl PackageLoader {
             force_repin: false,
             ignore_digests: false,
             allow_dirty: false,
+            flavor: flavor.into(),
         };
         Self { config }
     }
@@ -137,22 +147,27 @@ impl PackageLoader {
     /// By default `load` attempts to load the package from the lockfile, and repins if it is
     /// missing or out-of-date. However, this behavior can be changed using [Self::ignore_digests] and
     /// [Self::force_repin]
-    pub async fn load<F: MoveFlavor>(self) -> PackageResult<RootPackage<F>> {
+    pub async fn load(self) -> PackageResult<RootPackage<F>> {
         RootPackage::validate_and_construct(self.config).await
     }
 
     /// Block the current thread and call [Self::load]
-    pub fn load_sync<F: MoveFlavor>(self) -> PackageResult<RootPackage<F>> {
+    pub fn load_sync(self) -> PackageResult<RootPackage<F>> {
         block_on!(RootPackage::validate_and_construct(self.config))
     }
 
-    pub(crate) fn config(&self) -> &PackageConfig {
+    pub(crate) fn config(&self) -> &PackageConfig<F> {
         &self.config
     }
 }
 
-impl PackageConfig {
-    fn persistent(path: impl AsRef<Path>, env: Environment, modes: Vec<ModeName>) -> Self {
+impl<F: MoveFlavor> PackageConfig<F> {
+    pub(crate) fn persistent(
+        path: impl AsRef<Path>,
+        env: Environment,
+        modes: Vec<ModeName>,
+        flavor: Arc<F>,
+    ) -> Self {
         Self {
             input_path: path.as_ref().to_path_buf(),
             chain_id: env.id,
@@ -162,6 +177,7 @@ impl PackageConfig {
             force_repin: false,
             ignore_digests: false,
             allow_dirty: false,
+            flavor,
         }
     }
 }

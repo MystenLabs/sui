@@ -1,8 +1,8 @@
 //# publish
-module 0x42::m {
+mvir 0x42::m {
 
-struct S has copy, drop { f: u64 }
-public foo() {
+public struct S has copy, drop { f: u64 }
+public fun foo() {
     let x: Self::S;
     let y: Self::S;
     let z: u64;
@@ -25,9 +25,9 @@ public foo() {
 //# run 0x42::m::foo --gas-budget 100000
 
 //# run --gas-budget 100000
-module 0x43::m {
+mvir 0x43::m {
 
-entry foo() {
+entry fun foo() {
     let x: u64;
     let y: u64;
     let z: u64;

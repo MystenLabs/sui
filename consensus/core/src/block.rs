@@ -62,6 +62,7 @@ pub(crate) struct BlockTransactionVotes {
 pub enum Block {
     V1(BlockV1),
     V2(BlockV2),
+    V3(BlockV3),
 }
 
 #[allow(private_interfaces)]
@@ -73,10 +74,22 @@ pub trait BlockAPI {
     fn slot(&self) -> Slot;
     fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
+
+    /// Transactions included in this block.
     fn transactions(&self) -> &[Transaction];
     fn transactions_data(&self) -> Vec<&[u8]>;
-    fn commit_votes(&self) -> &[CommitVote];
+
+    /// Votes on if a transaction should be accepted or rejected.
     fn transaction_votes(&self) -> &[BlockTransactionVotes];
+
+    /// Transactions in this blocks' casual history at and before the cutoff round
+    /// will not receive accept votes from this block.
+    /// Only `BlockV3` carries this — earlier variants panic.
+    fn transaction_votes_cutoff_round(&self) -> Round;
+
+    /// Votes on commits observed by this authority.
+    fn commit_votes(&self) -> &[CommitVote];
+
     fn misbehavior_reports(&self) -> &[MisbehaviorReport];
 }
 
@@ -162,12 +175,16 @@ impl BlockAPI for BlockV1 {
         self.transactions.iter().map(|t| t.data()).collect()
     }
 
-    fn commit_votes(&self) -> &[CommitVote] {
-        &self.commit_votes
-    }
-
     fn transaction_votes(&self) -> &[BlockTransactionVotes] {
         &[]
+    }
+
+    fn transaction_votes_cutoff_round(&self) -> Round {
+        panic!("transaction_votes_cutoff_round() is not supported on BlockV1");
+    }
+
+    fn commit_votes(&self) -> &[CommitVote] {
+        &self.commit_votes
     }
 
     fn misbehavior_reports(&self) -> &[MisbehaviorReport] {
@@ -188,7 +205,6 @@ pub(crate) struct BlockV2 {
     misbehavior_reports: Vec<MisbehaviorReport>,
 }
 
-#[allow(unused)]
 impl BlockV2 {
     pub(crate) fn new(
         epoch: Epoch,
@@ -197,8 +213,8 @@ impl BlockV2 {
         timestamp_ms: BlockTimestampMs,
         ancestors: Vec<BlockRef>,
         transactions: Vec<Transaction>,
-        commit_votes: Vec<CommitVote>,
         transaction_votes: Vec<BlockTransactionVotes>,
+        commit_votes: Vec<CommitVote>,
         misbehavior_reports: Vec<MisbehaviorReport>,
     ) -> BlockV2 {
         Self {
@@ -208,8 +224,8 @@ impl BlockV2 {
             timestamp_ms,
             ancestors,
             transactions,
-            commit_votes,
             transaction_votes,
+            commit_votes,
             misbehavior_reports,
         }
     }
@@ -222,8 +238,8 @@ impl BlockV2 {
             timestamp_ms: context.epoch_start_timestamp_ms,
             ancestors: vec![],
             transactions: vec![],
-            commit_votes: vec![],
             transaction_votes: vec![],
+            commit_votes: vec![],
             misbehavior_reports: vec![],
         }
     }
@@ -266,6 +282,118 @@ impl BlockAPI for BlockV2 {
         &self.transaction_votes
     }
 
+    fn transaction_votes_cutoff_round(&self) -> Round {
+        panic!("transaction_votes_cutoff_round() is not supported on BlockV2");
+    }
+
+    fn commit_votes(&self) -> &[CommitVote] {
+        &self.commit_votes
+    }
+
+    fn misbehavior_reports(&self) -> &[MisbehaviorReport] {
+        &self.misbehavior_reports
+    }
+}
+
+#[derive(Clone, Default, Deserialize, Serialize)]
+pub(crate) struct BlockV3 {
+    epoch: Epoch,
+    round: Round,
+    author: AuthorityIndex,
+    timestamp_ms: BlockTimestampMs,
+    ancestors: Vec<BlockRef>,
+    transactions: Vec<Transaction>,
+    transaction_votes: Vec<BlockTransactionVotes>,
+    transaction_votes_cutoff_round: Round,
+    commit_votes: Vec<CommitVote>,
+    misbehavior_reports: Vec<MisbehaviorReport>,
+}
+
+#[allow(dead_code)]
+impl BlockV3 {
+    pub(crate) fn new(
+        epoch: Epoch,
+        round: Round,
+        author: AuthorityIndex,
+        timestamp_ms: BlockTimestampMs,
+        ancestors: Vec<BlockRef>,
+        transactions: Vec<Transaction>,
+        transaction_votes: Vec<BlockTransactionVotes>,
+        transaction_votes_cutoff_round: Round,
+        commit_votes: Vec<CommitVote>,
+        misbehavior_reports: Vec<MisbehaviorReport>,
+    ) -> BlockV3 {
+        Self {
+            epoch,
+            round,
+            author,
+            timestamp_ms,
+            ancestors,
+            transactions,
+            transaction_votes,
+            transaction_votes_cutoff_round,
+            commit_votes,
+            misbehavior_reports,
+        }
+    }
+
+    fn genesis_block(context: &Context, author: AuthorityIndex) -> Self {
+        Self {
+            epoch: context.committee.epoch(),
+            round: GENESIS_ROUND,
+            author,
+            timestamp_ms: context.epoch_start_timestamp_ms,
+            ancestors: vec![],
+            transactions: vec![],
+            transaction_votes: vec![],
+            transaction_votes_cutoff_round: GENESIS_ROUND,
+            commit_votes: vec![],
+            misbehavior_reports: vec![],
+        }
+    }
+}
+
+impl BlockAPI for BlockV3 {
+    fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+
+    fn round(&self) -> Round {
+        self.round
+    }
+
+    fn author(&self) -> AuthorityIndex {
+        self.author
+    }
+
+    fn slot(&self) -> Slot {
+        Slot::new(self.round, self.author)
+    }
+
+    fn timestamp_ms(&self) -> BlockTimestampMs {
+        self.timestamp_ms
+    }
+
+    fn ancestors(&self) -> &[BlockRef] {
+        &self.ancestors
+    }
+
+    fn transactions(&self) -> &[Transaction] {
+        &self.transactions
+    }
+
+    fn transactions_data(&self) -> Vec<&[u8]> {
+        self.transactions.iter().map(|t| t.data()).collect()
+    }
+
+    fn transaction_votes(&self) -> &[BlockTransactionVotes] {
+        &self.transaction_votes
+    }
+
+    fn transaction_votes_cutoff_round(&self) -> Round {
+        self.transaction_votes_cutoff_round
+    }
+
     fn commit_votes(&self) -> &[CommitVote] {
         &self.commit_votes
     }
@@ -277,7 +405,7 @@ impl BlockAPI for BlockV2 {
 
 /// Slot is the position of blocks in the DAG. It can contain 0, 1 or multiple blocks
 /// from the same authority at the same round.
-#[derive(Clone, Copy, PartialEq, PartialOrd, Default, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
 pub struct Slot {
     pub round: Round,
     pub authority: AuthorityIndex,
@@ -384,7 +512,7 @@ struct InnerBlockDigest([u8; consensus_config::DIGEST_LENGTH]);
 /// Computes the digest of a Block, only for signing and verifications.
 fn compute_inner_block_digest(block: &Block) -> ConsensusResult<InnerBlockDigest> {
     let mut hasher = DefaultHashFunction::new();
-    hasher.update(bcs::to_bytes(block).map_err(ConsensusError::SerializationFailure)?);
+    bcs::serialize_into(&mut hasher, block).map_err(ConsensusError::SerializationFailure)?;
     Ok(InnerBlockDigest(hasher.finalize().into()))
 }
 

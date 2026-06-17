@@ -15,6 +15,7 @@ use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
+use sui_kvstore::parse_alpha_pipeline_name;
 use sui_kvstore::set_write_legacy_data;
 use sui_protocol_config::Chain;
 use telemetry_subscribers::TelemetryConfig;
@@ -51,6 +52,10 @@ struct Args {
     #[arg(long)]
     write_legacy_data: bool,
 
+    /// Enable an alpha pipeline by framework pipeline name. Repeat to enable multiple pipelines.
+    #[arg(long = "enable-alpha-pipeline", value_name = "PIPELINE_NAME", value_parser = parse_alpha_pipeline_name)]
+    enable_alpha_pipelines: Vec<&'static str>,
+
     #[command(flatten)]
     metrics_args: MetricsArgs,
 
@@ -83,10 +88,12 @@ async fn main() -> Result<()> {
 
     let is_bounded = args.indexer_args.last_checkpoint.is_some();
     set_write_legacy_data(args.write_legacy_data);
+    let alpha_pipelines = args.enable_alpha_pipelines;
 
     info!("Starting sui-kvstore-alt indexer");
     info!(instance_id = %args.instance_id);
     info!("Config: {:#?}", config);
+    info!(?alpha_pipelines, "Enabled alpha pipelines");
 
     let channel_timeout = config
         .bigtable_channel_timeout_ms
@@ -97,6 +104,10 @@ async fn main() -> Result<()> {
         .clone()
         .finish(config.bigtable_connection_pool_size);
 
+    let registry = prometheus::Registry::new();
+    let metrics_service =
+        sui_indexer_alt_metrics::MetricsService::new(args.metrics_args, registry.clone());
+
     let client = BigTableClient::new_remote(
         args.instance_id,
         args.bigtable_project,
@@ -104,17 +115,13 @@ async fn main() -> Result<()> {
         channel_timeout,
         args.bigtable_max_decoding_message_size,
         "sui-kvstore-alt".to_string(),
-        None,
+        Some(&registry),
         args.app_profile_id,
         pool_config,
     )
     .await?;
 
     let store = BigTableStore::new(client);
-
-    let registry = prometheus::Registry::new();
-    let metrics_service =
-        sui_indexer_alt_metrics::MetricsService::new(args.metrics_args, registry.clone());
 
     let indexer_config = config.clone();
     let committer = config.committer.finish(CommitterConfig::default());
@@ -127,12 +134,13 @@ async fn main() -> Result<()> {
         indexer_config,
         config.pipeline,
         args.chain,
+        &alpha_pipelines,
         &registry,
     )
     .await?;
 
     let metrics_handle = metrics_service.run().await?;
-    let service = bigtable_indexer.indexer.run().await?;
+    let service = bigtable_indexer.run().await?;
 
     match service.attach(metrics_handle).main().await {
         Ok(()) => {}

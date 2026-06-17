@@ -4,8 +4,8 @@
 //# init --addresses test=0x0
 
 //# publish
-module 0x0::f {
-    enum X has store, key {
+mvir 0x0::f {
+    public enum X has store, key {
         A { } 
     }
 }

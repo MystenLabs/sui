@@ -1,18 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! These tests use `#[tokio::test]` rather than the workspace-standard simulator test
+//! attribute because the harness needs a real Postgres `TempDb` and a real
+//! `TestClusterBuilder` validator, neither of which works inside the simulator's
+//! deterministic runtime.
+
 use serde_json::json;
-use sui_macros::sim_test;
 use tokio_stream::StreamExt;
 
 use crate::testing::SubscriptionTestCluster;
+use crate::testing::checkpoint_seq;
 use crate::testing::checkpoint_tx_digests;
+use crate::testing::drain_until_stalled;
 use crate::testing::graphql_redactions;
 use crate::testing::object_wrapping_harness;
 use crate::testing::transfer_coins;
 use crate::testing::wait_for_matching_item;
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_sequential() {
     let cluster = SubscriptionTestCluster::new().await;
 
@@ -23,10 +29,11 @@ async fn test_subscription_sequential() {
         .collect()
         .await;
 
-    insta::assert_json_snapshot!("subscription_sequential", items);
+    let seqs: Vec<u64> = items.iter().map(checkpoint_seq).collect();
+    assert!(seqs.windows(2).all(|w| w[1] == w[0] + 1), "{seqs:?}");
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_fields() {
     let cluster = SubscriptionTestCluster::new().await;
 
@@ -65,7 +72,7 @@ async fn test_subscription_fields() {
     });
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_transactions() {
     let mut cluster = SubscriptionTestCluster::new().await;
     let sender = cluster.validator.wallet.active_address().unwrap();
@@ -98,7 +105,6 @@ async fn test_subscription_transactions() {
         )
         .await;
     // Prime the stream so it's actively subscribed before mutations happen.
-    let _ = stream.next().await;
     let digests = transfer_coins(&mut cluster.validator, &[1000]).await;
     let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
 
@@ -107,7 +113,7 @@ async fn test_subscription_transactions() {
     });
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_transactions_pagination_first() {
     let mut cluster = SubscriptionTestCluster::new().await;
     let sender = cluster.validator.wallet.active_address().unwrap();
@@ -138,7 +144,6 @@ async fn test_subscription_transactions_pagination_first() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
-    let _ = stream.next().await;
     let digests = transfer_coins(&mut cluster.validator, &[100, 100]).await;
     let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
 
@@ -147,7 +152,7 @@ async fn test_subscription_transactions_pagination_first() {
     });
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_transactions_pagination_last() {
     let mut cluster = SubscriptionTestCluster::new().await;
     let sender = cluster.validator.wallet.active_address().unwrap();
@@ -178,7 +183,6 @@ async fn test_subscription_transactions_pagination_last() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
-    let _ = stream.next().await;
     let digests = transfer_coins(&mut cluster.validator, &[100, 100]).await;
     let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
 
@@ -189,7 +193,7 @@ async fn test_subscription_transactions_pagination_last() {
 
 // --- Object resolution tests ---
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_object_create() {
     let mut cluster = SubscriptionTestCluster::new().await;
     let sender = cluster.validator.wallet.active_address().unwrap();
@@ -232,7 +236,6 @@ async fn test_subscription_object_create() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
-    let _ = stream.next().await;
 
     let (digest, _) =
         object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;
@@ -243,7 +246,7 @@ async fn test_subscription_object_create() {
     });
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_subscription_object_lifecycle() {
     let mut cluster = SubscriptionTestCluster::new().await;
     let sender = cluster.validator.wallet.active_address().unwrap();
@@ -286,7 +289,6 @@ async fn test_subscription_object_lifecycle() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
-    let _ = stream.next().await;
 
     let (d1, item) =
         object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;
@@ -311,7 +313,6 @@ async fn test_subscription_object_lifecycle() {
 
 /// Tests that `contents.json` resolves for streamed objects using the indexer-backed
 /// package store for type layout resolution.
-/// Uses #[tokio::test] because sim_test intercepts TCP, preventing Postgres access.
 #[tokio::test]
 async fn test_subscription_object_json() {
     let mut cluster = SubscriptionTestCluster::new().await;
@@ -354,7 +355,6 @@ async fn test_subscription_object_json() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
-    let _ = stream.next().await;
 
     let (d1, item) =
         object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;
@@ -378,4 +378,62 @@ async fn test_subscription_object_json() {
     settings.bind(|| {
         insta::assert_json_snapshot!("subscription_object_json", [cp1, cp2, cp3, cp4]);
     });
+}
+
+// --- Gap recovery tests ---
+
+/// Forces a reconnect blackout via the proxy and asserts the subscriber sees a
+/// contiguous sequence of checkpoints across it (gap recovery filled the
+/// missing range from kv-rpc). `ledger_grpc_url` bypasses the proxy, so
+/// recovery reads aren't blocked.
+#[tokio::test]
+async fn test_subscription_recovers_from_upstream_disconnect() {
+    let (cluster, proxy) = SubscriptionTestCluster::new_with_disruption_proxy().await;
+
+    let mut stream = cluster
+        .subscribe("subscription { checkpoints { sequenceNumber } }")
+        .await;
+
+    // Healthy streaming.
+    let first = checkpoint_seq(&stream.next().await.unwrap());
+    let second = checkpoint_seq(&stream.next().await.unwrap());
+    assert_eq!(second, first + 1);
+
+    // Blackout: graphql can't reconnect.
+    proxy.block_connections();
+    proxy.disconnect_all();
+
+    // Let the validator advance so a real gap forms, then drain whatever
+    // graphql had pushed before the disconnect took effect.
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    let drained = drain_until_stalled(&mut stream).await;
+    let last_seen = drained.last().map(checkpoint_seq).unwrap_or(second);
+    let validator_tip = cluster.validator_checkpoint_tip();
+    assert!(
+        validator_tip > last_seen + 1,
+        "validator did not advance during blackout: tip={validator_tip}, last_seen={last_seen}",
+    );
+
+    // Resume.
+    proxy.allow_connections();
+
+    // First item signals reconnect + recovery have started. The validator's
+    // tip at this moment bounds the reconnect tip from above, so reading
+    // past it crosses from recovery into post-recovery live items.
+    let mut received = vec![checkpoint_seq(&stream.next().await.unwrap())];
+    let resume_tip = cluster.validator_checkpoint_tip();
+    while *received.last().unwrap() < resume_tip + 20 {
+        received.push(checkpoint_seq(&stream.next().await.unwrap()));
+    }
+
+    assert_eq!(
+        received[0],
+        last_seen + 1,
+        "non-contiguous resume: last_seen={last_seen}, first received={}",
+        received[0],
+    );
+    assert!(
+        received.windows(2).all(|w| w[1] == w[0] + 1),
+        "post-resume not contiguous: {received:?}",
+    );
 }

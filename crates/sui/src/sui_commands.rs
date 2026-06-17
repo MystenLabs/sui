@@ -6,6 +6,7 @@ use std::net::{AddrParseError, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, io};
@@ -32,7 +33,7 @@ use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::node::Genesis;
 use sui_config::p2p::SeedPeer;
 use sui_config::{
-    Config, FULL_NODE_DB_PATH, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
+    Config, FULL_NODE_DB_PATH, NodeConfig, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
     SUI_NETWORK_CONFIG, genesis_blob_exists, sui_config_dir,
 };
 use sui_config::{
@@ -47,7 +48,9 @@ use sui_indexer_alt_consistent_store::{
 };
 use sui_indexer_alt_framework::{
     IndexerArgs,
-    ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
+    ingestion::{
+        ClientArgs, ingestion_client::IngestionClientArgs, streaming_client::StreamingClientArgs,
+    },
 };
 use sui_indexer_alt_graphql::{
     RpcArgs as GraphQlArgs, args::SubscriptionArgs, config::RpcConfig as GraphQlConfig,
@@ -420,6 +423,12 @@ pub enum SuiCommand {
 
         #[command(flatten)]
         replay_config: SR2::ReplayConfigStable,
+
+        /// Network or GraphQL URL to replay against. Accepts `mainnet`, `testnet`,
+        /// or a full GraphQL URL (e.g. for devnet or a self-hosted endpoint).
+        /// When omitted, the network is derived from the active wallet env.
+        #[arg(long = "node", short = 'n')]
+        node: Option<String>,
     },
 
     /// Generate shell completion scripts for CLI
@@ -673,6 +682,7 @@ impl SuiCommand {
                             run_bytecode_verifier: true,
                             print_diags_to_stderr: true,
                             environment,
+                            flavor: SuiFlavor::with_client(&context),
                         }
                         .build_async_from_root_pkg(&mut root_pkg)
                         .await?;
@@ -786,7 +796,7 @@ impl SuiCommand {
             }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
             SuiCommand::Analyzer => {
-                analyzer::run::<SuiFlavor>(Some(Flavor::Sui));
+                analyzer::run::<SuiFlavor>(Arc::new(SuiFlavor::new()), Some(Flavor::Sui));
                 Ok(())
             }
             SuiCommand::AnalyzeTrace {
@@ -797,13 +807,18 @@ impl SuiCommand {
             SuiCommand::ReplayTransaction {
                 config,
                 replay_config,
+                node,
             } => {
                 let mut context = get_wallet_context(&config).await?;
                 if let Some(env_override) = config.env {
                     context = context.with_env_override(env_override);
                 }
 
-                let node = get_replay_node(&context).await?;
+                let node = match node {
+                    Some(s) => sui_data_store::Node::from_str(&s)
+                        .map_err(|e| anyhow!("invalid --node value: {e}"))?,
+                    None => get_replay_node(&context).await?,
+                };
                 let file_config = SR2::load_config_file()?;
                 let stable_config = SR2::merge_configs(replay_config, file_config);
                 let experimental_config = SR2::ReplayConfigExperimental {
@@ -844,7 +859,7 @@ async fn start(
     force_regenesis: bool,
     epoch_duration_ms: Option<u64>,
     fullnode_rpc_port: u16,
-    mut data_ingestion_dir: Option<PathBuf>,
+    data_ingestion_dir: Option<PathBuf>,
     no_full_node: bool,
     committee_size: Option<usize>,
 ) -> Result<(), anyhow::Error> {
@@ -1008,13 +1023,6 @@ async fn start(
         sui_config_path
     };
 
-    // the indexer requires to set the fullnode's data ingestion directory
-    // note that this overrides the default configuration that is set when running the genesis
-    // command, which sets data_ingestion_dir to None.
-    if with_indexer.is_some() && data_ingestion_dir.is_none() {
-        data_ingestion_dir = Some(mysten_common::tempdir()?.keep())
-    }
-
     if let Some(ref dir) = data_ingestion_dir {
         swarm_builder = swarm_builder.with_data_ingestion_dir(dir.clone());
     }
@@ -1033,13 +1041,41 @@ async fn start(
         swarm_builder = swarm_builder
             .with_fullnode_count(1)
             .with_fullnode_rpc_addr(fullnode_rpc_address)
-            .with_fullnode_rpc_config(rpc_config);
+            .with_fullnode_rpc_config(rpc_config.clone());
+
+        let fullnode_config_path = config_dir.join(SUI_FULLNODE_CONFIG);
+        if fullnode_config_path.exists() {
+            let mut fullnode_config: NodeConfig = PersistedConfig::read(&fullnode_config_path)
+                .map_err(|err| {
+                    err.context(format!(
+                        "Cannot open Sui fullnode config file at {:?}",
+                        fullnode_config_path
+                    ))
+                })?;
+            fullnode_config.json_rpc_address = fullnode_rpc_address;
+            fullnode_config.rpc = Some(rpc_config);
+            let localhost = sui_config::local_ip_utils::localhost_for_testing();
+            fullnode_config.metrics_address =
+                sui_config::local_ip_utils::new_local_tcp_socket_for_testing();
+            fullnode_config.admin_interface_port =
+                sui_config::local_ip_utils::get_available_port(&localhost);
+            fullnode_config.network_address =
+                sui_config::local_ip_utils::new_tcp_address_for_testing(&localhost);
+            fullnode_config.p2p_config.listen_address =
+                sui_config::local_ip_utils::new_udp_address_for_testing(&localhost)
+                    .udp_multiaddr_to_listen_address()
+                    .unwrap();
+            if let Some(ref dir) = data_ingestion_dir {
+                fullnode_config
+                    .checkpoint_executor_config
+                    .data_ingestion_dir = Some(dir.clone());
+            }
+            swarm_builder = swarm_builder.with_fullnode_config(fullnode_config);
+        }
     }
 
     let mut swarm = swarm_builder.build();
     swarm.launch().await?;
-    // Let nodes connect to one another
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     info!("Cluster started");
 
     let fullnode_rpc_url = socket_addr_to_url(fullnode_rpc_address)?
@@ -1047,6 +1083,22 @@ async fn start(
         .trim_end_matches("/")
         .to_string();
     info!("Fullnode RPC URL: {fullnode_rpc_url}");
+
+    let fullnode_grpc_url = socket_addr_to_url(fullnode_rpc_address)?;
+    let client_args = ClientArgs {
+        ingestion: IngestionClientArgs {
+            rpc_api_url: Some(fullnode_grpc_url.clone()),
+            ..Default::default()
+        },
+        streaming: StreamingClientArgs {
+            streaming_url: Some(
+                fullnode_grpc_url
+                    .as_str()
+                    .parse()
+                    .context("Failed to parse fullnode gRPC URL into a streaming URI")?,
+            ),
+        },
+    };
 
     let prometheus_registry = Registry::new();
     let mut rpc_services = Service::new();
@@ -1083,19 +1135,11 @@ async fn start(
     };
 
     let pipelines = if let Some(ref db_url) = database_url {
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: data_ingestion_dir.clone(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
         let indexer = setup_indexer(
             db_url.clone(),
             DbArgs::default(),
             IndexerArgs::default(),
-            client_args,
+            client_args.clone(),
             IndexerConfig::for_test(),
             None,
             &prometheus_registry,
@@ -1116,14 +1160,6 @@ async fn start(
         let address = parse_host_port(input, DEFAULT_CONSISTENT_STORE_PORT)
             .context("Invalid consistent store host and port")?;
 
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: data_ingestion_dir.clone(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
         let consistent_args = ConsistentArgs {
             rpc_listen_address: address,
             ..Default::default()
@@ -1133,7 +1169,7 @@ async fn start(
             start_consistent_store(
                 config_dir.join("consistent_store"),
                 IndexerArgs::default(),
-                client_args,
+                client_args.clone(),
                 consistent_args,
                 "0.0.0",
                 ConsistentConfig::for_test(),
@@ -1262,7 +1298,13 @@ async fn start(
             config,
         });
 
-        start_faucet(app_state).await?;
+        rpc_services = rpc_services.merge(
+            start_faucet(app_state)
+                .await
+                .context("Failed to start faucet")?,
+        );
+
+        info!("Faucet started at {faucet_address}");
     }
 
     // Run health check loop until Ctrl+C or failure
@@ -1452,7 +1494,7 @@ async fn genesis(
     info!("Client keystore is stored in {:?}.", keystore_path);
 
     let fullnode_config = FullnodeConfigBuilder::new()
-        .with_config_directory(FULL_NODE_DB_PATH.into())
+        .with_config_directory(sui_config_dir.to_path_buf())
         .with_rpc_addr(sui_config::node::default_json_rpc_address())
         .build(&mut OsRng, &network_config);
 
@@ -1748,6 +1790,11 @@ async fn download_package_and_deps_under(
         linkage.insert(*original_id, pkg_info.clone());
         type_origins.insert(*original_id, package.type_origin_table().clone());
     }
+
+    type_origins.insert(
+        root_package.original_package_id(),
+        root_package.type_origin_table().clone(),
+    );
 
     let package_path = path.join(
         root_package

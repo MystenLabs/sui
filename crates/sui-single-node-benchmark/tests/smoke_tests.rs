@@ -110,6 +110,42 @@ async fn benchmark_publish_from_source() {
 }
 
 #[sim_test]
+async fn benchmark_send_funds_smoke_test() {
+    // SendFunds requires address-balance gas payments, which are not yet enabled
+    // on every chain (e.g. mainnet). Use the chain override env var (set by the
+    // simtest CI matrix) to determine the effective chain and skip the test when
+    // the feature is disabled.
+    let chain = match std::env::var("SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE").as_deref() {
+        Ok("mainnet") => sui_protocol_config::Chain::Mainnet,
+        Ok("testnet") => sui_protocol_config::Chain::Testnet,
+        _ => sui_protocol_config::Chain::Unknown,
+    };
+    let protocol_config = sui_protocol_config::ProtocolConfig::get_for_version(
+        sui_protocol_config::ProtocolVersion::MAX,
+        chain,
+    );
+    if !protocol_config.enable_address_balance_gas_payments() {
+        return;
+    }
+
+    // SendFunds uses address-balance gas which requires accumulators.
+    // Only test Baseline component — other components may not support this.
+    run_benchmark(
+        Workload::new(
+            10,
+            WorkloadKind::SendFunds {
+                seed_amount: 100_000_000_000,
+                transfer_amount: 1000,
+            },
+        ),
+        Component::Baseline,
+        1000,
+        false,
+    )
+    .await;
+}
+
+#[sim_test]
 async fn benchmark_publish_from_bytecode() {
     // This test makes sure that the benchmark runs.
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

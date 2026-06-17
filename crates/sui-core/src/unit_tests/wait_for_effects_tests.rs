@@ -113,7 +113,6 @@ async fn test_wait_for_effects_position_mismatch() {
         epoch_store.set_consensus_tx_status(tx_position2, ConsensusTxStatus::Finalized);
         state_clone
             .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
-            .await
             .unwrap()
             .0
     });
@@ -311,7 +310,6 @@ async fn test_wait_for_effects_finalized() {
         epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
         state_clone
             .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
-            .await
             .unwrap()
             .0
     });

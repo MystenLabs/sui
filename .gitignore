@@ -45,6 +45,7 @@ node_modules
 .tsbuildinfo
 *.tsbuildinfo
 .turbo
+.pnpm-store/
 
 # App build directories
 dist/
@@ -79,3 +80,4 @@ lcov.info
 
 .sparse
 docs/content/documentation.json
+.cache-external-docs/

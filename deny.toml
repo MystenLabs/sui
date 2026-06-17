@@ -58,6 +58,12 @@ ignore = [
     # walrus, seal, and other downstream consumers. Deferred pending a coordinated
     # ecosystem-wide bump (likely driven by fastcrypto first).
     "RUSTSEC-2026-0097",
+    # `proc-macro-error2` is unmaintained, no safe upgrade — transitive via
+    # alloy-sol-macro (sui-bridge ethereum stack); waiting for alloy to migrate
+    "RUSTSEC-2026-0173",
+    # `http-types` ASCII invariant notice, no safe upgrade — dev-dependency only,
+    # via wiremock 0.5 test mocks; not used to construct auth headers
+    "RUSTSEC-2026-0174",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories

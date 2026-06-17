@@ -453,7 +453,7 @@ pub enum SuiClientCommands {
         name = "test-publish",
         after_long_help = "The `test-publish` command is used to publish packages ephemerally, i.e. without recording the published addresses in the main `Published.toml` file. Running `sui client test-publish --pubfile-path <pubfile> --build-env <env>` will build the package for environment <env>, but will publish it on the current network, taking the dependency addresses from <pubfile>. It will also record the publication information for the package in <pubfile>. \n\
                 \n\
-                See https://docs.sui.io/guides/developer/sui-101/move-package-management for more information."
+                See https://docs.sui.io/guides/developer/packages/move-package-management for more information."
     )]
     TestPublish(TestPublishArgs),
 
@@ -465,7 +465,7 @@ pub enum SuiClientCommands {
         name = "test-upgrade",
         after_long_help = "The `test-upgrade` command is used to upgrade ephemeral packages, for packages published using `test-publish` command. This does not write publication info to `Published.toml` file. Running `sui client test-upgrade --pubfile-path <pubfile> --build-env <env>` will build the package for environment <env>, but will publish it on the current network, taking the dependency addresses from <pubfile>. It will also record the publication information for the package in <pubfile>. \n\
             \n\
-            See https://docs.sui.io/guides/developer/sui-101/move-package-management for more information."
+            See https://docs.sui.io/guides/developer/packages/move-package-management for more information."
     )]
     TestUpgrade(TestUpgradeArgs),
 
@@ -713,6 +713,10 @@ pub struct TxProcessingArgs {
     /// private key corresponding to this address is not in keystore.
     #[arg(long, required = false, value_parser)]
     pub sender: Option<SuiAddress>,
+    /// Submit the transaction without signatures for forked networks that support sender
+    /// impersonation. This is only intended for local forked-network testing.
+    #[arg(long)]
+    pub forking_mode: bool,
 }
 
 #[derive(Args, Debug, Default)]
@@ -943,7 +947,6 @@ impl SuiClientCommands {
                 verify_no_test_mode(&args.build_config)?;
                 verify_no_pubfile_path(&args.build_config, "upgrade")?;
                 verify_no_build_env(&args.build_config, "upgrade")?;
-                let _ = context.cache_chain_id().await?;
                 upgrade_command(args, context, false).await?
             }
 
@@ -956,7 +959,6 @@ impl SuiClientCommands {
                 verify_no_test_mode(&args.build_config)?;
                 verify_no_pubfile_path(&args.build_config, "publish")?;
                 verify_no_build_env(&args.build_config, "publish")?;
-                let _ = context.cache_chain_id().await?;
                 let mut root_package = load_root_pkg_for_publish_upgrade(
                     context,
                     &args.build_config,
@@ -1854,6 +1856,7 @@ impl SuiClientCommands {
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
                     environment: environment.clone(),
+                    flavor: SuiFlavor::with_client(context),
                 };
                 let compiled_package = build_config
                     .build_async_from_root_pkg(&mut root_pkg)
@@ -2112,8 +2115,8 @@ pub(crate) fn check_for_unpublished_deps(
         ",
             package_dependencies
                 .unpublished
-                .into_iter()
-                .map(|n| n.to_string())
+                .values()
+                .map(|dep| dep.name.to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         );
@@ -3323,6 +3326,7 @@ async fn dry_run_or_execute_or_serialize_impl(
         serialize_unsigned_transaction,
         serialize_signed_transaction,
         sender,
+        forking_mode,
     } = processing;
 
     ensure!(
@@ -3446,31 +3450,36 @@ async fn dry_run_or_execute_or_serialize_impl(
     } else if tx_digest {
         Ok(SuiClientCommandResult::ComputeTransactionDigest(tx_data))
     } else {
-        let mut signatures = vec![
-            context
-                .sign_secure(
-                    &KeyIdentity::Address(signer),
-                    &tx_data,
-                    Intent::sui_transaction(),
-                )
-                .await?
-                .into(),
-        ];
-
-        if let Some(gas_sponsor) = gas_sponsor
-            && gas_sponsor != signer
-        {
-            signatures.push(
+        let signatures = if forking_mode {
+            vec![]
+        } else {
+            let mut signatures = vec![
                 context
                     .sign_secure(
-                        &KeyIdentity::Address(gas_sponsor),
+                        &KeyIdentity::Address(signer),
                         &tx_data,
                         Intent::sui_transaction(),
                     )
                     .await?
                     .into(),
-            );
-        }
+            ];
+
+            if let Some(gas_sponsor) = gas_sponsor
+                && gas_sponsor != signer
+            {
+                signatures.push(
+                    context
+                        .sign_secure(
+                            &KeyIdentity::Address(gas_sponsor),
+                            &tx_data,
+                            Intent::sui_transaction(),
+                        )
+                        .await?
+                        .into(),
+                );
+            }
+            signatures
+        };
 
         let sender_signed_data = SenderSignedData::new(tx_data, signatures);
         if serialize_signed_transaction {
@@ -3684,6 +3693,7 @@ pub(crate) async fn pkg_tree_shake(
             // println!("{}", pkgs_to_keep.contains(pkg_name));
             pkgs_to_keep.contains(pkg_name)
         })
+        .map(|(pkg_name, dep)| (pkg_name, dep.published_at))
         .collect();
 
     info!("Pkgs to keep {pkgs_to_keep:#?}");
@@ -3727,7 +3737,10 @@ pub async fn load_root_pkg_for_publish_upgrade(
 ) -> anyhow::Result<RootPackage<SuiFlavor>> {
     let env = find_environment(path, build_config.environment.clone(), wallet, true).await?;
 
-    Ok(build_config.package_loader(path, &env).load().await?)
+    Ok(build_config
+        .package_loader(path, &env, SuiFlavor::with_client(wallet))
+        .load()
+        .await?)
 }
 
 pub async fn load_root_pkg_for_ephemeral_publish_or_upgrade(
@@ -3742,6 +3755,7 @@ pub async fn load_root_pkg_for_ephemeral_publish_or_upgrade(
         build_env.clone(),
         chain_id.to_string(),
         pubfile_path,
+        SuiFlavor::new(),
     )
     .modes(modes)
     .load()

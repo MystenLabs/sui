@@ -1,20 +1,20 @@
 // Tests that mutable borrows from enum variants work correctly.
 
 //# print-bytecode
-module 0x6::PolymorphicEnums {
-    enum EnumWithTwoVariants<T: drop> has drop {
+mvir 0x6::PolymorphicEnums {
+    public enum EnumWithTwoVariants<T: drop> has drop {
         One { x: T },
         Two { x: T, y: u64 }
     }
 
-    public f<T: drop>(t: T): Self::EnumWithTwoVariants<T> {
+    public fun f<T: drop>(t: T): Self::EnumWithTwoVariants<T> {
         let l: u64;
         label b0:
             l = 0;
             return EnumWithTwoVariants::Two<T> { x: move(t), y: move(l) };
     }
 
-    public mutate<T: drop>(e: &mut Self::EnumWithTwoVariants<T>, v: T) {
+    public fun mutate<T: drop>(e: &mut Self::EnumWithTwoVariants<T>, v: T) {
         let x: &mut T;
         let u: &mut u64;
         label b0:
@@ -32,7 +32,7 @@ module 0x6::PolymorphicEnums {
             return;
     }
 
-    public get<T: drop>(e: &Self::EnumWithTwoVariants<T>): &T {
+    public fun get<T: drop>(e: &Self::EnumWithTwoVariants<T>): &T {
         let x: &T;
         let u: &u64;
         label b0:
@@ -50,20 +50,20 @@ module 0x6::PolymorphicEnums {
 }
 
 //# publish
-module 0x6::PolymorphicEnums {
-    enum EnumWithTwoVariants<T: drop> has drop {
+mvir 0x6::PolymorphicEnums {
+    public enum EnumWithTwoVariants<T: drop> has drop {
         One { x: T },
         Two { x: T, y: u64 }
     }
 
-    public f<T: drop>(t: T): Self::EnumWithTwoVariants<T> {
+    public fun f<T: drop>(t: T): Self::EnumWithTwoVariants<T> {
         let l: u64;
         label b0:
             l = 0;
             return EnumWithTwoVariants::Two<T> { x: move(t), y: move(l) };
     }
 
-    public mutate<T: drop>(e: &mut Self::EnumWithTwoVariants<T>, v: T) {
+    public fun mutate<T: drop>(e: &mut Self::EnumWithTwoVariants<T>, v: T) {
         let x: &mut T;
         let u: &mut u64;
         label b0:
@@ -81,7 +81,7 @@ module 0x6::PolymorphicEnums {
             return;
     }
 
-    public get<T: drop>(e: &Self::EnumWithTwoVariants<T>): &T {
+    public fun get<T: drop>(e: &Self::EnumWithTwoVariants<T>): &T {
         let x: &T;
         let u: &u64;
         label b0:
@@ -99,9 +99,9 @@ module 0x6::PolymorphicEnums {
 }
 
 //# run
-module 0x7::m {
+mvir 0x7::m {
 import 0x6::PolymorphicEnums;
-entry foo() {
+entry fun foo() {
     let x: PolymorphicEnums::EnumWithTwoVariants<u64>;
     let y: &u64;
     label b0:

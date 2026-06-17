@@ -2905,6 +2905,29 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
+    let forking_mode_tx = SuiClientCommands::TransferSui {
+        to: KeyIdentity::Address(address1),
+        sui_coin_object_id: coin,
+        amount: Some(1),
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs {
+            serialize_signed_transaction: true,
+            forking_mode: true,
+            ..Default::default()
+        },
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::SerializedSignedTransaction(sender_signed_data) = forking_mode_tx
+    else {
+        panic!("Expected SerializedSignedTransaction result");
+    };
+    assert!(sender_signed_data.tx_signatures().is_empty());
+
     // use alias for transfer
     SuiClientCommands::TransferSui {
         to: KeyIdentity::Alias(alias1),
@@ -4258,6 +4281,67 @@ async fn test_tree_shaking_package_with_direct_dependency() -> Result<(), anyhow
     assert!(
         linkage_table_b.contains_key(&package_a_id),
         "Package B should depend on A"
+    );
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tree_shaking_package_with_duplicate_dependency_names() -> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
+
+    // Publish two packages with the same declared package name. The package system disambiguates
+    // them with package graph IDs like `a` and `a_1`; tree shaking needs to use that same key space.
+    let (package_a_id, _) = test.test_publish_package("A", false).await?;
+    let (package_a_alt_id, _) = test.test_publish_package("A_ALT", false).await?;
+
+    // `DuplicateDirect` declares both packages and references both. Tree shaking needs to keep
+    // both package graph IDs, even though both packages have the same declared package name.
+    let (package_duplicate_id, _) = test.test_publish_package("DuplicateDirect", false).await?;
+    let linkage_table = test.fetch_linkage_table(package_duplicate_id).await;
+
+    assert!(
+        linkage_table.contains_key(&package_a_id),
+        "Package DuplicateDirect should depend on A"
+    );
+    assert!(
+        linkage_table.contains_key(&package_a_alt_id),
+        "Package DuplicateDirect should depend on A_ALT"
+    );
+    assert_eq!(
+        linkage_table.len(),
+        2,
+        "Package DuplicateDirect should have exactly two dependencies"
+    );
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tree_shaking_package_with_duplicate_dependency_names_drops_unused()
+-> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
+
+    // Publish two packages with the same declared package name. `DuplicateSingle` declares both
+    // dependencies but references only A, so A_ALT must be dropped after tree shaking.
+    let (package_a_id, _) = test.test_publish_package("A", false).await?;
+    let (package_a_alt_id, _) = test.test_publish_package("A_ALT", false).await?;
+
+    let (package_duplicate_id, _) = test.test_publish_package("DuplicateSingle", false).await?;
+    let linkage_table = test.fetch_linkage_table(package_duplicate_id).await;
+
+    assert!(
+        linkage_table.contains_key(&package_a_id),
+        "Package DuplicateSingle should depend on A"
+    );
+    assert!(
+        !linkage_table.contains_key(&package_a_alt_id),
+        "Package DuplicateSingle should tree shake the unused A_ALT dependency"
+    );
+    assert_eq!(
+        linkage_table.len(),
+        1,
+        "Package DuplicateSingle should have exactly one dependency"
     );
 
     Ok(())

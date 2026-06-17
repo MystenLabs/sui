@@ -1,7 +1,7 @@
 //# publish
-module 0x6::M {
+mvir 0x6::M {
 
-    public foo(): u64 {
+    public fun foo(): u64 {
     label b0:
         return 0;
     }
@@ -9,10 +9,10 @@ module 0x6::M {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x6::M;
 
-entry foo() {
+entry fun foo() {
 label b0:
     // positive stack size invalid even with abort
     M::foo();

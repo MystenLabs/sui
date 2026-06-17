@@ -357,6 +357,7 @@ const config = {
       "data-mcp-enabled": "true",
       "data-mcp-server-url": "https://sui.mcp.kapa.ai",
       "data-mcp-button-text": "Use Sui MCP Server",
+      "data-chat-disclaimer": "**New:** Install [Sui Agent Skills](https://docs.sui.io/skills) to supercharge your AI coding agent with Sui expertise.",
       async: true,
     },
   ],
@@ -381,7 +382,47 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
+      announcementBar: {
+        id: "skills_launch",
+        content:
+          'New: <a href="/skills">Sui Agent Skills</a> — drop pre-built skills into Claude Code, Cursor, Codex, and other AI coding agents.',
+        isCloseable: true,
+      },
       image: "img/sui-doc-og.png",
+      mermaid: {
+        theme: {
+          light: "base",
+          dark: "base",
+        },
+        options: {
+          themeVariables: {
+            primaryColor: "#000000",
+            primaryTextColor: "#FFFFFF",
+            primaryBorderColor: "#6C7584",
+            secondaryColor: "#6C7584",
+            secondaryTextColor: "#FFFFFF",
+            tertiaryColor: "#298DFF",
+            tertiaryTextColor: "#FFFFFF",
+            lineColor: "#298DFF",
+            background: "#FFFFFF",
+            mainBkg: "#000000",
+            secondBkg: "#6C7584",
+            noteBkgColor: "#E6F1FB",
+            noteTextColor: "#000000",
+            noteBorderColor: "#298DFF",
+            activationBkgColor: "#298DFF",
+            activationBorderColor: "#185FA5",
+            fontSize: "14px",
+            fontFamily: "Inter, sans-serif",
+            signalColor: "#298DFF",
+            signalTextColor: "#298DFF",
+            labelBoxBkgColor: "#000000",
+            labelBoxBorderColor: "#6C7584",
+            labelTextColor: "#FFFFFF",
+            loopTextColor: "#FFFFFF",
+          },
+        },
+      },
       docs: {
         sidebar: {
           autoCollapseCategories: true,
@@ -400,7 +441,9 @@ const config = {
             label: "Getting Started",
             to: "getting-started",
             items: [
+              { to: "/skills", label: "Skills" },
               { type: "doc", docId: "getting-started/onboarding/index", label: "Hello, World!" },
+              { type: "doc", docId: "getting-started/examples/index", label: "Example Apps" },
               { type: "doc", docId: "getting-started/tooling", label: "Developer Tools" },
               { type: "doc", docId: "getting-started/dev-cheat-sheet", label: "Developer Cheat Sheet" },
               { type: "doc", docId: "getting-started/sui-for-ethereum", label: "Ethereum -> Sui" },
@@ -448,10 +491,13 @@ const config = {
             label: "Sui Stack",
             to: "sui-stack",
             items: [
-              { type: "doc", docId: "sui-stack/on-chain-primitives/randomness-onchain", label: "Onchain Randomness" },
               { type: "doc", docId: "sui-stack/on-chain-primitives/access-time", label: "Onchain Time" },
+              { type: "doc", docId: "sui-stack/on-chain-primitives/randomness-onchain", label: "Onchain Randomness" },
               { type: "doc", docId: "sui-stack/sagat", label: "Sagat" },
-              { type: "doc", docId: "sui-stack/indexer-walrus", label: "Walrus" },
+              { type: "doc", docId: "sui-stack/walrus/index", label: "Walrus" },
+              { type: "doc", docId: "sui-stack/seal/index", label: "Seal" },
+              { type: "doc", docId: "sui-stack/suins/index", label: "SuiNS" },
+              { type: "doc", docId: "sui-stack/enoki/solitaire", label: "Enoki" },
               { type: "doc", docId: "sui-stack/nautilus/index", label: "Nautilus" },
               { type: "doc", docId: "sui-stack/zklogin-integration/index", label: "zkLogin" },
               { type: "doc", docId: "sui-stack/suiplay0x1/index", label: "SuiPlay0X1" },

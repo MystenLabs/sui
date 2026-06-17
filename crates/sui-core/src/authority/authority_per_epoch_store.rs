@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use dashmap::DashMap;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -15,8 +16,7 @@ use fastcrypto_tbls::dkg_v1;
 use fastcrypto_tbls::nodes::PartyId;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId, OIDCProvider};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
-use futures::FutureExt;
-use futures::future::{Either, join_all, select};
+use futures::future::{Either, join_all};
 use itertools::Itertools;
 use moka::sync::SegmentedCache as MokaCache;
 use move_bytecode_utils::module_cache::SyncModuleCache;
@@ -25,9 +25,8 @@ use mysten_common::assert_reachable;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_common::{debug_fatal, fatal};
+use mysten_common::{debug_fatal, in_test_configuration};
 use mysten_metrics::monitored_scope;
-use nonempty::NonEmpty;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
@@ -64,6 +63,7 @@ use sui_types::messages_consensus::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, TimestampMs,
     VersionedDkgConfirmation, check_total_jwk_size,
 };
+use sui_types::node_role::{FullNodeSyncMode, NodeRole};
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{BackingPackageStore, InputKey, ObjectStore};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
@@ -77,8 +77,9 @@ use sui_types::transaction::{
     VerifiedSignedTransaction, VerifiedTransaction, VerifiedTransactionWithAliases, WithAliases,
 };
 use tap::TapOptional;
-use tokio::sync::{OnceCell, mpsc, oneshot};
+use tokio::sync::{OnceCell, mpsc};
 use tokio::time::Instant;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::DBMapUtils;
 use typed_store::Map;
@@ -108,7 +109,7 @@ use crate::authority::shared_object_version_manager::{
     AsTx, AssignedTxAndVersions, ConsensusSharedObjVerAssignment, Schedulable, SharedObjVerManager,
 };
 use crate::checkpoints::{
-    BuilderCheckpointSummary, CheckpointHeight, EpochStats, PendingCheckpoint, PendingCheckpointV2,
+    BuilderCheckpointSummary, CheckpointHeight, EpochStats, PendingCheckpoint,
 };
 use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
@@ -389,8 +390,13 @@ pub struct AuthorityPerEpochStore {
 
     executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
 
-    /// This is used to notify all epoch specific tasks that epoch has ended.
-    epoch_alive_notify: NotifyOnce,
+    /// In-memory cache of signed effects digests. Populated from disk at startup, updated on
+    /// insert, and pruned on checkpoint finalization. Avoids disk reads on the hot execution path
+    /// where the vast majority of lookups return None.
+    signed_effects_digests_cache: DashMap<TransactionDigest, TransactionEffectsDigest>,
+
+    /// Cancellation token used to signal epoch termination to all in-flight tasks.
+    epoch_alive_token: CancellationToken,
 
     /// Used to notify all epoch specific tasks that user certs are closed.
     user_certs_closed_notify: NotifyOnce,
@@ -458,22 +464,9 @@ pub struct AuthorityPerEpochStore {
     /// A cache which tracks recently finalized transactions.
     pub(crate) finalized_transactions_cache: MokaCache<TransactionDigest, ()>,
 
-    /// Waiters for settlement transactions. Used by execution scheduler to wait for
-    /// settlement transaction keys to resolve to transactions.
-    /// Stored in AuthorityPerEpochStore so that it is automatically cleaned up at the end of the epoch.
-    settlement_registrations: Arc<Mutex<HashMap<TransactionKey, SettlementRegistration>>>,
-
-    /// Waiters for barrier transactions. Used by execution scheduler to wait for
-    /// barrier transaction (keyed by the same AccumulatorSettlement key as settlements).
-    barrier_registrations: Arc<Mutex<HashMap<TransactionKey, BarrierRegistration>>>,
-}
-enum SettlementRegistration {
-    Ready(Vec<VerifiedExecutableTransaction>),
-    Waiting(oneshot::Sender<Vec<VerifiedExecutableTransaction>>),
-}
-enum BarrierRegistration {
-    Ready(Box<VerifiedExecutableTransaction>),
-    Waiting(oneshot::Sender<VerifiedExecutableTransaction>),
+    /// The node's role for this epoch, derived from committee membership and
+    /// the configured sync mode. Computed once at construction.
+    node_role: NodeRole,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -503,7 +496,9 @@ pub struct AuthorityEpochTables {
     /// to disk.
     signed_effects_digests: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
-    /// Signatures of transaction certificates that are executed locally.
+    /// No longer used.
+    #[allow(dead_code)]
+    #[deprecated(note = "column family retained only for backward DB compatibility")]
     transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
 
     /// Next available shared object versions for each shared object.
@@ -613,6 +608,7 @@ pub struct AuthorityEpochTables {
         DBMap<DeferralKey, Vec<DeprecatedWithAliases<TrustedExecutableTransaction>>>,
     deferred_transactions_with_aliases_v3:
         DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
+    pub(crate) dkg_output_v2: DBMap<u64, Option<dkg_v1::Output<PkG, EncG>>>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -879,6 +875,10 @@ impl AuthorityEpochTables {
                 "execution_time_observations".to_string(),
                 ThConfig::new(8 + 4, mutexes, uniform_key),
             ),
+            (
+                "dkg_output_v2".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
+            ),
         ];
         Self::open_tables_read_write(
             path.to_path_buf(),
@@ -1066,6 +1066,7 @@ impl AuthorityPerEpochStore {
         highest_executed_checkpoint: CheckpointSequenceNumber,
         previous_epoch_last_checkpoint: CheckpointSequenceNumber,
         submitted_transaction_cache_metrics: Arc<SubmittedTransactionCacheMetrics>,
+        fullnode_sync_mode: Option<FullNodeSyncMode>,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -1081,7 +1082,13 @@ impl AuthorityPerEpochStore {
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
 
-        let epoch_alive_notify = NotifyOnce::new();
+        let signed_effects_digests_cache = DashMap::new();
+        for item in tables.signed_effects_digests.safe_iter() {
+            let (tx_digest, effects_digest) = item?;
+            signed_effects_digests_cache.insert(tx_digest, effects_digest);
+        }
+
+        let epoch_alive_token = CancellationToken::new();
 
         assert_eq!(
             epoch_start_configuration.epoch_start_state().epoch(),
@@ -1233,7 +1240,7 @@ impl AuthorityPerEpochStore {
             parent_path: parent_path.to_path_buf(),
             db_options,
             reconfig_state_mem: RwLock::new(reconfig_state),
-            epoch_alive_notify,
+            epoch_alive_token,
             user_certs_closed_notify: NotifyOnce::new(),
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
@@ -1242,6 +1249,7 @@ impl AuthorityPerEpochStore {
             checkpoint_state_notify_read: NotifyRead::new(),
             running_root_notify_read: NotifyRead::new(),
             executed_digests_notify_read: NotifyRead::new(),
+            signed_effects_digests_cache,
             end_of_publish: Mutex::new(end_of_publish),
             mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
             version_assignment_mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
@@ -1263,8 +1271,7 @@ impl AuthorityPerEpochStore {
             tx_reject_reason_cache,
             submitted_transaction_cache,
             finalized_transactions_cache,
-            settlement_registrations: Default::default(),
-            barrier_registrations: Default::default(),
+            node_role: NodeRole::from_committee(&committee, &name, fullnode_sync_mode),
         });
 
         s.update_buffer_stake_metric();
@@ -1320,6 +1327,7 @@ impl AuthorityPerEpochStore {
         mut randomness_manager: RandomnessManager,
     ) -> SuiResult<()> {
         let reporter = randomness_manager.reporter();
+
         let result = randomness_manager.start_dkg().await;
         if self
             .randomness_manager
@@ -1330,10 +1338,19 @@ impl AuthorityPerEpochStore {
                 "BUG: `set_randomness_manager` called more than once; this should never happen"
             );
         }
-        if self.randomness_reporter.set(reporter).is_err() {
-            debug_fatal!(
-                "BUG: `set_randomness_manager` called more than once; this should never happen"
-            );
+        match reporter {
+            Some(reporter) => {
+                if self.randomness_reporter.set(reporter).is_err() {
+                    debug_fatal!(
+                        "BUG: `set_randomness_manager` called more than once; this should never happen"
+                    );
+                }
+            }
+            None => {
+                if self.node_role.is_validator() {
+                    debug_fatal!("expected a RandomnessReporter for a validator");
+                }
+            }
         }
         result
     }
@@ -1433,6 +1450,7 @@ impl AuthorityPerEpochStore {
         object_store: Arc<dyn ObjectStore + Send + Sync>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         epoch_last_checkpoint: CheckpointSequenceNumber,
+        fullnode_sync_mode: Option<FullNodeSyncMode>,
     ) -> SuiResult<Arc<Self>> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
@@ -1455,6 +1473,7 @@ impl AuthorityPerEpochStore {
             epoch_last_checkpoint,
             epoch_last_checkpoint,
             self.submitted_transaction_cache.metrics(),
+            fullnode_sync_mode,
         )
     }
 
@@ -1479,6 +1498,7 @@ impl AuthorityPerEpochStore {
             object_store,
             expensive_safety_check_config,
             epoch_last_checkpoint,
+            None,
         )
         .expect("failed to create new authority per epoch store")
     }
@@ -1887,18 +1907,6 @@ impl AuthorityPerEpochStore {
             .map(|t| t.into()))
     }
 
-    #[instrument(level = "trace", skip_all)]
-    pub fn insert_tx_cert_sig(
-        &self,
-        tx_digest: &TransactionDigest,
-        cert_sig: &AuthorityStrongQuorumSignInfo,
-    ) -> SuiResult {
-        let tables = self.tables()?;
-        Ok(tables
-            .transaction_cert_signatures
-            .insert(tx_digest, cert_sig)?)
-    }
-
     /// Record that a transaction has been executed in the current epoch.
     /// Used by checkpoint builder to cull dependencies from previous epochs.
     #[instrument(level = "trace", skip_all)]
@@ -1946,86 +1954,6 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    pub(crate) fn notify_settlement_transactions_ready(
-        &self,
-        tx_key: TransactionKey,
-        txns: Vec<VerifiedExecutableTransaction>,
-    ) {
-        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
-        let mut registrations = self.settlement_registrations.lock();
-        if let Some(registration) = registrations.remove(&tx_key) {
-            let SettlementRegistration::Waiting(tx) = registration else {
-                fatal!("Settlement registration should be waiting");
-            };
-            // Receiver is held in a `within_alive_epoch` task, so it may have
-            // been dropped already.
-            tx.send(txns).ok();
-        } else {
-            registrations.insert(tx_key, SettlementRegistration::Ready(txns));
-        }
-    }
-
-    pub(crate) async fn wait_for_settlement_transactions(
-        &self,
-        key: TransactionKey,
-    ) -> Vec<VerifiedExecutableTransaction> {
-        let rx = {
-            let mut registrations = self.settlement_registrations.lock();
-            if let Some(registration) = registrations.remove(&key) {
-                let SettlementRegistration::Ready(txns) = registration else {
-                    fatal!("Settlement registration should be ready");
-                };
-                return txns;
-            } else {
-                let (tx, rx) = oneshot::channel();
-                registrations.insert(key, SettlementRegistration::Waiting(tx));
-                rx
-            }
-        };
-
-        rx.await.unwrap()
-    }
-
-    pub(crate) fn notify_barrier_transaction_ready(
-        &self,
-        tx_key: TransactionKey,
-        txn: VerifiedExecutableTransaction,
-    ) {
-        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
-        let mut registrations = self.barrier_registrations.lock();
-        if let Some(registration) = registrations.remove(&tx_key) {
-            let BarrierRegistration::Waiting(tx) = registration else {
-                fatal!("Barrier registration should be waiting");
-            };
-            // Receiver may have been dropped if the scheduler cancelled its wait
-            // (e.g. checkpoint executor already executed this transaction).
-            tx.send(txn).ok();
-        } else {
-            registrations.insert(tx_key, BarrierRegistration::Ready(Box::new(txn)));
-        }
-    }
-
-    pub(crate) async fn wait_for_barrier_transaction(
-        &self,
-        key: TransactionKey,
-    ) -> VerifiedExecutableTransaction {
-        let rx = {
-            let mut registrations = self.barrier_registrations.lock();
-            if let Some(registration) = registrations.remove(&key) {
-                let BarrierRegistration::Ready(txn) = registration else {
-                    fatal!("Barrier registration should be ready");
-                };
-                return *txn;
-            } else {
-                let (tx, rx) = oneshot::channel();
-                registrations.insert(key, BarrierRegistration::Waiting(tx));
-                rx
-            }
-        };
-
-        rx.await.unwrap()
-    }
-
     pub fn insert_effects_digest_and_signature(
         &self,
         tx_digest: &TransactionDigest,
@@ -2040,6 +1968,8 @@ impl AuthorityPerEpochStore {
             [(tx_digest, effects_digest)],
         )?;
         batch.write()?;
+        self.signed_effects_digests_cache
+            .insert(*tx_digest, *effects_digest);
         Ok(())
     }
 
@@ -2081,15 +2011,22 @@ impl AuthorityPerEpochStore {
         &self,
         tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<TransactionEffectsDigest>> {
-        let tables = self.tables()?;
-        Ok(tables.signed_effects_digests.get(tx_digest)?)
-    }
-
-    pub fn get_transaction_cert_sig(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> SuiResult<Option<AuthorityStrongQuorumSignInfo>> {
-        Ok(self.tables()?.transaction_cert_signatures.get(tx_digest)?)
+        let cached = self.signed_effects_digests_cache.get(tx_digest).map(|r| *r);
+        if in_test_configuration() {
+            let from_db = self.tables()?.signed_effects_digests.get(tx_digest)?;
+            if cached != from_db {
+                // Cache and DB writes are not atomic, so retry after a brief delay
+                // to allow eventual consistency before panicking.
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                let from_db = self.tables()?.signed_effects_digests.get(tx_digest)?;
+                let cached = self.signed_effects_digests_cache.get(tx_digest).map(|r| *r);
+                assert_eq!(
+                    cached, from_db,
+                    "signed_effects_digests cache inconsistency for {tx_digest}"
+                );
+            }
+        }
+        Ok(cached)
     }
 
     /// Gets owned object locks, checking quarantine first then falling back to DB.
@@ -2292,6 +2229,10 @@ impl AuthorityPerEpochStore {
         let mut quarantine = self.consensus_quarantine.write();
         quarantine.update_highest_executed_checkpoint(seq, self, &mut batch)?;
         batch.write()?;
+
+        for digest in digests {
+            self.signed_effects_digests_cache.remove(digest);
+        }
 
         self.consensus_output_cache
             .remove_executed_in_epoch(digests);
@@ -3123,20 +3064,13 @@ impl AuthorityPerEpochStore {
 
     /// Notify epoch is terminated, can only be called once on epoch store
     pub async fn epoch_terminated(&self) {
-        // Notify interested tasks that epoch has ended
-        self.epoch_alive_notify
-            .notify()
-            .expect("epoch_terminated called twice on same epoch store");
+        // Signal all in-flight tasks that epoch has ended
+        self.epoch_alive_token.cancel();
         // This `write` acts as a barrier - it waits for futures executing in
         // `within_alive_epoch` to terminate before we can continue here
         info!("Epoch terminated - waiting for pending tasks to complete");
         *self.epoch_alive.write().await = false;
         info!("All pending epoch tasks completed");
-    }
-
-    /// Waits for the notification about epoch termination
-    pub async fn wait_epoch_terminated(&self) {
-        self.epoch_alive_notify.wait().await
     }
 
     /// This function executes given future until epoch_terminated is called
@@ -3153,11 +3087,9 @@ impl AuthorityPerEpochStore {
         if !*guard {
             return Err(());
         }
-        let terminated = self.wait_epoch_terminated().boxed();
-        let f = f.boxed();
-        match select(terminated, f).await {
-            Either::Left((_, _f)) => Err(()),
-            Either::Right((result, _)) => Ok(result),
+        tokio::select! {
+            _ = self.epoch_alive_token.cancelled() => Err(()),
+            result = f => Ok(result),
         }
     }
 
@@ -3333,14 +3265,6 @@ impl AuthorityPerEpochStore {
             .expect("test should not be write past end of epoch")
     }
 
-    pub(crate) fn calculate_pending_checkpoint_height(&self, consensus_round: u64) -> u64 {
-        if self.randomness_state_enabled() {
-            consensus_round * 2
-        } else {
-            consensus_round
-        }
-    }
-
     // Assigns shared object versions to transactions and updates the next shared object version state.
     // Shared object versions in cancelled transactions are assigned to special versions that will
     // cause the transactions to be cancelled in execution engine.
@@ -3448,12 +3372,7 @@ impl AuthorityPerEpochStore {
         debug!(
             checkpoint_commit_height = checkpoint.height(),
             "Pending checkpoint has {} roots",
-            checkpoint.roots().len(),
-        );
-        trace!(
-            checkpoint_commit_height = checkpoint.height(),
-            "Transaction roots for pending checkpoint: {:?}",
-            checkpoint.roots()
+            checkpoint.num_roots(),
         );
 
         output.insert_pending_checkpoint(checkpoint.clone());
@@ -3478,61 +3397,21 @@ impl AuthorityPerEpochStore {
             .pending_checkpoint_exists(index))
     }
 
-    pub(crate) fn write_pending_checkpoint_v2(
-        &self,
-        output: &mut ConsensusCommitOutput,
-        checkpoint: &PendingCheckpointV2,
-    ) -> SuiResult {
-        assert!(
-            !self.pending_checkpoint_exists_v2(&checkpoint.height())?,
-            "Duplicate pending checkpoint notification at height {:?}",
-            checkpoint.height()
-        );
-
-        debug!(
-            checkpoint_commit_height = checkpoint.height(),
-            "Pending checkpoint has {} roots",
-            checkpoint.num_roots(),
-        );
-
-        output.insert_pending_checkpoint_v2(checkpoint.clone());
-
-        Ok(())
-    }
-
-    pub fn get_pending_checkpoints_v2(
-        &self,
-        last: Option<CheckpointHeight>,
-    ) -> SuiResult<Vec<(CheckpointHeight, PendingCheckpointV2)>> {
-        Ok(self
-            .consensus_quarantine
-            .read()
-            .get_pending_checkpoints_v2(last))
-    }
-
-    fn pending_checkpoint_exists_v2(&self, index: &CheckpointHeight) -> SuiResult<bool> {
-        Ok(self
-            .consensus_quarantine
-            .read()
-            .pending_checkpoint_exists_v2(index))
-    }
-
     pub fn process_constructed_checkpoint(
         &self,
         commit_height: CheckpointHeight,
-        content_info: NonEmpty<(CheckpointSummary, CheckpointContents)>,
+        content_info: (CheckpointSummary, CheckpointContents),
     ) {
         let mut consensus_quarantine = self.consensus_quarantine.write();
-        for (position_in_commit, (summary, transactions)) in content_info.into_iter().enumerate() {
-            let sequence_number = summary.sequence_number;
-            let summary = BuilderCheckpointSummary {
-                summary,
-                checkpoint_height: Some(commit_height),
-                position_in_commit,
-            };
+        let (summary, transactions) = content_info;
+        let sequence_number = summary.sequence_number;
+        let summary = BuilderCheckpointSummary {
+            summary,
+            checkpoint_height: Some(commit_height),
+            position_in_commit: 0,
+        };
 
-            consensus_quarantine.insert_builder_summary(sequence_number, summary, transactions);
-        }
+        consensus_quarantine.insert_builder_summary(sequence_number, summary, transactions);
 
         // Because builder can run behind state sync, the data may be immediately ready to be committed.
         consensus_quarantine
@@ -3818,9 +3697,14 @@ impl AuthorityPerEpochStore {
             .get_observations()
     }
 
+    /// Returns the role of this node for the current epoch.
+    pub fn node_role(&self) -> NodeRole {
+        self.node_role
+    }
+
     /// Whether this node is a validator in this epoch.
     pub fn is_validator(&self) -> bool {
-        self.committee.authority_exists(&self.name)
+        self.node_role().is_validator()
     }
 }
 

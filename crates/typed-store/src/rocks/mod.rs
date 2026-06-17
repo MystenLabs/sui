@@ -259,15 +259,14 @@ impl Database {
                 .map(|r| Ok(r.map(GetResult::InMemory)))
                 .collect(),
             #[cfg(tidehunter)]
-            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => {
-                let res = keys.into_iter().map(|k| {
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => keys
+                .into_iter()
+                .map(|k| {
                     db.get(*ks, &transform_th_key(k.as_ref(), prefix))
                         .map_err(typed_store_error_from_th_error)
-                });
-                res.into_iter()
-                    .map(|r| r.map(|item| item.map(GetResult::TideHunter)))
-                    .collect()
-            }
+                        .map(|item| item.map(|bytes| GetResult::TideHunter(bytes.into_owned())))
+                })
+                .collect(),
             _ => unreachable!("typed store invariant violation"),
         }
     }
@@ -423,6 +422,29 @@ impl Database {
         Ok(())
     }
 
+    /// Wait for tidehunter background threads to finish.
+    ///
+    /// Consumes the `Arc<Database>`. Caller must ensure no other clones of this
+    /// `Arc<Database>` (e.g. via `DBMap::db`) are alive — otherwise the inner
+    /// `Arc<TideHunterDb>` strong count will not reach zero and the wait will
+    /// poll until it panics.
+    #[cfg(tidehunter)]
+    pub fn wait_for_tidehunter_background_threads(self: Arc<Self>) {
+        let strong = Arc::strong_count(&self);
+        if strong != 1 {
+            println!(
+                "WARNING: wait_for_tidehunter_background_threads called with Arc<Database> strong_count={} (expected 1); other clones will keep the inner tidehunter Db alive and the wait may panic on timeout",
+                strong,
+            );
+        }
+        let Storage::TideHunter(th_arc) = &self.storage else {
+            return;
+        };
+        let th_arc = th_arc.clone();
+        drop(self);
+        th_arc.wait_for_background_threads_to_finish();
+    }
+
     #[cfg(tidehunter)]
     pub fn drop_cells_in_range(
         &self,
@@ -525,6 +547,9 @@ pub struct MetricConf {
     pub read_sample_interval: SamplingInterval,
     pub write_sample_interval: SamplingInterval,
     pub iter_sample_interval: SamplingInterval,
+    /// When true and the database is opened with the tidehunter backend, each
+    /// committed `WriteBatch` is written as a single lz4-compressed WAL entry.
+    pub enable_th_batch_compression: bool,
 }
 
 impl MetricConf {
@@ -537,16 +562,18 @@ impl MetricConf {
             read_sample_interval: SamplingInterval::default(),
             write_sample_interval: SamplingInterval::default(),
             iter_sample_interval: SamplingInterval::default(),
+            enable_th_batch_compression: false,
         }
     }
 
-    pub fn with_sampling(self, read_interval: SamplingInterval) -> Self {
-        Self {
-            db_name: self.db_name,
-            read_sample_interval: read_interval,
-            write_sample_interval: SamplingInterval::default(),
-            iter_sample_interval: SamplingInterval::default(),
-        }
+    pub fn with_sampling(mut self, read_interval: SamplingInterval) -> Self {
+        self.read_sample_interval = read_interval;
+        self
+    }
+
+    pub fn with_th_batch_compression(mut self) -> Self {
+        self.enable_th_batch_compression = true;
+        self
     }
 }
 const CF_METRICS_REPORT_PERIOD_SECS: u64 = 30;
@@ -1145,7 +1172,7 @@ impl<K, V> DBMap<K, V> {
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound);
+                    apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound, prefix);
                     iter.reverse();
                     Ok(Box::new(transform_th_iterator(
                         iter,
@@ -1829,7 +1856,7 @@ where
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, lower_bound, upper_bound);
+                    apply_range_bounds(&mut iter, lower_bound, upper_bound, prefix);
                     Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
                 }
                 _ => unreachable!("storage backend invariant violation"),
@@ -1862,7 +1889,7 @@ where
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, lower_bound, upper_bound);
+                    apply_range_bounds(&mut iter, lower_bound, upper_bound, prefix);
                     Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
                 }
                 _ => unreachable!("storage backend invariant violation"),

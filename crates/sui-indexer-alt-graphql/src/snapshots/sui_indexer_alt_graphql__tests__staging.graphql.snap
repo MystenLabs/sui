@@ -88,6 +88,16 @@ type Address implements Node & IAddressable {
 	"""
 	asObject: Object
 	"""
+	How this address (interpreted as an object ID) was referenced by a specific transaction.
+	
+	Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
+	
+	The `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.
+	
+	Passing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.
+	"""
+	asTransactionObject(transactionDigest: String): TransactionObject
+	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
 	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
@@ -3504,11 +3514,13 @@ type Query {
 	"""
 	chainIdentifier: String!
 	"""
-	Fetch a checkpoint by its sequence number, or the latest checkpoint if no sequence number is provided.
+	Fetch a checkpoint by its sequence number or digest, or the latest checkpoint if neither is provided.
+	
+	It is an error to specify both `sequenceNumber` and `digest`.
 	
 	Returns `null` if the checkpoint does not exist in the store, either because it never existed or because it was pruned.
 	"""
-	checkpoint(sequenceNumber: UInt53): Checkpoint
+	checkpoint(sequenceNumber: UInt53, digest: String): Checkpoint
 	"""
 	Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
 	"""
@@ -4066,6 +4078,26 @@ type Subscription {
 	This subscription is not yet available for use.
 	"""
 	checkpoints: Checkpoint!
+	"""
+	Subscribe to events as they are emitted, with optional filtering.
+	
+	Each matching event is yielded individually as it appears in finalized
+	checkpoints. Events are ordered by checkpoint, then by transaction
+	position within the checkpoint, then by position within the transaction.
+	
+	This subscription is not yet available for use.
+	"""
+	events(filter: EventFilter): Event!
+	"""
+	Subscribe to transactions as they are finalized, with optional filtering.
+	
+	Each matching transaction is yielded individually as it appears in finalized
+	checkpoints. Transactions are ordered by checkpoint, then by position within
+	the checkpoint.
+	
+	This subscription is not yet available for use.
+	"""
+	transactions(filter: TransactionFilter): Transaction!
 }
 
 """
@@ -4247,6 +4279,10 @@ type TransactionEffects {
 	The unchanged consensus-managed objects that were referenced by this transaction.
 	"""
 	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection
+	"""
+	The schema version of the effects struct.
+	"""
+	version: Int
 }
 
 input TransactionFilter {
@@ -4340,6 +4376,11 @@ enum TransactionKindInput {
 	"""
 	PROGRAMMABLE_TX
 }
+
+"""
+An object as it appears in a specific transaction. The variant discriminates whether the object was changed by the transaction or read as an unchanged consensus (shared) input.
+"""
+union TransactionObject = ObjectChange | ConsensusObjectRead
 
 """
 Transfers `inputs` to `address`. All inputs must have the `store` ability (allows public transfer) and must not be previously immutable or shared.

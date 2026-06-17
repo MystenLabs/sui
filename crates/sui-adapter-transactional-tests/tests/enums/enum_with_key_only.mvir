@@ -4,14 +4,14 @@
 //# init --addresses test=0x0
 
 //# publish 
-module 0x0::f {
+mvir 0x0::f {
     import 0x2::transfer;
 
-    enum X has key {
+    public enum X has key {
         A { } 
     }
 
-    public transfer() {
+    public fun transfer() {
         let x: Self::X;
         label l0:
             x = X::A { };
@@ -19,7 +19,7 @@ module 0x0::f {
         return;
     }
 
-    public share() {
+    public fun share() {
         let x: Self::X;
         label l0:
             x = X::A { };
@@ -27,7 +27,7 @@ module 0x0::f {
         return;
     }
 
-    public freezer() {
+    public fun freezer() {
         let x: Self::X;
         label l0:
             x = X::A { };

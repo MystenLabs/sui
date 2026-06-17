@@ -8,9 +8,9 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// This file sits in: docs/content/sidebars/
-// Content root is one level up from here:
-const CONTENT_ROOT = path.resolve(__dirname, '..');
+// This file sits in: docs/content/
+// Content root is this directory:
+const CONTENT_ROOT = __dirname;
 
 function dirExists(rel) {
   return fs.existsSync(path.join(CONTENT_ROOT, rel));
@@ -90,6 +90,7 @@ const references = [
 			'references/cli/cheatsheet',
 			'references/cli/client',
 			'references/cli/ptb',
+			'references/cli/completion',
 			'references/cli/keytool',
 			'references/cli/external-signers',
 			'references/cli/move',
@@ -118,6 +119,7 @@ const references = [
 			id: 'references/sui-sdks',
 		},
 		items: [
+			'references/sdk-comparison',
 			{
 				type: 'link',
 				label: 'dApp Kit',
@@ -214,6 +216,7 @@ const references = [
 			'references/contribute/code-of-conduct',
 			'references/contribute/style-guide',
 			'references/contribute/mdx-components',
+			'references/contribute/diagram-standards',
 		],
 	},
 ];

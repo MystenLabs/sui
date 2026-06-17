@@ -8,7 +8,7 @@ mod consensus_tests {
 
     use consensus_config::{
         Authority, AuthorityIndex, AuthorityName, Committee, ConsensusProtocolConfig, Epoch,
-        NetworkKeyPair, ProtocolKeyPair, Stake,
+        NetworkKeyPair, Parameters, ProtocolKeyPair, Stake,
     };
     use consensus_core::NoopTransactionVerifier;
     use consensus_core::{BlockAPI, BlockStatus, TransactionVerifier, ValidationError};
@@ -16,7 +16,7 @@ mod consensus_tests {
     use consensus_types::block::{BlockRef, TransactionIndex};
     use fastcrypto::traits::{KeyPair as _, ToFromBytes as _};
     use mysten_metrics::RegistryService;
-    use mysten_network::Multiaddr;
+    use mysten_network::{Multiaddr, multiaddr::Protocol};
     use prometheus::Registry;
     use rand::{Rng, SeedableRng as _, rngs::StdRng};
     use sui_config::local_ip_utils;
@@ -67,15 +67,22 @@ mod consensus_tests {
         for (authority_index, _authority_info) in committee.authorities() {
             // Introduce a non-trivial clock drift for the first node (it's time will be ahead of the others). This will provide extra reassurance
             // around the block timestamp checks.
+            let db_dir = Arc::new(TempDir::new().unwrap());
+            let mut params = default_parameters();
+            params.db_path = db_dir.path().to_path_buf();
+
             let config = Config {
                 authority_index,
-                db_dir: Arc::new(TempDir::new().unwrap()),
+                db_dir,
                 committee: committee.clone(),
                 keypairs: keypairs.clone(),
                 boot_counter: boot_counters[authority_index],
                 protocol_config: protocol_config.clone(),
                 clock_drift: clock_drifts[authority_index.value() as usize],
                 transaction_verifier: Arc::new(NoopTransactionVerifier {}),
+                parameters: params,
+                observer_network_keypair: None,
+                observer_ip: None,
             };
             let node = AuthorityNode::new(config);
 
@@ -153,9 +160,13 @@ mod consensus_tests {
         for (authority_index, _authority_info) in committee.authorities() {
             // Introduce clock drifts for the first three nodes (their time will be ahead of the others).
             // This will provide extra reassurance around the block timestamp checks.
+            let db_dir = Arc::new(TempDir::new().unwrap());
+            let mut params = default_parameters();
+            params.db_path = db_dir.path().to_path_buf();
+
             let config = Config {
                 authority_index,
-                db_dir: Arc::new(TempDir::new().unwrap()),
+                db_dir,
                 committee: committee.clone(),
                 keypairs: keypairs.clone(),
                 boot_counter: boot_counters[authority_index],
@@ -164,6 +175,9 @@ mod consensus_tests {
                 transaction_verifier: Arc::new(RandomizedTransactionVerifier::new(
                     REJECTION_PROBABILITY,
                 )),
+                parameters: params,
+                observer_network_keypair: None,
+                observer_ip: None,
             };
             let node = AuthorityNode::new(config);
             node.start().await.unwrap();
@@ -325,6 +339,210 @@ mod consensus_tests {
             total_rejected_transactions
         );
     }
+
+    // Test with multiple Observer nodes in a chain
+    #[sim_test(config = "test_config()")]
+    async fn test_observer_chain_connectivity() {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+
+        const NUM_OF_AUTHORITIES: usize = 4;
+        const NUM_TRANSACTIONS: u16 = 300;
+
+        // Create committee and validators
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(5);
+
+        let mut authorities = Vec::with_capacity(committee.size());
+        let mut transaction_clients = Vec::with_capacity(committee.size());
+        let mut boot_counters = [0; NUM_OF_AUTHORITIES];
+
+        // Start validators with observer server support enabled
+        // Note: In production, validators would need observer server ports configured
+        for (authority_index, _) in committee.authorities() {
+            let db_dir = Arc::new(TempDir::new().unwrap());
+            let mut parameters = default_parameters();
+            parameters.db_path = db_dir.path().to_path_buf();
+            parameters.observer.server_port = Some(9600 + authority_index.value() as u16);
+
+            let config = Config {
+                authority_index,
+                db_dir,
+                committee: committee.clone(),
+                keypairs: keypairs.clone(),
+                boot_counter: boot_counters[authority_index],
+                protocol_config: protocol_config.clone(),
+                clock_drift: 0,
+                transaction_verifier: Arc::new(NoopTransactionVerifier {}),
+                parameters,
+                observer_network_keypair: None,
+                observer_ip: None,
+            };
+            let node = AuthorityNode::new(config);
+            node.start().await.unwrap();
+            node.spawn_committed_subdag_consumer().unwrap();
+            transaction_clients.push(node.transaction_client());
+            boot_counters[authority_index] += 1;
+            authorities.push(node);
+        }
+
+        // Pre-allocate IPs for Observer nodes so we can configure them properly
+        let observer1_ip = local_ip_utils::get_new_ip();
+        let observer2_ip = local_ip_utils::get_new_ip();
+
+        // Create Observer 1 - connects to validator
+        let observer1_dir = Arc::new(TempDir::new().unwrap());
+        let observer1_keypair =
+            NetworkKeyPair::generate(&mut rand::rngs::StdRng::from_seed([42; 32]));
+
+        // Configure Observer 1 to connect to validator 0's observer server port
+        let validator_index = AuthorityIndex::new_for_test(0);
+        let validator_info = committee.authority(validator_index);
+
+        // Extract IP from validator's address and swap port to observer port
+        let validator_observer_port = 9600 + validator_index.value() as u16;
+        let validator_observer_address =
+            replace_port_in_multiaddr(&validator_info.address, validator_observer_port)
+                .expect("Failed to create observer address");
+
+        let mut observer1_params = default_parameters();
+        observer1_params.db_path = observer1_dir.path().to_path_buf();
+        observer1_params.observer = consensus_config::ObserverParameters {
+            // Enable observer server on Observer 1 (port 9610) so Observer 2 can connect
+            server_port: Some(9610),
+            // Connect to validator 0's observer server port
+            peers: vec![consensus_config::PeerRecord {
+                public_key: validator_info.network_key.clone(),
+                address: validator_observer_address,
+            }],
+            ..Default::default()
+        };
+
+        tracing::info!(
+            "Starting Observer 1 (connects to validator) with IP {}",
+            observer1_ip
+        );
+
+        // Create Observer 1 using AuthorityNode with pre-allocated IP
+        let observer1_config = Config {
+            authority_index: AuthorityIndex::new_for_test(100), // Use a high index for Observer
+            db_dir: observer1_dir,
+            committee: committee.clone(),
+            keypairs: keypairs.clone(), // Observer won't use these
+            boot_counter: 0,
+            protocol_config: protocol_config.clone(),
+            clock_drift: 0,
+            transaction_verifier: Arc::new(NoopTransactionVerifier {}),
+            parameters: observer1_params,
+            observer_network_keypair: Some(observer1_keypair.clone()),
+            observer_ip: Some(observer1_ip.clone()), // Pass the pre-allocated IP
+        };
+
+        let observer1 = AuthorityNode::new(observer1_config);
+        observer1.start().await.unwrap();
+        observer1.spawn_committed_subdag_consumer().unwrap();
+        let observer1_monitor = observer1.commit_consumer_monitor();
+
+        // Create Observer 2 - connects to Observer 1
+        let observer2_dir = Arc::new(TempDir::new().unwrap());
+        let observer2_keypair =
+            NetworkKeyPair::generate(&mut rand::rngs::StdRng::from_seed([99; 32]));
+
+        // Create an address for Observer 1's observer server using the pre-allocated IP
+        let observer1_address = format!("/ip4/{}/udp/9610", observer1_ip).parse().unwrap();
+
+        let mut observer2_params = default_parameters();
+        observer2_params.db_path = observer2_dir.path().to_path_buf();
+        observer2_params.observer = consensus_config::ObserverParameters {
+            // Configure to connect to Observer 1's observer server at port 9610
+            peers: vec![consensus_config::PeerRecord {
+                public_key: observer1_keypair.public().clone(),
+                address: observer1_address,
+            }],
+            ..Default::default()
+        };
+
+        tracing::info!(
+            "Starting Observer 2 (connects to Observer 1) with IP {}",
+            observer2_ip
+        );
+
+        // Create Observer 2 using AuthorityNode with pre-allocated IP
+        let observer2_config = Config {
+            authority_index: AuthorityIndex::new_for_test(101), // Use a different high index for Observer 2
+            db_dir: observer2_dir,
+            committee: committee.clone(),
+            keypairs: keypairs.clone(), // Observer won't use these
+            boot_counter: 0,
+            protocol_config: protocol_config.clone(),
+            clock_drift: 0,
+            transaction_verifier: Arc::new(NoopTransactionVerifier {}),
+            parameters: observer2_params,
+            observer_network_keypair: Some(observer2_keypair.clone()),
+            observer_ip: Some(observer2_ip.clone()), // Pass the pre-allocated IP
+        };
+
+        let observer2 = AuthorityNode::new(observer2_config);
+        observer2.start().await.unwrap();
+        observer2.spawn_committed_subdag_consumer().unwrap();
+        let observer2_monitor = observer2.commit_consumer_monitor();
+
+        // Wait for all nodes to establish connections
+        tracing::info!("Waiting for nodes to establish connections...");
+        sleep(Duration::from_secs(5)).await;
+
+        // Submit transactions from validators
+        tracing::info!("Submitting {} transactions", NUM_TRANSACTIONS);
+        for i in 0..NUM_TRANSACTIONS {
+            let txn = vec![i as u8; 16];
+            transaction_clients[i as usize % transaction_clients.len()]
+                .submit(vec![txn])
+                .await
+                .unwrap();
+            if i % 50 == 0 {
+                sleep(Duration::from_millis(200)).await;
+            }
+        }
+
+        // Wait for processing and syncing
+        tracing::info!("Waiting for processing and syncing...");
+        sleep(Duration::from_secs(15)).await;
+
+        // Check progress of all nodes
+        let validator_commits = authorities[0]
+            .commit_consumer_monitor()
+            .highest_handled_commit();
+        let observer1_commits = observer1_monitor.highest_handled_commit();
+        let observer2_commits = observer2_monitor.highest_handled_commit();
+
+        // Validators should definitely make progress
+        assert!(
+            validator_commits > 10,
+            "Validators should make significant progress"
+        );
+
+        // Give observers a chance to sync by checking if they're making progress
+        // Note: Observers may take time to sync, so we check for any progress
+        const MAX_COMMIT_DIFFERENCE: u32 = 10;
+        assert!(
+            validator_commits - observer1_commits <= MAX_COMMIT_DIFFERENCE,
+            "Observer 1 should make progress"
+        );
+        assert!(
+            validator_commits - observer2_commits <= MAX_COMMIT_DIFFERENCE,
+            "Observer 2 should make progress"
+        );
+
+        // Clean up
+        observer1.stop();
+        observer2.stop();
+        for authority in authorities {
+            authority.stop();
+        }
+    }
+
     /// Creates a committee for local testing, and the corresponding key pairs for the authorities.
     pub fn local_committee_and_keys(
         epoch: Epoch,
@@ -357,6 +575,30 @@ mod consensus_tests {
         let ip = local_ip_utils::get_new_ip();
 
         local_ip_utils::new_udp_address_for_testing(&ip)
+    }
+
+    // Helper function to create default parameters with custom db_path
+    fn default_parameters() -> Parameters {
+        consensus_simtests::node::default_parameters()
+    }
+
+    // Helper function to replace the port in a Multiaddr
+    fn replace_port_in_multiaddr(addr: &Multiaddr, new_port: u16) -> Result<Multiaddr, String> {
+        let mut iter = addr.iter();
+        match (iter.next(), iter.next()) {
+            (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(_))) => {
+                Ok(format!("/ip4/{}/udp/{}", ipaddr, new_port).parse().unwrap())
+            }
+            (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(_))) => {
+                Ok(format!("/ip6/{}/udp/{}", ipaddr, new_port).parse().unwrap())
+            }
+            (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(_))) => {
+                Ok(format!("/dns/{}/udp/{}", hostname, new_port)
+                    .parse()
+                    .unwrap())
+            }
+            _ => Err(format!("Unsupported multiaddr format: {}", addr)),
+        }
     }
 
     // Transaction verifier with randomized voting.

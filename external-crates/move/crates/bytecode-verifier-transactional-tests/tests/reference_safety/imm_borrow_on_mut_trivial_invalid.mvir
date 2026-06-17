@@ -1,14 +1,14 @@
 //# publish
-module 0x1::Tester {
-    struct X { f: u64 }
+mvir 0x1::Tester {
+    public struct X { f: u64 }
 
-    bump_and_give(x_ref: &mut Self::X): &u64 {
+    fun bump_and_give(x_ref: &mut Self::X): &u64 {
     label b0:
         *(&mut copy(x_ref).X::f) = *&mut copy(x_ref).X::f + 1;
         return &move(x_ref).X::f;
     }
 
-    contrived_example_no(x_ref: &mut Self::X): &u64 {
+    fun contrived_example_no(x_ref: &mut Self::X): &u64 {
         let returned_ref: &u64;
     label b0:
         returned_ref = Self::bump_and_give(copy(x_ref));
@@ -17,7 +17,7 @@ module 0x1::Tester {
         return move(returned_ref);
     }
 
-    contrived_example_valid(x_ref: &mut Self::X): &u64 {
+    fun contrived_example_valid(x_ref: &mut Self::X): &u64 {
         let returned_ref: &u64;
     label b0:
         returned_ref = Self::bump_and_give(copy(x_ref));

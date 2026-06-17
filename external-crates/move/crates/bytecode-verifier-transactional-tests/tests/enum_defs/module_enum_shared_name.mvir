@@ -1,7 +1,7 @@
 //# publish
-module 0x42::M {
-    enum M has drop { V { } }
-    public new(): Self::M {
+mvir 0x42::M {
+    public enum M has drop { V { } }
+    public fun new(): Self::M {
     label b0:
         return M::V { };
     }
@@ -9,10 +9,10 @@ module 0x42::M {
 
 //# run
 
-module 0x43::m {
+mvir 0x43::m {
 import 0x42::M;
 
-entry foo() {
+entry fun foo() {
     let x: M::M;
 label b0:
     x = M::new();

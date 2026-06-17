@@ -158,22 +158,22 @@
 //! ## Modules
 //! ```text
 //! sdecl ∈ StructDecl ::=
-//!   | resource n { f_1: t_1, ..., f_j: t_j } // declaration of a resource struct
-//!   | struct n { f_1: t_1, ..., f_j: t_j }   // declaration of a non-resource (value) struct
-//!                                            // s.t. any 't_i' is not of resource kind
+//!   | public struct n { f_1: t_1, ..., f_j: t_j } // declaration of a struct;
+//!                                                 // currently `public` is the only supported visibility
 //!
 //! body ∈ ProcedureBody ::=
 //!  | let x_1; ... let x_j; s // The locals declared in this procedure, and the code for that procedure
 //!
 //! pdecl ∈ ProcedureDecl ::=
-//!   | (public?) p(x_1: 𝛕_1, ..., x_j: 𝛕_j): 𝛕-list { body } // declaration of a defined procedure
-//!                                                          // the procedure may be public, or internal to the module
-//!   | native (public?) p(x_1: 𝛕_1, ..., x_j: 𝛕_j): 𝛕-list; // declaration of a native procedure
-//!                                                         // the implementation is provided by the VM
-//!                                                         // the procedure may be public, or internal to the module
+//!   | (public?) fun p(x_1: 𝛕_1, ..., x_j: 𝛕_j): 𝛕-list { body } // declaration of a defined procedure
+//!                                                              // the procedure may be public, or internal to the module
+//!   | native (public?) fun p(x_1: 𝛕_1, ..., x_j: 𝛕_j): 𝛕-list; // declaration of a native procedure
+//!                                                             // the implementation is provided by the VM
+//!                                                             // the procedure may be public, or internal to the module
 //!
 //! mdecl ∈ ModuleDecl ::=
-//!   | module m { idecl_1 ... idecl_i sdecl_1 ... sdecl_j pdecl_1 ... pdecl_k }
+//!   | mvir m { idecl_1 ... idecl_i sdecl_1 ... sdecl_j pdecl_1 ... pdecl_k } // module declaration; `mvir` (rather than Move source's `module`)
+//!                                                                            // makes it visually obvious that a snippet is IR, not source
 //! ```
 //!
 //! ## Transaction Scripts

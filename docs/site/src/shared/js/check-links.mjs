@@ -1,5 +1,7 @@
+/*
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+*/
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import { resolve, dirname, join, extname } from "node:path";
@@ -221,7 +223,12 @@ async function main() {
     process.exit(0);
   }
 
-  console.log(`❌ Found ${brokenLinks} broken link${brokenLinks === 1 ? "" : "s"} across ${brokenByFile.size} file${brokenByFile.size === 1 ? "" : "s"}:\n`);
+  const lnk = brokenLinks === 1 ? "link" : "links";
+  const fls = brokenByFile.size === 1 ? "file" : "files";
+  console.log(
+    `❌ Found ${brokenLinks} broken ${lnk}` +
+    ` across ${brokenByFile.size} ${fls}:\n`,
+  );
 
   for (const [file, links] of brokenByFile) {
     console.log(`  ${file}`);

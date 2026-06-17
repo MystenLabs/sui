@@ -10,7 +10,7 @@ use crate::{
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics,
         codes::{DiagnosticInfo, Severity, custom},
-        warning_filters::WarningFilters,
+        filter::FilterScope,
     },
     expansion::ast as E,
     naming::ast as N,
@@ -152,7 +152,7 @@ impl TypingVisitorContext for Context<'_> {
         false
     }
 
-    fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.reporter.push_warning_filter_scope(filters)
     }
 

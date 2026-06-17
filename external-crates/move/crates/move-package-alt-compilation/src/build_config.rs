@@ -6,6 +6,7 @@ use std::{
     collections::BTreeMap,
     io::{BufRead, Write},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use clap::ArgAction;
@@ -133,9 +134,10 @@ impl BuildConfig {
         &self,
         path: &Path,
         env: &Environment,
+        flavor: F,
         writer: &mut W,
     ) -> anyhow::Result<()> {
-        let root_pkg: RootPackage<F> = self.package_loader(path, env).load().await?;
+        let root_pkg: RootPackage<F> = self.package_loader(path, env, flavor).load().await?;
         BuildPlan::create(&root_pkg, self)?.check(writer)
     }
 
@@ -143,16 +145,22 @@ impl BuildConfig {
         &self,
         path: &Path,
         env: &Environment,
+        flavor: F,
         writer: &mut W,
     ) -> anyhow::Result<CompiledPackage> {
-        let root_pkg: RootPackage<F> = self.package_loader(path, env).load().await?;
+        let root_pkg: RootPackage<F> = self.package_loader(path, env, flavor).load().await?;
         BuildPlan::create(&root_pkg, self)?.compile(writer, |compiler| compiler)
     }
 
     /// Create a [PackageLoader] for the package at `path` in environment `env` using the
     /// configuration options from `self`
-    pub fn package_loader(&self, path: &Path, env: &Environment) -> PackageLoader {
-        PackageLoader::new(path, env.clone())
+    pub fn package_loader<F: MoveFlavor>(
+        &self,
+        path: &Path,
+        env: &Environment,
+        flavor: impl Into<Arc<F>>,
+    ) -> PackageLoader<F> {
+        PackageLoader::new(path, env.clone(), flavor)
             .modes(self.mode_set())
             .allow_dirty(self.allow_dirty)
             .output_path(self.install_dir.clone())
@@ -163,12 +171,13 @@ impl BuildConfig {
         mut self,
         path: &Path,
         env: Environment,
+        flavor: F,
         writer: &mut W,
         reader: &mut R,
     ) -> anyhow::Result<()> {
         // we set test to migrate all the code
         self.test_mode = true;
-        let root_pkg: RootPackage<F> = self.package_loader(path, &env).load().await?;
+        let root_pkg: RootPackage<F> = self.package_loader(path, &env, flavor).load().await?;
         let build_plan = BuildPlan::create(&root_pkg, &self)?;
 
         migrate(build_plan, writer, reader)?;
@@ -179,9 +188,10 @@ impl BuildConfig {
         &self,
         path: &Path,
         env: Environment,
+        flavor: F,
         writer: &mut W,
     ) -> anyhow::Result<source_model::Model> {
-        let root_pkg: RootPackage<F> = self.package_loader(path, &env).load().await?;
+        let root_pkg: RootPackage<F> = self.package_loader(path, &env, flavor).load().await?;
         self.move_model_from_root_pkg(&root_pkg, writer).await
     }
 

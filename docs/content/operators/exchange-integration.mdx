@@ -1,252 +1,231 @@
 ---
-title: Sui Exchange Integration
-sidebar_label: Exchange Integration
-description: Learn the primary tasks necessary to integrate SUI, the token native to the Sui network, into a cryptocurrency exchange.
-keywords: [ integrate sui, integrate with SUI token, sui tokens, SUI, integrate sui into exchange, cryptocurrency exchange, decentralized exchange, dex, integrate with dex, sui balance transfer, staking functions, track balance, checkpoints, staking functions ]
+title: Exchange Integration
+description: Guidance for integrating SUI into a cryptocurrency exchange. Covers infrastructure, current APIs (gRPC and GraphQL), balance tracking, transactions, transfers, and staking.
+keywords: [ integrate sui, integrate with SUI token, sui tokens, SUI, integrate sui into exchange, cryptocurrency exchange, decentralized exchange, dex, integrate with dex, sui balance transfer, staking functions, track balance, checkpoints, grpc, graphql ]
 ---
 
-This topic describes how to integrate SUI, the token native to the Sui network, into a cryptocurrency exchange. The specific requirements and processes to implement an integration vary between exchanges. Rather than provide a step-by-step guide, this topic provides information about the primary tasks necessary to complete an integration. After the guidance about how to configure an integration, you can also find information and code samples related to staking on the Sui network.
+This topic describes how to integrate SUI into a cryptocurrency exchange. Specific requirements and processes vary between exchanges. Before you ship an integration to production, confirm the API and SDK examples you use against the current references linked from each section.
 
 ## Requirements to configure a SUI integration
 
+Sui's primary data access APIs are [gRPC](/develop/accessing-data/grpc) and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc). JSON-RPC has been deprecated. New integrations should use gRPC or GraphQL.
+
 The requirements to configure a SUI integration include:
- - A Sui full node. You can operate your own Sui full node or use a full node from a node operator.
- - Suggested hardware requirements to run a Sui full node:
+
+- A Sui full node. You can operate your own Sui full node or use a full node from a node operator.
+
+- Suggested hardware requirements to run a Sui full node:
+
     - CPU: 8 physical cores / 16 vCPUs
     - RAM: 128 GB
     - Storage (SSD): 4 TB NVMe drive
 
-For best results, run Sui full nodes on Linux. Sui supports the Ubuntu and Debian distributions. You can also run a full node on macOS.
+For software prerequisites, snapshots, observability, and the full setup walkthrough, see [Run a Sui Full Node](/operators/full-node/sui-full-node).
 
-## Configure a Sui full node
+## Infrastructure
 
-You can set up and configure a [Sui full node](/operators/full-node/sui-full-node) using Docker or directly from source code in the Sui GitHub repository.
+An exchange integration needs reliable access to Sui network data and the ability to submit transactions. You have two options:
 
-## Set up Sui addresses
+- **Run your own [Sui full node](/operators/full-node/sui-full-node).** This gives you full control over availability, retention, and read performance. The full node operator guide covers hardware sizing, setup, snapshots, logging, and monitoring.
 
-Sui addresses do not require onchain initialization, you can spend from an address if it corresponds to your private key. You can derive a 32-byte Sui address by hashing the signature scheme flag byte concatenated with public key bytes `flag || pubkey` using the [BLAKE2b](https://www.blake2.net/) (256 bits output) hashing function.
+- **Use an RPC or data provider.** Several providers operate gRPC-enabled and GraphQL-enabled Sui endpoints. See the [list of RPC and data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) for current options.
 
-Currently, Sui address supports these signature schemes: pure Ed25519, Secp256k1, Secp256r1 and multisig. The corresponding flag bytes are 0x00, 0x01, 0x02, 0x03 respectively.
+:::caution
 
-The following code sample demonstrates how to derive a Sui address in Rust:
+The public endpoints at `https://fullnode.<network>.sui.io` and `https://graphql.<network>.sui.io/graphql` are rate-limited and intended for development. Do not point a production exchange at them. Run your own full node or use a provider endpoint with a contract that meets your throughput and uptime needs.
 
-```rust
-let flag = 0x00; // 0x00 = ED25519, 0x01 = Secp256k1, 0x02 = Secp256r1, 0x03 = multiSig
-// Hash the [flag, public key] bytearray using Blake2b
-let mut hasher = DefaultHash::default();
-hasher.update([flag]);
-hasher.update(pk);
-let arr = hasher.finalize();
-let sui_address_string = hex::encode(arr);
-```
+:::
 
-## Displaying addresses
+## Sui APIs
 
-Sui supports both addresses with and without a `0x` prefix. Sui recommends that you always include the `0x` prefix in API calls and when you display user addresses.
+### gRPC
 
-## Track balance changes for an address
+gRPC is the recommended high-performance API for backend services. It supports `FieldMask`-based projection so you only fetch the fields you need, and includes checkpoint subscriptions that stream finalized checkpoints along with the transaction and event data you select through the response mask. For a complete tutorial including `grpcurl`, TypeScript, Go, and Python examples, see [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
 
-You can track balance changes by calling `suix_getBalance` at predefined intervals. This call returns the total balance for an address. The total includes any coin or token type, but this document focuses on SUI. You can track changes in the total balance for an address between subsequent `suix_getBalance` requests.
+For the Rust client, use the [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) crate (gRPC) for new code. The legacy [`sui-sdk` JSON-RPC client](/references/rust-sdk) remains available for migration purposes only.
 
-The following bash example demonstrates how to use `suix_getBalance` for address `0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3`. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate full node.
+### GraphQL RPC
 
-```sh
-rpc="https://fullnode.devnet.sui.io:443"
-address="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
-data="{\"jsonrpc\": \"2.0\", \"method\": \"suix_getBalance\", \"id\": 1, \"params\": {\"owner\": \"$owner\"}}"
-curl -X POST -H 'Content-type: application/json' --data-raw "$data" $rpc
-```
+GraphQL exposes a single endpoint where you select exactly the fields you need across addresses, objects, transactions, checkpoints, events, and balances. It is well suited for monitoring dashboards, custom indexers, and queries that join data across several resources. For practical examples including pagination, checkpoint scoping, and transaction submission, see [Querying Data with GraphQL RPC](/develop/accessing-data/graphql/query-with-graphql).
 
-The response is a JSON object that includes the `totalBalance` for the address:
-```json
-{
-  "jsonrpc":"2.0",
-  "result":{
-     "coinType":"0x2::sui::SUI",
-     "coinObjectCount":40,
-     "totalBalance":10000000000,
-     "lockedBalance":{
+### JSON-RPC (deprecated)
 
-     }
-  },
-  "id":1
-}
-```
+Existing integrations should plan a migration to gRPC or GraphQL. New integrations should not adopt JSON-RPC.
 
-The following example demonstrates using `suix_getBalance` in Rust:
-```rust
-use std::str::FromStr;
-use sui_sdk::types::base_types::SuiAddress;
-use sui_sdk::{SuiClient, SuiClientBuilder};
+## Sui addresses
 
+Sui addresses do not need onchain initialization. You can spend from an address as soon as it corresponds to a private key you control.
 
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-   let sui = SuiClientBuilder::default().build(
-      "https://fullnode.devnet.sui.io:443",
-   ).await.unwrap();
-   let address = SuiAddress::from_str("0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3")?;
-   let objects = sui.read_api().get_balance(address).await?;
-   println!("{:?}", objects);
-   Ok(())
-}
-```
+For the key-pair schemes Pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1, and Passkey, a Sui address is a 32-byte value derived as [BLAKE2b](https://www.blake2.net/)-256 of the 1-byte signature scheme flag concatenated with the public key bytes (`flag || pubkey`).
 
-## Use events to track balance changes for an address
+Multisig and zkLogin use scheme-specific derivations and do not follow the basic `flag || pubkey` rule:
 
-You can also track the balance for an address by subscribing to all of the events emitted from it. Use a filter to include only the events related to SUI coins, such as when the address acquires a coin or pays for a gas fee.
-The following example demonstrates how to filter events for an address using bash and cURL:
+- **Multisig:** `BLAKE2b-256(flag_MultiSig || threshold || flag_1 || pk_1 || weight_1 || ... || flag_n || pk_n || weight_n)`, where `threshold` and each `weight_i` are encoded as little-endian bytes.
 
-```sh
-rpc="https://fullnode.devnet.sui.io:443"
-address="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
-data="{\"jsonrpc\": \"2.0\", \"id\":1, \"method\": \"sui_getEvents\", \"params\": [{\"Recipient\": {\"AddressOwner\": \"0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3\"}}, null, null, true ]}"
-curl -X POST -H 'Content-type: application/json' --data-raw "$data" $rpc
-```
+- **zkLogin:** `BLAKE2b-256(flag_zkLogin || iss_len || iss || address_seed)`, where `iss_len` is the 1-byte length of the issuer string and `address_seed` is the unpadded form with leading zero bytes removed.
 
-The response can include a large number of events. Add pagination to the response using the `nextCursor` key in the request. You can determine the corresponding `txDigest` and `eventSeq` from the `id` field of a transaction.
+For every scheme, derive addresses through the [Sui SDKs](/references/sui-sdks) or the Sui CLI rather than hand-rolling the computation. Hand-rolling the keypair formula for a multisig or zkLogin account produces the wrong address. See [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview) for the per-scheme details, and the [`SuiAddress` implementations](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/base_types.rs) in `crates/sui-types/src/base_types.rs` for the byte-exact layout.
 
-You can replace the first `null` in the `params` array with a `txDigest` value to paginate from a specific point. The second `null` is an integer that defines how many results (up to 1000) to return and the `true` means ascending order. You can use the `nextCursor` so the response starts from a desired point.
+Sui currently supports the following schemes and flag bytes:
 
-The `id` field of any transaction looks like:
+| Scheme          | Flag |
+| --------------- | ---- |
+| Pure Ed25519    | 0x00 |
+| ECDSA Secp256k1 | 0x01 |
+| ECDSA Secp256r1 | 0x02 |
+| Multisig        | 0x03 |
+| zkLogin         | 0x05 |
+| Passkey         | 0x06 |
 
-```sh
-"id": {
-    "txDigest": "GZQN9pE3Zr9ZfLzBK1BfVCXtbjx5xKMxPSEKaHDvL3E2",
-    "eventSeq": 6019
-}
-```
+For full details on address derivation, signature formats, and key derivation paths (BIP-32, BIP-39, BIP-44, SLIP-0010), see [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview).
 
-With this data, create a `nextCursor` as follows:
+### Displaying addresses
 
-```sh
-nextCursor : {"txDigest": "GZQN9pE3Zr9ZfLzBK1BfVCXtbjx5xKMxPSEKaHDvL3E2","eventSeq": 6019}
-```
+Sui accepts addresses with or without the `0x` prefix. Always include the `0x` prefix when you display addresses to users and when you pass them to API calls.
 
-## Blocks vs checkpoints
+## Tracking balances
+
+Sui supports two ways to hold fungible value at an address:
+
+- **Coin objects.** Individual `Coin<T>` objects owned by an address.
+
+- **Address balances.** A canonical per-coin-type balance tied directly to an address, introduced in [SIP-58](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md). Funds sent through `sui::coin::send_funds` and `sui::balance::send_funds` merge automatically into a single balance per coin type with no object management required. See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances) for details.
+
+When you query a balance, account for both representations. In the GraphQL schema, `Balance.totalBalance` returns the sum across coin objects and the address-balance accumulator. `Balance.coinBalance` and `Balance.addressBalance` expose each component separately, so you can reconcile against your own bookkeeping.
+
+:::caution
+
+Exchange ledgers must account for both coin objects and address-balance accumulators. An address's funds can move between the two without a transfer between addresses, especially while users hold a mix of legacy coin objects and newer address balances. Reconcile by summing `Balance.coinBalance` and `Balance.addressBalance`, not by tracking only one.
+
+:::
+
+Query balances for an address using the `address(address:).balances(...)` connection in GraphQL. The [GraphQL query guide](/develop/accessing-data/graphql/query-with-graphql) shows the pagination pattern and how to scope queries to a specific checkpoint for consistent reads. For a typed client, use `StateService.GetBalance` for a single coin type or `StateService.ListBalances` for all balances over [gRPC](/develop/accessing-data/grpc/using-grpc). Both return the `balance`, `coinBalance`, and `addressBalance` fields.
+
+## Blocks vs Checkpoints {#blocks-vs-checkpoints}
 
 Sui is a DAG-based blockchain and uses checkpoints for node synchronization and global transaction ordering. Checkpoints differ from blocks in the following ways:
- - Sui creates checkpoints and adds finalized transactions. Transactions are finalized even before they are included in a checkpoint.
- - Checkpoints do not fork, roll back, or reorganize.
- - Sui creates approximately four checkpoints every second. Find the most up-to-date statistic on the [Sui public dashboard](https://metrics.sui.io/public-dashboards/4ceb11cc210d4025b122294586961169).
 
-### Checkpoint API operations
+- Sui creates checkpoints and adds finalized transactions. Transactions are finalized before they are included in a checkpoint.
 
-Sui Checkpoint API operations include:
- - [`sui_getCheckpoint`](/sui-api-ref#sui_getCheckpoint): Retrieves the specified checkpoint.
- - [`sui_getLatestCheckpointSequenceNumber`](/sui-api-ref#sui_getLatestCheckpointSequenceNumber): Retrieves the sequence number of the most recently executed checkpoint.
- - [`sui_getCheckpoints`](/sui-api-ref#sui_getCheckpoints): Retrieves a paginated list of checkpoints that occurred during the specified interval. Available in a future release.
+- Checkpoints do not fork, roll back, or reorganize.
 
-## SUI balance transfer
+- Sui creates about 4 checkpoints every second. Find the most current statistic on the [Sui public dashboard](https://metrics.sui.io/public-dashboards/4ceb11cc210d4025b122294586961169).
 
-To transfer a specific amount of SUI between addresses, you need a SUI token object with that specific value. In Sui, everything is an object, including SUI tokens. The amount of SUI in each SUI token object varies. For example, an address could own 3 SUI tokens with different values: one of 0.1 SUI, a second of 1.0 SUI, and a third with 0.005 SUI. The total balance for the address equals the sum of the values of the individual SUI token objects, in this case, 1.105 SUI.
+### Checkpoint API operations {#checkpoint-api-operations}
 
-You can merge and split SUI token objects to create token objects with specific values. To create a SUI token worth .6 SUI, split the token worth 1 SUI into two token objects worth .6 SUI and .4 SUI.
+Read checkpoints through the current gRPC or GraphQL APIs:
 
-To transfer a specific amount of SUI, you need a SUI token worth that specific amount. To get a SUI token with that specific value, you might need to split or merge existing SUI tokens. Sui supports several methods to accomplish this, including some that do not require you to manually split or merge coins.
+- **gRPC:** Use `LedgerService.GetCheckpoint` for point lookups. Subscribe with `SubscriptionService.SubscribeCheckpoints` for an ordered, gapless stream of finalized checkpoints. See [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
 
-## Sui API operations for transfers
+- **GraphQL:** Query the `checkpoint(sequenceNumber:)` field for a specific checkpoint, or paginate `checkpoints` for a range. See [Querying Data with GraphQL RPC](/develop/accessing-data/graphql/query-with-graphql).
 
-Sui supports the following API operations related to transferring SUI between addresses:
+## Tracking transactions and events
 
- - [`sui_transferObject`](/sui-api-ref#sui_transferObject): Because SUI tokens are objects, you can transfer SUI tokens just like any other object. This method requires a gas token, and is useful in niche cases only.
+Use checkpoints as the canonical, ordered stream of finalized activity:
 
- - [`sui_payAllSui`](/sui-api-ref#sui_payAllSui): This method accepts an array of SUI token IDs. It merges all existing tokens into one, deducts the gas fee, then sends the merged token to the recipient address.
+- **Checkpoints do not fork.** Once a checkpoint is final, it does not roll back or reorganize.
 
-   The method is especially useful if you want to transfer all SUI from an address. To merge together all coins for an address, set the recipient as the same address. This is a native Sui method and does not produce additional onchain transaction objects for the internal merge operation.
+- **Transactions are final before they are included in a checkpoint.** Checkpoints group finalized transactions for ordered downstream consumption.
 
- - [`sui_paySui`](/sui-api-ref#sui_paySui): This operation accepts an array of SUI token IDs, an array of amounts, and an array of recipient addresses.
+For real-time pipelines, subscribe to the checkpoint stream over [gRPC](/develop/accessing-data/grpc/using-grpc), and read each checkpoint's transaction and event data from the response through a `FieldMask`. For ad hoc queries and replays, paginate over checkpoints, transactions, and events with [GraphQL](/develop/accessing-data/graphql/query-with-graphql), which supports cursor-based pagination and checkpoint-scoped consistency.
 
-   The amounts and recipients array map one to one. Even if you use only one recipient address, you must include it for each amount in the amount array.
+For event consumption patterns, including filtering by sender, package, or event type, see [Using Events](/develop/accessing-data/using-events).
 
-   The operation merges all of the tokens provided into one token object and settles the gas fees. It then splits the token according to the amounts in the amounts array and sends the first token to the first recipient, the second token to the second recipient, and so on. Any remaining SUI on the token stays in the source address.
+## SUI transfers
 
-   The benefits of this method include no gas fees for merging or splitting tokens, and the abstracted token merge and split. The `sui_paySui` operation is a native function, so the merge and split operations are not considered Sui transactions. The gas fees for them match typical transactions on Sui. You can use this operation to split coins in your own address by setting the recipient as your own address. The total value of the input coins must be greater than the total value of the amounts to send.
+Build transfers as [programmable transaction blocks (PTBs)](/develop/transactions/ptbs/prog-txn-blocks) using the SDK of your choice. PTBs let you split, merge, and transfer coins in a single atomic transaction.
 
- - [`sui_pay`](/sui-api-ref#sui_pay): This method is similar to sui_paySui, but it accepts any kind of coin or token instead of only SUI. You must include a gas token, and all of the coins or tokens must be the same type.
+A few points that matter for exchange flows:
 
- - [`sui_transferSui`](/sui-api-ref#sui_transferSui): This method accepts only one SUI token object and an amount to send to the recipient. It uses the same token for gas fees, so the amount to transfer must be strictly less than the value of the SUI token used.
+- **Coin selection.** When you pay from coin objects, the network performs [gas smashing](/develop/transaction-payment/gas-smashing) automatically if you pass multiple gas coins. You do not need to merge coins offline before paying.
+
+- **Address balance gas payments.** When the [address balances](/onchain-finance/asset-custody/address-balances/using-address-balances) feature is enabled on the target network, the gas payment can be drawn directly from the sender or sponsor address balance, removing the need to manage gas coin objects entirely. Transactions that use address-balance gas payments must set a `ValidDuring` expiration with both a minimum and maximum epoch. Confirm the feature is enabled and review the expiration requirement in [Paying for gas from address balances](/onchain-finance/asset-custody/address-balances/using-address-balances#paying-for-gas-from-address-balances).
+
+- **Sponsored transactions.** For user-facing flows, you can sponsor a user's transaction so they pay no gas. See [Sponsored Transactions](/develop/transaction-payment/sponsor-txn).
 
 ## Signing transactions
 
-See [Sui Signatures](/develop/transactions/transaction-auth/auth-overview) for more details on signature validity requirements.
+Sui signs over the Blake2b-256 hash of the BCS serialization of an `IntentMessage` that wraps the transaction data. The supported signature schemes are pure Ed25519, ECDSA Secp256k1, and ECDSA Secp256r1, along with multisig, zkLogin, and passkey.
+
+For the full signature requirements, intent format, and worked examples in Rust, TypeScript, and the Sui CLI, see [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview) and [Intent Signing](/develop/transactions/transaction-auth/intent-signing). For offline custody workflows, see [Offline Signing](/develop/transactions/transaction-auth/offline-signing).
 
 ## SUI staking
 
-The Sui blockchain uses a Delegated Proof-of-Stake mechanism (DPoS). This allows SUI token holders to stake their SUI tokens to any validator of their choice. When someone stakes their SUI tokens, it means those tokens are locked for the entire epoch. Users can withdraw their stake at any time, but new staking requests become active only at the start of the next epoch.
+The Sui blockchain uses a Delegated Proof-of-Stake (DPoS) mechanism. SUI token holders stake to a validator's staking pool. When a user stakes, the network locks those tokens for the duration of the epoch in which the user adds the stake. New staking requests become active at the start of the next epoch. A user can request a withdrawal at any time. Stake withdrawals process immediately using the previous epoch's exchange rate and include the principal plus rewards accumulated through the previous epoch. The withdrawn stake stops contributing starting the next epoch.
 
-SUI holders who stake their tokens to validators earn rewards for helping secure the Sui network. Sui determines rewards for staking based on stake rewards on the network, and distributes them at the end of each epoch.
+SUI holders who stake to validators earn rewards for helping secure the Sui network. Sui determines staking rewards based on stake performance and distributes them at the end of each epoch.
 
-The total voting power in the Sui Network is always 10,000. The voting power of each individual validator is similar to basis points. For example, a voting power of 101 = 1.01%. Sui's quorum threshold (number of votes needed to confirm a transaction) is 6,667 (which is greater than 2/3). The voting power for a single validator is capped at 1,000 (10%) regardless of how much stake the validator has.
+The network fixes the total voting power across all validators at 10,000, similar to basis points (a voting power of 101 = 1.01%). Sui caps the voting power for a single validator at 1,000 (10%) regardless of how much stake the validator has. The quorum threshold for confirming a transaction is 6,667, which is greater than 2/3.
 
-## Staking functions
+### Staking functions
 
-Sui supports the following API operations related to staking. You can find the source code in the [sui_system](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move) module.
+The current entry functions in the [`sui_system` Move module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move) for staking are listed below. These signatures are the source of truth, because they change with system package upgrades, so verify against the linked Move source before you ship.
 
- - `request_add_stake`: Add user stake to a validator's staking pool.
+- `request_add_stake`: Add stake to a validator's staking pool. The function transfers the resulting `StakedSui` object to the sender.
 
-   ```move
-   public fun request_add_stake(
-      self: &mut SuiSystemState,
-      stake: Coin<SUI>,
-      validator_address: address,
-      ctx: &mut TxContext,
-   ) {
-      validator_set::request_add_stake(
-         &mut self.validators,
-         validator_address,
-         coin::into_balance(stake),
-         option::none(),
-         ctx,
-      );
-   }
-   ```
+    ```move
+    public entry fun request_add_stake(
+        wrapper: &mut SuiSystemState,
+        stake: Coin<SUI>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    )
+    ```
 
- - `request_add_stake_mul_coin`: Add user stake to a validator's staking pool using multiple coins.
+- `request_add_stake_mul_coin`: Add stake using multiple coins, optionally specifying a stake amount.
 
-   ```move
-   public fun request_add_stake_mul_coin(
-      self: &mut SuiSystemState,
-      delegate_stakes: vector<Coin<SUI>>,
-      stake_amount: option::Option<u64>,
-      validator_address: address,
-      ctx: &mut TxContext,
-   ) {
-      let balance = extract_coin_balance(delegate_stakes, stake_amount, ctx);
-      validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::none(), ctx);
-   }
-   ```
+    ```move
+    public entry fun request_add_stake_mul_coin(
+        wrapper: &mut SuiSystemState,
+        stakes: vector<Coin<SUI>>,
+        stake_amount: option::Option<u64>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    )
+    ```
 
- - `request_add_stake_with_locked_coin`: Add user stake to a validator's staking pool using a locked SUI coin.
+- `request_withdraw_stake`: Withdraw stake from a validator's staking pool. The function transfers the unstaked SUI coin to the sender.
 
-   ```move
-   public fun request_add_stake_with_locked_coin(
-      self: &mut SuiSystemState,
-      stake: LockedCoin<SUI>,
-      validator_address: address,
-      ctx: &mut TxContext,
-   ) {
-      let (balance, lock) = locked_coin::into_balance(stake);
-      validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::some(lock), ctx);
-   }
-   ```
+    ```move
+    public entry fun request_withdraw_stake(
+        wrapper: &mut SuiSystemState,
+        staked_sui: StakedSui,
+        ctx: &mut TxContext,
+    )
+    ```
 
- - `request_withdraw_stake`: Withdraw some portion of a user stake from a validator's staking pool.
+Non-entry variants `request_add_stake_non_entry` and `request_withdraw_stake_non_entry` return the `StakedSui` object or withdrawn balance directly, so you can compose them with other PTB commands. The `StakedSui` type lives in the [`staking_pool` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/staking_pool.move).
 
-   ```move
-   public fun request_withdraw_stake(
-      self: &mut SuiSystemState,
-      delegation: &mut Delegation,
-      staked_sui: &mut StakedSui,
-      principal_withdraw_amount: u64,
-      ctx: &mut TxContext,
-   ) {
-      validator_set::request_withdraw_stake(
-         &mut self.validators,
-         delegation,
-         staked_sui,
-         principal_withdraw_amount,
-         ctx,
-      );
-   }
-   ```
+To build staking and unstaking transactions, assemble a PTB that calls one of these functions. The [TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the helpers you need.
+
+To read stake state for an address, list owned `StakedSui` objects through `StateService.ListOwnedObjects` filtered by type on [gRPC](/develop/accessing-data/grpc/using-grpc), or through the `address.objects(filter: { type: ... })` connection on [GraphQL](/develop/accessing-data/graphql/query-with-graphql). The current schema exposes balance, transaction, and object access; it does not yet expose a first-class staking-state field that returns active stakes, pending stakes, and accrued rewards together. To compute accrued rewards, read the `StakedSui` object's stake activation epoch and principal, then compute the current value against the validator's exchange rate, or use the [TypeScript SDK](https://sdk.mystenlabs.com/typescript) staking helpers if available for your use case.
+
+## Designing deposits and withdrawals
+
+Treat deposit and withdrawal pipelines as event-driven and idempotent. The following checklist covers the design points that matter most for an exchange:
+
+- **Use checkpoint sequence numbers as your cursor.** Persist the last fully processed checkpoint, and resume from the next sequence number on restart. Checkpoints do not fork, so once you process a checkpoint, it does not change.
+
+- **Make every credit and debit idempotent.** Key your ledger entries by `(transaction digest, event sequence)` for event-driven credits, or by `(transaction digest, object change)` for object-based credits. Replaying the same checkpoint must not produce duplicate ledger entries.
+
+- **Define a finality policy.** Sui transactions are final before they are included in a checkpoint, and checkpoints themselves are final. For exchange purposes, treating inclusion in a finalized checkpoint as the point of finality is the standard choice.
+
+- **Support reprocessing and backfill.** Build the pipeline so you can replay a range of checkpoints to recover from a bug or a missed window. This depends on the idempotency keys above.
+
+- **Reconcile against onchain balances.** Periodically read `Balance.totalBalance`, and `Balance.coinBalance` and `Balance.addressBalance` separately, for each tracked address, and compare against your internal ledger. Investigate any drift.
+
+- **Plan for both coin objects and address balances.** You can pay withdrawals from either, and a user's holdings can sit in either at any time. Build your withdrawal logic to handle both, and use PTBs rather than legacy JSON-RPC transfer methods.
+
+- **Validate addresses on input.** Reject malformed addresses early, and confirm `0x` prefix handling matches your display layer.
+
+## Production considerations
+
+- **Endpoints.** Use your own full node or a contracted provider endpoint. Do not rely on the public `fullnode.<network>.sui.io` or `graphql.<network>.sui.io` URLs for production traffic.
+
+- **Observability.** Configure full node [logging](/operators/observability#logging-levels) and [metrics monitoring](/operators/full-node/monitoring) so you can detect lag or failures quickly.
+
+- **Snapshots.** Start a new full node from a recent snapshot rather than syncing from genesis. See [Sui Snapshots](/operators/snapshots).
+
+- **Custody and key management.** Treat exchange custody keys and any administrative capabilities (for example, capability objects governing your deposit or withdrawal flow) as high-value assets. Separate hot, warm, and cold keys by role, so an online compromise does not expose the keys with the most privilege. Hold warm and cold keys in a [multisig](/develop/transactions/transaction-auth/multisig) address or hardware custody, and sign cold-key transactions using [Offline Signing](/develop/transactions/transaction-auth/offline-signing). Keep Testnet and Mainnet keys strictly separate, so a test key can never sign a production transaction.
+
+- **API stability.** Pin SDK versions and verify your code against the linked references each time you upgrade. Watch the [release notes](/references/release-notes) for breaking changes that affect balances, events, or transaction shapes.

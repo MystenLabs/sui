@@ -268,7 +268,6 @@
 - [Mdx Components](/references/contribute/mdx-components.md)
 - [Style Guide](/references/contribute/style-guide.md)
 - [Sui Environment](/references/contribute/sui-environment.md)
-- [Exchange Integration Guide](/references/exchange-integration-guide.md)
 - [Framework](/references/framework.md)
 
 ### References/Framework/Sui Bridge

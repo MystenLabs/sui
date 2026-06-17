@@ -1,6 +1,6 @@
 //# publish
-module 0x6::Test {
-    public foo(v: u64): u64 * u64 {
+mvir 0x6::Test {
+    public fun foo(v: u64): u64 * u64 {
         let one_less: u64;
         let one_more: u64;
     label b0:
@@ -9,17 +9,17 @@ module 0x6::Test {
         return move(one_less), move(one_more);
     }
 
-    public bar(): u64 * u64 * u64 {
+    public fun bar(): u64 * u64 * u64 {
     label b0:
         return 500, 8, 256;
     }
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x6::Test;
 
-entry foo() {
+entry fun foo() {
     let y: u64;
     let x0: u64;
     let x1 : u64;

@@ -25,20 +25,14 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
 
 task 2, lines 23-35:
 //# run
-Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000044::m'. Got VMError: {
-    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
-    sub_status: None,
+Error: Function execution failed with VMError: {
+    major_status: VECTOR_OPERATION_ERROR,
+    sub_status: Some(3),
     location: 0x44::m,
-    indices: [(FunctionDefinition, 0)],
-    offsets: [(FunctionDefinitionIndex(0), 0)],
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
 }
 
 task 3, lines 36-48:
 //# run
-Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000045::m'. Got VMError: {
-    major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
-    sub_status: None,
-    location: 0x45::m,
-    indices: [(FunctionDefinition, 0)],
-    offsets: [(FunctionDefinitionIndex(0), 0)],
-}
+Error: ParserError: Invalid Token: vector unpack arity mismatch: expected 0 lvalues, got 1

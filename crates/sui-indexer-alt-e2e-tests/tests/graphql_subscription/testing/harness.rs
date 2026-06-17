@@ -7,9 +7,10 @@ use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use async_stream::stream;
+use bytes::BytesMut;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
-use futures::SinkExt;
 use prometheus::Registry;
 use serde_json::Value;
 use serde_json::json;
@@ -29,9 +30,9 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio_stream::StreamExt;
-use tokio_tungstenite::connect_async;
-use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::tungstenite::http::Request;
+
+use super::proxy;
+use super::proxy::ProxyController;
 
 const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -53,6 +54,24 @@ impl SubscriptionTestCluster {
     /// validator + postgres DB + kv_packages indexer + GraphQL service.
     /// Waits for kv_packages to index the genesis checkpoint so subscriptions are ready.
     pub async fn new() -> Self {
+        let (cluster, _controller) = Self::new_inner(false).await;
+        cluster
+    }
+
+    /// Same as `new()`, but inserts a TCP proxy between graphql's streaming
+    /// connection and the validator's gRPC. Returns a controller that tests
+    /// can use to forcibly disconnect the streaming connection mid-test,
+    /// exercising graphql's reconnect + gap-recovery code path.
+    ///
+    /// Only the streaming connection runs through the proxy. `ledger_grpc_url`
+    /// (used by gap recovery) still points at the validator directly, so
+    /// `disconnect_all()` only severs the stream and leaves recovery reads
+    /// untouched.
+    pub async fn new_with_disruption_proxy() -> (Self, ProxyController) {
+        Self::new_inner(true).await
+    }
+
+    async fn new_inner(use_proxy: bool) -> (Self, ProxyController) {
         let ingestion_dir = tempfile::tempdir().expect("Failed to create ingestion dir");
         let validator = TestClusterBuilder::new()
             .with_num_validators(1)
@@ -96,11 +115,27 @@ impl SubscriptionTestCluster {
         let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
         let rpc_url = validator.rpc_url();
 
+        let (stream_url, controller): (String, ProxyController) = if use_proxy {
+            proxy::start(rpc_url).await
+        } else {
+            (rpc_url.to_string(), ProxyController::default())
+        };
+
+        // The validator's gRPC v2 endpoint serves both `SubscriptionService` and
+        // `LedgerService`, so we point `ledger_grpc_url` at the same URL graphql streams
+        // from. Required because gap recovery makes `ledger_grpc_reader` mandatory when
+        // streaming is enabled. Note: `ledger_grpc_url` always targets the validator
+        // directly so `disconnect_all()` cannot interfere with gap-recovery reads.
+        let kv_args = KvArgs {
+            ledger_grpc_url: Some(rpc_url.parse().unwrap()),
+            ..Default::default()
+        };
+
         let service = start_graphql(
             Some(database_url),
             FullnodeArgs::new(rpc_url.parse().unwrap()),
             DbArgs::default(),
-            KvArgs::default(),
+            kv_args,
             ConsistentReaderArgs::default(),
             GraphQlArgs {
                 rpc_listen_address: graphql_listen_address,
@@ -108,7 +143,7 @@ impl SubscriptionTestCluster {
             },
             SystemPackageTaskArgs::default(),
             SubscriptionArgs {
-                checkpoint_stream_url: Some(rpc_url.parse().unwrap()),
+                checkpoint_stream_url: Some(stream_url.parse().unwrap()),
             },
             "0.0.0",
             GraphQlConfig::default(),
@@ -118,14 +153,31 @@ impl SubscriptionTestCluster {
         .await
         .expect("Failed to start GraphQL server");
 
-        Self {
-            validator,
-            db,
-            subscription_url: format!("ws://{}/graphql", graphql_listen_address),
-            service,
-            indexer,
-            ingestion_dir,
-        }
+        (
+            Self {
+                validator,
+                db,
+                subscription_url: format!(
+                    "http://{}/graphql/subscriptions",
+                    graphql_listen_address
+                ),
+                service,
+                indexer,
+                ingestion_dir,
+            },
+            controller,
+        )
+    }
+
+    /// Latest checkpoint sequence number produced by the validator (the
+    /// on-chain tip, not whatever graphql has currently streamed).
+    pub fn validator_checkpoint_tip(&self) -> u64 {
+        self.validator
+            .fullnode_handle
+            .sui_node
+            .state()
+            .get_latest_checkpoint_sequence_number()
+            .expect("Failed to read validator checkpoint tip")
     }
 
     /// Subscribe and return a stream of GraphQL payloads.
@@ -143,72 +195,78 @@ impl SubscriptionTestCluster {
         query: &str,
         variables: Option<Value>,
     ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>> {
-        let request = Request::builder()
-            .uri(&self.subscription_url)
-            .header("Sec-WebSocket-Protocol", "graphql-transport-ws")
-            .header("Connection", "Upgrade")
-            .header("Upgrade", "websocket")
-            .header("Sec-WebSocket-Version", "13")
-            .header("Host", "localhost")
-            .header(
-                "Sec-WebSocket-Key",
-                tokio_tungstenite::tungstenite::handshake::client::generate_key(),
-            )
-            .body(())
-            .unwrap();
-
-        let (ws, _) = connect_async(request)
-            .await
-            .expect("Failed to connect WebSocket");
-
-        // Use futures::StreamExt::split (tokio_stream doesn't have split).
-        let (mut sink, stream) = futures::StreamExt::split(ws);
-
-        sink.send(Message::Text(
-            json!({"type": "connection_init"}).to_string().into(),
-        ))
-        .await
-        .expect("Failed to send connection_init");
-
-        // Wrap with tokio_stream timeout, then wait for ack.
-        let mut stream = Box::pin(stream.timeout(SUBSCRIPTION_TIMEOUT));
-
-        let ack = stream
-            .next()
-            .await
-            .expect("Stream ended")
-            .expect("Timeout waiting for ack")
-            .expect("WS error");
-        let ack: Value = serde_json::from_str(ack.to_text().unwrap()).unwrap();
-        assert_eq!(ack["type"], "connection_ack");
-
         let mut payload = json!({ "query": query });
         if let Some(vars) = variables {
             payload["variables"] = vars;
         }
-        sink.send(Message::Text(
-            json!({
-                "id": "1",
-                "type": "subscribe",
-                "payload": payload
-            })
-            .to_string()
-            .into(),
-        ))
-        .await
-        .expect("Failed to send subscribe");
 
-        // Return a stream that extracts payloads from "next" messages.
-        Box::pin(stream.map(|result| {
-            let msg = result.expect("Timeout").expect("WS error");
-            let text = match msg {
-                Message::Text(t) => t,
-                other => panic!("Expected text message, got: {other:?}"),
-            };
-            let msg: Value = serde_json::from_str(&text).unwrap();
-            assert_eq!(msg["type"], "next", "Expected 'next' message, got: {msg}");
-            msg["payload"].clone()
-        }))
+        let response = reqwest::Client::new()
+            .post(&self.subscription_url)
+            .header("Accept", "text/event-stream")
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .await
+            .expect("Failed to POST subscription request");
+
+        assert!(
+            response.status().is_success(),
+            "Subscription request failed: {}",
+            response.status(),
+        );
+
+        Box::pin(
+            parse_sse_events(response.bytes_stream())
+                .timeout(SUBSCRIPTION_TIMEOUT)
+                .map(|result| result.expect("Timed out waiting for SSE event")),
+        )
+    }
+}
+
+/// Parse a graphql-sse byte stream into a stream of GraphQL response payloads.
+///
+/// Reads `event: next` frames, parses their `data:` field as JSON, and yields each one.
+/// Stops when the server sends `event: complete` or closes the connection.
+fn parse_sse_events(
+    body: impl futures::Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send + 'static,
+) -> impl tokio_stream::Stream<Item = Value> + Send + 'static {
+    stream! {
+        let mut body = Box::pin(body);
+        let mut buffer = BytesMut::new();
+        let mut current_event: Option<String> = None;
+        let mut current_data = String::new();
+
+        while let Some(chunk) = futures::StreamExt::next(&mut body).await {
+            let chunk = chunk.expect("SSE body error");
+            buffer.extend_from_slice(&chunk);
+
+            while let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
+                let line_bytes = buffer.split_to(pos + 1);
+                let line = std::str::from_utf8(&line_bytes[..line_bytes.len() - 1])
+                    .expect("Invalid UTF-8 in SSE stream")
+                    .trim_end_matches('\r');
+
+                if line.is_empty() {
+                    if current_event.as_deref() == Some("complete") {
+                        return;
+                    }
+                    if current_event.as_deref() == Some("next") && !current_data.is_empty() {
+                        let value: Value = serde_json::from_str(&current_data)
+                            .expect("Invalid JSON in SSE data field");
+                        yield value;
+                    }
+                    current_event = None;
+                    current_data.clear();
+                } else if let Some(rest) = line.strip_prefix("event:") {
+                    current_event = Some(rest.trim().to_string());
+                } else if let Some(rest) = line.strip_prefix("data:") {
+                    if !current_data.is_empty() {
+                        current_data.push('\n');
+                    }
+                    current_data.push_str(rest.strip_prefix(' ').unwrap_or(rest));
+                }
+            }
+        }
     }
 }
 
@@ -278,6 +336,31 @@ pub fn checkpoint_tx_digests(item: &Value) -> Vec<&str> {
         .unwrap_or_default()
 }
 
+/// Extract `sequenceNumber` from a top-level checkpoint subscription response.
+/// Path: data.checkpoints.sequenceNumber
+pub fn checkpoint_seq(item: &Value) -> u64 {
+    item["data"]["checkpoints"]["sequenceNumber"]
+        .as_u64()
+        .expect("checkpoint payload missing sequenceNumber")
+}
+
+/// Read items from `stream` until it goes quiet for one second, returning every item
+/// observed in order. Returns an empty `Vec` when the stream stalls before delivering
+/// anything. Used to assert silence (`drained.is_empty()`) or to recover the last
+/// observed value via a domain-specific extractor (`drained.last().map(...)`).
+pub async fn drain_until_stalled(
+    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
+) -> Vec<Value> {
+    let mut drained = Vec::new();
+    loop {
+        match tokio::time::timeout(Duration::from_secs(1), stream.next()).await {
+            Ok(Some(item)) => drained.push(item),
+            Ok(None) => panic!("stream ended unexpectedly"),
+            Err(_) => return drained,
+        }
+    }
+}
+
 /// Common snapshot redactions for GraphQL subscription tests.
 ///
 /// Redacts seed-dependent fields (digests, addresses, versions, timestamps, etc.)
@@ -300,6 +383,7 @@ pub fn graphql_redactions() -> insta::Settings {
     settings.add_redaction(".**.networkTotalTransactions", "[networkTotalTransactions]");
     settings.add_redaction(".**.cursor", "[cursor]");
     settings.add_redaction(".**.signature", "[signature]");
+    settings.add_redaction(".**.json.id", "[json_id]");
     settings.add_dynamic_redaction(".**.repr", |value, _path| {
         let s = value.as_str().unwrap();
         if let Some(idx) = s.find("::") {
@@ -319,6 +403,15 @@ pub fn graphql_redactions() -> insta::Settings {
         value
     });
     settings
+}
+
+/// Extract digest from a top-level transaction subscription response.
+/// Path: data.transactions.digest
+pub fn transaction_digest(item: &Value) -> Vec<&str> {
+    item["data"]["transactions"]["digest"]
+        .as_str()
+        .into_iter()
+        .collect()
 }
 
 /// Poll the kv_packages watermark until it reaches `target_checkpoint`.

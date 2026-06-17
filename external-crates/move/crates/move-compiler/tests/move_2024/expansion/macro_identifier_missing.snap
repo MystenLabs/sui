@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_2024/expansion/macro_identifier_missing.move:2:19
   │
 2 │     macro fun foo<T>(x: u64, f: |u64|) {
@@ -15,7 +15,7 @@ error[E02010]: invalid name
   │
   = Type parameter names starting with '$' indicate that their arguments do not have to satisfy certain constraints before the macro is expanded, meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_2024/expansion/macro_identifier_missing.move:2:22
   │
 2 │     macro fun foo<T>(x: u64, f: |u64|) {
@@ -25,7 +25,7 @@ error[E02010]: invalid name
   │
   = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_2024/expansion/macro_identifier_missing.move:2:30
   │
 2 │     macro fun foo<T>(x: u64, f: |u64|) {

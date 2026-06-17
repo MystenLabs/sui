@@ -1,16 +1,16 @@
 //# print-bytecode
-module 0x3d8::M {
-    enum T has drop {
+mvir 0x3d8::M {
+    public enum T has drop {
         X { },
         Y { f: u64 },
     }
 
-    f(): Self::T {
+    fun f(): Self::T {
         label b0:
             return T::X { };
     }
 
-    f1(): Self::T {
+    fun f1(): Self::T {
         let x: Self::T;
         let f: u64;
         label b0:
@@ -19,7 +19,7 @@ module 0x3d8::M {
             return T::X { };
     }
 
-    f2(): Self::T {
+    fun f2(): Self::T {
         let x: Self::T;
         let f: u64;
         label b0:
@@ -35,7 +35,7 @@ module 0x3d8::M {
             return move(f);
     }
 
-    f3(): Self::T {
+    fun f3(): Self::T {
         let x: Self::T;
         let f: u64;
         let g: &u64;
@@ -52,7 +52,7 @@ module 0x3d8::M {
             return 0;
     }
 
-    f4(): Self::T {
+    fun f4(): Self::T {
         let x: Self::T;
         let f: u64;
         let g: &mut u64;

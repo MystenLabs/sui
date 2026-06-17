@@ -1,0 +1,44 @@
+// Regression test for the A4 case: inner condition's alt arm targets a node that is
+// neither the inner's post-dominator nor immediately dominated by it — instead it's a
+// "shared continuation" reached from both the outer cond's alt AND the inner cond's alt.
+//
+//        0
+//        |
+//        1 (cond) — then=2, else=4
+//       / \
+//      2   4    (node 4 is reachable from BOTH 1's else AND 2's else)
+//     /|   |
+//    3 |   |
+//    | └─→ 4
+//    └───→ 5
+//          ↑
+//          4 ───┘
+//
+// CFG (forward edges only):
+//   0 → 1
+//   1 → 2  (cond conseq)
+//   1 → 4  (cond alt)
+//   2 → 3  (inner cond conseq)
+//   2 → 4  (inner cond alt — the A4 edge: 4 is not ichild of 2 (1 dominates 4 too)
+//          and not the post-dom of 2 (5 is))
+//   3 → 5
+//   4 → 5
+//   5 (sink)
+//
+// For inner cond 2:
+//   - ichildren(2) = {3}   (4 has two predecessors so 1 dominates it, not 2)
+//   - post_dom(2)  = 5     (paths 2→3→5 and 2→4→5 converge at 5)
+//   - So `alt=4` hits neither branch of the current arm logic: it's not the post-dom
+//     and not an ichild → the existing code emits `None` for the alt arm, silently
+//     dropping the 2→4 edge.
+//
+// Currently this snapshot will show the alt arm as missing or jump[A4] absent —
+// after Phase 1 lands, the alt should emit a goto[A4] (or, when Phase 4 lands, the
+// arm becomes a proper enclosing-scope `LatchEdge` and disappears entirely).
+
+code,0,1
+cond,1,2,4
+cond,2,3,4
+code,3,5
+code,4,5
+code,5

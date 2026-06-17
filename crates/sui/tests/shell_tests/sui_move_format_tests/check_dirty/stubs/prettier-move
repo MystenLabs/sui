@@ -1,0 +1,16 @@
+#!/bin/bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Stub `prettier-move` used by sui_move_format_tests/check_dirty.
+# Simulates a `--check` finding unformatted files: prints a diff to stderr
+# and exits 1. `sui move format` should propagate the exit code.
+
+if [ "$1" = "--version" ]; then
+    echo "stub-prettier-move 0.0.0"
+    exit 0
+fi
+
+echo "[warn] sources/foo.move" >&2
+echo "Code style issues found in 1 file." >&2
+exit 1

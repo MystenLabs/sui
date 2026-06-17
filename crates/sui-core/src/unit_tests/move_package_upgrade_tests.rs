@@ -139,7 +139,12 @@ pub fn build_upgrade_test_modules_with_dep_addr(
     (
         package.get_package_digest(with_unpublished_deps).to_vec(),
         package.get_package_bytes(with_unpublished_deps),
-        package.dependency_ids.published.values().cloned().collect(),
+        package
+            .dependency_ids
+            .published
+            .values()
+            .map(|dep| dep.published_at)
+            .collect(),
     )
 }
 
@@ -189,7 +194,7 @@ impl UpgradeStateRunner {
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
         let authority_state = TestAuthorityBuilder::new().build().await;
-        authority_state.insert_genesis_object(gas_object).await;
+        authority_state.insert_genesis_object(gas_object);
         let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
         let (package, upgrade_cap) = build_and_publish_test_package_with_upgrade_cap(
@@ -219,7 +224,7 @@ impl UpgradeStateRunner {
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
         let authority_state = TestAuthorityBuilder::new().build().await;
-        authority_state.insert_genesis_object(gas_object).await;
+        authority_state.insert_genesis_object(gas_object);
         let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
         let (package, upgrade_cap) = build_and_publish_package_with_upgrade_cap(
@@ -1155,6 +1160,8 @@ async fn test_upgrade_package_add_new_module_in_dep_only_mode_pre_v68() {
     // Allow new modules in deps-only mode for this test.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_execution_version_for_testing(3);
+        // set up config values that would otherwise be incompatible with the execution version
+        config.set_gas_model_version_for_testing(11);
         config.set_disallow_new_modules_in_deps_only_packages_for_testing(false);
         config
     });

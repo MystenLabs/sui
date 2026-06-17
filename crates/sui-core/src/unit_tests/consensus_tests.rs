@@ -75,7 +75,7 @@ pub async fn test_user_transactions_with_gas_objects(
     };
     for gas_object in gas_objects {
         // Object digest may be different in genesis than originally generated.
-        let gas_object = authority.get_object(&gas_object.id()).await.unwrap();
+        let gas_object = authority.get_object(&gas_object.id()).unwrap();
         // Make a sample transaction.
         let module = "object_basics";
         let function = "create";
@@ -123,10 +123,10 @@ pub async fn test_user_transaction(
     let rgp = epoch_store.reference_gas_price();
 
     // Object digest may be different in genesis than originally generated.
-    let gas_object = authority.get_object(&gas_object.id()).await.unwrap();
+    let gas_object = authority.get_object(&gas_object.id()).unwrap();
     let mut input_objs = vec![];
     for obj in input_objects {
-        input_objs.push(authority.get_object(&obj.id()).await.unwrap());
+        input_objs.push(authority.get_object(&obj.id()).unwrap());
     }
 
     let mut object_args: Vec<_> = input_objs

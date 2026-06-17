@@ -425,6 +425,7 @@ public(package) fun set_candidate_commission_rate(self: &mut Validator, new_comm
     assert!(self.is_preactive(), ENotValidatorCandidate);
     assert!(new_commission_rate <= MAX_COMMISSION_RATE, ECommissionRateTooHigh);
     self.commission_rate = new_commission_rate;
+    self.next_epoch_commission_rate = new_commission_rate;
 }
 
 /// Deposit stakes rewards into the validator's staking pool, called at the end of the epoch.

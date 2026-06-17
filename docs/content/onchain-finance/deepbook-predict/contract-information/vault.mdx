@@ -1,0 +1,86 @@
+---
+title: Vault
+description: Learn about the DeepBook Predict vault, PLP shares, vault value, exposure tracking, and liquidity reads.
+keywords:
+  [
+    deepbook predict vault,
+    vault,
+    plp,
+    liquidity provider,
+    vault value,
+    mark to market,
+    max payout,
+    settled oracle,
+  ]
+---
+
+The Predict vault holds accepted quote assets and takes the opposite side of every trade. `predict.move` owns pricing and trading orchestration; `vault.move` is the state machine for balances, exposure, mark-to-market liability, max payout, and settled-oracle compaction.
+
+LPs interact with the vault through `predict::supply` and `predict::withdraw`, which mint and burn `PLP` shares. See [Predict](/onchain-finance/deepbook-predict/contract-information/predict) for those public liquidity entry points.
+
+## Read functions
+
+<details>
+<summary>Vault balances and value</summary>
+
+Use these functions to read total vault balance, concrete asset balances, total mark-to-market liability, vault value, and total max payout.
+
+<ImportContent
+	source="packages/predict/sources/vault/vault.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="balance,asset_balance,total_mtm,vault_value,total_max_payout"
+	noComments
+/>
+
+</details>
+
+## Structs
+
+<details>
+<summary>`Vault`</summary>
+
+<ImportContent
+	source="packages/predict/sources/vault/vault.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="Vault"
+/>
+
+</details>
+
+<details>
+<summary>`SettledOracleState`</summary>
+
+After settlement compaction, the vault stores compact per-oracle remaining quantity and liability.
+
+<ImportContent
+	source="packages/predict/sources/vault/vault.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="SettledOracleState"
+/>
+
+</details>
+
+<details>
+<summary>`PLP`</summary>
+
+`PLP` is the LP share coin minted when users supply vault liquidity.
+
+<ImportContent
+	source="packages/predict/sources/vault/plp.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="PLP"
+/>
+
+</details>

@@ -574,7 +574,36 @@ function injectFallbackDescription(md) {
   const htmlModuleRe = /(<h[1-6][^>]*>\s*Module\s*(?:<code>[^<]+<\/code>|<span[^>]*>[^<]+<\/span>)\s*<\/h[1-6]>)/;
   const mdModuleRe = /^(\s*#{1,6}\s*Module\s+`[^`]+`.*)$/m;
   const moduleMatch = md.match(htmlModuleRe) || md.match(mdModuleRe);
-  if (!moduleMatch) return md;
+
+  // Also handle pages where the Module heading is only in frontmatter title
+  // (e.g., cargo-doc pages with `title: Module std::bool` but no body heading).
+  if (!moduleMatch) {
+    const fmModuleRe = /^title:\s*Module\s+/m;
+    if (!fmModuleRe.test(md)) return md;
+
+    // The page has a Module title in frontmatter but no body heading.
+    // Find the end of frontmatter and inject the description there.
+    const fmEndIdx = md.indexOf("\n---", 3);
+    if (fmEndIdx < 0) return md;
+    const headingEnd = fmEndIdx + 4; // after the closing ---
+    const afterHeading = md.slice(headingEnd);
+
+    const strippedBody = afterHeading.replace(/\s+/g, " ").replace(/<!--[\s\S]*?-->/g, "").trim();
+    if (strippedBody.length > 0) return md;
+
+    // extractModuleName looks for body headings; also try the frontmatter title
+    let moduleName = extractModuleName(md);
+    if (!moduleName) {
+      const titleMatch = md.match(/^title:\s*Module\s+`?([^`\n]+)`?\s*$/m);
+      if (titleMatch) moduleName = titleMatch[1].trim();
+    }
+    const displayName = moduleName || "this module";
+    const description =
+      `Reference documentation for the ${displayName} module. ` +
+      `See the sections below for available types, constants, and functions.`;
+
+    return md.slice(0, headingEnd) + "\n\n" + description + "\n" + md.slice(headingEnd);
+  }
 
   const headingEnd = md.indexOf(moduleMatch[0]) + moduleMatch[0].length;
   const afterHeading = md.slice(headingEnd);

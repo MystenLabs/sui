@@ -1,7 +1,7 @@
 //# publish
 
-module 0x42::Test {
-    public no(r: &mut u64): &u64 {
+mvir 0x42::Test {
+    public fun no(r: &mut u64): &u64 {
     label b0:
         // return type mismatch, no implicit freeze
         return move(r);

@@ -25,7 +25,6 @@ use std::{sync::Arc, time::Instant};
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::RandomnessRound;
-use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::transaction::{TransactionDataAPI, TransactionKind};
 
@@ -405,10 +404,19 @@ impl CheckpointExecutor {
 
         let seq = ckpt_state.data.checkpoint.sequence_number;
 
-        let batch = self
+        let mut batch = self
             .state
             .get_cache_commit()
             .build_db_batch(self.epoch_store.epoch(), &ckpt_state.data.tx_digests);
+
+        // Stamp the highest-committed-checkpoint watermark into the same batch
+        // as the outputs, so it lands atomically with the object writes. This
+        // gives consumers that read the live object set directly (the embedded
+        // rpc-store restore) a watermark that never lags the durable objects,
+        // unlike the separately-bumped `highest_executed` watermark below.
+        self.state
+            .get_cache_commit()
+            .set_highest_committed_checkpoint_in_batch(&mut batch, seq);
 
         finish_stage!(pipeline_handle, BuildDbBatch);
 
@@ -712,26 +720,15 @@ impl CheckpointExecutor {
         )
         .expect("failed to load checkpoint data");
 
-        if self.state.rpc_index.is_some() || self.config.data_ingestion_dir.is_some() {
-            let checkpoint_data = checkpoint.clone().into();
-            // Index the checkpoint. this is done out of order and is not written and committed to the
-            // DB until later (committing must be done in-order)
-            if let Some(rpc_index) = &self.state.rpc_index {
-                let mut layout_resolver = self.epoch_store.executor().type_layout_resolver(
-                    self.epoch_store.protocol_config(),
-                    Box::new(PackageStoreWithFallback::new(
-                        self.state.get_backing_package_store(),
-                        &checkpoint_data,
-                    )),
-                );
+        // Index the checkpoint. This is done out of order and is not written
+        // and committed to the DB until later (committing must be done in-order).
+        if let Some(rpc_index) = &self.state.rpc_index {
+            rpc_index.index_checkpoint(&checkpoint);
+        }
 
-                rpc_index.index_checkpoint(&checkpoint_data, layout_resolver.as_mut());
-            }
-
-            if let Some(path) = &self.config.data_ingestion_dir {
-                store_checkpoint_locally(path, &checkpoint_data)
-                    .expect("failed to store checkpoint locally");
-            }
+        if let Some(path) = &self.config.data_ingestion_dir {
+            store_checkpoint_locally(path, &checkpoint)
+                .expect("failed to store checkpoint locally");
         }
 
         Some(checkpoint)

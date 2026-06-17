@@ -1,10 +1,10 @@
 //# publish
-module 0x1::M {
-    struct X has drop { f: Self::Y }
-    struct Y has drop { g: u64, h: u64 }
+mvir 0x1::M {
+    public struct X has drop { f: Self::Y }
+    public struct Y has drop { g: u64, h: u64 }
 
     // tests deep borrows + releases
-    t1() {
+    fun t1() {
         let x: Self::X;
         let ref_x: &mut Self::X;
         let ref_x_f: &mut Self::Y;
@@ -28,7 +28,7 @@ module 0x1::M {
         return;
     }
 
-    foo(a: &mut u64, b: &mut u64) {
+    fun foo(a: &mut u64, b: &mut u64) {
     label b0:
         return;
     }

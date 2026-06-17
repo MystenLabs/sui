@@ -33,6 +33,9 @@ mysten-metrics.workspace = true
 
 anemo-cli.workspace = true
 anemo.workspace = true
+base64.workspace = true
+reqwest = { workspace = true, features = ["blocking"] }
+rustyline = { version = "14" }
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 typed-store.workspace = true
@@ -50,3 +53,12 @@ sui-types.workspace = true
 sui-package-dump.workspace = true
 sui-tls.workspace = true
 bin-version.workspace = true
+
+[target.'cfg(not(windows))'.dependencies]
+tideconsole = {git = "https://github.com/mystenlabs/tidehunter.git", rev = "2e0cd5669b1b6776e204e9ad0385189a65a62236", package = "tideconsole", optional = true}
+rhai = { version = "1", optional = true }
+rustyline = { version = "14", optional = true }
+parking_lot = { workspace = true, optional = true }
+
+[features]
+tideconsole = ["dep:tideconsole", "dep:rhai", "dep:rustyline", "dep:parking_lot"]

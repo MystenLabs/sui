@@ -1,8 +1,8 @@
 //# publish
-module 0x5::M {
+mvir 0x5::M {
     import 0x1::vector;
 
-    public new(): vector<u64> {
+    public fun new(): vector<u64> {
         let v: vector<u64>;
     label b0:
         v = vector::empty<u64>();
@@ -11,13 +11,13 @@ module 0x5::M {
         return move(v);
     }
 
-    public borrow_and_modify(v: &mut vector<u64>) {
+    public fun borrow_and_modify(v: &mut vector<u64>) {
     label b0:
         *vector::borrow_mut<u64>(move(v), 0) = 300;
         return;
     }
 
-    public verify_effects(v: &vector<u64>) {
+    public fun verify_effects(v: &vector<u64>) {
     label b0:
         assert(*vector::borrow<u64>(move(v), 0) == 300, 1000);
         return;
@@ -25,9 +25,9 @@ module 0x5::M {
 }
 
 //# publish
-module 0x6::test {
+mvir 0x6::test {
     import 0x5::M;
-    public test() {
+    public fun test() {
         let v: vector<u64>;
     label b0:
         v = M::new();

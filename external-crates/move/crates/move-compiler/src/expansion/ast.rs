@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
+    diagnostics::filter::FilterScope,
     parser::ast::{
         self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, DatatypeName, DocComment,
         ENTRY_MODIFIER, Field, FunctionName, MACRO_MODIFIER, ModuleName, NATIVE_MODIFIER,
@@ -33,9 +33,6 @@ use std::{
 
 #[derive(Debug, Clone)]
 pub struct Program {
-    /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
-    pub warning_filters_table: Arc<WarningFiltersTable>,
-    // Map of declared named addresses, and their values if specified
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
 
@@ -105,7 +102,7 @@ pub type ModuleIdent = Spanned<ModuleIdent_>;
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
     pub doc: DocComment,
-    pub warning_filter: WarningFilters,
+    pub warning_filter: FilterScope,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     /// The named address map used by this module during `expansion`.
@@ -161,7 +158,7 @@ pub struct DatatypeTypeParameter {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructDefinition {
     pub doc: DocComment,
-    pub warning_filter: WarningFilters,
+    pub warning_filter: FilterScope,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -181,7 +178,7 @@ pub enum StructFields {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumDefinition {
     pub doc: DocComment,
-    pub warning_filter: WarningFilters,
+    pub warning_filter: FilterScope,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -236,7 +233,7 @@ pub type FunctionBody = Spanned<FunctionBody_>;
 #[derive(PartialEq, Clone, Debug)]
 pub struct Function {
     pub doc: DocComment,
-    pub warning_filter: WarningFilters,
+    pub warning_filter: FilterScope,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -255,7 +252,7 @@ pub struct Function {
 #[derive(PartialEq, Clone, Debug)]
 pub struct Constant {
     pub doc: DocComment,
-    pub warning_filter: WarningFilters,
+    pub warning_filter: FilterScope,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -951,10 +948,7 @@ impl std::fmt::Display for Value_ {
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program {
-            warning_filters_table: _,
-            modules,
-        } = self;
+        let Program { modules } = self;
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(format!("module {}", m));
             w.block(|w| mdef.ast_debug(w));

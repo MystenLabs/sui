@@ -5,12 +5,14 @@ use clap::Parser;
 use move_cli::base::test::UnitTestResult;
 use move_package_alt_compilation::build_config::BuildConfig;
 use std::path::Path;
+use sui_package_alt::SuiFlavor;
 use sui_sdk::wallet_context::WalletContext;
 
 pub mod build;
 pub mod cache_package;
 pub mod coverage;
 pub mod disassemble;
+pub mod format;
 pub mod migrate;
 pub mod new;
 pub mod summary;
@@ -24,6 +26,7 @@ pub enum Command {
     #[command(hide = true)]
     CachePackage(cache_package::CachePackage),
     Disassemble(disassemble::Disassemble),
+    Format(format::Format),
     Migrate(migrate::Migrate),
     New(new::New),
     Test(unit_test::Test),
@@ -44,12 +47,14 @@ pub async fn execute_move_command(
     command_meta: Option<CommandMeta>,
     wallet: &WalletContext,
 ) -> anyhow::Result<()> {
+    let flavor = SuiFlavor::with_client(wallet);
     match command {
         Command::Build(c) => c.execute(package_path, build_config, wallet).await,
-        Command::CachePackage(c) => c.execute().await,
-        Command::Coverage(c) => c.execute(package_path, build_config).await,
-        Command::Disassemble(c) => c.execute(package_path, build_config).await,
-        Command::Migrate(c) => c.execute(package_path, build_config).await,
+        Command::CachePackage(c) => c.execute(flavor).await,
+        Command::Coverage(c) => c.execute(package_path, build_config, flavor).await,
+        Command::Disassemble(c) => c.execute(package_path, build_config, flavor).await,
+        Command::Format(c) => c.execute().await,
+        Command::Migrate(c) => c.execute(package_path, build_config, flavor).await,
         Command::New(c) => c.execute(package_path),
         Command::Summary(s) => {
             let additional_metadata = command_meta
@@ -58,11 +63,13 @@ pub async fn execute_move_command(
                     metadata
                 })
                 .unwrap_or_default();
-            s.execute(package_path, build_config, additional_metadata)
+            s.execute(package_path, build_config, flavor, additional_metadata)
                 .await
         }
         Command::Test(c) => {
-            let result = c.execute(package_path, build_config, wallet).await?;
+            let result = c
+                .execute(package_path, build_config, wallet, flavor)
+                .await?;
 
             // Return a non-zero exit code if any test failed
             if let UnitTestResult::Failure = result {
@@ -71,6 +78,6 @@ pub async fn execute_move_command(
 
             Ok(())
         }
-        Command::UpdateDeps(c) => c.execute(package_path, build_config, wallet).await,
+        Command::UpdateDeps(c) => c.execute(package_path, build_config, wallet, flavor).await,
     }
 }

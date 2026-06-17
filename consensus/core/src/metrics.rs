@@ -4,8 +4,9 @@
 use std::sync::Arc;
 
 use prometheus::{
-    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
-    exponential_buckets, register_histogram_vec_with_registry, register_histogram_with_registry,
+    Gauge, GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    Registry, exponential_buckets, register_gauge_vec_with_registry, register_gauge_with_registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
@@ -146,8 +147,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) invalid_blocks: IntCounterVec,
     pub(crate) rejected_blocks: IntCounterVec,
     pub(crate) subscribed_blocks: IntCounterVec,
-    #[allow(unused)]
-    pub(crate) observer_subscribed_blocks: IntCounter,
+    pub(crate) observer_subscribed_blocks_batch_size: Histogram,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
     pub(crate) last_committed_authority_round: IntGaugeVec,
@@ -169,6 +169,10 @@ pub(crate) struct NodeMetrics {
     pub(crate) quorum_receive_latency: Histogram,
     pub(crate) block_receive_delay: IntCounterVec,
     pub(crate) reputation_scores: IntGaugeVec,
+    pub(crate) leader_schedule_total_scores: IntGaugeVec,
+    pub(crate) leader_schedule_normalized_scores: GaugeVec,
+    pub(crate) leader_schedule_last_num_leaders: IntGauge,
+    pub(crate) leader_schedule_average_num_leaders: Gauge,
     pub(crate) scope_processing_time: HistogramVec,
     pub(crate) sub_dags_per_commit_count: Histogram,
     pub(crate) block_suspensions: IntCounterVec,
@@ -508,9 +512,10 @@ impl NodeMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
-            observer_subscribed_blocks: register_int_counter_with_registry!(
-                "observer_subscribed_blocks",
-                "Number of blocks received from a peer before verification",
+            observer_subscribed_blocks_batch_size: register_histogram_with_registry!(
+                "observer_subscribed_blocks_batch_size",
+                "The number of blocks received from a peer before verification in a single batch",
+                NUM_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             verified_blocks: register_int_counter_vec_with_registry!(
@@ -617,6 +622,28 @@ impl NodeMetrics {
                 "reputation_scores",
                 "Reputation scores for each authority",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            leader_schedule_total_scores: register_int_gauge_vec_with_registry!(
+                "leader_schedule_total_scores",
+                "LeaderScheduleV3 running per-authority score over the scoring window. Each commit contributes voted_for_stake * certified_by_stake (stake^2 units)",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            leader_schedule_normalized_scores: register_gauge_vec_with_registry!(
+                "leader_schedule_normalized_scores",
+                "LeaderScheduleV3 per-authority total score divided by (running sum of per-commit leader stake) * committee total stake. Stake^2 over stake^2; a fraction with no stake dimension",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            leader_schedule_last_num_leaders: register_int_gauge_with_registry!(
+                "leader_schedule_last_num_leaders",
+                "LeaderScheduleV3 number of leader-round blocks in the most recently scored commit",
+                registry,
+            ).unwrap(),
+            leader_schedule_average_num_leaders: register_gauge_with_registry!(
+                "leader_schedule_average_num_leaders",
+                "LeaderScheduleV3 moving average of the number of leaders per commit across the scoring window",
                 registry,
             ).unwrap(),
             scope_processing_time: register_histogram_vec_with_registry!(

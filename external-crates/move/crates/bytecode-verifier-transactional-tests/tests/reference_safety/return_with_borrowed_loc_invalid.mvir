@@ -1,9 +1,9 @@
 //# publish
-module 0x1::M {
-    struct X has drop { y: Self::Y }
-    struct Y has drop { u: u64 }
+mvir 0x1::M {
+    public struct X has drop { y: Self::Y }
+    public struct Y has drop { u: u64 }
 
-    t1(): &u64 {
+    fun t1(): &u64 {
         let x: u64;
         let y: &u64;
     label b0:
@@ -15,10 +15,10 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::M2 {
-    struct X has drop { y: Self::Y }
-    struct Y has drop { u: u64 }
-    t2(): &u64 {
+mvir 0x1::M2 {
+    public struct X has drop { y: Self::Y }
+    public struct Y has drop { u: u64 }
+    fun t2(): &u64 {
         let x: u64;
         let y: &u64;
     label b0:
@@ -30,10 +30,10 @@ module 0x1::M2 {
 }
 
 //# publish
-module 0x1::M3 {
-    struct X has drop { y: Self::Y }
-    struct Y has drop { u: u64 }
-    t3(): &u64 {
+mvir 0x1::M3 {
+    public struct X has drop { y: Self::Y }
+    public struct Y has drop { u: u64 }
+    fun t3(): &u64 {
         let s: Self::X;
         let x: &Self::X;
         let y: &Self::Y;
@@ -49,10 +49,10 @@ module 0x1::M3 {
 }
 
 //# publish
-module 0x1::M4 {
-    struct X has drop { y: Self::Y }
-    struct Y has drop { u: u64 }
-    t4(): &u64 {
+mvir 0x1::M4 {
+    public struct X has drop { y: Self::Y }
+    public struct Y has drop { u: u64 }
+    fun t4(): &u64 {
         let s: Self::X;
         let x: &Self::X;
         let y: &Self::Y;

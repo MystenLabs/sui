@@ -1,6 +1,6 @@
 //# publish
-module 0x1::M {
-    public id<T>(x: T): T {
+mvir 0x1::M {
+    public fun id<T>(x: T): T {
     label b0:
         return move(x);
     }
@@ -9,10 +9,10 @@ module 0x1::M {
 
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::M;
 
-entry foo() {
+entry fun foo() {
     let x: u64;
     let y: u64;
 label b0:

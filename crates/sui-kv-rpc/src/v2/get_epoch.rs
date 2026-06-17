@@ -17,7 +17,7 @@ use sui_rpc_api::{
 use sui_sdk_types::ValidatorCommittee;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
-pub const READ_MASK_DEFAULT: &str = "epoch,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
+pub const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EPOCH;
 
 pub async fn get_epoch(
     mut client: BigTableClient,

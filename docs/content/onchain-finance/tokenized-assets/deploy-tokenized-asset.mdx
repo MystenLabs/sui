@@ -61,20 +61,19 @@ $ sui client publish --gas-budget <GAS-BUDGET>
 The package should successfully deploy, and you then see:
  
 ```sh
-UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING asset_tokenization
 Successfully verified dependencies on-chain against source.
 ```
  
-Store the `package ID` and `registry ID` from the created objects in your `.env` file. Then modify `Move.toml`: under the `[addresses]` section, replace `0x0` with the same `package ID`. Optionally, under the `[package]` section, add `published-at = <package ID>` (this step is not needed if you see a `Move.lock` file after running `sui client publish`).
- 
+Store the `package ID` and `registry ID` from the created objects in your `.env` file. The package system automatically records the published address in `Published.toml`, so you do not need to manually edit `Move.toml` after publishing.
+
 For more details, see the setup folder's [README](https://github.com/MystenLabs/asset-tokenization/tree/main/setup).
  
 #### `template` package
  
-You can publish the `template` package manually with `sui client publish` or automatically through the WASM library using `npm run publish-template`. Before running the automatic flow, ensure the `asset_tokenization` package address is set in the `[addresses]` section of `asset_tokenization/Move.toml` and matches the original deployment. If no `Move.lock` file exists, also populate the `published-at` field with the latest package deployment address.
+You can publish the `template` package manually with `sui client publish` or automatically through the WASM library using `npm run publish-template`.
  
 To publish manually, run the following from the `move/template` directory:
  
@@ -85,7 +84,6 @@ $ sui client publish --gas-budget <GAS-BUDGET>
 The package should successfully deploy, and you then see:
  
 ```sh
-UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
 INCLUDING DEPENDENCY asset_tokenization
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib

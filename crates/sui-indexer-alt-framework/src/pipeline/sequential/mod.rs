@@ -202,8 +202,8 @@ mod tests {
     use prometheus::Registry;
     use sui_types::full_checkpoint_content::Checkpoint;
 
-    use crate::mocks::store::MockConnection;
-    use crate::mocks::store::MockStore;
+    use crate::mocks::store::FallibleMockConnection;
+    use crate::mocks::store::FallibleMockStore;
     use crate::pipeline::IndexedCheckpoint;
 
     use super::*;
@@ -224,7 +224,7 @@ mod tests {
 
     #[async_trait]
     impl Handler for TestHandler {
-        type Store = MockStore;
+        type Store = FallibleMockStore;
         type Batch = Vec<u64>;
         const MAX_BATCH_CHECKPOINTS: usize = 3; // Using small max value for testing.
         const MIN_EAGER_ROWS: usize = 4; // Using small eager value for testing.
@@ -236,7 +236,7 @@ mod tests {
         async fn commit<'a>(
             &self,
             batch: &Self::Batch,
-            conn: &mut MockConnection<'a>,
+            conn: &mut FallibleMockConnection<'a>,
         ) -> anyhow::Result<usize> {
             if !batch.is_empty() {
                 let mut sequential_data = conn.0.sequential_checkpoint_data.lock().unwrap();
@@ -247,7 +247,7 @@ mod tests {
     }
 
     struct TestSetup {
-        store: MockStore,
+        store: FallibleMockStore,
         checkpoint_tx: mpsc::Sender<IndexedCheckpoint<TestHandler>>,
         #[allow(unused)]
         service: Service,
@@ -256,7 +256,11 @@ mod tests {
     /// Emulates adding a sequential pipeline to the indexer. Bypasses the processor stage and
     /// feeds [IndexedCheckpoint]s directly to the collector. `next_checkpoint` is the starting
     /// checkpoint for the indexer.
-    fn setup_test(next_checkpoint: u64, config: SequentialConfig, store: MockStore) -> TestSetup {
+    fn setup_test(
+        next_checkpoint: u64,
+        config: SequentialConfig,
+        store: FallibleMockStore,
+    ) -> TestSetup {
         let metrics = IndexerMetrics::new(None, &Registry::default());
 
         let min_eager_rows = config.min_eager_rows.unwrap_or(TestHandler::MIN_EAGER_ROWS);
@@ -318,7 +322,7 @@ mod tests {
     #[tokio::test]
     async fn test_committer_processes_sequential_checkpoints() {
         let config = SequentialConfig::default();
-        let mut setup = setup_test(0, config, MockStore::default());
+        let mut setup = setup_test(0, config, FallibleMockStore::default());
 
         // Send checkpoints in order
         for i in 0..3 {
@@ -337,12 +341,12 @@ mod tests {
         assert_eq!(watermark.tx_hi, 2);
     }
 
-    /// Configure the MockStore with no watermark, and emulate `first_checkpoint` by passing the
-    /// `initial_watermark` into the setup.
+    /// Configure `FallibleMockStore` with no watermark, and emulate `first_checkpoint` by passing
+    /// the `initial_watermark` into the setup.
     #[tokio::test]
     async fn test_committer_processes_sequential_checkpoints_with_initial_watermark() {
         let config = SequentialConfig::default();
-        let mut setup = setup_test(5, config, MockStore::default());
+        let mut setup = setup_test(5, config, FallibleMockStore::default());
 
         // Verify watermark hasn't progressed
         let watermark = setup.store.watermark(TestHandler::NAME);
@@ -379,7 +383,7 @@ mod tests {
     #[tokio::test]
     async fn test_committer_processes_out_of_order_checkpoints() {
         let config = SequentialConfig::default();
-        let mut setup = setup_test(0, config, MockStore::default());
+        let mut setup = setup_test(0, config, FallibleMockStore::default());
 
         // Send checkpoints out of order
         for i in [1, 0, 2] {
@@ -401,7 +405,7 @@ mod tests {
     #[tokio::test]
     async fn test_committer_commit_up_to_max_batch_checkpoints() {
         let config = SequentialConfig::default();
-        let mut setup = setup_test(0, config, MockStore::default());
+        let mut setup = setup_test(0, config, FallibleMockStore::default());
 
         // Send checkpoints up to MAX_BATCH_CHECKPOINTS
         for i in 0..4 {
@@ -424,7 +428,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let mut setup = setup_test(0, config, MockStore::default());
+        let mut setup = setup_test(0, config, FallibleMockStore::default());
 
         // Wait for initial poll to be over
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -458,7 +462,7 @@ mod tests {
         };
 
         // Create store with transaction failure configuration
-        let store = MockStore::default().with_transaction_failures(1); // Will fail once before succeeding
+        let store = FallibleMockStore::default().with_transaction_failures(1); // Will fail once before succeeding
 
         let mut setup = setup_test(10, config, store);
 
@@ -486,7 +490,7 @@ mod tests {
             ..Default::default()
         };
 
-        let store = MockStore::default().with_commit_delay(700);
+        let store = FallibleMockStore::default().with_commit_delay(700);
         let mut setup = setup_test(0, config, store);
 
         for i in 0..6 {
@@ -512,7 +516,7 @@ mod tests {
             ..Default::default()
         };
 
-        let store = MockStore::default().with_commit_delay(100);
+        let store = FallibleMockStore::default().with_commit_delay(100);
         let mut setup = setup_test(0, config, store);
 
         for i in 0..6 {

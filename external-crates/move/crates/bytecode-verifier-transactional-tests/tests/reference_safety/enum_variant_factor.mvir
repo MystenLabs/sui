@@ -1,11 +1,11 @@
 //# publish
-module 0x1::o1 {
-    enum X has drop {
+mvir 0x1::o1 {
+    public enum X has drop {
         Empty { },
         One { x: u64, y: u64 },
     }
 
-    f(e: &mut Self::X) {
+    fun f(e: &mut Self::X) {
         let a1: &mut Self::X;
         let a2: &mut Self::X;
         label b0:
@@ -17,13 +17,13 @@ module 0x1::o1 {
 }
 
 //# publish
-module 0x1::o2 {
-    enum X has drop {
+mvir 0x1::o2 {
+    public enum X has drop {
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
     }
 
-    c(e: &mut Self::X) {
+    fun c(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         let a1: &mut Self::X;
@@ -36,13 +36,13 @@ module 0x1::o2 {
 }
 
 //# publish
-module 0x1::o3 {
-    enum X has drop {
+mvir 0x1::o3 {
+    public enum X has drop {
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
     }
 
-    c(e: &mut Self::X) {
+    fun c(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         let a1: &mut Self::X;
@@ -54,13 +54,13 @@ module 0x1::o3 {
 }
 
 //# publish
-module 0x1::o4 {
-    enum X has drop {
+mvir 0x1::o4 {
+    public enum X has drop {
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
     }
 
-    c(e: &mut Self::X) {
+    fun c(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         let a1: &mut Self::X;
@@ -74,13 +74,13 @@ module 0x1::o4 {
 }
 
 //# publish
-module 0x1::o5 {
-    enum X has drop {
+mvir 0x1::o5 {
+    public enum X has drop {
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
     }
 
-    c(e: &mut Self::X) {
+    fun c(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         let a1: &mut Self::X;
@@ -94,13 +94,13 @@ module 0x1::o5 {
 }
 
 //# publish
-module 0x1::invalid {
-    enum X has drop {
+mvir 0x1::invalid {
+    public enum X has drop {
         One { x: u64 },
         Two { x: u64, y: u64},
     }
 
-    h(e: &mut Self::X) {
+    fun h(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         let counter: &mut u64;
@@ -118,13 +118,13 @@ module 0x1::invalid {
 }
 
 //# publish
-module 0x1::invalid2 {
-    enum X has drop {
+mvir 0x1::invalid2 {
+    public enum X has drop {
         One { x: u64 },
         Two { x: u64, y: u64},
     }
 
-    h(e: &mut Self::X) {
+    fun h(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         let counter: &mut u64;

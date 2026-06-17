@@ -48,6 +48,8 @@ use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_kv_rpc::KvRpcServer;
+use sui_kvstore::ALL_PIPELINE_NAMES;
+use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
@@ -83,6 +85,7 @@ use url::Url;
 
 pub mod coin_registry;
 pub mod find;
+pub mod move_helpers;
 
 /// A simulation of the network, accompanied by off-chain services (database, indexer, RPC),
 /// connected by local data ingestion.
@@ -717,12 +720,16 @@ impl OffchainCluster {
             let mut interval = interval(Duration::from_millis(200));
             loop {
                 interval.tick().await;
-                if client.get_watermark().await.is_ok_and(|wm| {
-                    wm.is_some_and(|wm| {
-                        wm.checkpoint_hi_inclusive
-                            .is_some_and(|cp| cp >= checkpoint)
+                if client
+                    .get_watermark_for_pipelines(&ALL_PIPELINE_NAMES)
+                    .await
+                    .is_ok_and(|wm| {
+                        wm.is_some_and(|wm| {
+                            wm.checkpoint_hi_inclusive
+                                .is_some_and(|cp| cp >= checkpoint)
+                        })
                     })
-                }) {
+                {
                     break;
                 }
             }
@@ -842,13 +849,15 @@ async fn start_archival(
         BtIndexerConfig::default(),
         PipelineLayer::default(),
         Chain::Unknown,
+        &ALPHA_PIPELINE_NAMES,
         registry,
     )
     .await
     .context("Failed to create BigTable indexer")?;
 
+    // Use the BigTable wrapper, not the raw framework indexer, so bitmap
+    // committer background tasks are supervised for the duration of the test.
     let bt_indexer_service = bt_indexer
-        .indexer
         .run()
         .await
         .context("Failed to start BigTable indexer")?;
@@ -862,7 +871,13 @@ async fn start_archival(
     .await
     .context("Failed to create KvRpcServer")?;
     let kv_rpc_service = kv_rpc_server
-        .start_service(kv_rpc_address, sui_kv_rpc::ServerConfig::default())
+        .start_service(
+            kv_rpc_address,
+            sui_kv_rpc::ServerConfig {
+                enable_experimental_query_apis: true,
+                ..Default::default()
+            },
+        )
         .await
         .context("Failed to start kv-rpc server")?;
 

@@ -1,12 +1,12 @@
 //# publish
-module 0x6::o {
-    enum X has drop { 
+mvir 0x6::o {
+    public enum X has drop { 
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
     }
 
     // Tests that in this situation `x` and `x2` are aliases of each other
-    a(e: &mut Self::X) {
+    fun a(e: &mut Self::X) {
         let x: &mut u64;
         let x2: &mut u64;
         let y: &mut u64;
@@ -19,7 +19,7 @@ module 0x6::o {
     }
 
     // Tests that in this situation `x` and `x2` are aliases of each other and can both be mutated
-    b(e: &mut Self::X) {
+    fun b(e: &mut Self::X) {
         let x: &mut u64;
         let x2: &mut u64;
         let y: &mut u64;
@@ -32,7 +32,7 @@ module 0x6::o {
             return;
     }
 
-    public test1() {
+    public fun test1() {
         let x: Self::X;
         let x1: u64;
         let x2: u64;
@@ -45,7 +45,7 @@ module 0x6::o {
             return;
     }
 
-    public test2() {
+    public fun test2() {
         let x: Self::X;
         let x1: u64;
         let x2: u64;

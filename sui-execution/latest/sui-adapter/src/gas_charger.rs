@@ -11,13 +11,14 @@ pub mod checked {
     use crate::temporary_store::TemporaryStore;
     use either::Either;
     use indexmap::IndexMap;
+    use mysten_common::assert_reachable;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::deny_list_v2::CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS;
     use sui_types::digests::TransactionDigest;
     use sui_types::error::ExecutionErrorTrait;
     use sui_types::gas::{GasCostSummary, SuiGasStatus, deduct_gas};
     use sui_types::gas_model::gas_predicates::{
-        charge_upgrades, dont_charge_budget_on_storage_oog,
+        charge_upgrades, dont_charge_budget_on_storage_oog, refresh_gas_payment_location,
     };
     use sui_types::{
         accumulator_event::AccumulatorEvent,
@@ -202,6 +203,13 @@ pub mod checked {
             }
         }
 
+        pub(crate) fn gas_payment_location(&self) -> Option<PaymentLocation> {
+            match &self.payment {
+                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => None,
+                PaymentMetadata::Smash(metadata) => Some(metadata.gas_charge_location),
+            }
+        }
+
         pub fn gas_budget(&self) -> u64 {
             self.gas_status.gas_budget()
         }
@@ -339,6 +347,7 @@ pub mod checked {
         pub fn charge_gas<T, E: ExecutionErrorTrait>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
+            protocol_config: &ProtocolConfig,
             execution_result: &mut Result<T, E>,
         ) -> GasCostSummary {
             // at this point, we have done *all* charging for computation,
@@ -375,13 +384,10 @@ pub mod checked {
             temporary_store.ensure_active_inputs_mutated();
             temporary_store.collect_storage_and_rebate(self);
 
-            let gas_payment_location = match &self.payment {
-                PaymentMetadata::Unmetered => {
-                    return GasCostSummary::default();
-                }
-                PaymentMetadata::Gasless => None,
-                PaymentMetadata::Smash(metadata) => Some(metadata.gas_charge_location),
-            };
+            if matches!(&self.payment, PaymentMetadata::Unmetered) {
+                return GasCostSummary::default();
+            }
+            let gas_payment_location = self.gas_payment_location();
             if let Some(PaymentLocation::Coin(_)) = gas_payment_location {
                 #[skip_checked_arithmetic]
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
@@ -398,12 +404,19 @@ pub mod checked {
                 })
                 .unwrap_or(false)
                 && matches!(gas_payment_location, Some(PaymentLocation::AddressBalance(_))) {
+                    debug_assert!(!protocol_config.early_exit_on_iffw(), "Should have not reached charge gas in this case with IFFW");
                     // If we don't have enough balance to withdraw, don't charge for gas
                     // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
                     return GasCostSummary::default();
             }
 
             self.compute_storage_and_rebate(temporary_store, execution_result);
+
+            let gas_payment_location = if refresh_gas_payment_location(self.gas_model_version) {
+                self.gas_payment_location()
+            } else {
+                gas_payment_location
+            };
 
             let cost_summary = self.gas_status.summary();
 
@@ -594,6 +607,7 @@ pub mod checked {
                 assert_ne!(location, smash_location, "Payment methods must be unique");
                 match payment_method {
                     PaymentMethod::AddressBalance(sui_address, reservation) => {
+                        assert_reachable!("smashed payment is address-balance reservation");
                         let balance_type = sui_types::balance::Balance::type_tag(
                             sui_types::gas_coin::GAS::type_tag(),
                         );
@@ -606,12 +620,14 @@ pub mod checked {
                         temporary_store.add_accumulator_event(event);
                     }
                     PaymentMethod::Coin((id, _, _)) => {
+                        assert_reachable!("smashed payment is coin object");
                         temporary_store.delete_input_object(id);
                     }
                 }
             }
             match &self.smash_target {
                 PaymentMethod::AddressBalance(sui_address, reservation) => {
+                    assert_reachable!("smash target is address-balance reservation");
                     // The reservation here is only a maximal withdrawal from this address balance
                     // We do not need to withdraw here unless necessary, which will be done during
                     // gas charging

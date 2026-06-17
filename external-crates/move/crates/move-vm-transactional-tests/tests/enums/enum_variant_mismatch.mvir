@@ -1,11 +1,11 @@
 //# print-bytecode
-module 0x6::MonomorphicEnums {
-    enum EnumWithTwoVariants<T> {
+mvir 0x6::MonomorphicEnums {
+    public enum EnumWithTwoVariants<T> {
         One { },
         Two { x: T }
     }
 
-    public f<T>(t: T, e: T): T {
+    public fun f<T>(t: T, e: T): T {
         let x: Self::EnumWithTwoVariants<T>;
         let y: T;
         label b0:
@@ -24,13 +24,13 @@ module 0x6::MonomorphicEnums {
 }
 
 //# publish
-module 0x6::MonomorphicEnums {
-    enum EnumWithTwoVariants<T> {
+mvir 0x6::MonomorphicEnums {
+    public enum EnumWithTwoVariants<T> {
         One { },
         Two { x: T }
     }
 
-    public f<T>(t: T, e: T): T {
+    public fun f<T>(t: T, e: T): T {
         let x: Self::EnumWithTwoVariants<T>;
         let y: T;
         label b0:
@@ -49,9 +49,9 @@ module 0x6::MonomorphicEnums {
 }
 
 //# run
-module 0x7::m {
+mvir 0x7::m {
 import 0x6::MonomorphicEnums;
-entry foo() {
+entry fun foo() {
     let x: u64;
     label b0:
         x = MonomorphicEnums::f<u64>(42, 0);

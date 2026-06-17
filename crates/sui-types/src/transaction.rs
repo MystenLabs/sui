@@ -22,8 +22,8 @@ use crate::crypto::{
     DefaultHash, Ed25519SuiSignature, EmptySignInfo, RandomnessRound, Signature, Signer,
     SuiSignatureInner, ToFromBytes, default_hash,
 };
-use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSignedDataDigest};
-use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
+use crate::digests::{AdditionalConsensusStateDigest, SenderSignedDataDigest};
+use crate::digests::{ChainIdentifier, ConsensusCommitDigest};
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
 use crate::funds_accumulator::{FUNDS_ACCUMULATOR_MODULE_NAME, WITHDRAWAL_SPLIT_FUNC_NAME};
 use crate::gas_coin::GAS;
@@ -2081,7 +2081,9 @@ impl TransactionKind {
         Ok(input_objects)
     }
 
-    fn get_funds_withdrawals<'a>(&'a self) -> impl Iterator<Item = &'a FundsWithdrawalArg> + 'a {
+    pub fn get_funds_withdrawals<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = &'a FundsWithdrawalArg> + 'a {
         let TransactionKind::ProgrammableTransaction(pt) = &self else {
             return Either::Left(iter::empty());
         };
@@ -2099,6 +2101,10 @@ impl TransactionKind {
             return Either::Left(iter::empty());
         };
         Either::Right(pt.coin_reservation_obj_refs())
+    }
+
+    pub fn has_coin_reservations(&self) -> bool {
+        self.get_coin_reservation_obj_refs().next().is_some()
     }
 
     pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
@@ -2699,6 +2705,10 @@ impl TransactionData {
                 | Owner::ConsensusAddressOwner {
                     start_version: initial_shared_version,
                     ..
+                }
+                | Owner::Party {
+                    start_version: initial_shared_version,
+                    ..
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.0,
                     initial_shared_version,
@@ -2909,8 +2919,6 @@ pub trait TransactionDataAPI {
     ) -> Vec<ParsedObjectRefWithdrawal>;
 
     fn validity_check(&self, context: &TxValidityCheckContext<'_>) -> SuiResult;
-
-    fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult;
 
     /// Check if the transaction is compliant with sponsorship.
     fn check_sponsorship(&self) -> UserInputResult;
@@ -3440,13 +3448,6 @@ impl TransactionDataAPI for TransactionDataV1 {
             }
         }
 
-        self.validity_check_no_gas_check(config)?;
-        Ok(())
-    }
-
-    // Keep all the logic for validity here, we need this for dry run where the gas
-    // may not be provided and created "on the fly"
-    fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult {
         self.kind().validity_check(config)?;
 
         if config.enable_gasless() && self.is_gasless_transaction() {
@@ -3454,12 +3455,14 @@ impl TransactionDataAPI for TransactionDataV1 {
                 debug_fatal!("gasless transaction is not a ProgrammableTransaction");
                 return Err(UserInputError::Unsupported(
                     "Gasless transactions must be programmable transactions".to_string(),
-                ));
+                )
+                .into());
             };
             pt.validate_gasless_transaction(config)?;
         }
 
-        self.check_sponsorship()
+        self.check_sponsorship()?;
+        Ok(())
     }
 
     /// Check if the transaction is sponsored (namely gas owner != sender)
@@ -3558,7 +3561,12 @@ impl TransactionDataV1 {
         for withdraw in withdraws {
             let reserved_amount = match &withdraw.reservation {
                 Reservation::MaxAmountU64(amount) => {
-                    assert!(*amount > 0, "verified in validity check");
+                    if *amount == 0 {
+                        return Err(UserInputError::InvalidWithdrawReservation {
+                            error: "Balance withdraw reservation amount must be non-zero"
+                                .to_string(),
+                        });
+                    }
                     *amount
                 }
             };
@@ -4281,58 +4289,8 @@ impl SignedTransaction {
 pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
 impl CertifiedTransaction {
-    pub fn certificate_digest(&self) -> CertificateDigest {
-        let mut digest = DefaultHash::default();
-        bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
-        let hash = digest.finalize();
-        CertificateDigest::new(hash.into())
-    }
-
     pub fn gas_price(&self) -> u64 {
         self.data().transaction_data().gas_price()
-    }
-
-    // TODO: Eventually we should remove all calls to verify_signature
-    // and make sure they all call verify to avoid repeated verifications.
-    pub fn verify_signatures_authenticated(
-        &self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
-    ) -> SuiResult {
-        verify_sender_signed_data_message_signatures(
-            self.data(),
-            committee.epoch(),
-            verify_params,
-            zklogin_inputs_cache,
-            vec![],
-        )?;
-        self.auth_sig().verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            committee,
-        )
-    }
-
-    pub fn try_into_verified_for_testing(
-        self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-    ) -> SuiResult<VerifiedCertificate> {
-        self.verify_signatures_authenticated(
-            committee,
-            verify_params,
-            Arc::new(VerifiedDigestCache::new_empty()),
-        )?;
-        Ok(VerifiedCertificate::new_from_verified(self))
-    }
-
-    pub fn verify_committee_sigs_only(&self, committee: &Committee) -> SuiResult {
-        self.auth_sig().verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            committee,
-        )
     }
 }
 

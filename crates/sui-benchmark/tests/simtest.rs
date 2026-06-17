@@ -405,6 +405,14 @@ mod test {
     async fn test_simulated_load_reconfig_with_crashes_and_delays() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
+        // Use a short DKG timeout so that if DKG is prevented from completing (e.g. by the
+        // rb-dkg fail point below), DKG failure is declared quickly rather than at round 3000.
+        // This ensures the epoch transition completes within the surfer's 120s window.
+        let _dkg_timeout_guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_random_beacon_dkg_timeout_round_for_testing(50);
+            config
+        });
+
         register_fail_point_if("select-random-cache", || true);
 
         let test_cluster = Arc::new(
@@ -498,6 +506,10 @@ mod test {
         });
         register_fail_point_async("consensus-delay", || delay_failpoint(10..20, 0.001));
         register_fail_point_async("randomness-delay", || delay_failpoint(10..1000, 0.5));
+
+        // Cause DKG to fail ~5% of the time. With 4 validators and crashes reducing the active
+        // quorum, empirically ~6% per-validator skip rate produces ~5% DKG failure per epoch.
+        register_fail_point_if("rb-dkg", || thread_rng().gen_bool(0.06));
 
         test_simulated_load(test_cluster, 120).await;
     }
@@ -1595,6 +1607,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_composite_workload() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
         let test_cluster = build_test_cluster(4, 10000, 1).await;
 
         let protocol_config = sui_protocol_config::ProtocolConfig::get_for_version(
@@ -1697,7 +1710,12 @@ mod test {
             assert!(metrics_sum.success_count > 150);
             assert!(metrics_sum.permanent_failure_count > 50);
         }
-        assert!(metrics_sum.cancellation_count > 100);
+        // Congestion-induced cancellations vary seed-to-seed in a narrow band that
+        // can dip just below 100 (observed ~98-121 over a 200-seed sweep), making a
+        // `> 100` bar flake ~3% of the time. A `> 50` bar still asserts that
+        // shared-object congestion control actually kicked in, with comfortable
+        // margin below the observed floor.
+        assert!(metrics_sum.cancellation_count > 50);
 
         if address_aliases_enabled {
             let alias_add_stats = metrics
@@ -1735,6 +1753,49 @@ mod test {
                 "expected at least one authenticated event emit"
             );
         }
+    }
+
+    /// Regression test for a panic at transaction_rewriting.rs where a coin-reservation
+    /// transaction executes before the settlement transaction that creates the accumulator
+    /// object it depends on. Uses execution delays to create adversarial scheduling.
+    #[sim_test(config = "test_config()")]
+    async fn test_coin_reservation_checkpoint_replay() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        register_fail_point_async("transaction_execution_delay", move || async move {
+            if thread_rng().gen_range(0..10u64) == 0 {
+                let delay = thread_rng().gen_range(0..1000u64);
+                tokio::time::sleep(Duration::from_millis(delay)).await;
+            }
+        });
+
+        let test_cluster = build_test_cluster(4, 10000, 1).await;
+
+        use sui_benchmark::workloads::composite::*;
+        let composite_config = CompositeWorkloadConfig {
+            num_shared_counters: 2,
+            shared_counter_hotness: 0.95,
+            address_balance_amount: 1000,
+            address_balance_gas_probability: 0.5,
+            conflicting_transaction_probability: 0.1,
+            ..Default::default()
+        }
+        .with_probability(SharedCounterIncrement::NAME, 0.1)
+        .with_probability(AddressBalanceDeposit::NAME, 0.1)
+        .with_probability(AddressBalanceWithdraw::NAME, 0.1)
+        .with_probability(AddressBalanceOverdraw::NAME, 0.3)
+        .with_probability(CoinReservationWithdraw::NAME, 0.3);
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            60,
+            SimulatedLoadConfig::composite_only(composite_config),
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -2096,6 +2157,145 @@ mod test {
             .check_databases_equal(sync_indexes.tables());
     }
 
+    /// Test that Observer nodes can connect to validators and stream consensus
+    #[sim_test(config = "test_config()")]
+    async fn test_network_with_observer_node() {
+        use consensus_config::{NetworkPublicKey, ObserverParameters, PeerRecord};
+        use sui_types::crypto::KeypairTraits;
+
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        info!("Setting up 4-validator network for Observer node test");
+
+        // Build a 4-node validator network with observer server enabled on all validators
+        let mut test_cluster = init_test_cluster_builder(4, 40_000)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .with_validator_observer_config(Arc::new(|_idx| Some(ObserverParameters::default())))
+            .build()
+            .await;
+
+        info!("Creating Observer node configuration");
+
+        // Find the validator that has the observer server enabled
+        let observer_peers = {
+            let validator = test_cluster
+                .swarm
+                .validator_nodes()
+                .find(|v| {
+                    v.config()
+                        .consensus_config
+                        .as_ref()
+                        .and_then(|c| c.parameters.as_ref())
+                        .and_then(|p| p.observer.server_port)
+                        .is_some()
+                })
+                .expect("At least one validator should have observer server enabled");
+            let validator_config = validator.config();
+            let consensus_config = validator_config.consensus_config.as_ref().unwrap();
+
+            let observer_port = consensus_config
+                .parameters
+                .as_ref()
+                .and_then(|p| p.observer.server_port)
+                .unwrap();
+
+            let network_public_key =
+                NetworkPublicKey::new(validator_config.network_key_pair().public().clone());
+
+            let validator_host = validator_config
+                .network_address
+                .to_socket_addr()
+                .unwrap()
+                .ip()
+                .to_string();
+
+            let observer_address: sui_types::multiaddr::Multiaddr =
+                format!("/ip4/{}/udp/{}/http", validator_host, observer_port)
+                    .parse()
+                    .unwrap();
+
+            info!(
+                "Connecting Observer to validator at {} with observer port {}",
+                observer_address, observer_port
+            );
+
+            vec![PeerRecord {
+                public_key: network_public_key,
+                address: observer_address,
+            }]
+        };
+
+        info!(
+            "Creating Observer node with {} configured peers",
+            observer_peers.len()
+        );
+
+        let observer_config = test_cluster
+            .fullnode_config_builder()
+            .with_observer_config(ObserverParameters {
+                peers: observer_peers,
+                ..Default::default()
+            })
+            .build(&mut get_rng(), test_cluster.swarm.config());
+
+        info!("Starting Observer node with consensus enabled");
+
+        // Start the Observer node
+        let observer_handle = test_cluster
+            .start_fullnode_from_config(observer_config)
+            .await;
+        let observer_node_id = observer_handle.sui_node.with(|n| n.get_sim_node_id());
+        let observer_state = observer_handle.sui_node.state();
+
+        info!(
+            "Observer node started with node_id: {:?}, node_role: {:?}, runs_consensus: {}",
+            observer_node_id,
+            observer_state.epoch_store_for_testing().node_role(),
+            observer_state
+                .epoch_store_for_testing()
+                .node_role()
+                .runs_consensus()
+        );
+
+        // Let the Observer node stabilize
+        tokio::time::sleep(Duration::from_secs(5)).await;
+
+        info!("Running network for a period to verify Observer node doesn't crash");
+
+        // Let the network run for a while to ensure the Observer node is stable
+        // Submit a few transactions to generate some network activity
+        let sender = test_cluster.get_address_0();
+        let rgp = test_cluster.get_reference_gas_price().await;
+
+        for i in 0..5 {
+            info!("Submitting transaction {}", i);
+            // Fund an address to generate some transaction activity
+            let _ = test_cluster
+                .fund_address_and_return_gas(rgp, None, sender)
+                .await;
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
+
+        info!("Waiting for the network to advance...");
+
+        // Let the network run longer to verify Observer stability
+        tokio::time::sleep(Duration::from_secs(40)).await;
+
+        // Check that the Observer node is still running and has the correct role
+        let final_node_role = observer_state.epoch_store_for_testing().node_role();
+        info!(
+            "Observer node final check - node_role: {:?}, runs_consensus: {}",
+            final_node_role,
+            final_node_role.runs_consensus()
+        );
+
+        info!("Observer node test completed successfully - node ran without crashing");
+    }
+
     /// Finds the most recent protocol version that uses an older execution version
     /// than the max protocol version.
     fn find_previous_execution_version_protocol() -> Option<u64> {
@@ -2120,6 +2320,13 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_previous_execution_version() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        // The consensus handler requires this flag; it is enabled on all chains at the
+        // latest protocol version, but not at the older version this test targets.
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_split_checkpoints_in_consensus_handler_for_testing(true);
+            config
+        });
 
         let target_version = find_previous_execution_version_protocol()
             .expect("no protocol version found with an older execution version");

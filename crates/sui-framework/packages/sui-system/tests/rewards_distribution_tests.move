@@ -9,6 +9,7 @@ use sui::address;
 use sui_system::sui_system::SuiSystemState;
 use sui_system::test_runner;
 use sui_system::validator_builder;
+use sui_system::validator_preset;
 
 const VALIDATOR_ADDR_1: address = @01;
 const VALIDATOR_ADDR_2: address = @02;
@@ -291,6 +292,39 @@ fun validator_commission() {
         validators,
         vector[148 * MIST_PER_SUI, 266290909091, 390 * MIST_PER_SUI, 490 * MIST_PER_SUI],
     );
+
+    runner.finish();
+}
+
+#[test]
+fun candidate_commission_rate_preserved() {
+    let mut runner = test_runner::new().validators_count(2).build();
+    let preset = validator_preset::preset(3);
+    let val_addr = preset.account_address();
+
+    let validator = validator_builder::from_preset(preset).commission_rate(100).build(runner.ctx());
+    runner.add_validator_candidate(validator);
+    runner.stake_with(val_addr, 400);
+
+    // Check that the Validator commission rate is set to 100.
+    runner.set_sender(val_addr).system_tx!(|system, ctx| {
+        let validator = system.validators_mut().candidate_validator(val_addr);
+        assert_eq!(validator.commission_rate(), 100);
+
+        system.set_candidate_validator_commission_rate(101, ctx);
+        let validator = system.validators_mut().candidate_validator(val_addr);
+        assert_eq!(validator.commission_rate(), 101);
+    });
+
+    // Add validator, then skip 2 epochs.
+    runner.set_sender(val_addr).add_validator();
+    runner.advance_epoch(option::none()).destroy_zero();
+    runner.advance_epoch(option::none()).destroy_zero();
+
+    runner.system_tx!(|system, _| {
+        let validator = system.validators_mut().active_validator(val_addr);
+        assert_eq!(validator.commission_rate(), 101);
+    });
 
     runner.finish();
 }

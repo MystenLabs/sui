@@ -1,11 +1,11 @@
 //# publish
-module 0x1::Enums {
-    enum PolyEnumWithTwoVariants<T> {
+mvir 0x1::Enums {
+    public enum PolyEnumWithTwoVariants<T> {
         One { },
         Two { x: T }
     }
 
-    public g<T>(t: T, x2: T): T {
+    public fun g<T>(t: T, x2: T): T {
         let e: Self::PolyEnumWithTwoVariants<T>;
         let x: &mut T;
         label b0:
@@ -22,15 +22,15 @@ module 0x1::Enums {
 }
 
 //# publish
-module 0x1::Enums {
-    struct X { b: bool }
+mvir 0x1::Enums {
+    public struct X { b: bool }
 
-    enum MonoEnumWithTwoVariants {
+    public enum MonoEnumWithTwoVariants {
         One { },
         Two { x: Self::X }
     }
 
-    public g(t: Self::X, x2: Self::X): Self::X {
+    public fun g(t: Self::X, x2: Self::X): Self::X {
         let e: Self::MonoEnumWithTwoVariants;
         let x: &mut Self::X;
         label b0:

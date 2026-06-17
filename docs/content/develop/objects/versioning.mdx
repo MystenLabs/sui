@@ -31,15 +31,9 @@ It is recommended to use [party objects](/develop/objects/object-ownership/party
 
 Fastpath objects can only be [address-owned](/develop/objects/object-ownership/address-owned) or [immutable](/develop/objects/object-ownership/immutable). Transactions using fastpath benefit from low latency and fast finality because they bypass consensus.
 
-Every fastpath transaction must lock the object's current version as input and use the output version as the reference for the next transaction. If a fastpath object is frequently used by multiple senders, there is a risk of equivocating or locking the object until the end of the epoch, so you must coordinate offchain access carefully.
+Every fastpath transaction must use the object's current version as input and use the output version as the reference for the next transaction. If a fastpath object is frequently used by multiple senders, coordinate offchain access or use a consensus object instead.
 
-:::info
-
-Only an object's owner can equivocate it. You can avoid equivocation by never attempting to execute two different transactions that use the same object. If you don't receive a definite success or failure from the network for a transaction, assume it might have gone through and do not re-use any of its objects for different transactions. All locks reset at the end of the epoch, freeing equivocated objects again.
-
-:::
-
-You must reference fastpath transaction inputs at a specific ID and version. When a validator signs a transaction with an address-owned input at a specific version, that version is locked to that transaction. Validators reject other transactions requiring the same input. [Immutable](/develop/objects/object-ownership/immutable) objects are also referenced at a specific version, but do not need to be locked because their contents never change. Their version identifies the point at which they became immutable.
+You must reference fastpath transaction inputs at a specific ID and version. Validators reject conflicting transactions that require the same mutable owned object version. [Immutable](/develop/objects/object-ownership/immutable) objects are also referenced at a specific version, but do not need to be locked because their contents never change. Their version identifies the point at which they became immutable.
 
 Fastpath is a good fit for applications that are extremely sensitive to latency or gas costs, do not need complex multi-party transactions, or already rely on an offchain coordination service.
 

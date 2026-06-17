@@ -90,7 +90,7 @@ async fn load_event_stream_head_by_object_id(
     state: &sui_core::authority::AuthorityState,
     object_id: ObjectID,
 ) -> Option<EventStreamHead> {
-    let obj = state.get_object(&object_id).await?;
+    let obj = state.get_object(&object_id)?;
     let mo = obj.data.try_as_move()?;
     let field = mo.to_rust::<Field<ar::AccumulatorKey, EventStreamHead>>()?;
     Some(field.value)

@@ -10,8 +10,8 @@ use crate::{
     command_line::{DEFAULT_OUTPUT_DIR, MOVE_COMPILED_INTERFACES_DIR},
     compiled_unit::{self, AnnotatedCompiledUnit},
     diagnostics::{
-        codes::Severity,
-        warning_filters::{WarningFilter, WarningFiltersBuilder},
+        codes::{DiagnosticsID, Severity},
+        filter::{FilterName, FilterScope},
         *,
     },
     editions::Edition,
@@ -63,9 +63,11 @@ pub struct Compiler {
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
     visitors: Vec<Visitor>,
-    /// Predefined filter for compiler warnings.
-    warning_filter: Option<WarningFiltersBuilder>,
-    known_warning_filters: Vec<(/* Prefix */ Option<Symbol>, Vec<WarningFilter>)>,
+    warning_filter: Option<FilterScope>,
+    known_warning_filters: Vec<(
+        /* Prefix */ Option<Symbol>,
+        Vec<(FilterName, Vec<DiagnosticsID>)>,
+    )>,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
     /// Root path of the virtual file system.
@@ -282,18 +284,16 @@ impl Compiler {
         self
     }
 
-    pub fn set_warning_filter(mut self, filter: Option<WarningFiltersBuilder>) -> Self {
+    pub fn set_warning_filter(mut self, filter: Option<FilterScope>) -> Self {
         assert!(self.warning_filter.is_none());
         self.warning_filter = filter;
         self
     }
 
-    /// `prefix` is None for the default 'allow'.
-    /// Some(prefix) for a custom set of warnings, e.g. 'allow(lint(_))'.
     pub fn add_custom_known_filters(
         mut self,
         prefix: Option<impl Into<Symbol>>,
-        filters: Vec<WarningFilter>,
+        filters: Vec<(FilterName, Vec<DiagnosticsID>)>,
     ) -> Self {
         self.known_warning_filters
             .push((prefix.map(|s| s.into()), filters));
@@ -403,7 +403,7 @@ impl Compiler {
             files_to_compile,
         );
         for (prefix, filters) in known_warning_filters {
-            compilation_env.add_custom_known_filters(prefix, filters)?;
+            compilation_env.add_custom_known_filters(prefix, filters);
         }
 
         let (source_text, pprog) = parse_program(&compilation_env, maps, targets, deps)?;

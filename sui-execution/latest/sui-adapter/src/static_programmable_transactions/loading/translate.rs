@@ -14,22 +14,22 @@ use move_core_types::{account_address::AccountAddress, language_storage::StructT
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{
     base_types::TxContext,
-    error::ExecutionError,
-    object::Owner,
+    error::ExecutionErrorTrait,
+    object::{ObjectPermissions, Owner},
     transaction::{self as P, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability},
 };
 
 pub fn transaction<Mode: ExecutionMode>(
     meter: &mut TranslationMeter<'_, '_>,
-    env: &Env,
+    env: &Env<Mode>,
     tx_context: &TxContext,
     // which inputs are withdrawals that need to be converted to coins, must
     // be the same length as the inputs
     withdrawal_compatibility_inputs: Option<Vec<bool>>,
     gas_payment: Option<GasPayment>,
     pt: P::ProgrammableTransaction,
-) -> Result<L::Transaction, ExecutionError> {
-    metering::pre_translation::meter(meter, &pt)?;
+) -> Result<L::Transaction, Mode::Error> {
+    metering::pre_translation::meter::<Mode::Error>(meter, &pt)?;
     let P::ProgrammableTransaction { inputs, commands } = pt;
     // withdrawal_compatibility_inputs specified ==> the protocol config flag is set
     assert_invariant!(
@@ -56,7 +56,7 @@ pub fn transaction<Mode: ExecutionMode>(
     let commands = commands
         .into_iter()
         .enumerate()
-        .map(|(idx, cmd)| command(env, cmd).map_err(|e| e.with_command_index(idx)))
+        .map(|(idx, cmd)| command::<Mode>(env, cmd).map_err(|e| e.with_command_index(idx)))
         .collect::<Result<Vec<_>, _>>()?;
     let loaded_tx = L::Transaction {
         gas_payment,
@@ -64,17 +64,17 @@ pub fn transaction<Mode: ExecutionMode>(
         original_command_len,
         commands,
     };
-    metering::loading::meter(meter, &loaded_tx)?;
+    metering::loading::meter::<Mode::Error>(meter, &loaded_tx)?;
     Ok(loaded_tx)
 }
 
 fn input<Mode: ExecutionMode>(
-    env: &Env,
+    env: &Env<Mode>,
     tx_context: &TxContext,
     // True iff this is a withdrawal that needs to be converted to a coin
     is_withdrawal_compatibility_input: bool,
     arg: CallArg,
-) -> Result<(L::InputArg, L::InputType), ExecutionError> {
+) -> Result<(L::InputArg, L::InputType), Mode::Error> {
     // is_withdrawal_compatibility_input ==> FundsWithdrawal
     assert_invariant!(
         !is_withdrawal_compatibility_input || matches!(arg, CallArg::FundsWithdrawal(_)),
@@ -93,9 +93,15 @@ fn input<Mode: ExecutionMode>(
             };
             let tag: StructTag = ty.clone().into();
             let ty = env.load_type_from_struct(&tag)?;
-            let arg = match obj.owner {
-                Owner::AddressOwner(_) => L::ObjectArg::OwnedObject(oref),
-                Owner::Immutable => L::ObjectArg::ImmObject(oref),
+            let arg = match &obj.owner {
+                Owner::AddressOwner(_) => L::ObjectArg {
+                    kind: L::ObjectArgKind::OwnedObject(oref),
+                    refined_permissions: ObjectPermissions::ALL,
+                },
+                Owner::Immutable => L::ObjectArg {
+                    kind: L::ObjectArgKind::ImmObject(oref),
+                    refined_permissions: ObjectPermissions::IMMUTABLE_USAGE,
+                },
                 Owner::ObjectOwner(_)
                 | Owner::Shared { .. }
                 | Owner::ConsensusAddressOwner { .. } => {
@@ -104,7 +110,23 @@ fn input<Mode: ExecutionMode>(
                         "Unexpected owner for ImmOrOwnedObject: {:?}",
                         obj.owner,
                     );
-                    L::ObjectArg::OwnedObject(oref)
+                    let kind = L::ObjectArgKind::OwnedObject(oref);
+                    L::ObjectArg {
+                        kind,
+                        refined_permissions: ObjectPermissions::ALL,
+                    }
+                }
+                Owner::Party { permissions, .. } => {
+                    assert_invariant!(
+                        Mode::allow_arbitrary_values(),
+                        "Unexpected owner for ImmOrOwnedObject: {:?}",
+                        obj.owner,
+                    );
+                    let refined_permissions = permissions.permissions_for(&tx_context.sender());
+                    L::ObjectArg {
+                        kind: L::ObjectArgKind::OwnedObject(oref),
+                        refined_permissions,
+                    }
                 }
             };
             (L::InputArg::Object(arg), L::InputType::Fixed(ty))
@@ -120,24 +142,30 @@ fn input<Mode: ExecutionMode>(
             };
             let tag: StructTag = ty.clone().into();
             let ty = env.load_type_from_struct(&tag)?;
-            let kind = match obj.owner {
+            let owner_permissions = match &obj.owner {
                 Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                     assert_invariant!(
                         Mode::allow_arbitrary_values(),
                         "Unexpected owner for SharedObject: {:?}",
                         obj.owner
                     );
-                    L::SharedObjectKind::Party
+                    ObjectPermissions::ALL
                 }
-                Owner::Shared { .. } => L::SharedObjectKind::Legacy,
-                Owner::ConsensusAddressOwner { .. } => L::SharedObjectKind::Party,
+                Owner::Shared { .. } => ObjectPermissions::LEGACY_SHARED_OBJECT,
+                Owner::ConsensusAddressOwner { .. } => ObjectPermissions::ALL,
+                Owner::Party { permissions, .. } => {
+                    permissions.permissions_for(&tx_context.sender())
+                }
+            };
+            let refined_permissions = refine_permissions::<Mode>(mutability, owner_permissions)?;
+            let kind = L::ObjectArgKind::ConsensusObject {
+                id,
+                initial_shared_version,
             };
             (
-                L::InputArg::Object(L::ObjectArg::SharedObject {
-                    id,
-                    initial_shared_version,
-                    mutability: object_mutability(mutability),
+                L::InputArg::Object(L::ObjectArg {
                     kind,
+                    refined_permissions,
                 }),
                 L::InputType::Fixed(ty),
             )
@@ -189,15 +217,32 @@ fn input<Mode: ExecutionMode>(
     })
 }
 
-fn object_mutability(mutability: SharedObjectMutability) -> L::ObjectMutability {
-    match mutability {
-        SharedObjectMutability::Mutable => L::ObjectMutability::Mutable,
-        SharedObjectMutability::NonExclusiveWrite => L::ObjectMutability::NonExclusiveWrite,
-        SharedObjectMutability::Immutable => L::ObjectMutability::Immutable,
-    }
+fn refine_permissions<Mode: ExecutionMode>(
+    mutability: SharedObjectMutability,
+    permissions: ObjectPermissions,
+) -> Result<ObjectPermissions, Mode::Error> {
+    Ok(match mutability {
+        SharedObjectMutability::Mutable | SharedObjectMutability::NonExclusiveWrite => {
+            assert_invariant!(
+                permissions.can_use_mutably(),
+                "Mutable shared object usage requires mutable usage permission"
+            );
+            permissions
+        }
+        SharedObjectMutability::Immutable => {
+            assert_invariant!(
+                permissions.can_use_immutably(),
+                "Immutable shared object usage requires immutable usage permission"
+            );
+            ObjectPermissions::IMMUTABLE_USAGE
+        }
+    })
 }
 
-fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError> {
+fn command<Mode: ExecutionMode>(
+    env: &Env<Mode>,
+    command: P::Command,
+) -> Result<L::Command, Mode::Error> {
     Ok(match command {
         P::Command::MoveCall(pmc) => {
             let P::ProgrammableMoveCall {
@@ -232,13 +277,13 @@ fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError>
         P::Command::Publish(items, object_ids) => {
             let resolved_linkage = env
                 .linkage_analysis
-                .compute_publication_linkage(&object_ids, env.linkable_store)?;
+                .compute_publication_linkage::<Mode::Error>(&object_ids, env.linkable_store)?;
             L::Command::Publish(items, object_ids, resolved_linkage)
         }
         P::Command::Upgrade(items, object_ids, object_id, argument) => {
             let resolved_linkage = env
                 .linkage_analysis
-                .compute_publication_linkage(&object_ids, env.linkable_store)?;
+                .compute_publication_linkage::<Mode::Error>(&object_ids, env.linkable_store)?;
             L::Command::Upgrade(items, object_ids, object_id, argument, resolved_linkage)
         }
     })

@@ -1,8 +1,8 @@
 //# publish
-module 0x1::Token {
-    struct T has key { b: bool }
+mvir 0x1::Token {
+    public struct T has key { b: bool }
 
-    public test() {
+    public fun test() {
         let t: Self::T;
         let t_ref: &Self::T;
         let b: bool;
@@ -16,10 +16,10 @@ module 0x1::Token {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::Token;
 
-entry foo() {
+entry fun foo() {
 label b0:
     Token::test();
     return;
@@ -27,10 +27,10 @@ label b0:
 }
 
 //# publish
-module 0x2::Token {
-    enum T has key { V { b: bool } }
+mvir 0x2::Token {
+    public enum T has key { V { b: bool } }
 
-    public test() {
+    public fun test() {
         let t: Self::T;
         let t_ref: &Self::T;
         let b: bool;
@@ -44,10 +44,10 @@ module 0x2::Token {
 }
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x2::Token;
 
-entry foo() {
+entry fun foo() {
 label b0:
     Token::test();
     return;

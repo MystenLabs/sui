@@ -1,8 +1,8 @@
 //# publish
 
 // testing valid usages of == and != over references
-module 0x1::Tester {
-    eqtest1() {
+mvir 0x1::Tester {
+    fun eqtest1() {
         let x: u64;
         let r: &mut u64;
     label b0:
@@ -12,7 +12,7 @@ module 0x1::Tester {
         return;
     }
 
-    eqtest2() {
+    fun eqtest2() {
         let x: u64;
         let r: &mut u64;
     label b0:
@@ -22,7 +22,7 @@ module 0x1::Tester {
         return;
     }
 
-    neqtest1() {
+    fun neqtest1() {
         let x: u64;
         let r: &mut u64;
     label b0:
@@ -32,7 +32,7 @@ module 0x1::Tester {
         return;
     }
 
-    neqtest2() {
+    fun neqtest2() {
         let x: u64;
         let r: &mut u64;
     label b0:

@@ -1,14 +1,14 @@
 //# publish
-module 0x42::Token {
+mvir 0x42::Token {
 
-    struct T has key {balance: u64}
+    public struct T has key {balance: u64}
 
-    public new(balance: u64): Self::T  {
+    public fun new(balance: u64): Self::T  {
     label b0:
         return T{balance: copy(balance)};
     }
 
-    public value(this: &Self::T): u64 {
+    public fun value(this: &Self::T): u64 {
         let b: u64;
         let b_ref: &u64;
     label b0:
@@ -17,7 +17,7 @@ module 0x42::Token {
         return move(b);
     }
 
-    public bump(this: &mut Self::T) {
+    public fun bump(this: &mut Self::T) {
         let val: &mut u64;
         let x: u64;
     label b0:
@@ -27,14 +27,14 @@ module 0x42::Token {
         return;
     }
 
-    public publish(account: address, t: Self::T) {
+    public fun publish(account: address, t: Self::T) {
     label b0:
         abort(0);
     }
 
-    fake(addr: address): &mut Self::T { label b0: abort(0); }
+    fun fake(addr: address): &mut Self::T { label b0: abort(0); }
 
-    public test(account: address) {
+    public fun test(account: address) {
         let z: Self::T;
         let struct1: &mut Self::T;
         let imm_struct1: &Self::T;
@@ -62,16 +62,16 @@ module 0x42::Token {
 }
 
 //# publish
-module 0x43::Token {
+mvir 0x43::Token {
 
-    enum T has key {V { balance: u64} }
+    public enum T has key {V { balance: u64} }
 
-    public new(balance: u64): Self::T  {
+    public fun new(balance: u64): Self::T  {
     label b0:
         return T::V {balance: copy(balance)};
     }
 
-    public value(this: &Self::T): u64 {
+    public fun value(this: &Self::T): u64 {
         let b: u64;
         let b_ref: &u64;
     label b0:
@@ -80,7 +80,7 @@ module 0x43::Token {
         return move(b);
     }
 
-    public bump(this: &mut Self::T) {
+    public fun bump(this: &mut Self::T) {
         let val: &mut u64;
         let x: u64;
     label b0:
@@ -90,14 +90,14 @@ module 0x43::Token {
         return;
     }
 
-    public publish(account: address, t: Self::T) {
+    public fun publish(account: address, t: Self::T) {
     label b0:
         abort(0);
     }
 
-    fake(addr: address): &mut Self::T { label b0: abort(0); }
+    fun fake(addr: address): &mut Self::T { label b0: abort(0); }
 
-    public test(account: address) {
+    public fun test(account: address) {
         let z: Self::T;
         let struct1: &mut Self::T;
         let imm_struct1: &Self::T;

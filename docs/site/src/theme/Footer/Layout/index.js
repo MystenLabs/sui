@@ -72,7 +72,7 @@ export default function FooterLayout({ style, links, logo, copyright }) {
                 />
               </svg>
             </Link>
-            <Link to="https://github.com/mystenLabs/sui/">
+            <Link to="https://github.com/MystenLabs/sui/">
               <svg
                 width="32"
                 height="32"

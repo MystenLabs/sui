@@ -137,6 +137,22 @@ As with the BLS scheme, you can aggregate independent signatures resulting in a 
 
 To counter potential rogue key attacks on BLS12381 aggregated signatures, proof of knowledge of the secret key (KOSK) is used during authority registration. When an authority requests to be added to the validator set, a proof of possession is submitted and verified. See [Intent Signing](/develop/transactions/transaction-auth/intent-signing) on how to create a proof of possession. Unlike most standards, the Sui proof of knowledge scheme commits to the address as well, which offers an extra protection against adversarial reuse of a validator BLS key from another malicious validator.
 
+### Aggregated authority signatures {#authority-aggregation}
+
+A single authority signature on a piece of data is represented by `AuthoritySignInfo`. This struct records the `epoch` the signature was produced in, the `authority` that signed, and the BLS signature itself. Verification fails if the `epoch` does not match the committee that checks the signature, because committee membership and stake can change between epochs.
+
+When enough authorities sign the same data, Sui aggregates their individual signatures into one `AuthorityStrongQuorumSignInfo`. This struct contains three fields:
+
+- `epoch`: The epoch in which Sui collected the signatures. Verification checks this value against the committee for that epoch.
+
+- `signature`: The single aggregated BLS12381 signature that combines every individual authority signature.
+
+- `signers_map`: A bitmap that records which authorities contributed to the aggregated signature. Each bit corresponds to an authority index in the epoch committee.
+
+To verify an aggregated signature, Sui reads the `signers_map` to identify the signers, looks up the public key and stake of each signer in the committee, sums their stake, and confirms the total reaches the quorum threshold. The strong quorum threshold is 2f + 1 of the total stake, the same threshold required to execute a transaction. A weaker validity threshold of f + 1 covers cases that only need to prove at least 1 honest authority signed.
+
+Because the aggregated signature stays a fixed 48 bytes regardless of committee size, a transaction certificate stays compact even as the validator set grows. The `signers_map` bitmap adds only a few bytes to identify the signers.
+
 ### Account key pair {#account-pair}
 
 The account that the authority uses to receive payments on staking rewards is secured by the account key pair. Sui uses pure Ed25519 as the signing scheme.
@@ -204,7 +220,7 @@ Using the `SerialTransactionExecutor` prevents `SequenceNumber` errors by handli
 
 ### `ParallelTransactionExecutor`
 
-Use the `ParallelTransactionExecutor` when you want to process transactions with the same sender at the same time. This class creates a pool of gas coins that it manages to ensure parallel transactions don't equivocate those coins. The class tracks objects used across transactions and orders their processing so that the object inputs are also not equivocated.
+Use the `ParallelTransactionExecutor` when you want to process transactions with the same sender at the same time. This class creates and manages a pool of gas coins so parallel transactions do not reuse the same gas coin object version. The class tracks objects used across transactions and orders their processing so object inputs are not reused concurrently.
 
 ## Examples of signing transactions
 
@@ -426,7 +442,7 @@ Create a transfer transaction in the CLI. Set the `$SUI_ADDRESS` to the one corr
 $ sui client gas
 ```
 ```sh
-$ sui client transfer-sui --to $SUI_ADDRESS --sui-coin-object-id $GAS_COIN_ID --gas-budget $GAS_BUDGET --serialize-unsigned-transaction
+$ sui client ptb --transfer-objects "[gas]" @$SUI_ADDRESS --gas-coin @$GAS_COIN_ID --gas-budget $GAS_BUDGET --serialize-unsigned-transaction
 ```
 ```sh
 $ sui keytool sign --address $SUI_ADDRESS --data $TX_BYTES

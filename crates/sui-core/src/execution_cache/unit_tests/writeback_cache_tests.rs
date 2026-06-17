@@ -1173,12 +1173,11 @@ async fn test_transaction_cache_race() {
 // Regression test for the race described in Mark's original report: an account at
 // version V is deleted by a settlement tx that writes a tombstone at V+1, but the
 // barrier tx that bumps the root from V to V+1 has not yet run. In that window a
-// reader observes (live object at V, tombstone at V+1, root at V). Before the MVCC
-// fix, `get_latest_account_amount` would read the latest account (the tombstone),
-// fall through to re-read the root (still V), and return (0, V) — even though the
-// correct balance at V was non-zero.
+// reader observes (live object at V, tombstone at V+1, root at V). The consistent
+// read must cap the account read at the root version instead of reading the latest
+// account tombstone.
 #[tokio::test]
-async fn test_get_latest_account_amount_race_with_pending_settlement() {
+async fn test_get_consistent_latest_account_amount_race_with_pending_settlement() {
     use crate::accumulators::funds_read::AccountFundsRead;
     use sui_types::{
         SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_root::AccumulatorValue, balance::Balance,
@@ -1230,11 +1229,15 @@ async fn test_get_latest_account_amount_race_with_pending_settlement() {
     // V to V+1.
     cache.write_object_entry(account_id.inner(), v.next(), ObjectEntry::Deleted);
 
-    // The read must observe the pre-settlement balance at V: settlement must appear
-    // atomic to readers. Before the fix this returned (0, V) because the latest
-    // account read produced None (the tombstone at V+1) while the root had not
-    // advanced past V.
-    let (balance, version) = AccountFundsRead::get_latest_account_amount(&*cache, &account_id);
+    assert_eq!(
+        AccountFundsRead::get_latest_account_amount(&*cache, &account_id),
+        0
+    );
+
+    // The consistent read must observe the pre-settlement balance at V: settlement
+    // must appear atomic to readers that need the root version paired with the amount.
+    let (balance, version) =
+        AccountFundsRead::get_consistent_latest_account_amount_and_version(&*cache, &account_id);
     assert_eq!(version, v);
     assert_eq!(balance, expected_balance as u128);
 }

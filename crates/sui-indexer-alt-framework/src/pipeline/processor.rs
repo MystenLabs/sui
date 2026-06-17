@@ -224,6 +224,7 @@ mod tests {
 
     use anyhow::ensure;
     use sui_futures::service;
+    use sui_indexer_alt_framework_store_traits::testing::mock_store::MockWatermark;
     use sui_types::digests::ChainIdentifier;
     use sui_types::digests::CheckpointDigest;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
@@ -231,8 +232,7 @@ mod tests {
     use tokio::time::timeout;
 
     use crate::metrics::IndexerMetrics;
-    use crate::mocks::store::MockStore;
-    use crate::mocks::store::MockWatermark;
+    use crate::mocks::store::FallibleMockStore;
 
     use super::*;
 
@@ -297,7 +297,7 @@ mod tests {
             indexed_tx,
             metrics,
             ConcurrencyConfig::Fixed { value: 10 },
-            MockStore::default(),
+            FallibleMockStore::default(),
         );
 
         // Send both checkpoints
@@ -362,7 +362,7 @@ mod tests {
             indexed_tx,
             metrics,
             ConcurrencyConfig::Fixed { value: 10 },
-            MockStore::default(),
+            FallibleMockStore::default(),
         );
 
         // Send first checkpoint.
@@ -441,7 +441,7 @@ mod tests {
             indexed_tx,
             metrics.clone(),
             ConcurrencyConfig::Fixed { value: 10 },
-            MockStore::default(),
+            FallibleMockStore::default(),
         );
 
         // Send and verify first checkpoint (should succeed immediately)
@@ -473,7 +473,7 @@ mod tests {
     }
 
     async fn test_chain_id(
-        store: MockStore,
+        store: FallibleMockStore,
         checkpoint_chain_id: ChainIdentifier,
     ) -> (
         Option<IndexedCheckpoint<DataPipeline>>,
@@ -510,7 +510,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_chain_id_stored_when_none_exists() {
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
         let chain_id = ChainIdentifier::default();
 
         let (indexed_checkpoint, shutdown_result) = test_chain_id(store.clone(), chain_id).await;
@@ -530,7 +530,7 @@ mod tests {
     #[tokio::test]
     async fn test_chain_id_matches_existing() {
         let chain_id = ChainIdentifier::default();
-        let store = MockStore::default().with_watermark(
+        let store = FallibleMockStore::default().with_watermark(
             DataPipeline::NAME,
             MockWatermark {
                 chain_id: Some(*chain_id.as_bytes()),
@@ -550,7 +550,7 @@ mod tests {
     async fn test_chain_id_mismatch_returns_error() {
         let stored_chain_id = ChainIdentifier::default();
         let different_chain_id: ChainIdentifier = CheckpointDigest::from([1u8; 32]).into();
-        let store = MockStore::default().with_watermark(
+        let store = FallibleMockStore::default().with_watermark(
             DataPipeline::NAME,
             MockWatermark {
                 chain_id: Some(*stored_chain_id.as_bytes()),
@@ -619,7 +619,7 @@ mod tests {
             indexed_tx,
             metrics,
             ConcurrencyConfig::Fixed { value: 3 },
-            MockStore::default(),
+            FallibleMockStore::default(),
         );
 
         // Send all checkpoints and measure time

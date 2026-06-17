@@ -18,6 +18,9 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -48,6 +51,17 @@ env:
   # Set log level in CI to error. If you need more information to debug a CI
   # failure, change this temporarily and rerun your tests
   RUST_LOG: error
+  # sccache role selection:
+  #   trusted refs (protected + release branches), NOT a workflow_dispatch building
+  #     an override sui_repo_ref → RW role (read/write cache).
+  #   same-repo pull_request → RO role (read-only; a PR cannot poison the cache).
+  #   forks / overrides / everything else → empty → setup-sccache falls back to a
+  #     local cache. Forks are skipped here because GitHub caps fork id-token to
+  #     none, so role-to-assume would hard-fail the OIDC step. This fork skip is a
+  #     fail-safe accommodation, NOT a security boundary — the RO role still trusts
+  #     pull_request, so a fork reading the cache is acceptable (Decision A).
+  # Keep in sync with the sui-sccache-{rw,ro}-github trust policies.
+  SCCACHE_ROLE: ${{ (github.event_name != 'workflow_dispatch' || github.event.inputs.sui_repo_ref == '') && (contains(fromJSON('["refs/heads/main","refs/heads/devnet","refs/heads/testnet","refs/heads/mainnet"]'), github.ref) || (startsWith(github.ref, 'refs/heads/releases/sui-') && endsWith(github.ref, '-release'))) && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false) && 'arn:aws:iam::011083325127:role/sui-sccache-ro-github' || '' }}
 
 jobs:
   diff:
@@ -76,6 +90,9 @@ jobs:
         run: scripts/git-checks.sh
 
   test:
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
@@ -96,8 +113,7 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -125,6 +141,9 @@ jobs:
         shell: bash
 
   test-tidehunter:
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
@@ -145,8 +164,7 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -163,6 +181,9 @@ jobs:
       - name: cargo test with tidehunter
         run: |
           RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci --cargo-quiet -p sui-core --features typed-store/tidehunter
+      - name: cargo check sui-tool with tidehunter + tideconsole
+        run: |
+          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo check --quiet -p sui-tool --features typed-store/tidehunter,sui-tool/tideconsole
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -187,6 +208,9 @@ jobs:
       - run: 'echo "No build required" '
 
   test-extra:
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
@@ -207,8 +231,7 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -224,7 +247,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test (sui-graphql staging)
         run: |
-          cargo nextest run --profile ci --cargo-quiet --features staging -E 'package(sui-indexer-alt-graphql)'
+          cargo nextest run --profile ci --cargo-quiet --features staging -E 'package(sui-indexer-alt-graphql) or (package(sui-indexer-alt-e2e-tests) and binary(graphql_subscription))'
       - name: doctests
         run: |
           cargo test --doc
@@ -261,6 +284,9 @@ jobs:
         shell: bash
 
   benchmark-smoke:
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     name: benchmark (smoke)
     needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true'
@@ -272,8 +298,7 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: ubuntu-ghcloud
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
@@ -320,6 +345,9 @@ jobs:
           cargo bench --package consensus-core --bench commit_finalizer_bench -- --test
 
   windows-build:
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
@@ -330,8 +358,7 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: windows-ghcloud
 
       - uses: taiki-e/install-action@nextest
@@ -342,6 +369,9 @@ jobs:
           cargo build --all-features
 
   windows-cli-tests:
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     needs: [diff]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
@@ -357,8 +387,7 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: windows-ghcloud
 
       - uses: taiki-e/install-action@nextest
@@ -370,6 +399,9 @@ jobs:
           cargo nextest run -p sui --no-fail-fast --profile ci --cargo-quiet --filter-expr "not test(shell_tests::with_network)"
 
   simtest:
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
@@ -382,8 +414,7 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -405,6 +436,9 @@ jobs:
           scripts/simtest/stress-new-tests.sh
 
   simtest-mainnet:
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
@@ -418,8 +452,7 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
@@ -444,6 +477,9 @@ jobs:
   # to Move code but not Rust code (If there are Rust changes, they
   # will be run as part of a larger test suite).
   move-test:
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     needs: diff
     if: needs.diff.outputs.isRust == 'false' && needs.diff.outputs.isMove == 'true'
     timeout-minutes: 10
@@ -454,8 +490,7 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: ubuntu-ghcloud
       - uses: taiki-e/install-action@nextest
       - name: Run move tests
@@ -541,6 +576,9 @@ jobs:
       - run: 'echo "No build required" '
 
   clippy:
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-ghcloud ]
@@ -550,8 +588,7 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: ubuntu-ghcloud
       - run: rustup component add clippy
       # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
@@ -621,6 +658,9 @@ jobs:
       - run: cargo deny check advisories --hide-inclusion-graph
 
   sui-excution-cut:
+    permissions:
+      contents: read
+      id-token: write # OIDC token to assume the sccache role on trusted refs
     name: cutting a new execution layer
     needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true'
@@ -631,8 +671,7 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
           key-prefix: ubuntu-ghcloud
       - name: Install cargo-hakari, and cache the binary
         uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0

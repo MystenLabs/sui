@@ -75,6 +75,7 @@ pub async fn build_doc(output_directory: String) -> anyhow::Result<()> {
         .move_model_from_path::<Vanilla, Stdout>(
             Path::new(&modules_full_path()).parent().unwrap(),
             env,
+            Vanilla::new(),
             &mut std::io::stdout(),
         )
         .await?;

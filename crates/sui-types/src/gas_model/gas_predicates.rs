@@ -63,6 +63,15 @@ pub fn cost_table_for_version(gas_model: u64) -> CostTable {
     }
 }
 
+// In gas model versions <= 13, charge_native_function_before_execution pops
+// args that were already popped by charge_call — a double-pop. The resulting
+// negative stack heights were masked by saturating_sub in pop_stack.
+// Version 14+ fixes the double-pop so charge_native_function_before_execution
+// no longer pops args.
+pub fn legacy_charge_native_pops_args(gas_model_version: u64) -> bool {
+    gas_model_version <= 13
+}
+
 // Return if the native function call threshold is exceeded
 pub fn native_function_threshold_exceeded(gas_model_version: u64, num_native_calls: u64) -> bool {
     if gas_model_version > 8 {
@@ -70,4 +79,9 @@ pub fn native_function_threshold_exceeded(gas_model_version: u64, num_native_cal
     } else {
         false
     }
+}
+
+/// If true, re-read the gas payment location before final charging.
+pub fn refresh_gas_payment_location(gas_model_version: u64) -> bool {
+    gas_model_version >= 13
 }

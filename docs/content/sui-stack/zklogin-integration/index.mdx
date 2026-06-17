@@ -41,8 +41,8 @@ $ npm install @mysten/sui@experimental
 import { generateNonce, generateRandomness } from '@mysten/sui/zklogin';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 
-const FULLNODE_URL = 'https://fullnode.devnet.sui.io:443'; // replace with the RPC URL you want to use
-const suiClient = new SuiGrpcClient({ baseUrl: FULLNODE_URL, network: 'devnet' });
+const FULLNODE_URL = 'https://fullnode.testnet.sui.io:443'; // or mainnet: https://fullnode.mainnet.sui.io:443
+const suiClient = new SuiGrpcClient({ baseUrl: FULLNODE_URL, network: 'testnet' });
 const { epoch, epochDurationMs, epochStartTimestampMs } = await suiClient.core.getLatestSuiSystemState();
 
 const maxEpoch = Number(epoch) + 2; // this means the ephemeral key will be active for 2 epochs from now.

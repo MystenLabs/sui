@@ -223,7 +223,6 @@ async fn test_submit_transaction_already_executed() {
     test_context
         .state
         .try_execute_immediately(&verified_transaction, ExecutionEnv::new(), &epoch_store)
-        .await
         .unwrap();
 
     // Submit the same transaction that has already been executed.
@@ -388,13 +387,12 @@ async fn test_submit_batched_transactions_with_already_executed() {
     test_context
         .state
         .try_execute_immediately(&verified_tx1, ExecutionEnv::new(), &epoch_store)
-        .await
         .unwrap();
 
     // Create 2nd transaction (not executed)
     let gas_object2 = Object::with_owner_for_testing(test_context.sender);
     let gas_object_ref2 = gas_object2.compute_object_reference();
-    test_context.state.insert_genesis_object(gas_object2).await;
+    test_context.state.insert_genesis_object(gas_object2);
 
     let tx_data2 = TestTransactionBuilder::new(
         test_context.sender,
@@ -501,13 +499,12 @@ async fn test_submit_soft_bundle_transactions_with_already_executed() {
     test_context
         .state
         .try_execute_immediately(&verified_tx1, ExecutionEnv::new(), &epoch_store)
-        .await
         .unwrap();
 
     // Create 2nd transaction (not executed)
     let gas_object2 = Object::with_owner_for_testing(test_context.sender);
     let gas_object_ref2 = gas_object2.compute_object_reference();
-    test_context.state.insert_genesis_object(gas_object2).await;
+    test_context.state.insert_genesis_object(gas_object2);
 
     let tx_data2 = TestTransactionBuilder::new(
         test_context.sender,
@@ -574,7 +571,6 @@ async fn test_submit_oversized_transaction() {
     let gas_object = test_context
         .state
         .get_object(&test_context.gas_object_ref.0)
-        .await
         .unwrap();
     let full_object_ref = gas_object.compute_full_object_reference();
     let recipient = dbg_addr(2);

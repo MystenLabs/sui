@@ -61,4 +61,5 @@ im.workspace = true
 [dev-dependencies]
 mockall.workspace = true
 expect-test.workspace = true
+roaring.workspace = true
 telemetry-subscribers.workspace = true

@@ -105,6 +105,9 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
             );
+        if let Err(error) = &result {
+            log_execution_error(transaction_digest, error);
+        }
         // note: old versions do not report timings.
         (
             inner_temp_store,
@@ -139,7 +142,7 @@ impl executor::Executor for Executor {
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
         let gas_coins = gas.payment;
-        if skip_all_checks {
+        let (inner_temp_store, gas_status, effects, result) = if skip_all_checks {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
@@ -173,7 +176,11 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
             )
+        };
+        if let Err(error) = &result {
+            log_execution_error(transaction_digest, error);
         }
+        (inner_temp_store, gas_status, effects, result)
     }
 
     fn execute_transaction_to_effects_and_execution_error(
@@ -218,6 +225,9 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
             );
+        if let Err(error) = &result {
+            log_execution_error(transaction_digest, error);
+        }
         (inner_temp_store, gas_status, effects, vec![], result)
     }
 
@@ -287,5 +297,37 @@ impl verifier::Verifier for Verifier<'_> {
             meter,
             self.metrics,
         )
+    }
+}
+
+fn log_execution_error(transaction_digest: TransactionDigest, error: &ExecutionError) {
+    use sui_types::execution_status::ExecutionErrorKind as K;
+
+    match error.kind() {
+        K::InvariantViolation | K::VMInvariantViolation => {
+            tracing::error!(
+                kind = ?error.kind(),
+                tx_digest = ?transaction_digest,
+                "INVARIANT VIOLATION! Source: {:?}",
+                error.source(),
+            );
+        }
+        K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
+            tracing::debug!(
+                kind = ?error.kind(),
+                tx_digest = ?transaction_digest,
+                "Verification Error. Source: {:?}",
+                error.source(),
+            );
+        }
+        K::PublishUpgradeMissingDependency | K::PublishUpgradeDependencyDowngrade => {
+            tracing::debug!(
+                kind = ?error.kind(),
+                tx_digest = ?transaction_digest,
+                "Publish/Upgrade Error. Source: {:?}",
+                error.source(),
+            );
+        }
+        _ => (),
     }
 }

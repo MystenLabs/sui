@@ -38,6 +38,9 @@ Address.addressAt
 Address.asObject
   => {"obj_versions"}
 
+Address.asTransactionObject
+  => {}
+
 Address.balance
   => {"consistent"}
 
@@ -1643,6 +1646,12 @@ StoreExecutionTimeObservationsTransaction._
 Subscription.checkpoints
   => {}
 
+Subscription.transactions
+  => {}
+
+Subscription.events
+  => {}
+
 Transaction.id
   => {}
 
@@ -1683,6 +1692,9 @@ TransactionEffects.checkpoint
   => {}
 
 TransactionEffects.status
+  => {}
+
+TransactionEffects.version
   => {}
 
 TransactionEffects.lamportVersion

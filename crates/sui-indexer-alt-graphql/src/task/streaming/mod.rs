@@ -40,6 +40,7 @@
 //! ```
 
 mod checkpoint_stream_task;
+mod gap_recovery;
 mod package_eviction_task;
 mod processed_checkpoint;
 mod streamed_package_store;
@@ -49,6 +50,7 @@ use std::sync::Arc;
 
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 
+#[cfg(feature = "staging")]
 pub(crate) use checkpoint_stream_task::CheckpointBroadcaster;
 pub(crate) use checkpoint_stream_task::CheckpointStreamTask;
 pub(crate) use package_eviction_task::PackageEvictionTask;

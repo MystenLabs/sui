@@ -80,7 +80,7 @@ impl<S> Builder<S>
 where
     S: WriteStore + Clone + Send + Sync + 'static,
 {
-    pub fn build(self) -> (UnstartedStateSync<S>, anemo::Router) {
+    pub fn build(self) -> (UnstartedStateSync<S>, anemo::Router<anemo::ServicesSealed>) {
         let state_sync_config = self.config.clone().unwrap_or_default();
         let (mut builder, server) = self.build_internal();
         let mut state_sync_server = StateSyncServer::new(server);
@@ -126,11 +126,13 @@ where
         }
 
         let router = anemo::Router::new()
-            // Size limit layer applied before deserialization.
+            .add_rpc_service(state_sync_server)
+            // Size limit layer applies to request messages only. This effectively
+            // bounds only checkpoint summary size, because all other state sync
+            // request messages are very small.
             .route_layer(SizeLimitLayer::new(
                 state_sync_config.max_checkpoint_summary_size(),
-            ))
-            .add_rpc_service(state_sync_server);
+            ));
 
         (builder, router)
     }

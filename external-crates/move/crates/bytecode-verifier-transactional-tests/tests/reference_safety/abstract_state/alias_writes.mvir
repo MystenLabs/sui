@@ -2,9 +2,9 @@
 
 //# publish
 
-module 0x2::alias_after_join {
+mvir 0x2::alias_after_join {
 
-t(cond: bool) {
+fun t(cond: bool) {
     let a: u64;
     let b: u64;
     let x: &mut u64;

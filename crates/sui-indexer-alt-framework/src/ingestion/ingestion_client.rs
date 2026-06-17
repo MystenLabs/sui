@@ -20,6 +20,9 @@ use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
 use prometheus::Histogram;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderName;
+use reqwest::header::HeaderValue;
 use sui_futures::future::with_slow_future_monitor;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
@@ -50,7 +53,7 @@ const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
 const SLOW_OPERATION_WARNING_THRESHOLD: Duration = Duration::from_secs(60);
 
 #[async_trait]
-pub(crate) trait IngestionClientTrait: Send + Sync {
+pub trait IngestionClientTrait: Send + Sync {
     async fn chain_id(&self) -> anyhow::Result<ChainIdentifier>;
 
     async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult;
@@ -79,6 +82,11 @@ pub struct IngestionClientArgs {
     /// (env: AZURE_STORAGE_ACCOUNT_NAME, AZURE_STORAGE_ACCESS_KEY)
     #[arg(long, group = "source")]
     pub remote_store_azure: Option<String>,
+
+    /// Default header to include in remote store requests, as `<name>:<value>`.
+    /// Can be provided multiple times.
+    #[arg(long = "remote-store-header", value_parser = parse_remote_store_header)]
+    pub remote_store_headers: Vec<(HeaderName, HeaderValue)>,
 
     /// Path to the local ingestion directory.
     #[arg(long, group = "source")]
@@ -114,6 +122,7 @@ impl Default for IngestionClientArgs {
             remote_store_s3: None,
             remote_store_gcs: None,
             remote_store_azure: None,
+            remote_store_headers: vec![],
             local_ingestion_path: None,
             rpc_api_url: None,
             rpc_username: None,
@@ -127,18 +136,32 @@ impl Default for IngestionClientArgs {
 impl IngestionClientArgs {
     fn client_options(&self) -> ClientOptions {
         let mut options = ClientOptions::default();
+
         options = if self.checkpoint_timeout_ms == 0 {
             options.with_timeout_disabled()
         } else {
             let timeout = Duration::from_millis(self.checkpoint_timeout_ms);
             options.with_timeout(timeout)
         };
+
         options = if self.checkpoint_connection_timeout_ms == 0 {
             options.with_connect_timeout_disabled()
         } else {
             let timeout = Duration::from_millis(self.checkpoint_connection_timeout_ms);
             options.with_connect_timeout(timeout)
         };
+
+        options = if !self.remote_store_headers.is_empty() {
+            let mut headers = HeaderMap::new();
+            for (name, value) in &self.remote_store_headers {
+                headers.append(name.clone(), value.clone());
+            }
+
+            options.with_default_headers(headers)
+        } else {
+            options
+        };
+
         options
     }
 }
@@ -237,7 +260,7 @@ impl IngestionClient {
             store,
             Some(metrics.total_ingested_bytes.clone()),
         ));
-        Ok(Self::new_impl(client, metrics))
+        Ok(Self::from_trait(client, metrics))
     }
 
     /// An ingestion client that fetches checkpoints from a fullnode, over gRPC.
@@ -260,10 +283,24 @@ impl IngestionClient {
         } else {
             client
         };
-        Ok(Self::new_impl(Arc::new(client), metrics))
+        Ok(Self::from_trait(Arc::new(client), metrics))
     }
 
-    pub(crate) fn new_impl(
+    /// The metrics handle this client reports against. Callers constructing peer services (e.g. an
+    /// [`IngestionService`]) against the same client should reuse this Arc rather than building a
+    /// second [`IngestionMetrics`] from the same registry, which would double-register the metric
+    /// vectors.
+    ///
+    /// [`IngestionService`]: crate::ingestion::IngestionService
+    pub fn metrics(&self) -> &Arc<IngestionMetrics> {
+        &self.metrics
+    }
+
+    /// Wrap an arbitrary [`IngestionClientTrait`] implementation in an [`IngestionClient`]. Use
+    /// this when the source of checkpoints is not one of the built-in remote object stores or gRPC
+    /// endpoints — for example, when embedding the indexer in a fullnode that already has
+    /// checkpoint data on hand.
+    pub fn from_trait(
         client: Arc<dyn IngestionClientTrait>,
         metrics: Arc<IngestionMetrics>,
     ) -> Self {
@@ -448,6 +485,19 @@ where
     Ok(data)
 }
 
+fn parse_remote_store_header(header: &str) -> Result<(HeaderName, HeaderValue), String> {
+    let (name, value) = header
+        .split_once(':')
+        .ok_or_else(|| "remote store header must be in `<name>:<value>` format".to_string())?;
+
+    let name = HeaderName::from_bytes(name.as_bytes())
+        .map_err(|err| format!("invalid remote store header name `{name}`: {err}"))?;
+    let value = HeaderValue::from_str(value)
+        .map_err(|err| format!("invalid remote store header value for `{name}`: {err}"))?;
+
+    Ok((name, value))
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::sync::Arc;
@@ -563,7 +613,7 @@ pub(crate) mod tests {
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
         let metrics = IngestionMetrics::new(None, &registry);
         let mock_client = Arc::new(MockIngestionClient::default());
-        let client = IngestionClient::new_impl(mock_client.clone(), metrics);
+        let client = IngestionClient::from_trait(mock_client.clone(), metrics);
         (client, mock_client)
     }
 
@@ -614,6 +664,80 @@ pub(crate) mod tests {
         .unwrap_err();
 
         assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn test_args_remote_store_headers() {
+        let args = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "x-goog-user-project:my-project",
+            "--remote-store-header",
+            "authorization:Bearer abc:def",
+        ])
+        .unwrap();
+
+        assert_eq!(args.ingestion.remote_store_headers.len(), 2);
+        assert_eq!(
+            args.ingestion.remote_store_headers[0].0,
+            HeaderName::from_static("x-goog-user-project")
+        );
+        assert_eq!(
+            args.ingestion.remote_store_headers[0].1,
+            HeaderValue::from_static("my-project")
+        );
+        assert_eq!(
+            args.ingestion.remote_store_headers[1].0,
+            HeaderName::from_static("authorization")
+        );
+        assert_eq!(
+            args.ingestion.remote_store_headers[1].1,
+            HeaderValue::from_static("Bearer abc:def")
+        );
+    }
+
+    #[test]
+    fn test_args_remote_store_header_requires_delimiter() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "x-goog-user-project",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_args_remote_store_header_rejects_invalid_name() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "bad name:value",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_args_remote_store_header_rejects_invalid_value() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "x-test:bad\nvalue",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
     }
 
     #[tokio::test]

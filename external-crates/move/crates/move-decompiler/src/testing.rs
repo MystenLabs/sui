@@ -50,6 +50,11 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
 
             match parts.as_slice() {
                 ["cond", a, b, c] => match (a.parse::<u32>(), b.parse::<u32>(), c.parse::<u32>()) {
+                    // Match the translate.rs normalization: a `cond` whose two arms target
+                    // the same label is a `code` with a dead condition.
+                    (Ok(a), Ok(b), Ok(c)) if b == c => {
+                        nodes.push(In::Code(a.into(), a.into(), Some(b.into())))
+                    }
                     (Ok(a), Ok(b), Ok(c)) => {
                         nodes.push(In::Condition(a.into(), a.into(), b.into(), c.into()))
                     }
@@ -125,6 +130,6 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
         return "Expected an entry point `0`, but none was found".to_owned();
     }
     let config = crate::config::Config::default();
-    let structured = crate::structuring::structure(&config, input, 0.into());
+    let (structured, _unemitted) = crate::structuring::structure(&config, input, 0.into());
     structured.to_test_string()
 }

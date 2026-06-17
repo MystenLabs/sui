@@ -1,8 +1,8 @@
 //# publish
-module 0x2::O {
-    enum Foo<T> { V { x: T } }
+mvir 0x2::O {
+    public enum Foo<T> { V { x: T } }
 
-    foo(x: u64): Self::Foo<u64> {
+    fun foo(x: u64): Self::Foo<u64> {
         let y: Self::Foo<u64>;
     label b0:
         y = Foo::V { x: move(x) };

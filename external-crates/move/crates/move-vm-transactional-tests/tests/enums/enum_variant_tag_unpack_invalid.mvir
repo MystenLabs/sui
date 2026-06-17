@@ -1,94 +1,94 @@
 //# publish
-module 0x6::Enums {
-    enum PolyEnum<T> {
+mvir 0x6::Enums {
+    public enum PolyEnum<T> {
         One { },
         Two { x: T },
     }
 
-    enum MonoEnum {
+    public enum MonoEnum {
         One { },
         Two { x: u8 },
     }
 
-    public poly_unpack_one<T>(e: Self::PolyEnum<T>) {
+    public fun poly_unpack_one<T>(e: Self::PolyEnum<T>) {
         label b0:
             PolyEnum::One<T> { } = move(e);
             return;
     }
 
-    public poly_unpack_one_mut_ref<T>(e: &mut Self::PolyEnum<T>) {
+    public fun poly_unpack_one_mut_ref<T>(e: &mut Self::PolyEnum<T>) {
         label b0:
             &mut PolyEnum::One<T> { } = move(e);
             return;
     }
 
-    public poly_unpack_one_imm_ref<T>(e: &Self::PolyEnum<T>) {
+    public fun poly_unpack_one_imm_ref<T>(e: &Self::PolyEnum<T>) {
         label b0:
             & PolyEnum::One<T> { } = move(e);
             return;
     }
 
-    public poly_unpack_two<T: drop>(e: Self::PolyEnum<T>) {
+    public fun poly_unpack_two<T: drop>(e: Self::PolyEnum<T>) {
         let x: T;
         label b0:
             PolyEnum::Two<T> { x: x } = move(e);
             return;
     }
 
-    public poly_unpack_two_mut_ref<T: drop>(e: &mut Self::PolyEnum<T>) {
+    public fun poly_unpack_two_mut_ref<T: drop>(e: &mut Self::PolyEnum<T>) {
         let x: &mut T;
         label b0:
             &mut PolyEnum::Two<T> { x: x } = move(e);
             return;
     }
 
-    public poly_unpack_two_imm_ref<T: drop>(e: &Self::PolyEnum<T>) {
+    public fun poly_unpack_two_imm_ref<T: drop>(e: &Self::PolyEnum<T>) {
         let x: &T;
         label b0:
             & PolyEnum::Two<T> { x: x } = move(e);
             return;
     }
 
-    public mono_unpack_one(e: Self::MonoEnum) {
+    public fun mono_unpack_one(e: Self::MonoEnum) {
         label b0:
             MonoEnum::One { } = move(e);
             return;
     }
 
-    public mono_unpack_one_mut_ref(e: &mut Self::MonoEnum) {
+    public fun mono_unpack_one_mut_ref(e: &mut Self::MonoEnum) {
         label b0:
             &mut MonoEnum::One { } = move(e);
             return;
     }
 
-    public mono_unpack_one_imm_ref(e: &Self::MonoEnum) {
+    public fun mono_unpack_one_imm_ref(e: &Self::MonoEnum) {
         label b0:
             &MonoEnum::One { } = move(e);
             return;
     }
 
-    public mono_unpack_two(e: Self::MonoEnum) {
+    public fun mono_unpack_two(e: Self::MonoEnum) {
         let x: u8;
         label b0:
             MonoEnum::Two { x: x } = move(e);
             return;
     }
 
-    public mono_unpack_two_mut_ref(e: &mut Self::MonoEnum) {
+    public fun mono_unpack_two_mut_ref(e: &mut Self::MonoEnum) {
         let x: &mut u8;
         label b0:
             &mut MonoEnum::Two { x: x } = move(e);
             return;
     }
 
-    public mono_unpack_two_imm_ref(e: &Self::MonoEnum) {
+    public fun mono_unpack_two_imm_ref(e: &Self::MonoEnum) {
         let x: &u8;
         label b0:
             & MonoEnum::Two { x: x } = move(e);
             return;
     }
 
-    public all_valid() {
+    public fun all_valid() {
         let x1: Self::PolyEnum<u64>;
         let y1: Self::MonoEnum;
 
@@ -119,7 +119,7 @@ module 0x6::Enums {
             return;
     }
 
-    public poly_invalid1_mut_ref() {
+    public fun poly_invalid1_mut_ref() {
         let x1: Self::PolyEnum<u64>;
         label b0:
             x1 = PolyEnum::One<u64> {};
@@ -127,7 +127,7 @@ module 0x6::Enums {
             abort 0;
     }
 
-    public poly_invalid1_imm_ref() {
+    public fun poly_invalid1_imm_ref() {
         let x1: Self::PolyEnum<u64>;
         label b0:
             x1 = PolyEnum::One<u64> {};
@@ -135,7 +135,7 @@ module 0x6::Enums {
             abort 0;
     }
 
-    public poly_invalid1() {
+    public fun poly_invalid1() {
         let x1: Self::PolyEnum<u64>;
         label b0:
             x1 = PolyEnum::One<u64> {};
@@ -144,7 +144,7 @@ module 0x6::Enums {
     }
 
 
-    public poly_invalid2_mut_ref() {
+    public fun poly_invalid2_mut_ref() {
         let x2: Self::PolyEnum<u64>;
         label b0:
             x2 = PolyEnum::Two<u64> {x: 0};
@@ -152,7 +152,7 @@ module 0x6::Enums {
             abort 0;
     }
 
-    public poly_invalid2_imm_ref() {
+    public fun poly_invalid2_imm_ref() {
         let x2: Self::PolyEnum<u64>;
         label b0:
             x2 = PolyEnum::Two<u64> {x: 0};
@@ -160,7 +160,7 @@ module 0x6::Enums {
             abort 0;
     }
 
-    public poly_invalid2() {
+    public fun poly_invalid2() {
         let x2: Self::PolyEnum<u64>;
         label b0:
             x2 = PolyEnum::Two<u64> {x: 0};
@@ -168,7 +168,7 @@ module 0x6::Enums {
             return;
     }
 
-    public mono_invalid1_mut_ref() {
+    public fun mono_invalid1_mut_ref() {
         let x1: Self::MonoEnum;
         label b0:
             x1 = MonoEnum::One {};
@@ -176,7 +176,7 @@ module 0x6::Enums {
             abort 0;
     }
 
-    public mono_invalid1_imm_ref() {
+    public fun mono_invalid1_imm_ref() {
         let x1: Self::MonoEnum;
         label b0:
             x1 = MonoEnum::One {};
@@ -184,7 +184,7 @@ module 0x6::Enums {
             abort 0;
     }
 
-    public mono_invalid1() {
+    public fun mono_invalid1() {
         let x1: Self::MonoEnum;
         label b0:
             x1 = MonoEnum::One {};
@@ -192,7 +192,7 @@ module 0x6::Enums {
             return;
     }
 
-    public mono_invalid2_mut_ref() {
+    public fun mono_invalid2_mut_ref() {
         let x2: Self::MonoEnum;
         label b0:
             x2 = MonoEnum::Two {x: 0u8};
@@ -200,7 +200,7 @@ module 0x6::Enums {
             abort 0;
     }
 
-    public mono_invalid2_imm_ref() {
+    public fun mono_invalid2_imm_ref() {
         let x2: Self::MonoEnum;
         label b0:
             x2 = MonoEnum::Two {x: 0u8};
@@ -208,7 +208,7 @@ module 0x6::Enums {
             abort 0;
     }
 
-    public mono_invalid2() {
+    public fun mono_invalid2() {
         let x2: Self::MonoEnum;
         label b0:
             x2 = MonoEnum::Two {x: 0u8};

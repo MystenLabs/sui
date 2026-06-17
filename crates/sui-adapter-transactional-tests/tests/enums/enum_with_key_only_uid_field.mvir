@@ -4,16 +4,16 @@
 //# init --addresses test=0x0
 
 //# publish
-module 0x0::f {
+mvir 0x0::f {
     import 0x2::transfer;
     import 0x2::object;
     import 0x2::tx_context;
 
-    enum X has key {
+    public enum X has key {
         A { id: object::UID }
     }
 
-    public transfer(ctx: &mut tx_context::TxContext) {
+    public fun transfer(ctx: &mut tx_context::TxContext) {
         let x: Self::X;
         let id: object::UID;
         label  l0:
@@ -23,7 +23,7 @@ module 0x0::f {
         return;
     }
 
-    public share(ctx: &mut tx_context::TxContext) {
+    public fun share(ctx: &mut tx_context::TxContext) {
         let x: Self::X;
         let id: object::UID;
         label  l0:
@@ -33,7 +33,7 @@ module 0x0::f {
         return;
     }
 
-    public freezer(ctx: &mut tx_context::TxContext) {
+    public fun freezer(ctx: &mut tx_context::TxContext) {
         let x: Self::X;
         let id: object::UID;
         label  l0:

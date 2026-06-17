@@ -1,8 +1,8 @@
 //# publish
-module 0x42::m {
-    enum X  { A { }, B { } }
+mvir 0x42::m {
+    public enum X  { A { }, B { } }
 
-    foo(x: Self::X) {
+    fun foo(x: Self::X) {
         label b0:
             variant_switch X (&x) {
                 A : b1,

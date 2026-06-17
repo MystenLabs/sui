@@ -1,11 +1,11 @@
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 // tests multiple type mismatches for int operations
 // !!!! generated file, do NOT edit manually !!!!
 
 // operator +
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 + 0u64;
     return;
@@ -13,9 +13,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 + 0u128;
     return;
@@ -24,9 +24,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 + 0u8;
     return;
@@ -35,9 +35,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 + 0u128;
     return;
@@ -46,9 +46,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 + 0u8;
     return;
@@ -57,9 +57,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 + 0u64;
     return;
@@ -68,9 +68,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 + true;
     return;
@@ -79,9 +79,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true + 0;
     return;
@@ -90,9 +90,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true + true;
     return;
@@ -101,9 +101,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 + 0x0;
     return;
@@ -112,9 +112,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 + 0;
     return;
@@ -123,9 +123,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 + 0x0;
     return;
@@ -134,9 +134,9 @@ label b0:
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    f() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun f() {
     label b0:
         _ = 0 + (R { x: true });
         return;
@@ -144,9 +144,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    g() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun g() {
     label b0:
         _ = (R { x: true }) + 0;
         return;
@@ -154,9 +154,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    h() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun h() {
     label b0:
         _ = (R { x: true }) + (R { x: true });
         return;
@@ -167,9 +167,9 @@ module 0x42::M {
 
 // operator -
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 - 0u64;
     return;
@@ -178,9 +178,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 - 0u128;
     return;
@@ -189,9 +189,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 - 0u8;
     return;
@@ -200,9 +200,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 - 0u128;
     return;
@@ -211,9 +211,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 - 0u8;
     return;
@@ -222,9 +222,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 - 0u64;
     return;
@@ -233,9 +233,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 - true;
     return;
@@ -244,9 +244,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true - 0;
     return;
@@ -255,9 +255,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true - true;
     return;
@@ -266,9 +266,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 - 0x0;
     return;
@@ -277,9 +277,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 - 0;
     return;
@@ -288,9 +288,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 - 0x0;
     return;
@@ -299,9 +299,9 @@ label b0:
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    f() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun f() {
     label b0:
         _ = 0 - (R { x: true });
         return;
@@ -309,9 +309,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    g() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun g() {
     label b0:
         _ = (R { x: true }) - 0;
         return;
@@ -319,9 +319,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    h() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun h() {
     label b0:
         _ = (R { x: true }) - (R { x: true });
         return;
@@ -332,9 +332,9 @@ module 0x42::M {
 
 // operator *
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 * 0u64;
     return;
@@ -343,9 +343,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 * 0u128;
     return;
@@ -354,9 +354,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 * 0u8;
     return;
@@ -365,9 +365,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 * 0u128;
     return;
@@ -376,9 +376,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 * 0u8;
     return;
@@ -387,9 +387,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 * 0u64;
     return;
@@ -398,9 +398,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 * true;
     return;
@@ -409,9 +409,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true * 0;
     return;
@@ -420,9 +420,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true * true;
     return;
@@ -431,9 +431,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 * 0x0;
     return;
@@ -442,9 +442,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 * 0;
     return;
@@ -453,9 +453,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 * 0x0;
     return;
@@ -464,9 +464,9 @@ label b0:
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    f() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun f() {
     label b0:
         _ = 0 * (R { x: true });
         return;
@@ -474,9 +474,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    g() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun g() {
     label b0:
         _ = (R { x: true }) * 0;
         return;
@@ -484,9 +484,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    h() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun h() {
     label b0:
         _ = (R { x: true }) * (R { x: true });
         return;
@@ -497,9 +497,9 @@ module 0x42::M {
 
 // operator /
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 / 0u64;
     return;
@@ -508,9 +508,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 / 0u128;
     return;
@@ -519,9 +519,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 / 0u8;
     return;
@@ -530,9 +530,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 / 0u128;
     return;
@@ -541,9 +541,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 / 0u8;
     return;
@@ -552,9 +552,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 / 0u64;
     return;
@@ -563,9 +563,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 / true;
     return;
@@ -574,9 +574,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true / 0;
     return;
@@ -585,9 +585,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true / true;
     return;
@@ -596,9 +596,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 / 0x0;
     return;
@@ -607,9 +607,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 / 0;
     return;
@@ -618,9 +618,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 / 0x0;
     return;
@@ -629,9 +629,9 @@ label b0:
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    f() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun f() {
     label b0:
         _ = 0 / (R { x: true });
         return;
@@ -639,9 +639,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    g() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun g() {
     label b0:
         _ = (R { x: true }) / 0;
         return;
@@ -649,9 +649,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    h() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun h() {
     label b0:
         _ = (R { x: true }) / (R { x: true });
         return;
@@ -662,9 +662,9 @@ module 0x42::M {
 
 // operator &
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 & 0u64;
     return;
@@ -673,9 +673,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 & 0u128;
     return;
@@ -684,9 +684,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 & 0u8;
     return;
@@ -695,9 +695,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 & 0u128;
     return;
@@ -706,9 +706,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 & 0u8;
     return;
@@ -717,9 +717,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 & 0u64;
     return;
@@ -728,9 +728,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 & true;
     return;
@@ -739,9 +739,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true & 0;
     return;
@@ -750,9 +750,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true & true;
     return;
@@ -761,9 +761,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 & 0x0;
     return;
@@ -772,9 +772,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 & 0;
     return;
@@ -783,9 +783,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 & 0x0;
     return;
@@ -794,9 +794,9 @@ label b0:
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    f() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun f() {
     label b0:
         _ = 0 & (R { x: true });
         return;
@@ -804,9 +804,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    g() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun g() {
     label b0:
         _ = (R { x: true }) & 0;
         return;
@@ -814,9 +814,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    h() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun h() {
     label b0:
         _ = (R { x: true }) & (R { x: true });
         return;
@@ -827,9 +827,9 @@ module 0x42::M {
 
 // operator |
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 | 0u64;
     return;
@@ -838,9 +838,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 | 0u128;
     return;
@@ -849,9 +849,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 | 0u8;
     return;
@@ -860,9 +860,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 | 0u128;
     return;
@@ -871,9 +871,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 | 0u8;
     return;
@@ -882,9 +882,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 | 0u64;
     return;
@@ -893,9 +893,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 | true;
     return;
@@ -904,9 +904,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true | 0;
     return;
@@ -915,9 +915,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true | true;
     return;
@@ -926,9 +926,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 | 0x0;
     return;
@@ -937,9 +937,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 | 0;
     return;
@@ -948,9 +948,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 | 0x0;
     return;
@@ -959,9 +959,9 @@ label b0:
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    f() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun f() {
     label b0:
         _ = 0 | (R { x: true });
         return;
@@ -969,9 +969,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    g() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun g() {
     label b0:
         _ = (R { x: true }) | 0;
         return;
@@ -979,9 +979,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    h() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun h() {
     label b0:
         _ = (R { x: true }) | (R { x: true });
         return;
@@ -992,9 +992,9 @@ module 0x42::M {
 
 // operator ^
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 ^ 0u64;
     return;
@@ -1003,9 +1003,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 ^ 0u128;
     return;
@@ -1014,9 +1014,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 ^ 0u8;
     return;
@@ -1025,9 +1025,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 ^ 0u128;
     return;
@@ -1036,9 +1036,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 ^ 0u8;
     return;
@@ -1047,9 +1047,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 ^ 0u64;
     return;
@@ -1058,9 +1058,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 ^ true;
     return;
@@ -1069,9 +1069,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true ^ 0;
     return;
@@ -1080,9 +1080,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true ^ true;
     return;
@@ -1091,9 +1091,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 ^ 0x0;
     return;
@@ -1102,9 +1102,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 ^ 0;
     return;
@@ -1113,9 +1113,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 ^ 0x0;
     return;
@@ -1124,9 +1124,9 @@ label b0:
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    f() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun f() {
     label b0:
         _ = 0 ^ (R { x: true });
         return;
@@ -1134,9 +1134,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    g() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun g() {
     label b0:
         _ = (R { x: true }) ^ 0;
         return;
@@ -1144,9 +1144,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    h() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun h() {
     label b0:
         _ = (R { x: true }) ^ (R { x: true });
         return;
@@ -1157,9 +1157,9 @@ module 0x42::M {
 
 // operator ==
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 == 0u64;
     return;
@@ -1168,9 +1168,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 == 0u128;
     return;
@@ -1179,9 +1179,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 == 0u8;
     return;
@@ -1190,9 +1190,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 == 0u128;
     return;
@@ -1201,9 +1201,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 == 0u8;
     return;
@@ -1212,9 +1212,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 == 0u64;
     return;
@@ -1223,9 +1223,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 == true;
     return;
@@ -1234,9 +1234,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true == 0;
     return;
@@ -1245,9 +1245,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 == 0x0;
     return;
@@ -1256,9 +1256,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 == 0;
     return;
@@ -1267,9 +1267,9 @@ label b0:
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    f() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun f() {
     label b0:
         _ = 0 == (R { x: true });
         return;
@@ -1277,9 +1277,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    g() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun g() {
     label b0:
         _ = (R { x: true }) == 0;
         return;
@@ -1289,9 +1289,9 @@ module 0x42::M {
 
 // operator !=
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 != 0u64;
     return;
@@ -1300,9 +1300,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 != 0u128;
     return;
@@ -1311,9 +1311,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 != 0u8;
     return;
@@ -1322,9 +1322,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 != 0u128;
     return;
@@ -1333,9 +1333,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 != 0u8;
     return;
@@ -1344,9 +1344,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 != 0u64;
     return;
@@ -1355,9 +1355,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 != true;
     return;
@@ -1366,9 +1366,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true != 0;
     return;
@@ -1377,9 +1377,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 != 0x0;
     return;
@@ -1388,9 +1388,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 != 0;
     return;
@@ -1399,9 +1399,9 @@ label b0:
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    f() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun f() {
     label b0:
         _ = 0 != (R { x: true });
         return;
@@ -1409,9 +1409,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    g() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun g() {
     label b0:
         _ = (R { x: true }) != 0;
         return;
@@ -1422,9 +1422,9 @@ module 0x42::M {
 
 // operator <
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 < 0u64;
     return;
@@ -1433,9 +1433,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 < 0u128;
     return;
@@ -1444,9 +1444,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 < 0u8;
     return;
@@ -1455,9 +1455,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 < 0u128;
     return;
@@ -1466,9 +1466,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 < 0u8;
     return;
@@ -1477,9 +1477,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 < 0u64;
     return;
@@ -1488,9 +1488,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 < true;
     return;
@@ -1499,9 +1499,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true < 0;
     return;
@@ -1510,9 +1510,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 < 0x0;
     return;
@@ -1521,9 +1521,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 < 0;
     return;
@@ -1533,9 +1533,9 @@ label b0:
 
 // operator >
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 > 0u64;
     return;
@@ -1544,9 +1544,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 > 0u128;
     return;
@@ -1555,9 +1555,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 > 0u8;
     return;
@@ -1566,9 +1566,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 > 0u128;
     return;
@@ -1577,9 +1577,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 > 0u8;
     return;
@@ -1588,9 +1588,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 > 0u64;
     return;
@@ -1599,9 +1599,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 > true;
     return;
@@ -1610,9 +1610,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true > 0;
     return;
@@ -1621,9 +1621,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 > 0x0;
     return;
@@ -1632,9 +1632,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 > 0;
     return;
@@ -1644,9 +1644,9 @@ label b0:
 
 // operator <=
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 <= 0u64;
     return;
@@ -1655,9 +1655,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 <= 0u128;
     return;
@@ -1666,9 +1666,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 <= 0u8;
     return;
@@ -1677,9 +1677,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 <= 0u128;
     return;
@@ -1688,9 +1688,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 <= 0u8;
     return;
@@ -1699,9 +1699,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 <= 0u64;
     return;
@@ -1710,9 +1710,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 <= true;
     return;
@@ -1721,9 +1721,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true <= 0;
     return;
@@ -1732,9 +1732,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 <= 0x0;
     return;
@@ -1743,9 +1743,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 <= 0;
     return;
@@ -1755,9 +1755,9 @@ label b0:
 
 // operator >=
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 >= 0u64;
     return;
@@ -1766,9 +1766,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u8 >= 0u128;
     return;
@@ -1777,9 +1777,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 >= 0u8;
     return;
@@ -1788,9 +1788,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u64 >= 0u128;
     return;
@@ -1799,9 +1799,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 >= 0u8;
     return;
@@ -1810,9 +1810,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0u128 >= 0u64;
     return;
@@ -1821,9 +1821,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 >= true;
     return;
@@ -1832,9 +1832,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true >= 0;
     return;
@@ -1843,9 +1843,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 >= 0x0;
     return;
@@ -1854,9 +1854,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 >= 0;
     return;
@@ -1866,9 +1866,9 @@ label b0:
 
 // operator <<
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 << true;
     return;
@@ -1877,9 +1877,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 << 0x0;
     return;
@@ -1888,9 +1888,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 << 0u64;
     return;
@@ -1899,9 +1899,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 << 0u128;
     return;
@@ -1910,9 +1910,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true << 0u8;
     return;
@@ -1921,9 +1921,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true << true;
     return;
@@ -1932,9 +1932,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 << 0u8;
     return;
@@ -1943,9 +1943,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 << 0x0;
     return;
@@ -1954,9 +1954,9 @@ label b0:
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    f() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun f() {
     label b0:
         _ = 0 << (R { x: true });
         return;
@@ -1964,9 +1964,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    g() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun g() {
     label b0:
         _ = (R { x: true }) << 0;
         return;
@@ -1974,9 +1974,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    h() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun h() {
     label b0:
         _ = (R { x: true }) << (R { x: true });
         return;
@@ -1987,9 +1987,9 @@ module 0x42::M {
 
 // operator >>
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 >> true;
     return;
@@ -1998,9 +1998,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 >> 0x0;
     return;
@@ -2009,9 +2009,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 >> 0u64;
     return;
@@ -2020,9 +2020,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0 >> 0u128;
     return;
@@ -2031,9 +2031,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true >> 0u8;
     return;
@@ -2042,9 +2042,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = true >> true;
     return;
@@ -2053,9 +2053,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 >> 0u8;
     return;
@@ -2064,9 +2064,9 @@ label b0:
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     _ = 0x0 >> 0x0;
     return;
@@ -2075,9 +2075,9 @@ label b0:
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    f() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun f() {
     label b0:
         _ = 0 >> (R { x: true });
         return;
@@ -2085,9 +2085,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    g() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun g() {
     label b0:
         _ = (R { x: true }) >> 0;
         return;
@@ -2095,9 +2095,9 @@ module 0x42::M {
 }
 
 //# publish
-module 0x42::M {
-    struct R { x: bool }
-    h() {
+mvir 0x42::M {
+    public struct R { x: bool }
+    fun h() {
     label b0:
         _ = (R { x: true }) >> (R { x: true });
         return;

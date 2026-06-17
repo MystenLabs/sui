@@ -32,7 +32,6 @@ use typed_store_error::TypedStoreError;
 pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
 pub type PackageVersionsIterator<'a> =
     Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
-pub type AuthenticatedEventRecord = (u64, u64, u32, u32, crate::event::Event);
 
 pub trait ReadStore: ObjectStore {
     //
@@ -668,6 +667,27 @@ pub trait RpcStateReader:
 }
 
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
+pub type LedgerTxSeqDigestIterator<'a> =
+    Box<dyn Iterator<Item = Result<LedgerTxSeqDigest, TypedStoreError>> + 'a>;
+pub type LedgerBitmapBucketIterator<'a> =
+    Box<dyn Iterator<Item = Result<LedgerBitmapBucket, TypedStoreError>> + 'a>;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LedgerTxSeqDigest {
+    pub tx_sequence_number: u64,
+    pub digest: TransactionDigest,
+    pub event_count: u32,
+    /// Zero-based position of this transaction within its checkpoint.
+    pub tx_offset: u32,
+    pub checkpoint_number: CheckpointSequenceNumber,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LedgerBitmapBucket {
+    pub bucket_id: u64,
+    pub bitmap: roaring::RoaringBitmap,
+}
+
 pub trait RpcIndexes: Send + Sync {
     fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<EpochInfo>>;
 
@@ -704,16 +724,40 @@ pub trait RpcIndexes: Send + Sync {
     fn get_highest_indexed_checkpoint_seq_number(&self)
     -> Result<Option<CheckpointSequenceNumber>>;
 
-    fn authenticated_event_iter(
+    fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>>;
+
+    fn ledger_tx_seq_digest_multi_get(
         &self,
-        stream_id: SuiAddress,
-        start_checkpoint: u64,
-        start_accumulator_version: Option<u64>,
-        start_transaction_idx: Option<u32>,
-        start_event_idx: Option<u32>,
-        end_checkpoint: u64,
-        limit: u32,
-    ) -> Result<Box<dyn Iterator<Item = Result<AuthenticatedEventRecord, TypedStoreError>> + '_>>;
+        tx_seqs: &[u64],
+    ) -> Result<Vec<Option<LedgerTxSeqDigest>>> {
+        tx_seqs
+            .iter()
+            .map(|tx_seq| self.ledger_tx_seq_digest(*tx_seq))
+            .collect()
+    }
+
+    fn ledger_tx_seq_digest_iter(
+        &self,
+        start: u64,
+        end_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerTxSeqDigestIterator<'_>>;
+
+    fn transaction_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>>;
+
+    fn event_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>>;
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -762,7 +806,8 @@ pub struct CoinInfo {
 
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 pub struct BalanceInfo {
-    pub balance: u64,
+    pub coin_balance: u64,
+    pub address_balance: u64,
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]

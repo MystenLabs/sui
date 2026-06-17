@@ -1,72 +1,160 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+
+use anyhow::Context;
 use anyhow::Result;
 use axum::Router;
 use axum::routing::get;
 use clap::Parser;
-use prometheus::Registry;
-use std::time::Duration;
-use sui_kv_rpc::{KvRpcServer, PoolConfig, ServerConfig};
+use sui_kv_rpc::KvRpcConfig;
+use sui_kv_rpc::KvRpcServer;
+use sui_kv_rpc::ServerConfig;
+use sui_kvstore::validate_pipeline_name;
 use sui_rpc_api::ServerVersion;
-
-#[derive(Parser)]
-struct PoolArgs {
-    /// Number of gRPC channels to create at startup
-    #[clap(long = "bigtable-initial-pool-size", default_value_t = PoolConfig::default().initial_pool_size)]
-    bigtable_initial_pool_size: usize,
-    /// Minimum number of channels the pool will maintain
-    #[clap(long = "bigtable-min-pool-size", default_value_t = PoolConfig::default().min_pool_size)]
-    bigtable_min_pool_size: usize,
-    /// Maximum number of channels the pool can scale to
-    #[clap(long = "bigtable-max-pool-size", default_value_t = PoolConfig::default().max_pool_size)]
-    bigtable_max_pool_size: usize,
-}
-
-impl From<PoolArgs> for PoolConfig {
-    fn from(args: PoolArgs) -> Self {
-        Self {
-            initial_pool_size: args.bigtable_initial_pool_size,
-            min_pool_size: args.bigtable_min_pool_size,
-            max_pool_size: args.bigtable_max_pool_size,
-            ..Self::default()
-        }
-    }
-}
 use telemetry_subscribers::TelemetryConfig;
-use tonic::transport::Identity;
 
 bin_version::bin_version!();
 
 #[derive(Parser)]
 struct App {
-    /// Path to GCP service account JSON key file. If not provided, uses Application Default
-    /// Credentials (GOOGLE_APPLICATION_CREDENTIALS or metadata server).
+    /// Path to a YAML config file ([`KvRpcConfig`]). New tunables (concurrency,
+    /// scan budgets, per-endpoint list limits, experimental query APIs) are
+    /// configured here. Run with --config-schema to print the file format.
+    #[clap(long)]
+    config_path: Option<PathBuf>,
+
+    /// Print the JSON Schema for the --config-path file (with field docs) and
+    /// exit.
+    #[clap(long)]
+    config_schema: bool,
+
+    // The flags below are deprecated. They remain for backwards compatibility:
+    // each takes precedence over the config file when set, and logs a
+    // deprecation warning. Prefer setting them in the config file.
+    /// (deprecated) Path to GCP service account JSON key file. If not provided,
+    /// uses Application Default Credentials.
     #[clap(long)]
     credentials: Option<String>,
-    instance_id: String,
-    #[clap(default_value = "[::1]:8000")]
-    address: String,
-    #[clap(default_value = "127.0.0.1")]
-    metrics_host: String,
-    #[clap(default_value_t = 9184)]
-    metrics_port: usize,
-    #[clap(long = "tls-cert", default_value = "")]
-    tls_cert: String,
-    #[clap(long = "tls-key", default_value = "")]
-    tls_key: String,
-    /// GCP project ID for the BigTable instance (defaults to the token provider's project)
+    /// (deprecated) BigTable instance id.
+    instance_id: Option<String>,
+    /// (deprecated) gRPC listen address.
+    address: Option<String>,
+    /// (deprecated) Prometheus metrics host.
+    metrics_host: Option<String>,
+    /// (deprecated) Prometheus metrics port.
+    metrics_port: Option<u16>,
+    /// (deprecated) PEM TLS certificate path.
+    #[clap(long = "tls-cert")]
+    tls_cert: Option<String>,
+    /// (deprecated) PEM TLS private key path.
+    #[clap(long = "tls-key")]
+    tls_key: Option<String>,
+    /// (deprecated) GCP project id for the BigTable instance.
     #[clap(long = "bigtable-project")]
     bigtable_project: Option<String>,
+    /// (deprecated)
     #[clap(long = "app-profile-id")]
     app_profile_id: Option<String>,
+    /// (deprecated)
     #[clap(long = "checkpoint-bucket")]
     checkpoint_bucket: Option<String>,
-    /// Channel-level timeout in milliseconds for BigTable gRPC calls (default: 60000)
+    /// (deprecated) Pipeline watermark to include in GetServiceInfo checkpoint
+    /// height. Repeat to include multiple pipelines.
+    #[clap(
+        long = "watermark-pipeline",
+        value_name = "PIPELINE",
+        value_delimiter = ',',
+        value_parser = validate_pipeline_name
+    )]
+    watermark_pipeline: Vec<&'static str>,
+    /// (deprecated) Channel-level timeout in milliseconds for BigTable gRPC calls.
     #[clap(long = "bigtable-channel-timeout-ms")]
     bigtable_channel_timeout_ms: Option<u64>,
-    #[clap(flatten)]
-    pool: PoolArgs,
+    /// (deprecated) Number of gRPC channels to create at startup.
+    #[clap(long = "bigtable-initial-pool-size")]
+    bigtable_initial_pool_size: Option<usize>,
+    /// (deprecated) Minimum number of channels the pool will maintain.
+    #[clap(long = "bigtable-min-pool-size")]
+    bigtable_min_pool_size: Option<usize>,
+    /// (deprecated) Maximum number of channels the pool can scale to.
+    #[clap(long = "bigtable-max-pool-size")]
+    bigtable_max_pool_size: Option<usize>,
+}
+
+fn warn_deprecated(flag: &str) {
+    tracing::warn!(
+        "the `{flag}` CLI flag is deprecated; configure it via --config-path instead \
+         (run with --config-schema to see the file format; the CLI value takes \
+         precedence over the config file for now)"
+    );
+}
+
+/// Apply a deprecated CLI override on top of the loaded config: when `src` is
+/// set it wins over the config file and logs a deprecation warning.
+fn override_field<T>(flag: &str, src: Option<T>, dst: &mut Option<T>) {
+    if src.is_some() {
+        warn_deprecated(flag);
+        *dst = src;
+    }
+}
+
+/// Apply the deprecated CLI flags on top of a loaded config: each set flag wins
+/// over the config file and emits a deprecation warning.
+fn apply_deprecated_overrides(app: App, config: &mut KvRpcConfig) {
+    override_field("--credentials", app.credentials, &mut config.credentials);
+    override_field("instance_id", app.instance_id, &mut config.instance_id);
+    override_field("address", app.address, &mut config.address);
+    override_field("metrics_host", app.metrics_host, &mut config.metrics_host);
+    override_field("metrics_port", app.metrics_port, &mut config.metrics_port);
+    override_field("--tls-cert", app.tls_cert, &mut config.tls_cert);
+    override_field("--tls-key", app.tls_key, &mut config.tls_key);
+    override_field(
+        "--bigtable-project",
+        app.bigtable_project,
+        &mut config.bigtable_project,
+    );
+    override_field(
+        "--app-profile-id",
+        app.app_profile_id,
+        &mut config.app_profile_id,
+    );
+    override_field(
+        "--checkpoint-bucket",
+        app.checkpoint_bucket,
+        &mut config.checkpoint_bucket,
+    );
+    override_field(
+        "--bigtable-channel-timeout-ms",
+        app.bigtable_channel_timeout_ms,
+        &mut config.bigtable_channel_timeout_ms,
+    );
+    override_field(
+        "--bigtable-initial-pool-size",
+        app.bigtable_initial_pool_size,
+        &mut config.bigtable_initial_pool_size,
+    );
+    override_field(
+        "--bigtable-min-pool-size",
+        app.bigtable_min_pool_size,
+        &mut config.bigtable_min_pool_size,
+    );
+    override_field(
+        "--bigtable-max-pool-size",
+        app.bigtable_max_pool_size,
+        &mut config.bigtable_max_pool_size,
+    );
+
+    if !app.watermark_pipeline.is_empty() {
+        warn_deprecated("--watermark-pipeline");
+        config.watermark_pipeline = Some(
+            app.watermark_pipeline
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        );
+    }
 }
 
 async fn health_check() -> &'static str {
@@ -79,42 +167,49 @@ async fn main() -> Result<()> {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install CryptoProvider");
+
     let app = App::parse();
+    if app.config_schema {
+        println!("{}", KvRpcConfig::schema_json()?);
+        return Ok(());
+    }
+    let mut config = match &app.config_path {
+        Some(path) => KvRpcConfig::load(path)?,
+        None => KvRpcConfig::default(),
+    };
+    apply_deprecated_overrides(app, &mut config);
+
+    let instance_id = config.instance_id.clone().context(
+        "instance_id must be set via the config file (--config-path) or the \
+         deprecated positional argument",
+    )?;
     let server_version = Some(ServerVersion::new("sui-kv-rpc", VERSION));
     let registry_service = mysten_metrics::start_prometheus_server(
-        format!("{}:{}", app.metrics_host, app.metrics_port).parse()?,
+        format!("{}:{}", config.metrics_host(), config.metrics_port()).parse()?,
     );
-    let registry: Registry = registry_service.default_registry();
+    let registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&registry);
-    let channel_timeout = app.bigtable_channel_timeout_ms.map(Duration::from_millis);
-    let pool_config: PoolConfig = app.pool.into();
 
     let server = KvRpcServer::new(
-        app.instance_id,
-        app.bigtable_project,
-        app.app_profile_id,
-        app.checkpoint_bucket,
-        channel_timeout,
+        instance_id,
+        config.bigtable_project.clone(),
+        config.app_profile_id.clone(),
+        config.checkpoint_bucket.clone(),
+        config.channel_timeout(),
         server_version,
         &registry,
-        app.credentials,
-        pool_config,
+        config.credentials.clone(),
+        config.pool_config(),
+        config.service_info_watermark_pipelines()?,
+        config.ledger_history(),
     )
     .await?;
 
-    let tls_identity = if !app.tls_cert.is_empty() && !app.tls_key.is_empty() {
-        Some(Identity::from_pem(
-            std::fs::read(app.tls_cert)?,
-            std::fs::read(app.tls_key)?,
-        ))
-    } else {
-        None
-    };
-
-    let config = ServerConfig {
-        tls_identity,
+    let server_config = ServerConfig {
+        tls_identity: config.tls_identity()?,
         metrics_registry: Some(registry),
         enable_reflection: true,
+        enable_experimental_query_apis: config.enable_experimental_query_apis(),
     };
 
     tokio::spawn(async {
@@ -127,7 +222,11 @@ async fn main() -> Result<()> {
             .expect("healh check service failed");
     });
 
-    let addr = app.address.parse()?;
-    server.start_service(addr, config).await?.main().await?;
+    let addr = config.address().parse()?;
+    server
+        .start_service(addr, server_config)
+        .await?
+        .main()
+        .await?;
     Ok(())
 }

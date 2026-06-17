@@ -27,12 +27,13 @@ impl UpdateDeps {
         path: Option<&Path>,
         build_config: &BuildConfig,
         env: Environment,
+        flavor: F,
     ) -> anyhow::Result<()> {
         let default = PathBuf::from(".");
         let path = path.unwrap_or(&default);
 
         let mut root_package: RootPackage<F> = build_config
-            .package_loader(path, &env)
+            .package_loader(path, &env, flavor)
             .force_repin(true)
             .load()
             .await?;

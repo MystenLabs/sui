@@ -45,6 +45,7 @@ rand.workspace = true
 roaring.workspace = true
 rayon.workspace = true
 reqwest.workspace = true
+rustc-hash.workspace = true
 scopeguard.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -86,6 +87,7 @@ sui-execution.workspace = true
 sui-framework.workspace = true
 sui-swarm-config.workspace = true
 sui-genesis-builder.workspace = true
+sui-inverted-index.workspace = true
 sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
 sui-network.workspace = true
@@ -134,9 +136,5 @@ prost-build.workspace = true
 protox.workspace = true
 
 [[bench]]
-name = "verified_cert_cache_bench"
-harness = false
-
-[[bench]]
-name = "batch_verification_bench"
+name = "verified_digest_cache_bench"
 harness = false

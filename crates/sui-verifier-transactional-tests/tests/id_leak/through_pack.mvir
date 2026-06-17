@@ -3,24 +3,24 @@
 
 //# publish
 // not allowed since C is not packed with a fresh UID
-module 0x0::test {
+mvir 0x0::test {
     import 0x2::object;
     import 0x2::transfer;
     import 0x2::tx_context;
 
-    struct A has key {
+    public struct A has key {
         id: object::UID
     }
 
-    struct C has key {
+    public struct C has key {
         id: object::UID
     }
 
-    struct B {
+    public struct B {
         id: object::UID
     }
 
-    public entry test(x: Self::A) {
+    public entry fun test(x: Self::A) {
         let id: object::UID;
         let b: Self::B;
         let c: Self::C;
@@ -38,19 +38,19 @@ module 0x0::test {
 
 //# publish
 // allowed since Bar does not have key
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::object;
 
-    struct Foo has key {
+    public struct Foo has key {
         id: object::UID,
     }
 
-    struct Bar {
+    public struct Bar {
         id: object::UID,
         v: u64,
     }
 
-    foo(f: Self::Foo) {
+    fun foo(f: Self::Foo) {
         let id: object::UID;
         let b: Self::Bar;
         label l0:

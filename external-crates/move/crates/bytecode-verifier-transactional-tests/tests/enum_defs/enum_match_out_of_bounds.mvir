@@ -1,13 +1,13 @@
 //# publish
-module 0x42::m {
+mvir 0x42::m {
 
-    enum Threes<T> has {
+    public enum Threes<T> has {
         One { pos0: T } ,
         Two{},
         Three { pos0: T }
     }
 
-    t0(): u64 {
+    fun t0(): u64 {
             let loc3: u64;
             let loc1: Self::Threes<u64>;
             let inner: u64;

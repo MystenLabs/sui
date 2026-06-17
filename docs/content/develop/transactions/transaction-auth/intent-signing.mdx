@@ -47,7 +47,7 @@ The serialization of an `IntentMessage<T>` is the 3 bytes of the intent concaten
 
 ## User signature
 
-To create a user signature, construct an intent message first, then create the signature over the 32-byte Blake2b hash of the BCS serialized value of the intent message of the transaction data (`intent || message`).
+To create a user signature, construct an intent message first, then sign the 32-byte Blake2b-256 hash of its BCS serialization (`hash(intent || message)`). The signer does not sign the raw transaction bytes. It signs the hash of the structured `IntentMessage`, whose BCS serialization is the 3-byte intent followed by the BCS bytes of the transaction data. The signed digest therefore commits to both the intent and the message.
 
 The following examples demonstrate this:
 
@@ -83,7 +83,9 @@ Under the hood, the `new_secure` method in Rust and the `signData` method in Typ
 
 ## Authority signature
 
-The authority signature is created using the protocol key. The data that it commits to is also an intent message `intent || message`. See all available intent scopes [in the source code](https://github.com/MystenLabs/sui/blob/0dc1a38f800fc2d8fabe11477fdef702058cf00d/crates/sui-types/src/intent.rs#L66).
+The authority signature is created using the protocol key. It does not use the external Blake2b-256 prehash that user signatures use. Instead, `AuthoritySignature::new_secure` BCS-serializes the `IntentMessage`, appends the 8-byte epoch, and passes the resulting `BCS(IntentMessage) || epoch` bytes directly to the BLS signer. In other words, the authority signs `intent || message || epoch`. Verification reconstructs the same bytes from the `IntentMessage` and the epoch, then checks them against the authority protocol public key, so the epoch is bound into every authority signature.
+
+Authority signatures use the internal intent scopes, such as `TransactionEffects`, `ProofOfPossession`, and `SenderSignedTransaction`. For all available intent scopes, see the `IntentScope` enum in [`crates/shared-crypto/src/intent.rs`](https://github.com/MystenLabs/sui/blob/main/crates/shared-crypto/src/intent.rs).
 
 ### Generating proof of possession for an authority
 
@@ -99,4 +101,39 @@ The proof of possession is a BLS signature created using the authority protocol 
 
 - `epoch`: Serialized to `[0, 0, 0, 0, 0, 0, 0, 0]`.
 
-To generate a proof of possession in Rust, see the implementation at `fn generate_proof_of_possession`. For test vectors, see `fn test_proof_of_possession`.
+To generate a proof of possession in Rust, see [`generate_proof_of_possession`](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/crypto.rs) in `crates/sui-types/src/crypto.rs`. That function builds the intent message with `Intent::sui_app(IntentScope::ProofOfPossession)`, sets the message to the protocol public key bytes concatenated with the authority account address, and signs it with the authority protocol key. For test vectors, see `fn test_proof_of_possession`.
+
+## Verifying signatures in Move
+
+You can verify a personal-message signature onchain using the `sui::ed25519` or `sui::ecdsa_k1` module:
+
+```move
+use sui::ed25519;
+
+public fun verify_personal_message(
+    signature: vector<u8>,
+    public_key: vector<u8>,
+    message: vector<u8>,
+) {
+    // The client signs: Blake2b-256(BCS(IntentMessage { intent: Intent::personal_message(), value: PersonalMessage { message } }))
+    // The intent prefix for PersonalMessage is [3, 0, 0]
+    assert!(
+        ed25519::ed25519_verify(&signature, &public_key, &message),
+        0
+    );
+}
+```
+
+On the client side (TypeScript), produce the signature:
+
+```typescript
+const { signature } = await wallet.signPersonalMessage({
+  message: new TextEncoder().encode('Hello from Sui'),
+});
+```
+
+:::info
+
+This page covers Sui transaction intent signing (the cryptographic envelope format). For cross-chain bridge integrations, see the [Wormhole](https://wormhole.com/docs/) or [Axelar](https://docs.axelar.dev/) documentation.
+
+:::

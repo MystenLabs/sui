@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::gas_predicates::charge_input_as_memory;
+use super::gas_predicates::{charge_input_as_memory, legacy_charge_native_pops_args};
 use crate::gas_model::units_types::{CostTable, Gas, GasCost};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use mysten_common::debug_fatal;
 
 use move_core_types::gas_algebra::{AbstractMemorySize, InternalGas};
 
@@ -168,7 +169,24 @@ impl GasStatus {
     }
 
     pub fn pop_stack(&mut self, pops: u64) {
-        self.stack_height_current = self.stack_height_current.saturating_sub(pops);
+        // Underflow is expected when charge_native still pops args (legacy
+        // double-pop). Otherwise — i.e., gas_model_version > 11 where the
+        // native-call double-pop fix is in effect — it indicates a real bug.
+        // debug_fatal! panics in debug and logs an error + bumps the
+        // system_invariant_violations metric in release.
+        self.stack_height_current = match self.stack_height_current.checked_sub(pops) {
+            Some(stack_height) => stack_height,
+            None if legacy_charge_native_pops_args(self.gas_model_version) => 0,
+            None => {
+                debug_fatal!(
+                    "stack height underflow: current={}, pops={}. \
+                     This indicates a double-pop or missing push in the gas meter.",
+                    self.stack_height_current,
+                    pops
+                );
+                0
+            }
+        };
     }
 
     pub fn increase_instruction_count(&mut self, amount: u64) -> PartialVMResult<()> {
@@ -213,14 +231,6 @@ impl GasStatus {
         Ok(())
     }
 
-    pub fn decrease_stack_size(&mut self, size_amount: u64) {
-        let new_size = self.stack_size_current.saturating_sub(size_amount);
-        if new_size > self.stack_size_high_water_mark {
-            self.stack_size_high_water_mark = new_size;
-        }
-        self.stack_size_current = new_size;
-    }
-
     /// Given: pushes + pops + increase + decrease in size for an instruction charge for the
     /// execution of the instruction.
     pub fn charge(
@@ -250,7 +260,6 @@ impl GasStatus {
             .total_internal(),
         )?;
 
-        // self.decrease_stack_size(decr_size);
         self.pop_stack(pops);
         Ok(())
     }

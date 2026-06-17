@@ -1,0 +1,173 @@
+---
+title: Oracle
+description: Learn about OracleSVI lifecycle, price updates, SVI updates, settlement, and oracle read functions in DeepBook Predict.
+keywords:
+  [
+    oraclesvi,
+    deepbook predict oracle,
+    oracle lifecycle,
+    svi,
+    spot price,
+    forward price,
+    settlement price,
+    oracle events,
+  ]
+---
+
+`OracleSVI` is the market state for one underlying asset and one expiry. It stores spot and forward prices, SVI volatility surface parameters, activation state, the last update timestamp, and the settlement price after expiry.
+
+## Lifecycle
+
+An oracle starts inactive, becomes active after `activate()`, accepts live price and SVI updates before expiry, enters pending settlement at expiry, and becomes settled when the first post-expiry price update freezes the settlement price.
+
+Mints require a live oracle. Redeems can use quoteable live or settled oracle state. After settlement, price and SVI updates are rejected.
+
+## API
+
+<details>
+<summary>Activate an oracle</summary>
+
+The `activate()` function moves an oracle into the active state before expiry.
+
+<ImportContent
+	source="packages/predict/sources/oracle.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="activate"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Update prices</summary>
+
+The `update_prices()` function pushes high-frequency spot and forward prices. If the oracle is past expiry and not yet settled, this call freezes the settlement price instead of recording another live update.
+
+<ImportContent
+	source="packages/predict/sources/oracle.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="update_prices"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Update SVI parameters</summary>
+
+The `update_svi()` function pushes lower-frequency SVI volatility surface parameters before expiry.
+
+<ImportContent
+	source="packages/predict/sources/oracle.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="update_svi"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Read oracle state</summary>
+
+Use these functions to read oracle identifiers, underlying asset, prices, SVI parameters, expiry, timestamp, settlement, and lifecycle status.
+
+<ImportContent
+	source="packages/predict/sources/oracle.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="id,underlying_asset,spot_price,forward_price,prices,svi,expiry,timestamp,settlement_price,is_settled,is_active,status"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Create price and SVI data</summary>
+
+These helper constructors build `PriceData` and `SVIParams` values for oracle updates.
+
+<ImportContent
+	source="packages/predict/sources/oracle.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="new_price_data,new_svi_params"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Read status constants</summary>
+
+These functions return the numeric status values used by `status()`.
+
+<ImportContent
+	source="packages/predict/sources/oracle.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="status_inactive,status_active,status_pending_settlement,status_settled"
+	noComments
+/>
+
+</details>
+
+## Structs
+
+<details>
+<summary>`OracleSVI`</summary>
+
+<ImportContent
+	source="packages/predict/sources/oracle.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="OracleSVI"
+/>
+
+</details>
+
+<details>
+<summary>`PriceData` and `SVIParams`</summary>
+
+<ImportContent
+	source="packages/predict/sources/oracle.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="PriceData,SVIParams"
+/>
+
+</details>
+
+## Events
+
+<details>
+<summary>Oracle events</summary>
+
+<ImportContent
+	source="packages/predict/sources/oracle.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="OracleActivated,OraclePricesUpdated,OracleSVIUpdated,OracleSettled"
+/>
+
+</details>

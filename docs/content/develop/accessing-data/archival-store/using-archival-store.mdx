@@ -4,7 +4,7 @@ description: Query historical Sui network data through the Archival Service gRPC
 keywords: [ archival store, archival service, historical data, grpc, ledger service, bigtable, sui-kv-rpc ]
 ---
 
-The Archival Service provides access to historical Sui network data through the same [`LedgerService`](/references/fullnode-protocol) gRPC API available on full nodes. Use it as a fallback when your full node has pruned the data you need, or as a dedicated source for historical queries.
+The Archival Service provides access to historical Sui network data through the same [`LedgerService`](/references/fullnode-protocol) gRPC API available on full nodes. Use it as an explicit gRPC endpoint when a full node has pruned the data you need, or as a dedicated source for historical queries. Full node gRPC endpoints do not automatically fall back to Archival Service endpoints.
 
 For core concepts, see the [Archival Store and Service concepts page](/develop/accessing-data/archival-store).
 
@@ -25,7 +25,7 @@ These endpoints have strict rate limits.
 
 ## Querying the service
 
-The Archival Service exposes the same [`LedgerService`](/references/fullnode-protocol) gRPC API as a Sui full node. Query it using any gRPC client by pointing at an Archival Service endpoint instead of a full node.
+The Archival Service exposes the same [`LedgerService`](/references/fullnode-protocol) gRPC API as a Sui full node. Query it using any gRPC client by pointing at an Archival Service endpoint instead of a full node. GraphQL deployments can route supported historical lookups to Archival when the operator configures it; gRPC clients must choose the Archival Service URL explicitly.
 
 See [Using gRPC](/develop/accessing-data/grpc/using-grpc) for detailed examples with `grpcurl`, Buf CLI, TypeScript, Go, and Python.
 
@@ -39,10 +39,9 @@ grpcurl -d '{
 
 ## Using the Archival Service as a fallback
 
-Apps can query the Archival Service when a full node returns retention-related errors. This provides a graceful fallback without requiring the full node to store historical data:
+Apps can query the Archival Service when a full node returns retention-related errors. This application-level fallback does not implicitly happen inside the full node.
 
-1. Send your query to the full node.
-2. If the full node returns `NOT_FOUND` for data that should exist, retry against the Archival Service endpoint.
+If the full node returns `NOT_FOUND` for data that should exist, retry against an Archival Service endpoint such as `archive.mainnet.sui.io:443`.
 
 ## Running your own instance
 

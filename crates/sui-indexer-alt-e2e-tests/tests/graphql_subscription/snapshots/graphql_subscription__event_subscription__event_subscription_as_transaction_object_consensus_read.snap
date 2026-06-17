@@ -1,0 +1,28 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription/event_subscription.rs
+expression: item
+---
+{
+  "data": {
+    "events": {
+      "contents": {
+        "extract": {
+          "asAddress": {
+            "asTransactionObject": {
+              "__typename": "ConsensusObjectRead",
+              "object": {
+                "asMoveObject": {
+                  "contents": {
+                    "type": {
+                      "repr": "[pkg]::clock::Clock"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

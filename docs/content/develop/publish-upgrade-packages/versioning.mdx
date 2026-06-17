@@ -33,18 +33,6 @@ Framework packages, such as the [Move standard library](https://move-book.com/re
 
 Package manifest files include version fields in both the `[package]` section and `[dependencies]`. These are for user-level documentation only, as the `publish` and `upgrade` commands do not use them. Two publishes of the same package with different manifest versions are treated as entirely separate packages and cannot be used as dependency overrides for each other.
 
-## Fastpath vs. consensus: comparison
-
-| | Fastpath | Consensus |
-| :-- | :-- | :-- |
-| **Supported ownership** | Address-owned, immutable | Address-owned, party, shared |
-| **Version input** | Must specify exact ID and version | Specify ID and shared-at version; consensus assigns access version |
-| **Latency** | Low | Higher |
-| **Gas cost** | Lower | Higher |
-| **Multi-party access** | Requires offchain coordination | Handled onchain |
-| **Equivocation risk** | Yes, if same object used in two transactions | No |
-| **Best for** | Latency-sensitive, single-party, or offchain-coordinated apps | Multi-party coordination, frequently shared objects |
-
 ## Example: escrow swap
 
 This example demonstrates the trade-offs by implementing the same trustless object swap service two ways, one using fastpath address-owned objects with a custodian, and one using a consensus shared object.

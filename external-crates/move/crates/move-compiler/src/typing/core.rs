@@ -7,7 +7,7 @@ use crate::{
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics,
         codes::{NameResolution, TypeSafety},
-        warning_filters::WarningFilters,
+        filter::FilterScope,
     },
     editions::FeatureGate,
     expansion::ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
@@ -34,6 +34,7 @@ use crate::{
     },
     typing::deprecation_warnings::Deprecations,
 };
+use indexmap::IndexMap;
 use known_attributes::AttributePosition;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -453,7 +454,7 @@ impl<'env> ModuleContext<'env> {
         self.reporter.add_ide_annotation(loc, info);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.reporter.push_warning_filter_scope(filters)
     }
 
@@ -850,7 +851,7 @@ impl<'env, 'outer> Context<'env, 'outer> {
         self.reporter.add_ide_annotation(loc, info);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.reporter.push_warning_filter_scope(filters)
     }
 
@@ -1329,7 +1330,8 @@ impl TVarCounter {
 #[derive(Clone, Debug)]
 pub struct Subst {
     tvars: HashMap<TVar, Type>,
-    tvar_constraints: HashMap<TVar, VarConstraint>,
+    // IndexMap (rather than HashMap) so iteration order matches insertion order.
+    tvar_constraints: IndexMap<TVar, VarConstraint>,
 }
 
 #[derive(Clone, Debug)]
@@ -1344,7 +1346,7 @@ impl Subst {
     pub fn empty() -> Self {
         Self {
             tvars: HashMap::new(),
-            tvar_constraints: HashMap::new(),
+            tvar_constraints: IndexMap::new(),
         }
     }
 
@@ -2388,8 +2390,25 @@ pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
 pub fn solve_constraints(context: &mut Context) {
     use BuiltinTypeName_ as BT;
 
-    // Solve these constraints first to minimize error reporting.
+    // Resolve divergent type variables first, so that downstream constraints (e.g., base type)
+    // can see Void rather than an unresolved TVar. `tvar_constraints` is an IndexMap so iteration
+    // is deterministic using insertion order.
+    {
+        let var_constraints = context.subst.tvar_constraints.clone();
+        let mut subst = std::mem::replace(&mut context.subst, Subst::empty());
+        for (var, constraint) in &var_constraints {
+            if let VarConstraint::Divergent(loc) = constraint {
+                let last_tvar = forward_tvar(&subst, *var);
+                if subst.get(last_tvar).is_none() {
+                    join_bind_tvar(&mut subst, *loc, last_tvar, sp(*loc, VOID_TYPE.clone()))
+                        .expect("ICE failed handling unbound divergent type");
+                }
+            }
+        }
+        context.subst = subst;
+    }
 
+    // Solve these constraints now that divergent types have been resolved to Void.
     let constraints = std::mem::take(&mut context.constraints);
     for constraint in constraints {
         match constraint {
@@ -2422,6 +2441,9 @@ pub fn solve_constraints(context: &mut Context) {
 
     for (var, constraint) in var_constraints.into_iter() {
         match constraint {
+            VarConstraint::Divergent(_) => {
+                // Already resolved above.
+            }
             VarConstraint::Num(loc) => {
                 let tvar = sp(loc, TI::Var(var).into());
                 let unfolded_ty_ = unfold_type(&subst, &tvar).value;
@@ -2468,13 +2490,6 @@ pub fn solve_constraints(context: &mut Context) {
                         .unwrap()
                         .0;
                     subst = next_subst;
-                }
-            }
-            VarConstraint::Divergent(loc) => {
-                let last_tvar = forward_tvar(&subst, var);
-                if subst.get(last_tvar).is_none() {
-                    join_bind_tvar(&mut subst, loc, last_tvar, sp(loc, VOID_TYPE.clone()))
-                        .expect("ICE failed handling unbound divergent type");
                 }
             }
         }
@@ -2648,12 +2663,15 @@ fn solve_base_type_constraint(context: &mut Context, loc: Loc, msg: String, ty: 
                 (tyloc, tmsg)
             ))
         }
-        TI::UnresolvedError
-        | TI::Anything
-        | TI::Void
-        | TI::Param(_)
-        | TI::Apply(_, _, _)
-        | TI::Fun(_, _) => (),
+        TI::Void => {
+            let tmsg = "Could not find a concrete type for this expression";
+            context.add_diag(diag!(
+                TypeSafety::ExpectedBaseType,
+                (loc, msg),
+                (tyloc, tmsg)
+            ))
+        }
+        TI::UnresolvedError | TI::Anything | TI::Param(_) | TI::Apply(_, _, _) | TI::Fun(_, _) => {}
     }
 }
 

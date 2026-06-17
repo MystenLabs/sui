@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::{
+    execution_mode::ExecutionMode,
     sp,
     static_programmable_transactions::{
         env::Env,
@@ -17,8 +18,8 @@ use crate::{
 use move_regex_borrow_graph::{MeterError, meter::DummyMeter, references::Ref};
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{
-    error::{ExecutionError, SafeIndex, command_argument_error},
-    execution_status::CommandArgumentError,
+    error::{ExecutionErrorTrait, SafeIndex},
+    execution_status::{CommandArgumentError, ExecutionErrorKind},
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -69,7 +70,10 @@ impl Value {
 }
 
 impl Context {
-    fn new(_env: &Env, ast: &T::Transaction) -> Result<Self, ExecutionError> {
+    fn new<Mode: ExecutionMode>(
+        _env: &Env<Mode>,
+        ast: &T::Transaction,
+    ) -> Result<Self, Mode::Error> {
         let gas_coin = if ast.gas_payment.is_none() {
             None
         } else {
@@ -98,7 +102,7 @@ impl Context {
             .filter(|ty| matches!(&ty, Type::Reference(_, _)))
             .count();
         let (mut graph, _locals) =
-            Graph::new::<()>(canonical_reference_capacity, []).map_err(graph_err)?;
+            Graph::new::<()>(canonical_reference_capacity, []).map_err(graph_err::<Mode::Error>)?;
         let local_root = graph
             .extend_by_epsilon(
                 (),
@@ -106,7 +110,7 @@ impl Context {
                 /* is_mut */ true,
                 &mut DummyMeter,
             )
-            .map_err(graph_meter_err)?;
+            .map_err(graph_meter_err::<Mode::Error>)?;
         Ok(Self {
             graph,
             local_root,
@@ -120,7 +124,10 @@ impl Context {
         })
     }
 
-    fn location(&mut self, l: T::Location) -> Result<&mut Option<Value>, ExecutionError> {
+    fn location<E: ExecutionErrorTrait>(
+        &mut self,
+        l: T::Location,
+    ) -> Result<&mut Option<Value>, E> {
         Ok(match l {
             T::Location::TxContext => &mut self.tx_context,
             T::Location::GasCoin => &mut self.gas_coin,
@@ -135,45 +142,49 @@ impl Context {
         })
     }
 
-    fn is_mutable(&self, r: Ref) -> Result<bool, ExecutionError> {
-        self.graph.is_mutable(r).map_err(graph_err)
+    fn is_mutable<E: ExecutionErrorTrait>(&self, r: Ref) -> Result<bool, E> {
+        self.graph.is_mutable(r).map_err(graph_err::<E>)
     }
 
-    fn borrowed_by(&self, r: Ref) -> Result<BTreeMap<Ref, Paths>, ExecutionError> {
+    fn borrowed_by<E: ExecutionErrorTrait>(&self, r: Ref) -> Result<BTreeMap<Ref, Paths>, E> {
         self.graph
             .borrowed_by(r, &mut DummyMeter)
-            .map_err(graph_meter_err)
+            .map_err(graph_meter_err::<E>)
     }
 
     /// Used for checking if a location is borrowed
     /// Used for updating the borrowed marker in Copy, and for correctness of Move
-    fn is_location_borrowed(&self, l: T::Location) -> Result<bool, ExecutionError> {
-        let borrowed_by = self.borrowed_by(self.local_root)?;
+    fn is_location_borrowed<E: ExecutionErrorTrait>(&self, l: T::Location) -> Result<bool, E> {
+        let borrowed_by = self.borrowed_by::<E>(self.local_root)?;
         Ok(borrowed_by
             .iter()
             .any(|(_, paths)| paths.iter().any(|path| path.starts_with(&Location(l)))))
     }
 
-    fn release(&mut self, r: Ref) -> Result<(), ExecutionError> {
+    fn release<E: ExecutionErrorTrait>(&mut self, r: Ref) -> Result<(), E> {
         self.graph
             .release(r, &mut DummyMeter)
-            .map_err(graph_meter_err)
+            .map_err(graph_meter_err::<E>)
     }
 
-    fn extend_by_epsilon(&mut self, r: Ref, is_mut: bool) -> Result<Ref, ExecutionError> {
+    fn extend_by_epsilon<E: ExecutionErrorTrait>(
+        &mut self,
+        r: Ref,
+        is_mut: bool,
+    ) -> Result<Ref, E> {
         let new_r = self
             .graph
             .extend_by_epsilon((), std::iter::once(r), is_mut, &mut DummyMeter)
-            .map_err(graph_meter_err)?;
+            .map_err(graph_meter_err::<E>)?;
         Ok(new_r)
     }
 
-    fn extend_by_label(
+    fn extend_by_label<E: ExecutionErrorTrait>(
         &mut self,
         r: Ref,
         is_mut: bool,
         extension: T::Location,
-    ) -> Result<Ref, ExecutionError> {
+    ) -> Result<Ref, E> {
         let new_r = self
             .graph
             .extend_by_label(
@@ -183,49 +194,52 @@ impl Context {
                 Location(extension),
                 &mut DummyMeter,
             )
-            .map_err(graph_meter_err)?;
+            .map_err(graph_meter_err::<E>)?;
         Ok(new_r)
     }
 
-    fn extend_by_dot_star_for_call(
+    fn extend_by_dot_star_for_call<E: ExecutionErrorTrait>(
         &mut self,
         sources: &BTreeSet<Ref>,
         mutabilities: Vec<bool>,
-    ) -> Result<Vec<Ref>, ExecutionError> {
+    ) -> Result<Vec<Ref>, E> {
         let new_refs = self
             .graph
             .extend_by_dot_star_for_call((), sources, mutabilities, &mut DummyMeter)
-            .map_err(graph_meter_err)?;
+            .map_err(graph_meter_err::<E>)?;
         Ok(new_refs)
     }
 
     // Writable if
     // No imm equal
     // No extensions
-    fn is_writable(&self, r: Ref) -> Result<bool, ExecutionError> {
-        debug_assert!(self.is_mutable(r)?);
+    fn is_writable<E: ExecutionErrorTrait>(&self, r: Ref) -> Result<bool, E> {
+        debug_assert!(self.is_mutable::<E>(r)?);
         Ok(self
-            .borrowed_by(r)?
+            .borrowed_by::<E>(r)?
             .values()
             .all(|paths| paths.iter().all(|path| path.is_epsilon())))
     }
 
     // is in reference not able to be used in a call or return
-    fn find_non_transferrable(&self, refs: &BTreeSet<Ref>) -> Result<Option<Ref>, ExecutionError> {
+    fn find_non_transferrable<E: ExecutionErrorTrait>(
+        &self,
+        refs: &BTreeSet<Ref>,
+    ) -> Result<Option<Ref>, E> {
         let borrows = refs
             .iter()
             .copied()
-            .map(|r| Ok((r, self.borrowed_by(r)?)))
-            .collect::<Result<BTreeMap<_, _>, ExecutionError>>()?;
+            .map(|r| Ok((r, self.borrowed_by::<E>(r)?)))
+            .collect::<Result<BTreeMap<_, _>, E>>()?;
         let mut_refs = refs
             .iter()
             .copied()
-            .filter_map(|r| match self.is_mutable(r) {
+            .filter_map(|r| match self.is_mutable::<E>(r) {
                 Ok(true) => Some(Ok(r)),
                 Ok(false) => None,
                 Err(e) => Some(Err(e)),
             })
-            .collect::<Result<BTreeSet<_>, ExecutionError>>()?;
+            .collect::<Result<BTreeSet<_>, E>>()?;
         for (r, borrowed_by) in borrows {
             let is_mut = mut_refs.contains(&r);
             for (borrower, paths) in borrowed_by {
@@ -254,11 +268,15 @@ impl Context {
 /// Checks the following
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
-pub fn verify(env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
+pub fn verify<Mode: ExecutionMode>(
+    env: &Env<Mode>,
+    ast: &T::Transaction,
+) -> Result<(), Mode::Error> {
     let mut context = Context::new(env, ast)?;
     let commands = &ast.commands;
     for c in commands {
-        let result = command(&mut context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
+        let result = command::<Mode::Error>(&mut context, c)
+            .map_err(|e| e.with_command_index(c.idx as usize))?;
         assert_invariant!(
             result.len() == c.value.result_type.len(),
             "result length mismatch for command. {c:?}"
@@ -275,11 +293,11 @@ pub fn verify(env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
                 Ok(if !drop {
                     Some(v)
                 } else {
-                    consume_value(&mut context, v)?;
+                    consume_value::<Mode::Error>(&mut context, v)?;
                     None
                 })
             })
-            .collect::<Result<Vec<_>, ExecutionError>>()?;
+            .collect::<Result<Vec<_>, Mode::Error>>()?;
         context.results.push(result_values);
     }
 
@@ -296,21 +314,23 @@ pub fn verify(env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
     let pure = std::mem::take(pure);
     let receiving = std::mem::take(receiving);
     let results = std::mem::take(results);
-    consume_value_opt(&mut context, gas_coin)?;
+    consume_value_opt::<Mode::Error>(&mut context, gas_coin)?;
     for vopt in objects.into_iter().chain(pure).chain(receiving) {
-        consume_value_opt(&mut context, vopt)?;
+        consume_value_opt::<Mode::Error>(&mut context, vopt)?;
     }
     for result in results {
         for vopt in result {
-            consume_value_opt(&mut context, vopt)?;
+            consume_value_opt::<Mode::Error>(&mut context, vopt)?;
         }
     }
 
     assert_invariant!(
-        context.borrowed_by(context.local_root)?.is_empty(),
+        context
+            .borrowed_by::<Mode::Error>(context.local_root)?
+            .is_empty(),
         "reference to local root not released"
     );
-    context.release(context.local_root)?;
+    context.release::<Mode::Error>(context.local_root)?;
     assert_invariant!(context.graph.is_empty(), "reference not released");
     assert_invariant!(
         context.tx_context.is_some(),
@@ -320,7 +340,10 @@ pub fn verify(env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
     Ok(())
 }
 
-fn command(context: &mut Context, sp!(_, c): &T::Command) -> Result<Vec<Value>, ExecutionError> {
+fn command<E: ExecutionErrorTrait>(
+    context: &mut Context,
+    sp!(_, c): &T::Command,
+) -> Result<Vec<Value>, E> {
     let result_tys = &c.result_type;
     Ok(match &c.command {
         T::Command__::MoveCall(mc) => {
@@ -328,39 +351,39 @@ fn command(context: &mut Context, sp!(_, c): &T::Command) -> Result<Vec<Value>, 
                 function,
                 arguments: args,
             } = &**mc;
-            let arg_values = arguments(context, args)?;
-            call(context, arg_values, &function.signature)?
+            let arg_values = arguments::<E>(context, args)?;
+            call::<E>(context, arg_values, &function.signature)?
         }
         T::Command__::TransferObjects(objects, recipient) => {
-            let object_values = arguments(context, objects)?;
-            let recipient_value = argument(context, recipient)?;
-            consume_values(context, object_values)?;
-            consume_value(context, recipient_value)?;
+            let object_values = arguments::<E>(context, objects)?;
+            let recipient_value = argument::<E>(context, recipient)?;
+            consume_values::<E>(context, object_values)?;
+            consume_value::<E>(context, recipient_value)?;
             vec![]
         }
         T::Command__::SplitCoins(_, coin, amounts) => {
-            let coin_value = argument(context, coin)?;
-            let amount_values = arguments(context, amounts)?;
-            consume_values(context, amount_values)?;
-            write_ref(context, 0, coin_value)?;
+            let coin_value = argument::<E>(context, coin)?;
+            let amount_values = arguments::<E>(context, amounts)?;
+            consume_values::<E>(context, amount_values)?;
+            write_ref::<E>(context, 0, coin_value)?;
             (0..amounts.len()).map(|_| Value::NonRef).collect()
         }
         T::Command__::MergeCoins(_, target, coins) => {
-            let target_value = argument(context, target)?;
-            let coin_values = arguments(context, coins)?;
-            consume_values(context, coin_values)?;
-            write_ref(context, 0, target_value)?;
+            let target_value = argument::<E>(context, target)?;
+            let coin_values = arguments::<E>(context, coins)?;
+            consume_values::<E>(context, coin_values)?;
+            write_ref::<E>(context, 0, target_value)?;
             vec![]
         }
         T::Command__::MakeMoveVec(_, xs) => {
-            let vs = arguments(context, xs)?;
-            consume_values(context, vs)?;
+            let vs = arguments::<E>(context, xs)?;
+            consume_values::<E>(context, vs)?;
             vec![Value::NonRef]
         }
         T::Command__::Publish(_, _, _) => result_tys.iter().map(|_| Value::NonRef).collect(),
         T::Command__::Upgrade(_, _, _, x, _) => {
-            let v = argument(context, x)?;
-            consume_value(context, v)?;
+            let v = argument::<E>(context, x)?;
+            consume_value::<E>(context, v)?;
             vec![Value::NonRef]
         }
     })
@@ -370,173 +393,200 @@ fn command(context: &mut Context, sp!(_, c): &T::Command) -> Result<Vec<Value>, 
 // Abstract State
 //**************************************************************************************************
 
-fn consume_values(context: &mut Context, values: Vec<Value>) -> Result<(), ExecutionError> {
+fn consume_values<E: ExecutionErrorTrait>(
+    context: &mut Context,
+    values: Vec<Value>,
+) -> Result<(), E> {
     for v in values {
-        consume_value(context, v)?;
+        consume_value::<E>(context, v)?;
     }
     Ok(())
 }
 
-fn consume_value_opt(context: &mut Context, value: Option<Value>) -> Result<(), ExecutionError> {
+fn consume_value_opt<E: ExecutionErrorTrait>(
+    context: &mut Context,
+    value: Option<Value>,
+) -> Result<(), E> {
     match value {
-        Some(v) => consume_value(context, v),
+        Some(v) => consume_value::<E>(context, v),
         None => Ok(()),
     }
 }
 
-fn consume_value(context: &mut Context, value: Value) -> Result<(), ExecutionError> {
+fn consume_value<E: ExecutionErrorTrait>(context: &mut Context, value: Value) -> Result<(), E> {
     match value {
         Value::NonRef => Ok(()),
         Value::Ref(r) => {
-            context.release(r)?;
+            context.release::<E>(r)?;
             Ok(())
         }
     }
 }
 
-fn arguments(context: &mut Context, xs: &[T::Argument]) -> Result<Vec<Value>, ExecutionError> {
-    xs.iter().map(|x| argument(context, x)).collect()
+fn arguments<E: ExecutionErrorTrait>(
+    context: &mut Context,
+    xs: &[T::Argument],
+) -> Result<Vec<Value>, E> {
+    xs.iter().map(|x| argument::<E>(context, x)).collect()
 }
 
-fn argument(context: &mut Context, x: &T::Argument) -> Result<Value, ExecutionError> {
+fn argument<E: ExecutionErrorTrait>(context: &mut Context, x: &T::Argument) -> Result<Value, E> {
     match &x.value.0 {
-        T::Argument__::Use(T::Usage::Move(location)) => move_value(context, x.idx, *location),
+        T::Argument__::Use(T::Usage::Move(location)) => move_value::<E>(context, x.idx, *location),
         T::Argument__::Use(T::Usage::Copy { location, borrowed }) => {
-            copy_value(context, x.idx, *location, borrowed)
+            copy_value::<E>(context, x.idx, *location, borrowed)
         }
         T::Argument__::Borrow(is_mut, location) => {
-            borrow_location(context, x.idx, *is_mut, *location)
+            borrow_location::<E>(context, x.idx, *is_mut, *location)
         }
-        T::Argument__::Read(usage) => read_ref(context, x.idx, usage),
-        T::Argument__::Freeze(usage) => freeze_ref(context, x.idx, usage),
+        T::Argument__::Read(usage) => read_ref::<E>(context, x.idx, usage),
+        T::Argument__::Freeze(usage) => freeze_ref::<E>(context, x.idx, usage),
     }
 }
 
-fn move_value(
+fn move_value<E: ExecutionErrorTrait>(
     context: &mut Context,
     arg_idx: u16,
     l: T::Location,
-) -> Result<Value, ExecutionError> {
-    if context.is_location_borrowed(l)? {
+) -> Result<Value, E> {
+    if context.is_location_borrowed::<E>(l)? {
         // TODO more specific error
-        return Err(command_argument_error(
+        return Err(E::from_kind(ExecutionErrorKind::command_argument_error(
             CommandArgumentError::CannotMoveBorrowedValue,
-            arg_idx as usize,
-        ));
+            arg_idx,
+        )));
     }
-    let Some(value) = context.location(l)?.take() else {
-        return Err(command_argument_error(
+    let Some(value) = context.location::<E>(l)?.take() else {
+        return Err(E::from_kind(ExecutionErrorKind::command_argument_error(
             CommandArgumentError::ArgumentWithoutValue,
-            arg_idx as usize,
-        ));
+            arg_idx,
+        )));
     };
     Ok(value)
 }
 
-fn copy_value(
+fn copy_value<E: ExecutionErrorTrait>(
     context: &mut Context,
     arg_idx: u16,
     l: T::Location,
     borrowed: &OnceCell<bool>,
-) -> Result<Value, ExecutionError> {
-    let is_borrowed = context.is_location_borrowed(l)?;
+) -> Result<Value, E> {
+    let is_borrowed = context.is_location_borrowed::<E>(l)?;
     borrowed
         .set(is_borrowed)
         .map_err(|_| make_invariant_violation!("Copy's borrowed marker should not yet be set"))?;
 
-    let Some(value) = context.location(l)? else {
+    let Some(value) = context.location::<E>(l)? else {
         // TODO more specific error
-        return Err(command_argument_error(
+        return Err(E::from_kind(ExecutionErrorKind::command_argument_error(
             CommandArgumentError::ArgumentWithoutValue,
-            arg_idx as usize,
-        ));
+            arg_idx,
+        )));
     };
     Ok(match value {
         Value::Ref(r) => {
             let r = *r;
-            let is_mut = context.is_mutable(r)?;
-            let new_r = context.extend_by_epsilon(r, is_mut)?;
+            let is_mut = context.is_mutable::<E>(r)?;
+            let new_r = context.extend_by_epsilon::<E>(r, is_mut)?;
             Value::Ref(new_r)
         }
         Value::NonRef => Value::NonRef,
     })
 }
 
-fn borrow_location(
+fn borrow_location<E: ExecutionErrorTrait>(
     context: &mut Context,
     arg_idx: u16,
     is_mut: bool,
     l: T::Location,
-) -> Result<Value, ExecutionError> {
+) -> Result<Value, E> {
     // check that the location has a value
-    let Some(value) = context.location(l)? else {
+    let Some(value) = context.location::<E>(l)? else {
         // TODO more specific error
-        return Err(command_argument_error(
+        return Err(E::from_kind(ExecutionErrorKind::command_argument_error(
             CommandArgumentError::ArgumentWithoutValue,
-            arg_idx as usize,
-        ));
+            arg_idx,
+        )));
     };
     assert_invariant!(
         value.is_non_ref(),
         "type checking should guarantee no borrowing of references"
     );
-    let new_r = context.extend_by_label(context.local_root, is_mut, l)?;
+    let new_r = context.extend_by_label::<E>(context.local_root, is_mut, l)?;
     Ok(Value::Ref(new_r))
 }
 
 /// Creates an alias to the reference, but one that is immutable
-fn freeze_ref(context: &mut Context, arg_idx: u16, u: &T::Usage) -> Result<Value, ExecutionError> {
+fn freeze_ref<E: ExecutionErrorTrait>(
+    context: &mut Context,
+    arg_idx: u16,
+    u: &T::Usage,
+) -> Result<Value, E> {
     let value = match u {
-        T::Usage::Move(l) => move_value(context, arg_idx, *l)?,
-        T::Usage::Copy { location, borrowed } => copy_value(context, arg_idx, *location, borrowed)?,
+        T::Usage::Move(l) => move_value::<E>(context, arg_idx, *l)?,
+        T::Usage::Copy { location, borrowed } => {
+            copy_value::<E>(context, arg_idx, *location, borrowed)?
+        }
     };
     let Some(r) = value.to_ref() else {
         invariant_violation!("type checking should guarantee FreezeRef is used on only references")
     };
-    let new_r = context.extend_by_epsilon(r, /* is_mut */ false)?;
-    consume_value(context, value)?;
+    let new_r = context.extend_by_epsilon::<E>(r, /* is_mut */ false)?;
+    consume_value::<E>(context, value)?;
     Ok(Value::Ref(new_r))
 }
 
-fn read_ref(context: &mut Context, arg_idx: u16, u: &T::Usage) -> Result<Value, ExecutionError> {
+fn read_ref<E: ExecutionErrorTrait>(
+    context: &mut Context,
+    arg_idx: u16,
+    u: &T::Usage,
+) -> Result<Value, E> {
     let value = match u {
-        T::Usage::Move(l) => move_value(context, arg_idx, *l)?,
-        T::Usage::Copy { location, borrowed } => copy_value(context, arg_idx, *location, borrowed)?,
+        T::Usage::Move(l) => move_value::<E>(context, arg_idx, *l)?,
+        T::Usage::Copy { location, borrowed } => {
+            copy_value::<E>(context, arg_idx, *location, borrowed)?
+        }
     };
     assert_invariant!(
         value.is_ref(),
         "type checking should guarantee ReadRef is used on only references"
     );
-    consume_value(context, value)?;
+    consume_value::<E>(context, value)?;
     Ok(Value::NonRef)
 }
 
-fn write_ref(context: &mut Context, arg_idx: usize, value: Value) -> Result<(), ExecutionError> {
+fn write_ref<E: ExecutionErrorTrait>(
+    context: &mut Context,
+    arg_idx: usize,
+    value: Value,
+) -> Result<(), E> {
     let Value::Ref(r) = value else {
         invariant_violation!("type checking should guarantee WriteRef is used on only references");
     };
 
-    if !context.is_writable(r)? {
+    if !context.is_writable::<E>(r)? {
         // TODO more specific error
-        return Err(command_argument_error(
+        // TODO checked_as!
+        #[allow(clippy::cast_possible_truncation)]
+        return Err(E::from_kind(ExecutionErrorKind::command_argument_error(
             CommandArgumentError::CannotWriteToExtendedReference,
-            arg_idx,
-        ));
+            arg_idx as u16,
+        )));
     }
-    consume_value(context, value)?;
+    consume_value::<E>(context, value)?;
     Ok(())
 }
 
-fn call(
+fn call<E: ExecutionErrorTrait>(
     context: &mut Context,
     arg_values: Vec<Value>,
     signature: &T::LoadedFunctionInstantiation,
-) -> Result<Vec<Value>, ExecutionError> {
+) -> Result<Vec<Value>, E> {
     let sources = arg_values
         .iter()
         .filter_map(|v| v.to_ref())
         .collect::<BTreeSet<_>>();
-    if let Some(v) = context.find_non_transferrable(&sources)? {
+    if let Some(v) = context.find_non_transferrable::<E>(&sources)? {
         let mut_idx = arg_values
             .iter()
             .zip_debug_eq(&signature.parameters)
@@ -546,10 +596,12 @@ fn call(
         let Some((idx, _)) = mut_idx else {
             invariant_violation!("non transferrable value was not found in arguments");
         };
-        return Err(command_argument_error(
+        // TODO checked_as!
+        #[allow(clippy::cast_possible_truncation)]
+        return Err(E::from_kind(ExecutionErrorKind::command_argument_error(
             CommandArgumentError::InvalidReferenceArgument,
-            idx,
-        ));
+            idx as u16,
+        )));
     }
     let mutabilities = signature
         .return_
@@ -560,7 +612,7 @@ fn call(
         })
         .collect::<Vec<_>>();
     let mutabilities_len = mutabilities.len();
-    let mut return_references = context.extend_by_dot_star_for_call(&sources, mutabilities)?;
+    let mut return_references = context.extend_by_dot_star_for_call::<E>(&sources, mutabilities)?;
     assert_invariant!(
         return_references.len() == mutabilities_len,
         "return_references should have the same length as mutabilities"
@@ -576,33 +628,33 @@ fn call(
                     let Some(new_ref) = return_references.pop() else {
                         invariant_violation!("return_references has less references than return_");
                     };
-                    debug_assert_eq!(context.is_mutable(new_ref)?, *_is_mut);
+                    debug_assert_eq!(context.is_mutable::<E>(new_ref)?, *_is_mut);
                     Value::Ref(new_ref)
                 }
                 _ => Value::NonRef,
             })
         })
-        .collect::<Result<Vec<_>, ExecutionError>>()?;
+        .collect::<Result<Vec<_>, E>>()?;
     return_values.reverse();
     assert_invariant!(
         return_references.is_empty(),
         "return_references has more references than return_"
     );
-    consume_values(context, arg_values)?;
+    consume_values::<E>(context, arg_values)?;
     Ok(return_values)
 }
 
-fn graph_meter_err(e: MeterError<()>) -> ExecutionError {
+fn graph_meter_err<E: ExecutionErrorTrait>(e: MeterError<()>) -> E {
     match e {
         MeterError::Meter(()) => {
-            make_invariant_violation!("DummyMeter should never produce a Meter error")
+            make_invariant_violation!("DummyMeter should never produce a Meter error").into()
         }
-        MeterError::InvariantViolation(iv) => graph_err(iv),
+        MeterError::InvariantViolation(iv) => graph_err::<E>(iv),
     }
 }
 
-fn graph_err(e: move_regex_borrow_graph::InvariantViolation) -> ExecutionError {
-    make_invariant_violation!("Borrow graph invariant violation: {}", e.0)
+fn graph_err<E: ExecutionErrorTrait>(e: move_regex_borrow_graph::InvariantViolation) -> E {
+    make_invariant_violation!("Borrow graph invariant violation: {}", e.0).into()
 }
 
 impl fmt::Display for Location {

@@ -1,6 +1,6 @@
 //# publish
-module 0x1::M {
-    foo(
+mvir 0x1::M {
+    fun foo(
         p1 : u8,
         p2 : u8,
         p3 : u8,

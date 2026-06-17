@@ -1,3 +1,6 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 name: Simulator Tests
 
 concurrency:
@@ -28,6 +31,7 @@ on:
 env:
   SUI_REF: "${{ github.event.inputs.sui_ref || 'main' }}"
   TEST_NUM: "${{ github.event.inputs.test_num || '30' }}"
+  SIMTEST_MIN_FREE_GB: "100"
 
 jobs:
   simtest:
@@ -49,7 +53,7 @@ jobs:
         id: auth
         uses: teleport-actions/auth@d48447391aa28b202c98ae3f3358097025c32511 # pin@v2.0.4
         with:
-          # Specify the publically accessible address of your Teleport proxy.
+          # Specify the publicly accessible address of your Teleport proxy.
           proxy: mysten.teleport.sh:443
           # Specify the name of the join token for your bot.
           token: sui-simtest-token
@@ -60,20 +64,62 @@ jobs:
         run: tsh -i ${{ steps.auth.outputs.identity-file }} status
         env:
           TELEPORT_IDENTITY_FILE: ${{ env.TELEPORT_IDENTITY_FILE }}
-      # Clean tmpfs, old repo, and old simtest logs before starting fresh
+      # Clean tmpfs, old repo, and old simtest logs before starting fresh.
+      #
+      # Consolidated into a single SSH call: each additional `tsh ssh`
+      # spin-up has been hitting an intermittent
+      # "cannot relogin in non-interactive session" failure on the
+      # *second* (and beyond) call within the same step. One handshake
+      # = one chance to flake.
+      #
+      # The pkill block kills any stale simtest workers from a prior
+      # nightly that was cancelled mid-run and nohup'd onto the host —
+      # otherwise the survivor's in-flight cargo/test processes race
+      # our re-clone, exec test binaries we're about to delete, and
+      # corrupt the shared ~/simtest_stdout.log via a leaked fd.
       - name: Environment clean
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 echo 'teleport OK'
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "sudo rm -rf /tmp/*"
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -rf ~/sui"
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cd ~/ && git clone git@github.com:MystenLabs/sui.git"
-          # Keep only the 10 most recent simtest log directories
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cd ~/simtest_logs && ls -dt */ 2>/dev/null | tail -n +11 | xargs rm -rf" || true
+          # The character classes ([ ], [e]) below are deliberate: pkill -f
+          # matches against the full command line, which includes our own
+          # remote bash's command line — and that command line contains the
+          # literal pattern as text. A char class is a regex metasequence
+          # that still matches the intended live process (cargo-simtest
+          # simtest with a real space, target/simulator/deps/ with a real
+          # 'e') but does NOT match the literal text "[ ]" / "[e]" in our
+          # own shell, so pkill can no longer SIGKILL its own parent.
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "set -e; \
+            echo teleport OK; \
+            pkill -9 -f 'scripts/simtest/(simtest-run|seed-search)' || true; \
+            pkill -9 -f 'cargo-simtest[ ]simtest' || true; \
+            pkill -9 -f 'target/simulator/d[e]ps/' || true; \
+            sleep 3; \
+            rm -f ~/simtest_active_run; \
+            sudo rm -rf /tmp/* 2>/dev/null || true; \
+            rm -rf ~/sui; \
+            (cd ~/simtest_logs && ls -dt */ 2>/dev/null | tail -n +11 | xargs -r rm -rf) || true"
+
+      # Guard free space at the point of maximum free space — right after
+      # cleanup and before the clone/install/build that actually consume it.
+      # Checking here (rather than just before the run) means an already-full
+      # host fails with df/du diagnostics instead of a raw `git clone` or
+      # install.sh error that buries the real cause.
+      - name: Check simtest host disk space after cleanup
+        run: |
+          min_free_gb=${{ env.SIMTEST_MIN_FREE_GB }}
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "set -e; \
+            free_gb=\$(df -BG / | awk 'NR == 2 { gsub(/G/, \"\", \$4); print \$4 }'); \
+            echo \"simtest-01 root filesystem has \${free_gb}G free; required floor is ${min_free_gb}G\"; \
+            if [ \"\${free_gb}\" -lt \"${min_free_gb}\" ]; then \
+              echo '::error::simtest-01 does not have enough free disk space to start simulator tests'; \
+              df -h / /home /tmp; \
+              du -xh -d1 /home/ubuntu 2>/dev/null | sort -h | tail -20 || true; \
+              exit 1; \
+            fi"
 
       # Checkout out the latest sui repo
       - name: Checkout sui repo
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin && git checkout ${{ env.SUI_REF }}"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/ && git clone git@github.com:MystenLabs/sui.git && cd ~/sui && git fetch origin && git checkout ${{ env.SUI_REF }}"
 
       # Setting up cargo and simtest
       - name: Install simtest
@@ -108,7 +154,7 @@ jobs:
       # with short-lived SSH calls instead of holding a single long-lived session.
       - name: Start simtest (detached)
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_exit_code"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_exit_code; printf 'workflow=%s\nrun_id=%s\nrun_url=%s\nstarted_at=%s\nmin_free_gb=%s\n' '${{ github.workflow }}' '${{ github.run_id }}' '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '${{ env.SIMTEST_MIN_FREE_GB }}' > ~/simtest_active_run"
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && nohup bash -c 'RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ env.TEST_NUM }} ./scripts/simtest/simtest-run.sh > ~/simtest_stdout.log 2>&1; echo \$? > ~/simtest_exit_code' &"
 
       - name: Wait for simtest completion
@@ -120,7 +166,7 @@ jobs:
             # Use echo-based check so we can distinguish "SSH failed" from "file not found".
             # If SSH succeeds, we get DONE or RUNNING. If SSH fails, output is empty.
             result=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 \
-              "if test -f ~/simtest_exit_code; then echo DONE; else echo RUNNING; fi" 2>/dev/null) || true
+              "if test -s ~/simtest_exit_code; then if grep -Eq '^[0-9]+$' ~/simtest_exit_code; then echo DONE; else echo BAD_EXIT_MARKER; fi; elif test -e ~/simtest_exit_code; then echo BAD_EXIT_MARKER; else echo RUNNING; fi" 2>/dev/null) || true
             if [ "$result" = "DONE" ]; then
               echo "Simtest completed."
               break
@@ -128,6 +174,10 @@ jobs:
               ssh_failures=0
               echo "$(date): simtest still running..."
               tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "tail -5 ~/simtest_stdout.log" 2>/dev/null || true
+            elif [ "$result" = "BAD_EXIT_MARKER" ]; then
+              echo "::error::Remote simtest exit marker is missing, empty, or non-integer. Treating this as infrastructure failure."
+              tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -l ~/simtest_exit_code ~/simtest_stdout.log 2>/dev/null || true; df -h / /home /tmp; tail -200 ~/simtest_stdout.log 2>/dev/null || true" || true
+              exit 1
             else
               # No output — SSH call itself failed
               ssh_failures=$((ssh_failures + 1))
@@ -142,6 +192,12 @@ jobs:
       - name: Check simtest results
         run: |
           exit_code=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cat ~/simtest_exit_code")
+          if ! [[ "$exit_code" =~ ^[0-9]+$ ]]; then
+            echo "::error::Remote simtest exit marker is missing, empty, or non-integer: '$exit_code'"
+            echo "--- Remote disk and output state ---"
+            tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -l ~/simtest_exit_code ~/simtest_stdout.log 2>/dev/null || true; df -h / /home /tmp; tail -200 ~/simtest_stdout.log 2>/dev/null || true" || true
+            exit 1
+          fi
           echo "Remote simtest exited with code: $exit_code"
           echo "--- Last 200 lines of simtest output ---"
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "tail -200 ~/simtest_stdout.log" || true
@@ -152,11 +208,22 @@ jobs:
         if: failure()
         run: |
           LOG_DIR=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -td ~/simtest_logs/*/ | head -1")
-          FAILED_TESTS=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "sed 's/\x1b\[[0-9;]*m//g' ${LOG_DIR}* 2>/dev/null | grep -E '^\s*(FAIL|TIMEOUT)\s+\[' | sed -E 's/^\s*(FAIL|TIMEOUT)\s+\[[^]]+\]\s+//' | sort -u | head -20")
+          FAILED_TESTS=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 \
+            "cd ~/sui && ./scripts/simtest/collect-failures.py '$LOG_DIR' | head -20")
           echo "failed_tests<<EOF" >> $GITHUB_OUTPUT
           echo "$FAILED_TESTS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           echo "log_dir=$LOG_DIR" >> $GITHUB_OUTPUT
+
+      # Skip on cancellation: the simtest was launched with `nohup ... &`, so a
+      # cancelled Actions run leaves the remote process alive. Clearing the
+      # marker here would falsely advertise the host as idle while a run is
+      # still in flight. The next nightly's "Environment clean" step pkills the
+      # survivor and removes the marker together, so leaving it on cancel is safe.
+      - name: Clear simtest active marker
+        if: always() && !cancelled()
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_active_run" || true
 
     outputs:
       failed_tests: ${{ steps.failures.outputs.failed_tests }}

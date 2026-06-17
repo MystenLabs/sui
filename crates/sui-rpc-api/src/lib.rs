@@ -17,7 +17,9 @@ pub mod client;
 mod config;
 mod error;
 pub mod grpc;
+pub mod ledger_history;
 mod metrics;
+pub mod read_mask_defaults;
 mod reader;
 mod response;
 mod service;
@@ -28,7 +30,10 @@ pub use config::Config;
 pub use error::{
     CheckpointNotFoundError, ErrorDetails, ErrorReason, ObjectNotFoundError, Result, RpcError,
 };
-pub use metrics::{RpcMetrics, RpcMetricsMakeCallbackHandler};
+pub use metrics::{
+    GrpcMethodAllowlist, RpcMetrics, RpcMetricsMakeCallbackHandler,
+    grpc_method_paths_from_file_descriptor_sets,
+};
 pub use reader::TransactionNotFoundError;
 pub use sui_rpc::proto;
 
@@ -142,11 +147,42 @@ impl RpcService {
         let metrics = self.metrics.clone();
         let extra_routes = std::mem::take(&mut self.extra_routes);
         let extra_service_names = std::mem::take(&mut self.extra_service_names);
-        let extra_file_descriptor_sets = std::mem::take(&mut self.extra_file_descriptor_sets);
+
+        // Single source of truth for every encoded FileDescriptorSet that
+        // backs a gRPC service mounted below. Consumed by both the
+        // reflection services and the metrics allowlist so they cannot drift
+        // out of sync.
+        let file_descriptor_sets: Vec<&[u8]> = [
+            sui_rpc::proto::google::protobuf::FILE_DESCRIPTOR_SET,
+            sui_rpc::proto::google::rpc::FILE_DESCRIPTOR_SET,
+            sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
+            sui_rpc::proto::sui::rpc::v2alpha::FILE_DESCRIPTOR_SET,
+            tonic_health::pb::FILE_DESCRIPTOR_SET,
+        ]
+        .into_iter()
+        .chain(std::mem::take(&mut self.extra_file_descriptor_sets))
+        .collect();
+
+        // Allowlist of `/Service/Method` paths used by the metrics middleware
+        // to bound prometheus label cardinality.
+        let grpc_method_allowlist = Arc::new(
+            metrics::grpc_method_paths_from_file_descriptor_sets(&file_descriptor_sets)
+                .expect("registered FileDescriptorSet bytes must be valid protobuf"),
+        );
 
         let router = {
             let ledger_service =
                 sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer::new(
+                    self.clone(),
+                )
+                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
+            let ledger_service_v2alpha =
+                sui_rpc::proto::sui::rpc::v2alpha::ledger_service_server::LedgerServiceServer::new(
+                    self.clone(),
+                )
+                .send_compressed(tonic::codec::CompressionEncoding::Zstd);
+            let proof_service_v2alpha =
+                sui_rpc::proto::sui::rpc::v2alpha::proof_service_server::ProofServiceServer::new(
                     self.clone(),
                 )
                 .send_compressed(tonic::codec::CompressionEncoding::Zstd);
@@ -167,42 +203,11 @@ impl RpcService {
                 )
                 .send_compressed(tonic::codec::CompressionEncoding::Zstd);
 
-            let event_service_alpha =
-                crate::grpc::alpha::event_service_proto::event_service_server::EventServiceServer::new(
-                    self.clone(),
-                );
-            let proof_service_alpha =
-                crate::grpc::alpha::proof_service_proto::proof_service_server::ProofServiceServer::new(
-                    crate::grpc::alpha::proof_service::ProofServiceImpl::new(self.clone()),
-                );
-
             let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
-            let mut reflection_v1_builder = tonic_reflection::server::Builder::configure()
-                .register_encoded_file_descriptor_set(
-                    crate::proto::google::protobuf::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET);
-
-            let mut reflection_v1alpha_builder = tonic_reflection::server::Builder::configure()
-                .register_encoded_file_descriptor_set(
-                    crate::proto::google::protobuf::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET);
-
-            for fds in &extra_file_descriptor_sets {
+            let mut reflection_v1_builder = tonic_reflection::server::Builder::configure();
+            let mut reflection_v1alpha_builder = tonic_reflection::server::Builder::configure();
+            for fds in &file_descriptor_sets {
                 reflection_v1_builder =
                     reflection_v1_builder.register_encoded_file_descriptor_set(fds);
                 reflection_v1alpha_builder =
@@ -223,8 +228,8 @@ impl RpcService {
                 service_name(&signature_verification_service),
                 service_name(&move_package_service),
                 service_name(&name_service),
-                service_name(&event_service_alpha),
-                service_name(&proof_service_alpha),
+                service_name(&ledger_service_v2alpha),
+                service_name(&proof_service_v2alpha),
                 service_name(&reflection_v1),
                 service_name(&reflection_v1alpha),
             ] {
@@ -241,9 +246,9 @@ impl RpcService {
                 .add_service(signature_verification_service)
                 .add_service(move_package_service)
                 .add_service(name_service)
-                // alpha
-                .add_service(event_service_alpha)
-                .add_service(proof_service_alpha)
+                // V2alpha
+                .add_service(ledger_service_v2alpha)
+                .add_service(proof_service_v2alpha)
                 // Reflection
                 .add_service(reflection_v1)
                 .add_service(reflection_v1alpha);
@@ -286,7 +291,10 @@ sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceSe
             .pipe(|router| {
                 if let Some(metrics) = metrics {
                     router.layer(CallbackLayer::new(
-                        metrics::RpcMetricsMakeCallbackHandler::new(metrics),
+                        metrics::RpcMetricsMakeCallbackHandler::with_grpc_method_allowlist(
+                            metrics,
+                            grpc_method_allowlist,
+                        ),
                     ))
                 } else {
                     router

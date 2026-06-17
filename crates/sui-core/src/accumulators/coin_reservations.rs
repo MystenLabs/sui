@@ -19,7 +19,7 @@ use sui_types::{
 /// of (owner, type_tag) for each accumulator object ID.
 pub struct CachingCoinReservationResolver {
     inner: CoinReservationResolver,
-    cache: MokaCache<ObjectID, Result<(SuiAddress, TypeTag), UserInputError>>,
+    cache: MokaCache<ObjectID, UserInputResult<(SuiAddress, TypeTag)>>,
 }
 
 impl CachingCoinReservationResolver {
@@ -35,12 +35,34 @@ impl CachingCoinReservationResolver {
         object_id: ObjectID,
         accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<(SuiAddress, TypeTag)> {
-        // Owner and type_tag never change, so the cache is always coherent.
-        // On cache miss, use MVCC to read at the specified version.
-        self.cache.get_with(object_id, || {
-            self.inner
-                .get_owner_and_type_for_object(object_id, accumulator_version)
-        })
+        // Owner and type_tag never change once the object exists, so successful
+        // lookups are always coherent. Errors other than "not found" (e.g. the
+        // object exists but is not a balance accumulator field) are also
+        // permanent for a given object_id and so safe to cache.
+        //
+        // Don't cache "not found": the accumulator object may not exist on this
+        // node yet but will appear once the settlement transaction executes.
+        // Caching a transient not-found would poison the cache for all
+        // subsequent lookups of that id.
+        if let Some(cached) = self.cache.get(&object_id) {
+            return cached;
+        }
+        match self
+            .inner
+            .get_owner_and_type_for_object(object_id, accumulator_version)
+        {
+            Ok(Some(value)) => {
+                self.cache.insert(object_id, Ok(value.clone()));
+                Ok(value)
+            }
+            Ok(None) => Err(UserInputError::InvalidWithdrawReservation {
+                error: format!("coin reservation object id {} not found", object_id),
+            }),
+            Err(e) => {
+                self.cache.insert(object_id, Err(e.clone()));
+                Err(e)
+            }
+        }
     }
 
     pub fn resolve_funds_withdrawal(

@@ -13,6 +13,7 @@ pub mod authority_server;
 pub mod checkpoints;
 pub mod congestion_tracker;
 pub mod consensus_adapter;
+pub mod consensus_commit_summary;
 pub mod consensus_handler;
 pub mod consensus_manager;
 pub mod consensus_throughput_calculator;
@@ -35,6 +36,7 @@ pub mod mysticeti_adapter;
 pub mod overload_monitor;
 mod par_index_live_object_set;
 pub(crate) mod post_consensus_tx_reorder;
+pub mod randomness_round_receiver;
 pub mod rpc_index;
 pub mod runtime;
 pub mod safe_client;
@@ -52,7 +54,6 @@ pub mod transaction_orchestrator;
 mod transaction_outputs;
 mod transaction_signing_filter;
 pub mod validator_client_monitor;
-pub mod verify_indexes;
 
 #[cfg(test)]
 #[path = "unit_tests/congestion_control_tests.rs"]

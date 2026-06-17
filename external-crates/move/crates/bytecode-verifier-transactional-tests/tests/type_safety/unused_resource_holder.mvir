@@ -1,14 +1,14 @@
 //# publish
 
-module 0x42::A {
-    struct Coin has store { value: u64 }
-    struct T { g: Self::Coin }
+mvir 0x42::A {
+    public struct Coin has store { value: u64 }
+    public struct T { g: Self::Coin }
 
-    public zero(): Self::Coin {
+    public fun zero(): Self::Coin {
     label b0:
         return Coin { value: 0 };
     }
-    public new(g: Self::Coin): Self::T {
+    public fun new(g: Self::Coin): Self::T {
     label b0:
         return T {g: move(g)};
     }
@@ -16,11 +16,11 @@ module 0x42::A {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 import 0x42::A;
 
-entry foo() {
+entry fun foo() {
     let zero_resource: A::Coin;
     let s: A::T;
 label b0:
@@ -33,15 +33,15 @@ label b0:
 }
 
 //# publish
-module 0x43::A {
-    enum Coin has store { V{ value: u64 } }
-    enum T { V{ g: Self::Coin } }
+mvir 0x43::A {
+    public enum Coin has store { V{ value: u64 } }
+    public enum T { V{ g: Self::Coin } }
 
-    public zero(): Self::Coin {
+    public fun zero(): Self::Coin {
     label b0:
         return Coin::V { value: 0 };
     }
-    public new(g: Self::Coin): Self::T {
+    public fun new(g: Self::Coin): Self::T {
     label b0:
         return T::V {g: move(g)};
     }
@@ -50,10 +50,10 @@ module 0x43::A {
 
 //# run
 
-module 0x43::m {
+mvir 0x43::m {
 import 0x43::A;
 
-entry foo() {
+entry fun foo() {
     let zero_resource: A::Coin;
     let s: A::T;
 label b0:

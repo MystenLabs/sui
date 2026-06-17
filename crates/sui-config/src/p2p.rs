@@ -445,7 +445,7 @@ impl StateSyncConfig {
 ///   node's info will not be shared through discovery.
 /// * Trusted is the same as Private, except it allows sharing the node's info
 ///   only to other preconfigured peers (i.e. those in `allowlisted_peers` and
-///   `seed_peers`).
+///   `seed_peers`, or active Sui validators).
 /// * If not set, defaults to Public.
 ///
 /// AccessType is useful when a network of nodes want to stay private. To achieve this,

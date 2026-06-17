@@ -15,5 +15,8 @@ tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
+[dev-dependencies]
+sui-indexer-alt-framework-store-traits = { workspace = true, features = ["testing"] }
+
 [lints]
 workspace = true

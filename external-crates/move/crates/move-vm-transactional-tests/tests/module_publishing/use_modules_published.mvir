@@ -1,25 +1,25 @@
 //# publish
-module 0x42::M {
-    public foo(): u64 {
+mvir 0x42::M {
+    public fun foo(): u64 {
     label b0:
         return 5;
     }
 }
 
 //# publish
-module 0x43::M {
-    public bar(): u64 {
+mvir 0x43::M {
+    public fun bar(): u64 {
     label b0:
         return 7;
     }
 }
 
 //# publish
-module 0x44::M {
+mvir 0x44::M {
     import 0x43::M as M1;
     import 0x44::M as M2;
 
-    public run() {
+    public fun run() {
         let x: u64;
     label b0:
         x = M1::foo();
@@ -31,10 +31,10 @@ module 0x44::M {
 }
 
 //# run
-module 0x45::m {
+mvir 0x45::m {
 import 0x42::M;
 
-entry foo() {
+entry fun foo() {
 label b0:
     M::run();
     return;
@@ -42,20 +42,20 @@ label b0:
 }
 
 //# publish
-module 0x46::M {
-    public baz(): u64 {
+mvir 0x46::M {
+    public fun baz(): u64 {
     label b0:
         return 9;
     }
 }
 
 //# run
-module 0x47::m {
+mvir 0x47::m {
 import 0x42::M as M1;
 import 0x43::M as M2;
 import 0x44::M as M3;
 
-entry foo() {
+entry fun foo() {
     let x: u64;
 label b0:
     x = M1::foo();

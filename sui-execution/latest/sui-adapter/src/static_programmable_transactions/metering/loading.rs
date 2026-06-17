@@ -5,15 +5,15 @@ use crate::static_programmable_transactions::{
     linkage::resolved_linkage::ResolvedLinkage, loading::ast as L,
     metering::translation_meter::TranslationMeter,
 };
-use sui_types::error::ExecutionError;
+use sui_types::error::ExecutionErrorTrait;
 
 /// After loading and before type checking we do a pass over the loaded transaction to charge for
 /// types that occured in the transaction and were loaded. We simply charge for the number of type
 /// nodes that were loaded.
-pub fn meter(
+pub fn meter<E: ExecutionErrorTrait>(
     meter: &mut TranslationMeter,
     transaction: &L::Transaction,
-) -> Result<(), ExecutionError> {
+) -> Result<(), E> {
     let inputs = transaction.inputs.iter().filter_map(|i| match &i.1 {
         L::InputType::Bytes => None,
         L::InputType::Fixed(ty) => Some(ty),

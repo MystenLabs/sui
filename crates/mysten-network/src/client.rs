@@ -121,27 +121,27 @@ impl MyEndpoint {
             disable_caching_resolver
         });
 
+        let connect_timeout = self.endpoint.get_connect_timeout();
+
         if disable_caching_resolver {
             let mut http = HttpConnector::new();
             http.enforce_http(false);
             http.set_nodelay(true);
             http.set_keepalive(None);
-            http.set_connect_timeout(None);
+            http.set_connect_timeout(connect_timeout);
 
-            Channel::new(
-                hyper_rustls::HttpsConnectorBuilder::new()
-                    .with_tls_config(self.tls_config)
-                    .https_only()
-                    .enable_http2()
-                    .wrap_connector(http),
-                self.endpoint,
-            )
+            let https = hyper_rustls::HttpsConnectorBuilder::new()
+                .with_tls_config(self.tls_config)
+                .https_only()
+                .enable_http2()
+                .wrap_connector(http);
+            Channel::new(https, self.endpoint)
         } else {
             let mut http = HttpConnector::new_with_resolver(CachingResolver::new());
             http.enforce_http(false);
             http.set_nodelay(true);
             http.set_keepalive(None);
-            http.set_connect_timeout(None);
+            http.set_connect_timeout(connect_timeout);
 
             let https = hyper_rustls::HttpsConnectorBuilder::new()
                 .with_tls_config(self.tls_config)

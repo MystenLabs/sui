@@ -57,6 +57,10 @@ pub enum FeatureGate {
     StringLiterals,
 }
 
+/// Compiler flavor — selects syntax and semantic rules (e.g. `Core` vs `Sui`).
+///
+/// Note: this is distinct from [`move_package_alt::MoveFlavor`], which parameterizes the package
+/// management system (system dependencies, default environments, on-chain fetching).
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
 pub enum Flavor {
     #[default]

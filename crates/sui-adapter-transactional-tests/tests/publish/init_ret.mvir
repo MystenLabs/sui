@@ -6,18 +6,18 @@
 
 // initializer not valid due to return value
 
-module 0x0::M1 {
+mvir 0x0::M1 {
     import 0x2::tx_context;
     import 0x2::object;
     import 0x2::transfer;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: object::UID,
         value: u64,
     }
 
     // value param invalid
-    init(ctx: &mut tx_context::TxContext, value: u64): u64 {
+    fun init(ctx: &mut tx_context::TxContext, value: u64): u64 {
         label l0:
         (Object { id: object::new(copy(ctx)), value: copy(value) });
         (tx_context::sender(freeze(move(ctx))));
