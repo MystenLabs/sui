@@ -435,8 +435,8 @@ impl TransactionConnection {
         Self {
             edges: vec![],
             page_info: PageInfo {
-                has_next_page: false,
                 has_previous_page: false,
+                has_next_page: false,
                 start_cursor: None,
                 end_cursor: None,
             },
