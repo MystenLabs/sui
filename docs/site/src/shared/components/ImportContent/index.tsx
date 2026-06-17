@@ -432,7 +432,13 @@ export default function ImportContent({
   }
 
   if (resolvedLanguage === "move") {
-    return <PlayMoveEmbed code={out} title={noTitle ? undefined : title} />;
+    return (
+      <PlayMoveEmbed code={out} title={noTitle ? undefined : title}>
+        <CodeBlock language={resolvedLanguage} metastring={meta}>
+          {out}
+        </CodeBlock>
+      </PlayMoveEmbed>
+    );
   }
 
   return (
