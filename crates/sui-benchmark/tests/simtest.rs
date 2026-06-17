@@ -131,7 +131,6 @@ mod test {
                 // Disable system overload checks for the test - during tests with crashes,
                 // it is possible for overload protection to trigger due to validators
                 // having queued certs which are missing dependencies.
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
@@ -154,7 +153,6 @@ mod test {
                 // Disable system overload checks for the test - during tests with crashes,
                 // it is possible for overload protection to trigger due to validators
                 // having queued certs which are missing dependencies.
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
@@ -983,7 +981,6 @@ mod test {
                 // Disable system overload checks for the test - during tests with crashes,
                 // it is possible for overload protection to trigger due to validators
                 // having queued certs which are missing dependencies.
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 max_txn_age_in_queue: Duration::from_secs(10000),
                 max_transaction_manager_queue_length: 10000,
@@ -1027,7 +1024,6 @@ mod test {
                 // Disable system overload checks for the test - during tests with crashes,
                 // it is possible for overload protection to trigger due to validators
                 // having queued certs which are missing dependencies.
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
@@ -2007,7 +2003,6 @@ mod test {
 
         let mut test_cluster = init_test_cluster_builder(1, 0)
             .with_authority_overload_config(AuthorityOverloadConfig {
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
@@ -2170,7 +2165,6 @@ mod test {
         // Build a 4-node validator network with observer server enabled on all validators
         let mut test_cluster = init_test_cluster_builder(4, 40_000)
             .with_authority_overload_config(AuthorityOverloadConfig {
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
@@ -2342,7 +2336,6 @@ mod test {
             sui_framework_snapshot::load_bytecode_snapshot(target_version).unwrap();
         let test_cluster = init_test_cluster_builder(2, 10_000)
             .with_authority_overload_config(AuthorityOverloadConfig {
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })

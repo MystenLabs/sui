@@ -468,6 +468,12 @@ pub struct AuthorityEpochTables {
     /// to disk.
     signed_effects_digests: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
+    /// No longer used.
+    #[allow(dead_code)]
+    #[deprecated(note = "column family retained only for tidehunter backward compatibility")]
+    transaction_cert_signatures:
+        DBMap<TransactionDigest, sui_types::crypto::AuthorityStrongQuorumSignInfo>,
+
     /// Next available shared object versions for each shared object.
     next_shared_object_versions_v2: DBMap<ConsensusObjectSequenceKey, SequenceNumber>,
 
@@ -668,6 +674,16 @@ impl AuthorityEpochTables {
                     mutexes,
                     uniform_key,
                     bloom_config.clone(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "transaction_cert_signatures".to_string(),
+                ThConfig::new_with_rm_prefix_indexing(
+                    tx_digest_indexing.clone(),
+                    mutexes,
+                    uniform_key,
+                    lru_bloom_config.clone(),
                     digest_prefix.clone(),
                 ),
             ),
