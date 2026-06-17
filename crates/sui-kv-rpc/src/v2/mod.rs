@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::language_storage::StructTag;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2::{
     BatchGetObjectsRequest, BatchGetObjectsResponse, BatchGetTransactionsRequest,
@@ -13,32 +12,14 @@ use sui_rpc::proto::sui::rpc::v2::{
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
 use sui_sdk_types::Digest;
-use sui_types::TypeTag;
 use sui_types::digests::ChainIdentifier;
-use sui_types::object::rpc_visitor::proto::ProtoVisitor;
 
-use crate::{KvRpcServer, PackageResolver};
+use crate::KvRpcServer;
 
 pub(crate) mod get_checkpoint;
 mod get_epoch;
 mod get_object;
 pub(crate) mod get_transaction;
-
-/// Maximum size in bytes for JSON-rendered Move values (1 MiB).
-const MAX_JSON_MOVE_VALUE_SIZE: usize = 1024 * 1024;
-
-/// Render a Move value as JSON using the package resolver for type layout.
-pub(crate) async fn render_json(
-    resolver: &PackageResolver,
-    struct_tag: &StructTag,
-    contents: &[u8],
-) -> Option<prost_types::Value> {
-    let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
-    let layout = resolver.type_layout(type_tag).await.ok()?;
-    ProtoVisitor::new(MAX_JSON_MOVE_VALUE_SIZE)
-        .deserialize_value(contents, &layout)
-        .ok()
-}
 
 #[tonic::async_trait]
 impl LedgerService for KvRpcServer {
@@ -97,7 +78,8 @@ impl LedgerService for KvRpcServer {
         request: tonic::Request<GetTransactionRequest>,
     ) -> Result<tonic::Response<GetTransactionResponse>, tonic::Status> {
         get_transaction::get_transaction(
-            self.client.clone(),
+            self.limited_client("GetTransaction"),
+            &self.stages,
             request.into_inner(),
             &self.package_resolver,
         )
@@ -111,7 +93,8 @@ impl LedgerService for KvRpcServer {
         request: tonic::Request<BatchGetTransactionsRequest>,
     ) -> Result<tonic::Response<BatchGetTransactionsResponse>, tonic::Status> {
         get_transaction::batch_get_transactions(
-            self.client.clone(),
+            self.limited_client("BatchGetTransactions"),
+            &self.stages,
             request.into_inner(),
             &self.package_resolver,
         )
@@ -126,8 +109,9 @@ impl LedgerService for KvRpcServer {
     ) -> Result<tonic::Response<GetCheckpointResponse>, tonic::Status> {
         get_checkpoint::get_checkpoint(
             self.client.clone(),
+            self.limited_client("GetCheckpoint"),
+            &self.stages,
             request.into_inner(),
-            self.checkpoint_bucket.clone(),
         )
         .await
         .map(tonic::Response::new)

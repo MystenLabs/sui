@@ -7,8 +7,10 @@ use move_core_types::ident_str;
 use sui_indexer_alt_e2e_tests::FullCluster;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
+use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::AffectedAddressFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::AffectedObjectFilter;
@@ -3554,6 +3556,68 @@ async fn test_list_checkpoints_with_objects_read_mask() {
     assert!(
         any_transactions,
         "expected at least one tx.digest populated"
+    );
+}
+
+// GetCheckpoint hydrates transactions and objects from BigTable (the GCS
+// checkpoint-bucket dependency was removed). Without it, a `transactions`/
+// `objects` read mask silently returned empty.
+#[tokio::test]
+async fn test_get_checkpoint_with_transactions_and_objects() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    let gas_id_string = gas.0.to_canonical_string(true);
+
+    let (digest, _new_gas) = transfer_self(&mut cluster, sender, &kp, gas).await;
+    let checkpoint = cluster.create_checkpoint().await;
+    let seq = checkpoint.sequence_number;
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    let mut req = GetCheckpointRequest::default();
+    req.checkpoint_id = Some(CheckpointId::SequenceNumber(seq));
+    req.read_mask = Some(FieldMask::from_paths([
+        "sequence_number",
+        "transactions.digest",
+        "objects.objects.object_id",
+        "objects.objects.version",
+    ]));
+
+    let cp = client
+        .get_checkpoint(req)
+        .await
+        .unwrap()
+        .into_inner()
+        .checkpoint
+        .expect("checkpoint populated");
+    assert_eq!(cp.sequence_number, Some(seq));
+
+    // Transactions hydrated from BigTable.
+    let returned: std::collections::HashSet<String> = cp
+        .transactions
+        .iter()
+        .filter_map(|tx| tx.digest.clone())
+        .collect();
+    assert!(
+        returned.contains(&digest.to_string()),
+        "expected tx digest {digest} in transactions[].digest, got {returned:?}"
+    );
+
+    // Objects hydrated from BigTable: the transfer's mutated gas object appears.
+    let saw_gas_object = cp
+        .objects
+        .as_ref()
+        .map(|os| {
+            os.objects
+                .iter()
+                .any(|o| o.object_id.as_deref() == Some(gas_id_string.as_str()))
+        })
+        .unwrap_or(false);
+    assert!(
+        saw_gas_object,
+        "expected gas object {gas_id_string} in checkpoint objects[]"
     );
 }
 
