@@ -106,13 +106,13 @@ public fun insert_before<K: copy + drop + store, V: store>(
     value: V,
 ) {
     let anchor_node = df::borrow_mut<K, Node<K, V>>(&mut table.id, anchor);
-    let prev = anchor_node.prev.swap_or_fill(k);
-    if (prev.is_some()) {
-        df::borrow_mut<K, Node<K, V>>(&mut table.id, prev.destroy_some()).next = option::some(k);
+    let old_prev = anchor_node.prev.swap_or_fill(k);
+    if (old_prev.is_some()) {
+        df::borrow_mut<K, Node<K, V>>(&mut table.id, old_prev.destroy_some()).next = option::some(k);
     } else {
         table.head = option::some(k);
     };
-    df::add(&mut table.id, k, Node { prev, next: option::some(anchor), value });
+    df::add(&mut table.id, k, Node { prev: old_prev, next: option::some(anchor), value });
     table.size = table.size + 1;
 }
 
@@ -129,13 +129,13 @@ public fun insert_after<K: copy + drop + store, V: store>(
     value: V,
 ) {
     let anchor_node = df::borrow_mut<K, Node<K, V>>(&mut table.id, anchor);
-    let next = anchor_node.next.swap_or_fill(k);
-    if (next.is_some()) {
-        df::borrow_mut<K, Node<K, V>>(&mut table.id, next.destroy_some()).prev = option::some(k);
+    let old_next = anchor_node.next.swap_or_fill(k);
+    if (old_next.is_some()) {
+        df::borrow_mut<K, Node<K, V>>(&mut table.id, old_next.destroy_some()).prev = option::some(k);
     } else {
         table.tail = option::some(k);
     };
-    df::add(&mut table.id, k, Node { prev: option::some(anchor), next, value });
+    df::add(&mut table.id, k, Node { prev: option::some(anchor), next: old_next, value });
     table.size = table.size + 1;
 }
 
