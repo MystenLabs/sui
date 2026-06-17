@@ -75,24 +75,6 @@ pub(crate) struct TransactionConnection {
     pub page_info: PageInfo,
 }
 
-#[Object]
-impl TransactionConnection {
-    /// Information to aid in pagination.
-    async fn page_info(&self) -> &PageInfo {
-        &self.page_info
-    }
-
-    /// A list of edges.
-    async fn edges(&self) -> &[Edge<String, Transaction, EmptyFields>] {
-        &self.edges
-    }
-
-    /// A list of nodes.
-    async fn nodes(&self) -> Vec<&Transaction> {
-        self.edges.iter().map(|e| &e.node).collect()
-    }
-}
-
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
 impl Transaction {
@@ -132,6 +114,24 @@ impl Transaction {
     #[graphql(flatten)]
     async fn contents(&self, ctx: &Context<'_>) -> Result<TransactionContents, RpcError> {
         self.contents.fetch(ctx, self.digest).await
+    }
+}
+
+#[Object]
+impl TransactionConnection {
+    /// Information to aid in pagination.
+    async fn page_info(&self) -> &PageInfo {
+        &self.page_info
+    }
+
+    /// A list of edges.
+    async fn edges(&self) -> &[Edge<String, Transaction, EmptyFields>] {
+        &self.edges
+    }
+
+    /// A list of nodes.
+    async fn nodes(&self) -> Vec<&Transaction> {
+        self.edges.iter().map(|e| &e.node).collect()
     }
 }
 
@@ -336,7 +336,7 @@ impl Transaction {
         let reader_lo = available_range_key.reader_lo(watermarks)?;
 
         let Some(query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
-            return Ok(Connection::new(false, false).into());
+            return Ok(TransactionConnection::empty());
         };
 
         let TransactionFilter {
@@ -427,6 +427,20 @@ impl TransactionContents {
             scope: self.scope.clone(),
             contents: Some(Arc::new(transaction)),
         })
+    }
+}
+
+impl TransactionConnection {
+    pub fn empty() -> Self {
+        Self {
+            edges: vec![],
+            page_info: PageInfo {
+                has_next_page: false,
+                has_previous_page: false,
+                start_cursor: None,
+                end_cursor: None,
+            },
+        }
     }
 }
 
