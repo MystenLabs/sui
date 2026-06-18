@@ -66,7 +66,7 @@ Most integrations today submit through an MEV service rather than calling a vali
 
 ### Directly through gRPC
 
-Soft bundle submission belongs to the validator submission API, not the public full-node `sui.rpc.v2` API. You submit a bundle through the validator `SubmitTransaction` gRPC method, with the request's submission type set to `SoftBundle` and the signed transactions included in the request. The response returns one result per transaction, where each result reports that the transaction was submitted to consensus, was already executed, or was rejected.
+Soft bundle submission belongs to the validator submission API, not the public full-node `sui.rpc.v2` API. You submit a bundle through the validator `SubmitTransaction` gRPC method, with the request's submission type set to `SoftBundle` and the signed transactions included in the request. The response returns one result per transaction, where each result reports that the validator submitted the transaction to consensus, already executed it, or rejected it.
 
 The Sui TypeScript SDK does not wrap the validator submission API. Its public gRPC `TransactionExecutionService` executes single transactions through `ExecuteTransaction` only. Direct integration therefore requires you to build gRPC requests against the validator proto definitions, sign each transaction, and submit them as a single request.
 

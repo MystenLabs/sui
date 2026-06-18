@@ -29,9 +29,9 @@ This rollout initially has very limited impact:
 
 ### Impact for wallets, exchanges, and custody providers
 
-Anyone operating a wallet (custodial, non-custodial, or exchange wallets) might be impacted by this change. Users can now send funds to your address through `send_funds()` instead of transferring a coin object. If a wallet receives funds this way, but does not have proper support for address balances, the user will not be able to see or access the funds. The user might then believe the funds have been lost. The funds cannot actually be lost, but this can cause confusion for affected users.
+Anyone operating a wallet (custodial, non-custodial, or exchange wallets) might be impacted by this change. Users can now send funds to your address through `send_funds()` instead of transferring a coin object. If a wallet receives funds this way, but does not have proper support for address balances, the user cannot see or access the funds. The user might then believe the funds have been lost. The funds cannot actually be lost, but this can cause confusion for affected users.
 
-Initially, this should not happen often because most of the ecosystem will continue to transfer coin objects. However, because there is no way to prevent funds from arriving at any given wallet through an address balance transfer, wallet implementors should be prepared.
+Initially, this should not happen often because most of the ecosystem continues to transfer coin objects. However, because there is no way to prevent funds from arriving at any given wallet through an address balance transfer, wallet implementors should be prepared.
 
 User funds can also become split across both coins and address balances. Balance queries (through JSON-RPC, gRPC, or GraphQL) show the combined total. To send funds that include the address balance portion, you must either:
 
@@ -132,7 +132,7 @@ commands:
 
 A JSON-RPC compatibility layer presents compatibility coin reservations to clients that cannot upgrade. A compatibility coin reservation is a synthetic object reference that reserves address balance funds for backward compatibility with clients that still expect coin object references. It is not a persisted `Coin<T>` object.
 
-These reservations primarily to preserve basic functionality for older clients that expect coin object references. Do not treat them as normal persisted coin objects. For new development, use address balances directly, as described in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances).
+These reservations exist primarily to preserve basic functionality for older clients that expect coin object references. Do not treat them as normal persisted coin objects. For new development, use address balances directly, as described in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances).
 
 When a legacy client supplies a compatibility coin reservation as gas payment, the network resolves it as a withdrawal from the address balance rather than smashing it into a coin. And gas smashing applies depending on the position of the coin reservation in the list of gas payments. For more information, see [Gas Smashing](/develop/transaction-payment/gas-smashing).
 

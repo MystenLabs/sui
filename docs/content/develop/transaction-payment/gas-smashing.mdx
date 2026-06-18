@@ -28,7 +28,15 @@ Gas smashing applies only to real `Coin<SUI>` objects that you supply as gas pay
 
 Address balance gas payment is different. When you pay gas from an address balance, you do not select or provide any coin objects. The network resolves the gas fee as a withdrawal from your reserved address balance funds, so there is no gas coin selection or merge workflow, and gas smashing is not needed.
 
-The compatibility layer can present compatibility coin reservations to older clients. A compatibility coin reservation is a synthetic object reference that reserves address balance funds, not a persisted `Coin<SUI>` object. Gas smashing does not merge these reservations, because the network resolves an address balance reservation as a withdrawal instead of smashing it into a coin.
+The compatibility layer can present compatibility coin reservations to older clients. A compatibility coin reservation is a synthetic object reference that reserves address balance funds, not a persisted `Coin<SUI>` object. These reservations still participate in gas smashing, and the outcome depends on which gas payment you list first:
+
+- If the first payment is a real `Coin<SUI>`, the network smashes every payment into that coin. Any coin reservation is fully withdrawn from the address balance into the resulting coin.
+- If the first payment is a coin reservation, the network smashes all of the real coins and sends the combined balance to your address balance.
+
+You can also use a coin reservation deliberately, even when you do not need the compatibility layer. If you pay gas from an address balance but want extra `SUI` available within the PTB, you have two options:
+
+- Add additional fund withdrawals as input arguments.
+- Use a coin reservation larger than the gas budget. The excess amount is available through the `GasCoin` argument in the PTB, just as it is with `Coin`-based gas payments. This is helpful for PTB templates and similar cases.
 
 To pay gas from an address balance, see [Paying for gas from address balances](/onchain-finance/asset-custody/address-balances/using-address-balances#paying-for-gas-from-address-balances). For details on the compatibility layer, see [Compatibility coin reservations for legacy clients](/onchain-finance/asset-custody/address-balances/migrate-address-balances#compatibility-coin-reservations-for-legacy-clients).
 

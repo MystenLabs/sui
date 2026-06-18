@@ -3,13 +3,13 @@ title: Party Objects
 description: Party objects are owned by a specified party at the time of transfer and versioned by consensus. Learn how to create, transfer, and access these objects.
 ---
 
-A party object is owned by a `Party`: a permission set that determines which addresses can access the object and how. Like [shared](/develop/objects/object-ownership/shared) objects, party objects are sequenced and versioned by [consensus](/develop/sui-architecture/consensus), so several transactions can submitted concurrently. Unlike shared objects, only the addresses with the appropriate permissions can access a party object. These permissions govern all aspects of an object, including reads, writes, and transfers.
+A party object is owned by a `Party`: a permission set that determines which addresses can access the object and how. Like [shared](/develop/objects/object-ownership/shared) objects, party objects are sequenced and versioned by [consensus](/develop/sui-architecture/consensus), so several transactions can be submitted concurrently. As with shared objects, transactions that mutate a party object are sequenced and execute one at a time, while transactions that only read it can execute concurrently. Unlike shared objects, only the addresses with the appropriate permissions can access a party object. These permissions govern all aspects of an object, including reads, writes, and transfers.
 
 Party objects are transferred using the [`sui::transfer::party_transfer`](/references/framework/sui_sui/transfer#sui_transfer_party_transfer) or [`sui::transfer::public_party_transfer`](/references/framework/sui_sui/transfer#sui_transfer_public_party_transfer) function. The object's permissions are then defined by the `Party` to which it is transferred.
 
 :::info
 
-Party objects currently support only single-address ownership. The `sui::party::Party` type already models permissions for multiple members, but the public transfer functions accept only a single-owner party. A transfer of a party with more than one member aborts with `EInvalidPartyPermissions`.
+Party objects currently support only single-address ownership. The `sui::party::Party` type already models permissions for multiple members, but the public transfer functions today accept only a single-owner party. Support for multi-member parties, and for additional ownership variants, is planned.
 
 :::
 
@@ -22,7 +22,7 @@ Party objects sit between [address-owned](/develop/objects/object-ownership/addr
 | Owner | A single address (account address or object ID). | A single address (account address or object ID). | No owner. Anyone can access the object. |
 | Versioned by | Owner-signed fast path, not sequenced by consensus. | Consensus. | Consensus. |
 | Concurrent inflight transactions | One at a time, because the object takes a fast path lock. | Many, because consensus assigns versions. | Many, because consensus assigns versions. |
-| Access control | Only the owner can use the object. | Only the owning party can use the object. | Anyone can use the object, so the module must enforce its own rules. |
+| Access control | Only the owner can use the object. | Only addresses with the required permissions can use the object. | Anyone can use the object, so the module must enforce its own rules. |
 | Transfer and wrap | Supported. | Supported. You can move the object to and from other ownership types and wrap it. | Not supported. Sharing is permanent. |
 | `Coin<SUI>` gas payment | Supported. | Not supported. Convert the coin back to address-owned first. | Not supported. |
 | Transfer to object | Supported. | Not supported when the owning address is an object ID. | Not applicable. |
@@ -67,7 +67,7 @@ The `sui::party::Party` type stores a set of permissions for each member address
 
 A party with the `READ` permission can take the object as an immutable input. A party with the `WRITE`, `DELETE`, or `TRANSFER` permission can take the object as a mutable input. The `single_owner` constructor sets all four permissions for one address, which is why a single-owner party can read, mutate, transfer, and delete its object.
 
-The multi-member model exists in the type today, but the public transfer functions accept only single-owner parties. Both `party_transfer` and `public_party_transfer` assert that the party is a single owner and abort with `EInvalidPartyPermissions` otherwise.
+The multi-member model exists in the type today, but the public transfer functions currently accept only single-owner parties, so `single_owner` is the only constructor you can use. Support for multi-member parties is planned.
 
 ## When to use party objects
 
@@ -145,15 +145,13 @@ Party objects whose owning address corresponds to an object ID are not supported
 
 Keep the following constraints in mind when you design with party objects:
 
-- **Single-owner only:** The public transfer functions accept only single-owner parties. Multi-member parties are modeled in the type but are rejected at transfer time with `EInvalidPartyPermissions`.
-- **No transfer to object for object-ID owners:** A party object whose owning address corresponds to an object ID cannot be received through the [transfer to object](/develop/objects/transfers/transfer-to-object) mechanism.
+- **Single-owner only:** The public transfer functions currently accept only single-owner parties, constructed with `sui::party::single_owner`. The type models permissions for multiple members, and support for multi-member parties is planned.
+- **No transfer to object for object-ID owners:** Even when a single-owner party's address corresponds to an object ID, the party object cannot currently be received through the [`sui::transfer::Receiving`](/develop/objects/transfers/transfer-to-object) mechanism.
 - **No gas payment with party `Coin<SUI>`:** You cannot pay gas with a party object `Coin<SUI>`. Transfer it back to address-owned first.
-- **Cannot be shared after creation:** Once you set an object's ownership, you cannot [share](/develop/objects/object-ownership/shared) it. You can still transfer it to another ownership type, wrap it, or make it [immutable](/develop/objects/object-ownership/immutable).
 
 ## Troubleshooting
 
 Use the following guidance when a transaction that uses party objects fails.
 
-- **Invalid party permissions:** A transfer aborts with `EInvalidPartyPermissions` when the party passed to `party_transfer` or `public_party_transfer` has more than one member or does not grant all permissions to a single owner. Build the party with `sui::party::single_owner` so it has exactly one owner with full permissions.
 - **Owner changed or access denied:** A validator aborts the transaction when the owner of an input party object changed because of an earlier, conflicting transaction, or when the sender is not the current owner. Refetch the object's current owner and version, then rebuild and resubmit the transaction.
 - **Gas payment failed with a party coin:** A party object `Coin<SUI>` cannot pay for gas. Transfer the coin back to address-owned, then use it as the gas coin, or select a different address-owned gas coin.
