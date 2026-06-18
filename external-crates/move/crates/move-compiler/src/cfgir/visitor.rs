@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
+use std::{any::Any, collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use crate::{
     PreCompiledProgramInfo,
@@ -25,7 +25,7 @@ use move_proc_macros::growing_stack;
 pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 pub type CFGIRVisitorObj = Box<dyn CFGIRVisitor>;
 
-pub trait CFGIRVisitor: Send + Sync {
+pub trait CFGIRVisitor: Send + Sync + Any {
     fn visit(
         &self,
         env: &CompilationEnv,
@@ -41,7 +41,7 @@ pub trait CFGIRVisitor: Send + Sync {
     }
 }
 
-pub trait AbstractInterpreterVisitor: Send + Sync {
+pub trait AbstractInterpreterVisitor: Send + Sync + Any {
     fn verify(&self, context: &CFGContext, cfg: &ImmForwardCFG) -> Diagnostics;
 
     fn visitor(self) -> Visitor
@@ -331,7 +331,7 @@ impl<V: CFGIRVisitor + 'static> From<V> for CFGIRVisitorObj {
     }
 }
 
-impl<V: CFGIRVisitorConstructor + Send + Sync> CFGIRVisitor for V {
+impl<V: CFGIRVisitorConstructor + Send + Sync + 'static> CFGIRVisitor for V {
     fn visit(
         &self,
         env: &CompilationEnv,
@@ -852,7 +852,7 @@ impl<V: AbstractInterpreterVisitor + 'static> From<V> for AbsIntVisitorObj {
     }
 }
 
-impl<V: SimpleAbsIntConstructor + Send + Sync> AbstractInterpreterVisitor for V {
+impl<V: SimpleAbsIntConstructor + Send + Sync + 'static> AbstractInterpreterVisitor for V {
     fn verify(&self, context: &CFGContext, cfg: &ImmForwardCFG) -> Diagnostics {
         <Self as SimpleAbsIntConstructor>::verify(context, cfg)
     }

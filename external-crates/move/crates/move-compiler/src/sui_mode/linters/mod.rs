@@ -204,38 +204,25 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
     (Some(ALLOW_ATTR_CATEGORY.into()), filters)
 }
 
-/// Sui-mode lints that run unconditionally at `LintLevel::Default` and `LintLevel::All`.
-/// Kept as a helper so the `All` arm doesn't double-register lints that live in the core
-/// linter list (which is also added at `All`).
-fn sui_only_default_visitors() -> Vec<Visitor> {
-    vec![
-        share_owned::ShareOwnedVerifier.visitor(),
-        self_transfer::SelfTransferVerifier.visitor(),
-        custom_state_change::CustomStateChangeVerifier.visitor(),
-        coin_field::CoinFieldVisitor.visitor(),
-        freeze_wrapped::FreezeWrappedVisitor.visitor(),
-        collection_equality::CollectionEqualityVisitor.visitor(),
-        public_random::PublicRandomVisitor.visitor(),
-        missing_key::MissingKeyVisitor.visitor(),
-        unnecessary_public_entry::UnnecessaryPublicEntry.visitor(),
-        uncallable_function::UncallableFunction.visitor(),
-    ]
-}
-
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
     match level {
         LintLevel::None => vec![],
-        LintLevel::Default => {
-            let mut visitors = sui_only_default_visitors();
-            // The core linter registers `unused_return_value` at `LintLevel::All`. To make it
-            // on-by-default in Sui packages, register it here too.
-            visitors.push(crate::linters::unused_return_value::UnusedReturnValue.visitor());
-            visitors
-        }
+        LintLevel::Default => vec![
+            share_owned::ShareOwnedVerifier.visitor(),
+            self_transfer::SelfTransferVerifier.visitor(),
+            custom_state_change::CustomStateChangeVerifier.visitor(),
+            coin_field::CoinFieldVisitor.visitor(),
+            freeze_wrapped::FreezeWrappedVisitor.visitor(),
+            collection_equality::CollectionEqualityVisitor.visitor(),
+            public_random::PublicRandomVisitor.visitor(),
+            missing_key::MissingKeyVisitor.visitor(),
+            unnecessary_public_entry::UnnecessaryPublicEntry.visitor(),
+            uncallable_function::UncallableFunction.visitor(),
+            // This is not on by default outside of Sui mode
+            crate::linters::unused_return_value::UnusedReturnValue.visitor(),
+        ],
         LintLevel::All => {
-            // Note: `unused_return_value` is not in this list — the core linter list registers
-            // it at `All`, so adding it here would cause duplicate diagnostics in Sui+--lint.
-            let mut visitors = sui_only_default_visitors();
+            let mut visitors = linter_visitors(LintLevel::Default);
             visitors.extend([
                 freezing_capability::WarnFreezeCapability.visitor(),
                 public_mut_tx_context::PreferMutableTxContext.visitor(),
