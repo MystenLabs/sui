@@ -87,7 +87,6 @@ pub(crate) async fn list_events(
         endpoint.default_limit_items,
         endpoint.max_limit_items,
         QueryType::Events,
-        request.filter.as_ref(),
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
@@ -684,14 +683,7 @@ mod tests {
             Ordering::Descending => 1,
         };
 
-        QueryOptions::from_proto(
-            Some(&request),
-            100,
-            100,
-            QueryType::Events,
-            Option::<&sui_rpc::proto::sui::rpc::v2alpha::EventFilter>::None,
-        )
-        .unwrap()
+        QueryOptions::from_proto(Some(&request), 100, 100, QueryType::Events).unwrap()
     }
 
     fn tx_row(tx_sequence_number: u64, event_count: u32) -> TxSeqDigestData {
