@@ -1117,6 +1117,18 @@ async fn test_list_package_write_filter() {
         HashSet::from([publish_cp]),
         "package_write checkpoint filter should return exactly the publish checkpoint, got {seqs:?}"
     );
+
+    // The transfer is never a package write, regardless of which checkpoint it
+    // landed in: an unbounded query must not surface it.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.filter = Some(tx_package_write());
+    req.options = Some(query_options(100));
+    let all = transaction_digest_set(&list_transactions_result(&mut client, req).await);
+    assert!(
+        all.contains(&publish_digest) && !all.contains(&transfer_digest),
+        "unbounded package_write should include the publish and exclude the transfer, got {all:?}"
+    );
 }
 
 #[sim_test]
