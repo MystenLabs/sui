@@ -357,6 +357,7 @@ const MAINNET_USDB: &str =
 // Version 127: Enable always_advance_dkg_to_resolution.
 //              Update gas prices for range proofs and ristretto group operations.
 //              Enable Ristretto255 group operations and bulletproofs verification on testnet.
+//              Enable timestamp_based_epoch_close on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5024,6 +5025,8 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_ristretto255_group_ops = true;
                         cfg.feature_flags.enable_verify_bulletproofs_ristretto255 = true;
                     }
+
+                    cfg.feature_flags.timestamp_based_epoch_close = true;
                 }
                 // Use this template when making changes:
                 //
