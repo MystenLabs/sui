@@ -26,16 +26,9 @@ public fun loop_test_2() {
         if (l0 % 2u64 == 1u64) {
             
         } else {
-            let __c13 = l0 == 10u64;
-            {
-                if (__c13) {
-                    break
-                };
-                continue
+            if (l0 == 10u64) {
+                break
             }
-        };
-        {
-            
         }
     }
 }

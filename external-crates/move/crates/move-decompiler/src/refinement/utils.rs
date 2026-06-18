@@ -132,16 +132,32 @@ pub(super) fn trailing_continue_label(exp: &Exp) -> Option<Option<Label>> {
 /// remaining leading items as a `Vec<Exp>`. Callers splice them back as they wish — extend
 /// an enclosing `Seq` directly, or rebuild a single `Exp` via `seq_or_singleton`. The
 /// continue's identity is the caller's concern; this helper only handles structure.
+///
+/// Recurses through nested `Seq`s the same way [`ends_with_continue`] does — they need to
+/// agree on what counts as "trailing." When `flatten_seq` hasn't yet collapsed an
+/// intermediate `Seq` (e.g., a single iteration may flatten only the outermost nesting
+/// level before `hoist_tail_continue` runs), the detector still recurses to find the
+/// continue and the stripper needs to actually remove it. Without this symmetry, the two
+/// disagree, and `hoist_tail_continue` pushes a new continue at the loop tail without
+/// removing the original — fueling a refinement ping-pong.
 pub(super) fn strip_trailing_continue_into_seq(exp: Exp) -> Vec<Exp> {
     match exp {
         Exp::Continue(_) => vec![],
-        Exp::Seq(mut items) => {
-            // Trim a single trailing `Continue` — preceding refinements have already run
-            // `flatten_seq`, so nested `Seq`s aren't expected here.
-            if matches!(items.last(), Some(Exp::Continue(_))) {
-                items.pop();
+        Exp::Seq(mut items) => match items.pop() {
+            None => items,
+            Some(Exp::Continue(_)) => items,
+            Some(last) => {
+                // Recurse into nested sequencing so a continue inside a not-yet-flattened
+                // inner Seq (or Block) gets removed, then wrap the recursive result back so
+                // the surrounding shape is preserved.
+                let stripped = strip_trailing_continue_into_seq(last);
+                items.push(seq_or_singleton(stripped));
+                items
             }
-            items
+        },
+        Exp::Block(id, body) => {
+            let stripped = strip_trailing_continue_into_seq(*body);
+            vec![Exp::Block(id, Box::new(seq_or_singleton(stripped)))]
         }
         other => vec![other],
     }
