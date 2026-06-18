@@ -3,7 +3,7 @@ title: Party Objects
 description: Party objects are owned by a specified party at the time of transfer and versioned by consensus. Learn how to create, transfer, and access these objects.
 ---
 
-A party object is owned by a `Party`: a permission set that determines which addresses can access the object and how. Like [shared](/develop/objects/object-ownership/shared) objects, party objects are sequenced and versioned by [consensus](/develop/sui-architecture/consensus), so several transactions can use them concurrently. Unlike shared objects, only the owning party can access a party object, and you can transfer it to and from other ownership types and wrap it.
+A party object is owned by a `Party`: a permission set that determines which addresses can access the object and how. Like [shared](/develop/objects/object-ownership/shared) objects, party objects are sequenced and versioned by [consensus](/develop/sui-architecture/consensus), so several transactions can submitted concurrently. Unlike shared objects, only the addresses with the appropriate permissions can access a party object. These permissions govern all aspects of an object, including reads, writes, and transfers.
 
 Party objects are transferred using the [`sui::transfer::party_transfer`](/references/framework/sui_sui/transfer#sui_transfer_party_transfer) or [`sui::transfer::public_party_transfer`](/references/framework/sui_sui/transfer#sui_transfer_public_party_transfer) function. The object is accessible to the `Party` to which it is transferred.
 
