@@ -63,8 +63,7 @@ pub struct PromptCategory {
 #[derive(Parser)]
 #[clap(
     name = "prompt",
-    about = "Expert Move knowledge for AI agents (agent-agnostic). \
-             Call with no subcommand to print the discoverability overview."
+    about = "Expert Sui and Move knowledge for AI agents (run `sui prompt` to start)"
 )]
 pub struct Prompt {
     /// The chosen subcommand; `None` means render the no-args [`OVERVIEW`].
@@ -214,17 +213,26 @@ fn print_skill(bundle: &str, list: bool, file: Option<&str>, all: bool) -> anyho
         return Ok(());
     }
     if list {
-        let mut files: Vec<&str> = SKILL_FILES
+        // Same order as `--all` (SKILL.md first, then alphabetical) so an agent can
+        // map a `--list` entry to its position in `--all` output.
+        let files = bundle_files_sorted(bundle);
+        let entries: Vec<(&str, usize)> = files.iter().map(|&f| (f, file_size(bundle, f))).collect();
+        let total: usize = entries.iter().map(|(_, n)| n).sum();
+        let max_name = entries
             .iter()
-            .filter(|s| s.bundle == bundle)
-            .map(|s| s.file)
-            .collect();
-        files.sort();
-        println!("Files in skill bundle '{}' ({}):", bundle, files.len());
-        for f in files {
+            .map(|(f, _)| f.strip_suffix(".md").unwrap_or(f).len())
+            .max()
+            .unwrap_or(0);
+        println!(
+            "Files in skill bundle '{}' ({} files, {} chars):",
+            bundle,
+            entries.len(),
+            total
+        );
+        for (f, size) in &entries {
             // Display without `.md` extension so `--file <ref>` matches the printed form.
             let display = f.strip_suffix(".md").unwrap_or(f);
-            println!("  {}", display);
+            println!("  {:<width$}  {:>7}", display, size, width = max_name);
         }
         return Ok(());
     }
@@ -337,6 +345,17 @@ fn bundle_files_sorted(bundle: &str) -> Vec<&'static str> {
     files
 }
 
+/// Size in characters of a single embedded skill file. Reported by `--list` so an
+/// agent can decide whether `--all` will fit in its context budget without guessing.
+/// Returns 0 if the file isn't embedded (defensive; `build.rs` validates the table).
+fn file_size(bundle: &str, file: &str) -> usize {
+    SKILL_FILES
+        .iter()
+        .find(|s| s.bundle == bundle && s.file == file)
+        .map(|s| s.content.len())
+        .unwrap_or(0)
+}
+
 /// Print one bundle's content as a flat separator-per-file stream. With
 /// `bundle_prefix = None`, each separator is `# === FILE: <filename> ===` (skill-
 /// level `--all`); with `bundle_prefix = Some(bundle)`, each separator is
@@ -377,22 +396,58 @@ fn print_bundle_all(bundle: &str, bundle_prefix: Option<&str>) {
     }
 }
 
-/// Deep inventory: per bundle the category names, list every reference file.
-/// Bundles are iterated in CATEGORY.md frontmatter `skills:` order; files within
-/// each bundle use the same `SKILL` + alphabetical order as `--all` so an agent
-/// can map a `--list` entry to the position it will appear in `--all` output.
+/// Deep inventory: per bundle the category names, list every reference file with
+/// its size in characters. Bundles are iterated in CATEGORY.md frontmatter `skills:`
+/// order; files within each bundle use the same `SKILL` + alphabetical order as
+/// `--all` so an agent can map a `--list` entry to the position it will appear in
+/// `--all` output. Per-file size + per-bundle subtotal + category grand total are
+/// reported so the agent can decide whether `--all` fits its context budget.
 fn print_category_list(name: &str) -> anyhow::Result<()> {
     let c = find_category(name)?;
-    println!("Bundles in category '{}' ({}):", c.name, c.skills.len());
-    for bundle in c.skills {
-        let files = bundle_files_sorted(bundle);
+
+    // Pre-compute per-bundle file lists + sizes so we can emit the grand total in the
+    // header before the per-bundle breakdowns.
+    let bundles: Vec<(&str, Vec<(&str, usize)>)> = c
+        .skills
+        .iter()
+        .map(|&bundle| {
+            let entries: Vec<(&str, usize)> = bundle_files_sorted(bundle)
+                .into_iter()
+                .map(|f| (f, file_size(bundle, f)))
+                .collect();
+            (bundle, entries)
+        })
+        .collect();
+    let grand_total: usize = bundles
+        .iter()
+        .flat_map(|(_, files)| files.iter().map(|(_, n)| *n))
+        .sum();
+
+    println!(
+        "Bundles in category '{}' ({} bundles, {} chars):",
+        c.name,
+        c.skills.len(),
+        grand_total
+    );
+    for (bundle, files) in &bundles {
+        let bundle_total: usize = files.iter().map(|(_, n)| *n).sum();
+        let max_name = files
+            .iter()
+            .map(|(f, _)| f.strip_suffix(".md").unwrap_or(f).len())
+            .max()
+            .unwrap_or(0);
         println!();
-        println!("{} ({} files):", bundle, files.len());
-        for f in files {
+        println!(
+            "{} ({} files, {} chars):",
+            bundle,
+            files.len(),
+            bundle_total
+        );
+        for (f, size) in files {
             // `.md` stripped to match the `skill --list` convention, so `--file <ref>`
             // can be invoked with the printed form unchanged.
             let display = f.strip_suffix(".md").unwrap_or(f);
-            println!("  {display}");
+            println!("  {:<width$}  {:>7}", display, size, width = max_name);
         }
     }
     Ok(())

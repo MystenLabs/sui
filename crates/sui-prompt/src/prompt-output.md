@@ -8,7 +8,7 @@ organized into **categories**.
 Read the available categories (`sui prompt categories`), try to match one to the
 task, then drill into its bundles. Each skill is a two-tier bundle: `SKILL.md`
 routes, reference files hold content. **Read every reference file** before
-applying — `--all` (default), or `--list` + per-file reads when budget is tight.
+applying — `--all` loads them in one call.
 
 ```sh
 sui prompt categories                    # see the available categories

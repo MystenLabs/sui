@@ -9,62 +9,16 @@ skills:
 
 # Auditing Move packages on Sui
 
-*Default to `sui prompt category audit --all` — load every skill bundle the
-category names in one call. Step down to per-bundle (`sui prompt skill <bundle>
---all`) or per-file (`sui prompt skill <bundle> --file <ref>`) only when the
-full load would risk your token budget or context window — never to skip rules
-whose names don't obviously match your task, since rules apply by shape, not by
-name. `sui prompt category audit --list` shows the inventory if you need to
-make that capacity judgement.*
+**Run `sui prompt category audit --all` to load the full catalog.** Content
+cross-references heavily, and guidance in one file often informs reasoning
+about another. Partial loads create blind spots you can't predict in advance.
+
+`sui prompt category audit --list` reports skill sizes in case you have to
+make adjustments due to your context window or token budget.
 
 Auditing here means finding security vulnerabilities in deployed (compiled) Move packages
 on Sui: applying a catalog of invariant-violation rules against bytecode that's already
 on chain, with a disciplined evidence chain from bytecode-derived evidence to finding.
-
-## Skills
-
-Read each in order. Each skill bundle is **two-tier** — a SKILL.md that routes / summarizes,
-and a set of reference files where the actual content lives. Enumerate (`--list`) and read
-every reference file in each bundle before walking its rules.
-
-1. **`sui-and-move-tools`** — get the package decompiled: one Sui GraphQL call returns
-   every module's bytes, and `sui move decompile` (already on the system, running
-   `sui prompt`) produces readable `.move` files (the working view for the catalog
-   walk). Disassembly is fetched per-module on demand only for specific verification.
-
-   ```sh
-   sui prompt skill sui-and-move-tools
-   sui prompt skill sui-and-move-tools --list
-   sui prompt skill sui-and-move-tools --file <ref>
-   ```
-
-2. **`move-bytecode-comprehension`** — what survives compilation. Abilities, visibility,
-   `entry`, and signatures survive exactly; constant / local names, comments, and macro
-   sugar do not. This is the mental model for reading the decompiled output soundly —
-   recognizing artifacts (renamed constants, invented locals, expanded macros, synthetic
-   `dummy_field` on OTWs) and reasoning through them rather than dropping to disassembly.
-
-   ```sh
-   sui prompt skill move-bytecode-comprehension
-   sui prompt skill move-bytecode-comprehension --list
-   sui prompt skill move-bytecode-comprehension --file <ref>
-   ```
-
-3. **`sui-move-security-review`** — the `SM-*` rule catalog. The SKILL.md is a routing
-   table; the per-category reference files (`access-control.md`, `abilities-and-types.md`,
-   `object-lifecycle.md`, …) contain the detection heuristics, severity ratings, and
-   exploit sketches; pair with `auditing-bytecode.md` for the structured per-rule
-   decompiled-source signals.
-
-   ```sh
-   sui prompt skill sui-move-security-review
-   sui prompt skill sui-move-security-review --list
-   sui prompt skill sui-move-security-review --file <ref>
-   ```
-
-   For the audit workflow itself (apply SM-* rules to the decompiled view; reach for
-   disassembly only for specific verification cases), start with `sui prompt skill
-   sui-move-security-review --file auditing-bytecode`.
 
 ## Triage discipline
 
