@@ -87,6 +87,32 @@ sui prompt skill sui-move-security-review --list
 sui prompt skill sui-move-security-review --file access-control
 ```
 
+### Example 8 — bulk-load a whole bundle in one call
+
+```sh
+sui prompt skill sui-move-security-review --all
+```
+
+Prints `SKILL.md` and every reference file in the bundle, each preceded by a
+`# === FILE: <filename> ===` separator. Use when you know you need the whole
+bundle and want to avoid one process per reference file. The `=== FILE: ===`
+sentinel is greppable and visually distinct from any `#` heading the file's
+own content might use.
+
+### Example 9 — bulk-load a whole category in one call
+
+```sh
+sui prompt category audit --all
+```
+
+Prints every skill bundle the `audit` category names — `SKILL.md` plus every
+reference file each — in one call. Each file is preceded by a
+`# === FILE: <bundle>/<filename> ===` separator so source attribution is
+preserved and file boundaries don't collide with any `#` heading inside the
+file's own content. `CATEGORY.md` itself is NOT re-printed; read it first
+with `sui prompt category audit`. Use `sui prompt category audit --list` to
+see the deep inventory before deciding.
+
 ## Worked agent flow
 
 Realistic use case — point any AI agent at the binary with a prompt that names the kind
@@ -97,9 +123,10 @@ of work (e.g. *"audit Sui mainnet package `0x<id>` for security vulnerabilities;
 2. Agent calls `sui prompt categories` — sees `audit` and `bytecode`.
 3. Agent calls `sui prompt category audit` — gets the workflow + the ordered skill list
    + triage discipline + external references.
-4. For each skill the category names, the agent calls `sui prompt skill <bundle>`,
-   `sui prompt skill <bundle> --list`, then `sui prompt skill <bundle> --file <ref>`
-   for every reference file before applying the skill's rules.
+4. Agent loads the skill bundles the category names. The fewest round trips is
+   `sui prompt category <name> --all` (one call for the whole category); a single
+   bundle is `sui prompt skill <bundle> --all`; or it can enumerate file by file
+   with `--list` + `--file <ref>`.
 5. Agent follows the workflow against the target package — fetch via one Sui GraphQL
    call, decompile, walk the SM-* rules over the decompiled `.move` files.
 6. Agent produces findings in the format the audit category prescribes:

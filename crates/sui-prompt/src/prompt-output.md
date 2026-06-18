@@ -20,12 +20,15 @@ that workflow.
 
 Start with a category. The category's body lists which skills to read, in what order, and
 how to chain them. Each skill is a two-tier bundle — a `SKILL.md` that routes/summarizes
-plus reference files that hold the actual content; you should `--list` and read every
-reference file before applying the skill.
+plus reference files that hold the actual content; **read every reference file** before
+applying the skill. `--all` loads them in one call (default whenever your context allows);
+`--list` + per-file reads is the alternative if you need to budget context tighter.
 
 ```sh
 sui prompt categories                    # see the available categories
+sui prompt category <name> --list        # list bundle and reference file names (no content)
 sui prompt category <name>               # read a category's workflow + skill list
+sui prompt category <name> --all         # read every bundle's content in one call
 ```
 
 You can also reach skills directly when their category context isn't needed:
@@ -33,8 +36,9 @@ You can also reach skills directly when their category context isn't needed:
 ```sh
 sui prompt skills                        # list all skill bundles, flat
 sui prompt skill <bundle>                # read a bundle's SKILL.md
-sui prompt skill <bundle> --list         # enumerate the bundle's reference files
+sui prompt skill <bundle> --list         # list reference file names (no content)
 sui prompt skill <bundle> --file <ref>   # read a specific reference file
+sui prompt skill <bundle> --all          # read SKILL.md + every reference file
 ```
 
 A skill can belong to more than one category; reaching it directly is fine.
@@ -59,8 +63,11 @@ literal category name.
 
 - `sui prompt`                                          — this overview
 - `sui prompt categories`                               — list categories
+- `sui prompt category <name> --list`                   — list bundle and reference file names (no content)
 - `sui prompt category <name>`                          — read a category's content
+- `sui prompt category <name> --all`                    — read every bundle's content in one call
 - `sui prompt skills`                                   — list skill bundles (flat)
 - `sui prompt skill <bundle>`                           — read a bundle's `SKILL.md`
-- `sui prompt skill <bundle> --list`                    — list reference files in a bundle
+- `sui prompt skill <bundle> --list`                    — list reference file names (no content)
 - `sui prompt skill <bundle> --file <ref>`              — read a specific reference file
+- `sui prompt skill <bundle> --all`                     — read `SKILL.md` + every reference file

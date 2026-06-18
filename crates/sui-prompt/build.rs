@@ -78,7 +78,7 @@ fn main() {
     //    references. Everything else in `CATEGORY.md` — the whole file, frontmatter
     //    included — is embedded raw and served verbatim by `sui prompt category <name>`,
     //    the same convention as skills.
-    let mut category_entries: Vec<(String, String, PathBuf)> = Vec::new();
+    let mut category_entries: Vec<(String, String, Vec<String>, PathBuf)> = Vec::new();
     if categories_dir.exists() {
         for entry in fs::read_dir(&categories_dir)
             .expect("read src/categories/")
@@ -130,7 +130,12 @@ fn main() {
                     );
                 }
             }
-            category_entries.push((name, frontmatter.description, category_md));
+            category_entries.push((
+                name,
+                frontmatter.description,
+                frontmatter.skills,
+                category_md,
+            ));
         }
     }
 
@@ -153,12 +158,21 @@ fn main() {
     src.push_str("];\n\n");
 
     src.push_str("pub static CATEGORIES: &[PromptCategory] = &[\n");
-    for (name, description, abs) in &category_entries {
+    for (name, description, skills, abs) in &category_entries {
+        // Bundle list comes through in CATEGORY.md frontmatter `skills:` order. We rely
+        // on that order at runtime for `category --list` and `category --all` (see the
+        // `PromptCategory::skills` doc comment).
+        let skills_lit = skills
+            .iter()
+            .map(|s| format!("\"{}\"", escape(s)))
+            .collect::<Vec<_>>()
+            .join(", ");
         src.push_str(&format!(
-            "    PromptCategory {{ name: \"{}\", description: \"{}\", content: include_str!(r\"{}\") }},\n",
+            "    PromptCategory {{ name: \"{}\", description: \"{}\", content: include_str!(r\"{}\"), skills: &[{}] }},\n",
             escape(name),
             escape(description),
-            abs.display()
+            abs.display(),
+            skills_lit
         ));
     }
     src.push_str("];\n");

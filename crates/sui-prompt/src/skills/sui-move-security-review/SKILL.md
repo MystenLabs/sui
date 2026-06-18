@@ -15,11 +15,12 @@ description: >
 # Move Security Review (on Sui)
 
 > **Self-bootstrap (any AI agent):** this skill is bundled inside the `sui` binary. **For
-> comprehensive audits, enumerate every reference file in this bundle (`sui prompt skill
-> sui-move-security-review --list`) and read each one before applying the routing table
-> below.** The detection heuristics, severity ratings, exploit sketches, and bytecode
-> signals live in those per-category files; the routing table is a summary only. Read a
-> specific reference file with `sui prompt skill sui-move-security-review --file <ref>`.
+> comprehensive audits, read every reference file in this bundle before applying the
+> routing table below** — default to `sui prompt skill sui-move-security-review --all`
+> for a one-shot load of all of them; if you need to budget context tighter, enumerate
+> with `sui prompt skill sui-move-security-review --list` then read each via `--file
+> <ref>`. The detection heuristics, severity ratings, exploit sketches, and bytecode
+> signals live in those per-category files; the routing table is a summary only.
 > This skill belongs to one or more categories — run `sui prompt categories` to see them
 > and `sui prompt category <name>` to read the category's workflow. No filesystem install
 > is required — the binary is self-contained.

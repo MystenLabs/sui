@@ -50,6 +50,13 @@ pub struct PromptCategory {
     pub description: &'static str,
     /// Full `CATEGORY.md` content (frontmatter + body).
     pub content: &'static str,
+    /// Skill bundles this category references, in the order declared in its
+    /// `CATEGORY.md` frontmatter `skills:` list. Used by `--list` (deep inventory)
+    /// and `--all` (bulk load); note that the body's narrative workflow order may
+    /// not match this load order. Populated from frontmatter at build time, and
+    /// each entry is validated by `build.rs` to match an embedded bundle — so no
+    /// runtime existence check is needed.
+    pub skills: &'static [&'static str],
 }
 
 /// `sui prompt` — the agent-agnostic entry point to expert Move knowledge, shipped as part of the Sui CLI.
@@ -75,6 +82,17 @@ pub enum PromptCommand {
     Category {
         /// Category name (e.g. `audit`). See `sui prompt categories`.
         name: String,
+
+        /// Deep inventory: list every bundle the category names plus each bundle's
+        /// reference files. Use this to decide how to load the category's content.
+        #[clap(long, conflicts_with = "all")]
+        list: bool,
+
+        /// Print every bundle's `SKILL.md` and every reference file in one call.
+        /// Does NOT re-print `CATEGORY.md` (the agent has already read it). Each
+        /// file is preceded by a `# === FILE: <bundle>/<filename> ===` separator.
+        #[clap(long)]
+        all: bool,
     },
 
     /// List bundled skill bundles.
@@ -86,12 +104,17 @@ pub enum PromptCommand {
         bundle: String,
 
         /// List reference files in the bundle instead of printing content.
-        #[clap(long, conflicts_with = "file")]
+        #[clap(long, conflicts_with_all = ["file", "all"])]
         list: bool,
 
         /// Print a specific reference file in the bundle. The `.md` extension is optional.
-        #[clap(long)]
+        #[clap(long, conflicts_with = "all")]
         file: Option<String>,
+
+        /// Print `SKILL.md` and every reference file in the bundle in one call.
+        /// Each file is preceded by a `# === FILE: <filename> ===` separator.
+        #[clap(long)]
+        all: bool,
     },
 }
 
@@ -109,14 +132,25 @@ impl Prompt {
                 print_categories();
                 Ok(())
             }
-            Some(PromptCommand::Category { name }) => print_category(&name),
+            Some(PromptCommand::Category { name, list, all }) => {
+                if all {
+                    print_category_all(&name)
+                } else if list {
+                    print_category_list(&name)
+                } else {
+                    print_category(&name)
+                }
+            }
             Some(PromptCommand::Skills) => {
                 print_skills();
                 Ok(())
             }
-            Some(PromptCommand::Skill { bundle, list, file }) => {
-                print_skill(&bundle, list, file.as_deref())
-            }
+            Some(PromptCommand::Skill {
+                bundle,
+                list,
+                file,
+                all,
+            }) => print_skill(&bundle, list, file.as_deref(), all),
         }
     }
 }
@@ -149,12 +183,17 @@ fn print_skills() {
     println!("## Commands");
     println!();
     println!("- `sui prompt skill <bundle>` — read `SKILL.md`");
-    println!("- `sui prompt skill <bundle> --list` — list reference files");
+    println!("- `sui prompt skill <bundle> --list` — list reference file names (no content)");
     println!("- `sui prompt skill <bundle> --file <r>` — read a specific reference file");
+    println!("- `sui prompt skill <bundle> --all` — read SKILL.md + every reference file");
 }
 
-/// Read from a named skill bundle. Behaviour depends on the flags:
+/// Read from a named skill bundle. Behaviour depends on the flags (clap rejects
+/// any pair of `list` / `file` / `all`, so at most one is set):
 ///
+/// - `all = true`: print `SKILL.md` and every reference file, each preceded by a
+///   `# === FILE: <filename> ===` separator. Files are ordered with `SKILL.md`
+///   first, then the reference files in ASCII alphabetical order.
 /// - `list = true`: print the bundle's reference files (alphabetical, `.md` stripped).
 /// - `file = Some(name)`: print that reference file's content verbatim. The `.md`
 ///   extension is added if missing.
@@ -162,13 +201,17 @@ fn print_skills() {
 ///
 /// Returns an error if the bundle isn't embedded or the requested reference file
 /// doesn't exist in it.
-fn print_skill(bundle: &str, list: bool, file: Option<&str>) -> anyhow::Result<()> {
+fn print_skill(bundle: &str, list: bool, file: Option<&str>, all: bool) -> anyhow::Result<()> {
     let bundle_exists = SKILL_FILES.iter().any(|s| s.bundle == bundle);
     if !bundle_exists {
         anyhow::bail!(
             "no embedded skill bundle named '{}'. Run `sui prompt skills` to list bundles.",
             bundle
         );
+    }
+    if all {
+        print_bundle_all(bundle, None);
+        return Ok(());
     }
     if list {
         let mut files: Vec<&str> = SKILL_FILES
@@ -236,9 +279,12 @@ fn print_categories() {
     println!();
     println!("## Commands");
     println!();
+    println!("- `sui prompt category <name> --list` — list bundle and reference file names (no content)");
     println!("- `sui prompt category <name>` — read the category's content");
+    println!("- `sui prompt category <name> --all` — read every bundle's content in one call");
     println!("- `sui prompt skills` — list all skill bundles (flat)");
     println!("- `sui prompt skill <bundle>` — read a skill bundle's `SKILL.md`");
+    println!("- `sui prompt skill <bundle> --all` — read `SKILL.md` + every reference file");
 }
 
 /// Print the named category's content (frontmatter + body) verbatim — the same convention
@@ -259,6 +305,109 @@ fn print_category(name: &str) -> anyhow::Result<()> {
             anyhow::bail!("no embedded category named '{name}'. Valid categories: {valid}")
         }
     }
+}
+
+/// Look up a category by name, returning `&PromptCategory` or the standard
+/// `no embedded category named ...` error used by every category-level helper.
+fn find_category(name: &str) -> anyhow::Result<&'static PromptCategory> {
+    CATEGORIES.iter().find(|c| c.name == name).ok_or_else(|| {
+        let valid = CATEGORIES
+            .iter()
+            .map(|c| c.name)
+            .collect::<Vec<_>>()
+            .join(", ");
+        anyhow::anyhow!("no embedded category named '{name}'. Valid categories: {valid}")
+    })
+}
+
+/// Return the bundle's files in print order: `SKILL.md` first, then the remaining
+/// reference files in ASCII alphabetical order. Shared by both `--all` paths so
+/// the file ordering is identical regardless of entry point.
+fn bundle_files_sorted(bundle: &str) -> Vec<&'static str> {
+    let mut files: Vec<&'static str> = SKILL_FILES
+        .iter()
+        .filter(|s| s.bundle == bundle)
+        .map(|s| s.file)
+        .collect();
+    files.sort_by(|a, b| match (*a == "SKILL.md", *b == "SKILL.md") {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.cmp(b),
+    });
+    files
+}
+
+/// Print one bundle's content as a flat separator-per-file stream. With
+/// `bundle_prefix = None`, each separator is `# === FILE: <filename> ===` (skill-
+/// level `--all`); with `bundle_prefix = Some(bundle)`, each separator is
+/// `# === FILE: <bundle>/<filename> ===` (category-level `--all`, where the agent
+/// sees multiple bundles in one stream). The `=== FILE: … ===` sentinel cannot be
+/// confused with `#` headings inside the file's own content — both humans and
+/// agents can locate file boundaries unambiguously by grepping for `=== FILE:`.
+fn print_bundle_all(bundle: &str, bundle_prefix: Option<&str>) {
+    for file in bundle_files_sorted(bundle) {
+        // `# === FILE: ... ===` rather than a bare `# <filename>` so the file boundary
+        // can't be mistaken for a `#` heading inside the file's own content. The
+        // `=== FILE: … ===` sentinel is greppable and visually distinct from any
+        // plausible Markdown title.
+        match bundle_prefix {
+            Some(prefix) => println!("# === FILE: {prefix}/{file} ==="),
+            None => println!("# === FILE: {file} ==="),
+        }
+        println!();
+        let Some(s) = SKILL_FILES
+            .iter()
+            .find(|s| s.bundle == bundle && s.file == file)
+        else {
+            // build.rs guarantees the file exists; defensive in case the embedded
+            // table ever drifts. Skip silently rather than panicking mid-stream.
+            continue;
+        };
+        print!("{}", s.content);
+        // Normalize to a blank line separating the file from the next `#` heading,
+        // regardless of whether the source ends with `\n`, `\n\n`, or no newline.
+        if !s.content.ends_with("\n\n") {
+            if s.content.ends_with('\n') {
+                println!();
+            } else {
+                println!();
+                println!();
+            }
+        }
+    }
+}
+
+/// Deep inventory: per bundle the category names, list every reference file.
+/// Bundles are iterated in CATEGORY.md frontmatter `skills:` order; files within
+/// each bundle use the same `SKILL` + alphabetical order as `--all` so an agent
+/// can map a `--list` entry to the position it will appear in `--all` output.
+fn print_category_list(name: &str) -> anyhow::Result<()> {
+    let c = find_category(name)?;
+    println!("Bundles in category '{}' ({}):", c.name, c.skills.len());
+    for bundle in c.skills {
+        let files = bundle_files_sorted(bundle);
+        println!();
+        println!("{} ({} files):", bundle, files.len());
+        for f in files {
+            // `.md` stripped to match the `skill --list` convention, so `--file <ref>`
+            // can be invoked with the printed form unchanged.
+            let display = f.strip_suffix(".md").unwrap_or(f);
+            println!("  {display}");
+        }
+    }
+    Ok(())
+}
+
+/// Print every bundle's content for the named category in one call. Each file is
+/// preceded by a `# <bundle>/<filename>` heading so source attribution survives
+/// the flat stream. Does NOT prepend `CATEGORY.md` — the agent has already read
+/// it via plain `category <name>`.
+fn print_category_all(name: &str) -> anyhow::Result<()> {
+    let c = find_category(name)?;
+    for bundle in c.skills {
+        print_bundle_all(bundle, Some(bundle));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -318,7 +467,7 @@ mod tests {
     #[test]
     fn missing_skill_error() {
         // Unknown bundles should tell agents how to recover without guessing command syntax.
-        let err = print_skill("__missing_skill_for_prompt_test__", false, None)
+        let err = print_skill("__missing_skill_for_prompt_test__", false, None, false)
             .unwrap_err()
             .to_string();
         assert!(err.contains("sui prompt skills"));
@@ -331,5 +480,86 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("Valid categories:"));
+    }
+
+    #[test]
+    fn category_all_parses() {
+        // `--all` at the category level is valid on its own.
+        let result = Prompt::try_parse_from(["prompt", "category", "any-name", "--all"]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn category_list_parses() {
+        // `--list` at the category level is valid on its own.
+        let result = Prompt::try_parse_from(["prompt", "category", "any-name", "--list"]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn category_all_list_conflict() {
+        // `--all` and `--list` are mutually exclusive at the category level.
+        let result = Prompt::try_parse_from(["prompt", "category", "any-name", "--all", "--list"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn skill_all_parses() {
+        // `--all` at the skill level is valid on its own.
+        let result = Prompt::try_parse_from(["prompt", "skill", "any-bundle", "--all"]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn skill_all_file_conflict() {
+        // `--all` and `--file` are mutually exclusive at the skill level.
+        let result = Prompt::try_parse_from([
+            "prompt",
+            "skill",
+            "any-bundle",
+            "--all",
+            "--file",
+            "any-ref",
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn skill_all_list_conflict() {
+        // `--all` and `--list` are mutually exclusive at the skill level.
+        let result = Prompt::try_parse_from(["prompt", "skill", "any-bundle", "--all", "--list"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn category_all_missing_error() {
+        // Same recovery hint as `print_category` on an unknown name.
+        let err = print_category_all("__missing_category_for_prompt_test__")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("Valid categories:"));
+    }
+
+    #[test]
+    fn category_list_missing_error() {
+        let err = print_category_list("__missing_category_for_prompt_test__")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("Valid categories:"));
+    }
+
+    #[test]
+    fn bundle_files_sorted_skill_first() {
+        // SKILL.md must lead the order so `--all` always opens with the bundle's index.
+        // We pick the first embedded bundle (build.rs guarantees it has SKILL.md).
+        if let Some(first) = SKILL_FILES.first() {
+            let files = bundle_files_sorted(first.bundle);
+            assert_eq!(files.first().copied(), Some("SKILL.md"));
+            // Remaining files are alphabetical (already-strict order means a sort is no-op).
+            let mut tail = files[1..].to_vec();
+            let original_tail = tail.clone();
+            tail.sort();
+            assert_eq!(original_tail, tail);
+        }
     }
 }

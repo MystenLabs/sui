@@ -9,6 +9,14 @@ skills:
 
 # Auditing Move packages on Sui
 
+*Default to `sui prompt category audit --all` — load every skill bundle the
+category names in one call. Step down to per-bundle (`sui prompt skill <bundle>
+--all`) or per-file (`sui prompt skill <bundle> --file <ref>`) only when the
+full load would risk your token budget or context window — never to skip rules
+whose names don't obviously match your task, since rules apply by shape, not by
+name. `sui prompt category audit --list` shows the inventory if you need to
+make that capacity judgement.*
+
 Auditing here means finding security vulnerabilities in deployed (compiled) Move packages
 on Sui: applying a catalog of invariant-violation rules against bytecode that's already
 on chain, with a disciplined evidence chain from bytecode-derived evidence to finding.

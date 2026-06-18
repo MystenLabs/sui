@@ -8,6 +8,14 @@ skills:
 
 # Understanding Move bytecode
 
+*Default to `sui prompt category bytecode --all` — load every skill bundle the
+category names in one call. Step down to per-bundle (`sui prompt skill <bundle>
+--all`) or per-file (`sui prompt skill <bundle> --file <ref>`) only when the
+full load would risk your token budget or context window — never to skip rules
+whose names don't obviously match your task, since rules apply by shape, not by
+name. `sui prompt category bytecode --list` shows the inventory if you need to
+make that capacity judgement.*
+
 Compiled Move packages — including everything on chain — are bytecode, not source.
 Reading them well requires a mental model of what survives compilation and what doesn't,
 plus the tools to turn `.mv` files into something a human can read.
