@@ -156,6 +156,52 @@ impl Structured {
     pub fn to_test_string(&self) -> String {
         format!("{}", self)
     }
+
+    /// `Block(codes[0])` if `codes.len() == 1`; otherwise a `Seq` of `Block`s.
+    pub fn blocks_seq(codes: &[Code]) -> Structured {
+        if codes.len() == 1 {
+            Structured::Block(codes[0])
+        } else {
+            Structured::Seq(codes.iter().map(|c| Structured::Block(*c)).collect())
+        }
+    }
+
+    /// `Jump(GotoSource::ReachingExit, target)`.
+    pub fn exit_jump(target: NodeIndex) -> Structured {
+        Structured::Jump(GotoSource::ReachingExit, target)
+    }
+
+    /// Concatenate two structured forms, flattening any `Seq`s into the result so we don't
+    /// accumulate `Seq(Seq(...))` nesting.
+    pub fn seq(head: Structured, tail: Structured) -> Structured {
+        let mut items = Vec::new();
+        let mut push = |s: Structured| match s {
+            Structured::Seq(v) => items.extend(v),
+            other => items.push(other),
+        };
+        push(head);
+        push(tail);
+        Self::seq_or_singleton(items)
+    }
+
+    /// Empty input -> `Seq([])`; single-item input -> that item bare; otherwise -> `Seq`.
+    /// Avoids the `Seq([x])` shape that downstream refinements would just unwrap anyway.
+    pub fn seq_or_singleton(mut items: Vec<Structured>) -> Structured {
+        match items.len() {
+            0 => Structured::Seq(vec![]),
+            1 => items.pop().unwrap(),
+            _ => Structured::Seq(items),
+        }
+    }
+
+    /// `None` if `self` is an empty `Seq`; otherwise `Some(self)`. Useful for `IfElse` else
+    /// arms that should be elided rather than rendered as `else { }`.
+    pub fn non_empty(self) -> Option<Structured> {
+        match &self {
+            Structured::Seq(v) if v.is_empty() => None,
+            _ => Some(self),
+        }
+    }
 }
 
 // -------------------------------------------------------------------------------------------------

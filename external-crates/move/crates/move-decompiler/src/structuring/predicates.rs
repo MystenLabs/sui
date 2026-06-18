@@ -90,6 +90,13 @@ pub fn cond_atom(code: u64) -> Formula {
     atom(cond_var_name(NodeIndex::new(code as usize)))
 }
 
+/// `cond_atom(code)` if `positive`, otherwise its negation. Used where a branch is matched
+/// by either its `then` polarity or its `else` polarity depending on caller context.
+pub fn cond_atom_polarized(code: u64, positive: bool) -> Formula {
+    let a = cond_atom(code);
+    if positive { a } else { not(a) }
+}
+
 // -------------------------------------------------------------------------------------------------
 // Smart constructors (normalizing - see module-level comment for the invariants)
 // -------------------------------------------------------------------------------------------------

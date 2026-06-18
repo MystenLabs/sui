@@ -925,12 +925,7 @@ fn structure_cascade(
 
     // Adjacent items are now structural fall-through neighbors.
     elide_inter_item_gotos(&mut chain);
-    let body = match chain.len() {
-        0 => D::Structured::Seq(vec![]),
-        1 => chain.into_iter().next().unwrap(),
-        _ => D::Structured::Seq(chain),
-    };
-    (body, consumed)
+    (D::Structured::seq_or_singleton(chain), consumed)
 }
 
 /// A node is "singly entered" iff exactly one of its CFG predecessors lies outside its own
