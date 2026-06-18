@@ -739,7 +739,7 @@ public entry fun burn_art20(l0: NFT, l1: &mut CollectionCap, l2: vector<UserBala
     let l8 = false;
     let l10 = vector[];
     loop {
-        if (vector::is_empty(&l7)) {
+        if (!(!(vector::is_empty(&l7)))) {
             assert!(l8, C6);
             break
         };
@@ -1541,6 +1541,7 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
             };
             l17 = l17 + 1u64;
         };
+        let __c191;
         match (__dispatch_81) {
             0 => {
                 loop {
@@ -1560,12 +1561,14 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
                     l15 = true;
                     break
                 };
-                assert!(l15, C15);
+                __c191 = l15;
+                assert!(__c191, C15);
                 l16 = l16 + 1u64;
                 continue
             },
             1 => {
-                assert!(l15, C15);
+                __c191 = l15;
+                assert!(__c191, C15);
                 l16 = l16 + 1u64;
                 continue
             }

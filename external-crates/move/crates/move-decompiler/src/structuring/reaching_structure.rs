@@ -16,8 +16,7 @@
 use crate::config;
 use crate::structuring::{
     ast::{self as D, GotoSource},
-    bdd::Bdd,
-    reaching,
+    predicates,
 };
 use petgraph::algo::dominators::{self, Dominators};
 use petgraph::graph::{DiGraph, NodeIndex};
@@ -90,16 +89,9 @@ fn structure_inner(
     terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
 ) -> Option<D::Structured> {
     let pdom = PostDom::build(input, mode.region_exit())?;
-    // BDD variable order = reverse-postorder rank over the in-region nodes reachable from
-    // `entry`. Each `Formula::Atom(n)` the diamond folder builds is a condition node from this
-    // walk, so the BDD's read-back nests the guard in roughly the same order the structurer
-    // visits the CFG (source order) rather than however the bytecode happened to number the
-    // blocks.
-    let var_order = region_rpo(input, entry, mode);
     let mut ctx = Ctx {
         input,
         pdom,
-        bdd: Bdd::with_order(var_order),
         folded_any: false,
         mode,
         visiting: HashSet::new(),
@@ -122,7 +114,6 @@ fn structure_inner(
 struct Ctx<'a> {
     input: &'a BTreeMap<NodeIndex, D::Input>,
     pdom: PostDom,
-    bdd: Bdd,
     folded_any: bool,
     /// What kind of region we're structuring — whole-function or a loop-body. Encodes both
     /// the region exit (for `in_region`) and whether escapes lower to explicit `Jump`s.
@@ -236,7 +227,7 @@ impl Ctx<'_> {
                     let then_s = self.arm(then, join)?;
                     let els_s = self.arm(els, join)?;
                     let if_s = D::Structured::CondIf(
-                        reaching::cond_atom(code),
+                        predicates::cond_atom(code),
                         Box::new(then_s),
                         Box::new(non_empty(els_s)),
                     );
@@ -333,16 +324,17 @@ impl Ctx<'_> {
         if !bodies_equivalent(&s1_codes, &s2_codes, self.terms) {
             return None;
         }
-        // cond = (node ∧ stale-arm(I1)) ∨ (¬node ∧ stale-arm(I2)), as atoms over block ids,
-        // canonicalized through the BDD so the lowered guard comes out clean.
-        let a_node = reaching::atom(node);
-        let cond = reaching::or(vec![
-            reaching::and(vec![a_node.clone(), atom_pol(i1c, s1_then)]),
-            reaching::and(vec![reaching::not(a_node), atom_pol(i2c, s2_then)]),
+        // cond = (node ∧ stale-arm(I1)) ∨ (¬node ∧ stale-arm(I2)), as atoms over block ids.
+        // The smart constructors normalize: NNF + sort + dedup + absorption +
+        // complementation, so the recovered guard lands in canonical form without a
+        // separate canonicalization pass.
+        let a_node = predicates::cond_atom(node.index() as u64);
+        let cond = predicates::or(vec![
+            predicates::and(vec![a_node.clone(), atom_pol(i1c, s1_then)]),
+            predicates::and(vec![predicates::not(a_node), atom_pol(i2c, s2_then)]),
         ]);
-        let id = self.bdd.build(&cond);
         Some(Diamond {
-            cond: self.bdd.to_formula(id),
+            cond,
             stale_body: blocks_seq(&s1_codes),
             continue_at: k,
             far_join: j1,
@@ -386,50 +378,8 @@ impl Ctx<'_> {
     }
 }
 
-/// Reverse-postorder rank of the in-region nodes reachable from `entry`. Walks successors that
-/// stay in the region (per `Mode`); nodes outside the region or downstream of an escape don't
-/// participate, since the BDD won't see them as atoms. Used as the BDD variable order so the
-/// read-back nests in source order rather than NodeIndex order.
-fn region_rpo(
-    input: &BTreeMap<NodeIndex, D::Input>,
-    entry: NodeIndex,
-    mode: Mode,
-) -> HashMap<NodeIndex, u32> {
-    let in_region = |n: NodeIndex| input.contains_key(&n) && Some(n) != mode.region_exit();
-    let mut visited: HashSet<NodeIndex> = HashSet::new();
-    let mut post: Vec<NodeIndex> = Vec::new();
-    // Iterative post-order DFS: tag each frame with whether we've already expanded its
-    // successors (otherwise infinite recursion on cycles, and we want post-order).
-    let mut stack: Vec<(NodeIndex, bool)> = Vec::new();
-    if in_region(entry) {
-        stack.push((entry, false));
-    }
-    while let Some((node, expanded)) = stack.pop() {
-        if expanded {
-            post.push(node);
-            continue;
-        }
-        if !visited.insert(node) {
-            continue;
-        }
-        stack.push((node, true));
-        if let Some(inp) = input.get(&node) {
-            for (_, v) in inp.edges() {
-                if in_region(v) && !visited.contains(&v) {
-                    stack.push((v, false));
-                }
-            }
-        }
-    }
-    let n = post.len();
-    post.into_iter()
-        .enumerate()
-        .map(|(i, node)| (node, (n - 1 - i) as u32))
-        .collect()
-}
-
 struct Diamond {
-    cond: reaching::Formula,
+    cond: predicates::Formula,
     stale_body: D::Structured,
     continue_at: NodeIndex,
     far_join: NodeIndex,
@@ -503,9 +453,13 @@ fn exit_jump(target: NodeIndex) -> D::Structured {
     D::Structured::Jump(GotoSource::ReachingExit, target)
 }
 
-fn atom_pol(code: u64, positive: bool) -> reaching::Formula {
-    let atom = reaching::cond_atom(code);
-    if positive { atom } else { reaching::not(atom) }
+fn atom_pol(code: u64, positive: bool) -> predicates::Formula {
+    let atom = predicates::cond_atom(code);
+    if positive {
+        atom
+    } else {
+        predicates::not(atom)
+    }
 }
 
 fn seq(head: D::Structured, tail: D::Structured) -> D::Structured {

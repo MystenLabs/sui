@@ -567,44 +567,6 @@ fn strip_untargeted_blocks(exp: &mut Exp, targets: &HashSet<u64>) {
     }
 }
 
-/// Lower a recovered boolean [`Formula`](crate::structuring::reaching::Formula) to an `Exp`,
-/// substituting each atom with its condition-block expression and mapping `And`/`Or`/`Not` to
-/// the corresponding short-circuiting primitives.
-fn formula_to_exp(
-    formula: &crate::structuring::reaching::Formula,
-    conds: &BTreeMap<D::Label, Exp>,
-) -> Exp {
-    use crate::structuring::reaching::FormulaTree as T;
-    fn prim(op: SB::PrimitiveOp, a: Exp, b: Exp) -> Exp {
-        Out::Exp::Primitive {
-            op,
-            args: vec![a, b],
-        }
-    }
-    match &formula.0 {
-        T::True => Out::Exp::Value(move_core_types::runtime_value::MoveValue::Bool(true)),
-        T::False => Out::Exp::Value(move_core_types::runtime_value::MoveValue::Bool(false)),
-        T::Atom(n) => conds
-            .get(n)
-            .cloned()
-            .expect("CondIf atom missing its condition expression"),
-        T::Not(inner) => Out::Exp::Primitive {
-            op: SB::PrimitiveOp::Not,
-            args: vec![formula_to_exp(inner, conds)],
-        },
-        T::And(fs) => fs
-            .iter()
-            .map(|x| formula_to_exp(x, conds))
-            .reduce(|a, b| prim(SB::PrimitiveOp::And, a, b))
-            .expect("non-empty And"),
-        T::Or(fs) => fs
-            .iter()
-            .map(|x| formula_to_exp(x, conds))
-            .reduce(|a, b| prim(SB::PrimitiveOp::Or, a, b))
-            .expect("non-empty Or"),
-    }
-}
-
 fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Structured) -> Exp {
     match structured {
         D::Structured::Break(label) => Out::Exp::Break(Some(label.index() as u64)),
@@ -625,22 +587,24 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             Out::Exp::Seq(items)
         }
         D::Structured::CondIf(formula, conseq, alt) => {
-            // Pull each atom block's term apart: its trailing expr is the block's condition;
-            // any leading statements are setup that must run before the (hoisted) `if`. Atoms
-            // are taken in block-id order (≈ program order), so hoisted setups stay correctly
-            // ordered.
+            // Hoist each contributing condition block's term as setup. Each block ends in
+            // `let __c{n} = <test>` (see `term_reconstruction`'s `JumpIf` arm), so the let
+            // binding lands directly before the `if (__c{n})` we synthesize from
+            // `formula.to_exp()`. The single-atom case becomes `Seq(let __c{n} = e; if
+            // (__c{n}) ...)`; the `collapse_let_usage` refinement later folds the unique
+            // single-use read at the if's head position back into `if (e) ...` when nothing
+            // else references `__c{n}`. Compound formulas (recovered booleans from the
+            // diamond fold) keep the lets and produce `if (__c{i} || __c{j}) ...`,
+            // single-evaluation and side-effect-honest.
             let mut setups: Vec<Exp> = Vec::new();
-            let mut conds: BTreeMap<D::Label, Exp> = BTreeMap::new();
-            for atom in formula.atoms() {
-                let term = terms.remove(&atom).unwrap();
-                let Exp::Seq(mut seq) = term else {
-                    panic!("Expected Seq for CondIf atom block")
-                };
-                let cond = seq.pop().unwrap();
-                setups.extend(seq);
-                conds.insert(atom, cond);
+            for block_id in formula.cond_atoms() {
+                let term = terms.remove(&block_id).unwrap();
+                match term {
+                    Exp::Seq(seq) => setups.extend(seq),
+                    other => setups.push(other),
+                }
             }
-            let cond = formula_to_exp(&formula, &conds);
+            let cond = formula.to_exp();
             let alt_exp = alt.and_then(|a| {
                 let e = generate_output(terms.clone(), a);
                 match &e {
@@ -657,7 +621,7 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             // anchored at the condition block's label so any `Break(Some(lbl))` targeting it
             // (synthesized upstream by the structurer) still has its target. Compound formulas
             // come from the reaching structurer where no `Break` targets the synthesized guard.
-            match formula.as_atom() {
+            match formula.as_cond_atom() {
                 Some(n) => Out::Exp::Block(n.index() as u64, Box::new(Out::Exp::Seq(setups))),
                 None => Out::Exp::Seq(setups),
             }

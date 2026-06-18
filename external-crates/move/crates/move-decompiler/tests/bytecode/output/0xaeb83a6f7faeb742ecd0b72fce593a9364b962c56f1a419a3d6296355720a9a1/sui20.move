@@ -124,7 +124,7 @@ fun check_tick(l0: vector<u8>, l1: &mut Global): String {
     let l6 = string::utf8(l0);
     assert!(&l0.len() == 4u64, C9);
     loop {
-        if (vector::is_empty(&l0)) {
+        if (!(!(vector::is_empty(&l0)))) {
             assert!(!(bag::contains(&l1.sui20tokens, l6)), C11);
             break
         };
@@ -276,7 +276,7 @@ public fun transfer(l0: &mut Global, l1: String, l2: vector<Sui20>, l3: address,
     assert!(l4 > 0u64, C7);
     let l11 = 0u64;
     loop {
-        if (vector::is_empty(&l2)) {
+        if (!(!(vector::is_empty(&l2)))) {
             assert!(l11 >= l4, C6);
             break
         };

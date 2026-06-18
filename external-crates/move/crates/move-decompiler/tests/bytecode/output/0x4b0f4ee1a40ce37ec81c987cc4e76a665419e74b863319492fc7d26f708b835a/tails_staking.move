@@ -157,7 +157,7 @@ public fun claim_profit_sharing<T0>(l0: &mut Version, l1: &mut TailsStakingRegis
     let l7 = type_name::with_defining_ids();
     let (reg_6, reg_7) = vector::index_of(&l1.profit_assets, &l7);
     let l8 = reg_7;
-    assert!(reg_6, C6);
+    assert!(!(!(reg_6)), C6);
     let l15 = tx_context::sender(freeze(l2));
     let l6 = big_vector::length(&l1.staking_infos);
     let l13 = big_vector::slice_size(&l1.staking_infos)as u64;
@@ -235,7 +235,7 @@ public fun exp_down_with_fee(l0: &mut Version, l1: &mut TailsStakingRegistry, l2
     let l14 = tx_context::sender(l6);
     assert!(coin::value(&l5) == *(&(&l1.config)[C6]), C4);
     ecosystem::charge_fee(l0, coin::into_balance(l5));
-    assert!(object_table::contains(&l1.tails, l3), C12);
+    assert!(!(!(object_table::contains(&l1.tails, l3))), C12);
     let l8 = object_table::borrow_mut(&mut l1.tails, l3);
     typus_nft::nft_exp_down(&l1.tails_manager_cap, l8, l4);
     let l7 = typus_nft::level_up(&l1.tails_manager_cap, l8);
@@ -289,7 +289,7 @@ public fun exp_down_without_staking_with_fee(l0: &mut Version, l1: &TailsStaking
 
 public fun exp_up(l0: &Version, l1: &mut TailsStakingRegistry, l2: &mut TypusUserRegistry, l3: address, l4: u64, l5: &TxContext) {
     let l9 = tx_context::sender(l5);
-    assert!(object_table::contains(&l1.tails, l3), C12);
+    assert!(!(!(object_table::contains(&l1.tails, l3))), C12);
     let l6 = object_table::borrow_mut(&mut l1.tails, l3);
     typus_nft::nft_exp_up(&l1.tails_manager_cap, l6, l4);
     let l7 = object::id_address(freeze(l6));
@@ -484,7 +484,7 @@ entry fun init_tails_staking_registry(l0: &Version, l1: xb_ManagerCap, l2: Trans
 
 entry fun level_up(l0: &Version, l1: &mut TailsStakingRegistry, l2: address, l3: bool) {
     ecosystem::version_check(l0);
-    assert!(object_table::contains(&l1.tails, l2), C12);
+    assert!(!(!(object_table::contains(&l1.tails, l2))), C12);
     let l5 = object_table::borrow_mut(&mut l1.tails, l2);
     assert!(!(option::is_none(&typus_nft::level_up(&l1.tails_manager_cap, l5))), C3);
     let l6 = object::id_address(freeze(l5));
@@ -510,7 +510,7 @@ entry fun level_up(l0: &Version, l1: &mut TailsStakingRegistry, l2: address, l3:
 
 public fun public_exp_down(l0: &ManagerCap, l1: &Version, l2: &mut TailsStakingRegistry, l3: address, l4: u64) {
     ecosystem::version_check(l1);
-    assert!(object_table::contains(&l2.tails, l3), C12);
+    assert!(!(!(object_table::contains(&l2.tails, l3))), C12);
     let l6 = object_table::borrow_mut(&mut l2.tails, l3);
     typus_nft::nft_exp_down(&l2.tails_manager_cap, l6, l4);
     let l7 = object::id_address(freeze(l6));
@@ -556,7 +556,7 @@ public fun public_exp_down_without_staking(l0: &ManagerCap, l1: &Version, l2: &T
 
 public fun public_exp_up(l0: &ManagerCap, l1: &Version, l2: &mut TailsStakingRegistry, l3: address, l4: u64) {
     ecosystem::version_check(l1);
-    assert!(object_table::contains(&l2.tails, l3), C12);
+    assert!(!(!(object_table::contains(&l2.tails, l3))), C12);
     let l5 = object_table::borrow_mut(&mut l2.tails, l3);
     typus_nft::nft_exp_up(&l2.tails_manager_cap, l5, l4);
     let l6 = object::id_address(freeze(l5));
@@ -585,7 +585,7 @@ entry fun remove_profit_sharing<T0>(l0: &Version, l1: &mut TailsStakingRegistry,
     let l8 = type_name::with_defining_ids();
     let (reg_7, reg_8) = vector::index_of(&l1.profit_assets, &l8);
     let l9 = reg_8;
-    assert!(reg_7, C6);
+    assert!(!(!(reg_7)), C6);
     let l7 = big_vector::length(&l1.staking_infos);
     let l14 = big_vector::slice_size(&l1.staking_infos)as u64;
     let l12 = 0u64;

@@ -1,7 +1,7 @@
 ---
 source: crates/move-decompiler/tests/tests.rs
 ---
-if <((0 & 1) | (!0 & 2))> {
+if <((__c0 & __c1) | (__c2 & !__c0))> {
     { 3 }
 } else {
     { 4 }

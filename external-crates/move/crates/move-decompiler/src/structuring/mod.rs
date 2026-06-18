@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(crate) mod ast;
-pub(crate) mod bdd;
 pub(crate) mod dom_tree;
 pub(crate) mod graph;
 pub(crate) mod hoist_declarations;
+pub(crate) mod predicates;
 pub(crate) mod reaching;
 pub(crate) mod reaching_structure;
 pub(crate) mod term_reconstruction;
@@ -90,16 +90,8 @@ pub(crate) fn structure(
         && let Some(reach) = reaching::reaching_conditions(&input, entry_node)
     {
         print_heading("reaching conditions");
-        let mut solver = bdd::Bdd::new();
         for (node, formula) in &reach {
-            let id = solver.build(formula);
-            let factored = solver.to_formula(id);
-            let tag = match bdd::Bdd::const_value(id) {
-                Some(true) => " [always reached]",
-                Some(false) => " [unreachable]",
-                None => "",
-            };
-            println!("R({}) = {:?}{}", node.index(), factored, tag);
+            println!("R({}) = {formula}", node.index());
         }
     }
 
@@ -162,7 +154,7 @@ fn entry_label(s: &D::Structured) -> Option<NodeIndex> {
         // A single-atom `CondIf` (the dom-tree structurer's product) has the atom's block
         // as its CFG entry. A compound-formula `CondIf` is a recovered boolean over multiple
         // condition blocks — no single entry.
-        DS::CondIf(cond, _, _) => cond.as_atom(),
+        DS::CondIf(cond, _, _) => cond.as_cond_atom(),
         // Dispatch synthesis nodes carry no CFG entry of their own.
         DS::Let(_) | DS::Assign(_, _) | DS::SelectorMatch(_, _) => None,
     }
@@ -696,7 +688,7 @@ fn rewrite_jumps_for_dispatch(
                 let then_body = then_dispatch.unwrap_or(DS::Jump(*src, *then_target));
                 let else_body = else_dispatch.unwrap_or(DS::Jump(*src, *else_target));
                 *s = DS::CondIf(
-                    reaching::cond_atom(*code),
+                    predicates::cond_atom(*code),
                     Box::new(then_body),
                     Box::new(Some(else_body)),
                 );
@@ -828,7 +820,7 @@ fn insert_breaks(
                 (conseq_lk, alt_lk) => {
                     let conseq = lower_conseq(conseq_lk, loop_head, next);
                     let alt = lower_alt(alt_lk, loop_head, other);
-                    DS::CondIf(reaching::cond_atom(code), conseq, alt)
+                    DS::CondIf(predicates::cond_atom(code), conseq, alt)
                 }
             }
         }
@@ -1100,7 +1092,7 @@ fn structure_acyclic_region(
 
             graph.mark_emitted(code);
             D::Structured::CondIf(
-                reaching::cond_atom(code),
+                predicates::cond_atom(code),
                 Box::new(conseq_arm),
                 Box::new(Some(alt_arm)),
             )

@@ -277,12 +277,16 @@ public fun cancel_multiple_orders_safe(l0: &mut OrderManager, l1: vector<u64>, l
         };
         l4 = l4 + 1u64;
     };
-    while (&l1.len() > 0u64) {
-        
+    loop {
+        if (&l1.len() <= 0u64) {
+            break
+        }
     };
     std::vector::destroy_empty(l1);
-    while (&l7.len() > 0u64) {
-        
+    loop {
+        if (&l7.len() <= 0u64) {
+            break
+        }
     };
     std::vector::destroy_empty(l7)
 }

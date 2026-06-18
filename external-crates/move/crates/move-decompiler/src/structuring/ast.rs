@@ -101,7 +101,7 @@ pub enum Structured {
     /// by substituting each atom with its block's condition expression and threading
     /// `&&`/`||`/`!` through.
     CondIf(
-        crate::structuring::reaching::Formula,
+        crate::structuring::predicates::Formula,
         Box<Structured>,
         Box<Option<Structured>>,
     ),
@@ -193,7 +193,7 @@ impl std::fmt::Display for Structured {
                     // For the single-atom case (the migrated `IfElse(Code, ...)`) render the
                     // bare block id, matching legacy output. For compound formulas show the
                     // recovered boolean inside `<…>` so debug output stays scannable.
-                    match cond.as_atom() {
+                    match cond.as_cond_atom() {
                         Some(n) => writeln!(f, "if ({}) {{", n.index())?,
                         None => writeln!(f, "if <{cond}> {{")?,
                     }

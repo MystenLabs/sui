@@ -18,7 +18,10 @@ module staleness {
                 } else {
                     let l6 =         staleness::feed_ts(l3)
 ;
-                    if (l0 > l6 && l0 - l6 >= l2 || l0 <= l6 && l6 - l0 >= l2) {
+                    let __c25 = l0 > l6;
+                    let __c32 = l0 - l6 >= l2;
+                    let __c41 = l6 - l0 >= l2;
+                    if (__c25 && __c32 || __c41 && !(__c25)) {
                         l8 = false;
                     }
                 }
@@ -28,7 +31,10 @@ module staleness {
                 } else {
                     let l7 =         staleness::feed_ts(l3)
 ;
-                    if (l0 > l7 && l0 - l7 >= l2 || l0 <= l7 && l7 - l0 >= l2) {
+                    let __c59 = l0 > l7;
+                    let __c66 = l0 - l7 >= l2;
+                    let __c75 = l7 - l0 >= l2;
+                    if (__c59 && __c66 || __c75 && !(__c59)) {
                         l8 = false;
                     }
                 }
