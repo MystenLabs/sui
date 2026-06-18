@@ -1,13 +1,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+pub(crate) mod acyclic;
 pub(crate) mod ast;
 pub(crate) mod dom_tree;
 pub(crate) mod graph;
 pub(crate) mod hoist_declarations;
 pub(crate) mod predicates;
-pub(crate) mod reaching;
-pub(crate) mod reaching_structure;
 pub(crate) mod term_reconstruction;
 
 use crate::{
@@ -87,7 +86,7 @@ pub(crate) fn structure(
     }
 
     if config.debug_print.control_flow_graph
-        && let Some(reach) = reaching::reaching_conditions(&input, entry_node)
+        && let Some(reach) = acyclic::reaching_conditions(&input, entry_node)
     {
         print_heading("reaching conditions");
         for (node, formula) in &reach {
@@ -100,7 +99,7 @@ pub(crate) fn structure(
     // skip into a compound condition (otherwise returns `None`), so clean functions and any
     // function with loops fall through to the dom-tree structurer unchanged.
     if graph.loop_heads.is_empty()
-        && let Some(mut body) = reaching_structure::structure(config, &input, entry_node, terms)
+        && let Some(mut body) = acyclic::structure(config, terms, &input, entry_node)
     {
         flatten_sequence(&mut body);
         for n in &all_nodes {
@@ -347,13 +346,7 @@ fn structure_loop(
             .filter(|(k, _)| loop_nodes.contains(k))
             .map(|(k, v)| (*k, v.clone()))
             .collect();
-        reaching_structure::structure_with_exit_jumps(
-            config,
-            &region_input,
-            loop_head,
-            loop_head,
-            terms,
-        )
+        acyclic::structure_with_exit_jumps(config, terms, &region_input, loop_head, loop_head)
     } else {
         None
     };
@@ -575,13 +568,7 @@ fn try_structure_loop_without_dispatch(
             .filter(|(k, _)| loop_nodes.contains(k))
             .map(|(k, v)| (*k, v.clone()))
             .collect();
-        reaching_structure::structure_with_exit_jumps(
-            config,
-            &region_input,
-            loop_head,
-            loop_head,
-            terms,
-        )
+        acyclic::structure_with_exit_jumps(config, terms, &region_input, loop_head, loop_head)
     };
 
     let mut loop_body = vec![];

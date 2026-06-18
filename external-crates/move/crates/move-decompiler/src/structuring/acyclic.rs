@@ -5,51 +5,82 @@
 // Reaching-condition acyclic structuring (No More Gotos)
 // -------------------------------------------------------------------------------------------------
 // For a loop-free function whose dom-tree structuring would emit a goto for a guarded forward
-// skip, build the clean nested form directly. We recognize "skip diamonds" — an abs_diff-style
-// check whose arms set a flag and either skip to a far join or fall through to the next check —
-// and fold each into one compound condition (`CondIf`), nesting the continuation in the `else`.
-// The skip never becomes a goto: it's the fall-through after the `CondIf`'s then-branch.
+// skip, build the clean nested form directly. We recognize "skip diamonds" and fold each into a
+// single compound `CondIf`, nesting the continuation in the `else`. The skip never becomes a
+// goto: it's the fall-through after the `CondIf`'s then-branch.
 //
 // This is deliberately conservative: it returns `None` (handing back to the dom-tree structurer)
 // on any shape it doesn't recognize, so it only ever *replaces* output that currently has a goto.
+//
+// -------------------------------------------------------------------------------------------------
+// Vocabulary
+// -------------------------------------------------------------------------------------------------
+// Throughout this file, a **skip diamond** is the bytecode shape produced by abs-diff-style
+// idioms like `abs_diff(a, b)`, `max(a, b)`, and Pyth-style threshold guards: a check whose two
+// arms each set a flag (or compute the same value with swapped operands) and either skip to a
+// shared far join or fall through to the next check in a chain. Diagram:
+//
+//     node ─then→ I1 ─{stale S1 → J,  K}
+//          ─else→ I2 ─{stale S2 → J,  K}
+//
+// where `I1`/`I2` are inner condition blocks and `K` is the shared continuation both inner
+// conditions can branch to.
+//
+// A **stale arm** is the `S1` (or `S2`) branch: the side whose computation the diamond fold
+// will *discard*, keeping only the other arm's body for the recovered single `CondIf`. The
+// reason it's "stale" is the abs-diff idiom: both arms compute the same Move-level result
+// (one with `a - b`, the other with `b - a`), so keeping one and dropping the other is sound
+// iff they're observationally equivalent. `bodies_equivalent` is the guard that enforces it.
+//
+// The **far join** `J` is the block both stale arms reach after their code chain. It's the
+// post-diamond fall-through. The **continuation** `K` is the shared "next check" both inner
+// conditions branch to when neither arm is taken; it becomes the `else` of the recovered
+// `CondIf`.
 
 use crate::config;
 use crate::structuring::{
     ast::{self as D, GotoSource},
-    predicates,
+    predicates::{self, Formula},
 };
-use petgraph::algo::dominators::{self, Dominators};
+use petgraph::algo::{
+    self,
+    dominators::{self, Dominators},
+};
 use petgraph::graph::{DiGraph, NodeIndex};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-/// Structure an acyclic region via reaching conditions. `input` is the region's basic blocks
-/// (the caller trims it to the region's nodes) and `entry` is where to start emitting. Edges
-/// leaving the region (to a node not in `input`) signal an unexpected escape — emission relies
-/// on natural CFG sinks. Returns `None` to fall back to the dom-tree structurer when the shape
-/// isn't a recognized skip-diamond chain (so clean regions are left byte-identical).
+/// Structure an acyclic region via reaching conditions:
+///
+/// - `config`   — global config (debug-print toggles).
+/// - `terms`    — per-block lowered `Exp` content (consulted by `bodies_equivalent`).
+/// - `input`    — the region's basic blocks; the caller trims it to the region's nodes.
+/// - `entry`    — where to start emitting.
+///
+/// Edges leaving the region (to a node not in `input`) signal an unexpected escape — emission
+/// relies on natural CFG sinks. Returns `None` to fall back to the dom-tree structurer when
+/// the shape isn't a recognized skip-diamond chain (so clean regions are left byte-identical).
 pub fn structure(
     config: &config::Config,
+    terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
     input: &BTreeMap<NodeIndex, D::Input>,
     entry: NodeIndex,
-    terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
 ) -> Option<D::Structured> {
-    structure_inner(config, input, entry, Mode::WholeFunction, terms)
+    structure_inner(config, terms, input, entry, Mode::WholeFunction)
 }
 
 /// Same as [`structure`], but every edge leaving the region (either to the explicit `exit` or
 /// to a node not in `input`) is emitted as `Structured::Jump(GotoSource::ReachingExit, …)`.
 /// Used for loop-body regions where `insert_breaks` rewrites the Jumps to `Break`/`Continue`
-/// downstream. Like `structure`, returns `None` when no diamond was folded so the dom-tree
-/// structurer keeps owning shapes reaching doesn't improve on (clean nested ifs in a loop
-/// body, etc., where reaching's more-nested form would just churn snapshots).
+/// downstream. Returns `None` when no diamond was folded so the dom-tree structurer keeps
+/// owning shapes reaching doesn't improve on.
 pub fn structure_with_exit_jumps(
     config: &config::Config,
+    terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
     input: &BTreeMap<NodeIndex, D::Input>,
     entry: NodeIndex,
     exit: NodeIndex,
-    terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
 ) -> Option<D::Structured> {
-    structure_inner(config, input, entry, Mode::LoopBody { exit }, terms)
+    structure_inner(config, terms, input, entry, Mode::LoopBody { exit })
 }
 
 /// What kind of region we're structuring. Whole-function vs loop-body is a closed dichotomy —
@@ -83,20 +114,20 @@ impl Mode {
 
 fn structure_inner(
     config: &config::Config,
+    terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
     input: &BTreeMap<NodeIndex, D::Input>,
     entry: NodeIndex,
     mode: Mode,
-    terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
 ) -> Option<D::Structured> {
     let pdom = PostDom::build(input, mode.region_exit())?;
     let mut ctx = Ctx {
+        config,
         input,
         pdom,
         folded_any: false,
         mode,
         visiting: HashSet::new(),
         terms,
-        debug_print_structuring: config.debug_print.structuring,
     };
     // Process the region's entry without the `node == stop` short-circuit — for a loop-body
     // region where `entry == exit` (back-edge target), the entry IS the natural exit but we
@@ -112,6 +143,7 @@ fn structure_inner(
 }
 
 struct Ctx<'a> {
+    config: &'a config::Config,
     input: &'a BTreeMap<NodeIndex, D::Input>,
     pdom: PostDom,
     folded_any: bool,
@@ -124,12 +156,22 @@ struct Ctx<'a> {
     /// falls back to the dom-tree structurer.
     visiting: HashSet<NodeIndex>,
     /// Per-block term map (lowered `Exp` content), keyed by `NodeIndex` whose value matches
-    /// the basic-block id. Consulted by `bodies_equivalent` in `recognize_diamond` to guard
+    /// the basic-block id. Consulted by `bodies_equivalent` in `recognize_skip_diamond` to guard
     /// the s1/s2 fold against non-uniform arms.
     terms: &'a BTreeMap<NodeIndex, crate::ast::Exp>,
-    /// Snapshot of `config.debug_print.structuring` so the `process_node` bail-out path can
-    /// log a diagnostic without borrowing the config through every call.
-    debug_print_structuring: bool,
+}
+
+impl Ctx<'_> {
+    /// Whether escapes from this region lower to explicit `Jump`s (for `insert_breaks` to
+    /// rewrite as `Continue`/`Break` downstream) or fall through to natural CFG sinks.
+    fn emit_exit_jumps(&self) -> bool {
+        self.mode.emit_exit_jumps()
+    }
+
+    /// The region's back-edge target (loop-body mode) or `None` (whole-function mode).
+    fn region_exit(&self) -> Option<NodeIndex> {
+        self.mode.region_exit()
+    }
 }
 
 impl Ctx<'_> {
@@ -137,11 +179,6 @@ impl Ctx<'_> {
     /// (but not including) `stop`. Returns `Some(Seq([]))` when `node == stop` (we're at the
     /// region boundary; nothing to emit), `None` on failure (region cycle, Variants shape,
     /// arm escape without a shared join), otherwise `Some(Structured)`.
-    ///
-    /// Most recursive descent in `process_node` flows back through here so each step honors
-    /// the boundary. The initial call from `structure_inner` goes straight to `process_node`
-    /// instead, so loop-body regions where `entry == exit` (back-edge target) still emit the
-    /// entry's content the first time through.
     fn structure_reachable_subregion(
         &mut self,
         node: NodeIndex,
@@ -153,15 +190,9 @@ impl Ctx<'_> {
         self.process_node(node, stop)
     }
 
-    /// Process `node`'s content (a `Code` chain or a `Condition`) without the
-    /// `node == stop` short-circuit, recursing into sub-flow via
-    /// `structure_reachable_subregion` so each recursive visit honors `stop`. Called
-    /// directly for the region's entry (so loop-body regions where `entry == exit` still
-    /// emit the entry's content the first time through) and via
-    /// `structure_reachable_subregion` for every recursive descent.
     fn process_node(&mut self, node: NodeIndex, stop: Option<NodeIndex>) -> Option<D::Structured> {
         if !self.visiting.insert(node) {
-            if self.debug_print_structuring {
+            if self.config.debug_print.structuring {
                 println!("reaching: revisited node {node:?} (region cycle); bailing");
             }
             return None;
@@ -183,14 +214,25 @@ impl Ctx<'_> {
                 match next {
                     None => Some(head),
                     Some(next) if !self.in_region(*next) => {
-                        // Edge leaves the region (back edge in a loop-body region, or a
-                        // straight-line exit). For loop-body callers we emit an explicit
-                        // `Jump` so `insert_breaks` can rewrite it to `Continue`/`Break`;
-                        // whole-function callers fall through to a natural sink and don't
-                        // expect escapes here.
-                        if self.mode.emit_exit_jumps() {
+                        // Edge leaves the region. Loop-body callers emit an explicit `Jump`
+                        // (rewritten downstream by `insert_breaks` to `Continue`/`Break`);
+                        // whole-function callers fall through to a natural CFG sink, since
+                        // `WholeFunction` mode means the region IS the function and any
+                        // non-region edge can only be a sink (return/abort) — there's no
+                        // outer scope to land in. The `debug_assert!` locks that invariant
+                        // in: if it ever fires, we'd be silently swallowing a real control
+                        // edge here, repeating the unsound-elision bug from earlier rounds.
+                        if self.emit_exit_jumps() {
                             Some(seq(head, exit_jump(*next)))
                         } else {
+                            debug_assert!(
+                                self.input
+                                    .get(next)
+                                    .map(|i| i.edges().is_empty())
+                                    .unwrap_or(true),
+                                "WholeFunction acyclic structurer: dropping edge {node:?} -> {next:?} \
+                                 where target is not a CFG sink — would silently swallow control flow",
+                            );
                             Some(head)
                         }
                     }
@@ -203,7 +245,7 @@ impl Ctx<'_> {
             }
             D::Input::Condition(_, code, then, els) => {
                 let (code, then, els) = (*code, *then, *els);
-                if let Some(diamond) = self.recognize_diamond(node, then, els) {
+                if let Some(diamond) = self.recognize_skip_diamond(node, then, els) {
                     self.folded_any = true;
                     // then: the stale block (sets the flag); else: the continuation, structured
                     // only up to the far join. The join itself is emitted *after* the `CondIf`,
@@ -224,8 +266,8 @@ impl Ctx<'_> {
                 } else {
                     // Genuine branch: structure both arms up to where they rejoin, then continue.
                     let join = self.pdom.ipostdom(node);
-                    let then_s = self.arm(then, join)?;
-                    let els_s = self.arm(els, join)?;
+                    let then_s = self.structure_arm_target(then, join)?;
+                    let els_s = self.structure_arm_target(els, join)?;
                     let if_s = D::Structured::CondIf(
                         predicates::cond_atom(code),
                         Box::new(then_s),
@@ -240,18 +282,19 @@ impl Ctx<'_> {
         }
     }
 
-    /// Structure one Condition arm rooted at `target`. If `target` is already a region exit
-    /// (e.g. the arm is a direct break-target jump), emit the appropriate `Jump`/empty form
-    /// directly so we don't try to recur into a node that isn't in our `input`.
-    fn arm(&mut self, target: NodeIndex, join: Option<NodeIndex>) -> Option<D::Structured> {
+    /// Structure one branch's arm-target. In-region targets recur; out-of-region targets
+    /// emit an exit Jump (loop-body mode) or bail (whole-function mode, where there's no
+    /// outer scope to land in).
+    fn structure_arm_target(
+        &mut self,
+        target: NodeIndex,
+        join: Option<NodeIndex>,
+    ) -> Option<D::Structured> {
         if self.in_region(target) {
             self.structure_reachable_subregion(target, join)
-        } else if self.mode.emit_exit_jumps() {
+        } else if self.emit_exit_jumps() {
             Some(exit_jump(target))
         } else {
-            // Whole-function mode: an arm that escapes the region without going through the
-            // shared `join` would orphan a control-flow edge. Bail and let the dom-tree path
-            // own the shape.
             None
         }
     }
@@ -259,33 +302,13 @@ impl Ctx<'_> {
     /// True iff `node` is part of the structured region: it lives in `self.input` AND is not
     /// the loop-body `exit` (back-edge target).
     fn in_region(&self, node: NodeIndex) -> bool {
-        self.input.contains_key(&node) && Some(node) != self.mode.region_exit()
+        self.input.contains_key(&node) && Some(node) != self.region_exit()
     }
 
-    /// Recognize a balanced abs_diff-style skip diamond rooted at `node`:
-    ///
-    /// ```text
-    ///   node ─then→ I1 ─{stale S1 → J,  K}
-    ///        ─else→ I2 ─{stale S2 → J,  K}
-    /// ```
-    ///
-    /// where `I1`/`I2` are conditions, `S1`/`S2` are code chains that converge on a common far
-    /// join `J`, and both inner conditions' other arm is the same continuation `K`. The
-    /// recovered condition is the reaching condition of the stale blocks. Returns `None` unless
-    /// the shape matches.
-    ///
-    /// Soundness: the fold keeps only `S1`'s body for both branches of the recovered condition,
-    /// which is correct iff `S1` and `S2` are observationally equivalent. Checked via
-    /// `bodies_equivalent`: compare the per-block `Exp` content (from the `terms` map plumbed
-    /// in from `translate.rs`) after stripping empty/jump-only padding blocks the Move
-    /// compiler sometimes emits asymmetrically. Non-uniform shapes — e.g., one arm sets a
-    /// flag, the other ALSO bumps a counter — fall back to the dom-tree path (their dom-tree
-    /// emission preserves the difference; see the `non_uniform_arms` regression fixture in
-    /// `tests/move/staleness/sources/staleness.move`). The check is structural-on-Exp, not
-    /// semantic — equivalent but syntactically-different shapes (e.g., `x + 0` vs `x`) would
-    /// be rejected; a semantic-prover-grade guard would need alias analysis or symbolic
-    /// execution and is out of scope.
-    fn recognize_diamond(
+    /// Recognize a skip diamond rooted at `node` (see "Vocabulary" at the top of this file).
+    /// Returns `None` unless the shape matches; on match, returns the recovered guard plus the
+    /// stale body, the shared continuation, and the far join.
+    fn recognize_skip_diamond(
         &mut self,
         node: NodeIndex,
         then: NodeIndex,
@@ -293,9 +316,8 @@ impl Ctx<'_> {
     ) -> Option<Diamond> {
         let (i1c, i1t, i1e) = self.as_condition(then)?;
         let (i2c, i2t, i2e) = self.as_condition(els)?;
-        // The continuation is the single node both inner conditions branch to; each inner
-        // condition's *other* arm is its stale block. (Continuation may be a Code block — the
-        // chain's last check — or the next check; we don't care which.)
+        // Continuation = the node both inner conditions branch to; the *other* arm of each is
+        // its stale block.
         let k = [i1t, i1e].into_iter().find(|x| *x == i2t || *x == i2e)?;
         if (i1t == k) == (i1e == k) {
             return None; // both or neither inner-1 arm is the continuation
@@ -304,30 +326,23 @@ impl Ctx<'_> {
         let s2 = if i2t == k { i2e } else { i2t };
         let s1_then = s1 == i1t;
         let s2_then = s2 == i2t;
-        // Each stale arm is a straight-line code chain that converges on a common far join. We
-        // follow each to its end rather than peeking a single hop, and stop at `k` so we don't
-        // sweep the shared continuation block into the stale body (which would emit it twice
-        // — once inside `stale_body`, once as part of the post-diamond `rest`). We keep the
-        // first chain's body for the fold; see "Soundness" above for why we accept the second
-        // silently today and what's needed to guard it for real.
-        let (s1_codes, j1) = self.stale_chain(s1, k)?;
-        let (s2_codes, j2) = self.stale_chain(s2, k)?;
+        // Follow each stale arm's code chain to its convergence point. Both must converge on
+        // the same far join, or this isn't a diamond.
+        let (s1_codes, j1) = self.code_chain_to(s1, k)?;
+        let (s2_codes, j2) = self.code_chain_to(s2, k)?;
         if j1 != j2 {
             return None;
         }
-        // Body-equivalence guard. The fold keeps only `s1_codes` and discards `s2_codes`,
-        // sound iff the two stale chains are observationally equivalent. Compare them
-        // structurally on the lowered `Exp` content (via the `terms` map), modulo
-        // empty/jump-only padding blocks the Move compiler sometimes emits on one arm but
-        // not the other. Non-uniform arms (e.g. one arm sets a flag, the other ALSO bumps
-        // a counter) fail this check; we return `None` and the dom-tree path takes over.
+        // Soundness: the fold keeps `s1_codes` and discards `s2_codes`. Sound iff the two are
+        // observationally equivalent; `bodies_equivalent` is a structural-on-Exp guard (see
+        // its doc-comment for what that covers and what it doesn't). Non-uniform shapes fall
+        // back to the dom-tree path.
         if !bodies_equivalent(&s1_codes, &s2_codes, self.terms) {
             return None;
         }
         // cond = (node ∧ stale-arm(I1)) ∨ (¬node ∧ stale-arm(I2)), as atoms over block ids.
-        // The smart constructors normalize: NNF + sort + dedup + absorption +
-        // complementation, so the recovered guard lands in canonical form without a
-        // separate canonicalization pass.
+        // The smart constructors normalize (NNF + sort + dedup + absorption + complementation),
+        // so the recovered guard lands canonical without a separate pass.
         let a_node = predicates::cond_atom(node.index() as u64);
         let cond = predicates::or(vec![
             predicates::and(vec![a_node.clone(), atom_pol(i1c, s1_then)]),
@@ -348,23 +363,19 @@ impl Ctx<'_> {
         }
     }
 
-    /// Follow a stale arm's straight-line code chain, collecting block ids, until either:
-    /// (1) the next node is `k` — the diamond's shared continuation, which is emitted as the
-    ///     `else` arm and the post-diamond fall-through, NOT as part of the stale body; or
-    /// (2) the next node is not a fall-through code block (a condition, the function's
-    ///     `if (flag)` join, or the loop-head back-edge target); or
-    /// (3) the next node leaves the region (outside `input` or the loop-body exit). For
-    ///     loop-body regions, this stops the chain at the back-edge target rather than
-    ///     wandering into a node whose `Code` link points outside the region snapshot.
-    /// In every case that next node is the common far join. `None` if `s` isn't a code chain.
-    fn stale_chain(&self, s: NodeIndex, k: NodeIndex) -> Option<(Vec<u64>, NodeIndex)> {
+    /// Follow a straight-line `Code` chain from `start`, collecting block ids, until we either
+    /// hit `stop` (the shared diamond continuation), leave the region, or run into a non-Code
+    /// node (a `Condition`, a sink, or the loop-head back-edge target). Returns the collected
+    /// code-block ids and the stopping node. Returns `None` if `start` isn't a Code chain at
+    /// all.
+    fn code_chain_to(&self, start: NodeIndex, stop: NodeIndex) -> Option<(Vec<u64>, NodeIndex)> {
         let mut codes = Vec::new();
-        let mut cur = s;
+        let mut cur = start;
         loop {
             match self.input.get(&cur)? {
                 D::Input::Code(_, code, Some(next)) => {
                     codes.push(*code);
-                    if *next == k || !self.in_region(*next) {
+                    if *next == stop || !self.in_region(*next) {
                         return Some((codes, *next));
                     }
                     match self.input.get(next)? {
@@ -386,17 +397,31 @@ struct Diamond {
 }
 
 /// Structural-equivalence guard for the s1/s2 stale arms of a recognized diamond. Drops
-/// empty / jump-only "padding" blocks (the Move compiler sometimes pads one arm with an
-/// extra empty block for alignment) before comparing the surviving block bodies pairwise
-/// via `exp_struct_eq`.
+/// empty / Goto-only padding blocks (CFG-anchor blocks the Move compiler sometimes emits
+/// on one arm but not the other when the source-level shape requires it, even though they
+/// have no observable effect) before comparing the surviving block bodies pairwise via
+/// `exp_struct_eq`.
 ///
 /// NB: this is purely structural equivalence on the *pre-refinement* lowered `Exp` shape.
-/// It does NOT prove semantic equivalence — e.g., `flag = false` and `let _ = (); flag =
-/// false` would compare structurally unequal but are semantically equivalent. A
-/// semantic-prover-grade guard would need alias analysis or symbolic execution and is out
-/// of scope. The structural check is sufficient for the corpus today and conservatively
-/// rejects any shape we can't be sure about — non-uniform diamonds fall back to the
-/// dom-tree path.
+/// It does NOT prove semantic equivalence. A semantic-prover-grade guard would need alias
+/// analysis or symbolic execution and is out of scope. The structural check is sufficient
+/// for the corpus today and conservatively rejects any shape we can't be sure about —
+/// non-uniform diamonds fall back to the dom-tree path.
+///
+/// What passes:
+///   - `{ flag = true }`  vs  `{ flag = true }` — identical assigns.
+///   - `{ x = a - b }`  vs  `{ x = a - b }` — identical arithmetic.
+///   - `{ flag = true; goto J }`  vs  `{ flag = true }` — one arm's Goto-only padding is
+///     dropped before comparison.
+///
+/// What fails (correctly):
+///   - `{ flag = true }`  vs  `{ flag = true; counter = counter + 1 }` — non-uniform; the
+///     second arm has an extra observable effect. Falls back to dom-tree. See
+///     `non_uniform_arms` fixture in `tests/move/staleness/sources/staleness.move`.
+///   - `{ x = a + 0 }`  vs  `{ x = a }` — semantically equal but syntactically different;
+///     this is the conservative-by-design failure mode.
+///   - `{ x = a - b; y = c }`  vs  `{ y = c; x = a - b }` — reordered statements; the
+///     pre-refinement comparison is positional.
 fn bodies_equivalent(
     s1_codes: &[u64],
     s2_codes: &[u64],
@@ -487,6 +512,13 @@ fn non_empty(s: D::Structured) -> Option<D::Structured> {
 // -------------------------------------------------------------------------------------------------
 // Post-dominators (immediate post-dominator = where a branch's arms rejoin)
 // -------------------------------------------------------------------------------------------------
+// `dom_tree::DominatorTree` carries the regular dominator tree; the dom-tree structurer in
+// `structuring/mod.rs` walks it via `Graph::dom_tree`. We don't carry post-dominators globally
+// — they're only consumed by this acyclic structurer, and the region we structure is always a
+// strict subset of the function's blocks (a loop body region for `structure_with_exit_jumps`,
+// or the whole function for `structure`). Building post-doms region-locally keeps the cost
+// bounded by region size rather than total function size, and avoids carrying the synthetic-
+// exit + dual-edge plumbing in `Graph` for a structurer that may not even run.
 
 struct PostDom {
     doms: Dominators<NodeIndex>,
@@ -564,4 +596,113 @@ impl PostDom {
             _ => None,
         }
     }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Reaching conditions (No More Gotos, phase 1)
+// -------------------------------------------------------------------------------------------------
+// For a loop-free region, the reaching condition of a node is the boolean formula over branch
+// predicates under which control reaches that node:
+//
+//     R(entry) = true
+//     R(n)     = ⋁_{p → n}  R(p) ∧ cond(p → n)
+//
+// where `cond(p → n)` is the predicate at `p`'s branch taken to reach `n` (the atom for the
+// `then` edge, its negation for the `else` edge). Atoms are named by the convention
+// [`predicates::cond_var_name`] (`__c{N}` for condition block N), so a local that's reassigned
+// between regions yields a distinct atom per test and is never conflated.
+//
+// This is the pattern-independent half of No More Gotos: every node of an acyclic region gets a
+// guard, so there's nothing left to "fail to structure" — no gotos are required. Folding the
+// guarded sequence back into `&&`/`||`/`if` is a separate, semantics-preserving step (handled
+// above by [`recognize_skip_diamond`] and the rest of the acyclic structurer).
+
+/// The predicate under which edge `p → n` is taken, given `p`'s input node.
+fn edge_condition(pred_input: Option<&D::Input>, p: NodeIndex, n: NodeIndex) -> Formula {
+    match pred_input {
+        Some(D::Input::Condition(_, _, then, els)) => {
+            if n == *then {
+                predicates::cond_atom(p.index() as u64)
+            } else if n == *els {
+                predicates::not(predicates::cond_atom(p.index() as u64))
+            } else {
+                // `n` is not an arm of `p` — the caller's edge set is inconsistent with the
+                // condition's recorded arms. The adjacency build above only enumerates edges
+                // produced by `Input::edges`, which for a `Condition` returns exactly
+                // `(p, then)` and `(p, else)`, so reaching this arm means a Condition's arms
+                // were rewritten after the topo build. In release we fall back to a conservative
+                // `True` guard rather than panic — the resulting reaching set is over-broad but
+                // sound enough to keep the dom-tree fallback honest.
+                debug_assert!(
+                    false,
+                    "edge {p:?} -> {n:?} not in Condition's arms (then={then:?}, else={els:?})",
+                );
+                predicates::true_()
+            }
+        }
+        // Unconditional fall-through, or a node we don't model: the edge is always taken.
+        _ => predicates::true_(),
+    }
+}
+
+/// Compute reaching conditions for every node of an acyclic region described by `input`, rooted
+/// at `entry`. Returns `None` if the region contains a cycle (a back edge — not loop-free) or
+/// any enum-`Variants` dispatch (not yet modeled).
+pub fn reaching_conditions(
+    input: &BTreeMap<NodeIndex, D::Input>,
+    entry: NodeIndex,
+) -> Option<BTreeMap<NodeIndex, Formula>> {
+    if input.values().any(|i| matches!(i, D::Input::Variants(..))) {
+        return None;
+    }
+
+    // Intern region nodes into a compact petgraph index space and feed `algo::toposort` —
+    // the same `petgraph` reduction `PostDom::build` uses, just for the forward graph.
+    // `toposort` returns `Err(Cycle)` if the region has a back edge; we propagate as `None`
+    // so callers fall back to the dom-tree structurer.
+    let mut graph: DiGraph<(), ()> = DiGraph::new();
+    let mut to_internal: HashMap<NodeIndex, NodeIndex> = HashMap::with_capacity(input.len());
+    let mut from_internal: Vec<NodeIndex> = Vec::with_capacity(input.len());
+    let mut nodes: BTreeSet<NodeIndex> = input.keys().copied().collect();
+    for inp in input.values() {
+        for (u, v) in inp.edges() {
+            nodes.insert(u);
+            nodes.insert(v);
+        }
+    }
+    for n in &nodes {
+        let idx = graph.add_node(());
+        to_internal.insert(*n, idx);
+        from_internal.push(*n);
+    }
+    let mut preds: BTreeMap<NodeIndex, Vec<NodeIndex>> = BTreeMap::new();
+    for inp in input.values() {
+        for (u, v) in inp.edges() {
+            graph.add_edge(to_internal[&u], to_internal[&v], ());
+            preds.entry(v).or_default().push(u);
+        }
+    }
+
+    let topo = algo::toposort(&graph, None).ok()?;
+
+    // Forward-propagate. In a DAG every predecessor precedes its successor in `topo`, so each
+    // `reach[p]` is already populated when we reach `n`.
+    let mut reach: BTreeMap<NodeIndex, Formula> = BTreeMap::new();
+    reach.insert(entry, predicates::true_());
+    for internal in topo {
+        let n = from_internal[internal.index()];
+        if n == entry {
+            continue;
+        }
+        let mut terms = Vec::new();
+        for &p in preds.get(&n).into_iter().flatten() {
+            let rp = reach.get(&p).cloned().unwrap_or_else(predicates::false_);
+            terms.push(predicates::and(vec![
+                rp,
+                edge_condition(input.get(&p), p, n),
+            ]));
+        }
+        reach.insert(n, predicates::or(terms));
+    }
+    Some(reach)
 }

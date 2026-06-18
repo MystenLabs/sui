@@ -6,7 +6,7 @@
 // -------------------------------------------------------------------------------------------------
 //
 // Used by `compress_dispatch_cascade` (comparing cloned arm bodies) and by
-// `reaching_structure::recognize_diamond`'s body-equivalence guard (comparing the two stale arms
+// `acyclic::recognize_skip_diamond`'s body-equivalence guard (comparing the two stale arms
 // of an abs_diff diamond). Conservative: for foreign-typed fields that don't implement
 // `PartialEq` (`DataOp` from `move-stackless-bytecode-2`, `Constant<Symbol>` from
 // `move-binary-format`, `TypeRef`/`ModuleRef`/`Value`/`UnstructuredNode`) we fall back to

@@ -139,7 +139,18 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
     // mapping, and the content-level guard would only mask the shape regressions they
     // exist to catch.
     let empty_terms = std::collections::BTreeMap::new();
-    let (structured, _unemitted) =
+    let (structured, unemitted) =
         crate::structuring::structure(&config, input, 0.into(), &empty_terms);
-    structured.to_test_string()
+    // Surface unemitted blocks in the snapshot so a regression that silently drops blocks
+    // doesn't just match the old structured shape and pass — the snapshot diff makes the
+    // dropped blocks visible. Bytecode and `.move` corpus tests already render the
+    // `// Did not structure and emit blocks N, K, …` notice as part of their function output;
+    // `.stt` fixtures pin only the structured form, so the notice goes here.
+    let body = structured.to_test_string();
+    if unemitted.is_empty() {
+        body
+    } else {
+        let notice: Vec<String> = unemitted.iter().map(|n| n.to_string()).collect();
+        format!("// unemitted blocks: {}\n{body}", notice.join(", "))
+    }
 }
