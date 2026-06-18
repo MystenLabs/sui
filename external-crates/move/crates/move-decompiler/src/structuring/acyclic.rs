@@ -5,37 +5,66 @@
 // Reaching-condition acyclic structuring (No More Gotos)
 // -------------------------------------------------------------------------------------------------
 // For a loop-free function whose dom-tree structuring would emit a goto for a guarded forward
-// skip, build the clean nested form directly. We recognize "skip diamonds" and fold each into a
-// single compound `CondIf`, nesting the continuation in the `else`. The skip never becomes a
-// goto: it's the fall-through after the `CondIf`'s then-branch.
+// skip, build the clean nested form directly. We recognize the *duplicate-arm branch* pattern
+// and fold each occurrence into a single compound `CondIf`, nesting the continuation in the
+// `else`. The skip never becomes a goto: it's the fall-through after the `CondIf`'s then-branch.
 //
 // This is deliberately conservative: it returns `None` (handing back to the dom-tree structurer)
 // on any shape it doesn't recognize, so it only ever *replaces* output that currently has a goto.
 //
 // -------------------------------------------------------------------------------------------------
+// What the fold is achieving
+// -------------------------------------------------------------------------------------------------
+// Several common Move source idioms — Pyth-style freshness checks, `abs_diff`-style magnitude
+// comparisons, anything that's "split the check by sign, then compare with the right operand
+// order" — compile to a control-flow shape where two arms of an outer condition each run an
+// inner check, and both inner checks fire the *same* action when they pass. In source:
+//
+//     if (now > latest) {
+//         if (now - latest >= threshold) { stale = true }
+//     } else {
+//         if (latest - now >= threshold) { stale = true }
+//     }
+//
+// The two arms have to be split in the source because `now - latest` and `latest - now` are
+// only individually safe under their respective outer guards (the other would underflow on u64).
+// But the *action* both arms run is identical. The dom-tree structurer would emit this as a
+// nested if-else with two copies of the action body; this pass folds it back into a single
+// `if (recovered_boolean) { action }`, where `recovered_boolean` preserves the outer guard so
+// the inner checks still short-circuit safely:
+//
+//     if (now > latest && now - latest >= threshold
+//         || !(now > latest) && latest - now >= threshold) {
+//         stale = true
+//     }
+//
+// The outer condition stays load-bearing — it gates which inner check evaluates. We're not
+// collapsing to `if (I1 || I2)` (which would evaluate both inner checks unconditionally and
+// blow up on the unsafe operand direction); we're recovering the original *compound* boolean
+// the source-level conditional flow encoded.
+//
+// -------------------------------------------------------------------------------------------------
 // Vocabulary
 // -------------------------------------------------------------------------------------------------
-// Throughout this file, a **skip diamond** is the bytecode shape produced by abs-diff-style
-// idioms like `abs_diff(a, b)`, `max(a, b)`, and Pyth-style threshold guards: a check whose two
-// arms each set a flag (or compute the same value with swapped operands) and either skip to a
-// shared far join or fall through to the next check in a chain. Diagram:
+// The CFG shape forms a diamond:
 //
-//     node ─then→ I1 ─{stale S1 → J,  K}
-//          ─else→ I2 ─{stale S2 → J,  K}
+//     node ─then→ I1 ─{A1 → J,  K}
+//          ─else→ I2 ─{A2 → J,  K}
 //
-// where `I1`/`I2` are inner condition blocks and `K` is the shared continuation both inner
-// conditions can branch to.
+// where:
 //
-// A **stale arm** is the `S1` (or `S2`) branch: the side whose computation the diamond fold
-// will *discard*, keeping only the other arm's body for the recovered single `CondIf`. The
-// reason it's "stale" is the abs-diff idiom: both arms compute the same Move-level result
-// (one with `a - b`, the other with `b - a`), so keeping one and dropping the other is sound
-// iff they're observationally equivalent. `bodies_equivalent` is the guard that enforces it.
+//   * `node`      is the outer condition.
+//   * `I1`, `I2`  are the two inner conditions, one per outer arm.
+//   * `A1`, `A2`  are the two **duplicate arms**: the blocks that run when the respective
+//                 inner check fires. The fold's soundness rests on `A1` and `A2` being
+//                 observationally equivalent (`bodies_equivalent` is the guard).
+//   * `J`         is the **far join**: where both `A1` and `A2` end up.
+//   * `K`         is the **continuation**: the shared "neither arm fires" target both inner
+//                 conditions branch to. It becomes the `else` of the recovered `CondIf`.
 //
-// The **far join** `J` is the block both stale arms reach after their code chain. It's the
-// post-diamond fall-through. The **continuation** `K` is the shared "next check" both inner
-// conditions branch to when neither arm is taken; it becomes the `else` of the recovered
-// `CondIf`.
+// The fold keeps `A1`'s body, drops `A2`'s, and emits a single `CondIf` whose recovered
+// boolean fires when *either* `(node ∧ I1)` or `(¬node ∧ I2)` holds. Short-circuit evaluation
+// keeps each inner check inside the world where its operand direction is safe.
 
 use crate::config;
 use crate::structuring::{
@@ -58,7 +87,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 ///
 /// Edges leaving the region (to a node not in `input`) signal an unexpected escape — emission
 /// relies on natural CFG sinks. Returns `None` to fall back to the dom-tree structurer when
-/// the shape isn't a recognized skip-diamond chain (so clean regions are left byte-identical).
+/// the shape isn't a recognized duplicate-arm branch pattern (so clean regions are left
+/// byte-identical).
 pub fn structure(
     config: &config::Config,
     terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
@@ -156,8 +186,9 @@ struct Ctx<'a> {
     /// falls back to the dom-tree structurer.
     visiting: HashSet<NodeIndex>,
     /// Per-block term map (lowered `Exp` content), keyed by `NodeIndex` whose value matches
-    /// the basic-block id. Consulted by `bodies_equivalent` in `recognize_skip_diamond` to guard
-    /// the s1/s2 fold against non-uniform arms.
+    /// the basic-block id. Consulted by `bodies_equivalent` in
+    /// `fold_duplicate_arm_branches` to guard against arm-bodies that aren't observationally
+    /// identical.
     terms: &'a BTreeMap<NodeIndex, crate::ast::Exp>,
 }
 
@@ -245,23 +276,22 @@ impl Ctx<'_> {
             }
             D::Input::Condition(_, code, then, els) => {
                 let (code, then, els) = (*code, *then, *els);
-                if let Some(diamond) = self.recognize_skip_diamond(node, then, els) {
+                if let Some(fold) = self.fold_duplicate_arm_branches(node, then, els) {
                     self.folded_any = true;
-                    // then: the stale block (sets the flag); else: the continuation, structured
-                    // only up to the far join. The join itself is emitted *after* the `CondIf`,
-                    // so both the stale fall-through and the fresh continuation reach it once —
-                    // no goto, no duplication.
-                    let then_body = diamond.stale_body;
-                    let else_body = self.structure_reachable_subregion(
-                        diamond.continue_at,
-                        Some(diamond.far_join),
-                    )?;
+                    // then: the kept arm body (the other arm's identical body got dropped);
+                    // else: the continuation `K`, structured only up to the far join `J`. `J`
+                    // itself is emitted *after* the `CondIf`, so both the kept arm's
+                    // fall-through and the `else`-arm continuation reach it exactly once — no
+                    // goto, no duplication.
+                    let then_body = fold.arm_body;
+                    let else_body =
+                        self.structure_reachable_subregion(fold.continue_at, Some(fold.far_join))?;
                     let cond_if = D::Structured::CondIf(
-                        diamond.cond,
+                        fold.cond,
                         Box::new(then_body),
                         Box::new(non_empty(else_body)),
                     );
-                    let rest = self.structure_reachable_subregion(diamond.far_join, stop)?;
+                    let rest = self.structure_reachable_subregion(fold.far_join, stop)?;
                     Some(seq(cond_if, rest))
                 } else {
                     // Genuine branch: structure both arms up to where they rejoin, then continue.
@@ -305,52 +335,58 @@ impl Ctx<'_> {
         self.input.contains_key(&node) && Some(node) != self.region_exit()
     }
 
-    /// Recognize a skip diamond rooted at `node` (see "Vocabulary" at the top of this file).
-    /// Returns `None` unless the shape matches; on match, returns the recovered guard plus the
-    /// stale body, the shared continuation, and the far join.
-    fn recognize_skip_diamond(
+    /// Recognize a duplicate-arm branch pattern rooted at `node` and produce the fold (see the
+    /// "What the fold is achieving" and "Vocabulary" blocks at the top of this file for what
+    /// this is and why we're doing it). Returns `None` unless the shape matches; on match,
+    /// returns the recovered compound boolean plus the kept arm body, the shared continuation,
+    /// and the far join.
+    fn fold_duplicate_arm_branches(
         &mut self,
         node: NodeIndex,
         then: NodeIndex,
         els: NodeIndex,
-    ) -> Option<Diamond> {
+    ) -> Option<DuplicateArmFold> {
         let (i1c, i1t, i1e) = self.as_condition(then)?;
         let (i2c, i2t, i2e) = self.as_condition(els)?;
-        // Continuation = the node both inner conditions branch to; the *other* arm of each is
-        // its stale block.
+        // Continuation `K` = the single node both inner conditions branch to; each inner
+        // condition's *other* arm is the candidate duplicate-arm head (A1 / A2).
         let k = [i1t, i1e].into_iter().find(|x| *x == i2t || *x == i2e)?;
         if (i1t == k) == (i1e == k) {
             return None; // both or neither inner-1 arm is the continuation
         }
-        let s1 = if i1t == k { i1e } else { i1t };
-        let s2 = if i2t == k { i2e } else { i2t };
-        let s1_then = s1 == i1t;
-        let s2_then = s2 == i2t;
-        // Follow each stale arm's code chain to its convergence point. Both must converge on
-        // the same far join, or this isn't a diamond.
-        let (s1_codes, j1) = self.code_chain_to(s1, k)?;
-        let (s2_codes, j2) = self.code_chain_to(s2, k)?;
+        let a1 = if i1t == k { i1e } else { i1t };
+        let a2 = if i2t == k { i2e } else { i2t };
+        // Track which polarity of each inner check fires the duplicate-arm side, so the
+        // recovered boolean preserves the source's short-circuit gating.
+        let a1_then = a1 == i1t;
+        let a2_then = a2 == i2t;
+        // Walk each candidate arm's straight-line code chain to its convergence point. Both
+        // chains must end at the same far join, or this isn't a duplicate-arm fold.
+        let (a1_codes, j1) = self.code_chain_to(a1, k)?;
+        let (a2_codes, j2) = self.code_chain_to(a2, k)?;
         if j1 != j2 {
             return None;
         }
-        // Soundness: the fold keeps `s1_codes` and discards `s2_codes`. Sound iff the two are
-        // observationally equivalent; `bodies_equivalent` is a structural-on-Exp guard (see
-        // its doc-comment for what that covers and what it doesn't). Non-uniform shapes fall
-        // back to the dom-tree path.
-        if !bodies_equivalent(&s1_codes, &s2_codes, self.terms) {
+        // Soundness: the fold keeps `a1_codes` and drops `a2_codes`. Sound iff the two are
+        // observationally equivalent; `bodies_equivalent` is the structural-on-Exp guard. See
+        // its docstring for what passes and what doesn't.
+        if !bodies_equivalent(&a1_codes, &a2_codes, self.terms) {
             return None;
         }
-        // cond = (node ∧ stale-arm(I1)) ∨ (¬node ∧ stale-arm(I2)), as atoms over block ids.
+        // Recover the compound boolean. Shape: `(node ∧ I1) ∨ (¬node ∧ I2)`, with `I1`/`I2`
+        // polarity-corrected to the side that fires the duplicate arm. The outer `node`
+        // gating is load-bearing — it keeps each inner check inside the world where its
+        // operand direction is safe (e.g. `now - latest` evaluated only when `now > latest`).
         // The smart constructors normalize (NNF + sort + dedup + absorption + complementation),
-        // so the recovered guard lands canonical without a separate pass.
+        // so the result lands canonical without a separate pass.
         let a_node = predicates::cond_atom(node.index() as u64);
         let cond = predicates::or(vec![
-            predicates::and(vec![a_node.clone(), atom_pol(i1c, s1_then)]),
-            predicates::and(vec![predicates::not(a_node), atom_pol(i2c, s2_then)]),
+            predicates::and(vec![a_node.clone(), atom_pol(i1c, a1_then)]),
+            predicates::and(vec![predicates::not(a_node), atom_pol(i2c, a2_then)]),
         ]);
-        Some(Diamond {
+        Some(DuplicateArmFold {
             cond,
-            stale_body: blocks_seq(&s1_codes),
+            arm_body: blocks_seq(&a1_codes),
             continue_at: k,
             far_join: j1,
         })
@@ -364,7 +400,7 @@ impl Ctx<'_> {
     }
 
     /// Follow a straight-line `Code` chain from `start`, collecting block ids, until we either
-    /// hit `stop` (the shared diamond continuation), leave the region, or run into a non-Code
+    /// hit `stop` (the shared continuation `K`), leave the region, or run into a non-Code
     /// node (a `Condition`, a sink, or the loop-head back-edge target). Returns the collected
     /// code-block ids and the stopping node. Returns `None` if `start` isn't a Code chain at
     /// all.
@@ -389,14 +425,21 @@ impl Ctx<'_> {
     }
 }
 
-struct Diamond {
+struct DuplicateArmFold {
+    /// The recovered compound boolean — `(node ∧ I1) ∨ (¬node ∧ I2)` with polarities
+    /// matching whichever side of each inner check fires the duplicate arm.
     cond: predicates::Formula,
-    stale_body: D::Structured,
+    /// The kept arm's body (we drop the other; `bodies_equivalent` guarantees they're
+    /// observationally identical).
+    arm_body: D::Structured,
+    /// Where to continue structuring after this fold lands — `K` from the diagram.
     continue_at: NodeIndex,
+    /// The block both arm chains converged on — `J`. Stored so the caller can keep
+    /// structuring past it.
     far_join: NodeIndex,
 }
 
-/// Structural-equivalence guard for the s1/s2 stale arms of a recognized diamond. Drops
+/// Structural-equivalence guard for the two arm bodies of a recognized fold. Drops
 /// empty / Goto-only padding blocks (CFG-anchor blocks the Move compiler sometimes emits
 /// on one arm but not the other when the source-level shape requires it, even though they
 /// have no observable effect) before comparing the surviving block bodies pairwise via
@@ -615,7 +658,7 @@ impl PostDom {
 // This is the pattern-independent half of No More Gotos: every node of an acyclic region gets a
 // guard, so there's nothing left to "fail to structure" — no gotos are required. Folding the
 // guarded sequence back into `&&`/`||`/`if` is a separate, semantics-preserving step (handled
-// above by [`recognize_skip_diamond`] and the rest of the acyclic structurer).
+// above by [`Ctx::fold_duplicate_arm_branches`] and the rest of the acyclic structurer).
 
 /// The predicate under which edge `p → n` is taken, given `p`'s input node.
 fn edge_condition(pred_input: Option<&D::Input>, p: NodeIndex, n: NodeIndex) -> Formula {

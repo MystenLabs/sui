@@ -6,8 +6,8 @@
 // -------------------------------------------------------------------------------------------------
 //
 // Used by `compress_dispatch_cascade` (comparing cloned arm bodies) and by
-// `acyclic::recognize_skip_diamond`'s body-equivalence guard (comparing the two stale arms
-// of an abs_diff diamond). Conservative: for foreign-typed fields that don't implement
+// `acyclic::fold_duplicate_arm_branches`'s body-equivalence guard (comparing the two arm
+// bodies of an abs_diff-style fold). Conservative: for foreign-typed fields that don't implement
 // `PartialEq` (`DataOp` from `move-stackless-bytecode-2`, `Constant<Symbol>` from
 // `move-binary-format`, `TypeRef`/`ModuleRef`/`Value`/`UnstructuredNode`) we fall back to
 // comparing their `Debug` representation — deterministic for the shapes any current caller
