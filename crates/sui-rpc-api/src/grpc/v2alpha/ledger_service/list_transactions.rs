@@ -92,7 +92,6 @@ pub(crate) async fn list_transactions(
         endpoint.default_limit_items,
         endpoint.max_limit_items,
         QueryType::Transactions,
-        filter.as_ref(),
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
