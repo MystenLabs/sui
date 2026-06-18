@@ -2156,6 +2156,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_network_with_observer_node() {
         use consensus_config::{NetworkPublicKey, ObserverParameters, PeerRecord};
+        use sui_benchmark::workloads::composite::*;
         use sui_types::crypto::KeypairTraits;
 
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
@@ -2258,26 +2259,44 @@ mod test {
         // Let the Observer node stabilize
         tokio::time::sleep(Duration::from_secs(5)).await;
 
-        info!("Running network for a period to verify Observer node doesn't crash");
+        info!("Running object-funds workload to verify Observer node doesn't crash");
 
-        // Let the network run for a while to ensure the Observer node is stable
-        // Submit a few transactions to generate some network activity
-        let sender = test_cluster.get_address_0();
-        let rgp = test_cluster.get_reference_gas_price().await;
-
-        for i in 0..5 {
-            info!("Submitting transaction {}", i);
-            // Fund an address to generate some transaction activity
-            let _ = test_cluster
-                .fund_address_and_return_gas(rgp, None, sender)
-                .await;
-            tokio::time::sleep(Duration::from_secs(2)).await;
+        let composite_metrics = Arc::new(Mutex::new(CompositionMetrics::new()));
+        let composite_config = CompositeWorkloadConfig {
+            num_shared_counters: 1,
+            address_balance_amount: 1000,
+            address_balance_gas_probability: 0.0,
+            mixed_gas_payment_probability: 0.0,
+            conflicting_transaction_probability: 0.0,
+            alias_tx_probability: 0.0,
+            metrics: Some(composite_metrics.clone()),
+            ..Default::default()
         }
+        .with_probability(ObjectBalanceDeposit::NAME, 0.1)
+        .with_probability(ObjectBalanceWithdraw::NAME, 0.3)
+        .with_probability(ObjectBalanceOverdraw::NAME, 1.0)
+        .with_probability(AccumulatorBalanceRead::NAME, 0.2);
 
-        info!("Waiting for the network to advance...");
+        let test_cluster = Arc::new(test_cluster);
+        let mut simulated_load_config = SimulatedLoadConfig::composite_only(composite_config);
+        simulated_load_config.randomized_transaction_weight = 0;
+        test_simulated_load_with_test_config(
+            test_cluster.clone(),
+            20,
+            simulated_load_config,
+            Some(30),
+            Some(10),
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
 
-        // Let the network run longer so it produces a meaningful number of checkpoints.
-        tokio::time::sleep(Duration::from_secs(40)).await;
+        let metrics_sum = composite_metrics.lock().unwrap().sum_all();
+        info!("observer object-funds workload metrics: {metrics_sum:#?}");
+        assert!(
+            metrics_sum.insufficient_funds_count > 0,
+            "observer workload must exercise object-funds insufficient execution"
+        );
 
         // Snapshot the latest checkpoint that the network has executed, as observed by the
         // cluster's regular fullnode (which catches up via checkpoint sync). The Observer
