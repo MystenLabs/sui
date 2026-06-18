@@ -109,6 +109,18 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
     #[cfg(not(debug_assertions))]
     let max_maps = 8; // 8Gb of mapped space for prod
     let max_maps = parse_env_usize("TH_MAX_MAPS", 1).unwrap_or(max_maps);
+    // The perpetual DB is value-read-bound under sustained high load: object/tx/
+    // effects value fetches dominate, and once their record-WAL frags age out of
+    // the mmap window the reads fall back to `pread` syscalls (see
+    // docs/tidehunter-pt-load-investigation.md). Double the record-WAL mmap window
+    // for perpetual only — the index is in memory and the index-WAL window
+    // (`max_index_maps`) is deliberately left unchanged — so more recent values
+    // stay mapped instead of spilling to syscall reads.
+    let max_maps = if metric_conf.db_name.starts_with("perpetual") {
+        max_maps * 2
+    } else {
+        max_maps
+    };
     let max_index_maps = Some(parse_env_usize("TH_MAX_INDEX_MAPS", 3).unwrap_or(3));
     #[cfg(debug_assertions)]
     let commit_pool_size = 0;
