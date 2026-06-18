@@ -22,6 +22,8 @@ use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionC
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_pg_db::query::Query;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::QueryType;
 use sui_sql_macro::query;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::digests::TransactionDigest;
@@ -29,7 +31,7 @@ use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionExpiration;
 
 use crate::api::scalars::base64::Base64;
-use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::cursor::ByteCursor;
 use crate::api::scalars::digest::Digest;
 use crate::api::scalars::fq_name_filter::FqNameFilter;
 use crate::api::scalars::id::Id;
@@ -48,6 +50,8 @@ use crate::api::types::transaction_effects::TransactionEffects;
 use crate::api::types::transaction_kind::TransactionKind;
 use crate::api::types::user_signature::UserSignature;
 use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::upcast;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
@@ -68,11 +72,17 @@ pub(crate) struct TransactionContents {
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
 
-pub type CTransaction = JsonCursor<u64>;
+pub type CTransaction = ByteCursor;
 
 pub(crate) struct TransactionConnection {
     pub edges: Vec<Edge<String, Transaction, EmptyFields>>,
     pub page_info: PageInfo,
+}
+
+#[derive(thiserror::Error, Debug, Clone)]
+pub(crate) enum Error {
+    #[error("Invalid input cursor")]
+    BadCursor,
 }
 
 /// Description of a transaction, the unit of activity on Sui.
@@ -279,9 +289,19 @@ impl Transaction {
         transactions: &[ProcessedTransaction],
         page: &Page<CTransaction>,
         filter: TransactionFilter,
-    ) -> Result<TransactionConnection, RpcError> {
-        let after = page.after().map(|c| **c);
-        let before = page.before().map(|c| **c);
+    ) -> Result<TransactionConnection, RpcError<Error>> {
+        let after = page
+            .after()
+            .map(|c| bcs::from_bytes::<CursorToken>(c))
+            .transpose()
+            .map_err(|_| bad_user_input(Error::BadCursor))?
+            .map(|c| c.position);
+        let before = page
+            .before()
+            .map(|c| bcs::from_bytes::<CursorToken>(c))
+            .transpose()
+            .map_err(|_| bad_user_input(Error::BadCursor))?
+            .map(|c| c.position);
 
         let filtered: Vec<_> = transactions
             .iter()
@@ -293,10 +313,17 @@ impl Transaction {
 
         page.paginate_results(
             filtered,
-            |tx| JsonCursor::new(tx.tx_sequence_number),
+            |tx| {
+                ByteCursor::new(
+                    CursorToken::item(QueryType::Transactions, 0, tx.tx_sequence_number)
+                        .encode()
+                        .to_vec(),
+                )
+            },
             |tx| Transaction::with_contents(scope.clone(), tx.contents.clone()),
         )
         .map(Into::into)
+        .map_err(upcast)
     }
 
     /// Load the transaction from the store, and return it fully inflated (with contents already
@@ -366,7 +393,13 @@ impl Transaction {
 
         page.paginate_results(
             tx_digests(ctx, &tx_sequence_numbers).await?,
-            |(s, _)| JsonCursor::new(*s),
+            |(s, _)| {
+                ByteCursor::new(
+                    CursorToken::item(QueryType::Transactions, 0, *s)
+                        .encode()
+                        .to_vec(),
+                )
+            },
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
         .map(Into::into)
@@ -446,7 +479,9 @@ impl TransactionConnection {
 
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
-        *self.deref()
+        bcs::from_bytes::<CursorToken>(self.deref())
+            .expect("cursor already validated as ByteCursor")
+            .position
     }
 }
 

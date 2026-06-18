@@ -15475,6 +15475,7 @@ dependencies = [
  "sui-pg-db",
  "sui-protocol-config",
  "sui-rpc",
+ "sui-rpc-cursor",
  "sui-sdk-types",
  "sui-sql-macro",
  "sui-types",
@@ -15883,6 +15884,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-rpc",
  "sui-rpc-api",
+ "sui-rpc-cursor",
  "sui-sdk-types",
  "sui-types",
  "telemetry-subscribers",
@@ -16795,6 +16797,7 @@ dependencies = [
  "sui-package-resolver",
  "sui-protocol-config",
  "sui-rpc",
+ "sui-rpc-cursor",
  "sui-sdk-types",
  "sui-transaction-builder",
  "sui-transaction-checks",
@@ -16834,6 +16837,15 @@ dependencies = [
  "tokio-postgres",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "sui-rpc-cursor"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "bytes",
+ "serde",
 ]
 
 [[package]]

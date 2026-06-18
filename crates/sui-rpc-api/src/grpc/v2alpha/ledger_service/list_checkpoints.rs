@@ -22,6 +22,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::list_checkpoints_response;
+use sui_rpc_cursor::QueryType;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -33,10 +34,7 @@ use crate::grpc::v2::ledger_service::get_checkpoint::get_checkpoint;
 use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
-use crate::ledger_history::query_options::QueryType;
 use crate::ledger_history::query_options::ResolvedRange;
-
-use super::query_end::query_end;
 
 use super::bitmap_scan::LedgerBitmapKind;
 use super::bitmap_scan::PendingBitmapBucket;
@@ -56,6 +54,7 @@ use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::resolve_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
+use super::query_end::query_end;
 use crate::ledger_history::watermark::advance_boundary_excluding_cp;
 use crate::ledger_history::watermark::advance_checkpoint_boundary;
 use crate::ledger_history::watermark::boundary_cursor_cp;

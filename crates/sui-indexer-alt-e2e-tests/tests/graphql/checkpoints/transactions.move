@@ -74,7 +74,8 @@
   }
 }
 
-//# run-graphql --cursors 1
+//# run-graphql --cursors bcs(1u8,0u8,0u64,1u64)
+# BCS-encoded `CursorToken { query_type: Transactions(1), kind: Item(0), checkpoint: 0, position: 1 }`.
 { # Fetch a checkpoint's transactions, offset at the front
   checkpoint(sequenceNumber: 1) {
     sequenceNumber
@@ -91,7 +92,7 @@
   }
 }
 
-//# run-graphql --cursors 1 5
+//# run-graphql --cursors bcs(1u8,0u8,0u64,1u64) bcs(1u8,0u8,0u64,5u64)
 { # Fetch a checkpoint's transactions, offset from both ends and pick from the front
   checkpoint(sequenceNumber: 1) {
     sequenceNumber
@@ -108,7 +109,7 @@
   }
 }
 
-//# run-graphql --cursors 1 5
+//# run-graphql --cursors bcs(1u8,0u8,0u64,1u64) bcs(1u8,0u8,0u64,5u64)
 { # Fetch a checkpoint's transactions, offset from both ends and pick from the back
   checkpoint(sequenceNumber: 1) {
     sequenceNumber
@@ -125,7 +126,7 @@
   }
 }
 
-//# run-graphql --cursors 3
+//# run-graphql --cursors bcs(1u8,0u8,0u64,3u64)
 { # Fetch a checkpoint's transactions, offset from the end and pick from the back
   checkpoint(sequenceNumber: 1) {
     sequenceNumber
@@ -142,7 +143,7 @@
   }
 }
 
-//# run-graphql --cursors 6
+//# run-graphql --cursors bcs(1u8,0u8,0u64,6u64)
 { # Offset to a non-existent cursor
   checkpoint(sequenceNumber: 1) {
     sequenceNumber

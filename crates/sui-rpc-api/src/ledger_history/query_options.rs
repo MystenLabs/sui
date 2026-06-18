@@ -8,6 +8,8 @@ use sui_inverted_index::ScanDirection;
 use sui_rpc::proto::sui::rpc::v2alpha::Ordering as ProtoOrdering;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions as ProtoQueryOptions;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::QueryType;
 
 use crate::ErrorReason;
 use crate::RpcError;
@@ -20,19 +22,6 @@ const ORDERING_DESCENDING: i32 = ProtoOrdering::Descending as i32;
 pub enum Ordering {
     Ascending,
     Descending,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum QueryType {
-    Checkpoints,
-    Transactions,
-    Events,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-enum CursorKind {
-    Item,
-    Boundary,
 }
 
 /// Validated, normalized form of `QueryOptions` (the proto wire type).
@@ -198,20 +187,11 @@ impl QueryOptions {
     }
 
     pub fn cursor_for_item(&self, checkpoint: u64, position: u64) -> Bytes {
-        self.encode_cursor(CursorKind::Item, checkpoint, position)
+        CursorToken::item(self.query_type, checkpoint, position).encode()
     }
 
     pub fn cursor_for_boundary(&self, checkpoint: u64, position: u64) -> Bytes {
-        self.encode_cursor(CursorKind::Boundary, checkpoint, position)
-    }
-
-    fn encode_cursor(&self, kind: CursorKind, checkpoint: u64, position: u64) -> Bytes {
-        encode_cursor(CursorToken {
-            query_type: self.query_type,
-            kind,
-            checkpoint,
-            position,
-        })
+        CursorToken::boundary(self.query_type, checkpoint, position).encode()
     }
 }
 
@@ -360,58 +340,24 @@ impl CheckpointRange {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-struct CursorToken {
-    query_type: QueryType,
-    kind: CursorKind,
-    checkpoint: u64,
-    position: u64,
-}
-
-impl CursorToken {
-    fn validate(&self, query_type: QueryType) -> bool {
-        self.query_type == query_type
-    }
-
-    fn after_position_start(&self) -> Option<u64> {
-        match self.kind {
-            CursorKind::Item => self.position.checked_add(1),
-            CursorKind::Boundary => Some(self.position),
-        }
-    }
-
-    fn before_checkpoint_end(&self) -> Option<u64> {
-        match self.kind {
-            CursorKind::Item => self.checkpoint.checked_add(1),
-            CursorKind::Boundary => Some(self.checkpoint),
-        }
-    }
-}
-
 fn parse_cursor(
     field: &'static str,
     cursor: Option<&Bytes>,
     query_type: QueryType,
 ) -> Result<Option<CursorToken>, RpcError> {
     cursor
-        .map(|cursor| decode_cursor(field, cursor))
+        .map(|cursor| {
+            CursorToken::decode(cursor).map_err(|_| invalid_cursor(field, "invalid cursor"))
+        })
         .transpose()?
         .map(|token| {
-            if token.validate(query_type) {
+            if token.query_type == query_type {
                 Ok(token)
             } else {
                 Err(invalid_cursor(field, "invalid cursor"))
             }
         })
         .transpose()
-}
-
-fn decode_cursor(field: &'static str, cursor: &[u8]) -> Result<CursorToken, RpcError> {
-    bcs::from_bytes(cursor).map_err(|_| invalid_cursor(field, "invalid cursor"))
-}
-
-fn encode_cursor(cursor: CursorToken) -> Bytes {
-    bcs::to_bytes(&cursor).unwrap().into()
 }
 
 fn invalid_cursor(field: &'static str, description: impl Into<String>) -> RpcError {
@@ -431,28 +377,6 @@ mod tests {
         QueryOptions::from_proto(request, 100, 1_000, QueryType::Transactions)
     }
 
-    fn cursor_token(
-        kind: CursorKind,
-        checkpoint: u64,
-        position: u64,
-        query_type: QueryType,
-    ) -> CursorToken {
-        CursorToken {
-            query_type,
-            kind,
-            checkpoint,
-            position,
-        }
-    }
-
-    fn item_cursor(checkpoint: u64, position: u64, query_type: QueryType) -> CursorToken {
-        cursor_token(kind::ITEM, checkpoint, position, query_type)
-    }
-
-    fn boundary_cursor(checkpoint: u64, position: u64, query_type: QueryType) -> CursorToken {
-        cursor_token(kind::BOUNDARY, checkpoint, position, query_type)
-    }
-
     fn resolved_range(range: Range<u64>) -> ResolvedRange {
         ResolvedRange {
             range,
@@ -462,17 +386,10 @@ mod tests {
         }
     }
 
-    mod kind {
-        use super::CursorKind;
-
-        pub(super) const BOUNDARY: CursorKind = CursorKind::Boundary;
-        pub(super) const ITEM: CursorKind = CursorKind::Item;
-    }
-
     #[test]
     fn parses_cursors_and_ordering() {
-        let after = encode_cursor(item_cursor(2, 20, QueryType::Transactions));
-        let before = encode_cursor(item_cursor(3, 30, QueryType::Transactions));
+        let after = CursorToken::item(QueryType::Transactions, 2, 20).encode();
+        let before = CursorToken::item(QueryType::Transactions, 3, 30).encode();
         let mut request = ProtoQueryOptions::default();
         request.limit_items = Some(500);
         request.after = Some(after);
@@ -498,13 +415,13 @@ mod tests {
 
         // `before` bounds the high end, so it must not count as an explicit low end.
         let mut request = ProtoQueryOptions::default();
-        request.before = Some(encode_cursor(item_cursor(3, 30, QueryType::Transactions)));
+        request.before = Some(CursorToken::item(QueryType::Transactions, 3, 30).encode());
         let options = query_options_from_proto(Some(&request)).unwrap();
         assert!(!options.has_after_cursor());
 
         // `after` raises the low end → explicit.
         let mut request = ProtoQueryOptions::default();
-        request.after = Some(encode_cursor(item_cursor(2, 20, QueryType::Transactions)));
+        request.after = Some(CursorToken::item(QueryType::Transactions, 2, 20).encode());
         let options = query_options_from_proto(Some(&request)).unwrap();
         assert!(options.has_after_cursor());
     }
@@ -538,7 +455,7 @@ mod tests {
 
     #[test]
     fn rejects_cursor_for_different_query_type() {
-        let token = encode_cursor(item_cursor(1, 9, QueryType::Checkpoints));
+        let token = CursorToken::item(QueryType::Checkpoints, 1, 9).encode();
         let mut request = ProtoQueryOptions::default();
         request.after = Some(token);
         assert!(query_options_from_proto(Some(&request)).is_err());
@@ -550,8 +467,8 @@ mod tests {
         // accepted by a Transactions query even though `query_options_from_proto`
         // applies no filter. Position is an absolute, filter-independent
         // coordinate, so resuming under a different filter is correct.
-        let after = encode_cursor(item_cursor(1, 9, QueryType::Transactions));
-        let before = encode_cursor(item_cursor(3, 30, QueryType::Transactions));
+        let after = CursorToken::item(QueryType::Transactions, 1, 9).encode();
+        let before = CursorToken::item(QueryType::Transactions, 3, 30).encode();
         let mut request = ProtoQueryOptions::default();
         request.after = Some(after);
         request.before = Some(before);
@@ -560,7 +477,7 @@ mod tests {
 
     #[test]
     fn accepts_cursors_for_different_checkpoint_range_and_ordering() {
-        let token = encode_cursor(item_cursor(9, 9, QueryType::Transactions));
+        let token = CursorToken::item(QueryType::Transactions, 9, 9).encode();
         let mut request = ProtoQueryOptions::default();
         request.after = Some(token);
         request.ordering = ProtoOrdering::Descending as i32;
@@ -577,7 +494,7 @@ mod tests {
             query_type: QueryType::Transactions,
             limit_items: 2,
             ordering: Ordering::Ascending,
-            after: Some(item_cursor(1, 11, QueryType::Transactions)),
+            after: Some(CursorToken::item(QueryType::Transactions, 1, 11)),
             before: None,
         };
         assert_eq!(
@@ -586,7 +503,7 @@ mod tests {
         );
 
         let options = QueryOptions {
-            after: Some(item_cursor(1, u64::MAX, QueryType::Transactions)),
+            after: Some(CursorToken::item(QueryType::Transactions, 1, u64::MAX)),
             ..options
         };
         assert_eq!(
@@ -596,8 +513,8 @@ mod tests {
 
         let options = QueryOptions {
             ordering: Ordering::Descending,
-            after: Some(item_cursor(1, 11, QueryType::Transactions)),
-            before: Some(item_cursor(1, 19, QueryType::Transactions)),
+            after: Some(CursorToken::item(QueryType::Transactions, 1, 11)),
+            before: Some(CursorToken::item(QueryType::Transactions, 1, 19)),
             ..options
         };
         let bounded = options.apply_cursor_bounds(resolved_range(10..20));
@@ -606,7 +523,7 @@ mod tests {
         assert_eq!(bounded.end_position, 12);
 
         let options = QueryOptions {
-            before: Some(item_cursor(1, 12, QueryType::Transactions)),
+            before: Some(CursorToken::item(QueryType::Transactions, 1, 12)),
             ..options
         };
         assert_eq!(
@@ -621,7 +538,7 @@ mod tests {
             query_type: QueryType::Transactions,
             limit_items: 2,
             ordering: Ordering::Ascending,
-            after: Some(boundary_cursor(2, 20, QueryType::Transactions)),
+            after: Some(CursorToken::boundary(QueryType::Transactions, 2, 20)),
             before: None,
         };
         assert_eq!(
@@ -632,7 +549,7 @@ mod tests {
         let options = QueryOptions {
             ordering: Ordering::Descending,
             after: None,
-            before: Some(boundary_cursor(2, 20, QueryType::Transactions)),
+            before: Some(CursorToken::boundary(QueryType::Transactions, 2, 20)),
             ..options
         };
         assert_eq!(
