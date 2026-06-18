@@ -875,25 +875,50 @@ impl TestCluster {
     }
 
     pub async fn wait_for_tx_settlement(&self, digests: &[TransactionDigest]) {
-        self.fullnode_handle
-            .sui_node
-            .with_async(|node| async move {
+        Self::wait_for_tx_settlement_on_handles(
+            std::slice::from_ref(&self.fullnode_handle.sui_node),
+            digests,
+        )
+        .await;
+    }
+
+    /// Like `wait_for_tx_settlement`, but waits on every node (all validators and fullnodes)
+    /// instead of only the rpc fullnode. Nodes can execute the same checkpoint at different
+    /// times, so the rpc fullnode having settled a transaction does not imply every validator
+    /// has. Use this when a subsequent step may interact with an arbitrary validator (e.g. a
+    /// soft bundle is submitted to a randomly chosen validator) and that validator must have
+    /// already applied the settlement of `digests`.
+    pub async fn wait_for_tx_settlement_all_nodes(&self, digests: &[TransactionDigest]) {
+        let handles = self.all_node_handles();
+        Self::wait_for_tx_settlement_on_handles(&handles, digests).await;
+    }
+
+    /// Waits, concurrently across `handles`, until every transaction in `digests` has settled
+    /// on that node: the transaction's checkpoint is present in the node's store and that
+    /// checkpoint has been executed (which is when the transaction's settlement is visible).
+    async fn wait_for_tx_settlement_on_handles(
+        handles: &[SuiNodeHandle],
+        digests: &[TransactionDigest],
+    ) {
+        let waits = handles.iter().map(|handle| {
+            handle.with_async(|node| async move {
                 let state = node.state();
-                // wait until the transactions are in checkpoints
+                // wait until the transactions are in checkpoints on this node
                 let checkpoint_seqs = state
                     .epoch_store_for_testing()
                     .transactions_executed_in_checkpoint_notify(digests.to_vec())
                     .await
                     .unwrap();
 
-                // then wait until the highest of the checkpoints is executed
+                // then wait until the highest of those checkpoints is executed on this node
                 let max_checkpoint_seq = checkpoint_seqs.into_iter().max().unwrap();
                 state
                     .checkpoint_store
                     .notify_read_executed_checkpoint(max_checkpoint_seq)
                     .await;
             })
-            .await;
+        });
+        join_all(waits).await;
     }
 
     /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.

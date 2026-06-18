@@ -33,7 +33,7 @@ const MAX_DST_LENGTH: u64 = 64;
 /// The `dst` is a domain separation tag that is bound into the proof transcript. Provers and
 /// verifiers must agree on the same `dst` for verification to succeed. It can be at most 64 bytes.
 ///
-/// Enabled only on devnet.
+/// Enabled only on devnet and testnet.
 public fun verify_bulletproofs_with_dst_ristretto255(
     proof: &vector<u8>,
     bits: u8,

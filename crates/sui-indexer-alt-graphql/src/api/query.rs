@@ -63,6 +63,7 @@ use crate::api::types::signature_verify::SignatureVerifyResult;
 use crate::api::types::simulation_result::SimulationResult;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::transaction_effects::TransactionEffects;
@@ -718,7 +719,7 @@ impl Query {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         Some(
             async {
                 let scope = self.scope(ctx)?;

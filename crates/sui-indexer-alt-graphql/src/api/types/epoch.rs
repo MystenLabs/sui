@@ -47,6 +47,7 @@ use crate::api::types::object::Object;
 use crate::api::types::protocol_configs::ProtocolConfigs;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::validator_set::ValidatorSet;
@@ -425,7 +426,7 @@ impl Epoch {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         async {
             let (Some(start), end) = try_join!(self.start(ctx), self.end(ctx))? else {
                 return Ok(None);
@@ -451,7 +452,7 @@ impl Epoch {
                 before_checkpoint: Some(UInt53::from(cp_hi)),
                 ..Default::default()
             }) else {
-                return Ok(Some(Connection::new(false, false)));
+                return Ok(Some(Connection::new(false, false).into()));
             };
 
             Ok(Some(

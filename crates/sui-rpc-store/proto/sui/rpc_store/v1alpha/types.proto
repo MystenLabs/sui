@@ -1,0 +1,225 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// Storage-side messages backing `sui-rpc-store` column families.
+//
+// These are *storage* representations, not the public gRPC API
+// shapes — those live in `sui-rpc-api` / the Rust SDK protos. The
+// split lets storage evolve independently of the wire protocol.
+//
+// The convention for values that carry canonical Sui types is a
+// single `bytes bcs` field plus optional storage-side metadata.
+// Wrapping in protobuf (rather than storing raw BCS) buys us
+// forward-compatible field evolution: new aux fields can be added
+// without rewriting existing rows.
+
+syntax = "proto3";
+
+package sui.rpc_store.v1alpha;
+
+// === Raw chain data ============================================
+
+// A row in the `objects` column family, keyed by
+// `(ObjectID, version)`.
+//
+// Either a live version of an on-chain object (the BCS-encoded
+// `Object`) or a tombstone written at the lamport version of the
+// transaction that removed it from the live set. Tombstones let
+// version-bounded reads distinguish "object did not exist at this
+// version" (no row) from "object was deleted or wrapped at this
+// version" (tombstone row).
+message StoredObject {
+  oneof kind {
+    // BCS-encoded `sui_types::object::Object`.
+    bytes bcs = 1;
+    // The object was deleted or wrapped at this version.
+    StoredObjectTombstone tombstone = 2;
+  }
+}
+
+// Marker carried by a tombstone row in the `objects` CF.
+message StoredObjectTombstone {
+  // How the object was removed from the live set.
+  StoredObjectTombstoneKind kind = 1;
+}
+
+// Why a tombstone was written.
+//
+// `DELETED` covers both an explicit object deletion and the
+// `unwrapped_then_deleted` shape (object unwrapped and discarded
+// within a single transaction). `WRAPPED` marks the object as
+// nested inside another and removed from the live set — a future
+// unwrap can revive the id at a higher version.
+enum StoredObjectTombstoneKind {
+  STORED_OBJECT_TOMBSTONE_KIND_UNSPECIFIED = 0;
+  STORED_OBJECT_TOMBSTONE_KIND_DELETED = 1;
+  STORED_OBJECT_TOMBSTONE_KIND_WRAPPED = 2;
+}
+
+// A signed transaction, keyed by its assigned `tx_seq`.
+//
+// Stored as two BCS payloads rather than the wrapped envelope so
+// callers can read or rewrite either side without touching the
+// other. The two together are equivalent to a
+// `sui_types::transaction::Transaction` envelope.
+message StoredTransaction {
+  // BCS-encoded `sui_types::transaction::TransactionData`.
+  bytes transaction_bcs = 1;
+  // BCS-encoded `Vec<sui_types::signature::GenericSignature>` —
+  // the user signatures over `transaction_bcs`.
+  bytes signatures_bcs = 2;
+}
+
+// The effects of a transaction.
+//
+// Value type for the `effects` column family, keyed by `tx_seq`.
+message StoredEffects {
+  // BCS-encoded `sui_types::effects::TransactionEffects`.
+  bytes bcs = 1;
+
+  // BCS-encoded `Vec<sui_types::storage::ObjectKey>` listing
+  // objects loaded during execution but not modified by the tx.
+  // Folded into this message so callers fetching effects also get
+  // the loaded-runtime set in a single point lookup.
+  bytes unchanged_loaded_bcs = 2;
+}
+
+// The events emitted by a transaction.
+//
+// Value type for the `events` column family, keyed by `tx_seq`.
+message StoredEvents {
+  // BCS-encoded `sui_types::effects::TransactionEvents`.
+  bytes bcs = 1;
+}
+
+// A signed checkpoint header.
+//
+// Value type for the `checkpoint_summary` column family, keyed by
+// checkpoint sequence number (`u64`). Contents (the list of tx
+// digests) live in a separate `checkpoint_contents` CF; pulling
+// the lightweight summary doesn't pay the contents I/O.
+message StoredCheckpointSummary {
+  // BCS-encoded `sui_types::messages_checkpoint::CheckpointSummary`.
+  bytes summary_bcs = 1;
+  // BCS-encoded
+  // `sui_types::crypto::AuthorityStrongQuorumSignInfo`.
+  bytes signature_bcs = 2;
+}
+
+// The contents of a checkpoint — the ordered list of executed
+// transaction digests.
+//
+// Value type for the `checkpoint_contents` column family, keyed by
+// checkpoint sequence number.
+message StoredCheckpointContents {
+  // BCS-encoded
+  // `sui_types::messages_checkpoint::CheckpointContents`.
+  bytes bcs = 1;
+}
+
+// === Tx-seq layer ==============================================
+
+// Per-transaction metadata, keyed by the assigned `tx_seq`.
+//
+// This is the canonical "what is at this tx_seq" record. It
+// resolves the `tx_seq → digest` direction of the bijection; the
+// inverse lives in `tx_seq_by_digest`.
+message TxMetadata {
+  // 32-byte `TransactionDigest`.
+  bytes digest = 1;
+  // Checkpoint that contains this transaction.
+  uint64 checkpoint_seq = 2;
+  // 0-based position of this transaction within its checkpoint's
+  // contents. Pairs with `checkpoint_seq` for stable global
+  // ordering and pagination cursors.
+  uint32 ckpt_position = 3;
+  // Number of events emitted by this transaction.
+  uint32 event_count = 4;
+  // Wall-clock timestamp of the containing checkpoint, in
+  // milliseconds since the Unix epoch.
+  uint64 timestamp_ms = 5;
+}
+
+// A roaring bitmap blob, stored under one bucket of an inverted
+// index. Value type for `transaction_bitmap` and `event_bitmap`.
+//
+// The wire is the raw `RoaringBitmap` serialization; the wrapper
+// exists so future per-bucket aux fields (e.g. cardinality hints)
+// can be added without a CF-level rewrite.
+message BitmapBlob {
+  bytes data = 1;
+}
+
+// === Indexes ===================================================
+
+// `(owner, coin_type)` → coin + accumulator balance deltas.
+//
+// Each field is a 16-byte little-endian `i128`. The merge operator
+// adds fields component-wise; the compaction filter drops rows
+// where both components are zero. Readers compute the displayed
+// total as `coin + address`.
+//
+// Two sources contribute independently:
+//   - `coin`: aggregated from `Coin<T>` objects owned by `owner`.
+//   - `address`: aggregated from the address-scoped accumulator
+//     bucket for `(owner, type)`.
+//
+// Each indexer writes only its own field (the other left at the
+// default zero), so the merge operator never has to reconcile
+// concurrent writes to the same component.
+message BalanceDelta {
+  bytes coin = 1;
+  bytes address = 2;
+}
+
+// The storage id of one version of a Move package, stored in
+// `package_versions` keyed by `(original_package_id, version)`.
+message PackageVersionInfo {
+  // 32-byte `ObjectID` under which this version of the package
+  // is stored.
+  bytes storage_id = 1;
+}
+
+// Per-epoch metadata stored in `epochs` keyed by `EpochId`.
+//
+// Written as a sequence of partial records that the merge
+// operator combines field-wise:
+//
+// - "Epoch start" sets `protocol_version`,
+//   `reference_gas_price`, `start_timestamp_ms`,
+//   `start_checkpoint`, and `system_state_bcs`.
+// - "Epoch end" sets `end_timestamp_ms` and `end_checkpoint`.
+//
+// The two sides are produced by independent index pipelines and
+// never overlap in steady state, so the merge operator simply
+// takes whichever side has each field set; if the same field is
+// ever rewritten (e.g. during re-index), the latest operand
+// wins.
+//
+// All fields use proto3's `optional` modifier so a zero value
+// (or empty `bytes`) is distinguishable from "not yet observed".
+message StoredEpoch {
+  optional uint64 protocol_version = 1;
+  optional uint64 reference_gas_price = 2;
+  optional uint64 start_timestamp_ms = 3;
+  optional uint64 end_timestamp_ms = 4;
+  optional uint64 start_checkpoint = 5;
+  optional uint64 end_checkpoint = 6;
+  // BCS-encoded `sui_types::sui_system_state::SuiSystemState`
+  // captured at epoch start.
+  optional bytes system_state_bcs = 7;
+}
+
+// === Pruning watermarks ========================================
+
+// The lowest still-available data per axis. Drives compaction
+// filters on the bitmap CFs and feeds `available_range` queries.
+// Stored under a singleton key in the `pruning_watermark` CF.
+message PruningWatermarks {
+  // Lowest `tx_seq` whose `tx_metadata_by_seq`, `transactions`,
+  // `effects`, `events`, and bitmap rows are still present.
+  uint64 tx_seq_lo = 1;
+  // Lowest checkpoint sequence number whose `checkpoint_summary`
+  // / `checkpoint_contents` rows are still present.
+  uint64 checkpoint_lo = 2;
+}
