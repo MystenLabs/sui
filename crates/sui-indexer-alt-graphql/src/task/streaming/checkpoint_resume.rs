@@ -3,9 +3,9 @@
 
 //! Per-subscriber catch-up scan for resumable subscriptions.
 //!
-//! [`scan_checkpoints`] yields past `ProcessedCheckpoint`s via LedgerService until the
-//! remaining gap to the live tip is small enough for the broadcast channel to bridge, then
-//! exits. The caller bridges the remaining gap by consuming the live broadcast.
+//! [`scan_checkpoints`] yields past `ProcessedCheckpoint`s via LedgerService until it
+//! catches up to the live tip, then exits. The caller resubscribes to the broadcast and
+//! consumes live items from there.
 //!
 //! ```text
 //!   start_after                                       tip - threshold      network_tip
@@ -37,28 +37,25 @@ use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
 
 /// Yield `ProcessedCheckpoint`s from `start_after + 1` onward by reading LedgerService
-/// concurrently. Exits once the remaining gap to the network tip is small enough for the
-/// broadcast channel to bridge; the caller then takes over by consuming the live broadcast
-/// (the bridge between scan end and the first live item is covered by the caller subscribing
-/// before this scan starts).
-pub(super) fn scan_checkpoints<F: CheckpointFetcher + 'static>(
-    fetcher: Arc<F>,
+/// concurrently. Exits once the scan position catches up to the live tip; the caller then
+/// hands off to the live broadcast (the receiver is subscribed by the caller partway through
+/// this scan, so it accumulates live items in parallel with the remaining drain).
+pub(super) fn scan_checkpoints<F: CheckpointFetcher + Clone + Send + 'static>(
+    fetcher: F,
     broadcast: Arc<SubscriptionBroadcast>,
     start_after: u64,
     config: &SubscriptionConfig,
 ) -> impl Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>> + 'static {
-    let transition_threshold = config.resume_transition_threshold();
     let concurrency = config.per_subscriber_scan_max_concurrent_fetches;
     let throttle_interval = Duration::from_secs(1) / config.per_subscriber_scan_max_qps.max(1);
 
-    // Stream of sequence numbers to scan. Stops once the gap to the live tip drops below
-    // `transition_threshold`, handing off to the live broadcast that the caller is already
-    // consuming.
+    // Stream of sequence numbers to scan. Stops once `last` has caught up to the live tip;
+    // the caller then continues from the receiver it subscribed mid-scan.
     let seq_stream = stream::unfold(
         (start_after, broadcast),
         move |(last, broadcast)| async move {
             let tip = broadcast.network_tip();
-            if tip.saturating_sub(last) <= transition_threshold {
+            if last >= tip {
                 None
             } else {
                 let next = last + 1;
@@ -77,7 +74,7 @@ pub(super) fn scan_checkpoints<F: CheckpointFetcher + 'static>(
                 let fetcher = fetcher.clone();
                 let mask = mask.clone();
                 async move {
-                    let proto = fetch_one_with_retry(fetcher.as_ref(), &mask, seq).await?;
+                    let proto = fetch_one_with_retry(&fetcher, &mask, seq).await?;
                     let processed = process_checkpoint(proto)?;
                     Ok::<_, RpcError>(Arc::new(processed))
                 }

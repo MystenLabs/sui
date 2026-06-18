@@ -269,16 +269,6 @@ pub struct SubscriptionConfig {
     pub per_subscriber_scan_max_concurrent_fetches: usize,
 }
 
-impl SubscriptionConfig {
-    /// At what gap from the live tip the catch-up scan stops and hands off to the live
-    /// broadcast. Derived from `broadcast_buffer` so the receiver always holds enough
-    /// buffered items to bridge the transition: half the buffer leaves the other half as
-    /// slack against handoff latency.
-    pub(crate) fn resume_transition_threshold(&self) -> u64 {
-        (self.broadcast_buffer / 2) as u64
-    }
-}
-
 impl Default for SubscriptionConfig {
     fn default() -> Self {
         Self {
