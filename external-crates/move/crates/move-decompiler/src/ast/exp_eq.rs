@@ -10,12 +10,12 @@
 // bodies of an abs_diff-style fold). Conservative: for foreign-typed fields that don't implement
 // `PartialEq` (`DataOp` from `move-stackless-bytecode-2`, `Constant<Symbol>` from
 // `move-binary-format`, `TypeRef`/`ModuleRef`/`Value`/`UnstructuredNode`) we fall back to
-// comparing their `Debug` representation — deterministic for the shapes any current caller
+// comparing their `Debug` representation - deterministic for the shapes any current caller
 // sees. Everything else recurses structurally so renaming or reordering of fields can't
 // pretend two arms are equal when they aren't.
 //
 // NB: this is purely *structural* equivalence on the lowered `Exp` shape. It does NOT prove
-// semantic equivalence — two arms with the same Exp shape ARE observationally equivalent
+// semantic equivalence - two arms with the same Exp shape ARE observationally equivalent
 // (modulo the foreign-typed Debug fallback's correctness), but two arms with different shapes
 // COULD still be observationally equivalent (e.g., `x + 0` vs `x`). A semantic-prover-grade
 // guard would need alias analysis or symbolic execution; out of scope.
@@ -83,7 +83,7 @@ pub(crate) fn exp_struct_eq(a: &Exp, b: &Exp) -> bool {
         (Primitive { op: oa, args: aa }, Primitive { op: ob, args: ab }) => {
             oa == ob && seq_eq(aa, ab)
         }
-        // `DataOp` is a foreign enum with non-PartialEq fields — fall back to Debug string.
+        // `DataOp` is a foreign enum with non-PartialEq fields - fall back to Debug string.
         (Data { op: oa, args: aa }, Data { op: ob, args: ab }) => dbg(oa, ob) && seq_eq(aa, ab),
         (Unpack(ta, fa, ea), Unpack(tb, fb, eb)) => {
             dbg(ta, tb) && fa == fb && exp_struct_eq(ea, eb)
@@ -93,11 +93,11 @@ pub(crate) fn exp_struct_eq(a: &Exp, b: &Exp) -> bool {
         }
         (VecUnpack(na, ea), VecUnpack(nb, eb)) => na == nb && exp_struct_eq(ea, eb),
         (Borrow(ma, ea), Borrow(mb, eb)) => ma == mb && exp_struct_eq(ea, eb),
-        // `Value` (MoveValue) and `Constant<Symbol>` are foreign — Debug-string fallback.
+        // `Value` (MoveValue) and `Constant<Symbol>` are foreign - Debug-string fallback.
         (Value(a), Value(b)) => dbg(a, b),
         (Constant(a), Constant(b)) => dbg(a, b),
         (Variable(a), Variable(b)) => a == b,
-        // `UnstructuredNode` is local but contains `Box<Exp>` — recurse via Debug for now;
+        // `UnstructuredNode` is local but contains `Box<Exp>` - recurse via Debug for now;
         // this branch is rare (only set by `generate_output` for unhandled CFG shapes) and
         // the arm-comparison context doesn't hit it.
         (Unstructured(a), Unstructured(b)) => dbg(a, b),

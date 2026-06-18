@@ -16,12 +16,12 @@
 //!   2. **Flat.** No `And` inside `And`, no `Or` inside `Or`.
 //!   3. **Sorted.** Children of `And` / `Or` are in canonical order.
 //!   4. **Deduped.** No repeated children.
-//!   5. **Identities / short-circuits.** `True ∧ x = x`, `False ∧ x = False`,
+//!   5. **Identities / short-circuits.** `True && x = x`, `False && x = False`,
 //!      symmetric for `Or`.
-//!   6. **Complementation.** `A ∧ ¬A → False`, `A ∨ ¬A → True`.
-//!   7. **Absorption.** `A ∨ (A ∧ X) → A`, `A ∧ (A ∨ X) → A`.
+//!   6. **Complementation.** `A && !A -> False`, `A || !A -> True`.
+//!   7. **Absorption.** `A || (A && X) -> A`, `A && (A || X) -> A`.
 //!
-//! Distribution (`(A∧X) ∨ (A∧Y) → A∧(X∨Y)`) is intentionally NOT applied —
+//! Distribution (`(A&&X) || (A&&Y) -> A&&(X||Y)`) is intentionally NOT applied -
 //! it can blow up depth and the formulas this layer produces today don't
 //! need it.
 //!
@@ -46,7 +46,7 @@ pub struct Formula(FormulaTree);
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum FormulaTree {
-    // Discriminant order is load-bearing — it's the canonical sort order for the
+    // Discriminant order is load-bearing - it's the canonical sort order for the
     // normalizing constructors. `False` < `True` < `Atom` < `Not` < `And` < `Or` so
     // constant short-circuits collapse first, then literals, then compounds.
     False,
@@ -91,7 +91,7 @@ pub fn cond_atom(code: u64) -> Formula {
 }
 
 // -------------------------------------------------------------------------------------------------
-// Smart constructors (normalizing — see module-level comment for the invariants)
+// Smart constructors (normalizing - see module-level comment for the invariants)
 // -------------------------------------------------------------------------------------------------
 
 pub fn atom(name: Symbol) -> Formula {
@@ -178,7 +178,7 @@ fn has_complementary_pair(xs: &[Formula]) -> bool {
 }
 
 /// Inside an outer `Or`: drop any `And`-child whose conjuncts include any other outer
-/// disjunct. `A ∨ (A ∧ X) → A`.
+/// disjunct. `A || (A && X) -> A`.
 fn absorb_and_children(xs: &mut Vec<Formula>) {
     let drop: Vec<bool> = xs
         .iter()
@@ -199,7 +199,7 @@ fn absorb_and_children(xs: &mut Vec<Formula>) {
 }
 
 /// Inside an outer `And`: drop any `Or`-child whose disjuncts include any other outer
-/// conjunct. `A ∧ (A ∨ X) → A`.
+/// conjunct. `A && (A || X) -> A`.
 fn absorb_or_children(xs: &mut Vec<Formula>) {
     let drop: Vec<bool> = xs
         .iter()
@@ -265,7 +265,7 @@ impl Formula {
     }
 
     /// Lower to an `Exp`. Atoms become `Variable(name)`; the surrounding `let __c{n}`
-    /// bindings live in the structured form's setup (emitted by the caller — typically
+    /// bindings live in the structured form's setup (emitted by the caller - typically
     /// the `CondIf` handler in `translate.rs`, which hoists each contributing condition
     /// block's term as setup), so this method has no environment to thread.
     pub fn to_exp(&self) -> Exp {
@@ -416,7 +416,7 @@ mod tests {
         let p = a("p");
         let q = a("q");
         let r = a("r");
-        // !(p ∧ (q ∨ r)) = !p ∨ (!q ∧ !r)
+        // !(p && (q || r)) = !p || (!q && !r)
         let lhs = not(and(vec![p.clone(), or(vec![q.clone(), r.clone()])]));
         let rhs = or(vec![not(p), and(vec![not(q), not(r)])]);
         assert_eq!(lhs, rhs);
