@@ -59,7 +59,7 @@ struct TestHarness {
     sender_key: AccountKeyPair,
     gas_object: Object,
     reference_gas_price: u64,
-    checkpoint_receiver: tokio::sync::mpsc::Receiver<Checkpoint>,
+    checkpoint_receiver: tokio::sync::broadcast::Receiver<Arc<Checkpoint>>,
     temp: tempfile::TempDir,
 }
 
@@ -105,7 +105,7 @@ impl TestHarness {
 
         let gas_object = Self::find_gas_coin(&config, sender);
 
-        let (checkpoint_sender, checkpoint_receiver) = tokio::sync::mpsc::channel(4);
+        let (checkpoint_sender, checkpoint_receiver) = tokio::sync::broadcast::channel(4);
         let context = Arc::new(Context::new(sim, Chain::Unknown, checkpoint_sender));
         let executor = ForkedTransactionExecutor::new(context);
 
