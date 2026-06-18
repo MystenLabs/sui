@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_inverted_index::ANY_PACKAGE_VALUE;
 use sui_inverted_index::BitmapLiteral;
 use sui_inverted_index::BitmapQuery;
 use sui_inverted_index::BitmapTerm;
@@ -21,6 +22,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::EventStreamHeadFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::EventTerm;
 use sui_rpc::proto::sui::rpc::v2alpha::EventTypeFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::MoveCallFilter;
+use sui_rpc::proto::sui::rpc::v2alpha::PackageWriteFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionLiteral;
@@ -294,6 +296,9 @@ fn convert_transaction_predicate(
         transaction_predicate::Predicate::EventStreamHead(f) => {
             convert_event_stream_head(f, &format!("{field_prefix}.event_stream_head.stream_id"))
         }
+        transaction_predicate::Predicate::PackageWrite(f) => {
+            convert_package_write(f, &format!("{field_prefix}.package_write"))
+        }
         _ => Err(FieldViolation::new(field_prefix)
             .with_description("unknown predicate variant")
             .with_reason(ErrorReason::FieldInvalid)
@@ -481,6 +486,16 @@ fn convert_event_stream_head(f: &EventStreamHeadFilter, field: &str) -> Result<V
     ))
 }
 
+/// Match any package-writing transaction. `AnyPackageWrite` is a value-less
+/// global marker — every publish or upgrade maps to the same key — so there is
+/// nothing to read off the filter; it resolves to the single dimension key.
+fn convert_package_write(_f: &PackageWriteFilter, _field: &str) -> Result<Vec<u8>, RpcError> {
+    Ok(encode_dimension_key(
+        IndexDimension::AnyPackageWrite,
+        ANY_PACKAGE_VALUE,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -573,6 +588,25 @@ mod tests {
         assert_eq!(
             key,
             encode_dimension_key(IndexDimension::EventStreamHead, &bytes)
+        );
+    }
+
+    #[test]
+    fn package_write_filter_encodes_dimension_key() {
+        let mut predicate = TransactionPredicate::default();
+        predicate.predicate = Some(transaction_predicate::Predicate::PackageWrite(
+            PackageWriteFilter::default(),
+        ));
+
+        let key = convert_transaction_predicate(
+            &predicate,
+            "filter.terms.literals.include.package_write",
+        )
+        .expect("package write predicate converts");
+
+        assert_eq!(
+            key,
+            encode_dimension_key(IndexDimension::AnyPackageWrite, ANY_PACKAGE_VALUE)
         );
     }
 

@@ -28,6 +28,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::MoveCallFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
+use sui_rpc::proto::sui::rpc::v2alpha::PackageWriteFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions;
 use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
@@ -747,6 +748,12 @@ fn tx_event_stream_head_literal(stream_id: ObjectID) -> TransactionLiteral {
     tx_include(transaction_predicate::Predicate::EventStreamHead(esh))
 }
 
+fn tx_package_write_literal() -> TransactionLiteral {
+    tx_include(transaction_predicate::Predicate::PackageWrite(
+        PackageWriteFilter::default(),
+    ))
+}
+
 fn tx_sender(addr: SuiAddress) -> TransactionFilter {
     tx_filter(vec![tx_sender_literal(addr)])
 }
@@ -765,6 +772,10 @@ fn tx_event_type(path: &str) -> TransactionFilter {
 
 fn tx_event_stream_head(stream_id: ObjectID) -> TransactionFilter {
     tx_filter(vec![tx_event_stream_head_literal(stream_id)])
+}
+
+fn tx_package_write() -> TransactionFilter {
+    tx_filter(vec![tx_package_write_literal()])
 }
 
 fn tx_and(filters: Vec<TransactionFilter>) -> TransactionFilter {
@@ -1070,6 +1081,84 @@ async fn test_list_transactions_with_sender_filter() {
     assert!(
         !resp.transactions.is_empty(),
         "expected at least 1 transaction from sender"
+    );
+}
+
+#[tokio::test]
+async fn test_list_package_write_filter() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+
+    // Publish a Move package (a package write); capture its digest directly off
+    // the effects since the `publish_package` helper discards it.
+    let (publish_fx, publish_err) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(
+            TestTransactionBuilder::new(sender, gas, cluster.reference_gas_price())
+                .with_gas_budget(DEFAULT_GAS_BUDGET)
+                .publish(emit_test_event_pkg_path())
+                .build(),
+            vec![&kp],
+        ))
+        .expect("publish failed");
+    assert!(publish_err.is_none(), "publish failed: {publish_err:?}");
+    let publish_digest = publish_fx.transaction_digest().to_string();
+    let new_gas = publish_fx
+        .mutated()
+        .into_iter()
+        .find(|((id, _, _), _)| *id == gas.0)
+        .map(|((id, version, digest), _)| (id, version, digest))
+        .expect("gas mutated");
+
+    // A self-transfer writes no package; it shares the checkpoint below so the
+    // filter has a non-package-write sibling to exclude.
+    let (_transfer_digest, _) = transfer_self(&mut cluster, sender, &kp, new_gas).await;
+
+    // Seal both txns into one checkpoint and scope the query to it. This excludes
+    // genesis (which publishes the framework packages and so also matches a
+    // package-write filter), leaving our publish as the only package write in
+    // range — letting us assert an exact count.
+    let checkpoint = cluster.create_checkpoint().await;
+    let cp = checkpoint.sequence_number;
+
+    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(cp);
+    req.end_checkpoint = Some(cp + 1);
+    req.filter = Some(tx_package_write());
+    req.options = Some(query_options(100));
+    let resp = list_transactions_result(&mut client, req).await;
+    assert_transaction_cursors(&resp);
+
+    let digests: Vec<String> = resp
+        .transactions
+        .iter()
+        .filter_map(|t| t.transaction.as_ref().and_then(|tx| tx.digest.clone()))
+        .collect();
+    assert_eq!(
+        digests,
+        vec![publish_digest],
+        "package_write filter should return exactly the publish tx in this checkpoint, got {digests:?}"
+    );
+
+    // Checkpoint-level: scoped to the same range, only the publish's checkpoint
+    // matches the package-write filter.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(cp);
+    req.end_checkpoint = Some(cp + 1);
+    req.filter = Some(tx_package_write());
+    req.options = Some(query_options(100));
+    let resp = list_checkpoints_result(&mut client, req).await;
+    assert_checkpoint_cursors(&resp);
+    let seqs: Vec<u64> = resp.checkpoints.iter().map(checkpoint_sequence).collect();
+    assert_eq!(
+        seqs,
+        vec![cp],
+        "package_write filter should return exactly the publish checkpoint, got {seqs:?}"
     );
 }
 
