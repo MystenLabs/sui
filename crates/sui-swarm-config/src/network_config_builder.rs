@@ -740,7 +740,8 @@ mod test {
                 signer,
                 genesis_digest,
                 &mut None,
-            );
+            )
+            .expect("genesis execution does not produce retry errors");
 
         assert_eq!(&effects, genesis.effects());
     }

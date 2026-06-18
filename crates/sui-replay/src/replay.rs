@@ -809,7 +809,8 @@ impl LocalExec {
                 tx_info.sender,
                 *tx_digest,
                 &mut None,
-            );
+            )
+            .expect("replay execution does not produce retry errors");
 
         if let Err(err) = self.pretty_print_for_tracing(
             &gas_status,
@@ -1005,7 +1006,8 @@ impl LocalExec {
                 signer,
                 *executable.digest(),
                 &mut None,
-            );
+            )
+            .expect("replay execution does not produce retry errors");
 
         let effects =
             SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;

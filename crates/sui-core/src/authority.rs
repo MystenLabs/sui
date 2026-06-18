@@ -69,6 +69,7 @@ use std::{
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_execution::Executor;
+use sui_execution::executor::TransactionEffectsOutput;
 use sui_protocol_config::Chain;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
@@ -1877,13 +1878,7 @@ impl AuthorityState {
         rewritten_inputs: Option<Vec<bool>>,
         signer: SuiAddress,
         tx_digest: TransactionDigest,
-    ) -> (
-        InnerTemporaryStore,
-        SuiGasStatus,
-        TransactionEffects,
-        Vec<ExecutionTiming>,
-        Result<(), ExecutionError>,
-    ) {
+    ) -> TransactionEffectsOutput<ExecutionError> {
         let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
             // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
             .execute_transaction_to_effects_and_execution_error(
@@ -1902,7 +1897,9 @@ impl AuthorityState {
                 signer,
                 tx_digest,
                 &mut None,
-            );
+            )
+            // TODO: handle the retry request here. No native produces one yet, so assume it never trips.
+            .expect("transaction retry is not yet handled");
 
         (
             inner_temp_store,

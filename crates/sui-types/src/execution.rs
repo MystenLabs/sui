@@ -384,6 +384,31 @@ impl ExecutionTiming {
 
 pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
 
+/// Signals that transaction execution should be retried later rather than committed. Unlike
+/// `ExecutionError` it produces no effects; an enum so more retry reasons can be added.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExecutionRetryError {
+    /// A system object the transaction needs to read was not yet available at the version this
+    /// transaction requires (its latest committed version had not caught up). The transaction
+    /// should be retried once that object reaches the required version.
+    SystemObjectUnavailable { object_id: ObjectID },
+}
+
+impl std::fmt::Display for ExecutionRetryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExecutionRetryError::SystemObjectUnavailable { object_id } => {
+                write!(
+                    f,
+                    "system object {object_id} not yet available; retry requested"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for ExecutionRetryError {}
+
 /// Captures the output of executing a transaction in the execution driver.
 #[derive(Debug)]
 pub enum ExecutionOutput<T> {

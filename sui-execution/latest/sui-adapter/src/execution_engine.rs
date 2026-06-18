@@ -63,13 +63,13 @@ mod checked {
     };
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorTrait};
-    use sui_types::execution::{ExecutionTiming, ResultWithTimings};
+    use sui_types::execution::{ExecutionRetryError, ExecutionTiming, ResultWithTimings};
     use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::id::UID;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
-    use sui_types::storage::BackingStore;
+    use sui_types::storage::{BackingStore, Storage};
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result_for;
     use sui_types::sui_system_state::{ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME, AdvanceEpochParams};
@@ -281,13 +281,16 @@ mod checked {
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> (
-        InnerTemporaryStore,
-        SuiGasStatus,
-        TransactionEffects,
-        Vec<ExecutionTiming>,
-        Result<Mode::ExecutionResults, Mode::Error>,
-    ) {
+    ) -> Result<
+        (
+            InnerTemporaryStore,
+            SuiGasStatus,
+            TransactionEffects,
+            Vec<ExecutionTiming>,
+            Result<Mode::ExecutionResults, Mode::Error>,
+        ),
+        ExecutionRetryError,
+    > {
         let input_objects = input_objects.into_inner();
         let mutable_inputs = if enable_expensive_checks {
             input_objects.all_mutable_inputs().keys().copied().collect()
@@ -339,13 +342,13 @@ mod checked {
                 *epoch_id,
             );
 
-            return (
+            return Ok((
                 inner,
                 gas_meter.into_gas_status(),
                 effects,
                 vec![],
                 Err(execution_error),
-            );
+            ));
         }
 
         let sponsor = {
@@ -414,6 +417,13 @@ mod checked {
             trace_builder_opt,
             is_gasless,
             &input_reservations,
+        )?;
+
+        // Defense in depth: `execute_transaction` returns early on a retry, so none can be
+        // outstanding here.
+        debug_assert!(
+            !temporary_store.has_retry_request(),
+            "retry request must be consumed before building effects"
         );
 
         let status = if let Err(error) = &execution_result {
@@ -521,13 +531,13 @@ mod checked {
             });
         }
 
-        (
+        Ok((
             inner,
             gas_charger.into_gas_status(),
             effects,
             timings,
             execution_result,
-        )
+        ))
     }
 
     pub fn execute_genesis_state_update(
@@ -566,6 +576,14 @@ mod checked {
         Ok(temporary_store.into_inner(BTreeMap::new()))
     }
 
+    /// The non-retry output of `execute_transaction`: the gas cost summary, the execution status,
+    /// and the per-command execution timings.
+    type GasAndExecutionResult<Mode> = (
+        GasCostSummary,
+        Result<<Mode as ExecutionMode>::ExecutionResults, <Mode as ExecutionMode>::Error>,
+        Vec<ExecutionTiming>,
+    );
+
     #[instrument(name = "tx_execute", level = "debug", skip_all)]
     fn execute_transaction<Mode: ExecutionMode>(
         store: &dyn BackingStore,
@@ -582,11 +600,7 @@ mod checked {
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
         is_gasless: bool,
         input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
-    ) -> (
-        GasCostSummary,
-        Result<Mode::ExecutionResults, Mode::Error>,
-        Vec<ExecutionTiming>,
-    ) {
+    ) -> Result<GasAndExecutionResult<Mode>, ExecutionRetryError> {
         // At this point no charges have been applied yet
         debug_assert!(
             gas_charger.no_charges(),
@@ -605,15 +619,13 @@ mod checked {
 
         // We must charge object read here during transaction execution, because if this fails
         // we must still ensure an effect is committed and all objects versions incremented
-        let result = gas_charger.charge_input_objects(temporary_store);
+        let charge_result = gas_charger.charge_input_objects(temporary_store);
 
-        let result: ResultWithTimings<Mode::ExecutionResults, Mode::Error> =
-            result.map_err(|e| (e.into(), vec![])).and_then(
-                |()| -> ResultWithTimings<Mode::ExecutionResults, Mode::Error> {
-                    let mut execution_result: ResultWithTimings<
-                        Mode::ExecutionResults,
-                        Mode::Error,
-                    > = match execution_params.into_early_errors() {
+        let result: ResultWithTimings<Mode::ExecutionResults, Mode::Error> = match charge_result {
+            Err(e) => Err((e.into(), vec![])),
+            Ok(()) => {
+                let mut execution_result: ResultWithTimings<Mode::ExecutionResults, Mode::Error> =
+                    match execution_params.into_early_errors() {
                         Some(early_execution_errors) => {
                             Err((Mode::Error::from_kind(early_execution_errors.head), vec![]))
                         }
@@ -631,31 +643,37 @@ mod checked {
                         ),
                     };
 
-                    let meter_check = check_meter_limit::<Mode>(
+                // If a native requested a retry, bail out here — before any gas, metering, or
+                // effects — so nothing is committed and the transaction is rescheduled.
+                if let Some(reason) = temporary_store.take_retry_request() {
+                    return Err(reason);
+                }
+
+                let meter_check = check_meter_limit::<Mode>(
+                    temporary_store,
+                    gas_charger,
+                    protocol_config,
+                    metrics.clone(),
+                );
+                if let Err(e) = meter_check {
+                    execution_result = Err((e, vec![]));
+                }
+
+                if execution_result.is_ok() {
+                    let gas_check = check_written_objects_limit::<Mode>(
                         temporary_store,
                         gas_charger,
                         protocol_config,
-                        metrics.clone(),
+                        metrics,
                     );
-                    if let Err(e) = meter_check {
+                    if let Err(e) = gas_check {
                         execution_result = Err((e, vec![]));
                     }
+                }
 
-                    if execution_result.is_ok() {
-                        let gas_check = check_written_objects_limit::<Mode>(
-                            temporary_store,
-                            gas_charger,
-                            protocol_config,
-                            metrics,
-                        );
-                        if let Err(e) = gas_check {
-                            execution_result = Err((e, vec![]));
-                        }
-                    }
-
-                    execution_result
-                },
-            );
+                execution_result
+            }
+        };
 
         let (mut result, timings) = match result {
             Ok((r, t)) => (Ok(r), t),
@@ -716,7 +734,7 @@ mod checked {
             result = Err(e);
         }
 
-        (cost_summary, result, timings)
+        Ok((cost_summary, result, timings))
     }
 
     #[instrument(name = "run_conservation_checks", level = "debug", skip_all)]

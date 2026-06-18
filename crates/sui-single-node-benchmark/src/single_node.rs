@@ -207,8 +207,10 @@ impl SingleValidator {
         )
         .unwrap();
         let (kind, signer, gas_data) = executable.transaction_data().execution_parts();
-        let (inner_temp_store, _, effects, _timings, _) =
-            self.epoch_store.executor().execute_transaction_to_effects(
+        let (inner_temp_store, _, effects, _timings, _) = self
+            .epoch_store
+            .executor()
+            .execute_transaction_to_effects(
                 &store,
                 self.epoch_store.protocol_config(),
                 self.get_validator().metrics.execution_metrics.clone(),
@@ -224,7 +226,8 @@ impl SingleValidator {
                 signer,
                 *executable.digest(),
                 &mut None,
-            );
+            )
+            .expect("benchmark execution does not produce retry errors");
         assert!(effects.status().is_ok());
         store.commit_objects(inner_temp_store);
         effects
