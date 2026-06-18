@@ -111,7 +111,7 @@ The number of commitments times <code>bits</code> can be at most 512.
 The <code>dst</code> is a domain separation tag that is bound into the proof transcript. Provers and
 verifiers must agree on the same <code>dst</code> for verification to succeed. It can be at most 64 bytes.
 
-Enabled only on devnet.
+Enabled only on devnet and testnet.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/rangeproofs.md#sui_rangeproofs_verify_bulletproofs_with_dst_ristretto255">verify_bulletproofs_with_dst_ristretto255</a>(proof: &vector&lt;u8&gt;, bits: u8, commitments: &vector&lt;<a href="../sui/group_ops.md#sui_group_ops_Element">sui::group_ops::Element</a>&lt;<a href="../sui/ristretto255.md#sui_ristretto255_G">sui::ristretto255::G</a>&gt;&gt;, dst: &vector&lt;u8&gt;, version: u8): bool
