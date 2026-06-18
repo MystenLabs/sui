@@ -400,7 +400,7 @@ pub mod checked {
 
                     let mut gas_object =
                         temporary_store.read_object(&gas_object_id).unwrap().clone();
-                    deduct_gas(&mut gas_object, net_change);
+                    deduct_gas(&mut gas_object, net_change, false);
                     #[skip_checked_arithmetic]
                     trace!(net_change, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
 

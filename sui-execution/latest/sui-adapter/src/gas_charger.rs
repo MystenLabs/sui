@@ -466,7 +466,11 @@ pub mod checked {
                 PaymentLocation::Coin(gas_object_id) => {
                     let mut gas_object =
                         temporary_store.read_object(&gas_object_id).unwrap().clone();
-                    deduct_gas(&mut gas_object, net_change);
+                    deduct_gas(
+                        &mut gas_object,
+                        net_change,
+                        protocol_config.u128_gas_and_accumulator_accumulation(),
+                    );
                     #[skip_checked_arithmetic]
                     trace!(net_change, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
                     temporary_store.mutate_new_or_input_object(gas_object);

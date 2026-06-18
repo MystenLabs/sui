@@ -272,12 +272,30 @@ pub mod checked {
     // Helper functions to deal with gas coins operations.
     //
 
-    pub fn deduct_gas(gas_object: &mut Object, charge_or_rebate: i64) {
+    /// Apply a gas charge (positive) or refund (negative) to a gas coin's balance.
+    ///
+    /// When `accumulate_in_u128` is set (protocol flag `u128_gas_and_accumulator_accumulation`),
+    /// the refund addition is performed in `u128` so it cannot overflow, then narrowed back to
+    /// `u64`. The slim pre-gas representability gate bounds the total SUI withdrawn (and hence the
+    /// largest balance a gas coin can be recombined to) below `u64::MAX`, so the narrow is
+    /// guaranteed to fit; a failure here is an invariant violation. When the flag is off, the
+    /// legacy `u64` addition is used.
+    pub fn deduct_gas(gas_object: &mut Object, charge_or_rebate: i64, accumulate_in_u128: bool) {
         // The object must be a gas coin as we have checked in transaction handle phase.
         let gas_coin = gas_object.data.try_as_move_mut().unwrap();
         let balance = gas_coin.get_coin_value_unsafe();
         let new_balance = if charge_or_rebate < 0 {
-            balance + (-charge_or_rebate as u64)
+            let refund = (-charge_or_rebate) as u64;
+            if accumulate_in_u128 {
+                u64::try_from(balance as u128 + refund as u128).unwrap_or_else(|_| {
+                    mysten_common::fatal!(
+                        "gas refund overflows gas coin balance (balance {balance}, refund \
+                         {refund}); representability gate should have rejected this transaction"
+                    )
+                })
+            } else {
+                balance + refund
+            }
         } else {
             assert!(balance >= charge_or_rebate as u64);
             balance - charge_or_rebate as u64
