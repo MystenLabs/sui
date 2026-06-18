@@ -14,7 +14,7 @@ use crate::base_types::{
 use crate::committee::EpochId;
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
 use crate::error::{ExecutionError, SuiError, SuiErrorKind};
-use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
+use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionRetryError};
 use crate::full_checkpoint_content::ObjectSet;
 use crate::message_envelope::Message;
 use crate::move_package::MovePackage;
@@ -244,6 +244,18 @@ pub trait Storage {
     ) -> DenyListResult;
 
     fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>);
+
+    /// The retry request recorded during execution, if any. Defaults to `None`. Only the latest
+    /// `TemporaryStore` records one; the v0..=v3 stores never request a retry, so the default lets
+    /// them satisfy this trait without touching those adapters.
+    fn take_retry_request(&mut self) -> Option<ExecutionRetryError> {
+        None
+    }
+
+    /// Non-consuming peek for the commit-path assertion. Defaults to `false`.
+    fn has_retry_request(&self) -> bool {
+        false
+    }
 }
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;

@@ -936,7 +936,8 @@ fn create_genesis_transaction(
                 signer,
                 genesis_digest,
                 &mut None,
-            );
+            )
+            .expect("genesis execution does not produce retry errors");
         assert!(inner_temp_store.input_objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());
         assert!(effects.mutated().is_empty());

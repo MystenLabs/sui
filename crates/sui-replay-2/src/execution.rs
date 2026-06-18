@@ -147,7 +147,8 @@ pub fn execute_transaction_to_effects(
             txn_data.sender(),
             digest,
             trace_builder_opt,
-        );
+        )
+        .expect("replay execution does not produce retry errors");
     let ReplayStore {
         object_cache,
         checkpoint: _,

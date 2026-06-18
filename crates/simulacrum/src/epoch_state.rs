@@ -169,7 +169,8 @@ impl EpochState {
                 signer,
                 tx_digest,
                 &mut None,
-            );
+            )
+            .expect("simulacrum execution does not produce retry errors");
         Ok((inner_temp_store, gas_status, effects, result))
     }
 }

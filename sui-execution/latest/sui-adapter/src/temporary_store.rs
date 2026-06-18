@@ -6,6 +6,7 @@ use crate::gas_charger::{GasCharger, PaymentLocation};
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
@@ -18,7 +19,8 @@ use sui_types::effects::{
     TransactionEvents,
 };
 use sui_types::execution::{
-    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
+    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, ExecutionRetryError,
+    SharedInput,
 };
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
@@ -96,6 +98,12 @@ pub struct TemporaryStore<'backing> {
     /// underlying events are also cleared. A `Vec` is sufficient because real transactions run
     /// the PTB at most a handful of times.
     ptb_emitted_accumulator_event_ranges: Vec<std::ops::Range<usize>>,
+
+    /// Recorded when execution determines the transaction must be retried later rather than
+    /// committed; checked before gas finalization. A `RefCell` rather than a lock: execution is
+    /// single-threaded, but the condition is detected behind `&self` (`ChildObjectResolver`) so the
+    /// field must be interior-mutable.
+    retry_request: RefCell<Option<ExecutionRetryError>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -150,6 +158,7 @@ impl<'backing> TemporaryStore<'backing> {
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             ptb_emitted_accumulator_event_ranges: Vec::new(),
+            retry_request: RefCell::new(None),
         }
     }
 
@@ -1717,6 +1726,14 @@ impl Storage for TemporaryStore<'_> {
 
     fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>) {
         TemporaryStore::save_generated_object_ids(self, generated_ids)
+    }
+
+    fn take_retry_request(&mut self) -> Option<ExecutionRetryError> {
+        self.retry_request.borrow_mut().take()
+    }
+
+    fn has_retry_request(&self) -> bool {
+        self.retry_request.borrow().is_some()
     }
 }
 

@@ -384,6 +384,26 @@ impl ExecutionTiming {
 
 pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
 
+/// Signals that transaction execution should be retried later rather than committed. Unlike
+/// `ExecutionError` it produces no effects; an enum so more retry reasons can be added.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExecutionRetryError {
+    /// Placeholder retry reason; concrete reasons will replace this.
+    Placeholder,
+}
+
+impl std::fmt::Display for ExecutionRetryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExecutionRetryError::Placeholder => {
+                write!(f, "execution retry requested (placeholder)")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ExecutionRetryError {}
+
 /// Captures the output of executing a transaction in the execution driver.
 #[derive(Debug)]
 pub enum ExecutionOutput<T> {

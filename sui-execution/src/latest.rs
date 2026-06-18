@@ -6,7 +6,6 @@ use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
 use sui_types::{
@@ -15,7 +14,7 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::{ExecutionError, ExecutionErrorTrait, SuiError, SuiResult},
-    execution::{ExecutionResult, TypeLayoutStore},
+    execution::{ExecutionResult, ExecutionRetryError, TypeLayoutStore},
     execution_status::ExecutionFailure,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
@@ -80,13 +79,7 @@ impl executor::Executor for Executor {
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> (
-        InnerTemporaryStore,
-        SuiGasStatus,
-        TransactionEffects,
-        Vec<ExecutionTiming>,
-        Result<(), ExecutionFailure>,
-    ) {
+    ) -> Result<executor::TransactionEffectsOutput<ExecutionFailure>, ExecutionRetryError> {
         let (store_out, gas_status_out, effects, timings, result) =
             execute_transaction_to_effects::<execution_mode::Normal>(
                 store,
@@ -105,11 +98,11 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
                 trace_builder_opt,
-            );
+            )?;
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (store_out, gas_status_out, effects, timings, result)
+        Ok((store_out, gas_status_out, effects, timings, result))
     }
 
     fn execute_transaction_to_effects_and_execution_error(
@@ -129,13 +122,7 @@ impl executor::Executor for Executor {
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> (
-        InnerTemporaryStore,
-        SuiGasStatus,
-        TransactionEffects,
-        Vec<ExecutionTiming>,
-        Result<(), ExecutionError>,
-    ) {
+    ) -> Result<executor::TransactionEffectsOutput<ExecutionError>, ExecutionRetryError> {
         let (store_out, gas_status_out, effects, timings, result) =
             execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
                 store,
@@ -154,11 +141,11 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
                 trace_builder_opt,
-            );
+            )?;
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (store_out, gas_status_out, effects, timings, result)
+        Ok((store_out, gas_status_out, effects, timings, result))
     }
 
     fn dev_inspect_transaction(
@@ -222,7 +209,8 @@ impl executor::Executor for Executor {
                 execution_params,
                 &mut None,
             )
-        };
+        }
+        .expect("dev-inspect execution does not produce retry errors");
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }

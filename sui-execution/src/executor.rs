@@ -14,7 +14,7 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::ExecutionError,
-    execution::{ExecutionResult, TypeLayoutStore},
+    execution::{ExecutionResult, ExecutionRetryError, TypeLayoutStore},
     execution_status::ExecutionFailure,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
@@ -22,6 +22,16 @@ use sui_types::{
     metrics::ExecutionMetrics,
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
+
+/// Output of executing a transaction to effects: temporary store, gas status, effects, per-command
+/// timings, and the execution status (`E` is the error detail type).
+pub type TransactionEffectsOutput<E> = (
+    InnerTemporaryStore,
+    SuiGasStatus,
+    TransactionEffects,
+    Vec<ExecutionTiming>,
+    Result<(), E>,
+);
 
 /// Abstracts over access to the VM across versions of the execution layer.
 pub trait Executor {
@@ -47,13 +57,7 @@ pub trait Executor {
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> (
-        InnerTemporaryStore,
-        SuiGasStatus,
-        TransactionEffects,
-        Vec<ExecutionTiming>,
-        Result<(), ExecutionFailure>,
-    );
+    ) -> Result<TransactionEffectsOutput<ExecutionFailure>, ExecutionRetryError>;
 
     /// Execution mode returns greater error information, primarily used in fullnode execution
     /// as opposed to `execute_transaction_to_effects` which only includes basic `ExecutionFailure` error.
@@ -74,13 +78,7 @@ pub trait Executor {
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> (
-        InnerTemporaryStore,
-        SuiGasStatus,
-        TransactionEffects,
-        Vec<ExecutionTiming>,
-        Result<(), ExecutionError>,
-    );
+    ) -> Result<TransactionEffectsOutput<ExecutionError>, ExecutionRetryError>;
 
     fn dev_inspect_transaction(
         &self,
