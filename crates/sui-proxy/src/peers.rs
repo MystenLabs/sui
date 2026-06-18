@@ -9,6 +9,8 @@ use futures::stream::{self, StreamExt};
 use once_cell::sync::Lazy;
 use prometheus::{CounterVec, HistogramVec, IntGaugeVec};
 use prometheus::{register_counter_vec, register_histogram_vec, register_int_gauge_vec};
+use prost_types::Value as JsonValue;
+use prost_types::value::Kind as JsonKind;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -641,295 +643,81 @@ fn append_path_segment(mut url: Url, segment: &str) -> Option<Url> {
 
 // Hashi committee resolver
 //
-// Reads on-chain hashi state via Sui's gRPC API (sui-rpc). The `Hashi` shared
-// object is fetched once per poll cycle to extract the committee_set's epoch
-// info and the `members`/`committees` Bag UIDs. Each Committee and MemberInfo
-// is then a leaf dynamic-field fetch under those bags, BCS-decoded into the
-// `move_types` mirror structs below.
+// Reads on-chain hashi state via Sui's gRPC API (sui-rpc). Each `get_object`
+// call requests the `json` rendering of the Move object's contents — we
+// path-walk into the fields we care about rather than BCS-decoding mirror
+// structs. This keeps the resolver resilient to hashi adding/removing
+// sibling fields anywhere in the struct tree.
 //
-// On-chain layout (mirrored in `move_types`):
-//   Hashi (shared object, key)
-//     committee_set: CommitteeSet (store)
-//       members: Bag<address, MemberInfo>
-//       epoch: u64
-//       committees: Bag<u64, Committee>
-//       pending_epoch_change: Option<u64>
-//     config / treasury / proposals / tob / num_consumed_presigs (ignored
-//     after BCS decode but mirrored for field-counting)
+// JSON rendering conventions (from sui-rpc-api/grpc/v2/render.rs):
+//   - Move structs are flat JSON objects (no `fields` wrapper)
+//   - u64 → string (precision-safe), e.g. "6"
+//   - address → hex string with `0x` prefix
+//   - vector<u8> → base64 string
+//   - vector<T> (T != u8) → JSON array
+//   - Option<T> → {"vec": [...]} (Move-native, NOT JSON null)
 //
-//   MemberInfo.tls_public_key: vector<u8>   // 32-byte raw Ed25519; empty until set
-//   Committee.members: vector<CommitteeMember>
-//   CommitteeMember.validator_address: address
-//
-// BCS is positional and not self-describing, so to read a single inline field
-// out of `Hashi` we have to mirror every sibling struct. The `move_types`
-// module below defines exactly enough to satisfy field-counting; only fields
-// the resolver reads carry meaningful documentation.
+// On-chain paths the resolver reads:
+//   Hashi.committee_set.{epoch, pending_epoch_change, members.id.id, committees.id.id}
+//   Field<u64, Committee>.value.members[].validator_address
+//   Field<address, MemberInfo>.value.tls_public_key
 
-mod move_types {
-    use serde::Deserialize;
-    use sui_sdk_types::Address;
+// JSON-walk helpers — small utilities over prost_types::Value for path-based
+// traversal of the Move-object JSON rendering.
 
-    // Many of these fields are never read by the resolver — they exist so BCS
-    // can advance past them. `#[derive(Debug)]` keeps the compiler treating
-    // every field as "used" via the generated formatter.
-
-    /// Mirror of `hashi::hashi::Hashi`. Only `committee_set` is read.
-    #[derive(Debug, Deserialize)]
-    pub struct Hashi {
-        pub id: Address,
-        pub committee_set: CommitteeSet,
-        pub config: Config,
-        pub treasury: Treasury,
-        pub proposals: Proposals,
-        pub tob: Bag,
-        pub num_consumed_presigs: u64,
+fn json_struct(v: &JsonValue) -> Option<&std::collections::BTreeMap<String, JsonValue>> {
+    if let Some(JsonKind::StructValue(s)) = &v.kind {
+        Some(&s.fields)
+    } else {
+        None
     }
+}
 
-    /// Mirror of `hashi::committee_set::CommitteeSet`.
-    #[derive(Debug, Deserialize)]
-    pub struct CommitteeSet {
-        pub members: Bag,
-        pub epoch: u64,
-        pub committees: Bag,
-        pub pending_epoch_change: Option<u64>,
-        pub mpc_public_key: Vec<u8>,
+fn json_string(v: &JsonValue) -> Option<&str> {
+    if let Some(JsonKind::StringValue(s)) = &v.kind {
+        Some(s)
+    } else {
+        None
     }
+}
 
-    /// Mirror of `sui::bag::Bag`. The `id` doubles as the UID we feed back into
-    /// `derive_dynamic_child_id` to look up entries.
-    #[derive(Debug, Deserialize)]
-    pub struct Bag {
-        pub id: Address,
-        pub size: u64,
+fn json_list(v: &JsonValue) -> Option<&[JsonValue]> {
+    if let Some(JsonKind::ListValue(l)) = &v.kind {
+        Some(&l.values)
+    } else {
+        None
     }
+}
 
-    /// Mirror of the dynamic-field wrapper `sui::dynamic_field::Field<N, V>`.
-    /// Dynamic-field objects returned by `get_object` BCS-deserialize as this
-    /// shape with `value` carrying the actual Move struct (Committee, MemberInfo).
-    #[derive(Debug, Deserialize)]
-    pub struct Field<N, V> {
-        pub id: Address,
-        pub name: N,
-        pub value: V,
+fn json_field<'a>(v: &'a JsonValue, key: &str) -> Option<&'a JsonValue> {
+    json_struct(v)?.get(key)
+}
+
+fn json_at<'a>(v: &'a JsonValue, path: &[&str]) -> Option<&'a JsonValue> {
+    let mut cur = v;
+    for key in path {
+        cur = json_field(cur, key)?;
     }
+    Some(cur)
+}
 
-    /// Mirror of `hashi::committee_set::MemberInfo`.
-    #[derive(Debug, Deserialize)]
-    pub struct MemberInfo {
-        pub validator_address: Address,
-        pub operator_address: Address,
-        pub next_epoch_public_key: Vec<u8>,
-        pub endpoint_url: String,
-        /// 32-byte raw Ed25519 public key; empty until the operator calls
-        /// `set_tls_public_key` on chain.
-        pub tls_public_key: Vec<u8>,
-        pub next_epoch_encryption_public_key: Vec<u8>,
-    }
+/// Parse a stringly-encoded u64 (Move JSON encodes u64 as a string to preserve precision).
+fn json_u64(v: &JsonValue, name: &str) -> Result<u64> {
+    json_string(v)
+        .with_context(|| format!("{name}: expected JSON string-encoded u64"))?
+        .parse::<u64>()
+        .with_context(|| format!("parsing {name} as u64"))
+}
 
-    /// Mirror of `hashi::committee::Committee`.
-    #[derive(Debug, Deserialize)]
-    pub struct Committee {
-        pub epoch: u64,
-        pub members: Vec<CommitteeMember>,
-        pub total_weight: u64,
-        pub mpc_threshold_in_basis_points: u64,
-        pub mpc_weight_reduction_allowed_delta: u64,
-        pub mpc_max_faulty_in_basis_points: u64,
-    }
-
-    /// Mirror of `hashi::committee::CommitteeMember`.
-    #[derive(Debug, Deserialize)]
-    pub struct CommitteeMember {
-        pub validator_address: Address,
-        pub public_key: Vec<u8>,
-        pub encryption_public_key: Vec<u8>,
-        pub weight: u64,
-    }
-
-    // The remaining mirror types are pure BCS-skip — only their field shape
-    // matters so the deserializer can advance the cursor past Hashi's tail.
-
-    #[derive(Debug, Deserialize)]
-    pub struct Config {
-        pub config: VecMap<String, ConfigValue>,
-        pub enabled_versions: VecSet<u64>,
-        pub upgrade_cap: Option<UpgradeCap>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct Treasury {
-        pub objects: Bag,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct Proposals {
-        pub active: Bag,
-        pub executed: Bag,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct VecMap<K, V> {
-        pub contents: Vec<VecMapEntry<K, V>>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct VecMapEntry<K, V> {
-        pub key: K,
-        pub value: V,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct VecSet<T> {
-        pub contents: Vec<T>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    pub struct UpgradeCap {
-        pub id: Address,
-        pub package: Address,
-        pub version: u64,
-        pub policy: u8,
-    }
-
-    /// Mirror of `hashi::config_value::Value`. Move enum variants serialize as
-    /// (ULEB128 tag, payload), so all variants must be present in declaration
-    /// order to satisfy BCS.
-    #[derive(Debug, Deserialize)]
-    pub enum ConfigValue {
-        U64(u64),
-        Address(Address),
-        String(String),
-        Bool(bool),
-        Bytes(Vec<u8>),
-    }
-
-    /// Loadbearing field anchor. Many fields above exist only so BCS can
-    /// advance past them; the resolver never reads them at runtime. To keep
-    /// dead-code analysis honest (and `RUSTFLAGS=-Dwarnings` clean) without
-    /// `#[allow(dead_code)]`, this function pattern-matches every field into
-    /// a named local. Calling it once per resolver invocation is effectively
-    /// free and pins the layout discipline at compile time.
-    pub(super) fn acknowledge_layout(hashi: &Hashi) {
-        let Hashi {
-            id,
-            committee_set,
-            config,
-            treasury,
-            proposals,
-            tob,
-            num_consumed_presigs,
-        } = hashi;
-        let _ = (id, num_consumed_presigs);
-        let CommitteeSet {
-            members,
-            epoch,
-            committees,
-            pending_epoch_change,
-            mpc_public_key,
-        } = committee_set;
-        let _ = (epoch, pending_epoch_change, mpc_public_key);
-        for bag in [members, committees, tob] {
-            let Bag { id, size } = bag;
-            let _ = (id, size);
-        }
-        let Config {
-            config,
-            enabled_versions,
-            upgrade_cap,
-        } = config;
-        let VecMap { contents } = config;
-        for VecMapEntry { key, value } in contents {
-            let _ = key;
-            match value {
-                ConfigValue::U64(v) => {
-                    let _ = v;
-                }
-                ConfigValue::Address(v) => {
-                    let _ = v;
-                }
-                ConfigValue::String(v) => {
-                    let _ = v;
-                }
-                ConfigValue::Bool(v) => {
-                    let _ = v;
-                }
-                ConfigValue::Bytes(v) => {
-                    let _ = v;
-                }
-            }
-        }
-        let VecSet { contents } = enabled_versions;
-        let _ = contents;
-        if let Some(UpgradeCap {
-            id,
-            package,
-            version,
-            policy,
-        }) = upgrade_cap
-        {
-            let _ = (id, package, version, policy);
-        }
-        let Treasury { objects } = treasury;
-        let Bag { id, size } = objects;
-        let _ = (id, size);
-        let Proposals { active, executed } = proposals;
-        for bag in [active, executed] {
-            let Bag { id, size } = bag;
-            let _ = (id, size);
-        }
-    }
-
-    /// Same idea as `acknowledge_layout`, but for the dynamic-field-wrapped
-    /// `Committee` and `MemberInfo` payloads the resolver decodes per member.
-    pub(super) fn acknowledge_committee_field(field: &Field<u64, Committee>) {
-        let Field { id, name, value } = field;
-        let _ = (id, name);
-        let Committee {
-            epoch,
-            members,
-            total_weight,
-            mpc_threshold_in_basis_points,
-            mpc_weight_reduction_allowed_delta,
-            mpc_max_faulty_in_basis_points,
-        } = value;
-        let _ = (
-            epoch,
-            total_weight,
-            mpc_threshold_in_basis_points,
-            mpc_weight_reduction_allowed_delta,
-            mpc_max_faulty_in_basis_points,
-        );
-        for CommitteeMember {
-            validator_address,
-            public_key,
-            encryption_public_key,
-            weight,
-        } in members
-        {
-            let _ = (validator_address, public_key, encryption_public_key, weight);
-        }
-    }
-
-    pub(super) fn acknowledge_member_field(field: &Field<Address, MemberInfo>) {
-        let Field { id, name, value } = field;
-        let _ = (id, name);
-        let MemberInfo {
-            validator_address,
-            operator_address,
-            next_epoch_public_key,
-            endpoint_url,
-            tls_public_key,
-            next_epoch_encryption_public_key,
-        } = value;
-        let _ = (
-            validator_address,
-            operator_address,
-            next_epoch_public_key,
-            endpoint_url,
-            tls_public_key,
-            next_epoch_encryption_public_key,
-        );
+/// Parse a Move-encoded `Option<u64>` — rendered as `{"vec": []}` (None) or
+/// `{"vec": ["<n>"]}` (Some).
+fn json_option_u64(v: &JsonValue, name: &str) -> Result<Option<u64>> {
+    let vec = json_field(v, "vec")
+        .and_then(json_list)
+        .with_context(|| format!("{name}: expected Move Option<u64> shape {{vec: [...]}}"))?;
+    match vec.first() {
+        None => Ok(None),
+        Some(inner) => Ok(Some(json_u64(inner, &format!("{name}.vec[0]"))?)),
     }
 }
 
@@ -1099,43 +887,62 @@ async fn get_hashi_committee_snapshot(
         .with_label_values(&[rpc_method])
         .start_timer();
 
-    let response =
-        client
-            .ledger_client()
-            .get_object(GetObjectRequest::new(&hashi_object_id).with_read_mask(
-                FieldMask::from_paths([Object::path_builder().contents().finish()]),
-            ))
-            .await
-            .with_context(|| {
-                JSON_RPC_STATE
-                    .with_label_values(&[rpc_method, "failed_get"])
-                    .inc();
-                format!("get_object failed for Hashi {hashi_object_id}")
-            })?;
-
-    let hashi: move_types::Hashi = response
-        .into_inner()
-        .object()
-        .contents()
-        .deserialize()
+    let response = client
+        .ledger_client()
+        .get_object(
+            GetObjectRequest::new(&hashi_object_id)
+                .with_read_mask(FieldMask::from_paths([Object::path_builder().json()])),
+        )
+        .await
         .with_context(|| {
             JSON_RPC_STATE
-                .with_label_values(&[rpc_method, "failed_bcs_decode"])
+                .with_label_values(&[rpc_method, "failed_get"])
                 .inc();
-            format!("BCS-decode Hashi {hashi_object_id}")
+            format!("get_object failed for Hashi {hashi_object_id}")
         })?;
-    move_types::acknowledge_layout(&hashi);
+
+    let inner = response.into_inner();
+    let json = inner
+        .object_opt()
+        .and_then(|o| o.json_opt())
+        .with_context(|| {
+            JSON_RPC_STATE
+                .with_label_values(&[rpc_method, "missing_json"])
+                .inc();
+            format!("Hashi {hashi_object_id} response missing JSON rendering")
+        })?;
+
+    let cs = json_field(json, "committee_set").context("missing committee_set in Hashi JSON")?;
+    // Bag's `id` is a `UID` which renders as { "id": "<address>" }; double-hop.
+    let members_bag_id = json_at(cs, &["members", "id", "id"])
+        .and_then(json_string)
+        .context("missing committee_set.members.id.id")?
+        .parse::<Address>()
+        .context("parsing members bag id as Address")?;
+    let committees_bag_id = json_at(cs, &["committees", "id", "id"])
+        .and_then(json_string)
+        .context("missing committee_set.committees.id.id")?
+        .parse::<Address>()
+        .context("parsing committees bag id as Address")?;
+    let epoch = json_u64(
+        json_field(cs, "epoch").context("missing committee_set.epoch")?,
+        "committee_set.epoch",
+    )?;
+    let pending_epoch = json_option_u64(
+        json_field(cs, "pending_epoch_change")
+            .context("missing committee_set.pending_epoch_change")?,
+        "committee_set.pending_epoch_change",
+    )?;
 
     JSON_RPC_STATE
         .with_label_values(&[rpc_method, "success"])
         .inc();
 
-    let cs = hashi.committee_set;
     Ok(CommitteeSetSnapshot {
-        epoch: cs.epoch,
-        pending_epoch: cs.pending_epoch_change,
-        members_bag_id: cs.members.id,
-        committees_bag_id: cs.committees.id,
+        epoch,
+        pending_epoch,
+        members_bag_id,
+        committees_bag_id,
     })
 }
 
@@ -1157,9 +964,8 @@ async fn get_committee_validator_addresses(
     let response = client
         .ledger_client()
         .get_object(
-            GetObjectRequest::new(&field_id).with_read_mask(FieldMask::from_paths([
-                Object::path_builder().contents().finish(),
-            ])),
+            GetObjectRequest::new(&field_id)
+                .with_read_mask(FieldMask::from_paths([Object::path_builder().json()])),
         )
         .await
         .with_context(|| {
@@ -1169,29 +975,38 @@ async fn get_committee_validator_addresses(
             format!("get_object failed for Committee epoch={epoch} under {committees_bag_id}")
         })?;
 
-    let field: move_types::Field<u64, move_types::Committee> = response
-        .into_inner()
-        .object()
-        .contents()
-        .deserialize()
+    let inner = response.into_inner();
+    let json = inner
+        .object_opt()
+        .and_then(|o| o.json_opt())
         .with_context(|| {
             JSON_RPC_STATE
-                .with_label_values(&[rpc_method, "failed_bcs_decode"])
+                .with_label_values(&[rpc_method, "missing_json"])
                 .inc();
-            format!("BCS-decode Committee for epoch {epoch}")
+            format!("Committee epoch={epoch} response missing JSON rendering")
         })?;
-    move_types::acknowledge_committee_field(&field);
+
+    // Dynamic-field object wraps the Committee in a `Field<K, V>` shape — value
+    // is what we want.
+    let members = json_at(json, &["value", "members"])
+        .and_then(json_list)
+        .with_context(|| format!("Committee for epoch {epoch} missing value.members[]"))?;
+
+    let mut out = Vec::with_capacity(members.len());
+    for m in members {
+        let addr_str = json_field(m, "validator_address")
+            .and_then(json_string)
+            .context("missing CommitteeMember.validator_address")?;
+        let addr: SuiAddress = addr_str
+            .parse()
+            .with_context(|| format!("parsing CommitteeMember.validator_address: {addr_str}"))?;
+        out.push(addr);
+    }
 
     JSON_RPC_STATE
         .with_label_values(&[rpc_method, "success"])
         .inc();
-
-    Ok(field
-        .value
-        .members
-        .into_iter()
-        .map(|m| sdk_address_to_sui_address(m.validator_address))
-        .collect())
+    Ok(out)
 }
 
 async fn get_hashi_member_info(
@@ -1213,9 +1028,8 @@ async fn get_hashi_member_info(
     let response = client
         .ledger_client()
         .get_object(
-            GetObjectRequest::new(&field_id).with_read_mask(FieldMask::from_paths([
-                Object::path_builder().contents().finish(),
-            ])),
+            GetObjectRequest::new(&field_id)
+                .with_read_mask(FieldMask::from_paths([Object::path_builder().json()])),
         )
         .await
         .with_context(|| {
@@ -1225,36 +1039,36 @@ async fn get_hashi_member_info(
             format!("get_object failed for MemberInfo {validator_address}")
         })?;
 
-    let field: move_types::Field<Address, move_types::MemberInfo> = response
-        .into_inner()
-        .object()
-        .contents()
-        .deserialize()
+    let inner = response.into_inner();
+    let json = inner
+        .object_opt()
+        .and_then(|o| o.json_opt())
         .with_context(|| {
             JSON_RPC_STATE
-                .with_label_values(&[rpc_method, "failed_bcs_decode"])
+                .with_label_values(&[rpc_method, "missing_json"])
                 .inc();
-            format!("BCS-decode MemberInfo for {validator_address}")
+            format!("MemberInfo {validator_address} response missing JSON rendering")
         })?;
-    move_types::acknowledge_member_field(&field);
+
+    // `vector<u8>` is base64-encoded in the JSON form (see render.rs visit_vector).
+    let tls_public_key = match json_at(json, &["value", "tls_public_key"]).and_then(json_string) {
+        Some(b64) => Base64::decode(b64)
+            .with_context(|| format!("base64-decode tls_public_key for {validator_address}"))?,
+        None => Vec::new(),
+    };
 
     JSON_RPC_STATE
         .with_label_values(&[rpc_method, "success"])
         .inc();
-
     Ok(ResolvedHashiMember {
         validator_address,
-        tls_public_key: field.value.tls_public_key,
+        tls_public_key,
     })
 }
 
-/// Both sui-types and sui-sdk-types use 32-byte addresses; these helpers swap
-/// between them since sui-rpc returns `sdk_types::Address` but the rest of
-/// sui-proxy speaks `sui_types::base_types::SuiAddress`.
-fn sdk_address_to_sui_address(addr: Address) -> SuiAddress {
-    SuiAddress::from_bytes(addr.into_inner()).expect("Address is 32 bytes")
-}
-
+/// Both sui-types and sui-sdk-types use 32-byte addresses; this swaps a
+/// `SuiAddress` into the `sui_sdk_types::Address` shape that `derive_dynamic_child_id`
+/// and `bcs::to_bytes` need for key encoding.
 fn sui_address_to_sdk_address(addr: SuiAddress) -> Address {
     Address::new(addr.to_inner())
 }
