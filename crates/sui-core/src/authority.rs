@@ -3697,7 +3697,7 @@ impl AuthorityState {
 
     async fn init_object_funds_checker(&self) {
         let epoch_store = self.epoch_store.load();
-        if self.is_validator(&epoch_store)
+        if self.node_role(&epoch_store).runs_consensus()
             && epoch_store.protocol_config().enable_object_funds_withdraw()
         {
             if self.object_funds_checker.load().is_none() {
