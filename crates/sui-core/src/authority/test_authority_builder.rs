@@ -463,7 +463,6 @@ impl<'a> TestAuthorityBuilder<'a> {
                 ExecutionEnv::new(),
                 &state.epoch_store_for_testing(),
             )
-            .await
             .unwrap();
 
         let batch = state

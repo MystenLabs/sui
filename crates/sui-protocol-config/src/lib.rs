@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 125;
+const MAX_PROTOCOL_VERSION: u64 = 127;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -352,6 +352,12 @@ const MAINNET_USDB: &str =
 //              transfer per stable.
 // Version 125: Enable granular_post_execution_checks.
 //              Enable timestamp_based_epoch_close on testnet.
+// Version 126: Enable early_exit_on_iffw (gates the gas-underflow fix
+//              shipped to mainnet out-of-band in #26816).
+// Version 127: Enable always_advance_dkg_to_resolution.
+//              Update gas prices for range proofs and ristretto group operations.
+//              Enable Ristretto255 group operations and bulletproofs verification on testnet.
+//              Enable timestamp_based_epoch_close on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -950,6 +956,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     cancel_for_failed_dkg_early: bool,
 
+    // If true, keep advancing the DKG state machine while DKG is pending.
+    #[serde(skip_serializing_if = "is_false")]
+    always_advance_dkg_to_resolution: bool,
+
     // Enable coin registry protocol
     #[serde(skip_serializing_if = "is_false")]
     enable_coin_registry: bool,
@@ -1119,6 +1129,10 @@ struct FeatureFlags {
     // Enables more granular post-execution checks.
     #[serde(skip_serializing_if = "is_false")]
     granular_post_execution_checks: bool,
+
+    // If true, exit early for IFWW transactions.
+    #[serde(skip_serializing_if = "is_false")]
+    early_exit_on_iffw: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2661,6 +2675,10 @@ impl ProtocolConfig {
         self.feature_flags.cancel_for_failed_dkg_early
     }
 
+    pub fn always_advance_dkg_to_resolution(&self) -> bool {
+        self.feature_flags.always_advance_dkg_to_resolution
+    }
+
     pub fn abstract_size_in_object_runtime(&self) -> bool {
         self.feature_flags.abstract_size_in_object_runtime
     }
@@ -2856,6 +2874,10 @@ impl ProtocolConfig {
 
     pub fn granular_post_execution_checks(&self) -> bool {
         self.feature_flags.granular_post_execution_checks
+    }
+
+    pub fn early_exit_on_iffw(&self) -> bool {
+        self.feature_flags.early_exit_on_iffw
     }
 }
 
@@ -4980,6 +5002,32 @@ impl ProtocolConfig {
                         cfg.feature_flags.timestamp_based_epoch_close = true;
                     }
                 }
+                126 => {
+                    cfg.feature_flags.early_exit_on_iffw = true;
+                }
+                127 => {
+                    cfg.feature_flags.always_advance_dkg_to_resolution = true;
+
+                    cfg.verify_bulletproofs_ristretto255_base_cost = Some(23866);
+                    cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(1324);
+                    cfg.group_ops_ristretto_decode_scalar_cost = Some(5);
+                    cfg.group_ops_ristretto_decode_point_cost = Some(216);
+                    cfg.group_ops_ristretto_scalar_add_cost = Some(2);
+                    cfg.group_ops_ristretto_point_add_cost = Some(8);
+                    cfg.group_ops_ristretto_scalar_sub_cost = Some(2);
+                    cfg.group_ops_ristretto_point_sub_cost = Some(8);
+                    cfg.group_ops_ristretto_scalar_mul_cost = Some(5);
+                    cfg.group_ops_ristretto_point_mul_cost = Some(1763);
+                    cfg.group_ops_ristretto_scalar_div_cost = Some(557);
+                    cfg.group_ops_ristretto_point_div_cost = Some(2244);
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_ristretto255_group_ops = true;
+                        cfg.feature_flags.enable_verify_bulletproofs_ristretto255 = true;
+                    }
+
+                    cfg.feature_flags.timestamp_based_epoch_close = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -5433,6 +5481,10 @@ impl ProtocolConfig {
 
     pub fn set_cancel_for_failed_dkg_early_for_testing(&mut self, val: bool) {
         self.feature_flags.cancel_for_failed_dkg_early = val;
+    }
+
+    pub fn set_always_advance_dkg_to_resolution_for_testing(&mut self, val: bool) {
+        self.feature_flags.always_advance_dkg_to_resolution = val;
     }
 
     pub fn set_use_mfp_txns_in_load_initial_object_debts_for_testing(&mut self, val: bool) {

@@ -16,15 +16,7 @@ public fun while_test() {
 
 public fun while_test_2() {
     let l1 = 0u64;
-    loop {
-        let l0 = if (l1 < 10u64) {
-            true
-        } else {
-            l1 == 7u64
-        };
-        if (!(l0)) {
-            break
-        };
+    while (l1 < 10u64 || l1 == 7u64) {
         l1 = l1 + 1u64;
     }
 }
@@ -42,15 +34,7 @@ public fun while_test_3() {
 
 public fun while_test_4() {
     let l1 = 0u64;
-    loop {
-        let l0 = if (l1 < 10u64) {
-            true
-        } else {
-            l1 == 7u64
-        };
-        if (!(l0)) {
-            break
-        };
+    while (l1 < 10u64 || l1 == 7u64) {
         l1 = if (l1 % 2u64 == 0u64) {
             l1 + 1u64
         } else {
@@ -74,15 +58,7 @@ public fun while_test_5() {
 
 public fun while_test_6() {
     let l1 = 0u64;
-    loop {
-        let l0 = if (l1 < 10u64) {
-            true
-        } else {
-            l1 == 7u64
-        };
-        if (!(l0)) {
-            break
-        };
+    while (l1 < 10u64 || l1 == 7u64) {
         l1 = l1 + 1u64;
     }
 }

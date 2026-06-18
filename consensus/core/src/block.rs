@@ -82,7 +82,8 @@ pub trait BlockAPI {
     /// Votes on if a transaction should be accepted or rejected.
     fn transaction_votes(&self) -> &[BlockTransactionVotes];
 
-    /// The author's local GC round at the time the block was proposed.
+    /// Transactions in this blocks' casual history at and before the cutoff round
+    /// will not receive accept votes from this block.
     /// Only `BlockV3` carries this — earlier variants panic.
     fn transaction_votes_cutoff_round(&self) -> Round;
 
@@ -204,7 +205,6 @@ pub(crate) struct BlockV2 {
     misbehavior_reports: Vec<MisbehaviorReport>,
 }
 
-#[allow(unused)]
 impl BlockV2 {
     pub(crate) fn new(
         epoch: Epoch,
@@ -309,7 +309,7 @@ pub(crate) struct BlockV3 {
     misbehavior_reports: Vec<MisbehaviorReport>,
 }
 
-#[allow(unused)]
+#[allow(dead_code)]
 impl BlockV3 {
     pub(crate) fn new(
         epoch: Epoch,

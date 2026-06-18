@@ -259,6 +259,7 @@ impl AdapterInitConfig {
         let SuiInitArgs {
             accounts,
             protocol_version,
+            chain,
             max_gas,
             shared_object_deletion,
             simulator,
@@ -286,6 +287,7 @@ impl AdapterInitConfig {
             .map(|v| v.into_iter().collect::<BTreeSet<_>>())
             .unwrap_or_default();
 
+        let chain = chain.unwrap_or(Chain::Unknown);
         let mut protocol_config = if let Some(protocol_version) = protocol_version {
             assert!(
                 protocol_version <= ProtocolVersion::max().as_u64(),
@@ -298,9 +300,9 @@ impl AdapterInitConfig {
                 "Do not set the protocol version to the max {}. It can lead to unanticipated test changes once the max version is bumped. Instead, leave it unset to always use the max version.",
                 protocol_version,
             );
-            ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
+            ProtocolConfig::get_for_version(protocol_version.into(), chain)
         } else {
-            ProtocolConfig::get_for_max_version_UNSAFE()
+            ProtocolConfig::get_for_version(ProtocolVersion::MAX, chain)
         };
         if enable_accumulators {
             protocol_config.enable_accumulators_for_testing();

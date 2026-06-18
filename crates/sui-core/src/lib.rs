@@ -13,6 +13,7 @@ pub mod authority_server;
 pub mod checkpoints;
 pub mod congestion_tracker;
 pub mod consensus_adapter;
+pub mod consensus_commit_summary;
 pub mod consensus_handler;
 pub mod consensus_manager;
 pub mod consensus_throughput_calculator;

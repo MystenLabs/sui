@@ -154,7 +154,8 @@ pub fn handle_lint_results_exclude_external_crate_checks(
             (path.starts_with(EXTERNAL_CRATE_DIR)
                 || path.starts_with(CREATE_DAPP_TEMPLATE_DIR)
                 || path.to_string().contains("/generated/")
-                || path.to_string().contains("/proto/"))
+                || path.to_string().contains("/proto/")
+                || path.file_name() == Some("codegen.rs"))
                 && source.name() == "license-header"
         },
         // ignore check to skip buck related code paths, meta (fb) derived starlark, etc.

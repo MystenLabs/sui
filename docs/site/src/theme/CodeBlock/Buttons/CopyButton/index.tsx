@@ -71,6 +71,48 @@ function useCopyButton(buttonRef: React.RefObject<HTMLElement>) {
   return { copyCode, isCopied };
 }
 
+function OpenInPlayMoveButton({ className }: { className?: string }) {
+  const wrapperRef = useRef<HTMLSpanElement | null>(null);
+  const [isMove, setIsMove] = useState(false);
+
+  useEffect(() => {
+    let el: HTMLElement | null = wrapperRef.current;
+    while (el) {
+      const code = el.querySelector?.("pre code[class*='language-move']") as HTMLElement | null;
+      if (code) {
+        setIsMove(true);
+        return;
+      }
+      el = el.parentElement;
+    }
+  }, []);
+
+  const handleClick = useCallback(() => {
+    const code = getNearestCodeText(wrapperRef.current);
+    if (!code) return;
+    const url = `https://www.playmove.dev/#${encodeURIComponent(code)}`;
+    window.open(url, "_blank", "noopener");
+  }, []);
+
+  return (
+    <span ref={wrapperRef} style={{ display: isMove ? "contents" : "none" }}>
+      <Button
+        aria-label="Open in Move Playground"
+        title="Open in Move Playground"
+        className={clsx(
+          className,
+          "!opacity-50 !hover:opacity-100 text-xs !pb-2 justify-center",
+        )}
+        onClick={handleClick}
+      >
+        <span className="p-1">
+          <i className="fa-solid fa-play leading-[0] pr-1" style={{ fontSize: 9 }}></i>Playground
+        </span>
+      </Button>
+    </span>
+  );
+}
+
 export default function CopyButton({ className }: Props): ReactNode {
   const buttonRef = useRef<HTMLSpanElement | null>(null);
   const { copyCode, isCopied } = useCopyButton(buttonRef);
@@ -99,6 +141,7 @@ export default function CopyButton({ className }: Props): ReactNode {
         </span>
       </Button>
       <OpenInAgentButton className={className} />
+      <OpenInPlayMoveButton className={className} />
     </span>
   );
 }

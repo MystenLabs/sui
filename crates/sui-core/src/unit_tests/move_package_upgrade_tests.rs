@@ -194,7 +194,7 @@ impl UpgradeStateRunner {
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
         let authority_state = TestAuthorityBuilder::new().build().await;
-        authority_state.insert_genesis_object(gas_object).await;
+        authority_state.insert_genesis_object(gas_object);
         let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
         let (package, upgrade_cap) = build_and_publish_test_package_with_upgrade_cap(
@@ -224,7 +224,7 @@ impl UpgradeStateRunner {
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
         let authority_state = TestAuthorityBuilder::new().build().await;
-        authority_state.insert_genesis_object(gas_object).await;
+        authority_state.insert_genesis_object(gas_object);
         let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
         let (package, upgrade_cap) = build_and_publish_package_with_upgrade_cap(

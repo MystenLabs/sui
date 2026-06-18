@@ -28,6 +28,12 @@ Currently, iPhone and certain Android devices support only ECDSA Secp256r1 encla
 
 Compared to threshold signatures, a multisig account is generally more flexible and straightforward to implement and use without requiring complex multi-party computation (MPC) account setup ceremonies and related software, and any dependency on threshold crypto providers. Additionally, apart from the ability to mix and match key schemes and setting different weights for each key (which is complex in threshold cryptography), multisig accounts are accountable and transparent by design because both participating parties and observers can see who signed each transaction. On the other hand, threshold signatures provide the benefits of hiding the threshold policy, but also result in a single signature payload, making it indistinguishable from a single-key account.
 
+:::tip
+
+Hold privileged capabilities such as `AdminCap`, `UpgradeCap`, `TreasuryCap`, and `DenyCapV2` under a multisig account rather than a single key. Choose the `k`-of-`n` threshold deliberately so no single party can act alone, and distribute the signing keys across different people and devices to avoid a single point of compromise. Document your recovery and key-rotation procedures before you need them. See [User and operator key management](/develop/security/best-practices#user-and-operator-key-management) for details.
+
+:::
+
 ![Multisig structure diagram](images/sui_multisig_structures.png 'Supported multisig configurations in Sui')
 Multisig structures supported in Sui.
 

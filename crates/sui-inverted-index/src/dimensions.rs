@@ -53,9 +53,24 @@ pub enum IndexDimension {
     /// position is occupied. Event-space only — it gives the read side a
     /// concrete universe of real events to subtract from when evaluating
     /// unanchored negation (`NOT D` == `E \ D`), since the packed `event_seq`
-    /// namespace is far too sparse to synthesize a dense complement. Carries no
-    /// value payload, so its encoded key is just the tag byte.
+    /// namespace is far too sparse to synthesize a dense complement. Every real
+    /// event maps to the same singleton key; it carries a single placeholder
+    /// value byte so the encoded key keeps the standard `[tag, value...]` shape.
     EventExtant = 0x08,
+    /// Internal query-only universe marker for tx-space unanchored negation
+    /// (not user-queryable, never persisted): the tx-seq namespace is dense —
+    /// every integer up to the indexed tip is a real transaction — so backends
+    /// synthesize full buckets for this key at scan time instead of reading
+    /// storage. The filter layer anchors exclude-only tx terms with an include
+    /// on this key, resolving `NOT D` as `range \ D` without an extra
+    /// evaluator code path. No write path emits this dimension.
+    TxUniverse = 0x09,
+    /// Global marker for every Move package write — first publishes and upgrades
+    /// alike, regardless of package. Singleton key (a placeholder byte): every
+    /// package write maps to the same row, so the read side can enumerate all
+    /// package writes chain-wide in checkpoint order without an id to key on.
+    /// Backs the global `Query.packages` listing.
+    AnyPackageWrite = 0x0a,
 }
 
 impl IndexDimension {
@@ -73,6 +88,8 @@ impl IndexDimension {
             tag if tag == Self::EventType.tag_byte() => Some(Self::EventType),
             tag if tag == Self::EventStreamHead.tag_byte() => Some(Self::EventStreamHead),
             tag if tag == Self::EventExtant.tag_byte() => Some(Self::EventExtant),
+            tag if tag == Self::TxUniverse.tag_byte() => Some(Self::TxUniverse),
+            tag if tag == Self::AnyPackageWrite.tag_byte() => Some(Self::AnyPackageWrite),
             _ => None,
         }
     }
@@ -81,9 +98,25 @@ impl IndexDimension {
 const COMPOUND_VALUE_SEPARATOR: u8 = 0x00;
 
 /// Singleton value for the internal [`IndexDimension::EventExtant`] marker:
-/// every real event maps to the same key, so it carries no payload and its
-/// encoded row key is just the tag byte.
-const EVENT_EXTANT_VALUE: &[u8] = &[];
+/// every real event maps to the same key. It carries a single placeholder byte
+/// so the encoded row key has the standard `[tag, value...]` shape and passes
+/// `BitmapKey::new`'s length invariant (dimension keys must be at least two
+/// bytes) without a per-tag carve-out. The marker is a singleton — one row per
+/// bucket, not per event — so the extra byte costs ~1 byte per bucket-row.
+pub const EVENT_EXTANT_VALUE: &[u8] = &[0x00];
+
+/// Singleton value for the internal [`IndexDimension::TxUniverse`] marker.
+/// Like [`EVENT_EXTANT_VALUE`], it is a single placeholder byte so the encoded
+/// key has the standard `[tag, value...]` shape and passes `BitmapKey::new`'s
+/// length invariant. The key never reaches storage — backends recognize the
+/// tag at scan time and synthesize full buckets over the requested range.
+pub const TX_UNIVERSE_VALUE: &[u8] = &[0x00];
+
+/// Singleton value for the global [`IndexDimension::AnyPackageWrite`] marker:
+/// every package write maps to the same key. Like [`EVENT_EXTANT_VALUE`], it is
+/// a single placeholder byte so the encoded key keeps the standard
+/// `[tag, value...]` shape and passes `BitmapKey::new`'s length invariant.
+pub const ANY_PACKAGE_VALUE: &[u8] = &[0x00];
 
 /// Visit all tx-space dimensions for a transaction.
 ///
@@ -127,6 +160,17 @@ pub fn for_each_transaction_dimension(
         }
 
         f(IndexDimension::AffectedObject, change.id.as_ref());
+
+        // Move package writes — first publishes and upgrades alike — emit a
+        // single global marker so the read side can enumerate every package
+        // write chain-wide in checkpoint order.
+        if let Some(sui_types::object::Data::Package(_)) = change
+            .output_version
+            .and_then(|v| object_set.get(&ObjectKey(change.id, v)))
+            .map(|obj| &obj.data)
+        {
+            f(IndexDimension::AnyPackageWrite, ANY_PACKAGE_VALUE);
+        }
     }
 
     for (_, package_id, module, function) in tx_data.move_calls() {
@@ -177,7 +221,8 @@ pub fn for_each_transaction_dimension(
 /// buffer while the caller consumes each value synchronously.
 ///
 /// Every real event also yields one [`IndexDimension::EventExtant`] candidate
-/// (an empty-keyed existence marker) at its own `event_idx`.
+/// (a singleton existence marker keyed by a placeholder byte) at its own
+/// `event_idx`.
 pub fn for_each_event_dimension(
     sender: SuiAddress,
     effects: &TransactionEffects,
@@ -534,7 +579,10 @@ mod tests {
             tx.events.as_ref(),
             |event_idx, dim, value| {
                 if dim == IndexDimension::EventExtant {
-                    assert!(value.is_empty(), "existence marker carries no payload");
+                    assert_eq!(
+                        value, EVENT_EXTANT_VALUE,
+                        "existence marker carries the singleton placeholder value"
+                    );
                     extant_idxs.push(event_idx);
                 }
             },
@@ -542,10 +590,10 @@ mod tests {
 
         // Exactly one existence bit per real event, at each event's own index.
         assert_eq!(extant_idxs, vec![0, 1, 2]);
-        // The encoded key is just the tag byte (empty value).
+        // The encoded key is the tag byte followed by the placeholder value byte.
         assert_eq!(
             encode_dimension_key(IndexDimension::EventExtant, EVENT_EXTANT_VALUE),
-            vec![IndexDimension::EventExtant.tag_byte()]
+            vec![IndexDimension::EventExtant.tag_byte(), 0x00]
         );
     }
 
@@ -666,5 +714,75 @@ mod tests {
             IndexDimension::AffectedAddress,
             balance_owner.as_ref()
         )));
+    }
+
+    #[test]
+    fn transaction_visitor_emits_package_write_marker() {
+        use std::collections::HashSet;
+        use sui_types::digests::TransactionDigest;
+        use sui_types::effects::TestEffectsBuilder;
+        use sui_types::full_checkpoint_content::ObjectSet;
+        use sui_types::move_package::MovePackage;
+        use sui_types::object::{Data, Object};
+
+        // A BCS-encoded `MovePackage` (id 0x0..0, version 2) holding one module
+        // "DUMMY" whose declared self-address is 0x0..0. We patch the id byte
+        // (offset 31) and version byte (offset 32) to model each write below.
+        let pkg_bytes = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 5, 68, 85, 77, 77, 89, 63, 161, 28, 235, 11, 7, 0,
+            0, 5, 4, 1, 0, 2, 5, 2, 1, 7, 3, 6, 8, 9, 32, 0, 0, 0, 5, 68, 85, 77, 77, 89, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ];
+
+        let tx = TestCheckpointBuilder::new(0)
+            .start_transaction(1)
+            .finish_transaction()
+            .build_checkpoint()
+            .transactions[0]
+            .transaction
+            .clone();
+        let signed_data = sui_types::transaction::SenderSignedData::new(tx.clone(), vec![]);
+
+        // Run the extractor over a single package write installed at `id_byte`
+        // and `version`. Returns the emitted keys.
+        let run = |id_byte: u8, version: u8| {
+            let mut bytes = pkg_bytes.clone();
+            bytes[31] = id_byte;
+            bytes[32] = version;
+            let pkg: MovePackage = bcs::from_bytes(&bytes).unwrap();
+            let pkg_id = pkg.id();
+            let pkg_version = pkg.version();
+
+            let mut object_set = ObjectSet::default();
+            object_set.insert(Object::new_package_from_data(
+                Data::Package(pkg),
+                TransactionDigest::random(),
+            ));
+
+            let effects = TestEffectsBuilder::new(&signed_data)
+                .with_package_writes(vec![(pkg_id, pkg_version)])
+                .build();
+
+            let mut keys = HashSet::new();
+            for_each_transaction_dimension(&tx, &effects, None, &object_set, |dim, value| {
+                keys.insert(encode_dimension_key(dim, value));
+            });
+            keys
+        };
+
+        let any_write = encode_dimension_key(IndexDimension::AnyPackageWrite, ANY_PACKAGE_VALUE);
+
+        // Every package write emits the single global marker regardless of
+        // publish-vs-upgrade or whether the upgrade reuses its id: a first
+        // publish (version 1), a user upgrade that mints a new id (version 2,
+        // new id), and a reused-id upgrade (version 2, original == id).
+        for (id_byte, version) in [(0, 1), (1, 2), (0, 2)] {
+            assert!(
+                run(id_byte, version).contains(&any_write),
+                "package write (id_byte={id_byte}, version={version}) emits AnyPackageWrite"
+            );
+        }
     }
 }

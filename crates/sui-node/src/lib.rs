@@ -158,6 +158,7 @@ use typed_store::rocks::default_db_options;
 use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 
 pub mod admin;
+pub mod db_shell;
 mod handle;
 pub mod metrics;
 
@@ -803,10 +804,9 @@ impl SuiNode {
                         sui_types::executable_transaction::CertificateProof::Checkpoint(0, 0),
                     ),
                 );
+            let _enter = span.enter();
             state
                 .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
-                .instrument(span)
-                .await
                 .unwrap();
         }
 
@@ -1564,9 +1564,6 @@ impl SuiNode {
         };
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
-        let max_tx_per_checkpoint = max_tx_per_checkpoint(epoch_store.protocol_config());
-        let max_checkpoint_size_bytes =
-            epoch_store.protocol_config().max_checkpoint_size_bytes() as usize;
 
         CheckpointService::build(
             state.clone(),
@@ -1577,8 +1574,6 @@ impl SuiNode {
             checkpoint_output,
             Box::new(certified_checkpoint_output),
             checkpoint_metrics,
-            max_tx_per_checkpoint,
-            max_checkpoint_size_bytes,
         )
     }
 
@@ -1693,11 +1688,24 @@ impl SuiNode {
         self.state.committee_store().clone()
     }
 
-    /*
-    pub fn clone_authority_store(&self) -> Arc<AuthorityStore> {
-        self.state.db()
+    pub fn clone_checkpoint_store(&self) -> Arc<CheckpointStore> {
+        self.checkpoint_store.clone()
     }
-    */
+
+    pub fn clone_authority_store(&self) -> Arc<AuthorityStore> {
+        self.state.authority_store()
+    }
+
+    pub fn clone_consensus_store(
+        &self,
+    ) -> Option<Arc<consensus_core::storage::rocksdb_store::RocksDBStore>> {
+        self.validator_components
+            .try_lock()
+            .ok()?
+            .as_ref()?
+            .consensus_manager
+            .consensus_store()
+    }
 
     /// Clone an AuthorityAggregator currently used in this node, if the node is a fullnode.
     /// After reconfig, Transaction Driver builds a new AuthorityAggregator. The caller
@@ -2497,6 +2505,83 @@ fn build_kv_store(
     )))
 }
 
+async fn build_json_rpc_router(
+    state: &Arc<AuthorityState>,
+    transaction_orchestrator: &Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>>,
+    config: &NodeConfig,
+    prometheus_registry: &Registry,
+) -> Result<axum::Router> {
+    let traffic_controller = state.traffic_controller.clone();
+    let mut server = JsonRpcServerBuilder::new(
+        env!("CARGO_PKG_VERSION"),
+        prometheus_registry,
+        traffic_controller,
+        config.policy_config.clone(),
+    );
+
+    let kv_store = build_kv_store(state, config, prometheus_registry)?;
+
+    let metrics = Arc::new(JsonRpcMetrics::new(prometheus_registry));
+    server.register_module(ReadApi::new(
+        state.clone(),
+        kv_store.clone(),
+        metrics.clone(),
+    ))?;
+    server.register_module(CoinReadApi::new(
+        state.clone(),
+        kv_store.clone(),
+        metrics.clone(),
+    ))?;
+
+    // if run_with_range is enabled we want to prevent any transactions
+    // run_with_range = None is normal operating conditions
+    if config.run_with_range.is_none() {
+        server.register_module(TransactionBuilderApi::new(state.clone()))?;
+    }
+    server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
+    server.register_module(BridgeReadApi::new(state.clone(), metrics.clone()))?;
+
+    if let Some(transaction_orchestrator) = transaction_orchestrator {
+        server.register_module(TransactionExecutionApi::new(
+            state.clone(),
+            transaction_orchestrator.clone(),
+            metrics.clone(),
+        ))?;
+    }
+
+    let name_service_config = if let (
+        Some(package_address),
+        Some(registry_id),
+        Some(reverse_registry_id),
+    ) = (
+        config.name_service_package_address,
+        config.name_service_registry_id,
+        config.name_service_reverse_registry_id,
+    ) {
+        sui_name_service::NameServiceConfig::new(package_address, registry_id, reverse_registry_id)
+    } else {
+        match state.get_chain_identifier().chain() {
+            Chain::Mainnet => sui_name_service::NameServiceConfig::mainnet(),
+            Chain::Testnet => sui_name_service::NameServiceConfig::testnet(),
+            Chain::Unknown => sui_name_service::NameServiceConfig::default(),
+        }
+    };
+
+    server.register_module(IndexerApi::new(
+        state.clone(),
+        ReadApi::new(state.clone(), kv_store.clone(), metrics.clone()),
+        kv_store,
+        name_service_config,
+        metrics,
+        config.indexer_max_subscriptions,
+    ))?;
+    server.register_module(MoveUtils::new(state.clone()))?;
+
+    let server_type = config.jsonrpc_server_type();
+
+    Ok(server.to_router(server_type).await?)
+}
+
 async fn build_http_servers(
     state: Arc<AuthorityState>,
     store: RocksDbStore,
@@ -2515,80 +2600,22 @@ async fn build_http_servers(
 
     let mut router = axum::Router::new();
 
-    let json_rpc_router = {
-        let traffic_controller = state.traffic_controller.clone();
-        let mut server = JsonRpcServerBuilder::new(
-            env!("CARGO_PKG_VERSION"),
-            prometheus_registry,
-            traffic_controller,
-            config.policy_config.clone(),
+    // The JSON-RPC service can be disabled independently of the gRPC/REST
+    // service and of JSON-RPC indexing, so that a node can keep indexing
+    // without exposing the JSON-RPC endpoints.
+    if config.json_rpc_enabled() {
+        router = router.merge(
+            build_json_rpc_router(
+                &state,
+                transaction_orchestrator,
+                config,
+                prometheus_registry,
+            )
+            .await?,
         );
-
-        let kv_store = build_kv_store(&state, config, prometheus_registry)?;
-
-        let metrics = Arc::new(JsonRpcMetrics::new(prometheus_registry));
-        server.register_module(ReadApi::new(
-            state.clone(),
-            kv_store.clone(),
-            metrics.clone(),
-        ))?;
-        server.register_module(CoinReadApi::new(
-            state.clone(),
-            kv_store.clone(),
-            metrics.clone(),
-        ))?;
-
-        // if run_with_range is enabled we want to prevent any transactions
-        // run_with_range = None is normal operating conditions
-        if config.run_with_range.is_none() {
-            server.register_module(TransactionBuilderApi::new(state.clone()))?;
-        }
-        server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
-        server.register_module(BridgeReadApi::new(state.clone(), metrics.clone()))?;
-
-        if let Some(transaction_orchestrator) = transaction_orchestrator {
-            server.register_module(TransactionExecutionApi::new(
-                state.clone(),
-                transaction_orchestrator.clone(),
-                metrics.clone(),
-            ))?;
-        }
-
-        let name_service_config =
-            if let (Some(package_address), Some(registry_id), Some(reverse_registry_id)) = (
-                config.name_service_package_address,
-                config.name_service_registry_id,
-                config.name_service_reverse_registry_id,
-            ) {
-                sui_name_service::NameServiceConfig::new(
-                    package_address,
-                    registry_id,
-                    reverse_registry_id,
-                )
-            } else {
-                match state.get_chain_identifier().chain() {
-                    Chain::Mainnet => sui_name_service::NameServiceConfig::mainnet(),
-                    Chain::Testnet => sui_name_service::NameServiceConfig::testnet(),
-                    Chain::Unknown => sui_name_service::NameServiceConfig::default(),
-                }
-            };
-
-        server.register_module(IndexerApi::new(
-            state.clone(),
-            ReadApi::new(state.clone(), kv_store.clone(), metrics.clone()),
-            kv_store,
-            name_service_config,
-            metrics,
-            config.indexer_max_subscriptions,
-        ))?;
-        server.register_module(MoveUtils::new(state.clone()))?;
-
-        let server_type = config.jsonrpc_server_type();
-
-        server.to_router(server_type).await?
-    };
-
-    router = router.merge(json_rpc_router);
+    } else {
+        info!("json-rpc service is disabled");
+    }
 
     let (subscription_service_checkpoint_sender, subscription_service_handle) =
         SubscriptionService::build(prometheus_registry);
@@ -2669,16 +2696,6 @@ async fn build_http_servers(
         },
         Some(subscription_service_checkpoint_sender),
     ))
-}
-
-#[cfg(not(test))]
-fn max_tx_per_checkpoint(protocol_config: &ProtocolConfig) -> usize {
-    protocol_config.max_transactions_per_checkpoint() as usize
-}
-
-#[cfg(test)]
-fn max_tx_per_checkpoint(_: &ProtocolConfig) -> usize {
-    2
 }
 
 #[derive(Default)]

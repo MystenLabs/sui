@@ -9,7 +9,6 @@ use sui_system::stake_subsidy;
 use sui_system::sui_system;
 use sui_system::sui_system_state_inner;
 use sui_system::validator::{Self, Validator};
-use sui_system::validator_set;
 
 public struct GenesisValidatorMetadata has copy, drop {
     name: vector<u8>,
@@ -82,7 +81,7 @@ fun create(
     assert!(ctx.epoch() == 0, ENotCalledAtGenesis);
 
     // Create all the `Validator` structs
-    let mut validators = vector[];
+    let mut validators = vector<Validator>[];
     genesis_validators.do!(|genesis_validator| {
         let GenesisValidatorMetadata {
             name,
@@ -123,7 +122,7 @@ fun create(
 
         // Ensure that each validator is unique
         assert!(
-            !validator_set::is_duplicate_validator(&validators, &validator),
+            validators.all!(|v| v.sui_address() != sui_address && !v.is_duplicate(&validator)),
             EDuplicateValidator,
         );
 

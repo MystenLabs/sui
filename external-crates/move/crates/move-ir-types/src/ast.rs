@@ -396,8 +396,6 @@ pub type Function = Spanned<Function_>;
 /// type system and/or have access to some runtime/storage context
 #[derive(Debug, PartialEq, Clone)]
 pub enum Builtin {
-    /// Pack a vector fix a fixed number of elements. Zero elements means an empty vector.
-    VecPack(Vec<Type>, u64),
     /// Get the length of a vector
     VecLen(Vec<Type>),
     /// Acquire an immutable reference to the element at a given index of the vector
@@ -408,8 +406,6 @@ pub enum Builtin {
     VecPushBack(Vec<Type>),
     /// Pop and return an element from the end of the vector
     VecPopBack(Vec<Type>),
-    /// Destroy a vector of a fixed length. Zero length means destroying an empty vector.
-    VecUnpack(Vec<Type>, u64),
     /// Swap the elements at twi indices in the vector
     VecSwap(Vec<Type>),
 
@@ -486,6 +482,10 @@ pub enum Statement_ {
     JumpIfFalse(Box<Exp>, BlockLabel),
     /// `n { f_1: x_1, ... , f_j: x_j  } = e`
     Unpack(DatatypeName, Vec<Type>, Fields<Var>, Box<Exp>),
+    /// Destroy a vector of a fixed length, binding each popped value to the
+    /// corresponding LValue: `vector<T; N>(lv_1, ..., lv_N) = e`. The
+    /// `Box<Exp>` is the input vector expression.
+    VecUnpack(Type, u64, Vec<LValue>, Box<Exp>),
     /// `e::v { f_1: x_1, ... , f_j: x_j  } = e`
     UnpackVariant(
         DatatypeName,
@@ -619,6 +619,10 @@ pub enum Exp_ {
     /// as the current struct class (i.e., the class of the method we're currently executing).
     /// `n { f_1: e_1, ... , f_j: e_j }`
     Pack(DatatypeName, Vec<Type>, ExpFields),
+    /// Pack a vector of a fixed number of elements: `vector<T; N>(<args>)`. The
+    /// `Box<Exp>` is the args expression (typically an `ExprList`) supplying
+    /// the N stack values to pack.
+    VecPack(Type, u64, Box<Exp>),
     /// `&e.f`, `&mut e.f`
     Borrow {
         /// mutable or not
@@ -1455,15 +1459,11 @@ impl fmt::Display for Var_ {
 impl fmt::Display for Builtin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Builtin::VecPack(tys, num) => write!(f, "vec_pack_{}{}", num, format_type_actuals(tys)),
             Builtin::VecLen(tys) => write!(f, "vec_len{}", format_type_actuals(tys)),
             Builtin::VecImmBorrow(tys) => write!(f, "vec_imm_borrow{}", format_type_actuals(tys)),
             Builtin::VecMutBorrow(tys) => write!(f, "vec_mut_borrow{}", format_type_actuals(tys)),
             Builtin::VecPushBack(tys) => write!(f, "vec_push_back{}", format_type_actuals(tys)),
             Builtin::VecPopBack(tys) => write!(f, "vec_pop_back{}", format_type_actuals(tys)),
-            Builtin::VecUnpack(tys, num) => {
-                write!(f, "vec_unpack_{}{}", num, format_type_actuals(tys))
-            }
             Builtin::VecSwap(tys) => write!(f, "vec_swap{}", format_type_actuals(tys)),
             Builtin::Freeze => write!(f, "freeze"),
             Builtin::ToU8 => write!(f, "to_u8"),
@@ -1545,6 +1545,14 @@ impl fmt::Display for Statement_ {
                         "{} {} : {},",
                         acc, field, var
                     )),
+                e
+            ),
+            Statement_::VecUnpack(ty, n, lvalues, e) => write!(
+                f,
+                "vector<{}; {}>({}) = {};",
+                ty,
+                n,
+                intersperse(lvalues, ", "),
                 e
             ),
             Statement_::UnpackVariant(name, variant_name, tys, bindings, e, unpack_type) => {
@@ -1671,6 +1679,7 @@ impl fmt::Display for Exp_ {
                     acc, field, op,
                 ))
             ),
+            Exp_::VecPack(ty, n, args) => write!(f, "vector<{}; {}>{}", ty, n, args),
             Exp_::Borrow {
                 is_mutable,
                 exp,

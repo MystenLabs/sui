@@ -2157,6 +2157,445 @@ async fn test_multiple_deposits_merged_in_effects() {
     test_env.trigger_reconfiguration().await;
 }
 
+/// A single transaction produces two Merge accumulator events to the same `(sender, Balance<SUI>)`
+/// key whose amounts sum past `u64::MAX`:
+///
+///   1. A Move-native Merge of exactly `u64::MAX` (an object-sourced withdrawal redeemed and
+///      deposited back to the sender). This is accepted by the object-runtime per-key cap, which
+///      rejects only totals strictly greater than `u64::MAX`.
+///   2. An uncapped Merge of `coin.value >= 1` emitted by the gas charger during gas smashing,
+///      because the gas payment mixes an address-balance reservation (the smash target) with a gas
+///      coin, so `deposit = total_smashed - reservation = coin.value` is merged into the same key.
+///
+/// The combined gross Merge total `u64::MAX + coin.value` is not representable in `u64`. This test
+/// asserts that such a transaction is aborted as a recoverable `CoinBalanceOverflow` before gas is
+/// charged, rather than reaching the per-key merge fold in `AccumulatorWriteV1::merge` or the
+/// SUI-conservation sum.
+#[sim_test]
+async fn test_accumulator_merge_overflow_poison_pill() {
+    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+
+    // Publish the test package and fund the sender's SUI address balance so that the gas-payment
+    // reservation (the smash target) is backed at signing time.
+    let pkg = test_env.setup_test_package(move_test_code_path()).await;
+
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let fund_tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(100_000_000, sender)])
+        .build();
+    test_env.exec_tx_directly(fund_tx).await.unwrap();
+    test_env.verify_accumulator_exists(sender, 100_000_000);
+
+    // PTB: call the entry function that emits a Move-native Merge of u64::MAX to
+    // (sender, Balance<SUI>).
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.programmable_move_call(
+        pkg,
+        Identifier::new("accumulator_overflow").unwrap(),
+        Identifier::new("merge_u64_max").unwrap(),
+        vec![],
+        vec![],
+    );
+    let pt = builder.finish();
+
+    // Refresh the sender's gas coin and build a mixed gas payment: [reservation, coin]. The
+    // reservation is listed first so it becomes the smash target (an address balance), and the
+    // gas coin's value is deposited back into that same address balance as an *uncapped* Merge.
+    let (sender, gas_coin) = test_env.get_sender_and_gas(0);
+    let reservation_ref = test_env.encode_coin_reservation(sender, 0, 1_000);
+
+    let poison_tx = TransactionData::V1(TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(pt),
+        sender,
+        gas_data: GasData {
+            payment: vec![reservation_ref, gas_coin],
+            owner: sender,
+            price: test_env.rgp,
+            budget: 10_000_000,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: test_env.chain_id,
+            nonce: 0,
+        },
+    });
+
+    // The transaction is aborted cleanly with CoinBalanceOverflow.
+    let (_, effects) = test_env
+        .exec_tx_directly(poison_tx)
+        .await
+        .expect("execution must not panic the node");
+
+    let status = effects.status();
+    assert!(
+        matches!(
+            status,
+            sui_types::execution_status::ExecutionStatus::Failure(failure)
+                if failure.error == sui_types::execution_status::ExecutionFailureStatus::CoinBalanceOverflow
+        ),
+        "expected CoinBalanceOverflow abort, got: {status:?}"
+    );
+
+    // The sender's balance is untouched (only gas was charged) and a subsequent reconfiguration
+    // succeeds.
+    test_env.trigger_reconfiguration().await;
+}
+
+/// Per-key overflow for a *custom* coin type.
+///
+/// Gas is always paid in SUI, so the uncapped gas-smash deposit Merge that can defeat the
+/// object-runtime cap for `Balance<SUI>` has no analogue for an arbitrary `Balance<T>`. The only
+/// way to merge to a `Balance<COIN_A>` key is a Move-native deposit, every one of which is counted
+/// by the object-runtime per-key cap. So an attempt to merge past `u64::MAX` is rejected during
+/// execution (an arithmetic error from the native) and the transaction aborts cleanly.
+/// (Conservation checking does not apply to non-SUI types.) The
+/// `check_accumulator_amounts_representable` guard is also type-agnostic, so it backstops this even
+/// if the cap were ever bypassed.
+#[sim_test]
+async fn test_accumulator_merge_overflow_custom_coin_capped() {
+    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+
+    let pkg = test_env.setup_test_package(move_test_code_path()).await;
+    let (_publisher, coin_a_type) = test_env.setup_custom_coin().await;
+
+    // Two unbacked object-sourced u64::MAX deposits of Balance<COIN_A> to the sender, in one tx.
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    // COIN_A's `init` mints a starting balance to its publisher (== sender here); capture it so we
+    // can assert the aborted tx credits nothing.
+    let balance_before = test_env.get_balance_ab(sender, coin_a_type.clone());
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.programmable_move_call(
+        pkg,
+        Identifier::new("accumulator_overflow").unwrap(),
+        Identifier::new("double_merge_u64_max").unwrap(),
+        vec![coin_a_type.clone()],
+        vec![],
+    );
+    let tx = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        10_000_000,
+        test_env.rgp,
+    );
+
+    // The second merge pushes the per-key total past u64::MAX and is rejected by the object-runtime
+    // cap; the tx aborts.
+    let (_, effects) = test_env
+        .exec_tx_directly(tx)
+        .await
+        .expect("execution must not panic the node");
+    let status = effects.status();
+    assert!(
+        matches!(
+            status,
+            sui_types::execution_status::ExecutionStatus::Failure(failure)
+                if matches!(
+                    failure.error,
+                    sui_types::execution_status::ExecutionFailureStatus::MovePrimitiveRuntimeError(_)
+                )
+        ),
+        "expected the over-cap custom-coin merge to abort with an arithmetic (merge-cap) error, \
+         got: {status:?}"
+    );
+
+    // Nothing was credited to the sender's COIN_A balance.
+    assert_eq!(
+        test_env.get_balance_ab(sender, coin_a_type),
+        balance_before,
+        "aborted tx must not change the COIN_A balance"
+    );
+    test_env.trigger_reconfiguration().await;
+}
+
+/// A single object-sourced `u64::MAX` SUI withdrawal redeemed and deposited to the sender. The
+/// per-key representability guard bounds SUI accumulator totals to the total supply, so this
+/// `u64::MAX` (both the input-side `Split` and the deposit `Merge`) exceeds the supply and is
+/// rejected as `CoinBalanceOverflow` *before* gas is charged — well before the SUI-conservation sum
+/// or the withdrawal-backing check run. (The conservation sum still accumulates in `u128` as
+/// defense-in-depth for multi-key totals that individually stay within supply but jointly exceed
+/// `u64::MAX`.)
+#[sim_test]
+async fn test_accumulator_conservation_overflow_single_withdrawal() {
+    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+
+    let pkg = test_env.setup_test_package(move_test_code_path()).await;
+
+    // A single u64::MAX SUI withdrawal deposited to the sender, paid with a normal gas coin (no
+    // address-balance reservation). u64::MAX exceeds the total SUI supply, so the per-key guard
+    // rejects it before gas charging / conservation.
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.programmable_move_call(
+        pkg,
+        Identifier::new("accumulator_overflow").unwrap(),
+        Identifier::new("merge_u64_max").unwrap(),
+        vec![],
+        vec![],
+    );
+    let tx = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        10_000_000,
+        test_env.rgp,
+    );
+
+    // The u64::MAX deposit exceeds the total SUI supply, so the per-key representability guard
+    // aborts the transaction with CoinBalanceOverflow before gas is charged.
+    let (_, effects) = test_env
+        .exec_tx_directly(tx)
+        .await
+        .expect("execution must not panic the node");
+    let status = effects.status();
+    assert!(
+        matches!(
+            status,
+            sui_types::execution_status::ExecutionStatus::Failure(failure)
+                if failure.error
+                    == sui_types::execution_status::ExecutionFailureStatus::CoinBalanceOverflow
+        ),
+        "expected CoinBalanceOverflow, got: {status:?}"
+    );
+    test_env.trigger_reconfiguration().await;
+}
+
+/// A gas-refund Merge to a key already at `u64::MAX`. Bounding the per-key guard to `u64::MAX` alone
+/// would let a Move-native Merge of exactly `u64::MAX` to `(sender, Balance<SUI>)` pass; `charge_gas`
+/// then emits a refund Merge (`net_gas_usage() < 0`, gas paid from the sender's SUI address balance)
+/// to that same key *after* the guard, and the fold in `AccumulatorWriteV1::merge` would compute
+/// `u64::MAX + refund`, which is not representable.
+///
+/// This test sets up that shape: a single address-balance gas reservation (empty `payment` +
+/// `ValidDuring`, so no smash-time deposit Merge) plus a net refund produced by deleting a large
+/// pre-existing owned object. Because the supply bound makes the `u64::MAX` Merge exceed
+/// `TOTAL_SUPPLY_MIST`, it is rejected as `CoinBalanceOverflow` before gas is charged, so the refund
+/// is never emitted.
+#[sim_test]
+async fn test_accumulator_merge_overflow_gas_refund_poison_pill() {
+    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+
+    let pkg = test_env.setup_test_package(move_test_code_path()).await;
+
+    // Fund the sender's SUI address balance so the (empty-payment) address-balance gas reservation
+    // is backed at signing time.
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let fund_tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1_000_000_000, sender)])
+        .build();
+    test_env.exec_tx_directly(fund_tx).await.unwrap();
+    test_env.verify_accumulator_exists(sender, 1_000_000_000);
+
+    // Setup: create a large owned object, paying its (large) storage cost now via a normal coin gas
+    // payment. Deleting it in the later tx then returns a storage rebate big enough to make that tx
+    // net-negative (a gas refund). 16_000 bytes stays under the 16_384-byte max pure-argument size;
+    // at obj_data_cost_refundable (100) * storage_gas_price (76) = 7600 MIST/byte that is ~120M MIST
+    // of storage cost, whose rebate dwarfs the later tx's two-call computation.
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let value = builder.pure(1u64).unwrap();
+    let data_arg = builder.pure(vec![0u8; 16_000]).unwrap();
+    builder.programmable_move_call(
+        pkg,
+        Identifier::new("gas_test").unwrap(),
+        Identifier::new("create_object_with_large_storage").unwrap(),
+        vec![],
+        vec![value, data_arg],
+    );
+    let create_tx = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        2_000_000_000,
+        test_env.rgp,
+    );
+    let (_, create_effects) = test_env.exec_tx_directly(create_tx).await.unwrap();
+    assert!(
+        create_effects.status().is_ok(),
+        "large-object create failed: {:?}",
+        create_effects.status()
+    );
+    let large_obj = create_effects.created()[0].0;
+
+    // PTB: delete the large object (storage rebate >> computation => net refund) and emit a
+    // Move-native Merge of u64::MAX to (sender, Balance<SUI>) via the object-sourced withdrawal.
+    let (sender, _gas) = test_env.get_sender_and_gas(0);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let obj_arg = builder.obj(ObjectArg::ImmOrOwnedObject(large_obj)).unwrap();
+    builder.programmable_move_call(
+        pkg,
+        Identifier::new("gas_test").unwrap(),
+        Identifier::new("delete_object").unwrap(),
+        vec![],
+        vec![obj_arg],
+    );
+    builder.programmable_move_call(
+        pkg,
+        Identifier::new("accumulator_overflow").unwrap(),
+        Identifier::new("merge_u64_max").unwrap(),
+        vec![],
+        vec![],
+    );
+    let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
+
+    // Empty gas payment + ValidDuring expiration => gas is paid from the sender's SUI address
+    // balance (a single reservation, the smash target). No smash-time deposit Merge is emitted, so
+    // the only over-limit event would be the final (refund) Merge emitted inside charge_gas, after
+    // the guard — which is why the guard must reject the u64::MAX deposit (above the supply) up
+    // front, before that refund is ever computed.
+    let poison_tx = create_address_balance_transaction(
+        tx_kind,
+        sender,
+        100_000_000,
+        test_env.rgp,
+        test_env.chain_id,
+    );
+
+    // The over-supply deposit is rejected as CoinBalanceOverflow before gas is charged.
+    let (_, effects) = test_env
+        .exec_tx_directly(poison_tx)
+        .await
+        .expect("execution must not panic the node");
+    let status = effects.status();
+    assert!(
+        matches!(
+            status,
+            sui_types::execution_status::ExecutionStatus::Failure(failure)
+                if failure.error
+                    == sui_types::execution_status::ExecutionFailureStatus::CoinBalanceOverflow
+        ),
+        "expected CoinBalanceOverflow, got: {status:?}"
+    );
+
+    test_env.trigger_reconfiguration().await;
+}
+
+/// Gas-coin overflow via `Argument::GasCoin`. The per-key supply guard bounds SUI *accumulator*
+/// amounts, but merging SUI into the PTB gas coin via a `MergeCoins` command is an object mutation,
+/// not an accumulator event, so it escapes that guard. `MergeCoins` only rejects sums strictly
+/// greater than `u64::MAX`, so it permits driving the gas coin's raw value up to exactly `u64::MAX`.
+/// If the transaction then nets a gas *refund* (`net_gas_usage() < 0`), `deduct_gas` would compute
+/// `u64::MAX + refund`, which is not representable.
+///
+/// The gas coin is driven to `u64::MAX` with two object-sourced SUI withdrawals — each
+/// `< TOTAL_SUPPLY_MIST`, so each passes the per-key supply guard — redeemed to `Coin<SUI>` and
+/// merged into the gas coin; the refund is produced by deleting a large pre-existing object.
+/// Reaching this requires ~`u64::MAX` MIST of SUI in one coin, more than the total supply.
+///
+/// The cross-key total-SUI-withdraw bound covers this: the two withdrawals sum to ~`u64::MAX`, which
+/// exceeds the total supply, so the transaction is rejected as `CoinBalanceOverflow` before gas is
+/// charged. (The per-key supply guard alone does not catch this — each withdrawal is under supply.)
+#[sim_test]
+async fn test_gas_coin_overflow_via_merge_into_gas_coin() {
+    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+
+    let pkg = test_env.setup_test_package(move_test_code_path()).await;
+
+    // Create a large owned object up front; deleting it in the later tx yields a storage rebate
+    // big enough to make that tx net-negative (a gas refund), which is what makes deduct_gas *add*
+    // to the (already u64::MAX) gas coin rather than subtract.
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let value = builder.pure(1u64).unwrap();
+    let data_arg = builder.pure(vec![0u8; 16_000]).unwrap();
+    builder.programmable_move_call(
+        pkg,
+        Identifier::new("gas_test").unwrap(),
+        Identifier::new("create_object_with_large_storage").unwrap(),
+        vec![],
+        vec![value, data_arg],
+    );
+    let create_tx = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        2_000_000_000,
+        test_env.rgp,
+    );
+    let (_, create_effects) = test_env.exec_tx_directly(create_tx).await.unwrap();
+    assert!(
+        create_effects.status().is_ok(),
+        "large-object create failed: {:?}",
+        create_effects.status()
+    );
+    let large_obj = create_effects.created()[0].0;
+
+    // Drive the gas coin to exactly u64::MAX: gas_coin_value + amount1 + amount2 == u64::MAX, with
+    // each withdrawal kept under total supply so the per-key supply guard passes.
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let gas_value = test_env.get_coin_balance(gas.0).await;
+    let needed = u64::MAX - gas_value;
+    let amount1 = needed / 2;
+    let amount2 = needed - amount1;
+    assert!(
+        amount1 < sui_types::gas_coin::TOTAL_SUPPLY_MIST
+            && amount2 < sui_types::gas_coin::TOTAL_SUPPLY_MIST,
+        "each phantom withdrawal ({amount1}, {amount2}) must stay under total supply to pass the guard"
+    );
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    // Delete the large object (storage rebate >> computation => net refund).
+    let obj_arg = builder.obj(ObjectArg::ImmOrOwnedObject(large_obj)).unwrap();
+    builder.programmable_move_call(
+        pkg,
+        Identifier::new("gas_test").unwrap(),
+        Identifier::new("delete_object").unwrap(),
+        vec![],
+        vec![obj_arg],
+    );
+    // Two SUI withdrawals returned as Coin<SUI>.
+    let a1 = builder.pure(amount1).unwrap();
+    let c1 = builder.programmable_move_call(
+        pkg,
+        Identifier::new("accumulator_overflow").unwrap(),
+        Identifier::new("withdraw_sui_as_coin").unwrap(),
+        vec![],
+        vec![a1],
+    );
+    let a2 = builder.pure(amount2).unwrap();
+    let c2 = builder.programmable_move_call(
+        pkg,
+        Identifier::new("accumulator_overflow").unwrap(),
+        Identifier::new("withdraw_sui_as_coin").unwrap(),
+        vec![],
+        vec![a2],
+    );
+    // Merge both into the gas coin: gas + amount1 + amount2 == u64::MAX, which MergeCoins permits
+    // (it rejects only sums strictly above u64::MAX).
+    builder.command(Command::MergeCoins(Argument::GasCoin, vec![c1, c2]));
+
+    let poison_tx = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        100_000_000,
+        test_env.rgp,
+    );
+
+    // The over-supply aggregate withdraw is rejected as CoinBalanceOverflow before gas is charged.
+    let (_, effects) = test_env
+        .exec_tx_directly(poison_tx)
+        .await
+        .expect("execution must not panic the node");
+    let status = effects.status();
+    assert!(
+        matches!(
+            status,
+            sui_types::execution_status::ExecutionStatus::Failure(failure)
+                if failure.error
+                    == sui_types::execution_status::ExecutionFailureStatus::CoinBalanceOverflow
+        ),
+        "expected CoinBalanceOverflow, got: {status:?}"
+    );
+
+    test_env.trigger_reconfiguration().await;
+}
+
 #[sim_test]
 async fn test_address_balance_gas_budget_enforcement_with_storage() {
     let mut test_env = TestEnvBuilder::new().build().await;
@@ -2599,9 +3038,7 @@ async fn publish_and_mint_trusted_coin(test_env: &mut TestEnv, sender: SuiAddres
                     .cluster
                     .fullnode_handle
                     .sui_node
-                    .with_async(
-                        |node| async move { node.state().get_object(&obj_ref.0).await.unwrap() },
-                    )
+                    .with_async(|node| async move { node.state().get_object(&obj_ref.0).unwrap() })
                     .await;
                 if object.type_().unwrap().name().as_str() == "TreasuryCap" {
                     treasury_cap = Some(obj_ref);
@@ -3031,7 +3468,21 @@ async fn address_balance_stress_test() {
                             } else {
                                 exec_failure_count.fetch_add(1, Ordering::Relaxed);
                             }
-                            current_gas = effects.gas_object().unwrap().0;
+                            // On the IFFW short-circuit `effects.gas_object()` is `None` (the
+                            // executor never builds gas-charge metadata), but the gas coin is
+                            // still mutated. Fall back to looking up the input gas coin in
+                            // `mutated()` so subsequent transactions can chain off its new ref.
+                            current_gas = effects
+                                .gas_object()
+                                .map(|(obj_ref, _)| obj_ref)
+                                .or_else(|| {
+                                    effects
+                                        .mutated()
+                                        .into_iter()
+                                        .find(|(obj_ref, _)| obj_ref.0 == current_gas.0)
+                                        .map(|(obj_ref, _)| obj_ref)
+                                })
+                                .expect("gas coin must be present in effects");
                         }
                         Err(err) => {
                             let err_str = err.to_string();

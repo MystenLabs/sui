@@ -50,6 +50,7 @@ use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::owner::Owner;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::error::RpcError;
 use crate::error::upcast;
@@ -425,7 +426,7 @@ impl CoinMetadata {
         last: Option<u64>,
         before: Option<CTransaction>,
         filter: Option<TransactionFilter>,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         self.super_
             .received_transactions(ctx, first, after, last, before, filter)
             .await

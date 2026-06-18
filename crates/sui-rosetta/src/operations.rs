@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ops::Not;
 use std::str::FromStr;
 use std::vec;
@@ -20,6 +20,7 @@ use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::Input;
 use sui_rpc::proto::sui::rpc::v2::MoveCall;
 use sui_rpc::proto::sui::rpc::v2::ProgrammableTransaction;
+use sui_rpc::proto::sui::rpc::v2::Transaction as ProtoTransaction;
 use sui_rpc::proto::sui::rpc::v2::TransactionKind;
 use sui_rpc::proto::sui::rpc::v2::argument::ArgumentKind;
 use sui_rpc::proto::sui::rpc::v2::command::Command;
@@ -41,13 +42,134 @@ use crate::types::internal_operation::{
     WithdrawStake,
 };
 use crate::types::{
-    AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, Currency,
+    AccountIdentifier, Amount, AuxData, CoinAction, CoinChange, CoinID, CoinIdentifier, Currency,
     InternalOperation, OperationIdentifier, OperationStatus, OperationType, RedeemMode,
 };
 use crate::{CoinMetadataCache, Error, SUI};
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct Operations(Vec<Operation>);
+
+/// Which currency labels a payment-shaped PTB's operations, decided by the
+/// caller and applied by the parser. The parser cannot compute this itself — the
+/// coin type isn't in the PTB; it comes from the `/parse` annotation or from
+/// `balance_changes`.
+#[derive(Clone, Debug)]
+pub(crate) enum PaymentCurrency {
+    /// No non-SUI coin → PaySui ops.
+    Sui,
+    /// Exactly one resolved non-SUI coin → PayCoin(_) ops.
+    NonSui(Currency),
+    /// A non-SUI coin is involved but we can't pin it to one known currency —
+    /// its metadata didn't resolve, or two-plus non-SUI coins were present →
+    /// generic_op.
+    Unresolvable,
+}
+
+/// The currencies a transaction touches, resolved once from `balance_changes`.
+#[derive(Debug)]
+struct TxCurrencies {
+    /// `coin_type → Currency` for every resolved coin; drives the per-coin
+    /// balance-change reporting in the reconciliation pass.
+    by_coin_type: BTreeMap<String, Currency>,
+    /// How to label the payment ops (`Unresolvable` → generic_op).
+    payment: PaymentCurrency,
+}
+
+/// Resolve every coin in `balance_changes` to its `Currency` and, in the same
+/// pass, decide which currency labels the payment. See [`TxCurrencies`] for the
+/// two outputs.
+///
+/// The `payment` label is:
+/// - 0 non-SUI coins → `Sui`
+/// - exactly 1 resolved non-SUI coin → `NonSui`
+/// - ≥2 resolved non-SUI coins, or any coin with no usable metadata →
+///   `Unresolvable` (rosetta's `pay_coin_pt` produces exactly one non-SUI
+///   balance change, so anything else means we can't trust a PayCoin label and
+///   fall through to generic_op rather than guess)
+///
+/// For a non-SUI coin we degrade to `Unresolvable` only when it genuinely has no
+/// usable metadata (empty symbol / NotFound / missing); every other (transient)
+/// failure returns a retriable error so `/block` stalls and retries rather than
+/// baking a generic_op into a block that should have been PayCoin (by-hash
+/// idempotency).
+async fn resolve_tx_currencies(
+    balance_changes: &[BalanceChange],
+    cache: &CoinMetadataCache,
+) -> Result<TxCurrencies, Error> {
+    let mut currencies: BTreeMap<String, Currency> = BTreeMap::new();
+    let mut any_unresolvable = false;
+    for balance_change in balance_changes {
+        let coin_type = balance_change.coin_type();
+        // SUI's metadata is fixed and known — insert it directly rather than
+        // spending an RPC per transaction. It stays in the map so SUI balance
+        // changes survive the reconciliation filter; the non-SUI count below
+        // ignores it.
+        if coin_type == SUI.metadata.coin_type {
+            currencies.insert(coin_type.to_string(), SUI.clone());
+            continue;
+        }
+        let type_tag = sui_types::TypeTag::from_str(coin_type)
+            .map_err(|e| anyhow!("Invalid coin type: {}", e))?;
+        // `get_currency` surfaces "this coin has no usable metadata" in three
+        // different shapes, depending on what the upstream node returned and
+        // where it short-circuited: an `Ok` whose symbol is empty (metadata
+        // present but blank), `Err(MissingMetadata)` (response came back but the
+        // symbol/decimals fields were absent), or `Err(SuiRpcError(NotFound))`
+        // (the node answered the lookup with a NotFound status — the common one).
+        // All three mean the same thing to us, so the next three arms collapse
+        // them into the same "degrade to generic_op" outcome.
+        match cache.get_currency(&type_tag).await {
+            Ok(currency) if !currency.symbol.is_empty() => {
+                currencies.insert(coin_type.to_string(), currency);
+            }
+            Ok(_) | Err(Error::MissingMetadata) => {
+                tracing::debug!(coin_type, "non-SUI coin metadata unresolved; generic_op");
+                any_unresolvable = true;
+            }
+            Err(Error::SuiRpcError(status)) if status.code() == tonic::Code::NotFound => {
+                tracing::debug!(coin_type, "non-SUI coin metadata not found; generic_op");
+                any_unresolvable = true;
+            }
+            // Any other error — transient (Unavailable/DeadlineExceeded/...) or an
+            // anomaly like InvalidArgument (we sent a type we'd already validated,
+            // so this shouldn't happen) — is not a clean "no metadata" signal.
+            // Surface it as retriable rather than silently degrading to generic_op.
+            Err(e) => {
+                return Err(Error::CoinMetadataUnavailable(format!(
+                    "resolving coin metadata for {coin_type}: {e}"
+                )));
+            }
+        }
+    }
+
+    let non_sui: Vec<&Currency> = currencies
+        .values()
+        .filter(|c| c.metadata.coin_type != SUI.metadata.coin_type)
+        .collect();
+    let payment = if any_unresolvable {
+        PaymentCurrency::Unresolvable
+    } else {
+        match non_sui.as_slice() {
+            [] => PaymentCurrency::Sui,
+            [c] => PaymentCurrency::NonSui((*c).clone()),
+            many => {
+                // /block indexes the entire chain history, not just rosetta txns,
+                // so multi-coin txns (swaps, multi-sends) are expected.
+                tracing::debug!(
+                    non_sui_count = many.len(),
+                    "multiple non-SUI currencies in balance changes; emitting \
+                     generic_op rather than guessing PayCoin label"
+                );
+                PaymentCurrency::Unresolvable
+            }
+        }
+    };
+    Ok(TxCurrencies {
+        by_coin_type: currencies,
+        payment,
+    })
+}
 
 impl FromIterator<Operation> for Operations {
     fn from_iter<T: IntoIterator<Item = Operation>>(iter: T) -> Self {
@@ -358,17 +480,18 @@ impl Operations {
         ))
     }
 
-    pub fn from_transaction(
+    pub(crate) fn from_transaction(
         tx: TransactionKind,
         sender: SuiAddress,
         status: Option<OperationStatus>,
+        currency: PaymentCurrency,
     ) -> Result<Vec<Operation>, Error> {
         let TransactionKind { data, kind, .. } = tx;
         Ok(match data {
             Some(TransactionKindData::ProgrammableTransaction(pt))
                 if status != Some(OperationStatus::Failure) =>
             {
-                Self::parse_programmable_transaction(sender, status, pt)?
+                Self::parse_programmable_transaction(sender, status, pt, currency)?
             }
             data => {
                 let mut tx = TransactionKind::default();
@@ -383,6 +506,7 @@ impl Operations {
         sender: SuiAddress,
         status: Option<OperationStatus>,
         pt: ProgrammableTransaction,
+        currency: PaymentCurrency,
     ) -> Result<Vec<Operation>, Error> {
         #[derive(Debug)]
         enum KnownValue {
@@ -628,7 +752,6 @@ impl Operations {
         let mut needs_generic = false;
         let mut operations = vec![];
         let mut stake_ids = vec![];
-        let mut currency: Option<Currency> = None;
 
         // Detect FSS consolidation/redemption PTBs by signature MoveCalls.
         // Order matters: a PTB with `redeem_fss` is always MergeAndRedeem (Consolidate
@@ -740,39 +863,41 @@ impl Operations {
             }
         }
 
-        if !needs_generic && !aggregated_recipients.is_empty() {
+        // Drop the address-balance "change" artifact. A payment funded from
+        // address balance withdraws a coin, splits off the amount paid, and
+        // transfers the leftover back to the sender. The parser models the
+        // withdrawn coin as value 0 (it derives the sender's debit from the
+        // recipient totals instead), so that leftover transfer shows up as a
+        // meaningless `(sender, 0)` self-payment. Drop it.
+        aggregated_recipients.retain(|recipient, amount| !(*recipient == sender && *amount == 0));
+
+        if !needs_generic
+            && !matches!(currency, PaymentCurrency::Unresolvable)
+            && !aggregated_recipients.is_empty()
+        {
             let total_paid: u64 = aggregated_recipients.values().copied().sum();
             operations.extend(
                 aggregated_recipients
                     .into_iter()
                     .map(|(recipient, amount)| {
-                        currency = inputs.iter().last().and_then(|input| {
-                            if input.kind() == InputKind::Pure {
-                                let bytes = input.pure();
-                                bcs::from_bytes::<String>(bytes).ok().and_then(|json_str| {
-                                    serde_json::from_str::<Currency>(&json_str).ok()
-                                })
-                            } else {
-                                None
-                            }
-                        });
-                        match currency {
-                            Some(_) => Operation::pay_coin(
+                        match &currency {
+                            PaymentCurrency::NonSui(c) => Operation::pay_coin(
                                 status,
                                 recipient,
                                 amount.into(),
-                                currency.clone(),
+                                Some(c.clone()),
                             ),
-                            None => Operation::pay_sui(status, recipient, amount.into()),
+                            // Sui; Unresolvable is gated out by the `if` above.
+                            _ => Operation::pay_sui(status, recipient, amount.into()),
                         }
                     }),
             );
-            match currency {
-                Some(_) => operations.push(Operation::pay_coin(
+            match &currency {
+                PaymentCurrency::NonSui(c) => operations.push(Operation::pay_coin(
                     status,
                     sender,
                     -(total_paid as i128),
-                    currency.clone(),
+                    Some(c.clone()),
                 )),
                 _ => operations.push(Operation::pay_sui(status, sender, -(total_paid as i128))),
             }
@@ -1758,7 +1883,15 @@ impl Operations {
             .kind
             .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?;
         let is_gascoin_transfer = Self::is_gascoin_transfer(&tx_kind);
-        let ops = Self::new(Self::from_transaction(tx_kind, sender, status)?);
+
+        // Resolve coins to currencies and pick the payment's currency in one pass.
+        // `by_coin_type` is reused by the reconciliation pass below
+        // (`balance_changes_with_currency`); `payment` is handed to the parser.
+        let TxCurrencies {
+            by_coin_type: currencies,
+            payment,
+        } = resolve_tx_currencies(&balance_changes, cache).await?;
+        let ops = Self::new(Self::from_transaction(tx_kind, sender, status, payment)?);
         let ops = ops.into_iter();
 
         // We will need to subtract the operation amounts from the actual balance
@@ -1814,19 +1947,16 @@ impl Operations {
             vec![]
         };
 
-        let mut balance_changes_with_currency = vec![];
-
-        for balance_change in &balance_changes {
-            let coin_type = balance_change.coin_type();
-            let type_tag = sui_types::TypeTag::from_str(coin_type)
-                .map_err(|e| anyhow!("Invalid coin type: {}", e))?;
-
-            if let Ok(currency) = cache.get_currency(&type_tag).await
-                && !currency.symbol.is_empty()
-            {
-                balance_changes_with_currency.push((balance_change.clone(), currency));
-            }
-        }
+        // Reuse the currencies map built above instead of a second
+        // `cache.get_currency` pass per balance change.
+        let balance_changes_with_currency: Vec<_> = balance_changes
+            .iter()
+            .filter_map(|bc| {
+                currencies
+                    .get(bc.coin_type())
+                    .map(|c| (bc.clone(), c.clone()))
+            })
+            .collect();
 
         // Extract coin change operations from balance changes
         let mut coin_change_operations = Self::process_balance_change(
@@ -2078,10 +2208,150 @@ impl Operation {
     }
 }
 
+/// Reconstruct Rosetta `Operations` from a proto `Transaction`, applying the
+/// out-of-band `AuxData`. Shared by `/parse` and `/payloads`.
+///
+/// The aux data carries the few labels the PTB cannot encode (PayCoin
+/// currency, FSS validator / redeem-mode / cap), populated in `/metadata` and
+/// carried in the wrapper; it is not cryptographically bound to the signature.
+/// The PayCoin currency — the one label whose correctness affects fund routing
+/// — is verified online against the simulated balance changes in `/submit`; FSS
+/// labels are display-only (the signed PTB determines execution, and `/block`
+/// re-derives the truth from chain). `apply_aux` still rejects aux data whose
+/// family disagrees with the parsed transaction family.
+///
+/// Steps:
+/// 1. Reconstruct operations from the transaction via the shared parser
+///    (`from_transaction`), seeding the currency map from a `PayCoin` label so
+///    payments are labelled correctly.
+/// 2. Decorate FSS ops with the validator / redeem-mode / cap the PTB cannot
+///    encode, asserting the parsed family matches the aux-data family.
+pub fn reconstruct_operations(
+    proto: &ProtoTransaction,
+    aux: &AuxData,
+    status: Option<OperationStatus>,
+) -> Result<Operations, Error> {
+    let sender = SuiAddress::from_str(proto.sender())
+        .map_err(|e| Error::DataError(format!("invalid transaction sender: {e}")))?;
+    let tx_kind = proto
+        .kind
+        .clone()
+        .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?;
+
+    // The PayCoin label is the only currency the PTB cannot encode; everything
+    // else reconstructs as SUI. This path never produces `Unresolvable`.
+    let payment_currency = match aux {
+        AuxData::PayCoin { currency } => PaymentCurrency::NonSui(currency.clone()),
+        _ => PaymentCurrency::Sui,
+    };
+    let mut ops = Operations::from_transaction(tx_kind, sender, status, payment_currency)?;
+
+    // Apply the labels the PTB cannot encode.
+    apply_aux(&mut ops, aux)?;
+    Ok(Operations::new(ops))
+}
+
+/// Overlay the non-reconstructable labels from `aux` onto the parsed `ops`,
+/// rejecting if the parsed operation family disagrees with the aux-data family.
+fn apply_aux(ops: &mut [Operation], aux: &AuxData) -> Result<(), Error> {
+    match aux {
+        AuxData::None => {}
+        AuxData::PayCoin { .. } => {
+            // The currency map already drove the parser to label payments as
+            // PayCoin; just assert the parsed family is a payment family so a
+            // PayCoin label over e.g. a Stake PTB is rejected.
+            let is_payment = ops
+                .iter()
+                .all(|op| matches!(op.type_, OperationType::PayCoin | OperationType::PaySui));
+            if ops.is_empty() || !is_payment {
+                return Err(Error::DataError(
+                    "envelope inconsistency: PayCoin aux data over a non-payment transaction"
+                        .to_string(),
+                ));
+            }
+        }
+        AuxData::Consolidate { validator } => {
+            let op = single_op(ops, OperationType::ConsolidateAllStakedSuiToFungible)?;
+            match &mut op.metadata {
+                Some(OperationMetadata::ConsolidateAllStakedSuiToFungible {
+                    validator: v, ..
+                }) => {
+                    *v = Some(*validator);
+                }
+                _ => {
+                    return Err(Error::DataError(
+                        "envelope inconsistency: Consolidate aux data but parsed op lacks \
+                         Consolidate metadata"
+                            .to_string(),
+                    ));
+                }
+            }
+        }
+        AuxData::MergeAndRedeem {
+            validator,
+            redeem_mode,
+            amount,
+        } => {
+            // Minimal sanity check (replaces the removed
+            // `InternalOperation::validate`): AtLeast/AtMost must carry a
+            // positive amount; All must carry none. Guards against a server
+            // building structurally invalid aux data.
+            match redeem_mode {
+                RedeemMode::All if amount.is_some() => {
+                    return Err(Error::DataError(
+                        "MergeAndRedeem All must carry no amount".to_string(),
+                    ));
+                }
+                RedeemMode::AtLeast | RedeemMode::AtMost if !matches!(amount, Some(a) if *a > 0) => {
+                    return Err(Error::DataError(format!(
+                        "MergeAndRedeem {redeem_mode:?} must carry a positive amount"
+                    )));
+                }
+                _ => {}
+            }
+            let op = single_op(ops, OperationType::MergeAndRedeemFungibleStakedSui)?;
+            match &mut op.metadata {
+                Some(OperationMetadata::MergeAndRedeemFungibleStakedSui {
+                    validator: v,
+                    amount: a,
+                    redeem_mode: m,
+                    ..
+                }) => {
+                    // Override: the parser cannot distinguish AtMost from
+                    // All/unknown-partial, so the aux data is authoritative
+                    // for the user-declared mode + cap.
+                    *v = Some(*validator);
+                    *m = Some(redeem_mode.clone());
+                    *a = amount.map(|amount| amount.to_string());
+                }
+                _ => {
+                    return Err(Error::DataError(
+                        "envelope inconsistency: MergeAndRedeem aux data but parsed op lacks \
+                         MergeAndRedeem metadata"
+                            .to_string(),
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Return the single operation of `expected` type, rejecting if the parsed
+/// family does not match the aux-data family.
+fn single_op(ops: &mut [Operation], expected: OperationType) -> Result<&mut Operation, Error> {
+    match ops {
+        [op] if op.type_ == expected => Ok(op),
+        _ => Err(Error::DataError(format!(
+            "envelope inconsistency: aux data expects a single {expected:?} operation, \
+             but the transaction parsed to a different shape"
+        ))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::SUI;
     use crate::types::ConstructionMetadata;
     use crate::types::internal_operation::{consolidate_to_fungible_pt, merge_and_redeem_fss_pt};
     use sui_rpc::proto::sui::rpc::v2::Transaction;
@@ -2115,7 +2385,8 @@ mod tests {
         );
         let proto_tx: Transaction = data.into();
         let tx_kind = proto_tx.kind.expect("tx missing kind");
-        Operations::from_transaction(tx_kind, sender, None).expect("parse failed")
+        Operations::from_transaction(tx_kind, sender, None, PaymentCurrency::Sui)
+            .expect("parse failed")
     }
 
     #[tokio::test]
@@ -2151,6 +2422,7 @@ mod tests {
                 .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?,
             sender,
             None,
+            PaymentCurrency::Sui,
         )?);
         ops.0
             .iter()
@@ -2179,56 +2451,37 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_operation_data_parsing_pay_coin() -> Result<(), anyhow::Error> {
-        use crate::types::internal_operation::pay_coin_pt;
-
-        let gas = (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::random(),
-        );
-
-        let coin = (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::random(),
-        );
+    /// Stake operations must survive a parse round-trip: ops → internal → data →
+    /// proto → `from_transaction` → ops. This is a pure data round-trip (no chain
+    /// state), so it lives in-crate rather than forcing `from_transaction` /
+    /// `PaymentCurrency` into the public API for an integration test.
+    #[test]
+    fn test_stake_parse_round_trip() -> Result<(), anyhow::Error> {
+        use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_STAKING;
 
         let sender = SuiAddress::random_for_testing_only();
-        let recipient = SuiAddress::random_for_testing_only();
-
-        let pt = pay_coin_pt(sender, vec![recipient], vec![10000], &[coin], &[], 0, &SUI)?;
+        let validator = SuiAddress::random_for_testing_only();
+        let gas = random_object_ref();
         let gas_price = 10;
-        let data = TransactionData::new_programmable(
-            sender,
-            vec![gas],
-            pt,
-            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
-            gas_price,
-        );
 
-        let proto_tx: Transaction = data.clone().into();
-        let ops = Operations::new(Operations::from_transaction(
-            proto_tx
-                .kind
-                .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?,
-            sender,
-            None,
-        )?);
-        ops.0
-            .iter()
-            .for_each(|op| assert_eq!(op.type_, OperationType::PayCoin));
+        let ops: Operations = serde_json::from_value(serde_json::json!([{
+            "operation_identifier": {"index": 0},
+            "type": "Stake",
+            "account": {"address": sender.to_string()},
+            "amount": {"value": "-100000", "currency": {"symbol": "SUI", "decimals": 9}},
+            "metadata": {"Stake": {"validator": validator.to_string()}}
+        }]))?;
+
         let metadata = ConstructionMetadata {
             sender,
             gas_coins: vec![gas],
             extra_gas_coins: vec![],
-            objects: vec![coin],
+            objects: vec![],
             party_objects: vec![],
             total_coin_value: 0,
             gas_price,
-            budget: TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
-            currency: Some(SUI.clone()),
+            budget: gas_price * TEST_ONLY_GAS_UNIT_FOR_STAKING,
+            currency: None,
             address_balance_withdrawal: 0,
             epoch: None,
             chain_id: None,
@@ -2237,9 +2490,200 @@ mod tests {
             redeem_plan: None,
             bind_epoch: None,
         };
-        let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
-        assert_eq!(data, parsed_data);
+        let parsed_data = ops.clone().into_internal()?.try_into_data(metadata)?;
 
+        let proto_tx: Transaction = parsed_data.clone().into();
+        let parsed_ops = Operations::new(Operations::from_transaction(
+            proto_tx
+                .kind
+                .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?,
+            sender,
+            None,
+            PaymentCurrency::Sui,
+        )?);
+
+        assert_eq!(ops, parsed_ops, "expected {ops:#?}, got: {parsed_ops:#?}");
+        Ok(())
+    }
+
+    /// Build a `pay_coin_pt`-shaped PTB (SplitCoins + TransferObjects) and parse
+    /// it under the given payment currency. Shared by the currency→label tests.
+    fn parse_payment_pt(payment: PaymentCurrency) -> Result<Vec<Operation>, anyhow::Error> {
+        use crate::SUI;
+        use crate::types::internal_operation::pay_coin_pt;
+
+        let gas = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+        let coin = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+        let sender = SuiAddress::random_for_testing_only();
+        let recipient = SuiAddress::random_for_testing_only();
+        let pt = pay_coin_pt(sender, vec![recipient], vec![10_000], &[coin], &[], 0, &SUI)?;
+        let gas_price = 10;
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![gas],
+            pt,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
+        );
+        let proto_tx: Transaction = data.into();
+        let tx_kind = proto_tx.kind.unwrap();
+        Ok(Operations::from_transaction(
+            tx_kind, sender, None, payment,
+        )?)
+    }
+
+    /// The parser is a dumb applier: `PaymentCurrency::Unresolvable` must emit
+    /// neither PaySui nor PayCoin — it falls through to `generic_op`. This is
+    /// what the indexing caller hands over when `balance_changes` shows a non-SUI
+    /// coin it couldn't resolve (or two or more non-SUI coins).
+    #[test]
+    fn test_parse_unresolvable_emits_generic_op() -> Result<(), anyhow::Error> {
+        let ops = parse_payment_pt(PaymentCurrency::Unresolvable)?;
+        assert!(
+            !ops.iter().any(|op| op.type_ == OperationType::PaySui),
+            "Unresolvable must not silently fall back to PaySui: {ops:?}"
+        );
+        assert!(
+            !ops.iter().any(|op| op.type_ == OperationType::PayCoin),
+            "Unresolvable must not produce PayCoin (we don't know the currency): {ops:?}"
+        );
+        assert!(
+            ops.iter()
+                .any(|op| matches!(op.metadata, Some(OperationMetadata::GenericTransaction(_)))),
+            "Unresolvable must fall through to generic_op: {ops:?}"
+        );
+        Ok(())
+    }
+
+    /// `PaymentCurrency::NonSui(c)` must label every payment leg as PayCoin
+    /// carrying exactly `c`, and never PaySui.
+    #[test]
+    fn test_parse_nonsui_emits_pay_coin() -> Result<(), anyhow::Error> {
+        use crate::types::CurrencyMetadata;
+
+        let usdc = Currency {
+            symbol: "USDC".to_string(),
+            decimals: 6,
+            metadata: CurrencyMetadata {
+                coin_type: "0xaaa::usdc::USDC".to_string(),
+            },
+        };
+        let ops = parse_payment_pt(PaymentCurrency::NonSui(usdc.clone()))?;
+        assert!(
+            !ops.iter().any(|op| op.type_ == OperationType::PaySui),
+            "NonSui must not produce PaySui: {ops:?}"
+        );
+        let pay_coins: Vec<_> = ops
+            .iter()
+            .filter(|op| op.type_ == OperationType::PayCoin)
+            .collect();
+        assert!(
+            !pay_coins.is_empty(),
+            "NonSui must produce PayCoin: {ops:?}"
+        );
+        for op in pay_coins {
+            assert_eq!(
+                op.amount.as_ref().map(|a| &a.currency),
+                Some(&usdc),
+                "PayCoin op must carry the NonSui currency: {op:?}"
+            );
+        }
+        Ok(())
+    }
+
+    /// A cache backed by a client that never connects, so every non-SUI coin
+    /// lookup fails with a transport (transient) error.
+    fn unreachable_cache() -> CoinMetadataCache {
+        use std::num::NonZeroUsize;
+        use sui_rpc::client::Client;
+        CoinMetadataCache::new(
+            Client::new("http://127.0.0.1:1").unwrap(),
+            NonZeroUsize::new(1).unwrap(),
+        )
+    }
+
+    fn balance_change(coin_type: &str) -> BalanceChange {
+        let mut bc = BalanceChange::default();
+        bc.coin_type = Some(coin_type.to_string());
+        bc
+    }
+
+    /// SUI takes no metadata RPC: even with an unreachable cache, a SUI-only
+    /// transaction resolves to a `Sui` payment (with SUI inserted directly into
+    /// the map for the reconciliation pass), never a retriable error.
+    #[tokio::test]
+    async fn test_resolve_sui_needs_no_lookup() {
+        let cache = unreachable_cache();
+        let resolved = resolve_tx_currencies(&[balance_change(&SUI.metadata.coin_type)], &cache)
+            .await
+            .expect("SUI must resolve without an RPC");
+        assert!(matches!(resolved.payment, PaymentCurrency::Sui));
+        assert_eq!(
+            resolved.by_coin_type.get(&SUI.metadata.coin_type),
+            Some(&*SUI)
+        );
+    }
+
+    /// Part 2 / idempotency: a transient failure resolving a non-SUI coin must
+    /// surface as a retriable error so `/block` stalls and retries, rather than
+    /// degrading to a generic_op and baking it into the block.
+    #[tokio::test]
+    async fn test_resolve_transient_non_sui_is_retriable() {
+        let cache = unreachable_cache();
+        let err = resolve_tx_currencies(&[balance_change("0xaaa::usdc::USDC")], &cache)
+            .await
+            .expect_err("a transient non-SUI lookup failure must surface as an error");
+        assert!(
+            matches!(err, Error::CoinMetadataUnavailable(_)),
+            "transient failure must map to CoinMetadataUnavailable: {err:?}"
+        );
+        // The Mesh error response must carry `retriable: true`.
+        let json = serde_json::to_value(&err).expect("error serializes");
+        assert_eq!(
+            json.get("retriable"),
+            Some(&serde_json::Value::Bool(true)),
+            "CoinMetadataUnavailable must serialize as retriable: {json}"
+        );
+    }
+
+    /// `pay_coin_pt` must not append a trailing `Pure` input whose bytes
+    /// BCS-decode as a String that JSON-decodes as `Currency`. Any future
+    /// builder change that reintroduces that shape would re-couple
+    /// downstream parsing to a brittle "scan last input" invariant.
+    #[test]
+    fn test_pay_coin_pt_has_no_currency_bearer() -> Result<(), anyhow::Error> {
+        use crate::SUI;
+        use crate::types::internal_operation::pay_coin_pt;
+
+        let sender = SuiAddress::random_for_testing_only();
+        let recipient = SuiAddress::random_for_testing_only();
+        let coin = (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::random(),
+        );
+
+        let pt = pay_coin_pt(sender, vec![recipient], vec![10_000], &[coin], &[], 0, &SUI)?;
+
+        for input in &pt.inputs {
+            if let CallArg::Pure(bytes) = input
+                && let Ok(s) = bcs::from_bytes::<String>(bytes)
+                && serde_json::from_str::<Currency>(&s).is_ok()
+            {
+                panic!(
+                    "pay_coin_pt produced a Pure input that decodes as a Currency JSON string: {:?}",
+                    s
+                );
+            }
+        }
         Ok(())
     }
 
@@ -3973,5 +4417,166 @@ mod tests {
             .into_internal()
             .expect_err("should fail without redeem_mode");
         assert!(format!("{err}").contains("redeem_mode"));
+    }
+
+    // ---- reconstruct_operations tests -----------------------------------------
+
+    use crate::types::CurrencyMetadata;
+    use crate::types::internal_operation::pay_coin_pt;
+
+    fn sample_currency() -> Currency {
+        Currency {
+            symbol: "USDC".to_string(),
+            decimals: 6,
+            metadata: CurrencyMetadata {
+                coin_type: "0x5::usdc::USDC".to_string(),
+            },
+        }
+    }
+
+    fn data_with_pt(sender: SuiAddress, pt: ProgrammableTransaction) -> TransactionData {
+        let gas_price = 1000;
+        TransactionData::new_programmable(
+            sender,
+            vec![random_object_ref()],
+            pt,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
+        )
+    }
+
+    /// Mirror `/parse`: encode the structured proto (clearing `bcs`) then decode
+    /// it back, so `reconstruct_operations` sees exactly what the endpoint sees.
+    fn proto_clean(data: &TransactionData) -> Transaction {
+        use crate::types::transaction_envelope::{decode_inner_proto, encode_inner_proto};
+        decode_inner_proto(&encode_inner_proto(data)).unwrap()
+    }
+
+    /// PayCoin currency from the aux data labels the reconstructed payment ops.
+    #[test]
+    fn test_reconstruct_pay_coin_currency() {
+        let sender = SuiAddress::random_for_testing_only();
+        let recipient = SuiAddress::random_for_testing_only();
+        let coin = random_object_ref();
+        let currency = sample_currency();
+        let aux = AuxData::PayCoin {
+            currency: currency.clone(),
+        };
+        let pt = pay_coin_pt(
+            sender,
+            vec![recipient],
+            vec![10_000],
+            &[coin],
+            &[],
+            0,
+            &currency,
+        )
+        .unwrap();
+        let proto = proto_clean(&data_with_pt(sender, pt));
+
+        let ops = reconstruct_operations(&proto, &aux, None).expect("reconstruct ok");
+        assert!(ops.0.iter().any(|op| op.type_ == OperationType::PayCoin));
+        let recip_amount = ops
+            .0
+            .iter()
+            .find(|o| o.account.as_ref().map(|a| a.address) == Some(recipient))
+            .and_then(|o| o.amount.clone())
+            .expect("recipient op");
+        assert_eq!(
+            recip_amount.currency.metadata.coin_type,
+            currency.metadata.coin_type
+        );
+    }
+
+    /// Family-mismatch guard: PayCoin aux data applied to a non-payment
+    /// (Consolidate) transaction is rejected by `apply_aux`'s family
+    /// assertion, regardless of the currency map.
+    #[test]
+    fn test_reconstruct_family_mismatch_rejected() {
+        let sender = SuiAddress::random_for_testing_only();
+        let pay_aux = AuxData::PayCoin {
+            currency: sample_currency(),
+        };
+        let pt = consolidate_to_fungible_pt(
+            sender,
+            vec![random_object_ref()],
+            vec![random_object_ref()],
+        )
+        .unwrap();
+        let proto = proto_clean(&data_with_pt(sender, pt));
+        let err = reconstruct_operations(&proto, &pay_aux, None)
+            .expect_err("family mismatch must be rejected");
+        assert!(format!("{err:?}").contains("non-payment"));
+    }
+
+    /// FSS decoration: Consolidate validator is recovered from the aux data.
+    #[test]
+    fn test_reconstruct_consolidate_validator_decorated() {
+        let sender = SuiAddress::random_for_testing_only();
+        let validator = SuiAddress::random_for_testing_only();
+        let aux = AuxData::Consolidate { validator };
+        let pt = consolidate_to_fungible_pt(
+            sender,
+            vec![random_object_ref()],
+            vec![random_object_ref()],
+        )
+        .unwrap();
+        let proto = proto_clean(&data_with_pt(sender, pt));
+        let ops = reconstruct_operations(&proto, &aux, None).unwrap();
+        let Some(OperationMetadata::ConsolidateAllStakedSuiToFungible { validator: v, .. }) =
+            ops.0[0].metadata.clone()
+        else {
+            panic!("expected Consolidate metadata");
+        };
+        assert_eq!(v, Some(validator));
+    }
+
+    /// FSS decoration: MergeAndRedeem AtMost — the parser alone cannot
+    /// distinguish AtMost, so the aux-data override must report it, with the
+    /// validator + cap recovered.
+    #[test]
+    fn test_reconstruct_merge_redeem_atmost_decorated() {
+        let sender = SuiAddress::random_for_testing_only();
+        let validator = SuiAddress::random_for_testing_only();
+        let aux = AuxData::MergeAndRedeem {
+            validator,
+            redeem_mode: RedeemMode::AtMost,
+            amount: Some(1_000_000),
+        };
+        let plan = RedeemPlan::AtMost {
+            token_amount: Some(500_000_000),
+            max_sui: 0,
+        };
+        let pt = merge_and_redeem_fss_pt(sender, vec![random_object_ref()], &plan).unwrap();
+        let proto = proto_clean(&data_with_pt(sender, pt));
+        let ops = reconstruct_operations(&proto, &aux, None).unwrap();
+        let Some(OperationMetadata::MergeAndRedeemFungibleStakedSui {
+            validator: v,
+            amount,
+            redeem_mode,
+            ..
+        }) = ops.0[0].metadata.clone()
+        else {
+            panic!("expected MergeAndRedeem metadata");
+        };
+        assert_eq!(v, Some(validator));
+        assert_eq!(redeem_mode, Some(RedeemMode::AtMost));
+        assert_eq!(amount, Some("1000000".to_string()));
+    }
+
+    /// PaySui reconstructs cleanly with `None` aux data.
+    #[test]
+    fn test_reconstruct_pay_sui_none_ok() {
+        let sender = SuiAddress::random_for_testing_only();
+        let recipient = SuiAddress::random_for_testing_only();
+        let pt = {
+            let mut b = ProgrammableTransactionBuilder::new();
+            b.pay_sui(vec![recipient], vec![10_000]).unwrap();
+            b.finish()
+        };
+        let proto = proto_clean(&data_with_pt(sender, pt));
+        let ops = reconstruct_operations(&proto, &AuxData::None, None)
+            .expect("PaySui reconstructs with no aux data");
+        assert!(ops.0.iter().any(|op| op.type_ == OperationType::PaySui));
     }
 }

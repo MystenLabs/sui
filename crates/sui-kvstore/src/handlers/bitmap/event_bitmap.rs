@@ -189,7 +189,8 @@ mod tests {
 
         let extant_key = event_bitmap_index::encode_row_key(
             event_bitmap_index::SCHEMA_VERSION,
-            &encode_dimension_key(IndexDimension::EventExtant, &[]),
+            // EventExtant is keyed by a singleton placeholder value byte.
+            &encode_dimension_key(IndexDimension::EventExtant, &[0x00]),
             0,
         );
         let value = row(&values, &extant_key);

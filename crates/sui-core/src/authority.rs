@@ -36,6 +36,7 @@ use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, fatal};
+use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use prometheus::{
     Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
@@ -68,6 +69,7 @@ use std::{
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_execution::Executor;
+use sui_protocol_config::Chain;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::dynamic_field::visitor as DFV;
@@ -103,7 +105,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 use self::authority_store::ExecutionLockWriteGuard;
 use self::authority_store_pruner::{AuthorityStorePruningMetrics, PrunerWatermarks};
-pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
+pub use authority_store::{AuthorityStore, ResolverWrapper};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 
 use crate::jsonrpc_index::IndexStore;
@@ -1278,12 +1280,6 @@ impl AuthorityState {
             .check_system_overload_at_signing
     }
 
-    pub fn check_system_overload_at_execution(&self) -> bool {
-        self.config
-            .authority_overload_config
-            .check_system_overload_at_execution
-    }
-
     pub(crate) fn check_system_overload(
         &self,
         tx_data: &SenderSignedData,
@@ -1453,7 +1449,7 @@ impl AuthorityState {
     ///
     /// Should only be called within sui-core.
     #[instrument(level = "trace", skip_all)]
-    pub async fn try_execute_immediately(
+    pub fn try_execute_immediately(
         &self,
         certificate: &VerifiedExecutableTransaction,
         mut execution_env: ExecutionEnv,
@@ -1631,26 +1627,6 @@ impl AuthorityState {
         )
     }
 
-    /// Test only wrapper for `try_execute_immediately()` above, useful for executing change epoch
-    /// transactions. Assumes execution will always succeed.
-    pub async fn try_execute_for_test(
-        &self,
-        certificate: &VerifiedCertificate,
-        execution_env: ExecutionEnv,
-    ) -> (VerifiedSignedTransactionEffects, Option<ExecutionError>) {
-        let epoch_store = self.epoch_store_for_testing();
-        let (effects, execution_error_opt) = self
-            .try_execute_immediately(
-                &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
-                execution_env,
-                &epoch_store,
-            )
-            .await
-            .unwrap();
-        let signed_effects = self.sign_effects(effects, &epoch_store).unwrap();
-        (signed_effects, execution_error_opt)
-    }
-
     pub async fn try_execute_executable_for_test(
         &self,
         executable: &VerifiedExecutableTransaction,
@@ -1659,7 +1635,6 @@ impl AuthorityState {
         let epoch_store = self.epoch_store_for_testing();
         let (effects, execution_error_opt) = self
             .try_execute_immediately(executable, execution_env, &epoch_store)
-            .await
             .unwrap();
         self.flush_post_processing(executable.digest()).await;
         let signed_effects = self.sign_effects(effects, &epoch_store).unwrap();
@@ -1999,9 +1974,17 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
+        // Mainnet-only: feed the accumulator (settlement) version so the address-balance gas-smash
+        // short-circuit activates at its rollout version and replays bit-for-bit. Other chains pass
+        // `None`, where the short-circuit applies unconditionally.
+        let accumulator_version = if self.chain_identifier.chain() == Chain::Mainnet {
+            execution_env.assigned_versions.accumulator_version
+        } else {
+            None
+        };
         let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::Err(error),
-            None => ExecutionOrEarlyError::Ok(()),
+            None => ExecutionOrEarlyError::ok(accumulator_version),
+            Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),
         };
 
         // Skip on early error: the tx will fail anyway and rewriting may fail if the accumulator
@@ -2409,15 +2392,19 @@ impl AuthorityState {
             .into());
         }
 
-        // Cheap validity checks for a transaction, including input size limits.
-        transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
-
+        // Compute input/receiving object kinds before mock gas injection so the mock
+        // gas reference is not included in input_object_kinds (it is added to
+        // input_objects directly after object loading).
         let input_object_kinds = transaction.input_objects()?;
         let receiving_object_refs = transaction.receiving_objects();
 
-        // Create and inject mock gas coin before pre_object_load_checks so that
-        // funds withdrawal processing sees non-empty payment and doesn't incorrectly
-        // create an address balance withdrawal for gas.
+        // Inject mock gas coin before validity_check so that on protocol versions
+        // where address-balance gas payments are not yet enabled, the non-empty
+        // payment check in validity_check passes for simulate/dev-inspect requests
+        // submitted without explicit gas.
+        // Also required before pre_object_load_checks so that funds-withdrawal
+        // processing sees non-empty payment and doesn't create an address-balance
+        // withdrawal for gas.
         // Skip mock gas for gasless transactions — they don't use gas coins.
         let is_gasless = protocol_config.enable_gasless() && transaction.is_gasless_transaction();
         let mock_gas_object = if allow_mock_gas_coin && transaction.gas().is_empty() && !is_gasless
@@ -2436,6 +2423,9 @@ impl AuthorityState {
         } else {
             None
         };
+
+        // Full validity check including gas budget and price.
+        transaction.validity_check(&epoch_store.tx_validity_check_context())?;
 
         let declared_withdrawals = self.pre_object_load_checks(
             &transaction,
@@ -2504,9 +2494,11 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &FundsWithdrawStatus::MaybeSufficient,
         );
+        // Dev-inspect/simulation path (not committed): no assigned accumulator version here, so the
+        // IFFW short-circuit applies unconditionally (`None`), matching non-mainnet execution.
         let execution_params = match early_execution_error {
-            Some(error) => ExecutionOrEarlyError::Err(error),
-            None => ExecutionOrEarlyError::Ok(()),
+            None => ExecutionOrEarlyError::ok(None),
+            Some(errors) => ExecutionOrEarlyError::failed(errors, None),
         };
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
@@ -2546,7 +2538,7 @@ impl AuthorityState {
                 .iter()
                 .filter(|(id, _)| !address_funds.contains(id))
                 .any(|(id, max_withdraw)| {
-                    let (balance, _) = self.get_account_funds_read().get_latest_account_amount(id);
+                    let balance = self.get_account_funds_read().get_latest_account_amount(id);
                     balance < *max_withdraw
                 });
 
@@ -2562,7 +2554,10 @@ impl AuthorityState {
                     protocol_config,
                     self.metrics.execution_metrics.clone(),
                     false,
-                    ExecutionOrEarlyError::Err(ExecutionErrorKind::InsufficientFundsForWithdraw),
+                    ExecutionOrEarlyError::failed(
+                        NonEmpty::new(ExecutionErrorKind::InsufficientFundsForWithdraw),
+                        None,
+                    ),
                     &epoch_id,
                     epoch_timestamp_ms,
                     cloned_input_objects,
@@ -3379,15 +3374,14 @@ impl AuthorityState {
 
         let requested_object_seq = match request.request_kind {
             ObjectInfoRequestKind::LatestObjectInfo => {
-                let (_, seq, _) = self
-                    .get_object_or_tombstone(request.object_id)
-                    .await
-                    .ok_or_else(|| {
-                        SuiError::from(UserInputError::ObjectNotFound {
-                            object_id: request.object_id,
-                            version: None,
-                        })
-                    })?;
+                let (_, seq, _) =
+                    self.get_object_or_tombstone(request.object_id)
+                        .ok_or_else(|| {
+                            SuiError::from(UserInputError::ObjectNotFound {
+                                object_id: request.object_id,
+                                version: None,
+                            })
+                        })?;
                 seq
             }
             ObjectInfoRequestKind::PastObjectInfoDebug(seq) => seq,
@@ -3424,8 +3418,7 @@ impl AuthorityState {
             // Only address owned objects have locks.
             None
         } else {
-            self.get_transaction_lock(&object.compute_object_reference(), &epoch_store)
-                .await?
+            self.get_transaction_lock(&object.compute_object_reference(), &epoch_store)?
                 .map(|s| s.into_inner())
         };
 
@@ -3683,15 +3676,12 @@ impl AuthorityState {
             && epoch_store.protocol_config().enable_object_funds_withdraw()
         {
             if self.object_funds_checker.load().is_none() {
-                let inner = self
-                    .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-                    .await
-                    .map(|o| {
-                        Arc::new(ObjectFundsChecker::new(
-                            o.version(),
-                            self.object_funds_checker_metrics.clone(),
-                        ))
-                    });
+                let inner = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).map(|o| {
+                    Arc::new(ObjectFundsChecker::new(
+                        o.version(),
+                        self.object_funds_checker_metrics.clone(),
+                    ))
+                });
                 self.object_funds_checker.store(inner);
             }
         } else {
@@ -3730,12 +3720,6 @@ impl AuthorityState {
 
     pub fn get_object_store(&self) -> &Arc<dyn ObjectStore + Send + Sync> {
         &self.execution_cache_trait_pointers.object_store
-    }
-
-    pub fn pending_post_processing(
-        &self,
-    ) -> &Arc<DashMap<TransactionDigest, oneshot::Receiver<PostProcessingOutput>>> {
-        &self.pending_post_processing
     }
 
     pub async fn await_post_processing(
@@ -3789,6 +3773,18 @@ impl AuthorityState {
     }
 
     pub fn database_for_testing(&self) -> Arc<AuthorityStore> {
+        self.execution_cache_trait_pointers
+            .testing_api
+            .database_for_testing()
+    }
+
+    /// Access to the underlying authority store for diagnostic tooling (db-shell).
+    ///
+    /// Goes through `testing_api` deliberately: db-shell is read-only diagnostics
+    /// that bypasses the writeback cache, and we want the execution path to have
+    /// no other route to the raw `AuthorityStore`. Using the testing API here
+    /// keeps that invariant visible — diagnostic code is the only non-test caller.
+    pub fn authority_store(&self) -> Arc<AuthorityStore> {
         self.execution_cache_trait_pointers
             .testing_api
             .database_for_testing()
@@ -4022,7 +4018,6 @@ impl AuthorityState {
     ) -> Vec<(VerifiedExecutableTransaction, ExecutionEnv)> {
         let accumulator_version = self
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-            .await
             .unwrap()
             .version();
         // Use provided checkpoint sequence, or fall back to accumulator version.
@@ -4073,7 +4068,6 @@ impl AuthorityState {
             let env = ExecutionEnv::new().with_assigned_versions(assigned);
             let (effects, _) = self
                 .try_execute_immediately(&tx.clone(), env.clone(), &epoch_store)
-                .await
                 .unwrap();
             assert!(effects.status().is_ok());
             replay_txns.push((tx, env));
@@ -4103,7 +4097,6 @@ impl AuthorityState {
         let env = ExecutionEnv::new().with_assigned_versions(barrier_assigned);
         let (effects, _) = self
             .try_execute_immediately(&barrier.clone(), env.clone(), &epoch_store)
-            .await
             .unwrap();
         assert!(effects.status().is_ok());
         replay_txns.push((barrier, env));
@@ -4129,7 +4122,6 @@ impl AuthorityState {
         for (tx, env) in txns {
             let (effects, _) = self
                 .try_execute_immediately(tx, env.clone(), &epoch_store)
-                .await
                 .unwrap();
             assert!(effects.status().is_ok());
         }
@@ -4377,14 +4369,13 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+    pub fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         self.get_object_store().get_object(object_id)
     }
 
-    pub async fn get_sui_system_package_object_ref(&self) -> SuiResult<ObjectRef> {
+    pub fn get_sui_system_package_object_ref(&self) -> SuiResult<ObjectRef> {
         Ok(self
             .get_object(&SUI_SYSTEM_ADDRESS.into())
-            .await
             .expect("framework object should always exist")
             .compute_object_reference())
     }
@@ -4450,30 +4441,6 @@ impl AuthorityState {
     /// Chain Identifier is the digest of the genesis checkpoint.
     pub fn get_chain_identifier(&self) -> ChainIdentifier {
         self.chain_identifier
-    }
-
-    pub fn get_fork_recovery_state(&self) -> Option<&ForkRecoveryState> {
-        self.fork_recovery_state.as_ref()
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_move_object<T>(&self, object_id: &ObjectID) -> SuiResult<T>
-    where
-        T: DeserializeOwned,
-    {
-        let o = self.get_object_read(object_id)?.into_object()?;
-        if let Some(move_object) = o.data.try_as_move() {
-            Ok(bcs::from_bytes(move_object.contents()).map_err(|e| {
-                SuiErrorKind::ObjectDeserializationError {
-                    error: format!("{e}"),
-                }
-            })?)
-        } else {
-            Err(SuiErrorKind::ObjectDeserializationError {
-                error: format!("Provided object : [{object_id}] is not a Move object."),
-            }
-            .into())
-        }
     }
 
     /// This function aims to serve rpc reads on past objects and
@@ -4714,11 +4681,7 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn get_move_objects<T>(
-        &self,
-        owner: SuiAddress,
-        type_: MoveObjectType,
-    ) -> SuiResult<Vec<T>>
+    pub fn get_move_objects<T>(&self, owner: SuiAddress, type_: MoveObjectType) -> SuiResult<Vec<T>>
     where
         T: DeserializeOwned,
     {
@@ -5196,17 +5159,14 @@ impl AuthorityState {
         Ok(events)
     }
 
-    pub async fn insert_genesis_object(&self, object: Object) {
+    pub fn insert_genesis_object(&self, object: Object) {
         self.get_reconfig_api().insert_genesis_object(object);
     }
 
-    pub async fn insert_genesis_objects(&self, objects: &[Object]) {
-        futures::future::join_all(
-            objects
-                .iter()
-                .map(|o| self.insert_genesis_object(o.clone())),
-        )
-        .await;
+    pub fn insert_genesis_objects(&self, objects: &[Object]) {
+        for o in objects {
+            self.insert_genesis_object(o.clone());
+        }
     }
 
     /// Make a status response for a transaction
@@ -5230,8 +5190,7 @@ impl AuthorityState {
                     TransactionEvents::default()
                 };
                 // The cert_sig slot is permanently None: validators no longer aggregate or
-                // persist per-transaction quorum signatures (the transaction_cert_signatures
-                // table is deprecated and unwritten).
+                // persist per-transaction quorum signatures.
                 return Ok(Some((
                     (*transaction).clone().into_message(),
                     TransactionStatus::Executed(None, effects.into_inner(), events),
@@ -5397,7 +5356,7 @@ impl AuthorityState {
     /// Returns None if a lock record is initialized for the given ObjectRef but not yet locked by any transaction,
     ///     or cannot find the transaction in transaction table, because of data race etc.
     #[instrument(level = "trace", skip_all)]
-    pub async fn get_transaction_lock(
+    pub fn get_transaction_lock(
         &self,
         object_ref: &ObjectRef,
         epoch_store: &AuthorityPerEpochStore,
@@ -5422,11 +5381,11 @@ impl AuthorityState {
         epoch_store.get_signed_transaction(&lock_info.tx_digest)
     }
 
-    pub async fn get_objects(&self, objects: &[ObjectID]) -> Vec<Option<Object>> {
+    pub fn get_objects(&self, objects: &[ObjectID]) -> Vec<Option<Object>> {
         self.get_object_cache_reader().get_objects(objects)
     }
 
-    pub async fn get_object_or_tombstone(&self, object_id: ObjectID) -> Option<ObjectRef> {
+    pub fn get_object_or_tombstone(&self, object_id: ObjectID) -> Option<ObjectRef> {
         self.get_object_cache_reader()
             .get_latest_object_ref_or_tombstone(object_id)
     }
@@ -5537,7 +5496,7 @@ impl AuthorityState {
         binary_config: &BinaryConfig,
     ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>> {
         let ids: Vec<_> = system_packages.iter().map(|(id, _, _)| *id).collect();
-        let objects = self.get_objects(&ids).await;
+        let objects = self.get_objects(&ids);
 
         let mut res = Vec::with_capacity(system_packages.len());
         for (system_package_ref, object) in system_packages.into_iter().zip_debug_eq(objects.iter())

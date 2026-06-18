@@ -577,12 +577,12 @@ impl ValidatorService {
                             timeout(Duration::from_secs(15), state.wait_for_epoch(next_epoch)).await
                         {
                             assert_reachable!("retry submission at epoch end");
-                            if new_epoch == next_epoch {
+                            if new_epoch >= next_epoch {
                                 continue;
                             }
-
+                            // wait_for_epoch guarantees >= target; < would indicate a bug there.
                             debug_fatal!(
-                                "expected epoch {} after reconfiguration. got {}",
+                                "wait_for_epoch returned early: expected >= {}, got {}",
                                 next_epoch,
                                 new_epoch
                             );
@@ -668,6 +668,8 @@ impl ValidatorService {
         let mut total_size_bytes = 0;
         // Traffic control spam weight to use for the transaction.
         let mut spam_weight = Weight::zero();
+        // First gas price seen in this soft bundle.
+        let mut expected_soft_bundle_gas_price = None;
 
         let req_type = if is_ping_request {
             "ping"
@@ -700,6 +702,28 @@ impl ValidatorService {
 
             // Ok to fail the request when any transaction is invalid.
             let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
+            let tx_digest = *transaction.digest();
+
+            // Soft bundles require all transactions to use the same gas price.
+            if is_soft_bundle_request {
+                let gas_price = transaction.data().transaction_data().gas_price();
+                if let Some(expected) = expected_soft_bundle_gas_price {
+                    fp_ensure!(
+                        gas_price == expected,
+                        SuiErrorKind::UserInputError {
+                            error: UserInputError::GasPriceMismatchError {
+                                digest: tx_digest,
+                                expected,
+                                actual: gas_price,
+                            }
+                        }
+                        .into()
+                    );
+                } else {
+                    expected_soft_bundle_gas_price = Some(gas_price);
+                }
+            }
+
             let is_gasless = transaction
                 .data()
                 .transaction_data()
@@ -743,6 +767,12 @@ impl ValidatorService {
                     .num_rejected_tx_during_overload
                     .with_label_values(&[error.as_ref()])
                     .inc();
+                if is_gasless {
+                    metrics
+                        .gasless_submission_outcomes
+                        .with_label_values(&["rejected_overload"])
+                        .inc();
+                }
                 results[idx] = Some(SubmitTxResult::Rejected { error });
                 continue;
             }
@@ -788,7 +818,6 @@ impl ValidatorService {
                 }
             };
 
-            let tx_digest = *verified_transaction.tx().digest();
             debug!(
                 ?tx_digest,
                 "handle_submit_transaction: verified transaction"

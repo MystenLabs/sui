@@ -1,0 +1,21 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module bool_if_simplify {
+    public fun and_left () {
+        return l0 == 0u64 && l1 > 0u64
+    }
+
+    public fun ident () {
+        return l0 == 0u64
+    }
+
+    public fun neg () {
+        return l0 != 0u64
+    }
+
+    public fun or_right () {
+        return l0 == 0u64 || l1 > 0u64
+    }
+
+}

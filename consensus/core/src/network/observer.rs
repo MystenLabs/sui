@@ -96,7 +96,6 @@ pub(crate) struct FetchCommitsResponse {
 /// Information about an observer peer connection, set in request extensions by the server.
 #[derive(Clone, Debug)]
 pub(crate) struct ObserverPeerInfo {
-    #[allow(unused)]
     pub(crate) public_key: NetworkPublicKey,
 }
 
@@ -229,7 +228,6 @@ impl TonicObserverClient {
         }
     }
 
-    #[allow(unused)]
     async fn get_client(
         &self,
         peer: PeerId,

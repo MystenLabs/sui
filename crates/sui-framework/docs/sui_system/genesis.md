@@ -377,7 +377,7 @@ all the information we need in the system.
     // Ensure this is only called at <a href="../sui_system/genesis.md#sui_system_genesis">genesis</a>
     <b>assert</b>!(ctx.epoch() == 0, <a href="../sui_system/genesis.md#sui_system_genesis_ENotCalledAtGenesis">ENotCalledAtGenesis</a>);
     // Create all the `Validator` structs
-    <b>let</b> <b>mut</b> validators = vector[];
+    <b>let</b> <b>mut</b> validators = vector&lt;Validator&gt;[];
     genesis_validators.do!(|genesis_validator| {
         <b>let</b> <a href="../sui_system/genesis.md#sui_system_genesis_GenesisValidatorMetadata">GenesisValidatorMetadata</a> {
             name,
@@ -416,7 +416,7 @@ all the information we need in the system.
         );
         // Ensure that each <a href="../sui_system/validator.md#sui_system_validator">validator</a> is unique
         <b>assert</b>!(
-            !<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_validator">validator_set::is_duplicate_validator</a>(&validators, &<a href="../sui_system/validator.md#sui_system_validator">validator</a>),
+            validators.all!(|v| v.sui_address() != sui_address && !v.is_duplicate(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>)),
             <a href="../sui_system/genesis.md#sui_system_genesis_EDuplicateValidator">EDuplicateValidator</a>,
         );
         validators.push_back(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);

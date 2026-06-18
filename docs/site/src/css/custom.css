@@ -2805,3 +2805,164 @@ html[data-theme='dark'] .protoUnionNote {
   opacity: 1 !important;
   transition: none !important;
 }
+
+/* ---- Kapa sidebar content shift ---- */
+/* Kapa renders in Shadow DOM so CSS :has() can't detect it.
+   A client module (kapa-sidebar.js) toggles .kapa-sidebar-open on <html>. */
+html.kapa-sidebar-open body {
+  width: calc(100vw - 500px) !important;
+  overflow-x: hidden;
+  transition: width 0.3s ease;
+}
+
+html.kapa-sidebar-open .navbar,
+html.kapa-sidebar-open .navbar--fixed-top {
+  right: 500px !important;
+  overflow: hidden;
+  transition: right 0.3s ease;
+}
+
+/* Hide the Ask Sui AI and Search buttons in navbar when sidebar is open
+   since Kapa is already visible */
+html.kapa-sidebar-open .kapa-trigger-btn,
+html.kapa-sidebar-open .DocSearch-Button {
+  display: none !important;
+}
+
+.navbar,
+.navbar--fixed-top {
+  transition: right 0.3s ease;
+}
+
+/* Hide the desktop TOC column when sidebar is open to free space */
+html.kapa-sidebar-open .col.col--3:has(.theme-doc-toc-desktop) {
+  display: none;
+}
+
+/* Let the main content column expand to fill the freed space */
+html.kapa-sidebar-open .col[class*="docItemCol"] {
+  max-width: 100% !important;
+  flex: 1 !important;
+}
+
+body {
+  transition: width 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  html.kapa-sidebar-open body {
+    width: 100vw !important;
+  }
+}
+
+/* ---- Getting Started landing page ---- */
+
+/* Remove Docusaurus doc page padding and copy-page button on the landing page */
+.gs-landing {
+  margin: 0 auto;
+  max-width: 960px;
+}
+
+/* Hide the copy-page-button on the getting-started landing page */
+:has(.gs-landing) [class*="copyPage"] {
+  display: none !important;
+}
+
+/* Hide the copy-page-button on all index/category pages */
+:has(.docCardListScopeExclude) [class*="copyPage"] {
+  display: none !important;
+}
+
+/* Strip all Docusaurus wrapper padding on the landing page */
+:has(.gs-landing) .theme-doc-markdown {
+  padding: 0;
+  margin: 0;
+}
+
+:has(.gs-landing) article {
+  padding: 0 !important;
+  max-width: 100% !important;
+}
+
+:has(.gs-landing) .col,
+:has(.gs-landing) [class*="docItemCol"],
+:has(.gs-landing) [class*="docMainContainer"],
+:has(.gs-landing) .container {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  max-width: 100% !important;
+}
+
+:has(.gs-landing) .row {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.gs-hero {
+  text-align: center;
+  padding: 1.5rem 0 1.5rem;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.gs-hero-title {
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.gs-hero-desc {
+  font-size: 1.05rem;
+  color: var(--ifm-color-emphasis-700);
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+.gs-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0.75rem 1.1rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 12px;
+  background: var(--ifm-background-surface-color);
+  color: var(--ifm-color-emphasis-500);
+  font-size: 0.95rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.gs-search-bar:hover {
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 3px rgba(41, 141, 255, 0.12);
+}
+
+.gs-search-bar svg {
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+[data-theme="light"] .gs-search-bar {
+  background: #ffffff;
+  border-color: #d0d7de;
+}
+
+[data-theme="light"] .gs-search-bar:hover {
+  border-color: var(--ifm-color-primary);
+}
+
+.gs-section {
+  max-width: 900px;
+  margin: 0 auto 2rem;
+  padding: 0;
+}
+
+.gs-section-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
