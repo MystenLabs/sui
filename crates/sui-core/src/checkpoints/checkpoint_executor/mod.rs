@@ -144,6 +144,44 @@ impl CheckpointTransactionData {
         }
     }
 }
+
+fn accumulator_root_effect_versions(
+    effects: &TransactionEffects,
+) -> (Option<SequenceNumber>, Option<SequenceNumber>) {
+    effects
+        .object_changes()
+        .into_iter()
+        .find_map(|change| {
+            (change.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                .then_some((change.input_version, change.output_version))
+        })
+        .unwrap_or((None, None))
+}
+
+fn checkpoint_replay_accumulator_tx_kind(
+    txn: &VerifiedExecutableTransaction,
+    effects: &TransactionEffects,
+) -> &'static str {
+    let transaction_data = txn.transaction_data();
+    if transaction_data.kind().is_accumulator_barrier_settle_tx()
+        || accumulator_root_effect_versions(effects).1.is_some()
+    {
+        "barrier"
+    } else if transaction_data
+        .shared_input_objects()
+        .into_iter()
+        .any(|input| input.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+    {
+        if transaction_data.kind().is_system_tx() {
+            "settlement"
+        } else {
+            "user"
+        }
+    } else {
+        "other"
+    }
+}
+
 pub(crate) struct CheckpointExecutionState {
     pub data: CheckpointExecutionData,
 
@@ -921,6 +959,30 @@ impl CheckpointExecutor {
                         barrier_deps_builder.process_tx(*tx_digest, txn.transaction_data());
 
                     if let Some(executed_fx_digest) = executed_fx_digest {
+                        let (input_accumulator_version, output_accumulator_version_if_any) =
+                            accumulator_root_effect_versions(effects);
+                        let tx_kind = checkpoint_replay_accumulator_tx_kind(txn, effects);
+                        let should_trace = accumulator_version.is_some()
+                            || input_accumulator_version.is_some()
+                            || output_accumulator_version_if_any.is_some()
+                            || tx_kind != "other";
+                        if should_trace {
+                            info!(
+                                node_role = ?self.epoch_store.node_role(),
+                                checkpoint_seq = ckpt_state.data.checkpoint.sequence_number,
+                                checkpoint_digest = %ckpt_state.data.checkpoint.digest(),
+                                ?tx_digest,
+                                ?expected_fx_digest,
+                                tx_kind,
+                                settlement_key_if_barrier = ?txn.transaction_data().kind().accumulator_barrier_settlement_key(),
+                                ?input_accumulator_version,
+                                ?output_accumulator_version_if_any,
+                                already_executed = true,
+                                ?executed_fx_digest,
+                                status = ?effects.status(),
+                                "ACC_TRACE checkpoint_replay_schedule"
+                            );
+                        }
                         assert_not_forked(
                             &ckpt_state.data.checkpoint,
                             tx_digest,
@@ -941,6 +1003,32 @@ impl CheckpointExecutor {
                                 &*self.object_cache_reader,
                             )
                             .expect("failed to acquire shared version assignments");
+                        let (input_accumulator_version, output_accumulator_version_if_any) =
+                            accumulator_root_effect_versions(effects);
+                        let tx_kind = checkpoint_replay_accumulator_tx_kind(txn, effects);
+                        let should_trace = accumulator_version.is_some()
+                            || input_accumulator_version.is_some()
+                            || output_accumulator_version_if_any.is_some()
+                            || tx_kind != "other";
+                        if should_trace {
+                            info!(
+                                node_role = ?self.epoch_store.node_role(),
+                                checkpoint_seq = ckpt_state.data.checkpoint.sequence_number,
+                                checkpoint_digest = %ckpt_state.data.checkpoint.digest(),
+                                ?tx_digest,
+                                ?expected_fx_digest,
+                                tx_kind,
+                                settlement_key_if_barrier = ?txn.transaction_data().kind().accumulator_barrier_settlement_key(),
+                                assigned_accumulator_version = ?assigned_versions.accumulator_version,
+                                assigned_shared_versions = ?assigned_versions.shared_object_versions,
+                                ?input_accumulator_version,
+                                ?output_accumulator_version_if_any,
+                                already_executed = false,
+                                executed_fx_digest = ?executed_fx_digest,
+                                status = ?effects.status(),
+                                "ACC_TRACE checkpoint_replay_schedule"
+                            );
+                        }
 
                         let mut env = ExecutionEnv::new()
                             .with_assigned_versions(assigned_versions)

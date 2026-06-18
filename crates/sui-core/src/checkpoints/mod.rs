@@ -1728,6 +1728,36 @@ impl CheckpointBuilder {
 
         let funds_changes = builder.collect_funds_changes();
         let num_updates = builder.num_updates();
+        let num_deposits = builder.num_deposits();
+        let num_withdrawals = builder.num_withdrawals();
+        let funds_change_fingerprint = accumulators::funds_changes_fingerprint(&funds_changes);
+        let source_tx_digests: Vec<_> = sorted_tx_effects_included_in_checkpoint
+            .iter()
+            .map(|effects| *effects.transaction_digest())
+            .collect();
+        let source_effect_digests: Vec<_> = sorted_tx_effects_included_in_checkpoint
+            .iter()
+            .map(|effects| effects.digest())
+            .collect();
+        let assigned_accumulator_version: Option<SequenceNumber> = None;
+        info!(
+            path = "checkpoint_builder",
+            node_role = ?self.epoch_store.node_role(),
+            epoch,
+            settlement_key = ?tx_key,
+            checkpoint_height,
+            checkpoint_seq,
+            root_initial_shared_version = ?accumulator_root_obj_initial_shared_version,
+            ?assigned_accumulator_version,
+            ?source_effect_digests,
+            ?source_tx_digests,
+            num_accumulator_updates = num_updates,
+            num_deposits,
+            num_withdrawals,
+            funds_change_count = funds_changes.len(),
+            %funds_change_fingerprint,
+            "ACC_TRACE settlement_build_inputs"
+        );
         let settlement_txns = builder.build_tx(
             self.epoch_store.protocol_config(),
             epoch,
@@ -1747,6 +1777,19 @@ impl CheckpointBuilder {
             .collect();
 
         let settlement_digests: Vec<_> = settlement_txns.iter().map(|tx| *tx.digest()).collect();
+        info!(
+            path = "checkpoint_builder",
+            node_role = ?self.epoch_store.node_role(),
+            epoch,
+            settlement_key = ?tx_key,
+            checkpoint_height,
+            checkpoint_seq,
+            root_initial_shared_version = ?accumulator_root_obj_initial_shared_version,
+            ?assigned_accumulator_version,
+            ?settlement_digests,
+            settlement_tx_count = settlement_digests.len(),
+            "ACC_TRACE settlement_built"
+        );
 
         debug!(
             ?settlement_digests,
@@ -1768,6 +1811,10 @@ impl CheckpointBuilder {
             accumulators::count_accumulator_object_changes(&settlement_effects);
         self.metrics
             .report_accumulator_account_changes(accounts_created, accounts_deleted);
+        let settlement_effect_digests: Vec<_> = settlement_effects
+            .iter()
+            .map(|effects| effects.digest())
+            .collect();
 
         let barrier_tx = accumulators::build_accumulator_barrier_tx(
             epoch,
@@ -1781,6 +1828,23 @@ impl CheckpointBuilder {
             self.epoch_store.epoch(),
         );
         let barrier_digest = *barrier_tx.digest();
+        info!(
+            path = "checkpoint_builder",
+            node_role = ?self.epoch_store.node_role(),
+            epoch,
+            settlement_key = ?tx_key,
+            checkpoint_height,
+            checkpoint_seq,
+            root_initial_shared_version = ?accumulator_root_obj_initial_shared_version,
+            ?assigned_accumulator_version,
+            ?settlement_digests,
+            ?settlement_effect_digests,
+            num_settlements = settlement_effects.len(),
+            objects_created = accounts_created,
+            objects_destroyed = accounts_deleted,
+            ?barrier_digest,
+            "ACC_TRACE barrier_built"
+        );
 
         self.epoch_store
             .notify_barrier_transaction_ready(tx_key, barrier_tx);
@@ -2108,17 +2172,64 @@ impl CheckpointBuilder {
             tx_index_offset,
         );
 
-        let settlement_digests: Vec<_> = builder
-            .build_tx(
-                self.epoch_store.protocol_config(),
-                epoch,
-                accumulator_root_obj_initial_shared_version,
-                checkpoint_height,
-                checkpoint_seq,
-            )
+        let funds_changes = builder.collect_funds_changes();
+        let num_updates = builder.num_updates();
+        let num_deposits = builder.num_deposits();
+        let num_withdrawals = builder.num_withdrawals();
+        let funds_change_fingerprint = accumulators::funds_changes_fingerprint(&funds_changes);
+        let source_tx_digests: Vec<_> = sorted_root_effects
+            .iter()
+            .map(|effects| *effects.transaction_digest())
+            .collect();
+        let source_effect_digests: Vec<_> = sorted_root_effects
+            .iter()
+            .map(|effects| effects.digest())
+            .collect();
+        let assigned_accumulator_version: Option<SequenceNumber> = None;
+        info!(
+            path = "checkpoint_builder_resolve",
+            node_role = ?self.epoch_store.node_role(),
+            epoch,
+            ?settlement_key,
+            checkpoint_height,
+            checkpoint_seq,
+            root_initial_shared_version = ?accumulator_root_obj_initial_shared_version,
+            ?assigned_accumulator_version,
+            ?source_effect_digests,
+            ?source_tx_digests,
+            num_accumulator_updates = num_updates,
+            num_deposits,
+            num_withdrawals,
+            funds_change_count = funds_changes.len(),
+            %funds_change_fingerprint,
+            "ACC_TRACE settlement_build_inputs"
+        );
+
+        let settlement_txns = builder.build_tx(
+            self.epoch_store.protocol_config(),
+            epoch,
+            accumulator_root_obj_initial_shared_version,
+            checkpoint_height,
+            checkpoint_seq,
+        );
+
+        let settlement_digests: Vec<_> = settlement_txns
             .into_iter()
             .map(|tx| *VerifiedTransaction::new_system_transaction(tx).digest())
             .collect();
+        info!(
+            path = "checkpoint_builder_resolve",
+            node_role = ?self.epoch_store.node_role(),
+            epoch,
+            ?settlement_key,
+            checkpoint_height,
+            checkpoint_seq,
+            root_initial_shared_version = ?accumulator_root_obj_initial_shared_version,
+            ?assigned_accumulator_version,
+            ?settlement_digests,
+            settlement_tx_count = settlement_digests.len(),
+            "ACC_TRACE settlement_built"
+        );
 
         debug!(
             ?settlement_digests,
@@ -2137,6 +2248,10 @@ impl CheckpointBuilder {
             accumulators::count_accumulator_object_changes(&settlement_effects);
         self.metrics
             .report_accumulator_account_changes(accounts_created, accounts_deleted);
+        let settlement_effect_digests: Vec<_> = settlement_effects
+            .iter()
+            .map(|effects| effects.digest())
+            .collect();
 
         let barrier_digest = *VerifiedTransaction::new_system_transaction(
             accumulators::build_accumulator_barrier_tx(
@@ -2147,6 +2262,23 @@ impl CheckpointBuilder {
             ),
         )
         .digest();
+        info!(
+            path = "checkpoint_builder_resolve",
+            node_role = ?self.epoch_store.node_role(),
+            epoch,
+            ?settlement_key,
+            checkpoint_height,
+            checkpoint_seq,
+            root_initial_shared_version = ?accumulator_root_obj_initial_shared_version,
+            ?assigned_accumulator_version,
+            ?settlement_digests,
+            ?settlement_effect_digests,
+            num_settlements = settlement_effects.len(),
+            objects_created = accounts_created,
+            objects_destroyed = accounts_deleted,
+            ?barrier_digest,
+            "ACC_TRACE barrier_built"
+        );
 
         let barrier_effects = wait_for_effects_with_retry(
             self.effects_store.as_ref(),

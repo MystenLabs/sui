@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use fastcrypto::hash::HashFunction;
 use itertools::Itertools;
 use move_core_types::ident_str;
 use move_core_types::u256::U256;
@@ -17,6 +18,7 @@ use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
 use sui_types::base_types::SequenceNumber;
 
 use sui_types::accumulator_root::ACCUMULATOR_METADATA_MODULE;
+use sui_types::crypto::DefaultHash;
 use sui_types::digests::Digest;
 use sui_types::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, IDOperation,
@@ -525,6 +527,17 @@ pub(crate) fn count_accumulator_object_changes(
                 IDOperation::None => (created, destroyed),
             }
         })
+}
+
+pub(crate) fn funds_changes_fingerprint(
+    funds_changes: &BTreeMap<AccumulatorObjId, i128>,
+) -> Digest {
+    let mut hasher = DefaultHash::default();
+    for (object_id, delta) in funds_changes {
+        hasher.update(object_id.inner());
+        hasher.update(delta.to_le_bytes());
+    }
+    Digest::new(hasher.finalize().digest)
 }
 
 #[cfg(test)]

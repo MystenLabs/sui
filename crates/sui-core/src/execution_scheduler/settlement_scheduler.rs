@@ -24,9 +24,10 @@ use sui_types::{
     base_types::TransactionDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
     executable_transaction::VerifiedExecutableTransaction,
+    message_envelope::Message,
     transaction::{TransactionDataAPI, TransactionKey, VerifiedTransaction},
 };
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 #[derive(Clone)]
 pub struct SettlementBatchInfo {
@@ -277,6 +278,14 @@ impl SettlementScheduler {
         let ccp_digest = self.extract_consensus_commit_prologue_digest(&digests, &effects);
 
         let sorted_effects = CausalOrder::causal_sort_with_ccp(effects, ccp_digest);
+        let source_tx_digests: Vec<_> = sorted_effects
+            .iter()
+            .map(|effects| *effects.transaction_digest())
+            .collect();
+        let source_effect_digests: Vec<_> = sorted_effects
+            .iter()
+            .map(|effects| effects.digest())
+            .collect();
 
         let epoch = epoch_store.epoch();
         let accumulator_root_obj_initial_shared_version = epoch_store
@@ -301,6 +310,28 @@ impl SettlementScheduler {
             .inc_by(builder.num_withdrawals());
 
         let funds_changes = builder.collect_funds_changes();
+        let num_accumulator_updates = builder.num_updates();
+        let num_deposits = builder.num_deposits();
+        let num_withdrawals = builder.num_withdrawals();
+        let funds_change_fingerprint = accumulators::funds_changes_fingerprint(&funds_changes);
+        info!(
+            path = "early_settlement",
+            node_role = ?epoch_store.node_role(),
+            epoch,
+            ?settlement_key,
+            checkpoint_height = batch_info.checkpoint_height,
+            checkpoint_seq,
+            root_initial_shared_version = ?accumulator_root_obj_initial_shared_version,
+            assigned_accumulator_version = ?batch_info.assigned_versions.accumulator_version,
+            ?source_effect_digests,
+            ?source_tx_digests,
+            num_accumulator_updates,
+            num_deposits,
+            num_withdrawals,
+            funds_change_count = funds_changes.len(),
+            %funds_change_fingerprint,
+            "ACC_TRACE settlement_build_inputs"
+        );
         let settlement_txns = builder.build_tx(
             epoch_store.protocol_config(),
             epoch,
@@ -321,6 +352,19 @@ impl SettlementScheduler {
 
         let settlement_tx_count = settlement_txns.len() + 1; // +1 for barrier
         let settlement_digests: Vec<_> = settlement_txns.iter().map(|tx| *tx.digest()).collect();
+        info!(
+            path = "early_settlement",
+            node_role = ?epoch_store.node_role(),
+            epoch,
+            ?settlement_key,
+            checkpoint_height = batch_info.checkpoint_height,
+            checkpoint_seq,
+            root_initial_shared_version = ?accumulator_root_obj_initial_shared_version,
+            assigned_accumulator_version = ?batch_info.assigned_versions.accumulator_version,
+            ?settlement_digests,
+            settlement_tx_count = settlement_digests.len(),
+            "ACC_TRACE settlement_built"
+        );
 
         debug!(
             ?settlement_key,
@@ -347,6 +391,12 @@ impl SettlementScheduler {
                 &settlement_digests,
             )
             .await;
+        let settlement_effect_digests: Vec<_> = settlement_effects
+            .iter()
+            .map(|effects| effects.digest())
+            .collect();
+        let (objects_created, objects_destroyed) =
+            accumulators::count_accumulator_object_changes(&settlement_effects);
         let barrier_tx = accumulators::build_accumulator_barrier_tx(
             epoch,
             accumulator_root_obj_initial_shared_version,
@@ -359,6 +409,23 @@ impl SettlementScheduler {
             epoch,
         );
         let barrier_digest = *barrier_tx.digest();
+        info!(
+            path = "early_settlement",
+            node_role = ?epoch_store.node_role(),
+            epoch,
+            ?settlement_key,
+            checkpoint_height = batch_info.checkpoint_height,
+            checkpoint_seq,
+            root_initial_shared_version = ?accumulator_root_obj_initial_shared_version,
+            assigned_accumulator_version = ?batch_info.assigned_versions.accumulator_version,
+            ?settlement_digests,
+            ?settlement_effect_digests,
+            num_settlements = settlement_effects.len(),
+            objects_created,
+            objects_destroyed,
+            ?barrier_digest,
+            "ACC_TRACE barrier_built"
+        );
 
         let deps = barrier_deps.process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
         let env = env.with_barrier_dependencies(deps);

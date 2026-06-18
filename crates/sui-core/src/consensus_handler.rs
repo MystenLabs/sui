@@ -29,7 +29,7 @@ use sui_config::node::CongestionLogConfig;
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::{
-    SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
     authenticator_state::ActiveJwk,
     base_types::{
         AuthorityName, ConciseableName, ConsensusObjectSequenceKey, ObjectID, ObjectRef,
@@ -1778,6 +1778,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             schedulables[0] = Schedulable::Transaction(consensus_commit_prologue);
         }
 
+        self.log_accumulator_consensus_assignments(commit_info, &assigned_versions);
+
         self.epoch_store
             .process_user_signatures(schedulables.iter().chain(randomness_schedulables.iter()));
 
@@ -1890,6 +1892,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 Schedulable::Transaction(consensus_commit_prologue);
         }
 
+        self.log_accumulator_consensus_assignments(commit_info, &assigned_versions);
+
         let assigned_versions = assigned_versions.into_map();
 
         self.epoch_store.process_user_signatures(
@@ -1980,6 +1984,46 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         state.output.set_checkpoint_queue_drained(queue_drained);
 
         commit_height
+    }
+
+    fn log_accumulator_consensus_assignments(
+        &self,
+        commit_info: &ConsensusCommitInfo,
+        assigned_versions: &AssignedTxAndVersions,
+    ) {
+        let node_role = self.epoch_store.node_role();
+        let epoch = self.epoch_store.epoch();
+        for (tx_key, versions) in assigned_versions.0.iter() {
+            let checkpoint_height_if_settlement = match tx_key {
+                TransactionKey::AccumulatorSettlement(_, height) => Some(*height),
+                _ => None,
+            };
+            let touches_accumulator = versions
+                .shared_object_versions
+                .iter()
+                .any(|((id, _), _)| *id == SUI_ACCUMULATOR_ROOT_OBJECT_ID);
+
+            if checkpoint_height_if_settlement.is_none()
+                && versions.accumulator_version.is_none()
+                && !touches_accumulator
+            {
+                continue;
+            }
+
+            info!(
+                node_role = ?node_role,
+                epoch,
+                consensus_commit = %commit_info.consensus_commit_ref,
+                commit_round = commit_info.round,
+                tx_key = ?tx_key,
+                tx_digest_if_any = ?tx_key.as_digest(),
+                assigned_accumulator_version = ?versions.accumulator_version,
+                assigned_shared_versions = ?versions.shared_object_versions,
+                ?checkpoint_height_if_settlement,
+                touches_accumulator,
+                "ACC_TRACE consensus_assigned"
+            );
+        }
     }
 
     // Adds the consensus commit prologue transaction to the beginning of input `transactions` to update

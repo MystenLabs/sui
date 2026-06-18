@@ -75,7 +75,7 @@ use sui_types::base_types::{
 };
 use sui_types::bridge::{Bridge, get_bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
-use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::global_state_hash::GlobalStateHash;
@@ -915,6 +915,21 @@ impl WritebackCache {
             unchanged_loaded_runtime_objects,
             ..
         } = &*tx_outputs;
+
+        if let Some(change) = effects
+            .object_changes()
+            .into_iter()
+            .find(|change| change.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+        {
+            info!(
+                ?tx_digest,
+                effects_digest = ?effects.digest(),
+                input_accumulator_version = ?change.input_version,
+                output_accumulator_version = ?change.output_version,
+                status = ?effects.status(),
+                "ACC_TRACE accumulator_write"
+            );
+        }
 
         // Deletions and wraps must be written first. The reason is that one of the deletes
         // may be a child object, and if we write the parent object first, a reader may or may
