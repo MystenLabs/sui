@@ -55,9 +55,9 @@ use dashmap::mapref::entry::Entry as DashMapEntry;
 use futures::{FutureExt, future::BoxFuture};
 use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::ZipDebugEqIteratorExt;
-use mysten_common::debug_fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
+use mysten_common::{debug_fatal, debug_fatal_no_invariant};
 use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashSet};
@@ -1439,7 +1439,7 @@ impl AccountFundsRead for WritebackCache {
                     .version();
             if pre_root_version == post_root_version {
                 if loop_iter > 3 {
-                    debug_fatal!(
+                    debug_fatal_no_invariant!(
                         "Root version stabilized after {} iterations during MVCC read",
                         loop_iter
                     );
