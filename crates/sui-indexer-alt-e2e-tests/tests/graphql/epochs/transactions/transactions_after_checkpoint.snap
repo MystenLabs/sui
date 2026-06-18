@@ -48,7 +48,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "MQ==",
+            "cursor": "AQAAAAAAAAAAAAEAAAAAAAAA",
             "node": {
               "digest": "5iUmf7DhkKHzsVFoCdD241kkwpeBDBSnq7ThaayXcxk1",
               "effects": {
@@ -62,7 +62,7 @@ Response: {
             }
           },
           {
-            "cursor": "Mg==",
+            "cursor": "AQAAAAAAAAAAAAIAAAAAAAAA",
             "node": {
               "digest": "HjDrg9zhZj1HHaMkrnC7XMt1q6XPojY6uxqqVGiswQQY",
               "effects": {
@@ -76,7 +76,7 @@ Response: {
             }
           },
           {
-            "cursor": "Mw==",
+            "cursor": "AQAAAAAAAAAAAAMAAAAAAAAA",
             "node": {
               "digest": "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm",
               "effects": {
@@ -124,7 +124,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "NA==",
+            "cursor": "AQAAAAAAAAAAAAQAAAAAAAAA",
             "node": {
               "digest": "9a1KzAaEk6ZqUKZXg2hNJyMWtdkKEwReZoDSqRi9otjY",
               "effects": {
@@ -138,7 +138,7 @@ Response: {
             }
           },
           {
-            "cursor": "NQ==",
+            "cursor": "AQAAAAAAAAAAAAUAAAAAAAAA",
             "node": {
               "digest": "Hnxj2axhuQBiVo7q68KTMJr6J5yduvxEfE7FNVEz5uv1",
               "effects": {
@@ -152,7 +152,7 @@ Response: {
             }
           },
           {
-            "cursor": "Ng==",
+            "cursor": "AQAAAAAAAAAAAAYAAAAAAAAA",
             "node": {
               "digest": "2iEZQGAgJYgzmcNC2eLrbNejeTJHJxY4Xy4yKj7R3D8g",
               "effects": {
@@ -203,7 +203,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "OA==",
+            "cursor": "AQAAAAAAAAAAAAgAAAAAAAAA",
             "node": {
               "digest": "9mtg2vpK2YcgRuY4D1VbhHNv59Erg3zrTcPdS6VACTPi",
               "effects": {
@@ -217,7 +217,7 @@ Response: {
             }
           },
           {
-            "cursor": "OQ==",
+            "cursor": "AQAAAAAAAAAAAAkAAAAAAAAA",
             "node": {
               "digest": "5TAcpGD2KLrZZ71LqLPFimR8TU2d3ShSC1Z18BQP3ymA",
               "effects": {
@@ -231,7 +231,7 @@ Response: {
             }
           },
           {
-            "cursor": "MTA=",
+            "cursor": "AQAAAAAAAAAAAAoAAAAAAAAA",
             "node": {
               "digest": "9Jgpen4tvpn3ZjDhQyZoykZG2VF4bmJ2uZsjV9jWbACU",
               "effects": {

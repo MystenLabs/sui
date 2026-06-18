@@ -176,6 +176,7 @@ members = [
     "crates/sui-rosetta",
     "crates/sui-rpc-api",
     "crates/sui-rpc-benchmark",
+    "crates/sui-rpc-cursor",
     "crates/sui-rpc-loadgen",
     "crates/sui-rpc-resolver",
     "crates/sui-rpc-store",
@@ -746,6 +747,7 @@ sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
 sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
 sui-rpc-api = { path = "crates/sui-rpc-api" }
+sui-rpc-cursor = { path = "crates/sui-rpc-cursor" }
 sui-rpc-resolver = { path = "crates/sui-rpc-resolver" }
 sui-rpc-store = { path = "crates/sui-rpc-store" }
 sui-tool = { path = "crates/sui-tool" }

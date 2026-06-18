@@ -7,16 +7,18 @@ use async_graphql::Context;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::QueryType;
 use tokio::sync::broadcast;
 use tracing::warn;
 
+use crate::api::scalars::cursor::ByteCursor;
 use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::EventCursor;
 use crate::api::types::event::filter::EventFilter;
-use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::config::Limits;
@@ -111,7 +113,10 @@ impl Subscription {
                             if !filter.matches(&tx.contents) {
                                 continue;
                             }
-                            let cursor = CTransaction::new(tx.tx_sequence_number).encode_cursor();
+                            let cursor = ByteCursor::new(
+                                CursorToken::item(QueryType::Transactions, processed.summary.sequence_number, tx.tx_sequence_number)
+                                .encode().to_vec()
+                            ).encode_cursor();
                             yield Transaction::with_contents(scope.clone(), tx.contents.clone())
                                 .map(|transaction| Edge::new(cursor, transaction));
                         }

@@ -71,8 +71,9 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors 0 3
-# Offset from the back, select so the page is full
+//# run-graphql --cursors bcs(1u8,0u8,0u64,0u64) bcs(1u8,0u8,0u64,3u64)
+# Offset from the back, select so the page is full.
+# Each `bcs(...)` = BCS-encoded `CursorToken { query_type: Transactions(1), kind: Item(0), checkpoint: 0, position: N }`.
 {
   transactions(first: 5, before: "@{cursor_1}") {
     pageInfo {
@@ -96,7 +97,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors 0 4
+//# run-graphql --cursors bcs(1u8,0u8,0u64,0u64) bcs(1u8,0u8,0u64,4u64)
 # Offset from front and back, select two from the front so has_next_page and has_previous_page are true
 {
   transactions(after: "@{cursor_0}", first: 2, before: "@{cursor_1}") {
@@ -121,7 +122,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors 0 6
+//# run-graphql --cursors bcs(1u8,0u8,0u64,0u64) bcs(1u8,0u8,0u64,6u64)
 # Offset from front and back, select two from the front so has_next_page and has_previous_page are true
 {
   transactions(after: "@{cursor_0}", last: 2, before: "@{cursor_1}") {
@@ -146,7 +147,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors 0
+//# run-graphql --cursors bcs(1u8,0u8,0u64,0u64)
 # Offset from front paginate backwards
 {
   transactions(after: "@{cursor_0}", last: 2) {

@@ -41,7 +41,8 @@
 
 //# advance-epoch
 
-//# run-graphql --cursors 4 8
+//# run-graphql --cursors bcs(1u8,0u8,0u64,4u64) bcs(1u8,0u8,0u64,8u64)
+# Each `bcs(...)` = BCS-encoded `CursorToken { query_type: Transactions(1), kind: Item(0), checkpoint: 0, position: N }`.
 { # Fetch an epoch and its transactions, with cursors applied to transactions
   epoch1WithCursorsFromFront: epoch(epochId: 1) {
     totalTransactions
@@ -57,7 +58,7 @@
   }
 }
 
-//# run-graphql --cursors 4 8
+//# run-graphql --cursors bcs(1u8,0u8,0u64,4u64) bcs(1u8,0u8,0u64,8u64)
 { # Fetch an epoch and its transactions, with cursors applied to transactions
   epoch1WithCursorsFromBack: epoch(epochId: 1) {
     totalTransactions
@@ -73,7 +74,7 @@
   }
 }
 
-//# run-graphql --cursors 4 
+//# run-graphql --cursors bcs(1u8,0u8,0u64,4u64)
 { # Fetch an epoch and its transactions, paginate from the front
   epoch1WithAfterCursorFromFront: epoch(epochId: 1) {
     totalTransactions
@@ -89,7 +90,7 @@
   }
 }
 
-//# run-graphql --cursors 4 
+//# run-graphql --cursors bcs(1u8,0u8,0u64,4u64)
 { # Fetch an epoch and its transactions, paginate from the front
   epoch1WithAfterCursorFromBack: epoch(epochId: 1) {
     totalTransactions
@@ -105,7 +106,7 @@
   }
 }
 
-//# run-graphql --cursors 8
+//# run-graphql --cursors bcs(1u8,0u8,0u64,8u64)
 { # Fetch an epoch and its transactions, paginate from the front
   epoch1WithBeforeCursorFromBack: epoch(epochId: 1) {
     totalTransactions

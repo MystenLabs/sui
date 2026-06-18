@@ -19,6 +19,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::TransactionItem;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
+use sui_rpc_cursor::QueryType;
 use sui_sdk_types::Digest;
 use sui_types::storage::LedgerTxSeqDigest;
 use tokio::task::JoinHandle;
@@ -32,10 +33,13 @@ use crate::grpc::v2::ledger_service::get_transaction::render_executed_transactio
 use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
-use crate::ledger_history::query_options::QueryType;
 use crate::ledger_history::query_options::ResolvedRange;
-
-use super::query_end::query_end;
+use crate::ledger_history::watermark::advance_boundary_excluding_cp;
+use crate::ledger_history::watermark::boundary_cursor_cp;
+use crate::ledger_history::watermark::boundary_watermark;
+use crate::ledger_history::watermark::item_watermark;
+use crate::ledger_history::watermark::reached_range_end;
+use crate::ledger_history::watermark::terminal_boundary_watermark;
 
 use super::bitmap_scan::LedgerBitmapKind;
 use super::bitmap_scan::PendingBitmapBucket;
@@ -57,12 +61,7 @@ use super::ledger_read::lowest_available_tx_seq;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::resolve_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
-use crate::ledger_history::watermark::advance_boundary_excluding_cp;
-use crate::ledger_history::watermark::boundary_cursor_cp;
-use crate::ledger_history::watermark::boundary_watermark;
-use crate::ledger_history::watermark::item_watermark;
-use crate::ledger_history::watermark::reached_range_end;
-use crate::ledger_history::watermark::terminal_boundary_watermark;
+use super::query_end::query_end;
 
 const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::TRANSACTION;
 

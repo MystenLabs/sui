@@ -77,8 +77,8 @@ task 12, line 42:
 //# advance-epoch
 Epoch advanced: 2
 
-task 13, lines 44-58:
-//# run-graphql --cursors 4 8
+task 13, lines 44-59:
+//# run-graphql --cursors bcs(1u8,0u8,0u64,4u64) bcs(1u8,0u8,0u64,8u64)
 Response: {
   "data": {
     "epoch1WithCursorsFromFront": {
@@ -87,12 +87,12 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": true,
           "hasNextPage": true,
-          "startCursor": "NQ==",
-          "endCursor": "Ng=="
+          "startCursor": "AQAAAAAAAAAAAAUAAAAAAAAA",
+          "endCursor": "AQAAAAAAAAAAAAYAAAAAAAAA"
         },
         "edges": [
           {
-            "cursor": "NQ==",
+            "cursor": "AQAAAAAAAAAAAAUAAAAAAAAA",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -102,7 +102,7 @@ Response: {
             }
           },
           {
-            "cursor": "Ng==",
+            "cursor": "AQAAAAAAAAAAAAYAAAAAAAAA",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -117,8 +117,8 @@ Response: {
   }
 }
 
-task 14, lines 60-74:
-//# run-graphql --cursors 4 8
+task 14, lines 61-75:
+//# run-graphql --cursors bcs(1u8,0u8,0u64,4u64) bcs(1u8,0u8,0u64,8u64)
 Response: {
   "data": {
     "epoch1WithCursorsFromBack": {
@@ -127,12 +127,12 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": true,
           "hasNextPage": true,
-          "startCursor": "Ng==",
-          "endCursor": "Nw=="
+          "startCursor": "AQAAAAAAAAAAAAYAAAAAAAAA",
+          "endCursor": "AQAAAAAAAAAAAAcAAAAAAAAA"
         },
         "edges": [
           {
-            "cursor": "Ng==",
+            "cursor": "AQAAAAAAAAAAAAYAAAAAAAAA",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -142,7 +142,7 @@ Response: {
             }
           },
           {
-            "cursor": "Nw==",
+            "cursor": "AQAAAAAAAAAAAAcAAAAAAAAA",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -157,8 +157,8 @@ Response: {
   }
 }
 
-task 15, lines 76-90:
-//# run-graphql --cursors 4 
+task 15, lines 77-91:
+//# run-graphql --cursors bcs(1u8,0u8,0u64,4u64)
 Response: {
   "data": {
     "epoch1WithAfterCursorFromFront": {
@@ -167,12 +167,12 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": true,
           "hasNextPage": true,
-          "startCursor": "NQ==",
-          "endCursor": "Ng=="
+          "startCursor": "AQAAAAAAAAAAAAUAAAAAAAAA",
+          "endCursor": "AQAAAAAAAAAAAAYAAAAAAAAA"
         },
         "edges": [
           {
-            "cursor": "NQ==",
+            "cursor": "AQAAAAAAAAAAAAUAAAAAAAAA",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -182,7 +182,7 @@ Response: {
             }
           },
           {
-            "cursor": "Ng==",
+            "cursor": "AQAAAAAAAAAAAAYAAAAAAAAA",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -197,8 +197,8 @@ Response: {
   }
 }
 
-task 16, lines 92-106:
-//# run-graphql --cursors 4 
+task 16, lines 93-107:
+//# run-graphql --cursors bcs(1u8,0u8,0u64,4u64)
 Response: {
   "data": {
     "epoch1WithAfterCursorFromBack": {
@@ -207,12 +207,12 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": true,
           "hasNextPage": false,
-          "startCursor": "MTE=",
-          "endCursor": "MTI="
+          "startCursor": "AQAAAAAAAAAAAAsAAAAAAAAA",
+          "endCursor": "AQAAAAAAAAAAAAwAAAAAAAAA"
         },
         "edges": [
           {
-            "cursor": "MTE=",
+            "cursor": "AQAAAAAAAAAAAAsAAAAAAAAA",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -222,7 +222,7 @@ Response: {
             }
           },
           {
-            "cursor": "MTI=",
+            "cursor": "AQAAAAAAAAAAAAwAAAAAAAAA",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -237,8 +237,8 @@ Response: {
   }
 }
 
-task 17, lines 108-122:
-//# run-graphql --cursors 8
+task 17, lines 109-123:
+//# run-graphql --cursors bcs(1u8,0u8,0u64,8u64)
 Response: {
   "data": {
     "epoch1WithBeforeCursorFromBack": {
@@ -247,12 +247,12 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": true,
           "hasNextPage": true,
-          "startCursor": "Ng==",
-          "endCursor": "Nw=="
+          "startCursor": "AQAAAAAAAAAAAAYAAAAAAAAA",
+          "endCursor": "AQAAAAAAAAAAAAcAAAAAAAAA"
         },
         "edges": [
           {
-            "cursor": "Ng==",
+            "cursor": "AQAAAAAAAAAAAAYAAAAAAAAA",
             "node": {
               "effects": {
                 "checkpoint": {
@@ -262,7 +262,7 @@ Response: {
             }
           },
           {
-            "cursor": "Nw==",
+            "cursor": "AQAAAAAAAAAAAAcAAAAAAAAA",
             "node": {
               "effects": {
                 "checkpoint": {

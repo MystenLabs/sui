@@ -22,6 +22,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 use sui_rpc::proto::sui::rpc::v2alpha::list_events_response;
+use sui_rpc_cursor::QueryType;
 use sui_types::storage::LedgerTxSeqDigest;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -33,7 +34,6 @@ use crate::RpcService;
 use crate::ledger_history::filter::event_filter_to_query;
 use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
-use crate::ledger_history::query_options::QueryType;
 use crate::ledger_history::query_options::ResolvedRange;
 
 use super::query_end::query_end;
