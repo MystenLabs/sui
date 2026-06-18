@@ -112,12 +112,12 @@ pub fn trace_ptb_summary<Mode: ExecutionMode>(
                 Command__::MergeCoins(..) => Ok(vec![PTBCommandInfo::ExternalEvent(
                     "MergeCoins".to_string(),
                 )]),
-                Command__::Publish(module_bytes, _, _) => {
+                Command__::Publish(payload, dep_ids, _) => {
                     let mut events = vec![];
                     events.push(PTBCommandInfo::ExternalEvent("Publish".to_string()));
                     // Not ideal but it only runs when tracing is enabled so overhead
                     // should be insignificant
-                    let modules = context.deserialize_modules(module_bytes)?;
+                    let (modules, _) = context.package_payload_modules(payload.clone(), dep_ids)?;
                     events.extend(modules.into_iter().find_map(|m| {
                         for fdef in &m.function_defs {
                             let fhandle = m.function_handle_at(fdef.function);

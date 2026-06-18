@@ -4,7 +4,9 @@
 use crate::{
     gas_charger::GasPayment,
     static_programmable_transactions::{
-        linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
+        linkage::resolved_linkage::ResolvedLinkage,
+        loading::ast::{self as L, PackagePayload},
+        spanned::Spanned,
     },
 };
 use indexmap::{IndexMap, IndexSet};
@@ -132,9 +134,9 @@ pub enum Command__ {
     SplitCoins(/* Coin<T> */ Type, Argument, Vec<Argument>),
     MergeCoins(/* Coin<T> */ Type, Argument, Vec<Argument>),
     MakeMoveVec(/* T for vector<T> */ Type, Vec<Argument>),
-    Publish(Vec<Vec<u8>>, Vec<ObjectID>, ResolvedLinkage),
+    Publish(PackagePayload, Vec<ObjectID>, ResolvedLinkage),
     Upgrade(
-        Vec<Vec<u8>>,
+        PackagePayload,
         Vec<ObjectID>,
         ObjectID,
         Argument,

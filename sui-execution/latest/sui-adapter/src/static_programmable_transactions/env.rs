@@ -16,7 +16,8 @@ use crate::{
     },
 };
 use move_binary_format::{
-    errors::VMError,
+    CompiledModule,
+    errors::{Location, VMError, VMResult},
     file_format::{Ability, AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
@@ -42,7 +43,7 @@ use sui_types::{
     execution_status::{ExecutionErrorKind, TypeArgumentError},
     funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
     gas_coin::GasCoin,
-    move_package::{UpgradeCap, UpgradeReceipt, UpgradeTicket},
+    move_package::{MovePackage, UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::Object,
     type_input::{StructInput, TypeInput},
 };
@@ -599,6 +600,35 @@ where
         }
         let tag = to_type_tag_internal(self, type_arg_idx, ty)?;
         self.load_vm_type_from_type_tag(Some(type_arg_idx), &tag)
+    }
+
+    pub fn deserialize_modules(
+        &self,
+        module_bytes: &[Vec<u8>],
+        dep_ids: &[ObjectID],
+    ) -> Result<(Vec<CompiledModule>, usize, [u8; 32]), Mode::Error> {
+        assert_invariant!(
+            !module_bytes.is_empty(),
+            "empty package is checked in transaction input checker"
+        );
+
+        let total_bytes = module_bytes.iter().map(|v| v.len()).sum();
+
+        let binary_config = self.protocol_config.binary_config(None);
+        let modules = module_bytes
+            .iter()
+            .map(|b| {
+                CompiledModule::deserialize_with_config(b, &binary_config)
+                    .map_err(|e| e.finish(Location::Undefined))
+            })
+            .collect::<VMResult<Vec<CompiledModule>>>()
+            .map_err(|e| self.convert_vm_error(e))?;
+        let computed_digest = MovePackage::compute_digest_for_modules_and_deps(
+            module_bytes,
+            dep_ids,
+            /* hash_modules */ true,
+        );
+        Ok((modules, total_bytes, computed_digest))
     }
 }
 

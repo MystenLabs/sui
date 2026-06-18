@@ -30,7 +30,6 @@ use sui_types::{
     execution::{ExecutionTiming, ResultWithTimings},
     execution_status::{ExecutionErrorKind, PackageUpgradeError},
     metrics::ExecutionMetrics,
-    move_package::MovePackage,
     object::Owner,
 };
 use tracing::instrument;
@@ -347,9 +346,9 @@ fn execute_command<Mode: ExecutionMode>(
             trace_utils::trace_make_move_vec(context, trace_builder_opt, &items, &ty)?;
             vec![CtxValue::vec_pack(ty, items)?]
         }
-        T::Command__::Publish(module_bytes, dep_ids, linkage) => {
+        T::Command__::Publish(payload, dep_ids, linkage) => {
             trace_utils::trace_publish_event(trace_builder_opt)?;
-            let modules = context.deserialize_modules(&module_bytes)?;
+            let (modules, _) = context.package_payload_modules(payload, &dep_ids)?;
 
             let original_id =
                 context.publish_and_init_package(modules, &dep_ids, linkage, trace_builder_opt)?;
@@ -361,13 +360,7 @@ fn execute_command<Mode: ExecutionMode>(
                 std::vec![context.new_upgrade_cap(original_id)?]
             }
         }
-        T::Command__::Upgrade(
-            module_bytes,
-            dep_ids,
-            current_package_id,
-            upgrade_ticket,
-            linkage,
-        ) => {
+        T::Command__::Upgrade(payload, dep_ids, current_package_id, upgrade_ticket, linkage) => {
             trace_utils::trace_upgrade_event(trace_builder_opt)?;
             let upgrade_ticket = context
                 .argument::<CtxValue>(upgrade_ticket)?
@@ -384,14 +377,9 @@ fn execute_command<Mode: ExecutionMode>(
                 ));
             }
             // deserialize modules and charge gas
-            let modules = context.deserialize_modules(&module_bytes)?;
+            let (modules, computed_digest) = context.package_payload_modules(payload, &dep_ids)?;
+            let computed_digest = computed_digest.to_vec();
 
-            let computed_digest = MovePackage::compute_digest_for_modules_and_deps(
-                &module_bytes,
-                &dep_ids,
-                /* hash_modules */ true,
-            )
-            .to_vec();
             if computed_digest != upgrade_ticket.digest {
                 return Err(Mode::Error::from_kind(
                     ExecutionErrorKind::PackageUpgradeError {
