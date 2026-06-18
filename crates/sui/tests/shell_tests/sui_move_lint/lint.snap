@@ -1,0 +1,28 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Tests that `sui move lint` runs the extra linters (lint level `All`) and reports
+# warnings that a plain `sui move build` does not. `COLOR_MODE=NONE` disables ANSI
+# color codes in the compiler diagnostics so the snapshot is stable.
+COLOR_MODE=NONE sui move --client.config $CONFIG lint -p example
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING example
+
+----- stderr -----
+warning[Lint W04004]: unneeded return
+   ┌─ ./sources/example.move:12:5
+   │
+12 │     return VALUE
+   │     ^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+   │
+   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
