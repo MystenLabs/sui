@@ -190,7 +190,7 @@ impl SimpleAbsInt for UnusedReturnValueAI {
                 }
                 Purity::Pure {
                     tx_context_exempted,
-                } => *&tx_context_exempted,
+                } => tx_context_exempted,
             };
             Value::Fresh(CallSite {
                 loc: *loc,
