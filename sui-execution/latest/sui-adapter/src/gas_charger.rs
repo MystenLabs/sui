@@ -17,9 +17,7 @@ pub mod checked {
     use sui_types::digests::TransactionDigest;
     use sui_types::error::ExecutionErrorTrait;
     use sui_types::gas::{GasCostSummary, SuiGasStatus, deduct_gas};
-    use sui_types::gas_model::gas_predicates::{
-        charge_upgrades, dont_charge_budget_on_storage_oog, refresh_gas_payment_location,
-    };
+    use sui_types::gas_model::gas_predicates::refresh_gas_payment_location;
     use sui_types::{
         accumulator_event::AccumulatorEvent,
         base_types::{ObjectID, ObjectRef, SuiAddress},
@@ -282,14 +280,6 @@ pub mod checked {
             self.gas_status.charge_publish_package(size)
         }
 
-        pub fn charge_upgrade_package(&mut self, size: usize) -> Result<(), ExecutionError> {
-            if charge_upgrades(self.gas_model_version) {
-                self.gas_status.charge_publish_package(size)
-            } else {
-                Ok(())
-            }
-        }
-
         pub fn charge_input_objects(
             &mut self,
             temporary_store: &TemporaryStore<'_>,
@@ -482,39 +472,10 @@ pub mod checked {
         /// If we exceed gas_budget, we set execution_result to InsufficientGas, failing the tx.
         /// If we have InsufficientGas, we determine how much gas to charge for the failed tx:
         ///
-        /// v1: we set computation_cost = gas_budget, so we charge net (gas_budget - storage_rebates)
-        /// v2: we charge (computation + storage costs for input objects - storage_rebates)
-        ///     if the gas balance is still insufficient, we fall back to set computation_cost = gas_budget
-        ///     so we charge net (gas_budget - storage_rebates)
+        /// we charge (computation + storage costs for input objects - storage_rebates)
+        /// if the gas balance is still insufficient, we fall back to set computation_cost = gas_budget
+        /// so we charge net (gas_budget - storage_rebates)
         fn compute_storage_and_rebate<T, E: ExecutionErrorTrait>(
-            &mut self,
-            temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, E>,
-        ) {
-            if dont_charge_budget_on_storage_oog(self.gas_model_version) {
-                self.handle_storage_and_rebate_v2(temporary_store, execution_result)
-            } else {
-                self.handle_storage_and_rebate_v1(temporary_store, execution_result)
-            }
-        }
-
-        fn handle_storage_and_rebate_v1<T, E: ExecutionErrorTrait>(
-            &mut self,
-            temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, E>,
-        ) {
-            if let Err(err) = self.gas_status.charge_storage_and_rebate() {
-                self.reset(temporary_store);
-                self.gas_status.adjust_computation_on_out_of_gas();
-                temporary_store.ensure_active_inputs_mutated();
-                temporary_store.collect_rebate(self);
-                if execution_result.is_ok() {
-                    *execution_result = Err(err.into());
-                }
-            }
-        }
-
-        fn handle_storage_and_rebate_v2<T, E: ExecutionErrorTrait>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
             execution_result: &mut Result<T, E>,
