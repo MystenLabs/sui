@@ -11,10 +11,6 @@ description: >
 
 # Sui and Move Tools
 
-> **Self-bootstrap (any AI agent):** this skill is bundled inside the `sui` binary.
-> Read the procedure with `sui prompt skill sui-and-move-tools --file fetch-and-decompile`.
-> See `sui prompt categories` for which categories use this skill.
-
 Get a deployed Sui package's bytecode and produce `.mv` and decompiled `.move` files. One
 Sui GraphQL call returns raw bytes for every module; `sui move decompile` produces the
 readable working view. Disassembly is fetched per-module only when a specific question

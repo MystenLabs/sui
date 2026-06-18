@@ -11,13 +11,10 @@ description: >
 
 # Move Bytecode Comprehension
 
-> **Self-bootstrap (any AI agent):** this skill is bundled inside the `sui` binary. **Before
-> relying on the routing in this SKILL.md, enumerate the reference files (`sui prompt skill
-> move-bytecode-comprehension --list`) and read each (`--file <ref>`).** They cover the
-> bytecode format and the practice of reading disassembly / decompiled output; this SKILL.md
-> is the mental-model wrapper. This skill belongs to one or more categories — run
-> `sui prompt categories` to see them and `sui prompt category <name>` to read the
-> category's workflow. No filesystem install is required — the binary is self-contained.
+> **Self-bootstrap:** before relying on the routing below, load every reference file —
+> default to `sui prompt skill move-bytecode-comprehension --all`, or `--list` + `--file
+> <ref>` when budget is tight. This SKILL.md is the mental-model wrapper; reference files
+> cover the binary format and the practice of reading disassembly / decompiled output.
 
 On-chain Sui packages are compiled **Move bytecode** (`.mv`, magic `0xA11CEB0B`). You analyze it
 two ways: **disassembly** (stack-machine assembly, via `sui move disassemble`) and

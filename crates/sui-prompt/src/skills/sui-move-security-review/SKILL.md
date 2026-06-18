@@ -25,28 +25,18 @@ description: >
 > and `sui prompt category <name>` to read the category's workflow. No filesystem install
 > is required — the binary is self-contained.
 
-> Offensive counterpart to the constructive Move skills. Each constructive "must / never /
-> always" rule implies a vulnerability when violated. This skill is the violation catalog: every
-> rule has a **detection heuristic**, a **severity**, and an **exploit sketch** so findings are
-> actionable against concrete code.
+> Offensive counterpart to the constructive Move skills — each rule = violated invariant
+> with detection heuristic, severity, and exploit sketch.
 
-> **Sources.** Rules are grounded in the MystenLabs Sui skills (cited per rule as
-> `MystenLabs/skills → <file>`). Rules marked **[+domain]** come from established Sui/Move auditing
-> practice and are NOT in those skills — they are high-yield and easy to miss (e.g.
-> capability–resource binding SM-A3, type-confusion SM-B4). When verifying on-chain facts, prefer
-> [docs.sui.io](https://docs.sui.io), [move-book.com](https://move-book.com), and the Sui framework
-> source.
+> **Sources.** Per-rule citation `MystenLabs/skills → <file>`. **[+domain]** = established
+> auditing practice not in upstream skills (high-yield, easy to miss — e.g. SM-A3, SM-B4).
+> Verify on-chain facts against [docs.sui.io](https://docs.sui.io),
+> [move-book.com](https://move-book.com), or framework source.
 
-> **Auditing on-chain bytecode?** If the target is a deployed package (not source): first
-> stand up tools with the `sui-and-move-tools` skill (fetch the package, decompile every
-> module). **Apply the `SM-*` rules to the decompiled `.move` files** — abilities,
-> visibility, the `entry` flag, signatures, struct shapes, control flow, and call patterns
-> are byte-for-byte faithful (see `move-bytecode-comprehension/decompilation.md`).
-> Disassembly is reserved for verification when a determination needs an exact abort code
-> value, when decompilation visibly failed for a module, or when a specific decompiled
-> excerpt is ambiguous — fetch per-module on demand and read it surgically. See
-> `auditing-bytecode.md` for the workflow + per-rule signals, and
-> `move-bytecode-comprehension` for what survives compilation.
+> **Auditing on-chain bytecode?** Use `sui-and-move-tools` to fetch + decompile; apply
+> `SM-*` rules to the decompiled `.move` files. See `auditing-bytecode.md` for workflow +
+> per-rule signals. Drop to disassembly only for abort-code values, failed decompilation,
+> or ambiguous excerpts.
 
 ## How to audit with this skill
 
@@ -58,23 +48,16 @@ description: >
    against the code.
    - **A grep hit is a *candidate*, not a finding.** Confirm the invariant is actually
      broken before reporting.
-   - **A grep miss is NOT proof of absence.** Many rules in this catalog detect the
-     *absence* of a guard, check, or invariant assertion — either purely (SM-A2, SM-A3,
-     SM-A6, SM-B4, SM-D1, SM-E4, SM-G2) or as the confirmation step on top of a
-     candidate-presence check (SM-C1, SM-C3, SM-C4, SM-F2, SM-G1, SM-M1). For these the
-     bug shape is "X is missing where it should be" — so a grep returning no hits often
-     means *"X is missing everywhere"*, not *"the rule doesn't apply"*. Do not skip an
-     absence-detection rule because the grep was empty; that's the exact failure mode
-     the rule is designed to catch. Each such rule has a **Discipline (absence
-     detection)** line in its `Detect:` paragraph spelling out the candidate set and
-     the anti-skip check.
-   - **Absence-detection rules require walking the candidate set explicitly.** First
-     identify what the rule is *about* (the privileged call sites for SM-A6; every
-     `&mut SharedT`-mutating `public`/`entry` fn for SM-A2; every cap-gated fn for
-     SM-A3; every `dynamic_field::borrow*`/`bag::borrow*`/`table::borrow*` site for
-     SM-E4; every `object::delete` site for SM-C1; etc.). For each candidate, check
-     whether the required guard/check/invariant is present — reason about the dataflow,
-     not just the textual presence of `assert!` or `abort` somewhere in the file.
+   - **A grep miss is NOT proof of absence — walk the candidate set explicitly.** Many
+     rules detect the *absence* of a guard, check, or invariant — either purely (SM-A2,
+     A3, A6, B4, D1, E4, G2) or as confirmation on top of a candidate-presence check
+     (SM-C1, C3, C4, F2, G1, M1). For these the bug shape is "X is missing where it
+     should be"; an empty grep often means *"X is missing everywhere"*. Identify the
+     rule's candidate set (privileged call sites for SM-A6; `&mut SharedT`-mutating
+     `public`/`entry` fns for SM-A2; cap-gated fns for SM-A3; `dynamic_field::borrow*` /
+     `bag::borrow*` / `table::borrow*` sites for SM-E4; `object::delete` sites for SM-C1;
+     etc.) and for each candidate check whether the required guard is present — reason
+     about dataflow, not the textual presence of `assert!` somewhere in the file.
 3. **Report findings keyed to the rule ID** (e.g. `SM-A3`) with: severity, the offending
    location (`file:line`), why the invariant is violated, and the concrete exploit. Distinguish
    *exploitable* from *defense-in-depth*.
