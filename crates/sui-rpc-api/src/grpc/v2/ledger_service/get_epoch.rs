@@ -4,6 +4,7 @@
 use crate::ErrorReason;
 use crate::Result;
 use crate::RpcService;
+use crate::error::EpochNotFoundError;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
@@ -40,16 +41,22 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEp
 
     let epoch = request.epoch.unwrap_or(current_epoch);
 
-    if read_mask.contains(Epoch::EPOCH_FIELD.name) {
-        message.set_epoch(epoch);
-    }
-
     // Fetch epoch info, if indexing is available.
     let mut epoch_info = service
         .reader
         .inner()
         .indexes()
-        .and_then(|indexes| indexes.get_epoch_info(epoch).ok().flatten());
+        .map(|indexes| indexes.get_epoch_info(epoch))
+        .transpose()?
+        .flatten();
+
+    if epoch != current_epoch && epoch_info.is_none() {
+        return Err(EpochNotFoundError::new(epoch).into());
+    }
+
+    if read_mask.contains(Epoch::EPOCH_FIELD.name) {
+        message.set_epoch(epoch);
+    }
 
     let system_state = if epoch == current_epoch {
         Some(current_system_state)
