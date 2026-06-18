@@ -29,6 +29,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::MoveCallFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
+use sui_rpc::proto::sui::rpc::v2alpha::PackageWriteFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions;
 use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
@@ -708,6 +709,12 @@ fn tx_event_stream_head_literal(stream_id: ObjectID) -> TransactionLiteral {
     tx_include(transaction_predicate::Predicate::EventStreamHead(esh))
 }
 
+fn tx_package_write_literal() -> TransactionLiteral {
+    tx_include(transaction_predicate::Predicate::PackageWrite(
+        PackageWriteFilter::default(),
+    ))
+}
+
 fn tx_sender(addr: SuiAddress) -> TransactionFilter {
     tx_filter(vec![tx_sender_literal(addr)])
 }
@@ -726,6 +733,10 @@ fn tx_event_type(path: &str) -> TransactionFilter {
 
 fn tx_event_stream_head(stream_id: ObjectID) -> TransactionFilter {
     tx_filter(vec![tx_event_stream_head_literal(stream_id)])
+}
+
+fn tx_package_write() -> TransactionFilter {
+    tx_filter(vec![tx_package_write_literal()])
 }
 
 fn tx_and(filters: Vec<TransactionFilter>) -> TransactionFilter {
@@ -1059,6 +1070,52 @@ async fn test_list_transactions_filter_predicates() {
     assert!(
         digests.contains(&digest_a) && !digests.contains(&digest_b),
         "tx event_type filter should match only GenericEvent<u64>, got {digests:?}"
+    );
+}
+
+#[sim_test]
+async fn test_list_package_write_filter() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+
+    // A publish writes a Move package; the transfer writes none.
+    let (_pkg, publish_tx) = publish_package(&cluster, sender, emit_test_event_pkg_path()).await;
+    let transfer_tx = transfer_self(&cluster, sender).await;
+    let publish_digest = tx_digest(&publish_tx);
+    let transfer_digest = tx_digest(&transfer_tx);
+    let publish_cp = tx_checkpoint(&publish_tx);
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    // Scope to the publish's checkpoint. Genesis also writes packages (the
+    // framework) and so matches an unbounded package-write query, so bounding
+    // the range leaves our publish as the only package write in it — letting us
+    // assert an exact result rather than mere membership.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(publish_cp);
+    req.end_checkpoint = Some(publish_cp + 1);
+    req.filter = Some(tx_package_write());
+    req.options = Some(query_options(100));
+    let digests = transaction_digest_set(&list_transactions_result(&mut client, req).await);
+    assert_eq!(
+        digests,
+        HashSet::from([publish_digest.clone()]),
+        "package_write filter should return exactly the publish tx in its checkpoint, got {digests:?}"
+    );
+
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(publish_cp);
+    req.end_checkpoint = Some(publish_cp + 1);
+    req.filter = Some(tx_package_write());
+    req.options = Some(query_options(100));
+    let resp = list_checkpoints_result(&mut client, req).await;
+    let seqs: HashSet<u64> = resp.checkpoints.iter().map(checkpoint_sequence).collect();
+    assert_eq!(
+        seqs,
+        HashSet::from([publish_cp]),
+        "package_write checkpoint filter should return exactly the publish checkpoint, got {seqs:?}"
     );
 }
 
