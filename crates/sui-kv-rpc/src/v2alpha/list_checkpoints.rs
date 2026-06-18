@@ -98,7 +98,6 @@ pub(crate) async fn list_checkpoints(
         endpoint.default_limit_items,
         endpoint.max_limit_items,
         QueryType::Checkpoints,
-        request.filter.as_ref(),
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;

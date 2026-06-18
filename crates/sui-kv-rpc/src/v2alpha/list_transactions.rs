@@ -85,7 +85,6 @@ pub(crate) async fn list_transactions(
         endpoint.default_limit_items,
         endpoint.max_limit_items,
         QueryType::Transactions,
-        request.filter.as_ref(),
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
@@ -523,14 +522,7 @@ mod tests {
     }
 
     fn options() -> QueryOptions {
-        QueryOptions::from_proto(
-            None,
-            100,
-            1_000,
-            QueryType::Transactions,
-            Option::<&sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter>::None,
-        )
-        .unwrap()
+        QueryOptions::from_proto(None, 100, 1_000, QueryType::Transactions).unwrap()
     }
 
     #[test]
