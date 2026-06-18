@@ -40,7 +40,7 @@ public fun public_party_transfer<T: key + store>(obj: T, party: sui::party::Part
 
 - Use the [`sui::transfer::public_party_transfer`](/references/framework/sui_sui/transfer#sui_transfer_public_party_transfer) function if the object has the `store` capability.
 
-Both functions take a `sui::party::Party` value. Construct that value with [`sui::party::single_owner`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/party.move), which grants all permissions to one address and no permissions to anyone else:
+Both functions take a `sui::party::Party` value. Currently, that value can be constructed only with [`sui::party::single_owner`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/party.move), which grants all permissions to one address and no permissions to anyone else:
 
 ```
 public fun single_owner(owner: address): sui::party::Party
