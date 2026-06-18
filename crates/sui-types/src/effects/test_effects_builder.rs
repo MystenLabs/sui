@@ -36,10 +36,7 @@ pub struct TestEffectsBuilder {
     frozen_objects: BTreeSet<ObjectID>,
     /// Accumulator events.
     accumulator_events: Vec<AccumulatorEvent>,
-    /// Move package writes that create a new on-chain id (a publish, or a user
-    /// upgrade that mints a new id): (id, version). Emitted as a created
-    /// `ObjectOut::PackageWrite` so the change carries the package's own version
-    /// rather than the tx lamport version.
+    /// Move package writes that create a new on-chain id
     package_writes: Vec<(ObjectID, SequenceNumber)>,
 }
 

@@ -9,7 +9,6 @@ use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::full_checkpoint_content::ObjectSet;
-use sui_types::object::OBJECT_START_VERSION;
 use sui_types::object::Owner;
 use sui_types::storage::ObjectKey;
 use sui_types::transaction::TransactionData;
@@ -66,18 +65,12 @@ pub enum IndexDimension {
     /// on this key, resolving `NOT D` as `range \ D` without an extra
     /// evaluator code path. No write path emits this dimension.
     TxUniverse = 0x09,
-    /// Package publish. Value: `[original_package_id_32]`.
-    PackagePublish = 0x0a,
-    /// Package upgrade. Value: `[original_package_id_32]`.
-    PackageUpgrade = 0x0b,
-    /// Global marker for every first publish, regardless of package. Singleton
-    /// key (a placeholder byte): every publish maps to the same row, so the read
-    /// side can enumerate all publishes chain-wide in checkpoint order without an
-    /// id to key on. Backs the global `Query.packages` listing.
-    AnyPackagePublish = 0x0c,
-    /// Global marker for every upgrade, regardless of package. Singleton key,
-    /// the upgrade counterpart to [`Self::AnyPackagePublish`].
-    AnyPackageUpgrade = 0x0d,
+    /// Global marker for every Move package write — first publishes and upgrades
+    /// alike, regardless of package. Singleton key (a placeholder byte): every
+    /// package write maps to the same row, so the read side can enumerate all
+    /// package writes chain-wide in checkpoint order without an id to key on.
+    /// Backs the global `Query.packages` listing.
+    AnyPackageWrite = 0x0a,
 }
 
 impl IndexDimension {
@@ -96,10 +89,7 @@ impl IndexDimension {
             tag if tag == Self::EventStreamHead.tag_byte() => Some(Self::EventStreamHead),
             tag if tag == Self::EventExtant.tag_byte() => Some(Self::EventExtant),
             tag if tag == Self::TxUniverse.tag_byte() => Some(Self::TxUniverse),
-            tag if tag == Self::PackagePublish.tag_byte() => Some(Self::PackagePublish),
-            tag if tag == Self::PackageUpgrade.tag_byte() => Some(Self::PackageUpgrade),
-            tag if tag == Self::AnyPackagePublish.tag_byte() => Some(Self::AnyPackagePublish),
-            tag if tag == Self::AnyPackageUpgrade.tag_byte() => Some(Self::AnyPackageUpgrade),
+            tag if tag == Self::AnyPackageWrite.tag_byte() => Some(Self::AnyPackageWrite),
             _ => None,
         }
     }
@@ -122,11 +112,10 @@ pub const EVENT_EXTANT_VALUE: &[u8] = &[0x00];
 /// tag at scan time and synthesize full buckets over the requested range.
 pub const TX_UNIVERSE_VALUE: &[u8] = &[0x00];
 
-/// Singleton value for the global [`IndexDimension::AnyPackagePublish`] /
-/// [`IndexDimension::AnyPackageUpgrade`] markers: every package write maps to
-/// the same key for its kind. Like [`EVENT_EXTANT_VALUE`], it is a single
-/// placeholder byte so the encoded key keeps the standard `[tag, value...]`
-/// shape and passes `BitmapKey::new`'s length invariant.
+/// Singleton value for the global [`IndexDimension::AnyPackageWrite`] marker:
+/// every package write maps to the same key. Like [`EVENT_EXTANT_VALUE`], it is
+/// a single placeholder byte so the encoded key keeps the standard
+/// `[tag, value...]` shape and passes `BitmapKey::new`'s length invariant.
 pub const ANY_PACKAGE_VALUE: &[u8] = &[0x00];
 
 /// Visit all tx-space dimensions for a transaction.
@@ -172,28 +161,15 @@ pub fn for_each_transaction_dimension(
 
         f(IndexDimension::AffectedObject, change.id.as_ref());
 
-        // Move package writes. A package at version 1 is a first publish (user
-        // or genesis system package), keyed by its own id (which is also its
-        // original id). A later version is an upgrade — user upgrades mint a new
-        // id, system upgrades reuse the id — keyed by the stable original
-        // (root) id so every version in a lineage shares one key. Discriminating
-        // on version (rather than `original_package_id() == id`) is what lets
-        // system upgrades be classified correctly, since they keep their id.
-        if let Some(sui_types::object::Data::Package(pkg)) = change
+        // Move package writes — first publishes and upgrades alike — emit a
+        // single global marker so the read side can enumerate every package
+        // write chain-wide in checkpoint order.
+        if let Some(sui_types::object::Data::Package(_)) = change
             .output_version
             .and_then(|v| object_set.get(&ObjectKey(change.id, v)))
             .map(|obj| &obj.data)
         {
-            if pkg.version() == OBJECT_START_VERSION {
-                f(IndexDimension::PackagePublish, pkg.id().as_ref());
-                f(IndexDimension::AnyPackagePublish, ANY_PACKAGE_VALUE);
-            } else {
-                f(
-                    IndexDimension::PackageUpgrade,
-                    pkg.original_package_id().as_ref(),
-                );
-                f(IndexDimension::AnyPackageUpgrade, ANY_PACKAGE_VALUE);
-            }
+            f(IndexDimension::AnyPackageWrite, ANY_PACKAGE_VALUE);
         }
     }
 
@@ -741,7 +717,7 @@ mod tests {
     }
 
     #[test]
-    fn transaction_visitor_emits_package_publish_and_upgrade() {
+    fn transaction_visitor_emits_package_write_marker() {
         use std::collections::HashSet;
         use sui_types::digests::TransactionDigest;
         use sui_types::effects::TestEffectsBuilder;
@@ -751,9 +727,7 @@ mod tests {
 
         // A BCS-encoded `MovePackage` (id 0x0..0, version 2) holding one module
         // "DUMMY" whose declared self-address is 0x0..0. We patch the id byte
-        // (offset 31) and version byte (offset 32) to model each write below;
-        // the module's declared address always stays 0x0..0 and so serves as
-        // the original (root) id for the upgrade fixtures.
+        // (offset 31) and version byte (offset 32) to model each write below.
         let pkg_bytes = vec![
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 5, 68, 85, 77, 77, 89, 63, 161, 28, 235, 11, 7, 0,
@@ -772,7 +746,7 @@ mod tests {
         let signed_data = sui_types::transaction::SenderSignedData::new(tx.clone(), vec![]);
 
         // Run the extractor over a single package write installed at `id_byte`
-        // and `version`. Returns (storage id, original/root id, emitted keys).
+        // and `version`. Returns the emitted keys.
         let run = |id_byte: u8, version: u8| {
             let mut bytes = pkg_bytes.clone();
             bytes[31] = id_byte;
@@ -780,7 +754,6 @@ mod tests {
             let pkg: MovePackage = bcs::from_bytes(&bytes).unwrap();
             let pkg_id = pkg.id();
             let pkg_version = pkg.version();
-            let original_id = pkg.original_package_id();
 
             let mut object_set = ObjectSet::default();
             object_set.insert(Object::new_package_from_data(
@@ -796,77 +769,20 @@ mod tests {
             for_each_transaction_dimension(&tx, &effects, None, &object_set, |dim, value| {
                 keys.insert(encode_dimension_key(dim, value));
             });
-            (pkg_id, original_id, keys)
+            keys
         };
 
-        let any_publish =
-            encode_dimension_key(IndexDimension::AnyPackagePublish, ANY_PACKAGE_VALUE);
-        let any_upgrade =
-            encode_dimension_key(IndexDimension::AnyPackageUpgrade, ANY_PACKAGE_VALUE);
+        let any_write = encode_dimension_key(IndexDimension::AnyPackageWrite, ANY_PACKAGE_VALUE);
 
-        // First publish (version 1): original id == storage id.
-        let (id, original_id, keys) = run(0, 1);
-        assert_eq!(id, original_id);
-        assert!(keys.contains(&encode_dimension_key(
-            IndexDimension::PackagePublish,
-            id.as_ref()
-        )));
-        assert!(
-            keys.contains(&any_publish),
-            "a publish also emits the global AnyPackagePublish marker"
-        );
-        assert!(
-            !keys
-                .iter()
-                .any(|k| k[0] == IndexDimension::PackageUpgrade.tag_byte()),
-            "a version-1 write is a publish, never an upgrade"
-        );
-        assert!(
-            !keys.contains(&any_upgrade),
-            "a publish does not emit the global upgrade marker"
-        );
-
-        // User upgrade (version 2, new storage id): keyed by the stable root id.
-        let (id, original_id, keys) = run(1, 2);
-        assert_ne!(
-            id, original_id,
-            "user upgrade mints a new id distinct from the root"
-        );
-        assert!(keys.contains(&encode_dimension_key(
-            IndexDimension::PackageUpgrade,
-            original_id.as_ref()
-        )));
-        assert!(
-            keys.contains(&any_upgrade),
-            "an upgrade also emits the global AnyPackageUpgrade marker"
-        );
-        assert!(!keys.contains(&encode_dimension_key(
-            IndexDimension::PackagePublish,
-            id.as_ref()
-        )));
-        assert!(
-            !keys.contains(&any_publish),
-            "an upgrade does not emit the global publish marker"
-        );
-
-        // A version-2 write whose original id equals its own storage id (as a
-        // reused-id / system package upgrade has) must still classify as an
-        // upgrade. This is the case the old `original == id` discriminator got
-        // wrong; the version-based discriminator keys it under PackageUpgrade.
-        let (id, original_id, keys) = run(0, 2);
-        assert_eq!(
-            id, original_id,
-            "fixture models a reused-id upgrade (original == id)"
-        );
-        assert!(keys.contains(&encode_dimension_key(
-            IndexDimension::PackageUpgrade,
-            id.as_ref()
-        )));
-        assert!(keys.contains(&any_upgrade));
-        assert!(!keys.contains(&encode_dimension_key(
-            IndexDimension::PackagePublish,
-            id.as_ref()
-        )));
-        assert!(!keys.contains(&any_publish));
+        // Every package write emits the single global marker regardless of
+        // publish-vs-upgrade or whether the upgrade reuses its id: a first
+        // publish (version 1), a user upgrade that mints a new id (version 2,
+        // new id), and a reused-id upgrade (version 2, original == id).
+        for (id_byte, version) in [(0, 1), (1, 2), (0, 2)] {
+            assert!(
+                run(id_byte, version).contains(&any_write),
+                "package write (id_byte={id_byte}, version={version}) emits AnyPackageWrite"
+            );
+        }
     }
 }
