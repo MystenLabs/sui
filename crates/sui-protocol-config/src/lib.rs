@@ -1135,6 +1135,10 @@ struct FeatureFlags {
     // If true, exit early for IFWW transactions.
     #[serde(skip_serializing_if = "is_false")]
     early_exit_on_iffw: bool,
+
+    // If true enable unified linkage
+    #[serde(skip_serializing_if = "is_false")]
+    enable_unified_linkage: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2898,6 +2902,10 @@ impl ProtocolConfig {
 
     pub fn early_exit_on_iffw(&self) -> bool {
         self.feature_flags.early_exit_on_iffw
+    }
+
+    pub fn enable_unified_linkage(&self) -> bool {
+        self.feature_flags.enable_unified_linkage
     }
 }
 
@@ -5052,6 +5060,9 @@ impl ProtocolConfig {
                     }
 
                     cfg.feature_flags.timestamp_based_epoch_close = true;
+                    // TODO: Place this in the correct protocol version once we have a better idea
+                    // on rollout date.
+                    cfg.feature_flags.enable_unified_linkage = true;
                 }
                 128 => {
                     cfg.max_generic_instantiation_type_nodes_per_function = Some(10_000);
@@ -5359,6 +5370,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_party_transfer_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_party_transfer = val
+    }
+
+    pub fn set_enable_unified_linkage_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_unified_linkage = val
     }
 
     pub fn set_consensus_distributed_vote_scoring_strategy_for_testing(&mut self, val: bool) {

@@ -15,6 +15,13 @@ module test1::m;
 
 public fun bar() {}
 
+// Cannot be resolved under unified linkage
 //# programmable --sender A
 //> 0: test::m::foo();
 //> 1: test1::m::bar();
+
+//# programmable --sender A
+//> test::m::foo();
+
+//# programmable --sender A
+//> test1::m::bar();

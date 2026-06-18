@@ -278,14 +278,34 @@ fn command<Mode: ExecutionMode>(
             let resolved_linkage = env
                 .linkage_analysis
                 .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
-            let payload = PackagePayload::Serialized(items);
+            let payload = if env.protocol_config.enable_unified_linkage() {
+                let (modules, total_bytes, computed_digest) =
+                    env.deserialize_modules(&items, &dep_ids)?;
+                PackagePayload::Deserialized {
+                    modules,
+                    total_bytes,
+                    computed_digest,
+                }
+            } else {
+                PackagePayload::Serialized(items)
+            };
             L::Command::Publish(payload, dep_ids, resolved_linkage)
         }
         P::Command::Upgrade(items, dep_ids, object_id, argument) => {
             let resolved_linkage = env
                 .linkage_analysis
                 .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
-            let payload = PackagePayload::Serialized(items);
+            let payload = if env.protocol_config.enable_unified_linkage() {
+                let (modules, total_bytes, computed_digest) =
+                    env.deserialize_modules(&items, &dep_ids)?;
+                PackagePayload::Deserialized {
+                    modules,
+                    total_bytes,
+                    computed_digest,
+                }
+            } else {
+                PackagePayload::Serialized(items)
+            };
             L::Command::Upgrade(payload, dep_ids, object_id, argument, resolved_linkage)
         }
     })

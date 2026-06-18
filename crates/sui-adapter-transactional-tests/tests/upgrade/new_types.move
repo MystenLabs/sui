@@ -77,25 +77,38 @@ module Test_V3::M1 {
 
 //# view-object 6,0
 
-// call functions from two different versions of the same module modifying the same object
+// call functions from two different versions of the same module  -- this will fail under unified linkage.
 //# programmable --sender A --inputs object(6,0)
 //> 0: Test_DepV1::DepM1::mod_obj(Input(0));
 //> 1: Test_DepV2::DepM1::mod_obj(Input(0));
+
+// call functions from two different versions of the same module modifying the same object
+//# programmable --sender A --inputs object(6,0)
+//> Test_DepV1::DepM1::mod_obj(Input(0));
+
+//# programmable --sender A --inputs object(6,0)
+//> Test_DepV2::DepM1::mod_obj(Input(0));
 
 //# view-object 6,0
 
 // call functions from two different versions of the same module modifying the same object defined
 // in the same version of the dependent module
+
 //# programmable --sender A --inputs object(6,0)
-//> 0: Test_V1::M1::mod_dep_obj(Input(0));
-//> 1: Test_V2::M1::mod_dep_obj(Input(0));
+//> Test_V1::M1::mod_dep_obj(Input(0));
+
+//# programmable --sender A --inputs object(6,0)
+//> Test_V2::M1::mod_dep_obj(Input(0));
 
 //# view-object 6,0
 
 // call functions from two different versions of the same module modifying the same object defined
 // in different versions of the dependent module
+
 //# programmable --sender A --inputs object(6,0)
-//> 0: Test_V2::M1::mod_dep_obj(Input(0));
-//> 1: Test_V3::M1::mod_dep_obj(Input(0));
+//> Test_V2::M1::mod_dep_obj(Input(0));
+
+//# programmable --sender A --inputs object(6,0)
+//> Test_V3::M1::mod_dep_obj(Input(0));
 
 //# view-object 6,0
