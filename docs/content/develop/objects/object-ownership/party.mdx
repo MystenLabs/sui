@@ -46,7 +46,7 @@ Both functions take a `sui::party::Party` value. Currently, that value can be co
 public fun single_owner(owner: address): sui::party::Party
 ```
 
-The `sui::party` module also provides two convenience macros that wrap the `transfer` functions. The `sui::party::transfer` macro calls `sui::transfer::party_transfer`, and the `sui::party::public_transfer` macro calls `sui::transfer::public_party_transfer`. Use whichever form reads more clearly in your module.
+The `sui::party` module also provides wrapper macros for the `transfer` functions that can be used with method syntax, e.g. `my_party.public_transfer()`. The `sui::party::transfer` macro calls `sui::transfer::party_transfer`, and the `sui::party::public_transfer` macro calls `sui::transfer::public_party_transfer`.
 
 The following example creates an object and transfers it to a single-owner party in one function:
 
