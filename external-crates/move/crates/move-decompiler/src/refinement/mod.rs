@@ -70,11 +70,21 @@ const REFINEMENTS: &[Refinement] = &[
 // Public Interface
 
 pub fn refine(exp: &mut Exp) {
+    // Cap iterations to defend against ping-pong cycles between refinements: certain
+    // input shapes admit a 2-3 step transformation loop where no fixed point exists
+    // under the current refinement set. In practice convergence happens in well under
+    // this many iterations on the corpus; the cap is a safety valve.
+    const MAX_ITERS: usize = 200;
     let mut changed = true;
+    let mut iters = 0;
     while changed {
         changed = false;
+        iters += 1;
         for r in REFINEMENTS {
             changed |= r(exp);
+        }
+        if iters > MAX_ITERS {
+            return;
         }
     }
 }
