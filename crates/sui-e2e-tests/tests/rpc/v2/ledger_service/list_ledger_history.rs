@@ -1078,56 +1078,54 @@ async fn test_list_package_write_filter() {
     let cluster = new_cluster().await;
     let sender = cluster.get_address_0();
 
-    // A publish writes a Move package; the transfer writes none.
+    // A publish writes a Move package; the transfer writes none. Each helper
+    // waits for its transaction to be sealed into a checkpoint before returning
+    // (execute_transaction_and_wait_for_checkpoint), so the publish's checkpoint
+    // is finalized before the transfer is submitted — they land in distinct
+    // checkpoints, letting us test checkpoint-level exclusion deterministically.
     let (_pkg, publish_tx) = publish_package(&cluster, sender, emit_test_event_pkg_path()).await;
     let transfer_tx = transfer_self(&cluster, sender).await;
     let publish_digest = tx_digest(&publish_tx);
     let transfer_digest = tx_digest(&transfer_tx);
     let publish_cp = tx_checkpoint(&publish_tx);
+    let transfer_cp = tx_checkpoint(&transfer_tx);
+    assert_ne!(
+        publish_cp, transfer_cp,
+        "publish and transfer should occupy distinct checkpoints"
+    );
 
     let mut client = new_ledger_client(&cluster).await;
 
-    // Scope to the publish's checkpoint. Genesis also writes packages (the
-    // framework) and so matches an unbounded package-write query, so bounding
-    // the range leaves our publish as the only package write in it — letting us
-    // assert an exact result rather than mere membership.
+    // Transaction-level: the publish matches the filter, the transfer does not.
     let mut req = ListTransactionsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["digest"]));
-    req.start_checkpoint = Some(publish_cp);
-    req.end_checkpoint = Some(publish_cp + 1);
     req.filter = Some(tx_package_write());
     req.options = Some(query_options(100));
     let digests = transaction_digest_set(&list_transactions_result(&mut client, req).await);
-    assert_eq!(
-        digests,
-        HashSet::from([publish_digest.clone()]),
-        "package_write filter should return exactly the publish tx in its checkpoint, got {digests:?}"
+    assert!(
+        digests.contains(&publish_digest),
+        "package_write filter should include the publish tx, got {digests:?}"
+    );
+    assert!(
+        !digests.contains(&transfer_digest),
+        "package_write filter should exclude the transfer tx, got {digests:?}"
     );
 
+    // Checkpoint-level: the publish's checkpoint matches, the transfer-only
+    // checkpoint does not.
     let mut req = ListCheckpointsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
-    req.start_checkpoint = Some(publish_cp);
-    req.end_checkpoint = Some(publish_cp + 1);
     req.filter = Some(tx_package_write());
     req.options = Some(query_options(100));
     let resp = list_checkpoints_result(&mut client, req).await;
     let seqs: HashSet<u64> = resp.checkpoints.iter().map(checkpoint_sequence).collect();
-    assert_eq!(
-        seqs,
-        HashSet::from([publish_cp]),
-        "package_write checkpoint filter should return exactly the publish checkpoint, got {seqs:?}"
-    );
-
-    // The transfer is never a package write, regardless of which checkpoint it
-    // landed in: an unbounded query must not surface it.
-    let mut req = ListTransactionsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["digest"]));
-    req.filter = Some(tx_package_write());
-    req.options = Some(query_options(100));
-    let all = transaction_digest_set(&list_transactions_result(&mut client, req).await);
     assert!(
-        all.contains(&publish_digest) && !all.contains(&transfer_digest),
-        "unbounded package_write should include the publish and exclude the transfer, got {all:?}"
+        seqs.contains(&publish_cp),
+        "package_write checkpoint filter should include the publish checkpoint {publish_cp}, got {seqs:?}"
+    );
+    assert!(
+        !seqs.contains(&transfer_cp),
+        "package_write checkpoint filter should exclude the transfer-only checkpoint {transfer_cp}, got {seqs:?}"
     );
 }
 
