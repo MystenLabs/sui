@@ -2999,6 +2999,12 @@ impl ExecutionSchedulerSender {
             let txns = transactions
                 .into_iter()
                 .map(|(txn, versions)| {
+                    if let Some(tx) = txn.as_tx() {
+                        crate::tx_commit_timestamp_check::record_or_check(
+                            tx.digest(),
+                            commit_timestamp_ms,
+                        );
+                    }
                     (
                         txn,
                         ExecutionEnv::new()

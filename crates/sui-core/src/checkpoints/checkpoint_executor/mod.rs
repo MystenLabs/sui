@@ -19,14 +19,16 @@
 //! end of epoch. This allows us to use it as a signal for reconfig.
 
 use futures::StreamExt;
-use mysten_common::{ZipDebugEqIteratorExt, debug_fatal, fatal, izip_debug_eq};
+use mysten_common::{
+    ZipDebugEqIteratorExt, debug_fatal, fatal, in_test_configuration, izip_debug_eq,
+};
 use parking_lot::Mutex;
 use std::{sync::Arc, time::Instant};
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::RandomnessRound;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
-use sui_types::transaction::{TransactionDataAPI, TransactionKind};
+use sui_types::transaction::{TransactionData, TransactionDataAPI, TransactionKind};
 
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::fail_point;
@@ -178,6 +180,18 @@ macro_rules! finish_stage {
     };
 }
 
+/// Commit timestamp of a `ConsensusCommitPrologue` (the first transaction of every consensus
+/// commit), or `None` for other transaction kinds.
+fn consensus_commit_prologue_timestamp_ms(tx_data: &TransactionData) -> Option<u64> {
+    match tx_data.kind() {
+        TransactionKind::ConsensusCommitPrologue(p) => Some(p.commit_timestamp_ms),
+        TransactionKind::ConsensusCommitPrologueV2(p) => Some(p.commit_timestamp_ms),
+        TransactionKind::ConsensusCommitPrologueV3(p) => Some(p.commit_timestamp_ms),
+        TransactionKind::ConsensusCommitPrologueV4(p) => Some(p.commit_timestamp_ms),
+        _ => None,
+    }
+}
+
 pub struct CheckpointExecutor {
     epoch_store: Arc<AuthorityPerEpochStore>,
     state: Arc<AuthorityState>,
@@ -193,6 +207,11 @@ pub struct CheckpointExecutor {
     metrics: Arc<CheckpointExecutorMetrics>,
     tps_estimator: Mutex<TPSEstimator>,
     subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<Checkpoint>>,
+    // Running consensus commit timestamp, carried checkpoint to checkpoint: seeded in `run_epoch`
+    // from the last executed checkpoint and advanced at each ConsensusCommitPrologue. The pipeline
+    // serializes the ExecuteTransactions stage in checkpoint order, so this Mutex is uncontended — it
+    // just provides interior mutability across the per-checkpoint tasks.
+    running_commit_timestamp_ms: Mutex<Option<u64>>,
 }
 
 impl CheckpointExecutor {
@@ -219,6 +238,7 @@ impl CheckpointExecutor {
             metrics,
             tps_estimator: Mutex::new(TPSEstimator::default()),
             subscription_service_checkpoint_sender,
+            running_commit_timestamp_ms: Mutex::new(None),
         }
     }
 
@@ -301,6 +321,17 @@ impl CheckpointExecutor {
         let Some(next_to_schedule) = self.get_next_to_schedule() else {
             return StopReason::EpochComplete;
         };
+
+        // Seed from the last executed checkpoint (just before `next_to_schedule`): its stored
+        // timestamp is that checkpoint's last commit timestamp — what a checkpoint resuming mid-commit
+        // needs before its own first prologue (e.g. the tail of a commit cut short by a restart).
+        // `None` only at genesis; every other start has an executed checkpoint (restart and DB
+        // snapshot keep the HighestExecuted watermark, formal-snapshot restore sets it).
+        *self.running_commit_timestamp_ms.lock() = self
+            .checkpoint_store
+            .get_highest_executed_checkpoint()
+            .expect("db error")
+            .map(|cp| cp.timestamp_ms);
 
         let this = Arc::new(self);
 
@@ -527,7 +558,7 @@ impl CheckpointExecutor {
             .expect("db error");
 
         let Some(locally_built_checkpoint) = locally_built_checkpoint else {
-            // fall back to tx-by-tx execution path if we are catching up.
+            // Fall back to tx-by-tx execution if we are catching up.
             return self
                 .execute_transactions_from_synced_checkpoint(checkpoint, pipeline_handle)
                 .await;
@@ -565,6 +596,22 @@ impl CheckpointExecutor {
             .map(|digests| (digests.transaction, digests.effects))
             .unzip();
 
+        // Already executed via the live path, so we don't re-schedule them — but we still advance the
+        // running timestamp: a commit's chunks can finish executing out of order, so a later mid-commit
+        // chunk can reach the catch-up path (and read this field) while this prologue-bearing chunk
+        // took the validator-normal path.
+        //
+        // `checkpoint.timestamp_ms` is the checkpoint's last commit timestamp. The consensus handler
+        // floors every commit to the epoch start, so the builder's non-decreasing clamp (#21792) never
+        // alters it — it equals the raw prologue timestamp, as the catch-up path asserts. Still in the
+        // ExecuteTransactions stage, so this stays ordered with the catch-up read.
+        //
+        // In tests, cross-check each transaction's timestamp against the consensus handler.
+        if in_test_configuration() {
+            self.cross_check_validator_path_timestamps(&tx_digests);
+        }
+        *self.running_commit_timestamp_ms.lock() = Some(checkpoint.timestamp_ms);
+
         pipeline_handle
             .skip_to(PipelineStage::FinalizeTransactions)
             .await;
@@ -586,6 +633,29 @@ impl CheckpointExecutor {
         )
     }
 
+    /// Test-only: assign each transaction the timestamp the catch-up path would (these aren't
+    /// re-scheduled here) and cross-check it against the consensus handler. Walks from the incoming
+    /// running timestamp, so must run before it's overwritten with the outgoing value.
+    fn cross_check_validator_path_timestamps(&self, tx_digests: &[TransactionDigest]) {
+        let blocks = self
+            .transaction_cache_reader
+            .multi_get_transaction_blocks(tx_digests);
+        // Skip if any transaction is missing — we can't locate prologues to walk.
+        if blocks.iter().any(Option::is_none) {
+            return;
+        }
+        let mut current = *self.running_commit_timestamp_ms.lock();
+        for txn in blocks.into_iter().flatten() {
+            if let Some(ts) = consensus_commit_prologue_timestamp_ms(txn.data().transaction_data())
+            {
+                current = Some(ts);
+            }
+            if let Some(ts) = current {
+                crate::tx_commit_timestamp_check::record_or_check(txn.digest(), ts);
+            }
+        }
+    }
+
     #[instrument(level = "info", skip_all)]
     async fn execute_transactions_from_synced_checkpoint(
         &self,
@@ -597,7 +667,16 @@ impl CheckpointExecutor {
             let _scope =
                 mysten_metrics::monitored_scope("CheckpointExecutor::execute_transactions");
             let (ckpt_state, tx_data) = self.load_checkpoint_transactions(checkpoint);
-            let unexecuted_tx_digests = self.schedule_transaction_execution(&ckpt_state, &tx_data);
+            // The pipeline runs this stage in checkpoint order, so the incoming value is the one the
+            // previous checkpoint left; scheduling advances it through this checkpoint's prologues.
+            let incoming_commit_timestamp_ms = *self.running_commit_timestamp_ms.lock();
+            let (unexecuted_tx_digests, outgoing_commit_timestamp_ms) = self
+                .schedule_transaction_execution(
+                    &ckpt_state,
+                    &tx_data,
+                    incoming_commit_timestamp_ms,
+                );
+            *self.running_commit_timestamp_ms.lock() = outgoing_commit_timestamp_ms;
             (ckpt_state, tx_data, unexecuted_tx_digests)
         };
 
@@ -851,12 +930,22 @@ impl CheckpointExecutor {
 
     // Schedule all unexecuted transactions in the checkpoint for execution
     #[instrument(level = "info", skip_all)]
+    /// Schedules the checkpoint's unexecuted transactions, returning their digests and the running
+    /// consensus commit timestamp after this checkpoint.
+    ///
+    /// `incoming_commit_timestamp_ms` is the value left by the previous checkpoint. Each
+    /// `ConsensusCommitPrologue` carries its commit's timestamp, which we advance to and feed into
+    /// every subsequent transaction's `ExecutionEnv`; the incoming value covers transactions before
+    /// the first prologue we observe (e.g. the tail of a commit cut short by a restart).
     fn schedule_transaction_execution(
         &self,
         ckpt_state: &CheckpointExecutionState,
         tx_data: &CheckpointTransactionData,
-    ) -> Vec<TransactionDigest> {
+        incoming_commit_timestamp_ms: Option<u64>,
+    ) -> (Vec<TransactionDigest>, Option<u64>) {
         let mut barrier_deps_builder = BarrierDependencyBuilder::new();
+
+        let mut current_commit_timestamp_ms = incoming_commit_timestamp_ms;
 
         // Find unexecuted transactions and their expected effects digests
         let (unexecuted_tx_digests, unexecuted_txns): (Vec<_>, Vec<_>) = itertools::multiunzip(
@@ -877,6 +966,16 @@ impl CheckpointExecutor {
                     executed_fx_digest,
                     accumulator_version,
                 )| {
+                    // Advance at every prologue, before the skip below, so it stays correct even past
+                    // already-executed transactions.
+                    if let Some(ts) = consensus_commit_prologue_timestamp_ms(txn.transaction_data())
+                    {
+                        current_commit_timestamp_ms = Some(ts);
+                    }
+                    if let Some(ts) = current_commit_timestamp_ms {
+                        crate::tx_commit_timestamp_check::record_or_check(tx_digest, ts);
+                    }
+
                     let barrier_deps =
                         barrier_deps_builder.process_tx(*tx_digest, txn.transaction_data());
 
@@ -907,6 +1006,10 @@ impl CheckpointExecutor {
                             .with_expected_effects_digest(*expected_fx_digest)
                             .with_barrier_dependencies(barrier_deps);
 
+                        if let Some(ts) = current_commit_timestamp_ms {
+                            env = env.with_tx_timestamp_ms(ts);
+                        }
+
                         // Check if the expected effects indicate insufficient balance
                         if let &ExecutionStatus::Failure(ExecutionFailure {
                             error: ExecutionErrorKind::InsufficientFundsForWithdraw,
@@ -926,7 +1029,17 @@ impl CheckpointExecutor {
         self.execution_scheduler
             .enqueue_transactions(unexecuted_txns, &self.epoch_store);
 
-        unexecuted_tx_digests
+        // The running timestamp after walking the prologues equals `checkpoint.timestamp_ms` (the
+        // floor on commit timestamps means the builder's non-decreasing clamp (#21792) never alters
+        // it), which is what the validator-normal path seeds from instead of loading transactions.
+        debug_assert!(
+            current_commit_timestamp_ms.is_none()
+                || current_commit_timestamp_ms == Some(ckpt_state.data.checkpoint.timestamp_ms),
+            "carried commit timestamp {current_commit_timestamp_ms:?} disagrees with checkpoint timestamp {}",
+            ckpt_state.data.checkpoint.timestamp_ms,
+        );
+
+        (unexecuted_tx_digests, current_commit_timestamp_ms)
     }
 
     // Execute the change epoch txn

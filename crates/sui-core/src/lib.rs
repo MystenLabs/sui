@@ -53,6 +53,7 @@ mod transaction_input_loader;
 pub mod transaction_orchestrator;
 mod transaction_outputs;
 mod transaction_signing_filter;
+mod tx_commit_timestamp_check;
 pub mod validator_client_monitor;
 
 #[cfg(test)]
