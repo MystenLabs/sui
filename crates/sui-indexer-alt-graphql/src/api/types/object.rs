@@ -67,6 +67,7 @@ use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::owner::Owner;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
@@ -150,7 +151,7 @@ use crate::task::watermark::Watermarks;
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<CTransaction>"),
         arg(name = "filter", ty = "Option<TransactionFilter>"),
-        ty = "Option<Result<Connection<String, Transaction>, RpcError>>",
+        ty = "Option<Result<TransactionConnection, RpcError>>",
         desc = "The transactions that sent objects to this object."
     )
 )]
@@ -644,7 +645,7 @@ impl Object {
         last: Option<u64>,
         before: Option<CTransaction>,
         filter: Option<TransactionFilter>,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         let result = async {
             let pagination: &PaginationConfig = ctx.data()?;
             let limits = pagination.limits("IObject", "receivedTransactions");
@@ -658,7 +659,7 @@ impl Object {
 
             // Intersect with user-provided filter
             let Some(filter) = filter.unwrap_or_default().intersect(address_filter) else {
-                return Ok(Connection::new(false, false));
+                return Ok(Connection::new(false, false).into());
             };
 
             Transaction::paginate(ctx, self.super_.scope.clone(), page, filter).await

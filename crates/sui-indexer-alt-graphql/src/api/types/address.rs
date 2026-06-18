@@ -40,6 +40,7 @@ use crate::api::types::object_filter::ObjectFilter;
 use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::transaction_effects::EffectsContents;
@@ -491,7 +492,7 @@ impl Address {
         before: Option<CTransaction>,
         relation: Option<AddressTransactionRelationship>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         Some(
             async {
                 let pagination: &PaginationConfig = ctx.data()?;
@@ -515,7 +516,7 @@ impl Address {
 
                 // Intersect with user-provided filter
                 let Some(filter) = filter.unwrap_or_default().intersect(address_filter) else {
-                    return Ok(Connection::new(false, false));
+                    return Ok(Connection::new(false, false).into());
                 };
 
                 Transaction::paginate(ctx, self.scope.clone(), page, filter).await
