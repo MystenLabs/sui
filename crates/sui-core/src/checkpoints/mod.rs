@@ -1953,22 +1953,16 @@ impl CheckpointBuilder {
         let last_checkpoint_of_epoch = details.last_of_epoch;
 
         let sequence_number = details.checkpoint_seq;
-        let mut timestamp_ms = details.timestamp_ms;
+        let timestamp_ms = details.timestamp_ms;
         if let Some((_, last_checkpoint)) = &last_checkpoint
             && last_checkpoint.timestamp_ms > timestamp_ms
         {
-            // First consensus commit of an epoch can have zero timestamp.
-            debug!(
-                "Decrease of checkpoint timestamp, possibly due to epoch change. Sequence: {}, previous: {}, current: {}",
-                sequence_number, last_checkpoint.timestamp_ms, timestamp_ms,
+            debug_fatal!(
+                "Decrease of checkpoint timestamp. Sequence: {}, previous: {}, current: {}",
+                sequence_number,
+                last_checkpoint.timestamp_ms,
+                timestamp_ms
             );
-            if self
-                .epoch_store
-                .protocol_config()
-                .enforce_checkpoint_timestamp_monotonicity()
-            {
-                timestamp_ms = last_checkpoint.timestamp_ms;
-            }
         }
 
         let mut effects = all_effects;
