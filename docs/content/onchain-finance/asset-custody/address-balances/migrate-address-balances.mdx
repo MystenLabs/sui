@@ -134,7 +134,7 @@ A JSON-RPC compatibility layer presents compatibility coin reservations to clien
 
 These reservations primarily to preserve basic functionality for older clients that expect coin object references. Do not treat them as normal persisted coin objects. For new development, use address balances directly, as described in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances).
 
-When a legacy client supplies a compatibility coin reservation as gas payment, the network resolves it as a withdrawal from the address balance rather than smashing it into a coin. Gas smashing applies only to real `Coin<SUI>` objects supplied as gas payment. For more information, see [Gas Smashing](/develop/transaction-payment/gas-smashing).
+When a legacy client supplies a compatibility coin reservation as gas payment, the network resolves it as a withdrawal from the address balance rather than smashing it into a coin. And gas smashing applies depending on the position of the coin reservation in the list of gas payments. For more information, see [Gas Smashing](/develop/transaction-payment/gas-smashing).
 
 ## Converting existing coins to address balances
 
