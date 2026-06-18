@@ -658,7 +658,7 @@ fn append_path_segment(mut url: Url, segment: &str) -> Option<Url> {
 //   - Option<T> → {"vec": [...]} (Move-native, NOT JSON null)
 //
 // On-chain paths the resolver reads:
-//   Hashi.committee_set.{epoch, pending_epoch_change, members.id.id, committees.id.id}
+//   Hashi.committee_set.{epoch, pending_epoch_change, members.id, committees.id}
 //   Field<u64, Committee>.value.members[].validator_address
 //   Field<address, MemberInfo>.value.tls_public_key
 
@@ -913,15 +913,17 @@ async fn get_hashi_committee_snapshot(
         })?;
 
     let cs = json_field(json, "committee_set").context("missing committee_set in Hashi JSON")?;
-    // Bag's `id` is a `UID` which renders as { "id": "<address>" }; double-hop.
-    let members_bag_id = json_at(cs, &["members", "id", "id"])
+    // Bag.id is a UID, which the JSON renderer flattens to a single address
+    // string (see sui-types/src/object/rpc_visitor/mod.rs — UID and ID are
+    // collapsed to their canonical address representation, not a nested struct).
+    let members_bag_id = json_at(cs, &["members", "id"])
         .and_then(json_string)
-        .context("missing committee_set.members.id.id")?
+        .context("missing committee_set.members.id")?
         .parse::<Address>()
         .context("parsing members bag id as Address")?;
-    let committees_bag_id = json_at(cs, &["committees", "id", "id"])
+    let committees_bag_id = json_at(cs, &["committees", "id"])
         .and_then(json_string)
-        .context("missing committee_set.committees.id.id")?
+        .context("missing committee_set.committees.id")?
         .parse::<Address>()
         .context("parsing committees bag id as Address")?;
     let epoch = json_u64(
