@@ -36,7 +36,7 @@ use sui_types::{
     gas::GasCostSummary,
     object::Object,
     object::Owner,
-    storage::{BackingPackageStore, ChildObjectResolver, ParentSync, Storage},
+    storage::{BackingPackageStore, ParentSync, RuntimeObjectResolver, Storage},
     transaction::InputObjects,
 };
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
@@ -101,7 +101,7 @@ pub struct TemporaryStore<'backing> {
 
     /// Recorded when execution determines the transaction must be retried later rather than
     /// committed; checked before gas finalization. A `RefCell` rather than a lock: execution is
-    /// single-threaded, but the condition is detected behind `&self` (`ChildObjectResolver`) so the
+    /// single-threaded, but the condition is detected behind `&self` (`RuntimeObjectResolver`) so the
     /// field must be interior-mutable.
     retry_request: RefCell<Option<ExecutionRetryError>>,
 }
@@ -1529,7 +1529,7 @@ impl TemporaryStore<'_> {
     }
 }
 
-impl ChildObjectResolver for TemporaryStore<'_> {
+impl RuntimeObjectResolver for TemporaryStore<'_> {
     fn read_child_object(
         &self,
         parent: &ObjectID,
