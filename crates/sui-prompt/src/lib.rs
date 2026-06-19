@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! `sui prompt` — the agent-agnostic entry point to expert Move knowledge, shipped as part of the Sui CLI.
+//! `sui prompt` — the entry point to expert Sui and Move knowledge, shipped as part of the Sui CLI.
 //!
 //! See `crates/sui-prompt/README.md` for usage with worked examples.
 //!
@@ -59,7 +59,7 @@ pub struct PromptCategory {
     pub skills: &'static [&'static str],
 }
 
-/// `sui prompt` — the agent-agnostic entry point to expert Move knowledge, shipped as part of the Sui CLI.
+/// `sui prompt` — the entry point to expert Sui and Move knowledge, shipped as part of the Sui CLI.
 #[derive(Parser)]
 #[clap(
     name = "prompt",
@@ -167,24 +167,40 @@ pub fn execute_prompt_command(prompt: Prompt) -> anyhow::Result<()> {
 fn print_skills() {
     let bundles: BTreeSet<&str> = SKILL_FILES.iter().map(|s| s.bundle).collect();
     if bundles.is_empty() {
-        println!("# Embedded skill bundles");
-        println!();
         println!("No skill bundles are embedded in this binary.");
         return;
     }
-    println!("# Embedded skill bundles ({})", bundles.len());
-    println!();
+    println!("Embedded skill bundles ({}):", bundles.len());
+    let max_name = bundles.iter().map(|b| b.len()).max().unwrap_or(0);
     for b in &bundles {
         let n = SKILL_FILES.iter().filter(|s| s.bundle == *b).count();
-        println!("- `{}` — {} file{}", b, n, if n == 1 { "" } else { "s" });
+        let label = format!("{} file{}", n, if n == 1 { "" } else { "s" });
+        println!("  {:<width$}  — {}", b, label, width = max_name);
     }
     println!();
-    println!("## Commands");
-    println!();
-    println!("- `sui prompt skill <bundle>` — read `SKILL.md`");
-    println!("- `sui prompt skill <bundle> --list` — list reference file names (no content)");
-    println!("- `sui prompt skill <bundle> --file <r>` — read a specific reference file");
-    println!("- `sui prompt skill <bundle> --all` — read SKILL.md + every reference file");
+    // Plain-text command listing — left-aligned commands padded to a common width so
+    // the descriptions line up. No `#`/`##` markdown headings; this is CLI output, not
+    // a rendered README.
+    let commands: &[(&str, &str)] = &[
+        ("sui prompt skill <bundle>", "read SKILL.md"),
+        (
+            "sui prompt skill <bundle> --list",
+            "list reference file names (no content)",
+        ),
+        (
+            "sui prompt skill <bundle> --file <r>",
+            "read a specific reference file",
+        ),
+        (
+            "sui prompt skill <bundle> --all",
+            "read SKILL.md + every reference file",
+        ),
+    ];
+    let max_cmd = commands.iter().map(|(c, _)| c.len()).max().unwrap_or(0);
+    println!("Commands:");
+    for (cmd, desc) in commands {
+        println!("  {:<width$}  — {}", cmd, desc, width = max_cmd);
+    }
 }
 
 /// Read from a named skill bundle. Behaviour depends on the flags (clap rejects
@@ -274,25 +290,41 @@ fn print_categories() {
     let mut entries: Vec<&PromptCategory> = CATEGORIES.iter().collect();
     entries.sort_by_key(|c| c.name);
     if entries.is_empty() {
-        println!("# Embedded categories");
-        println!();
         println!("No categories are embedded in this binary.");
         return;
     }
-    println!("# Embedded categories ({})", entries.len());
-    println!();
+    println!("Embedded categories ({}):", entries.len());
+    let max_name = entries.iter().map(|c| c.name.len()).max().unwrap_or(0);
     for c in &entries {
-        println!("- `{}` — {}", c.name, c.description);
+        println!("  {:<width$}  — {}", c.name, c.description, width = max_name);
     }
     println!();
-    println!("## Commands");
-    println!();
-    println!("- `sui prompt category <name> --list` — list bundle and reference file names (no content)");
-    println!("- `sui prompt category <name>` — read the category's content");
-    println!("- `sui prompt category <name> --all` — read every bundle's content in one call");
-    println!("- `sui prompt skills` — list all skill bundles (flat)");
-    println!("- `sui prompt skill <bundle>` — read a skill bundle's `SKILL.md`");
-    println!("- `sui prompt skill <bundle> --all` — read `SKILL.md` + every reference file");
+    // Plain-text command listing — see `print_skills` for the rationale.
+    let commands: &[(&str, &str)] = &[
+        (
+            "sui prompt category <name> --list",
+            "list bundle and reference file names (no content)",
+        ),
+        ("sui prompt category <name>", "read the category's content"),
+        (
+            "sui prompt category <name> --all",
+            "read every bundle's content in one call",
+        ),
+        ("sui prompt skills", "list all skill bundles (flat)"),
+        (
+            "sui prompt skill <bundle>",
+            "read a skill bundle's SKILL.md",
+        ),
+        (
+            "sui prompt skill <bundle> --all",
+            "read SKILL.md + every reference file",
+        ),
+    ];
+    let max_cmd = commands.iter().map(|(c, _)| c.len()).max().unwrap_or(0);
+    println!("Commands:");
+    for (cmd, desc) in commands {
+        println!("  {:<width$}  — {}", cmd, desc, width = max_cmd);
+    }
 }
 
 /// Print the named category's content (frontmatter + body) verbatim — the same convention

@@ -381,7 +381,7 @@ pub enum SuiCommand {
         cmd: sui_move::Command,
     },
 
-    /// Expert Move knowledge for AI agents (agent-agnostic).
+    /// Expert Sui and Move knowledge for AI agents (run `sui prompt` to start).
     #[cfg(debug_assertions)]
     #[clap(name = "prompt")]
     Prompt(sui_prompt::Prompt),
