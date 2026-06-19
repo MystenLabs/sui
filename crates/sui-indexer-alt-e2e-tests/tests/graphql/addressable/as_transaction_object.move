@@ -22,6 +22,17 @@
     }
   }
 
+  # Same resolver called directly on an Object (an IAddressable implementor).
+  objectDirect: object(address: "@{obj_1_0}") {
+    asTransactionObject(transactionDigest: "@{digest_1}") {
+      __typename
+      ... on ObjectChange {
+        idCreated
+        outputState { address }
+      }
+    }
+  }
+
   # No `transactionDigest` argument outside subscription scope → null.
   noArg: address(address: "@{obj_1_0}") {
     asTransactionObject {

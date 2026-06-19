@@ -18,11 +18,20 @@ task 2, line 10:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 12-40:
+task 3, lines 12-51:
 //# run-graphql
 Response: {
   "data": {
     "changed": {
+      "asTransactionObject": {
+        "__typename": "ObjectChange",
+        "idCreated": true,
+        "outputState": {
+          "address": "0xb97536b48e93de1f9c1d06619490683304fdf3423dadd0e409bd99d116a1c80c"
+        }
+      }
+    },
+    "objectDirect": {
       "asTransactionObject": {
         "__typename": "ObjectChange",
         "idCreated": true,
@@ -40,17 +49,17 @@ Response: {
   }
 }
 
-task 4, lines 42-65:
+task 4, lines 53-76:
 //# publish
 created: object(4,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 6680400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 5, line 67:
+task 5, line 78:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 6, lines 69-71:
+task 6, lines 80-82:
 //# programmable --sender A --inputs 7u64 @A
 //> 0: P::M::create_object(Input(0));
 //> 1: TransferObjects([Result(0)], Input(1));
@@ -58,22 +67,22 @@ created: object(6,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7, line 73:
+task 7, line 84:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 8, lines 75-76:
+task 8, lines 86-87:
 //# programmable --sender A --inputs object(6,0) 99u64
 //> 0: P::M::mutate_and_emit(Input(0), Input(1));
 events: Event { package_id: P, transaction_module: Identifier("M"), sender: A, type_: StructTag { address: P, module: Identifier("M"), name: Identifier("TestAddressEvent"), type_params: [] }, contents: [62, 219, 117, 132, 227, 135, 32, 1, 102, 151, 41, 1, 101, 98, 132, 247, 88, 218, 211, 19, 164, 9, 23, 115, 161, 29, 20, 131, 114, 1, 203, 163] }
 mutated: object(0,0), object(6,0)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256
 
-task 9, line 78:
+task 9, line 89:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 10, lines 80-105:
+task 10, lines 91-116:
 //# run-graphql
 Response: {
   "data": {
@@ -117,7 +126,7 @@ Response: {
   }
 }
 
-task 11, lines 107-134:
+task 11, lines 118-145:
 //# run-graphql
 Response: {
   "data": {

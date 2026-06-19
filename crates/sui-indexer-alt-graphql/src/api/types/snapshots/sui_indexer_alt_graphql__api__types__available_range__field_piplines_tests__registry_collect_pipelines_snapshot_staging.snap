@@ -269,6 +269,9 @@ CoinMetadata.version
 CoinMetadata.digest
   => {}
 
+CoinMetadata.asTransactionObject
+  => {}
+
 CoinMetadata.balance
   => {"consistent"}
 
@@ -432,6 +435,9 @@ DynamicField.version
   => {}
 
 DynamicField.digest
+  => {}
+
+DynamicField.asTransactionObject
   => {}
 
 DynamicField.balance
@@ -690,6 +696,9 @@ IAddressable.address
   => {}
 
 IAddressable.addressAt
+  => {}
+
+IAddressable.asTransactionObject
   => {}
 
 IAddressable.balance
@@ -959,6 +968,9 @@ MoveObject.asCoinMetadata
 MoveObject.asDynamicField
   => {}
 
+MoveObject.asTransactionObject
+  => {}
+
 MoveObject.balance
   => {"consistent"}
 
@@ -1035,6 +1047,9 @@ MovePackage.version
   => {}
 
 MovePackage.digest
+  => {}
+
+MovePackage.asTransactionObject
   => {}
 
 MovePackage.balance
@@ -1221,6 +1236,9 @@ Object.asMoveObject
   => {}
 
 Object.asMovePackage
+  => {}
+
+Object.asTransactionObject
   => {}
 
 Object.balance
