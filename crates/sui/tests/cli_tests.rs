@@ -2905,7 +2905,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let forking_mode_tx = SuiClientCommands::TransferSui {
+    let skip_signing_tx = SuiClientCommands::TransferSui {
         to: KeyIdentity::Address(address1),
         sui_coin_object_id: coin,
         amount: Some(1),
@@ -2915,14 +2915,14 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
         },
         processing: TxProcessingArgs {
             serialize_signed_transaction: true,
-            forking_mode: true,
+            skip_signing: true,
             ..Default::default()
         },
     }
     .execute(context)
     .await?;
 
-    let SuiClientCommandResult::SerializedSignedTransaction(sender_signed_data) = forking_mode_tx
+    let SuiClientCommandResult::SerializedSignedTransaction(sender_signed_data) = skip_signing_tx
     else {
         panic!("Expected SerializedSignedTransaction result");
     };
