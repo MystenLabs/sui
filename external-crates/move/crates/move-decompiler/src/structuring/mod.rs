@@ -452,7 +452,8 @@ fn emit_dispatch_arms(
     // Each arm clones its tail; `compress_dispatch_cascade` later folds the duplication
     // back into the `if (sel <= K)` form.
     //
-    // TODO: consider revisiting with NMG NCD + reaching conditions once reaching lands.
+    // TODO: consider replacing with the NMG NCD algorithm using the reaching-condition
+    // machinery in `acyclic`.
     let owned_set: HashSet<NodeIndex> = owned_succs.iter().copied().collect();
     let cascade_next: HashMap<NodeIndex, NodeIndex> = owned_succs
         .iter()
@@ -891,7 +892,8 @@ fn is_cfg_sink(target: NodeIndex, cfg: &petgraph::graph::DiGraph<(), ()>) -> boo
 /// Adjacent items in the cascade are pairwise fall-through neighbors by construction;
 /// `elide_inter_item_gotos` drops the inter-step `Jump`s before wrapping the body.
 ///
-/// TODO: consider revisiting with NMG NCD + reaching conditions once reaching lands.
+/// TODO: consider replacing with the NMG NCD algorithm using the reaching-condition
+/// machinery in `acyclic`.
 fn structure_cascade(
     start: NodeIndex,
     source: &mut BTreeMap<NodeIndex, D::Structured>,
@@ -1133,19 +1135,15 @@ fn structure_acyclic_region(
     // Hoist orphan dom-tree children. After arm processing, any `ichildren` of `start` that
     // weren't absorbed as arms and weren't the loop successor remain in `structured_blocks`.
     // They're "owned" by us — every CFG path to them goes through `start` — so they
-    // semantically belong in our sequence. Append them as siblings.
+    // semantically belong in our sequence. Append them as siblings; surviving tail `Jump`s
+    // to them flow to `goto_to_break` for labeled-break rewriting.
     //
     // We always hoist (otherwise the orphan leaks — its idom is `start`, no ancestor scope
-    // sees it as an ichild). Reaching-condition acyclic structuring covers the cases where
-    // we previously also elided tail `Jump`s to the hoisted siblings; for shapes reaching
-    // doesn't cover, any surviving Jumps end up as gotos and become candidates for a future
-    // labeled-break refinement.
-    //
-    // We skip the hoist at loop heads: the loop's successor stays in `structured_blocks` so
-    // `structure_loop` can append it after the `Loop` form, and body-side ichildren are
-    // placed by the body-assembly logic. We also skip orphans that are succ_nodes of an
-    // enclosing loop — `structure_loop` for that outer loop will append them after its
-    // `Loop`, so we mustn't eat them at this inner level.
+    // sees it as an ichild). We skip the hoist at loop heads: the loop's successor stays in
+    // `structured_blocks` so `structure_loop` can append it after the `Loop` form, and
+    // body-side ichildren are placed by the body-assembly logic. We also skip orphans that
+    // are succ_nodes of an enclosing loop — `structure_loop` for that outer loop will append
+    // them after its `Loop`, so we mustn't eat them at this inner level.
     let mut exp = vec![structured];
     if loop_successor.is_none() {
         let mut orphans: Vec<NodeIndex> = ichildren
@@ -1166,9 +1164,8 @@ fn structure_acyclic_region(
 }
 
 /// Place each orphan as a sibling of `seq`'s existing items in CFG-topo order over the
-/// orphan-induced subgraph (`hoist_order`). No tail-Jump elision: reaching-condition
-/// acyclic structuring covers that case earlier in the pipeline, and any surviving Jumps
-/// flow to `goto_to_break` for later labeled-break rewriting.
+/// orphan-induced subgraph (`hoist_order`). Surviving tail `Jump`s flow to `goto_to_break`
+/// downstream for labeled-break rewriting.
 ///
 /// `orphans` should already be the filtered + sorted list (caller is closer to the source
 /// data — `ichildren` + scope-specific exclusions like `Some(c) != next` in

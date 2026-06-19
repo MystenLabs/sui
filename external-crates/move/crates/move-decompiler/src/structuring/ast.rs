@@ -236,9 +236,8 @@ impl std::fmt::Display for Structured {
                 }
                 Structured::CondIf(cond, then_branch, else_branch) => {
                     indent(f, level)?;
-                    // For the single-atom case (the migrated `IfElse(Code, ...)`) render the
-                    // bare block id, matching legacy output. For compound formulas show the
-                    // recovered boolean inside `<…>` so debug output stays scannable.
+                    // Single-atom guard renders as bare block id; compound formulas render
+                    // inside `<...>` so debug output stays scannable.
                     match cond.as_cond_atom() {
                         Some(n) => writeln!(f, "if ({}) {{", n.index())?,
                         None => writeln!(f, "if <{cond}> {{")?,

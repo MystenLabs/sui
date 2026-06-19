@@ -399,15 +399,14 @@ fn bodies_equivalent(
             .all(|(a, b)| crate::ast::exp_eq::exp_struct_eq(a, b))
 }
 
-// Region-local post-dominators. We build them per-region (always a strict subset of the
-// function's blocks) rather than carrying a global pdom tree, so the cost is bounded by region
-// size and `Graph` doesn't have to plumb the synthetic-exit graph for a structurer that may
-// not run.
+// Region-local post-dominators. Each region (whole-function or loop-body) needs its own
+// pdom: the convergence point for a branch inside a loop body is the loop's back-edge target
+// or break point, not the function-level convergence. Building per-region answers the
+// region-local question directly.
 
 struct PostDom {
-    /// Forward region CFG with a synthetic exit node absorbing all escapes. Sharing with
-    /// `reaching_conditions` (via `algo::toposort` over this graph) saves a second walk over
-    /// `input` to rebuild the same structure.
+    /// Forward region CFG with a synthetic exit absorbing all escapes. Shared with
+    /// `reaching_conditions` via `algo::toposort`.
     graph: DiGraph<(), ()>,
     doms: Dominators<NodeIndex>,
     exit_internal: NodeIndex,

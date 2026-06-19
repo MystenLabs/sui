@@ -142,10 +142,10 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
     let (structured, unemitted) =
         crate::structuring::structure(&config, input, 0.into(), &empty_terms);
     // Surface unemitted blocks in the snapshot so a regression that silently drops blocks
-    // doesn't just match the old structured shape and pass - the snapshot diff makes the
-    // dropped blocks visible. Bytecode and `.move` corpus tests already render the
-    // `// Did not structure and emit blocks N, K, ...` notice as part of their function output;
-    // `.stt` fixtures pin only the structured form, so the notice goes here.
+    // shows up as a snapshot diff rather than passing on shape match. Bytecode and `.move`
+    // corpus tests already render the `// Did not structure and emit blocks N, K, ...` notice
+    // as part of their function output; `.stt` fixtures pin only the structured form, so the
+    // notice goes here.
     let body = structured.to_test_string();
     if unemitted.is_empty() {
         body
