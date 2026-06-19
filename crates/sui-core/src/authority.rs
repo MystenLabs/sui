@@ -1872,6 +1872,7 @@ impl AuthorityState {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         kind: TransactionKind,
@@ -1890,6 +1891,7 @@ impl AuthorityState {
                 epoch_id,
                 epoch_timestamp_ms,
                 input_objects,
+                system_object_versions,
                 gas_data,
                 gas_status,
                 kind,
@@ -1971,6 +1973,15 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
+        // System object versions this transaction is allowed to read during execution. Currently
+        // only the accumulator root, at the version this transaction was sequenced against (if
+        // any), so the in-execution object-funds check can gate on settlement progress.
+        let system_object_versions: BTreeMap<ObjectID, SequenceNumber> = execution_env
+            .assigned_versions
+            .accumulator_version
+            .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
+            .into_iter()
+            .collect();
         // Mainnet-only: feed the accumulator (settlement) version so the address-balance gas-smash
         // short-circuit activates at its rollout version and replays bit-for-bit. Other chains pass
         // `None`, where the short-circuit applies unconditionally.
@@ -2019,6 +2030,7 @@ impl AuthorityState {
                     .epoch_data()
                     .epoch_start_timestamp(),
                 input_objects,
+                system_object_versions,
                 gas_data,
                 gas_status,
                 kind,
