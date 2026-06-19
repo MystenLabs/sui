@@ -48,7 +48,7 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    BalanceChange as RpcBalanceChange, BcsEvent, Coin, DryRunTransactionBlockResponse,
+    BalanceChange as RpcBalanceChange, BcsEvent, Coin as RpcCoin, DryRunTransactionBlockResponse,
     ObjectChange as RpcObjectChange, SuiEvent, SuiTransactionBlock, SuiTransactionBlockEffects,
     SuiTransactionBlockEvents, SuiTransactionBlockResponse,
 };
@@ -69,7 +69,7 @@ use sui_sdk::{
 use sui_types::{
     SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{FullObjectID, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress},
-    coin::{COIN_MODULE_NAME, COIN_STRUCT_NAME},
+    coin::{COIN_MODULE_NAME, COIN_STRUCT_NAME, Coin},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
     effects::TransactionEffectsAPI,
@@ -866,7 +866,9 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
 
                 let client = context.grpc_client()?;
-                let coin_type = coin_type.map(parse_coin_type_arg).transpose()?;
+                let coin_type = coin_type
+                    .map(|coin_type| coin_type.parse::<StructTag>())
+                    .transpose()?;
                 let mut balances =
                     balance_outputs_for_address(&client, address, coin_type.as_ref()).await?;
 
@@ -875,7 +877,7 @@ impl SuiClientCommands {
                         .await?;
                 }
 
-                order_balance_outputs_sui_first(&mut balances)?;
+                order_balance_outputs_sui_first(&mut balances);
                 SuiClientCommandResult::Balance(balances, with_coins)
             }
 
@@ -2775,7 +2777,7 @@ pub struct AddressesOutput {
 pub struct BalanceOutput {
     pub metadata: Option<proto::GetCoinInfoResponse>,
     pub balance: proto::Balance,
-    pub coins: Vec<Coin>,
+    pub coins: Vec<RpcCoin>,
 }
 
 #[derive(Serialize)]
@@ -2987,14 +2989,6 @@ pub async fn request_tokens_from_faucet(
     Ok(())
 }
 
-/// Parse the CLI coin type argument as the inner type `T`, not as `Coin<T>`.
-fn parse_coin_type_arg(coin_type: String) -> Result<StructTag, anyhow::Error> {
-    match coin_type.parse::<TypeTag>()? {
-        TypeTag::Struct(coin_type) => Ok(*coin_type),
-        coin_type => bail!("coin type must be a struct type, got {coin_type}"),
-    }
-}
-
 /// Fetch aggregate balances from gRPC and attach coin metadata for display.
 async fn balance_outputs_for_address(
     client: &Client,
@@ -3039,17 +3033,16 @@ async fn attach_owned_coin_objects(
     client: &Client,
     address: SuiAddress,
     coin_type: Option<&StructTag>,
-    balances: &mut Vec<BalanceOutput>,
+    balances: &mut [BalanceOutput],
 ) -> Result<(), anyhow::Error> {
     let coin_object_type = coin_object_type_filter(coin_type);
-    let coins: Vec<Coin> = client
+    let coins: Vec<RpcCoin> = client
         .list_owned_objects(address, Some(coin_object_type))
         .try_filter_map(|o| async move {
-            let Ok(Some((coin_type, balance))) = sui_types::coin::Coin::extract_balance_if_coin(&o)
-            else {
+            let Ok(Some((coin_type, balance))) = Coin::extract_balance_if_coin(&o) else {
                 return Ok(None);
             };
-            Ok(Some(Coin {
+            Ok(Some(RpcCoin {
                 coin_type: coin_type.to_canonical_string(true),
                 coin_object_id: o.id(),
                 version: o.version(),
@@ -3061,10 +3054,10 @@ async fn attach_owned_coin_objects(
         .try_collect()
         .await?;
 
-    let mut coins_by_type: BTreeMap<String, Vec<Coin>> = BTreeMap::new();
+    let mut coins_by_type: BTreeMap<String, Vec<RpcCoin>> = BTreeMap::new();
     for coin in coins {
         coins_by_type
-            .entry(canonicalize_type(&coin.coin_type)?)
+            .entry(coin.coin_type.clone())
             .or_default()
             .push(coin);
     }
@@ -3075,26 +3068,13 @@ async fn attach_owned_coin_objects(
         }
     }
 
-    for (coin_type, coins) in coins_by_type {
-        let metadata = if let Ok(ty) = StructTag::from_str(&coin_type) {
-            client.get_coin_info(&ty).await.ok()
-        } else {
-            None
-        };
-        balances.push(BalanceOutput {
-            metadata,
-            balance: balance_from_coins(coin_type, &coins),
-            coins,
-        });
-    }
-
     Ok(())
 }
 
 /// Build the object type filter expected by `list_owned_objects`.
 fn coin_object_type_filter(coin_type: Option<&StructTag>) -> StructTag {
     if let Some(coin_type) = coin_type {
-        sui_types::coin::Coin::type_(TypeTag::Struct(Box::new(coin_type.clone())))
+        Coin::type_(coin_type.clone().into())
     } else {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
@@ -3105,30 +3085,9 @@ fn coin_object_type_filter(coin_type: Option<&StructTag>) -> StructTag {
     }
 }
 
-/// Reconstruct an aggregate balance for coin objects missing from `list_balances`.
-fn balance_from_coins(coin_type: String, coins: &[Coin]) -> proto::Balance {
-    let coin_balance = coins
-        .iter()
-        .fold(0u64, |total, coin| total.saturating_add(coin.balance));
-    let mut balance = proto::Balance::default()
-        .with_coin_type(coin_type)
-        .with_balance(coin_balance);
-    if coin_balance != 0 {
-        balance.set_coin_balance(coin_balance);
-    }
-    balance
-}
-
-/// Normalize equivalent type strings before grouping and ordering balances.
-fn canonicalize_type(type_: &str) -> Result<String, anyhow::Error> {
-    Ok(TypeTag::from_str(type_)
-        .context("Cannot parse coin type")?
-        .to_canonical_string(/* with_prefix */ true))
-}
-
 /// Keep SUI first while preserving the balance API's order for other coin types.
-fn order_balance_outputs_sui_first(balances: &mut Vec<BalanceOutput>) -> Result<(), anyhow::Error> {
-    let sui_type_tag = canonicalize_type(SUI_COIN_TYPE)?;
+fn order_balance_outputs_sui_first(balances: &mut Vec<BalanceOutput>) {
+    let sui_type_tag = GasCoin::type_().to_canonical_string(/* with_prefix */ true);
     if let Some(index) = balances
         .iter()
         .position(|balance| balance.balance.coin_type() == sui_type_tag.as_str())
@@ -3136,7 +3095,6 @@ fn order_balance_outputs_sui_first(balances: &mut Vec<BalanceOutput>) -> Result<
         let sui_balance = balances.remove(index);
         balances.insert(0, sui_balance);
     }
-    Ok(())
 }
 
 fn pretty_print_balance(balances: &[BalanceOutput], builder: &mut TableBuilder, with_coins: bool) {
