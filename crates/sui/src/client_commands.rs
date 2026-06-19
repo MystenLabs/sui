@@ -8,7 +8,7 @@ use crate::{
     upgrade_compatibility::check_compatibility,
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::{Debug, Display, Formatter, Write},
@@ -115,6 +115,9 @@ use sui_package_alt::{BuildParams, SuiFlavor, find_environment};
 use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
 use sui_types::digests::ChainIdentifier;
 use tracing::{debug, info};
+
+/// Concurrency level for fetching coin metadata for balances.
+const NUM_CONCURRENCY_REQS: usize = 8;
 
 pub(crate) static USER_AGENT: &str =
     concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
@@ -3001,17 +3004,18 @@ async fn balance_outputs_for_address(
         client.list_balances(address).try_collect().await?
     };
 
-    let mut outputs = Vec::with_capacity(balances.len());
-    for balance in balances {
-        let metadata = coin_metadata_for_balance(client, &balance).await?;
-        outputs.push(BalanceOutput {
-            metadata,
-            balance,
-            coins: Vec::new(),
-        });
-    }
-
-    Ok(outputs)
+    futures::stream::iter(balances)
+        .map(|balance| async move {
+            let metadata = coin_metadata_for_balance(client, &balance).await?;
+            Ok(BalanceOutput {
+                metadata,
+                balance,
+                coins: Vec::new(),
+            })
+        })
+        .buffered(NUM_CONCURRENCY_REQS)
+        .try_collect()
+        .await
 }
 
 /// Best-effort metadata lookup for a balance returned by the balance API.
