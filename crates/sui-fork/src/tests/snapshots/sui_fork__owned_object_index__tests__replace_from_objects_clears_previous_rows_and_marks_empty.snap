@@ -1,0 +1,33 @@
+---
+source: crates/sui-fork/src/tests/owned_object_index.rs
+assertion_line: 275
+expression: "serde_json::json!({\n    \"exists_after_populated\": exists_after_populated, \"populated\": populated,\n    \"exists_after_empty\": exists_after_empty, \"empty\": empty,\n})"
+---
+{
+  "exists_after_populated": true,
+  "populated": [
+    {
+      "owner": "[owner]",
+      "object_type": {
+        "address": "0000000000000000000000000000000000000000000000000000000000000002",
+        "module": "coin",
+        "name": "Coin",
+        "type_args": [
+          {
+            "struct": {
+              "address": "0000000000000000000000000000000000000000000000000000000000000002",
+              "module": "sui",
+              "name": "SUI",
+              "type_args": []
+            }
+          }
+        ]
+      },
+      "balance": 1,
+      "object_id": "[object]",
+      "version": 1
+    }
+  ],
+  "exists_after_empty": true,
+  "empty": []
+}

@@ -1,0 +1,147 @@
+---
+source: crates/sui-fork/src/tests/owned_object_index.rs
+assertion_line: 171
+expression: "serde_json::json!({\n    \"exists_before\": exists_before, \"exists_after_initialization\":\n    exists_after_initialization, \"exists_after_insert\": exists_after_insert,\n    \"after_insert\": after_insert, \"cursor_from_second\": cursor_from_second,\n    \"next_owner_empty\": next_owner_empty, \"after_transfer_original_owner\":\n    after_transfer_original_owner, \"after_transfer_next_owner_from_cursor\":\n    after_transfer_next_owner_from_cursor, \"after_delete_all\":\n    after_delete_all,\n})"
+---
+{
+  "exists_before": false,
+  "exists_after_initialization": true,
+  "exists_after_insert": true,
+  "after_insert": [
+    {
+      "owner": "[owner]",
+      "object_type": {
+        "address": "0000000000000000000000000000000000000000000000000000000000000002",
+        "module": "coin",
+        "name": "Coin",
+        "type_args": [
+          {
+            "struct": {
+              "address": "0000000000000000000000000000000000000000000000000000000000000002",
+              "module": "sui",
+              "name": "SUI",
+              "type_args": []
+            }
+          }
+        ]
+      },
+      "balance": 1000000,
+      "object_id": "[first]",
+      "version": 1
+    },
+    {
+      "owner": "[owner]",
+      "object_type": {
+        "address": "0000000000000000000000000000000000000000000000000000000000000002",
+        "module": "coin",
+        "name": "Coin",
+        "type_args": [
+          {
+            "struct": {
+              "address": "0000000000000000000000000000000000000000000000000000000000000002",
+              "module": "sui",
+              "name": "SUI",
+              "type_args": []
+            }
+          }
+        ]
+      },
+      "balance": 1000000,
+      "object_id": "[second]",
+      "version": 1
+    }
+  ],
+  "cursor_from_second": [
+    {
+      "owner": "[owner]",
+      "object_type": {
+        "address": "0000000000000000000000000000000000000000000000000000000000000002",
+        "module": "coin",
+        "name": "Coin",
+        "type_args": [
+          {
+            "struct": {
+              "address": "0000000000000000000000000000000000000000000000000000000000000002",
+              "module": "sui",
+              "name": "SUI",
+              "type_args": []
+            }
+          }
+        ]
+      },
+      "balance": 1000000,
+      "object_id": "[second]",
+      "version": 1
+    }
+  ],
+  "next_owner_empty": [],
+  "after_transfer_original_owner": [
+    {
+      "owner": "[owner]",
+      "object_type": {
+        "address": "0000000000000000000000000000000000000000000000000000000000000002",
+        "module": "coin",
+        "name": "Coin",
+        "type_args": [
+          {
+            "struct": {
+              "address": "0000000000000000000000000000000000000000000000000000000000000002",
+              "module": "sui",
+              "name": "SUI",
+              "type_args": []
+            }
+          }
+        ]
+      },
+      "balance": 1000000,
+      "object_id": "[second]",
+      "version": 1
+    }
+  ],
+  "after_transfer_next_owner_from_cursor": [
+    {
+      "owner": "[next_owner]",
+      "object_type": {
+        "address": "0000000000000000000000000000000000000000000000000000000000000002",
+        "module": "coin",
+        "name": "Coin",
+        "type_args": [
+          {
+            "struct": {
+              "address": "0000000000000000000000000000000000000000000000000000000000000002",
+              "module": "sui",
+              "name": "SUI",
+              "type_args": []
+            }
+          }
+        ]
+      },
+      "balance": 1000000,
+      "object_id": "[first]",
+      "version": 2
+    }
+  ],
+  "after_delete_all": [
+    {
+      "owner": "[next_owner]",
+      "object_type": {
+        "address": "0000000000000000000000000000000000000000000000000000000000000002",
+        "module": "coin",
+        "name": "Coin",
+        "type_args": [
+          {
+            "struct": {
+              "address": "0000000000000000000000000000000000000000000000000000000000000002",
+              "module": "sui",
+              "name": "SUI",
+              "type_args": []
+            }
+          }
+        ]
+      },
+      "balance": 1000000,
+      "object_id": "[first]",
+      "version": 2
+    }
+  ]
+}

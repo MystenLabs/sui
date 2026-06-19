@@ -132,10 +132,13 @@ fn object_latest_path(store: &FilesystemStore, object_id: &ObjectID) -> std::pat
     object_dir(store, object_id).join(LATEST_FILE)
 }
 
-fn assert_no_old_removal_marker_files(dir: &Path) {
-    assert!(!dir.join("removed").exists());
-    assert!(!dir.join("deleted").exists());
-    assert!(!dir.join("wrapped").exists());
+macro_rules! assert_no_old_removal_marker_files {
+    ($dir:expr $(,)?) => {{
+        let dir = $dir;
+        assert!(!dir.join("removed").exists());
+        assert!(!dir.join("deleted").exists());
+        assert!(!dir.join("wrapped").exists());
+    }};
 }
 
 #[test]
@@ -259,7 +262,7 @@ fn test_deleted_latest_blocks_latest_but_preserves_exact_versions() {
         fs::read_to_string(dir.join(LATEST_FILE)).unwrap(),
         "5,deleted"
     );
-    assert_no_old_removal_marker_files(&dir);
+    assert_no_old_removal_marker_files!(&dir);
 
     let exact = store.get_object_at_version(&id, 5).unwrap();
     assert_eq!(exact.unwrap(), obj);
@@ -297,7 +300,7 @@ fn test_wrapped_latest_blocks_latest_preserves_exact_and_clears_on_live_write() 
         fs::read_to_string(dir.join(LATEST_FILE)).unwrap(),
         "5,wrapped"
     );
-    assert_no_old_removal_marker_files(&dir);
+    assert_no_old_removal_marker_files!(&dir);
 
     let exact = store.get_object_at_version(&id, 5).unwrap();
     assert_eq!(exact.unwrap(), obj);
@@ -398,73 +401,6 @@ fn test_unwrapped_then_deleted_latest_overwrites_wrapped_latest() {
         fs::read_to_string(object_latest_path(&store, &id)).unwrap(),
         "7,deleted",
     );
-}
-
-#[test]
-fn test_owned_object_index_upserts_removes_and_stays_sorted() {
-    let (_dir, store) = test_store();
-    let owner = SuiAddress::random_for_testing_only();
-    let next_owner = SuiAddress::random_for_testing_only();
-    let first_id = ObjectID::random();
-    let second_id = ObjectID::random();
-    let first = make_object_with_owner(first_id, 1, Owner::AddressOwner(owner));
-    let second = make_object_with_owner(second_id, 1, Owner::AddressOwner(owner));
-
-    store
-        .apply_owned_object_index_updates(&[], [&second, &first])
-        .unwrap();
-    let entries = store.get_owned_object_entries().unwrap();
-    assert_eq!(entries.len(), 2);
-    assert!(
-        entries
-            .windows(2)
-            .all(|window| window[0].object_ref.0 < window[1].object_ref.0)
-    );
-    assert!(entries.iter().all(|entry| entry.owner == owner));
-    assert!(
-        entries
-            .iter()
-            .all(|entry| entry.object_type == sui_types::gas_coin::GasCoin::type_())
-    );
-    assert!(entries.iter().all(|entry| entry.balance == Some(1_000_000)));
-    assert!(
-        entries
-            .iter()
-            .any(|entry| entry.object_ref == first.compute_object_reference())
-    );
-    assert!(
-        entries
-            .iter()
-            .any(|entry| entry.object_ref == second.compute_object_reference())
-    );
-
-    let transferred = make_object_with_owner(first_id, 2, Owner::AddressOwner(next_owner));
-    store
-        .apply_owned_object_index_updates(&[], [&transferred])
-        .unwrap();
-    let first_entry = store
-        .get_owned_object_entries()
-        .unwrap()
-        .into_iter()
-        .find(|entry| entry.object_ref.0 == first_id)
-        .unwrap();
-    assert_eq!(first_entry.owner, next_owner);
-    assert_eq!(
-        first_entry.object_ref,
-        transferred.compute_object_reference()
-    );
-    assert_eq!(
-        first_entry.object_type,
-        sui_types::gas_coin::GasCoin::type_()
-    );
-    assert_eq!(first_entry.balance, Some(1_000_000));
-
-    store
-        .apply_owned_object_index_updates(&[second_id], std::iter::empty::<&Object>())
-        .unwrap();
-    let entries = store.get_owned_object_entries().unwrap();
-    assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0].object_ref.0, first_id);
 }
 
 #[test]

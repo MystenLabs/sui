@@ -13,6 +13,7 @@ bcs.workspace = true
 chrono.workspace = true
 clap = { workspace = true, features = ["derive", "env"] }
 cynic.workspace = true
+eyre.workspace = true
 fastcrypto.workspace = true
 itertools.workspace = true
 move-core-types.workspace = true
@@ -23,11 +24,13 @@ reqwest = { workspace = true, features = ["json"] }
 roaring.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tonic.workspace = true
 tonic-prost.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+typed-store.workspace = true
 typed-store-error.workspace = true
 
 bin-version.workspace = true
@@ -38,7 +41,7 @@ sui-swarm-config.workspace = true
 sui-types.workspace = true
 
 [dev-dependencies]
-tempfile.workspace = true
+insta.workspace = true
 wiremock.workspace = true
 
 [build-dependencies]

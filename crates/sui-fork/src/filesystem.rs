@@ -14,7 +14,7 @@
 //!            - latest                  (text: version[,deleted|,wrapped])
 //!            - {version}                (BCS-encoded Object)
 //!     - indices/
-//!         - owned_objects              (BCS-encoded `Vec<OwnedObjectEntry>`)
+//!         - owned_objects_db/          (typed-store owned-object index)
 //!     - checkpoints/
 //!         - latest                     (text: highest persisted sequence number)
 //!         - {seq}/
@@ -41,11 +41,8 @@ use anyhow::Error;
 use anyhow::bail;
 use anyhow::ensure;
 
-use move_core_types::language_storage::StructTag;
 use sui_types::base_types::ObjectID;
-use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
-use sui_types::base_types::SuiAddress;
 use sui_types::digests::CheckpointContentsDigest;
 use sui_types::digests::CheckpointDigest;
 use sui_types::digests::TransactionDigest;
@@ -56,7 +53,6 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
-use sui_types::object::Owner;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::VerifiedTransaction;
 
@@ -71,13 +67,11 @@ const DATA_DIR: &str = "sui_fork_data";
 /// Per-chain object storage directory.
 const OBJECTS_DIR: &str = "objects";
 /// Per-chain secondary indices directory.
-const INDICES_DIR: &str = "indices";
+pub(crate) const INDICES_DIR: &str = "indices";
 /// Per-chain checkpoint storage directory.
 const CHECKPOINTS_DIR: &str = "checkpoints";
 /// Per-chain transaction storage directory.
 const TRANSACTIONS_DIR: &str = "transactions";
-/// BCS-encoded owned-object index filename.
-const OWNED_OBJECTS_INDEX_FILE: &str = "owned_objects";
 /// Filename for the BCS-encoded transaction data within a transaction directory.
 const TX_DATA_FILE: &str = "data";
 /// Filename for the BCS-encoded transaction effects within a transaction directory.
@@ -159,31 +153,6 @@ impl ObjectLatestMetadata {
     }
 }
 
-/// Index entry for a live address-owned object.
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub(crate) struct OwnedObjectEntry {
-    pub(crate) owner: SuiAddress,
-    pub(crate) object_ref: ObjectRef,
-    pub(crate) object_type: StructTag,
-    pub(crate) balance: Option<u64>,
-}
-
-impl OwnedObjectEntry {
-    pub(crate) fn from_object(object: &Object) -> Option<Self> {
-        let owner = match &object.owner {
-            Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => *owner,
-            _ => return None,
-        };
-        let object_type = object.struct_tag()?;
-        Some(Self {
-            owner,
-            object_ref: object.compute_object_reference(),
-            object_type,
-            balance: object.as_coin_maybe().map(|coin| coin.value()),
-        })
-    }
-}
-
 /// Local filesystem-backed store for Sui data.
 #[derive(Clone)]
 pub(crate) struct FilesystemStore {
@@ -202,12 +171,17 @@ impl FilesystemStore {
             Some(dir) => dir,
             None => Self::default_root(node, forked_at_checkpoint)?,
         };
-        Ok(Self { root })
+        Ok(Self::new_with_root(root))
     }
 
     /// Create a filesystem store with an explicit root directory.
     pub(crate) fn new_with_root(root: PathBuf) -> Self {
         Self { root }
+    }
+
+    /// Return the root directory this store is anchored at.
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
     }
 
     /// Resolve the default base path for on-disk storage.
@@ -280,11 +254,6 @@ impl FilesystemStore {
         self.root.join(OBJECTS_DIR)
     }
 
-    /// Return the directory path for secondary indices.
-    fn indices_dir(&self) -> PathBuf {
-        self.root.join(INDICES_DIR)
-    }
-
     /// Return the directory path for storing checkpoint data.
     fn checkpoints_dir(&self) -> PathBuf {
         self.root.join(CHECKPOINTS_DIR)
@@ -298,11 +267,6 @@ impl FilesystemStore {
     /// Return the directory for a specific transaction.
     fn tx_dir(&self, digest: &TransactionDigest) -> PathBuf {
         self.transactions_dir().join(digest.to_string())
-    }
-
-    /// Return the file path for the owned-object index.
-    fn owned_objects_index_path(&self) -> PathBuf {
-        self.indices_dir().join(OWNED_OBJECTS_INDEX_FILE)
     }
 
     /// Return the path to the seed manifest for this fork directory.
@@ -603,68 +567,6 @@ impl FilesystemStore {
             .with_context(|| format!("Failed to write latest file: {}", latest_file.display()))
     }
 
-    /// Read the owned-object index. Missing index files represent an empty index.
-    pub(crate) fn get_owned_object_entries(&self) -> anyhow::Result<Vec<OwnedObjectEntry>> {
-        let path = self.owned_objects_index_path();
-        if !path.exists() {
-            return Ok(Vec::new());
-        }
-        self.read_bcs_file(&path)
-    }
-
-    /// Apply local execution ownership changes to the owned-object index.
-    pub(crate) fn apply_owned_object_index_updates<'a>(
-        &self,
-        removed_object_ids: &[ObjectID],
-        written_objects: impl IntoIterator<Item = &'a Object>,
-    ) -> anyhow::Result<()> {
-        let mut entries = self.get_owned_object_entries()?;
-
-        for object_id in removed_object_ids {
-            remove_owned_entry(&mut entries, *object_id);
-        }
-
-        for object in written_objects {
-            match OwnedObjectEntry::from_object(object) {
-                Some(entry) => upsert_owned_entry(&mut entries, entry),
-                None => remove_owned_entry(&mut entries, object.id()),
-            }
-        }
-
-        self.write_owned_object_entries(&entries)
-    }
-
-    /// Persist the owned-object index to disk. The entire index is rewritten on each update, but
-    /// this is expected to be small and updated infrequently enough that this should not be a
-    /// bottleneck.
-    pub(crate) fn write_owned_object_entries(
-        &self,
-        entries: &[OwnedObjectEntry],
-    ) -> anyhow::Result<()> {
-        let path = self.owned_objects_index_path();
-        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
-        }
-
-        let tmp_path = path.with_extension("tmp");
-        let bytes = bcs::to_bytes(entries).with_context(|| {
-            format!(
-                "Failed to serialize owned-object index for: {}",
-                path.display()
-            )
-        })?;
-        fs::write(&tmp_path, bytes)
-            .with_context(|| format!("Failed to write index file: {}", tmp_path.display()))?;
-        fs::rename(&tmp_path, &path)
-            .with_context(|| format!("Failed to replace owned-object index: {}", path.display()))
-    }
-
-    /// Return whether the owned-object index has already been initialized.
-    pub(crate) fn owned_object_index_exists(&self) -> bool {
-        self.owned_objects_index_path().exists()
-    }
-
     /// Return whether the immutable seed manifest exists for this fork directory.
     pub(crate) fn seed_manifest_exists(&self) -> bool {
         self.seed_manifest_path().exists()
@@ -945,19 +847,6 @@ fn parse_object_latest_inner(content: &str) -> anyhow::Result<ObjectLatestMetada
     let version: u64 = version.parse().context("version should be a u64")?;
 
     Ok(ObjectLatestMetadata { version, state })
-}
-
-fn remove_owned_entry(entries: &mut Vec<OwnedObjectEntry>, object_id: ObjectID) {
-    if let Ok(index) = entries.binary_search_by_key(&object_id, |entry| entry.object_ref.0) {
-        entries.remove(index);
-    }
-}
-
-fn upsert_owned_entry(entries: &mut Vec<OwnedObjectEntry>, entry: OwnedObjectEntry) {
-    match entries.binary_search_by_key(&entry.object_ref.0, |existing| existing.object_ref.0) {
-        Ok(index) => entries[index] = entry,
-        Err(index) => entries.insert(index, entry),
-    }
 }
 
 /// Append a single `{key} {value}\n` line to `path`, creating the file and
