@@ -655,7 +655,7 @@ fn append_path_segment(mut url: Url, segment: &str) -> Option<Url> {
 //   - address → hex string with `0x` prefix
 //   - vector<u8> → base64 string
 //   - vector<T> (T != u8) → JSON array
-//   - Option<T> → {"vec": [...]} (Move-native, NOT JSON null)
+//   - Option<T> → JSON null (None) or bare T (Some); NOT Move's {"vec": [...]}
 //
 // On-chain paths the resolver reads:
 //   Hashi.committee_set.{epoch, pending_epoch_change, members.id, committees.id}
@@ -709,15 +709,13 @@ fn json_u64(v: &JsonValue, name: &str) -> Result<u64> {
         .with_context(|| format!("parsing {name} as u64"))
 }
 
-/// Parse a Move-encoded `Option<u64>` — rendered as `{"vec": []}` (None) or
-/// `{"vec": ["<n>"]}` (Some).
+/// Parse a Move `Option<u64>`. The JSON renderer collapses `Option<T>` to
+/// either JSON null (None) or the bare T value (Some) — NOT Move's native
+/// `{"vec": [...]}` shape (see sui-types/src/object/rpc_visitor/mod.rs).
 fn json_option_u64(v: &JsonValue, name: &str) -> Result<Option<u64>> {
-    let vec = json_field(v, "vec")
-        .and_then(json_list)
-        .with_context(|| format!("{name}: expected Move Option<u64> shape {{vec: [...]}}"))?;
-    match vec.first() {
-        None => Ok(None),
-        Some(inner) => Ok(Some(json_u64(inner, &format!("{name}.vec[0]"))?)),
+    match &v.kind {
+        Some(JsonKind::NullValue(_)) | None => Ok(None),
+        _ => Ok(Some(json_u64(v, name)?)),
     }
 }
 
