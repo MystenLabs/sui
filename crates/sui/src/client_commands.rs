@@ -713,10 +713,10 @@ pub struct TxProcessingArgs {
     /// private key corresponding to this address is not in keystore.
     #[arg(long, required = false, value_parser)]
     pub sender: Option<SuiAddress>,
-    /// Submit the transaction without signatures for forked networks that support sender
-    /// impersonation. This is only intended for local forked-network testing.
+    /// Do not sign the transaction. This is only intended for local forked networks that
+    /// support sender impersonation.
     #[arg(long)]
-    pub forking_mode: bool,
+    pub skip_signing: bool,
 }
 
 #[derive(Args, Debug, Default)]
@@ -3326,7 +3326,7 @@ async fn dry_run_or_execute_or_serialize_impl(
         serialize_unsigned_transaction,
         serialize_signed_transaction,
         sender,
-        forking_mode,
+        skip_signing,
     } = processing;
 
     ensure!(
@@ -3450,7 +3450,7 @@ async fn dry_run_or_execute_or_serialize_impl(
     } else if tx_digest {
         Ok(SuiClientCommandResult::ComputeTransactionDigest(tx_data))
     } else {
-        let signatures = if forking_mode {
+        let signatures = if skip_signing {
             vec![]
         } else {
             let mut signatures = vec![
