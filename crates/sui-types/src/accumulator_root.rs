@@ -14,7 +14,7 @@ use crate::{
     },
     error::{SuiError, SuiErrorKind, SuiResult},
     object::{MoveObject, Object, Owner},
-    storage::{ChildObjectResolver, ObjectStore},
+    storage::{ObjectStore, RuntimeObjectResolver},
 };
 use move_core_types::{
     ident_str,
@@ -136,7 +136,7 @@ impl AccumulatorValue {
     }
 
     pub fn exists(
-        child_object_resolver: &dyn ChildObjectResolver,
+        child_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         owner: SuiAddress,
         type_: &TypeTag,
@@ -159,7 +159,7 @@ impl AccumulatorValue {
     }
 
     pub fn load_by_id<T>(
-        child_object_resolver: &dyn ChildObjectResolver,
+        child_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         id: AccumulatorObjId,
     ) -> SuiResult<Option<T>>
@@ -177,7 +177,7 @@ impl AccumulatorValue {
     }
 
     pub fn load(
-        child_object_resolver: &dyn ChildObjectResolver,
+        child_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         owner: SuiAddress,
         type_: &TypeTag,
@@ -205,7 +205,7 @@ impl AccumulatorValue {
     }
 
     pub fn load_object(
-        child_object_resolver: &dyn ChildObjectResolver,
+        child_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         owner: SuiAddress,
         type_: &TypeTag,
@@ -222,7 +222,7 @@ impl AccumulatorValue {
     }
 
     pub fn load_object_by_id(
-        child_object_resolver: &dyn ChildObjectResolver,
+        child_object_resolver: &dyn RuntimeObjectResolver,
         version_bound: Option<SequenceNumber>,
         id: ObjectID,
     ) -> SuiResult<Option<Object>> {

@@ -6,7 +6,7 @@ use crate::crypto::DefaultHash;
 use crate::error::{SuiError, SuiErrorKind, SuiResult};
 use crate::id::UID;
 use crate::object::{MoveObject, Object};
-use crate::storage::{ChildObjectResolver, ObjectStore};
+use crate::storage::{ObjectStore, RuntimeObjectResolver};
 use crate::sui_serde::Readable;
 use crate::sui_serde::SuiTypeTag;
 use crate::{MoveTypeTagTrait, ObjectID, SUI_FRAMEWORK_ADDRESS, SequenceNumber};
@@ -570,7 +570,7 @@ where
     /// If the field does not exist, return None.
     pub fn load_object(
         self,
-        child_object_resolver: &dyn ChildObjectResolver,
+        child_object_resolver: &dyn RuntimeObjectResolver,
     ) -> Result<Option<DynamicFieldObject<K>>, SuiError> {
         child_object_resolver
             .read_child_object(&self.0, &self.1, self.2)
@@ -578,7 +578,10 @@ where
     }
 
     /// Check if the field object exists in the store.
-    pub fn exists(self, child_object_resolver: &dyn ChildObjectResolver) -> Result<bool, SuiError> {
+    pub fn exists(
+        self,
+        child_object_resolver: &dyn RuntimeObjectResolver,
+    ) -> Result<bool, SuiError> {
         self.load_object(child_object_resolver).map(|r| r.is_some())
     }
 }

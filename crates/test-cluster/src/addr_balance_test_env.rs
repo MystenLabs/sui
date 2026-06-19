@@ -24,7 +24,7 @@ use sui_types::{
     gas_coin::GAS,
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    storage::ChildObjectResolver,
+    storage::RuntimeObjectResolver,
     transaction::{
         CallArg, FundsWithdrawalArg, GasData, ObjectArg, TransactionData, TransactionDataV1,
         TransactionExpiration, TransactionKind,
@@ -794,19 +794,22 @@ pub fn get_accumulator_object_id(sender: SuiAddress, coin_type: TypeTag) -> Obje
 }
 
 pub fn get_balance(
-    child_object_resolver: &dyn ChildObjectResolver,
+    child_object_resolver: &dyn RuntimeObjectResolver,
     owner: SuiAddress,
     coin_type: TypeTag,
 ) -> u64 {
     sui_core::accumulators::balances::get_balance(owner, child_object_resolver, coin_type).unwrap()
 }
 
-pub fn get_sui_balance(child_object_resolver: &dyn ChildObjectResolver, owner: SuiAddress) -> u64 {
+pub fn get_sui_balance(
+    child_object_resolver: &dyn RuntimeObjectResolver,
+    owner: SuiAddress,
+) -> u64 {
     get_balance(child_object_resolver, owner, GAS::type_tag())
 }
 
 pub fn verify_accumulator_exists(
-    child_object_resolver: &dyn ChildObjectResolver,
+    child_object_resolver: &dyn RuntimeObjectResolver,
     owner: SuiAddress,
     expected_balance: u64,
 ) {

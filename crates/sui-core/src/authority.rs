@@ -86,9 +86,9 @@ use sui_types::layout_resolver::into_struct_layout;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::node_role::NodeRole;
 use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::InputKey;
 use sui_types::storage::OverlayBackingPackageStore;
+use sui_types::storage::RuntimeObjectResolver;
 use sui_types::storage::TrackingBackingStore;
 use sui_types::traffic_control::{
     PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
@@ -3703,7 +3703,7 @@ impl AuthorityState {
         &self.execution_cache_trait_pointers.backing_store
     }
 
-    pub fn get_child_object_resolver(&self) -> &Arc<dyn ChildObjectResolver + Send + Sync> {
+    pub fn get_child_object_resolver(&self) -> &Arc<dyn RuntimeObjectResolver + Send + Sync> {
         &self.execution_cache_trait_pointers.child_object_resolver
     }
 
