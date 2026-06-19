@@ -22,11 +22,14 @@ use futures::StreamExt;
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal, fatal, izip_debug_eq};
 use parking_lot::Mutex;
 use std::{sync::Arc, time::Instant};
-use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::RandomnessRound;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::transaction::{TransactionDataAPI, TransactionKind};
+use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    node_role::{FullNodeSyncMode, NodeRole},
+};
 
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::fail_point;
@@ -535,6 +538,9 @@ impl CheckpointExecutor {
 
         let Some(locally_built_checkpoint) = locally_built_checkpoint else {
             // fall back to tx-by-tx execution path if we are catching up.
+            self.metrics
+                .checkpoint_executor_validator_sync_fallback_path
+                .inc();
             return self
                 .execute_transactions_from_synced_checkpoint(checkpoint, pipeline_handle)
                 .await;
@@ -563,7 +569,10 @@ impl CheckpointExecutor {
 
         // Observer fullnodes have already executed these transactions through consensus,
         // but still need the fullnode side effects that the synced path normally performs.
-        if self.epoch_store.node_role().is_fullnode() {
+        if matches!(
+            self.epoch_store.node_role(),
+            NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+        ) {
             pipeline_handle
                 .skip_to(PipelineStage::FinalizeTransactions)
                 .await;
