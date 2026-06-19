@@ -3,6 +3,7 @@
 
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::{GasCharger, PaymentLocation};
+use move_core_types::u256::U256;
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
@@ -10,7 +11,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
-use sui_types::accumulator_root::AccumulatorObjId;
+use sui_types::accumulator_root::{AccumulatorObjId, AccumulatorValue as AccumulatorRootValue};
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
@@ -26,10 +27,10 @@ use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::object::{Data, ObjectPermissions};
-use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
+use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsSufficiency, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::{
-    SUI_DENY_LIST_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiErrorKind, SuiResult},
@@ -106,6 +107,13 @@ pub struct TemporaryStore<'backing> {
     /// (the transaction was not sequenced against it), so the check errors rather than allowing it.
     system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
 
+    /// Running total of object funds withdrawn per `(owner, type)` during this transaction. A single
+    /// transaction can withdraw from the same account multiple times, so each in-execution
+    /// sufficiency check must compare the available balance against the cumulative amount, not just
+    /// the current withdrawal. Interior-mutable because the check runs behind `&self`
+    /// (`RuntimeObjectResolver`).
+    in_flight_object_withdrawals: RefCell<BTreeMap<(SuiAddress, TypeTag), U256>>,
+
     /// Recorded when execution determines the transaction must be retried later rather than
     /// committed; checked before gas finalization. A `RefCell` rather than a lock: execution is
     /// single-threaded, but the condition is detected behind `&self` (`RuntimeObjectResolver`) so the
@@ -167,6 +175,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             ptb_emitted_accumulator_event_ranges: Vec::new(),
             system_object_versions,
+            in_flight_object_withdrawals: RefCell::new(BTreeMap::new()),
             retry_request: RefCell::new(None),
         }
     }
@@ -1596,6 +1605,53 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
         };
         let latest_version = self.store.get_object(object_id).map(|o| o.version());
         Ok(latest_version.is_some_and(|v| v >= required_version))
+    }
+
+    fn check_object_funds_sufficiency(
+        &self,
+        owner: SuiAddress,
+        type_: &TypeTag,
+        amount: U256,
+    ) -> SuiResult<ObjectFundsSufficiency> {
+        // The accumulator root must be available at the version this transaction requires.
+        // `is_system_object_available` errors if it has no assigned version — a transaction
+        // performing an object-funds withdrawal is always sequenced against the accumulator root,
+        // so its absence is an invariant violation rather than a reason to pass the check.
+        //
+        // TODO: gating on the accumulator root reaching its required version is not sufficient on
+        // its own — the root catching up does not guarantee this owner's account has settled to
+        // that version, since per-account settlement can lag the root update. Revisit with a
+        // per-account settlement signal.
+        if !self.is_system_object_available(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)? {
+            *self.retry_request.borrow_mut() = Some(ExecutionRetryError::Placeholder);
+            return Ok(ObjectFundsSufficiency::Unknown);
+        }
+
+        // Availability implies a required version is recorded for the accumulator root. Read the
+        // balance at that version and compare against the total withdrawn from this account so far
+        // in this transaction, including the current withdrawal.
+        let required_version = self
+            .system_object_versions
+            .get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .copied();
+        let balance = AccumulatorRootValue::load(self, required_version, owner, type_)?
+            .and_then(|v| v.as_u128())
+            .map(U256::from)
+            .unwrap_or_else(|| U256::from(0u8));
+
+        let mut withdrawals = self.in_flight_object_withdrawals.borrow_mut();
+        let running = withdrawals
+            .entry((owner, type_.clone()))
+            .or_insert_with(|| U256::from(0u8));
+        let Some(total) = running.checked_add(amount) else {
+            return Ok(ObjectFundsSufficiency::Insufficient);
+        };
+        if balance >= total {
+            *running = total;
+            Ok(ObjectFundsSufficiency::Sufficient)
+        } else {
+            Ok(ObjectFundsSufficiency::Insufficient)
+        }
     }
 }
 
