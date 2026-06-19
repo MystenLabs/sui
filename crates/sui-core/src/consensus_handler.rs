@@ -15,7 +15,8 @@ use consensus_types::block::TransactionIndex;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use lru::LruCache;
 use mysten_common::{
-    assert_reachable, assert_sometimes, debug_fatal, random_util::randomize_cache_capacity_in_tests,
+    ZipDebugEqIteratorExt, assert_reachable, assert_sometimes, debug_fatal,
+    random_util::randomize_cache_capacity_in_tests,
 };
 use mysten_metrics::{
     monitored_future,
@@ -1238,7 +1239,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let (
             transactions_to_schedule,
             randomness_transactions_to_schedule,
-            cancelled_txns,
+            mut cancelled_txns,
             randomness_state_update_transaction,
         ) = self.collect_transactions_to_schedule(
             &mut state,
@@ -1246,6 +1247,26 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             &commit_info,
             user_transactions,
         );
+
+        // Crash-recovered (poison-pill) transactions have now gone through deferral, congestion
+        // control, and owned-object lock acquisition identically to normal transactions, so their
+        // effect on neighbors is deterministic across the crash boundary. Drop them now, before
+        // version assignment and checkpoint inclusion, and release the owned-object locks they
+        // hold so their inputs remain usable for the rest of the epoch.
+        let (transactions_to_schedule, randomness_transactions_to_schedule) =
+            if self.crashed_transactions.is_empty() {
+                (
+                    transactions_to_schedule,
+                    randomness_transactions_to_schedule,
+                )
+            } else {
+                self.drop_crashed_transactions(
+                    &mut state,
+                    transactions_to_schedule,
+                    randomness_transactions_to_schedule,
+                    &mut cancelled_txns,
+                )
+            };
 
         let (should_accept_tx, lock, final_round) =
             self.handle_close_epoch(&mut state, &commit_info, end_of_publish_transactions);
@@ -1566,6 +1587,89 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             cancelled_txns,
             randomness_state_update_transaction,
         )
+    }
+
+    /// Removes crash-recovered (poison-pill) transactions from the schedulable sets just before
+    /// version assignment, so they are neither assigned versions nor included in a checkpoint.
+    /// Their owned-object locks (acquired and retained like a normal transaction's) are released
+    /// here, since they will never execute to advance their inputs to a new version.
+    fn drop_crashed_transactions(
+        &self,
+        state: &mut CommitHandlerState,
+        transactions_to_schedule: Vec<VerifiedExecutableTransactionWithAliases>,
+        randomness_transactions_to_schedule: Vec<VerifiedExecutableTransactionWithAliases>,
+        cancelled_txns: &mut BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+    ) -> (
+        Vec<VerifiedExecutableTransactionWithAliases>,
+        Vec<VerifiedExecutableTransactionWithAliases>,
+    ) {
+        let mut locks_to_release: Vec<ObjectRef> = Vec::new();
+
+        let mut retain_non_crashed =
+            |txns: Vec<VerifiedExecutableTransactionWithAliases>| -> Vec<_> {
+                txns.into_iter()
+                    .filter(|transaction| {
+                        let digest = transaction.tx().digest();
+                        if !self.crashed_transactions.contains(digest) {
+                            return true;
+                        }
+                        cancelled_txns.remove(digest);
+                        self.collect_locks_to_release(transaction, &mut locks_to_release);
+                        false
+                    })
+                    .collect()
+            };
+
+        let transactions_to_schedule = retain_non_crashed(transactions_to_schedule);
+        let randomness_transactions_to_schedule =
+            retain_non_crashed(randomness_transactions_to_schedule);
+
+        if !locks_to_release.is_empty() {
+            state.output.remove_owned_object_locks(locks_to_release);
+        }
+
+        (
+            transactions_to_schedule,
+            randomness_transactions_to_schedule,
+        )
+    }
+
+    /// Collects the owned-object locks held by a dropped transaction so they can be released.
+    /// We only release locks actually held by this transaction: a candidate input ref claimed
+    /// immutable was never locked (or is held by another transaction), so ownership is verified
+    /// against the quarantine-and-DB lock state.
+    fn collect_locks_to_release(
+        &self,
+        transaction: &VerifiedExecutableTransactionWithAliases,
+        out: &mut Vec<ObjectRef>,
+    ) {
+        let tx = transaction.tx();
+        let Ok(input_objects) = tx.transaction_data().input_objects() else {
+            debug_fatal!("Invalid input objects for transaction {}", tx.digest());
+            return;
+        };
+
+        let candidate_refs: Vec<ObjectRef> = input_objects
+            .iter()
+            .filter_map(|obj| match obj {
+                InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => Some(*obj_ref),
+                _ => None,
+            })
+            .collect();
+        if candidate_refs.is_empty() {
+            return;
+        }
+
+        let digest = *tx.digest();
+        let held = self
+            .epoch_store
+            .get_owned_object_locks(&candidate_refs)
+            .unwrap_or_default();
+        for (obj_ref, lock) in candidate_refs.into_iter().zip_debug_eq(held) {
+            if lock == Some(digest) {
+                out.push(obj_ref);
+            }
+        }
     }
 
     #[allow(clippy::type_complexity)]
@@ -1941,12 +2045,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             deferral_key,
                             congested_objects
                         );
-                        if self
-                            .crashed_transactions
-                            .contains(transaction.tx().digest())
-                        {
-                            return;
-                        }
                         cancelled_txns.insert(
                             *transaction.tx().digest(),
                             CancelConsensusCertificateReason::CongestionOnObjects(
@@ -1959,12 +2057,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         } else {
             shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, transaction.tx());
-            if !self
-                .crashed_transactions
-                .contains(transaction.tx().digest())
-            {
-                scheduled_txns.push(transaction);
-            }
+            scheduled_txns.push(transaction);
         }
     }
 
@@ -2657,12 +2750,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
-                // Crash-recovered transactions skip lock acquisition: they are dropped before
-                // execution in handle_deferral_and_cancellation, so acquiring a lock here
-                // would create a persistent lock that is never released.
-                if !is_crash_recovered
-                    && let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
-                        &parsed.transaction.kind
+                // Crash-recovered (poison-pill) transactions acquire owned-object locks like any
+                // other transaction. This keeps their effect on other transactions' lock-conflict
+                // resolution identical across the crash boundary. They are dropped later, when
+                // schedulables are formed, at which point the locks they hold are released.
+                if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
+                    &parsed.transaction.kind
                 {
                     let immutable_object_ids: HashSet<ObjectID> =
                         tx_with_claims.get_immutable_objects().into_iter().collect();
@@ -2696,10 +2789,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         ) {
                         Ok(new_locks) => {
                             owned_object_locks.extend(new_locks.into_iter());
-                            // Lock acquisition succeeded - now set Finalized status
-                            self.epoch_store
-                                .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
-                            num_finalized_user_transactions[author] += 1;
+                            // A crash-recovered transaction keeps the Dropped status set above; it
+                            // acquires locks only so neighbors' conflict resolution is deterministic.
+                            if !is_crash_recovered {
+                                // Lock acquisition succeeded - now set Finalized status
+                                self.epoch_store.set_consensus_tx_status(
+                                    position,
+                                    ConsensusTxStatus::Finalized,
+                                );
+                                num_finalized_user_transactions[author] += 1;
+                            }
                         }
                         Err(e) => {
                             debug!("Dropping transaction {}: {}", tx.digest(), e);
