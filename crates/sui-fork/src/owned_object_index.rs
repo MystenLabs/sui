@@ -48,7 +48,7 @@ const OWNED_OBJECT_INDEX_VERSION: u64 = 1;
 /// Rows are grouped by owner, then by object type. Coin-like objects store `!balance` so ascending
 /// scans return the largest balances first, matching the v2 RPC index.
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, serde::Deserialize, serde::Serialize)]
-struct OwnedObjectIndexKey {
+pub(crate) struct OwnedObjectIndexKey {
     owner: SuiAddress,
     object_type: StructTag,
     inverted_balance: Option<u64>,
@@ -80,7 +80,7 @@ pub(crate) struct OwnedObjectIndexStore {
 }
 
 impl OwnedObjectIndexKey {
-    fn from_object(object: &Object) -> Option<Self> {
+    pub(crate) fn from_object(object: &Object) -> Option<Self> {
         let owner = match object.owner() {
             Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => *owner,
             _ => return None,
@@ -321,106 +321,6 @@ impl OwnedObjectIndexStore {
             }
         }
         Ok(())
-    }
-}
-
-/// `DataStore`-level orchestration of the owned-object index: lazy seed initialization and the
-/// owner-listing reads that back the v2 RPC owned-object iterator.
-impl DataStore {
-    /// Initialize the owned-object index from the seed manifest the first time it is needed.
-    pub(crate) fn ensure_owned_object_index_initialized(&self) -> anyhow::Result<()> {
-        if self.owned_index().owned_object_index_exists()? {
-            return Ok(());
-        }
-
-        let _local_snapshot_guard = self.write_local_snapshot()?;
-        if self.owned_index().owned_object_index_exists()? {
-            return Ok(());
-        }
-
-        if let Some(checkpoint) = self.local().get_highest_verified_checkpoint()?
-            && checkpoint.data().sequence_number > self.forked_at_checkpoint()
-        {
-            bail!(
-                "owned-object index is missing while local checkpoints have advanced past the fork checkpoint; refusing to rebuild stale seed state",
-            );
-        }
-
-        let mut indexed_objects = BTreeMap::new();
-        if self.local().seed_manifest_exists() {
-            let manifest = self.local().read_seed_manifest()?;
-            if manifest.checkpoint != self.forked_at_checkpoint() {
-                bail!(
-                    "Seed manifest checkpoint {} does not match requested checkpoint {}. Use a different --data-dir.",
-                    manifest.checkpoint,
-                    self.forked_at_checkpoint(),
-                );
-            }
-
-            let keys: Vec<_> = manifest
-                .entries
-                .iter()
-                .map(|entry| ObjectKey {
-                    object_id: entry.object_ref.0,
-                    version_query: VersionQuery::VersionAtCheckpoint {
-                        version: entry.object_ref.1.value(),
-                        checkpoint: self.forked_at_checkpoint(),
-                    },
-                })
-                .collect();
-            let objects = self
-                .gql()
-                .get_objects(&keys)
-                .context("failed to fetch seeded objects for owned-object index")?;
-
-            for (seed_entry, object) in manifest.entries.iter().zip_eq(objects) {
-                let Some((object, _)) = object else {
-                    bail!(
-                        "seeded object {} version {} was not found at fork checkpoint {}",
-                        seed_entry.object_ref.0,
-                        seed_entry.object_ref.1.value(),
-                        self.forked_at_checkpoint(),
-                    );
-                };
-                if OwnedObjectIndexKey::from_object(&object).is_none() {
-                    bail!(
-                        "seeded object {} is not an address-owned Move object",
-                        seed_entry.object_ref.0,
-                    );
-                }
-                let object_ref = object.compute_object_reference();
-                if object_ref != seed_entry.object_ref {
-                    bail!(
-                        "seeded object {} metadata does not match fetched object at fork checkpoint {}",
-                        seed_entry.object_ref.0,
-                        self.forked_at_checkpoint(),
-                    );
-                }
-
-                self.local().write_object(&object)?;
-                indexed_objects.insert(object_ref.0, object);
-            }
-        }
-
-        // Insert into DB the objects for index
-        self.owned_index()
-            .replace_from_objects(indexed_objects.values())
-    }
-
-    /// Get owned objects for an address, optionally filtered by object type and paginated with a
-    /// cursor.
-    pub(crate) fn get_owned_objects(
-        &self,
-        owner: SuiAddress,
-        object_type: Option<StructTag>,
-        cursor: Option<OwnedObjectInfo>,
-    ) -> StorageResult<Vec<OwnedObjectInfo>> {
-        self.ensure_owned_object_index_initialized()
-            .map_err(|e| StorageError::custom(e.to_string()))?;
-        let _local_snapshot_guard = self.read_local_snapshot()?;
-        self.owned_index()
-            .scan_owner(owner, object_type.as_ref(), cursor)
-            .map_err(|e| StorageError::custom(e.to_string()))
     }
 }
 
