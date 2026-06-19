@@ -5,11 +5,9 @@
 // Tail-goto-to-immediate-block elision
 // -------------------------------------------------------------------------------------------------
 //
-// The dom-tree acyclic structurer used to elide tail `Jump`s targeting orphan-hoisted
-// siblings via `convergence_ok` + `elide_tail_jump_to`; `-1.4` deleted that machinery
-// because reaching covers most acyclic shapes goto-free. For the shapes reaching doesn't
-// fold the dom-tree path now surfaces those tail jumps as `Unstructured(Goto)` in the
-// output. The dominant pattern is:
+// The reaching-condition acyclic structurer covers most goto-free shapes; for the rest, the
+// dom-tree path surfaces tail jumps as `Unstructured(Goto)` in the output. The dominant
+// residual pattern is:
 //
 //     if (cond) {
 //         body_t;
