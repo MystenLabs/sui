@@ -31,18 +31,18 @@ use crate::{
 use move_ir_types::location::*;
 use std::collections::BTreeMap;
 
-pub struct UnusedReturnValue;
+pub(crate) struct UnusedReturnValue;
 
-pub struct UnusedReturnValueAI {
+pub(crate) struct UnusedReturnValueAI {
     is_sui: bool,
 }
 
 /// Function unique index derived from the block label + command index within the block
-pub type CommandIndex = (Label, usize);
+pub(crate) type CommandIndex = (Label, usize);
 
 /// Information about a tracked pure call
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct CallSite {
+pub(crate) struct CallSite {
     /// The location
     loc: Loc,
     /// In Sui mode, was an &mut TxContext present but excluded
@@ -50,7 +50,7 @@ pub struct CallSite {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub enum Value {
+pub(crate) enum Value {
     /// Pure-call result not yet bound to a named local.
     Fresh(CallSite),
     /// Bound to one or more temporary locals; `index -> originating call loc`
@@ -60,11 +60,11 @@ pub enum Value {
 }
 
 #[derive(Clone, Debug)]
-pub struct State {
+pub(crate) struct State {
     locals: BTreeMap<Var, LocalState<Value>>,
 }
 
-pub struct ExecutionContext {
+pub(crate) struct ExecutionContext {
     diags: Diagnostics,
     current_command: (Label, usize),
 }
@@ -156,14 +156,13 @@ impl SimpleAbsInt for UnusedReturnValueAI {
         state: &mut State,
         e: &Exp,
     ) -> Option<Vec<Value>> {
-        // If the local is copied or borrowed, this will not free the value, but does mean that
-        // the value is now "used". We can update the value as being used to prevent any
-        // erroneous error reporting... though this likely will never happen
+        // Copying or borrowing the local does not free the tracked value, but it does count as a
+        // use, so we stop tracking it (mark it `Other`) to avoid a spurious unused-value warning.
         let var = match &e.exp.value {
             UnannotatedExp_::Copy { var, .. } | UnannotatedExp_::BorrowLocal(_, var) => var,
             _ => return None,
         };
-        if state.locals().get(var).is_some() {
+        if state.locals().contains_key(var) {
             state
                 .locals_mut()
                 .insert(*var, LocalState::Available(e.exp.loc, Value::Other));
@@ -321,8 +320,7 @@ fn unused_return_value_warning(call_site: CallSite) -> Diagnostic {
     let mut d = diag!(StyleCodes::UnusedReturnValue.diag_info(), (loc, msg));
     if tx_context_exempted {
         d.add_note(
-            "This function takes a '&mut TxContext' argument, but 'TxContext' is not counted \
-             as a mutable reference input for this lint.",
+            "'TxContext' is not considered a mutable reference input for the purposes of this lint.",
         );
     }
     d.add_note("Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.");
