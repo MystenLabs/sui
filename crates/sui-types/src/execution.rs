@@ -388,15 +388,17 @@ pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<Exe
 /// `ExecutionError` it produces no effects; an enum so more retry reasons can be added.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionRetryError {
-    /// Placeholder retry reason; concrete reasons will replace this.
-    Placeholder,
+    /// The in-execution object-funds-withdraw check could not determine sufficiency because the
+    /// accumulator root had not yet settled to the version this transaction requires. The
+    /// transaction should be retried once the root catches up.
+    ObjectFundsNotSettled,
 }
 
 impl std::fmt::Display for ExecutionRetryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExecutionRetryError::Placeholder => {
-                write!(f, "execution retry requested (placeholder)")
+            ExecutionRetryError::ObjectFundsNotSettled => {
+                write!(f, "object funds withdraw not yet settled; retry requested")
             }
         }
     }

@@ -3,6 +3,7 @@
 
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::{GasCharger, PaymentLocation};
+use move_core_types::u256::U256;
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
@@ -10,7 +11,9 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
-use sui_types::accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead};
+use sui_types::accumulator_root::{
+    AccumulatorObjId, AccumulatorValue as AccumulatorRootValue, UnsettledObjectFundsRead,
+};
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
@@ -26,10 +29,10 @@ use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::object::{Data, ObjectPermissions};
-use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
+use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsSufficiency, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::{
-    SUI_DENY_LIST_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiErrorKind, SuiResult},
@@ -113,6 +116,13 @@ pub struct TemporaryStore<'backing> {
     /// accounted for.
     unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
 
+    /// Running total of object funds withdrawn per `(owner, type)` during this transaction. A single
+    /// transaction can withdraw from the same account multiple times, so each in-execution
+    /// sufficiency check must compare the available balance against the cumulative amount, not just
+    /// the current withdrawal. Interior-mutable because the check runs behind `&self`
+    /// (`RuntimeObjectResolver`).
+    in_flight_object_withdrawals: RefCell<BTreeMap<(SuiAddress, TypeTag), U256>>,
+
     /// Recorded when execution determines the transaction must be retried later rather than
     /// committed; checked before gas finalization. A `RefCell` rather than a lock: execution is
     /// single-threaded, but the condition is detected behind `&self` (`RuntimeObjectResolver`) so the
@@ -176,6 +186,7 @@ impl<'backing> TemporaryStore<'backing> {
             ptb_emitted_accumulator_event_ranges: Vec::new(),
             system_object_versions,
             unsettled_object_funds,
+            in_flight_object_withdrawals: RefCell::new(BTreeMap::new()),
             retry_request: RefCell::new(None),
         }
     }
@@ -1612,6 +1623,76 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
         };
         let latest_version = self.store.get_object(object_id).map(|o| o.version());
         Ok(latest_version.is_some_and(|v| v >= required_version))
+    }
+
+    fn check_object_funds_sufficiency(
+        &self,
+        owner: SuiAddress,
+        type_: &TypeTag,
+        amount: U256,
+        deposited: u128,
+    ) -> SuiResult<ObjectFundsSufficiency> {
+        // The accumulator root must be available at the version this transaction requires.
+        // `is_system_object_available` errors if it has no assigned version — a transaction
+        // performing an object-funds withdrawal is always sequenced against the accumulator root,
+        // so its absence is an invariant violation rather than a reason to pass the check.
+        //
+        // TODO: gating on the accumulator root reaching its required version is not sufficient on
+        // its own — the root catching up does not guarantee this owner's account has settled to
+        // that version, since per-account settlement can lag the root update. Revisit with a
+        // per-account settlement signal.
+        if !self.is_system_object_available(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)? {
+            *self.retry_request.borrow_mut() = Some(ExecutionRetryError::ObjectFundsNotSettled);
+            return Ok(ObjectFundsSufficiency::Unknown);
+        }
+
+        // Availability guarantees a required version is recorded for the accumulator root.
+        let required_version = self
+            .system_object_versions
+            .get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .copied();
+
+        // Settled balance at the required accumulator version.
+        let settled = AccumulatorRootValue::load(self, required_version, owner, type_)?
+            .and_then(|v| v.as_u128())
+            .unwrap_or(0);
+
+        // Discount withdrawals from earlier transactions in this consensus commit that executed
+        // against the same accumulator version but have not yet settled — the settled balance does
+        // not reflect them. Same-account withdrawals never execute concurrently, so this read is
+        // stable.
+        let unsettled = match (self.unsettled_object_funds, required_version) {
+            (Some(reader), Some(version)) => {
+                let account = AccumulatorRootValue::get_field_id(owner, type_)?;
+                reader.get_unsettled_object_withdraw(&account, version)
+            }
+            _ => 0,
+        };
+        let available = U256::from(settled.saturating_sub(unsettled));
+
+        // Compare against the net withdrawn from this account so far in this transaction, including
+        // the current withdrawal: gross withdrawals (the running total of withdraw limits) minus
+        // deposits made back to the same account. A withdraw followed by an equal deposit is a no-op
+        // against the balance.
+        let mut withdrawals = self.in_flight_object_withdrawals.borrow_mut();
+        let running = withdrawals
+            .entry((owner, type_.clone()))
+            .or_insert_with(|| U256::from(0u8));
+        let Some(gross) = running.checked_add(amount) else {
+            return Ok(ObjectFundsSufficiency::Insufficient);
+        };
+        let deposited = U256::from(deposited);
+        let net = if gross > deposited {
+            gross - deposited
+        } else {
+            U256::from(0u8)
+        };
+        if available >= net {
+            *running = gross;
+            Ok(ObjectFundsSufficiency::Sufficient)
+        } else {
+            Ok(ObjectFundsSufficiency::Insufficient)
+        }
     }
 }
 

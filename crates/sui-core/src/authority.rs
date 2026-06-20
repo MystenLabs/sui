@@ -76,6 +76,7 @@ use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::accumulator_root::UnsettledObjectFundsRead;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
+use sui_types::execution::ExecutionRetryError;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
@@ -1881,37 +1882,26 @@ impl AuthorityState {
         rewritten_inputs: Option<Vec<bool>>,
         signer: SuiAddress,
         tx_digest: TransactionDigest,
-    ) -> TransactionEffectsOutput<ExecutionError> {
-        let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
-            // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
-            .execute_transaction_to_effects_and_execution_error(
-                store,
-                protocol_config,
-                self.metrics.execution_metrics.clone(),
-                enable_expensive_checks,
-                execution_params,
-                epoch_id,
-                epoch_timestamp_ms,
-                input_objects,
-                system_object_versions,
-                unsettled_object_funds,
-                gas_data,
-                gas_status,
-                kind,
-                rewritten_inputs,
-                signer,
-                tx_digest,
-                &mut None,
-            )
-            // TODO: handle the retry request here. No native produces one yet, so assume it never trips.
-            .expect("transaction retry is not yet handled");
-
-        (
-            inner_temp_store,
+    ) -> Result<TransactionEffectsOutput<ExecutionError>, ExecutionRetryError> {
+        // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
+        executor.execute_transaction_to_effects_and_execution_error(
+            store,
+            protocol_config,
+            self.metrics.execution_metrics.clone(),
+            enable_expensive_checks,
+            execution_params,
+            epoch_id,
+            epoch_timestamp_ms,
+            input_objects,
+            system_object_versions,
+            unsettled_object_funds,
+            gas_data,
             gas_status,
-            effects,
-            timings,
-            execution_error,
+            kind,
+            rewritten_inputs,
+            signer,
+            tx_digest,
+            &mut None,
         )
     }
 
@@ -2024,7 +2014,7 @@ impl AuthorityState {
             .map(|checker| checker.as_ref() as &dyn UnsettledObjectFundsRead);
 
         #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
+        let (inner_temp_store, _, mut effects, timings, execution_error_opt) = match self
             .execute_transaction_to_effects(
                 &**epoch_store.executor(),
                 &tracking_store,
@@ -2049,21 +2039,68 @@ impl AuthorityState {
                 rewritten_inputs,
                 signer,
                 tx_digest,
-            );
+            ) {
+            Ok(output) => output,
+            // The in-execution object-funds check could not confirm sufficiency: the accumulator
+            // root has not settled to the version this transaction requires. No effects were
+            // produced.
+            Err(ExecutionRetryError::ObjectFundsNotSettled) => {
+                assert_reachable!("retry object withdraw later (in-execution)");
+                let accumulator_version =
+                    execution_env.assigned_versions.accumulator_version.expect(
+                        "a tx requesting an object-funds retry must have an accumulator version",
+                    );
+                if let Some(object_funds_checker) = object_funds_checker.as_ref() {
+                    // Wait for the root to settle, then re-enqueue so the check runs again against
+                    // the now-settled state. The checker exists on every node that runs the
+                    // in-execution check (see `init_object_funds_checker`).
+                    object_funds_checker.reenqueue_after_settlement(
+                        certificate,
+                        &execution_env,
+                        accumulator_version,
+                        &self.execution_scheduler,
+                        epoch_store,
+                    );
+                } else {
+                    debug_fatal!(
+                        "object funds checker must exist when the in-execution funds check is enabled"
+                    );
+                }
+                return ExecutionOutput::RetryLater;
+            }
+        };
 
-        if let Some(object_funds_checker) = object_funds_checker.as_ref()
-            && !object_funds_checker.should_commit_object_funds_withdraws(
-                certificate,
-                effects.status(),
-                &inner_temp_store.accumulator_running_max_withdraws,
-                &execution_env,
-                self.get_account_funds_read(),
-                &self.execution_scheduler,
-                epoch_store,
-            )
+        // When the in-execution check is enabled the VM is authoritative and signals retries via
+        // `ExecutionRetryError` (handled above), so the post-execution checker is bypassed. Reuses
+        // the `object_funds_checker` guard loaded before execution.
+        if !protocol_config.check_object_funds_withdraw_in_execution() {
+            if let Some(object_funds_checker) = object_funds_checker.as_ref()
+                && !object_funds_checker.should_commit_object_funds_withdraws(
+                    certificate,
+                    effects.status(),
+                    &inner_temp_store.accumulator_running_max_withdraws,
+                    &execution_env,
+                    self.get_account_funds_read(),
+                    &self.execution_scheduler,
+                    epoch_store,
+                )
+            {
+                assert_reachable!("retry object withdraw later");
+                return ExecutionOutput::RetryLater;
+            }
+        } else if effects.status().is_ok()
+            && let Some(object_funds_checker) = object_funds_checker.as_ref()
+            && let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version
         {
-            assert_reachable!("retry object withdraw later");
-            return ExecutionOutput::RetryLater;
+            // In-execution flow: the VM confirmed sufficiency and the transaction succeeded. Record
+            // its object withdrawals as unsettled so later transactions in this consensus commit,
+            // which read the same not-yet-advanced settled balance, account for them.
+            object_funds_checker.record_object_funds_withdraws(
+                certificate,
+                &inner_temp_store.accumulator_running_max_withdraws,
+                accumulator_version,
+                epoch_store,
+            );
         }
 
         if let Some(expected_effects_digest) = expected_effects_digest
@@ -3692,9 +3729,14 @@ impl AuthorityState {
 
     async fn init_object_funds_checker(&self) {
         let epoch_store = self.epoch_store.load();
-        if self.is_validator(&epoch_store)
-            && epoch_store.protocol_config().enable_object_funds_withdraw()
-        {
+        let protocol_config = epoch_store.protocol_config();
+        // The post-execution checker is a validator concern, but the in-execution check requires the
+        // checker on every executing node (including fullnodes / checkpoint execution) to track
+        // unsettled withdrawals and to wait-and-reschedule on a retry.
+        let needs_checker = protocol_config.enable_object_funds_withdraw()
+            && (self.is_validator(&epoch_store)
+                || protocol_config.check_object_funds_withdraw_in_execution());
+        if needs_checker {
             if self.object_funds_checker.load().is_none() {
                 let inner = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).map(|o| {
                     Arc::new(ObjectFundsChecker::new(

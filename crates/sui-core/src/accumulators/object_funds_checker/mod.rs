@@ -101,6 +101,54 @@ impl ObjectFundsChecker {
         }
     }
 
+    /// Records the object-funds withdrawals of a transaction that executed successfully under the
+    /// in-execution funds check, so subsequent transactions in the same consensus commit see them as
+    /// unsettled. This is the recording half of `should_commit_object_funds_withdraws`/`try_withdraw`
+    /// without the sufficiency check, which the Move VM already performed during execution. Entries
+    /// are garbage-collected by `commit_accumulator_versions` once the accumulator version settles.
+    pub fn record_object_funds_withdraws(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        accumulator_running_max_withdraws: &BTreeMap<AccumulatorObjId, u128>,
+        accumulator_version: SequenceNumber,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        if accumulator_running_max_withdraws.is_empty() {
+            return;
+        }
+        // Address-reservation withdraws are settled separately; only object withdraws (those without
+        // a funds reservation) are tracked here, mirroring `should_commit_object_funds_withdraws`.
+        let address_funds_reservations: BTreeSet<_> = certificate
+            .transaction_data()
+            .process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier())
+            .into_keys()
+            .collect();
+        let mut inner = self.inner.write();
+        for (account, amount) in accumulator_running_max_withdraws {
+            if address_funds_reservations.contains(account) {
+                continue;
+            }
+            let entry = inner
+                .unsettled_withdraws
+                .entry(*account)
+                .or_default()
+                .entry(accumulator_version)
+                .or_default();
+            *entry = entry.checked_add(*amount).unwrap();
+            inner
+                .unsettled_accounts
+                .entry(accumulator_version)
+                .or_default()
+                .insert(*account);
+        }
+        self.metrics
+            .unsettled_accounts
+            .set(inner.unsettled_withdraws.len() as i64);
+        self.metrics
+            .unsettled_versions
+            .set(inner.unsettled_accounts.len() as i64);
+    }
+
     #[instrument(level = "debug", skip_all, fields(tx_digest = ?certificate.digest()))]
     pub fn should_commit_object_funds_withdraws(
         &self,
@@ -220,6 +268,56 @@ impl ObjectFundsChecker {
                 false
             }
         }
+    }
+
+    /// Re-enqueues `certificate` for execution once the accumulator root has settled to
+    /// `accumulator_version`. Used when the in-execution object-funds check could not determine
+    /// sufficiency yet (the root had not caught up) and signalled a retry. Unlike the
+    /// post-execution checker this performs no funds accounting — it only waits for settlement and
+    /// re-enqueues, so the next execution re-runs the in-VM check against the now-settled state.
+    pub fn reenqueue_after_settlement(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        execution_env: &ExecutionEnv,
+        accumulator_version: SequenceNumber,
+        execution_scheduler: &Arc<ExecutionScheduler>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        self.metrics.pending_checks.inc();
+        let timer = self.metrics.pending_check_latency.start_timer();
+        let pending_metrics = self.metrics.clone();
+        let last_settled_version_sender = self.last_settled_version_sender.clone();
+        let scheduler = execution_scheduler.clone();
+        let cert = certificate.clone();
+        let execution_env = execution_env.clone();
+        let epoch_store = epoch_store.clone();
+        tokio::task::spawn(async move {
+            // The checkpoint executor may finish the epoch and reconfigure while we wait, so bound
+            // the wait to the alive epoch.
+            let _ = epoch_store
+                .within_alive_epoch(async move {
+                    let tx_digest = cert.digest();
+                    let mut version_receiver = last_settled_version_sender.subscribe();
+                    // Guaranteed to be notified eventually: every settlement transaction advances
+                    // the settled version and must eventually be executed.
+                    if version_receiver
+                        .wait_for(|v| *v >= accumulator_version)
+                        .await
+                        .is_err()
+                    {
+                        tracing::error!("Last settled accumulator version receiver channel closed");
+                        return;
+                    }
+                    debug!(
+                        ?tx_digest,
+                        "Accumulator root settled, re-enqueueing transaction"
+                    );
+                    scheduler.send_transaction_for_execution(&cert, execution_env, Instant::now());
+                })
+                .await;
+            timer.observe_duration();
+            pending_metrics.pending_checks.dec();
+        });
     }
 
     fn check_object_funds(
