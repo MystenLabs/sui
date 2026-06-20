@@ -10,7 +10,7 @@ use mysten_common::{assert_reachable, debug_fatal};
 use parking_lot::RwLock;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    accumulator_root::AccumulatorObjId,
+    accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead},
     base_types::SequenceNumber,
     effects::{TransactionEffects, TransactionEffectsAPI},
     executable_transaction::VerifiedExecutableTransaction,
@@ -68,6 +68,22 @@ struct Inner {
     /// unused entries in unsettled_withdraws that are now fully committed. Without doing so unsettled_withdraws
     /// may grow unbounded.
     unsettled_accounts: BTreeMap<SequenceNumber, BTreeSet<AccumulatorObjId>>,
+}
+
+impl UnsettledObjectFundsRead for ObjectFundsChecker {
+    fn get_unsettled_object_withdraw(
+        &self,
+        account: &AccumulatorObjId,
+        accumulator_version: SequenceNumber,
+    ) -> u128 {
+        self.inner
+            .read()
+            .unsettled_withdraws
+            .get(account)
+            .and_then(|withdraws| withdraws.get(&accumulator_version))
+            .copied()
+            .unwrap_or_default()
+    }
 }
 
 impl ObjectFundsChecker {

@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
-use sui_types::accumulator_root::AccumulatorObjId;
+use sui_types::accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead};
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
@@ -106,6 +106,13 @@ pub struct TemporaryStore<'backing> {
     /// (the transaction was not sequenced against it), so the check errors rather than allowing it.
     system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
 
+    /// Source of object-funds withdrawals that have executed in the current consensus commit but
+    /// have not yet settled. The settled balance read from the accumulator root does not include
+    /// these, so the in-execution funds check subtracts them. `None` when the authority did not
+    /// provide one (e.g. dev-inspect, genesis, replay), in which case no in-flight withdrawals are
+    /// accounted for.
+    unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
+
     /// Recorded when execution determines the transaction must be retried later rather than
     /// committed; checked before gas finalization. A `RefCell` rather than a lock: execution is
     /// single-threaded, but the condition is detected behind `&self` (`RuntimeObjectResolver`) so the
@@ -124,6 +131,7 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
         system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -167,8 +175,16 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             ptb_emitted_accumulator_event_ranges: Vec::new(),
             system_object_versions,
+            unsettled_object_funds,
             retry_request: RefCell::new(None),
         }
+    }
+
+    /// The source of unsettled object-funds withdrawals for the current consensus commit, if the
+    /// authority provided one. The in-execution object-funds sufficiency check consults this to
+    /// discount withdrawals that have executed but not yet settled.
+    pub fn unsettled_object_funds(&self) -> Option<&dyn UnsettledObjectFundsRead> {
+        self.unsettled_object_funds
     }
 
     // Helpers to access private fields
