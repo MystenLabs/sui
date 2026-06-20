@@ -4,9 +4,8 @@ A `.mv` file is a serialized `CompiledModule`. You rarely read the raw bytes —
 disassembly/decompilation — but knowing the structure explains *why* certain things survive and
 others don't.
 
-Reference (public):
-`external-crates/move/crates/move-binary-format/src/file_format.rs`. Key definitions (line numbers
-approximate; they drift between refs — grep the enum name):
+Reference (public): [`move-binary-format/src/file_format.rs`](https://github.com/MystenLabs/sui/blob/main/external-crates/move/crates/move-binary-format/src/file_format.rs).
+Key definitions (line numbers approximate; they drift between refs — grep the enum name):
 `Visibility` ~L492 · `Ability` ~L651 · `AbilitySet` ~L802 · `SignatureToken` ~L1019 ·
 `Bytecode` ~L1309.
 
