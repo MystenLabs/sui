@@ -1,6 +1,6 @@
 ---
 name: bytecode
-description: Bytecode-comprehension entry point for deployed code; choose to read, decompile, inspect `.mv`, or understand what a package does without security framing.
+description: Reading, decompiling, and comprehending Move bytecode (typically in `.mv` files).
 skills:
   - move-bytecode-comprehension
   - sui-and-move-tools
