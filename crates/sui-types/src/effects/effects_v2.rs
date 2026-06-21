@@ -588,6 +588,7 @@ impl TransactionEffectsV2 {
         gas_used: GasCostSummary,
         shared_objects: Vec<SharedInput>,
         loaded_per_epoch_config_objects: BTreeSet<ObjectID>,
+        loaded_system_objects: BTreeMap<ObjectID, VersionDigest>,
         transaction_digest: TransactionDigest,
         lamport_version: SequenceNumber,
         changed_objects: BTreeMap<ObjectID, EffectsObjectChange>,
@@ -595,7 +596,7 @@ impl TransactionEffectsV2 {
         events_digest: Option<TransactionEventsDigest>,
         dependencies: Vec<TransactionDigest>,
     ) -> Self {
-        let unchanged_consensus_objects = shared_objects
+        let mut unchanged_consensus_objects: Vec<_> = shared_objects
             .into_iter()
             .filter_map(|shared_input| match shared_input {
                 SharedInput::Existing((id, version, digest)) => {
@@ -635,6 +636,23 @@ impl TransactionEffectsV2 {
                     .map(|id| (id, UnchangedConsensusKind::PerEpochConfig)),
             )
             .collect();
+
+        // Record system objects read during execution (e.g. the accumulator root) as read-only
+        // consensus objects, so the read can be reproduced on replay. Skip any that already appear
+        // as a changed object or as an unchanged consensus object — those versions are already
+        // recorded.
+        let already_recorded: HashSet<ObjectID> = changed_objects
+            .keys()
+            .chain(unchanged_consensus_objects.iter().map(|(id, _)| id))
+            .copied()
+            .collect();
+        for (id, version_digest) in loaded_system_objects {
+            if !already_recorded.contains(&id) {
+                unchanged_consensus_objects
+                    .push((id, UnchangedConsensusKind::ReadOnlyRoot(version_digest)));
+            }
+        }
+
         let changed_objects: Vec<_> = changed_objects.into_iter().collect();
 
         let gas_object_index = gas_object.map(|gas_id| {

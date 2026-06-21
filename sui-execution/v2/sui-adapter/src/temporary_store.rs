@@ -380,6 +380,7 @@ impl<'backing> TemporaryStore<'backing> {
             // TODO: Provide the list of read-only shared objects directly.
             shared_object_refs,
             BTreeSet::new(),
+            BTreeMap::new(),
             *transaction_digest,
             lamport_version,
             object_changes,

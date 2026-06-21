@@ -358,12 +358,15 @@ impl SharedObjVerManager {
             let cert_assigned_versions: Vec<_> = effects
                 .input_consensus_objects()
                 .into_iter()
-                .map(|iso| {
+                .filter_map(|iso| {
                     let (id, version) = iso.id_and_version();
-                    let initial_version = initial_version_map
-                        .get(&id)
-                        .expect("transaction must have all inputs from effects");
-                    ((id, *initial_version), version)
+                    // System objects read during execution (e.g. the accumulator root) are recorded
+                    // in effects as read-only consensus objects, but they are not declared/sequenced
+                    // inputs, so they have no entry in the input version map and are not assigned a
+                    // shared version here. Their version is carried separately in
+                    // `system_object_versions`.
+                    let initial_version = initial_version_map.get(&id)?;
+                    Some(((id, *initial_version), version))
                 })
                 .collect();
             let tx_key = cert.key();

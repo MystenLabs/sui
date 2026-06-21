@@ -3,7 +3,7 @@
 
 pub use self::effects_v2::TransactionEffectsV2;
 use crate::accumulator_event::AccumulatorEvent;
-use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
+use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber, VersionDigest};
 use crate::committee::EpochId;
 use crate::crypto::{AuthoritySignInfo, EmptySignInfo, default_hash};
 use crate::digests::{
@@ -127,6 +127,7 @@ impl TransactionEffects {
         gas_used: GasCostSummary,
         shared_objects: Vec<SharedInput>,
         loaded_per_epoch_config_objects: BTreeSet<ObjectID>,
+        loaded_system_objects: BTreeMap<ObjectID, VersionDigest>,
         transaction_digest: TransactionDigest,
         lamport_version: SequenceNumber,
         changed_objects: BTreeMap<ObjectID, EffectsObjectChange>,
@@ -140,6 +141,7 @@ impl TransactionEffects {
             gas_used,
             shared_objects,
             loaded_per_epoch_config_objects,
+            loaded_system_objects,
             transaction_digest,
             lamport_version,
             changed_objects,
