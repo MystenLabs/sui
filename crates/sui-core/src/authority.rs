@@ -1513,7 +1513,7 @@ impl AuthorityState {
             return ExecutionOutput::EpochEnded;
         }
 
-        let accumulator_version = execution_env.assigned_versions.accumulator_version;
+        let accumulator_version = execution_env.assigned_versions.accumulator_version();
 
         let (transaction_outputs, timings, execution_error_opt) = match self.process_certificate(
             &tx_guard,
@@ -1969,17 +1969,15 @@ impl AuthorityState {
         // System object versions this transaction is allowed to read during execution. Currently
         // only the accumulator root, at the version this transaction was sequenced against (if
         // any), so the in-execution object-funds check can gate on settlement progress.
-        let system_object_versions: BTreeMap<ObjectID, SequenceNumber> = execution_env
+        let system_object_versions = execution_env
             .assigned_versions
-            .accumulator_version
-            .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
-            .into_iter()
-            .collect();
+            .system_object_versions
+            .clone();
         // Mainnet-only: feed the accumulator (settlement) version so the address-balance gas-smash
         // short-circuit activates at its rollout version and replays bit-for-bit. Other chains pass
         // `None`, where the short-circuit applies unconditionally.
         let accumulator_version = if self.chain_identifier.chain() == Chain::Mainnet {
-            execution_env.assigned_versions.accumulator_version
+            execution_env.assigned_versions.accumulator_version()
         } else {
             None
         };
@@ -1996,7 +1994,7 @@ impl AuthorityState {
                 &*self.coin_reservation_resolver,
                 sender,
                 &mut kind,
-                execution_env.assigned_versions.accumulator_version,
+                execution_env.assigned_versions.accumulator_version(),
             )
             .expect("rewriting must succeed for a certified transaction")
         } else {
@@ -2046,8 +2044,10 @@ impl AuthorityState {
             // produced.
             Err(ExecutionRetryError::ObjectFundsNotSettled) => {
                 assert_reachable!("retry object withdraw later (in-execution)");
-                let accumulator_version =
-                    execution_env.assigned_versions.accumulator_version.expect(
+                let accumulator_version = execution_env
+                    .assigned_versions
+                    .accumulator_version()
+                    .expect(
                         "a tx requesting an object-funds retry must have an accumulator version",
                     );
                 if let Some(object_funds_checker) = object_funds_checker.as_ref() {
@@ -2090,7 +2090,7 @@ impl AuthorityState {
             }
         } else if effects.status().is_ok()
             && let Some(object_funds_checker) = object_funds_checker.as_ref()
-            && let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version
+            && let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version()
         {
             // In-execution flow: the VM confirmed sufficiency and the transaction succeeded. Record
             // its object withdrawals as unsettled so later transactions in this consensus commit,

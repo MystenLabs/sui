@@ -137,7 +137,8 @@ impl TestEnv {
                 .iter()
                 .map(|tx| {
                     let mut env = ExecutionEnv::default();
-                    env.assigned_versions.accumulator_version = Some(version);
+                    env.assigned_versions
+                        .set_system_object_version(SUI_ACCUMULATOR_ROOT_OBJECT_ID, version);
                     (Schedulable::Transaction(tx.clone()), env)
                 })
                 .collect(),
