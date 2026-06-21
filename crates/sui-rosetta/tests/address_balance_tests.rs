@@ -2411,6 +2411,7 @@ async fn test_address_balance_gas_payment_parsing() {
         GasCostSummary::new(1000, 0, 0, 0), // computation_cost, non_refundable_storage_fee, storage_cost, storage_rebate
         vec![],                             // shared_objects
         BTreeSet::new(),                    // loaded_per_epoch_config_objects
+        BTreeMap::new(),                    // loaded_system_objects
         tx_digest,                          // transaction_digest
         9.into(),                           // lamport_version
         BTreeMap::new(),                    // changed_objects

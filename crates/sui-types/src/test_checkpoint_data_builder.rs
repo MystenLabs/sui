@@ -757,6 +757,7 @@ impl TestCheckpointBuilder {
             GasCostSummary::default(),
             vec![],
             BTreeSet::new(),
+            BTreeMap::new(),
             end_of_epoch_tx_signed.digest(),
             lamport_version,
             changed_objects,

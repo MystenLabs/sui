@@ -106,6 +106,12 @@ pub struct TemporaryStore<'backing> {
     /// (the transaction was not sequenced against it), so the check errors rather than allowing it.
     system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
 
+    /// System objects actually read during execution, keyed by object ID, with the version (and its
+    /// digest) at which they were read. Recorded by `is_system_object_available` and emitted into the
+    /// transaction effects as read-only consensus objects so the read can be reproduced on replay.
+    /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
+    loaded_system_objects: RefCell<BTreeMap<ObjectID, VersionDigest>>,
+
     /// Recorded when execution determines the transaction must be retried later rather than
     /// committed; checked before gas finalization. A `RefCell` rather than a lock: execution is
     /// single-threaded, but the condition is detected behind `&self` (`RuntimeObjectResolver`) so the
@@ -167,6 +173,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             ptb_emitted_accumulator_event_ranges: Vec::new(),
             system_object_versions,
+            loaded_system_objects: RefCell::new(BTreeMap::new()),
             retry_request: RefCell::new(None),
         }
     }
@@ -461,6 +468,7 @@ impl<'backing> TemporaryStore<'backing> {
         let lamport_version = self.lamport_timestamp;
         // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
         let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
+        let loaded_system_objects = self.loaded_system_objects.borrow().clone();
         let inner = self.into_inner(accumulator_running_max_withdraws);
 
         let effects = TransactionEffects::new_from_execution_v2(
@@ -470,6 +478,7 @@ impl<'backing> TemporaryStore<'backing> {
             // TODO: Provide the list of read-only shared objects directly.
             shared_object_refs,
             loaded_per_epoch_config_objects,
+            loaded_system_objects,
             *transaction_digest,
             lamport_version,
             object_changes,
@@ -1594,18 +1603,42 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
             }
             .into());
         };
-        let latest_version = self.store.get_object(object_id).map(|o| o.version());
-        if latest_version.is_some_and(|v| v >= required_version) {
-            return Ok(true);
+        let latest = self.store.get_object(object_id);
+        if latest
+            .as_ref()
+            .is_none_or(|o| o.version() < required_version)
+        {
+            // Not yet available: mark the transaction for retry. The retry is signaled out-of-band
+            // via this interior-mutable state (the Move VM boundary can't carry it), and surfaces as
+            // `ExecutionRetryError` out of `execute_transaction_to_effects`. The authority then waits
+            // for `object_id` to reach `required_version` and re-enqueues.
+            *self.retry_request.borrow_mut() = Some(ExecutionRetryError::SystemObjectUnavailable {
+                object_id: *object_id,
+            });
+            return Ok(false);
         }
-        // Not yet available: mark the transaction for retry. The retry is signaled out-of-band via
-        // this interior-mutable state (the Move VM boundary can't carry it), and surfaces as
-        // `ExecutionRetryError` out of `execute_transaction_to_effects`. The authority then waits
-        // for `object_id` to reach `required_version` and re-enqueues.
-        *self.retry_request.borrow_mut() = Some(ExecutionRetryError::SystemObjectUnavailable {
-            object_id: *object_id,
-        });
-        Ok(false)
+
+        // Available: record the read at `required_version` (which is what the transaction depends
+        // on and reads) so it can be emitted into effects as a read-only consensus object and
+        // reproduced on replay. The version and digest are taken at `required_version` — not the
+        // latest — so the recorded value is deterministic across nodes regardless of how far the
+        // object has since advanced.
+        let object_at_required = if latest.as_ref().map(|o| o.version()) == Some(required_version) {
+            latest
+        } else {
+            self.store.get_object_by_key(object_id, required_version)
+        };
+        let digest = object_at_required
+            .ok_or_else(|| SuiErrorKind::GenericAuthorityError {
+                error: format!(
+                    "system object {object_id} not found at required version {required_version:?}"
+                ),
+            })?
+            .digest();
+        self.loaded_system_objects
+            .borrow_mut()
+            .insert(*object_id, (required_version, digest));
+        Ok(true)
     }
 }
 
