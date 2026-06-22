@@ -30,7 +30,7 @@
 // This refinement does exactly that. It looks at every `Seq` and, for each adjacent pair
 // `(items[i], items[i+1])` where `items[i+1]` is `Block(N, _)`, walks the tail positions
 // of `items[i]` (last item of a `Seq`, both arms of `IfElse`, every arm of `Switch`/
-// `Match`/`MatchLit`) and pops any `Unstructured(…, Goto(N))` it finds. Empty
+// `Match`/`MatchLit`) and pops any `Unstructured(..., Goto(N))` it finds. Empty
 // `Unstructured` after the pop becomes an empty `Seq` (later refinements drop it).
 //
 // Conservative: only strips when `Block(N, _)` is the *immediately* next sibling. A goto
