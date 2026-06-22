@@ -18,7 +18,7 @@
 //     match (sel) { ... }
 //
 // The if/else nest at the loop's tail is the **dispatch-writer**: every leaf path is
-// guaranteed to set `sel` and `break`. That's a property we can exploit — the entire
+// guaranteed to set `sel` and `break`. That's a property we can exploit - the entire
 // conditional structurally belongs OUTSIDE the loop, because:
 //
 //   1. None of its leaves continue the loop. Every path exits.
@@ -27,7 +27,7 @@
 //      to the extracted dispatch-writer, which sets `sel` (without the now-stale `break`).
 //
 // **Detection.** A trailing slice `items[k..n]` of the loop body's `Seq` qualifies if
-// every leaf-evaluation path of every item terminates (Break(L), Return, or Abort) — never
+// every leaf-evaluation path of every item terminates (Break(L), Return, or Abort) - never
 // falls through, never continues. Then `items[k..n]` is reached only via fall-through from
 // the prefix.
 //
@@ -56,7 +56,7 @@
 //     let sel = if (...) { K } else { ... };
 //     if (sel <= 0) { ... }; if (sel <= 1) { ... }; ...; last_body
 //
-// — close to what the original Move source looked like before the bytecode optimizer
+// - close to what the original Move source looked like before the bytecode optimizer
 // fused the post-loop code into the search loop.
 
 use crate::ast::{Exp, Label};
@@ -224,7 +224,7 @@ fn try_extract(exp: Exp) -> Result<Exp, Exp> {
 /// - `Switch` / `Match` / `MatchLit` rely on the arm list being exhaustive over the
 ///   scrutinee. Move's enum dispatch is exhaustive at the type level, so post-structuring
 ///   shapes meet this. If a future refinement drops an arm during folding, this check is
-///   over-optimistic — flag the change with a regression fixture.
+///   over-optimistic - flag the change with a regression fixture.
 fn all_paths_terminate(exp: &Exp, label: Label) -> bool {
     use Exp as E;
     match exp {
@@ -249,7 +249,7 @@ fn all_paths_terminate(exp: &Exp, label: Label) -> bool {
 }
 
 /// True iff `exp` syntactically contains `Break(Some(label))`. Descends through nested
-/// constructs — a labeled break from inside an inner loop still exits OUR loop.
+/// constructs - a labeled break from inside an inner loop still exits OUR loop.
 fn contains_break_for(exp: &Exp, label: Label) -> bool {
     use Exp as E;
     match exp {
