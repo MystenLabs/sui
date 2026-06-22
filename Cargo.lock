@@ -15480,6 +15480,7 @@ dependencies = [
  "tonic 0.14.6",
  "tower-http 0.5.2",
  "tracing",
+ "tracing-subscriber",
  "url",
  "uuid",
 ]
