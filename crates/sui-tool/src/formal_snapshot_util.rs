@@ -6,7 +6,7 @@ use anyhow::anyhow;
 use futures::{StreamExt, TryStreamExt};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use sui_storage::object_store::util::{build_object_store, fetch_checkpoint};
+use sui_storage::object_store::util::{build_object_store_with_config, fetch_checkpoint};
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint};
 use sui_types::storage::WriteStore;
 
@@ -16,11 +16,18 @@ pub(crate) async fn read_summaries_for_list_no_verify<S>(
     store: S,
     checkpoints: Vec<CheckpointSequenceNumber>,
     checkpoint_counter: Arc<AtomicU64>,
+    checkpoint_download_timeout_secs: u64,
+    checkpoint_download_max_retries: usize,
 ) -> Result<()>
 where
     S: WriteStore + Clone,
 {
-    let client = build_object_store(&ingestion_url, vec![]);
+    let client = build_object_store_with_config(
+        &ingestion_url,
+        vec![],
+        checkpoint_download_timeout_secs,
+        checkpoint_download_max_retries,
+    );
     futures::stream::iter(checkpoints)
         .map(|sq| fetch_checkpoint(&client, sq))
         .buffer_unordered(concurrency)

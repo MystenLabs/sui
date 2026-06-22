@@ -343,6 +343,12 @@ pub enum ToolCommand {
         /// Defaults to 3 retries. Set to 0 to disable retries.
         #[clap(long = "max-retries", default_value = "3")]
         max_retries: usize,
+        /// Request timeout in seconds for checkpoint archive downloads.
+        #[clap(long = "checkpoint-download-timeout-secs", default_value = "30")]
+        checkpoint_download_timeout_secs: u64,
+        /// Number of retries for failed checkpoint archive downloads.
+        #[clap(long = "checkpoint-download-max-retries", default_value = "10")]
+        checkpoint_download_max_retries: usize,
     },
 
     #[clap(name = "replay")]
@@ -659,6 +665,8 @@ impl ToolCommand {
                 latest,
                 verbose,
                 max_retries,
+                checkpoint_download_timeout_secs,
+                checkpoint_download_max_retries,
             } => {
                 if !verbose {
                     tracing_handle
@@ -788,6 +796,8 @@ impl ToolCommand {
                     network,
                     verify,
                     max_retries,
+                    checkpoint_download_timeout_secs,
+                    checkpoint_download_max_retries,
                 )
                 .await?;
             }

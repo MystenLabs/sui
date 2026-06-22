@@ -25,7 +25,9 @@ use sui_storage::object_store::http::HttpDownloaderBuilder;
 use sui_storage::object_store::util::MANIFEST_FILENAME;
 use sui_storage::object_store::util::Manifest;
 use sui_storage::object_store::util::PerEpochManifest;
-use sui_storage::object_store::util::{build_object_store, end_of_epoch_data, fetch_checkpoint};
+use sui_storage::object_store::util::{
+    build_object_store_with_config, end_of_epoch_data_with_config, fetch_checkpoint,
+};
 use sui_types::committee::QUORUM_THRESHOLD;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::global_state_hash::GlobalStateHash;
@@ -585,6 +587,8 @@ fn start_summary_sync(
     num_parallel_downloads: usize,
     verify: bool,
     end_of_epoch_checkpoint_seq_nums: Vec<u64>,
+    checkpoint_download_timeout_secs: u64,
+    checkpoint_download_max_retries: usize,
 ) -> JoinHandle<Result<(), anyhow::Error>> {
     tokio::spawn(async move {
         let store = AuthorityStore::open_no_genesis(perpetual_db, false, &Registry::default())?;
@@ -650,6 +654,8 @@ fn start_summary_sync(
             state_sync_store.clone(),
             end_of_epoch_checkpoint_seq_nums.clone(),
             sync_checkpoint_counter,
+            checkpoint_download_timeout_secs,
+            checkpoint_download_max_retries,
         )
         .await?;
         sync_progress_bar.finish_with_message("Checkpoint summary sync is complete");
@@ -789,6 +795,8 @@ pub async fn download_formal_snapshot(
     network: Chain,
     verify: SnapshotVerifyMode,
     max_retries: usize,
+    checkpoint_download_timeout_secs: u64,
+    checkpoint_download_max_retries: usize,
 ) -> Result<(), anyhow::Error> {
     let m = MultiProgress::new();
     let msg = format!(
@@ -827,11 +835,16 @@ pub async fn download_formal_snapshot(
         Arc::new(PrunerWatermarks::default()),
     );
 
-    let end_of_epoch_checkpoint_seq_nums: Vec<_> = end_of_epoch_data(ingestion_url, vec![])
-        .await?
-        .into_iter()
-        .take((epoch + 1) as usize)
-        .collect();
+    let end_of_epoch_checkpoint_seq_nums: Vec<_> = end_of_epoch_data_with_config(
+        ingestion_url,
+        vec![],
+        checkpoint_download_timeout_secs,
+        checkpoint_download_max_retries,
+    )
+    .await?
+    .into_iter()
+    .take((epoch + 1) as usize)
+    .collect();
 
     let summaries_handle = start_summary_sync(
         perpetual_db.clone(),
@@ -843,6 +856,8 @@ pub async fn download_formal_snapshot(
         num_parallel_downloads,
         verify != SnapshotVerifyMode::None,
         end_of_epoch_checkpoint_seq_nums.clone(),
+        checkpoint_download_timeout_secs,
+        checkpoint_download_max_retries,
     );
 
     // Start transaction backfill in parallel with summary sync
@@ -859,6 +874,8 @@ pub async fn download_formal_snapshot(
                 num_parallel_downloads,
                 m,
                 end_of_epoch_checkpoint_seq_nums,
+                checkpoint_download_timeout_secs,
+                checkpoint_download_max_retries,
             )
             .await
         })
@@ -1049,6 +1066,8 @@ async fn backfill_epoch_transaction_digests(
     concurrency: usize,
     m: MultiProgress,
     end_of_epoch_checkpoint_seq_nums: Vec<u64>,
+    checkpoint_download_timeout_secs: u64,
+    checkpoint_download_max_retries: usize,
 ) -> Result<()> {
     if epoch == 0 {
         return Ok(());
@@ -1090,7 +1109,12 @@ async fn backfill_epoch_transaction_digests(
         ),
     );
 
-    let client = build_object_store(&ingestion_url, vec![]);
+    let client = build_object_store_with_config(
+        &ingestion_url,
+        vec![],
+        checkpoint_download_timeout_secs,
+        checkpoint_download_max_retries,
+    );
     let checkpoint_counter = Arc::new(AtomicU64::new(0));
     let tx_counter = Arc::new(AtomicU64::new(0));
     let cloned_checkpoint_counter = checkpoint_counter.clone();
