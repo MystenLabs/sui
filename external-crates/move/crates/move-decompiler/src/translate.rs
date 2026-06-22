@@ -315,8 +315,8 @@ fn make_input(
             None
         };
         // Per-block: the block's first StoreLoc of each local emits `let X = e`, the rest
-        // `X = e`. Cross-block coordination — hoisting `let X;` out of arm scopes when X is
-        // shared with siblings or seen by later items — happens later in `hoist_declarations`.
+        // `X = e`. Cross-block coordination - hoisting `let X;` out of arm scopes when X is
+        // shared with siblings or seen by later items - happens later in `hoist_declarations`.
         let mut let_binds: HashSet<SB::RegId> = HashSet::new();
         let blk_terms = generate_term_block(block, &mut let_binds);
         let blk_input = extract_input(block, next_block_label);

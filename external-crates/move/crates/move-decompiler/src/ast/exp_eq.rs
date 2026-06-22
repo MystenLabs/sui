@@ -11,7 +11,7 @@
 // `PartialEq` (`DataOp` from `move-stackless-bytecode-2`, `Constant<Symbol>` from
 // `move-binary-format`, `TypeRef`/`ModuleRef`/`Value`/`UnstructuredNode`) we fall back to
 // comparing their `Debug` representation - deterministic for the shapes any current caller
-// sees. Everything else recurses structurally so renaming or reordering of fields can't
+// sees. Everything else recurs structurally so renaming or reordering of fields can't
 // pretend two arms are equal when they aren't.
 //
 // NB: this is purely *structural* equivalence on the lowered `Exp` shape. It does NOT prove
@@ -97,7 +97,7 @@ pub(crate) fn exp_struct_eq(a: &Exp, b: &Exp) -> bool {
         (Value(a), Value(b)) => dbg(a, b),
         (Constant(a), Constant(b)) => dbg(a, b),
         (Variable(a), Variable(b)) => a == b,
-        // `UnstructuredNode` is local but contains `Box<Exp>` - recurse via Debug for now;
+        // `UnstructuredNode` is local but contains `Box<Exp>` - recur via Debug for now;
         // this branch is rare (only set by `generate_output` for unhandled CFG shapes) and
         // the arm-comparison context doesn't hit it.
         (Unstructured(a), Unstructured(b)) => dbg(a, b),

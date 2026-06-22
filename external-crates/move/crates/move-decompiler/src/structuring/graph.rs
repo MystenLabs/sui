@@ -27,7 +27,7 @@ pub struct Graph {
     /// Per-node emission flag. Set when a structurer constructs a `Block`, `IfElse`,
     /// `Switch`, or `JumpIf` carrying that node's code. After `structure()` returns,
     /// any input node whose slot is still `false` was never emitted into the structured
-    /// output — the rendered function carries a `// Did not structure and emit blocks …`
+    /// output - the rendered function carries a `// Did not structure and emit blocks ...`
     /// note listing them.
     pub emitted: Vec<bool>,
 }
@@ -103,7 +103,7 @@ impl Graph {
 
     /// Input nodes (out of `all_nodes`) whose basic-block ids never got `mark_emitted`
     /// during structuring. Sorted ascending; intended to drive the rendered
-    /// `// Did not structure and emit blocks …` notice.
+    /// `// Did not structure and emit blocks ...` notice.
     pub fn unemitted_from(&self, all_nodes: &[NodeIndex]) -> Vec<u64> {
         let mut out: Vec<u64> = all_nodes
             .iter()
@@ -150,7 +150,7 @@ impl Graph {
         // Loop-body discovery, following the No More Gotos definition: for each back-edge t -> h
         // (where the header h dominates the latch t), the loop body is {h} together with every
         // node that can reach t without going through h. We collect that with one reverse BFS
-        // from the latches, treating the header as a frontier — O(V + E) per call.
+        // from the latches, treating the header as a frontier - O(V + E) per call.
         //
         // We recompute back-edges from the CFG and dom tree directly: u -> h is a back-edge iff h
         // dominates u. Both the CFG and the dom tree are immutable across structuring, so this is
@@ -186,7 +186,7 @@ impl Graph {
             }
         }
 
-        // Iterate `loop_nodes` in sorted order — it's a HashSet so iteration order is
+        // Iterate `loop_nodes` in sorted order - it's a HashSet so iteration order is
         // otherwise non-deterministic, and that order leaks into `refine_loop_nodes`'s
         // greedy fixpoint, which can produce different SCC-boundary refinements run-to-run.
         let mut loop_nodes_sorted: Vec<NodeIndex> = loop_nodes.iter().copied().collect();
@@ -230,7 +230,7 @@ impl Graph {
                     succ_nodes.remove(&node);
                     // When absorbing `node` into the body, its outgoing CFG edges to nodes
                     // not in `loop_nodes` are now exit edges of the (enlarged) body. Don't
-                    // filter by dom_tree subtree of the header — a legitimate loop break
+                    // filter by dom_tree subtree of the header - a legitimate loop break
                     // target (a label owned by an outer scope) is not dominated by the loop
                     // header but is the loop's true successor; dropping it would leave
                     // `succ_nodes` empty so `insert_breaks` couldn't rewrite the break Jump

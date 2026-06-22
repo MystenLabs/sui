@@ -14,12 +14,12 @@ pub fn refine(exp: &mut Exp) -> bool {
 // Refinement
 //
 // Structuring emits every loop and every break/continue with its target loop's label. Most of
-// those labels aren't needed in the output — bare `break;` / `continue;` already means
+// those labels aren't needed in the output - bare `break;` / `continue;` already means
 // "innermost enclosing loop", so the label is only required when a labeled use lives inside a
 // nested loop (where the unlabeled form would target the inner loop instead).
 //
 // For each labeled `Loop`/`While`, we ask: does the body contain a `Break(Some(L))` /
-// `Continue(Some(L))` strictly inside a nested loop? If yes → keep the label. If no → strip:
+// `Continue(Some(L))` strictly inside a nested loop? If yes -> keep the label. If no -> strip:
 // the loop loses its label AND every matching break/continue at this scope demotes to
 // unlabeled, in lockstep. (Doing one without the other would be a bug.)
 
@@ -45,7 +45,7 @@ impl Refine for StripLoopLabels {
 // Helpers
 
 /// True iff `exp` contains a `Break(Some(target))` / `Continue(Some(target))` that sits strictly
-/// inside a nested loop. Uses at the surrounding scope are fine — an unlabeled break/continue
+/// inside a nested loop. Uses at the surrounding scope are fine - an unlabeled break/continue
 /// there already targets the enclosing labeled loop. Uses inside a nested loop need the label
 /// because an unlabeled break/continue there targets the nested loop instead.
 fn used_inside_nested_loop(exp: &Exp, target: Label) -> bool {
@@ -99,7 +99,7 @@ fn used_inside_nested_loop(exp: &Exp, target: Label) -> bool {
 }
 
 /// Refine helper that demotes every matching break/continue at the current scope to unlabeled
-/// form, leaving nested loops untouched (their internal uses of `target` must keep the label —
+/// form, leaving nested loops untouched (their internal uses of `target` must keep the label -
 /// an unlabeled break/continue at that depth would target the nested loop, not us).
 struct Demote {
     target: Label,

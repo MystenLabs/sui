@@ -35,7 +35,7 @@ pub(super) fn unwrap_block(exp: Exp) -> Exp {
 }
 
 /// An expression `always_terminates` if every CFG path through it leaves the surrounding
-/// statement context — `abort`/`return`/`break`/`continue`, a `Seq` whose last item does, an
+/// statement context - `abort`/`return`/`break`/`continue`, a `Seq` whose last item does, an
 /// `IfElse` whose both arms do, or a `Block` whose body does.
 pub(super) fn always_terminates(exp: &Exp) -> bool {
     match exp {
@@ -94,7 +94,7 @@ pub(super) fn loop_body_seq_mut(exp: &mut Exp) -> Option<(Option<Label>, &mut Ve
 // the canonical relocation target; these helpers locate it and reshape the surrounding
 // structure consistently.
 
-/// True iff `else_b` is missing (`None`) or an empty `Seq` — the shapes the swap-* rules
+/// True iff `else_b` is missing (`None`) or an empty `Seq` - the shapes the swap-* rules
 /// treat as "no else-arm." A non-empty else is the hoist-dual-continue rule's territory
 /// (when it also ends in `continue`) or out of scope.
 pub(super) fn else_is_empty_or_missing(else_b: Option<&Exp>) -> bool {
@@ -129,17 +129,17 @@ pub(super) fn trailing_continue_label(exp: &Exp) -> Option<Option<Label>> {
 }
 
 /// Consume `exp` (typically an arm body), drop a trailing `Continue`, and return the
-/// remaining leading items as a `Vec<Exp>`. Callers splice them back as they wish — extend
+/// remaining leading items as a `Vec<Exp>`. Callers splice them back as they wish - extend
 /// an enclosing `Seq` directly, or rebuild a single `Exp` via `seq_or_singleton`. The
 /// continue's identity is the caller's concern; this helper only handles structure.
 ///
-/// Recurses through nested `Seq`s the same way [`ends_with_continue`] does — they need to
+/// Recurses through nested `Seq`s the same way [`ends_with_continue`] does - they need to
 /// agree on what counts as "trailing." When `flatten_seq` hasn't yet collapsed an
 /// intermediate `Seq` (e.g., a single iteration may flatten only the outermost nesting
-/// level before `hoist_tail_continue` runs), the detector still recurses to find the
+/// level before `hoist_tail_continue` runs), the detector still recurs to find the
 /// continue and the stripper needs to actually remove it. Without this symmetry, the two
 /// disagree, and `hoist_tail_continue` pushes a new continue at the loop tail without
-/// removing the original — fueling a refinement ping-pong.
+/// removing the original - fueling a refinement ping-pong.
 pub(super) fn strip_trailing_continue_into_seq(exp: Exp) -> Vec<Exp> {
     match exp {
         Exp::Continue(_) => vec![],

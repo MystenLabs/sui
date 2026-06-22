@@ -250,7 +250,7 @@ fn function(context: &Context, fun: &Function) -> Doc {
     }
 }
 
-/// Look through any number of `Exp::Block` wrappers — used by the function-body dispatcher
+/// Look through any number of `Exp::Block` wrappers - used by the function-body dispatcher
 /// to decide which braces strategy applies based on the underlying shape.
 fn peek_block(exp: &Exp) -> &Exp {
     match exp {
@@ -264,7 +264,7 @@ fn peek_block(exp: &Exp) -> &Exp {
 //
 // Anything that prints a `Type` ultimately bottoms out at a `TypeRef`'s `Display` impl, which
 // already knows about `Aliased` vs. `Qualified`. The renderers below just walk the AST shapes
-// in the same shape as `move_model_2::pretty_printer::fun_header` etc. — the difference is the
+// in the same shape as `move_model_2::pretty_printer::fun_header` etc. - the difference is the
 // types they read have been through `collect_uses`.
 
 fn fun_header_doc(fun: &Function) -> Doc {
@@ -385,7 +385,7 @@ fn datatype_tparam_doc(idx: usize, tp: &DatatypeTyParameter) -> Doc {
 
 /// Render the abilities in an `AbilitySet`, in the same order as
 /// `move_model_2::summary::Ability` (copy, drop, key, store) so output stays stable against
-/// any upstream changes to AbilitySet iteration. `sep` is the joiner — `+` for constraints
+/// any upstream changes to AbilitySet iteration. `sep` is the joiner - `+` for constraints
 /// in type-parameter positions, `,` for struct/enum `has` clauses.
 fn ability_parts(s: AbilitySet) -> Vec<Doc> {
     let mut parts: Vec<Doc> = Vec::new();
@@ -415,7 +415,7 @@ fn ability_constraints_doc(s: AbilitySet) -> Option<Doc> {
     }
 }
 
-/// `has copy, drop` ability list for struct/enum declarations — same set as
+/// `has copy, drop` ability list for struct/enum declarations - same set as
 /// `ability_constraints_doc` but comma-separated instead of `+`-separated.
 fn ability_list_doc(s: AbilitySet) -> Option<Doc> {
     let parts = ability_parts(s);
@@ -514,7 +514,7 @@ fn variant_doc(v: &Variant) -> Doc {
     }
 }
 
-/// `{ name: ty, ... }` — used for both struct fields and enum variant fields. Empty fields
+/// `{ name: ty, ... }` - used for both struct fields and enum variant fields. Empty fields
 /// render as `{}`. Wide-vs.-tall layout mirrors model-2's `Fields::to_doc` so output stays
 /// stable: the wide form is `{ a: A, b: B }`, the tall form has each field on its own line
 /// with a trailing comma.
@@ -822,7 +822,7 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
 
     fn e_block(context: &Context, e: &Exp) -> Doc {
         // Peel `Block` wrappers, collecting `/* block N */` comments to lead the brace-block,
-        // then delegate the inner shape (Seq → stmts; single Exp → statement).
+        // then delegate the inner shape (Seq -> stmts; single Exp -> statement).
         let mut headers: Vec<Doc> = Vec::new();
         let mut inner = e;
         while let Exp::Block(id, body) = inner {

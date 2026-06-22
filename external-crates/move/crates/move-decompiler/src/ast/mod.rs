@@ -101,7 +101,7 @@ pub struct Variant {
 /// because everything we model comes off compiled bytecode), with one key difference:
 /// `Datatype` carries our `TypeRef` instead of a bare `ModuleId<Symbol>`. That makes types
 /// participate in the same alias-rewriting pass (`collect_uses`) that handles call sites and
-/// `Unpack`/`Switch`/`Match` heads — without it, a struct or function signature would render
+/// `Unpack`/`Switch`/`Match` heads - without it, a struct or function signature would render
 /// fully qualified even when the body referenced the same type via an alias.
 #[derive(Debug, Clone)]
 pub enum Type {
@@ -131,7 +131,7 @@ pub struct Datatype {
 
 impl Type {
     /// Convert from the normalized bytecode type. The `Datatype` arm builds a
-    /// `TypeRef::Qualified(ModuleRef::Qualified(mid), name)` — `collect_uses` later collapses
+    /// `TypeRef::Qualified(ModuleRef::Qualified(mid), name)` - `collect_uses` later collapses
     /// these to aliased form where appropriate.
     pub fn from_normalized(t: &normalized::Type<Symbol>) -> Self {
         match t {
@@ -168,7 +168,7 @@ impl Type {
 pub enum ModuleRef {
     Qualified(ModuleId<Symbol>),
     Aliased(Symbol),
-    /// No module prefix — for macros and other unqualified builtins. The `Symbol` in the
+    /// No module prefix - for macros and other unqualified builtins. The `Symbol` in the
     /// containing `Call` is rendered alone, e.g. `assert!`. `Display` emits an empty string;
     /// the Call printers detect this variant and skip the `::` separator.
     Builtin,
@@ -234,7 +234,7 @@ pub enum Exp {
     Seq(Vec<Exp>),
     While(Option<Label>, Box<Exp>, Box<Exp>),
     IfElse(Box<Exp>, Box<Exp>, Box<Option<Exp>>),
-    /// A tagged dispatch on an enum's variant — the shape structuring emits before pattern
+    /// A tagged dispatch on an enum's variant - the shape structuring emits before pattern
     /// recovery runs. Each arm is `(variant, body)` with no pattern bindings. The
     /// `reconstruct_match` refinement promotes a `Switch` to `Match` when each arm's body
     /// starts with an `UnpackVariant` whose fields can be lifted into a pattern.
@@ -258,7 +258,7 @@ pub enum Exp {
     // non-control expressions
     Assign(Vec<String>, Box<Exp>),
     LetBind(Vec<String>, Box<Exp>),
-    /// `let X;` — declaration with no initializer. Inserted by `hoist_declarations` when an
+    /// `let X;` - declaration with no initializer. Inserted by `hoist_declarations` when an
     /// arm-scope `let X = e` has to be lifted out to a common enclosing scope.
     Declare(Vec<String>),
     Call((ModuleRef, Symbol), Vec<Exp>),
@@ -508,8 +508,8 @@ impl std::fmt::Display for Exp {
         }
 
         /// `true` for `Exp` variants whose `fmt_exp` already starts with `indent(level)` and
-        /// ends with `writeln!`. Everything else is an "inline" expression — `Value`,
-        /// `Variable`, `Primitive`, `Borrow`, etc. — that needs `fmt_block_body` to provide
+        /// ends with `writeln!`. Everything else is an "inline" expression - `Value`,
+        /// `Variable`, `Primitive`, `Borrow`, etc. - that needs `fmt_block_body` to provide
         /// indent/newline when it appears at statement position.
         fn emits_own_line(exp: &Exp) -> bool {
             matches!(
@@ -830,9 +830,9 @@ fn write_data_op(
     }
 }
 
-/// Render `exp` as an operand of `&&`/`||`. Naked `Seq` operands — which `recover_flag` emits
-/// when each `||` branch needs its per-feed setup statements to stay lazy under short-circuit
-/// — are wrapped in `{ … }` so the output parses as Move. All other shapes render via their
+/// Render `exp` as an operand of `&&`/`||`. Naked `Seq` operands (which `recover_flag` emits
+/// when each `||` branch needs its per-feed setup statements to stay lazy under short-circuit)
+/// are wrapped in `{ ... }` so the output parses as Move. All other shapes render via their
 /// normal `Display`. This mirrors `pretty_printer::primitive_op_doc::bin`'s production
 /// behavior so the debug `Display` path used by `run_move_test` produces valid Move.
 fn fmt_short_circuit_operand(

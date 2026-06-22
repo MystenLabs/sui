@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, HashSet};
 /// the block sits inside an IfElse/Switch/Loop arm is `hoist_declarations`'s job.
 ///
 /// Condition blocks (those ending in `JumpIf`) emit `let __c{block_id} = <test>` as their
-/// trailing item — the same convention `predicates::cond_var_name` produces. The recovered
+/// trailing item - the same convention `predicates::cond_var_name` produces. The recovered
 /// boolean lowering (`Formula::to_exp`) then references the variable directly instead of
 /// re-inlining the condition expression at every atom.
 pub fn exp(

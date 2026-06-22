@@ -46,7 +46,7 @@ const REFINEMENTS: &[Refinement] = &[
     introduce_while::refine,
     loop_to_seq::refine,
     reconstruct_match::refine,
-    // Strip spurious trailing `continue`/`return` markers first — they're structurer
+    // Strip spurious trailing `continue`/`return` markers first - they're structurer
     // artifacts that would otherwise make `simplify_if`'s `always_terminates` predicate
     // fire on arms whose true Move-level shape doesn't actually terminate.
     remove_trailing_continue::refine,

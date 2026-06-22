@@ -47,7 +47,7 @@ pub enum GotoSource {
     /// loop, or `generate_output` lowers to `Unstructured`.
     ArmOutsideSubtree,
     /// Jump emitted by `structure_code_node` when the Code block's `next` isn't its
-    /// dom-tree child — the join is owned by an enclosing scope. Without this explicit
+    /// dom-tree child - the join is owned by an enclosing scope. Without this explicit
     /// Jump the branch would live only in the bytecode terminator, invisible to elision.
     CodeBranch,
     /// JumpIf emitted at a latch node by `structure_latch_node`.
@@ -59,7 +59,7 @@ pub enum GotoSource {
     SelfLoop,
     /// Escape Jump synthesized in `insert_breaks` when a JumpIf has one Latch arm.
     EscapeJumpIf,
-    /// Jump emitted by the reaching-condition structurer at a region-exit edge — either the
+    /// Jump emitted by the reaching-condition structurer at a region-exit edge - either the
     /// loop-body back edge (target == loop_head, rewritten to `Continue` by `insert_breaks`)
     /// or a break-target edge (target outside the loop, rewritten to `Break`).
     ReachingExit,
@@ -83,11 +83,11 @@ impl GotoSource {
 
 #[derive(Debug, Clone)]
 pub enum Structured {
-    /// `break 'label;` — targets the labeled enclosing Loop. Structuring always knows which
+    /// `break 'label;` - targets the labeled enclosing Loop. Structuring always knows which
     /// loop a break targets (the loop being processed), so this is unconditional `Label`. The
     /// `Option`al/unlabeled form lives in `crate::ast::Exp` after `strip_loop_labels` runs.
     Break(Label),
-    /// `continue 'label;` — see `Break`.
+    /// `continue 'label;` - see `Break`.
     Continue(Label),
     Block(Code),
     /// `'label: loop { ... }`. The label is the loop_head NodeIndex; it disambiguates

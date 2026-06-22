@@ -13,20 +13,20 @@ use crate::{
 //
 // 1. If the then-arm `always_terminates` (abort/return/break/continue, or a Seq/IfElse
 //    that recursively does), the else-arm is unreachable as fall-through from inside the
-//    if — it only runs when the test was false. Hoist it out as a sibling after the if:
-//      `if (t) { terminator } else alt` → `if (t) { terminator }; alt`.
+//    if - it only runs when the test was false. Hoist it out as a sibling after the if:
+//      `if (t) { terminator } else alt` -> `if (t) { terminator }; alt`.
 //
 // 2. Symmetric: if the else-arm always_terminates and the then-arm is non-empty, negate
 //    the test, swap the arms, and hoist the (now-conseq's old-then) body out:
-//      `if (t) { rest } else { terminator }` → `if (!t) { terminator }; rest`.
+//      `if (t) { rest } else { terminator }` -> `if (!t) { terminator }; rest`.
 //    The negation keeps the rewrite in the early-exit idiom (`if (!t) abort; rest`)
 //    rather than the equivalent `if (t) { rest }; (else-terminator-unreachable)` shape.
 //
-// 3. An empty else carries no information — drop it: `if (t) c else {}` → `if (t) c`.
+// 3. An empty else carries no information - drop it: `if (t) c else {}` -> `if (t) c`.
 //
 // Precedence between rules 1 and 2 when both could fire (both arms always_terminate):
 // prefer the rule that keeps an `Abort` in the conditional. When `else` is an `Abort` and
-// `then` isn't, rule 2 wins — `recover_asserts` can then fold the result into
+// `then` isn't, rule 2 wins - `recover_asserts` can then fold the result into
 // `assert!(cond, code)`. Otherwise rule 1 wins (which also keeps abort-in-then where the
 // then-arm is the abort). For both-non-abort terminators we just go with rule 1.
 //
@@ -104,7 +104,7 @@ fn is_singleton_abort(exp: &Exp) -> bool {
 }
 
 /// Build `Seq[if_exp, ...rest]`, flattening if `rest` is already a `Seq` so we don't nest
-/// pointlessly. An empty `rest` collapses to just `if_exp` — but the rules above only call
+/// pointlessly. An empty `rest` collapses to just `if_exp` - but the rules above only call
 /// here with `!is_empty(rest)`, so this branch exists for safety.
 fn with_rest(if_exp: Exp, rest: Exp) -> Exp {
     if is_empty(&rest) {
