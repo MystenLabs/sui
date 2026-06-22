@@ -11,7 +11,6 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream;
 use futures::stream::BoxStream;
-use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
 use sui_kvstore::TransactionData;
 use sui_kvstore::tables;
@@ -166,7 +165,7 @@ pub(crate) async fn list_checkpoints(
         'static,
         Result<Watermarked<(u64, CheckpointData)>, anyhow::Error>,
     > = if let Some(filter) = &request.filter {
-        let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
+        let scan_budget = ctx.scan_budget(ctx.tx_bitmap_spec());
         let tx_range = client.checkpoint_to_tx_range(cp_range.clone()).await?;
         let seq_stream = filtered_checkpoint_seq_stream(
             &ctx,
@@ -805,7 +804,7 @@ async fn filtered_checkpoint_seq_stream(
     let tx_seq_stream = client.eval_bitmap_query_stream(
         query,
         tx_range,
-        BitmapIndexSpec::tx(),
+        ctx.tx_bitmap_spec(),
         options.scan_direction(),
         budget,
         ctx.bitmap_scan_observer(),

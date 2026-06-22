@@ -68,6 +68,18 @@ struct ConcurrencyArgs {
     /// bitmap-bucket-budget-tx.
     #[clap(long = "bitmap-bucket-budget-event", default_value_t = ConcurrencyConfig::default().bitmap_bucket_budget_event)]
     bitmap_bucket_budget_event: u64,
+    /// EXPERIMENTAL (bucket-size A/B testing): tx-bitmap schema version to read
+    /// from. When unset, uses the compiled-in version (v1 / 65536 baseline).
+    /// Must be paired with --tx-bitmap-bucket-size and point at a backfill
+    /// written under that version prefix.
+    #[clap(long = "tx-bitmap-schema-version")]
+    tx_bitmap_schema_version: Option<u32>,
+    /// EXPERIMENTAL: tx-bitmap bucket size (txns per bucket) to assume when
+    /// decoding bit positions. Must equal the size the target schema version
+    /// was backfilled at, be > 0 and <= u32::MAX. Pair with
+    /// --tx-bitmap-schema-version.
+    #[clap(long = "tx-bitmap-bucket-size")]
+    tx_bitmap_bucket_size: Option<u64>,
 }
 
 impl From<ConcurrencyArgs> for ConcurrencyConfig {
@@ -77,6 +89,8 @@ impl From<ConcurrencyArgs> for ConcurrencyConfig {
             max_bitmap_filter_literals: args.max_bitmap_filter_literals,
             bitmap_bucket_budget_tx: args.bitmap_bucket_budget_tx,
             bitmap_bucket_budget_event: args.bitmap_bucket_budget_event,
+            tx_bitmap_schema_version: args.tx_bitmap_schema_version,
+            tx_bitmap_bucket_size: args.tx_bitmap_bucket_size,
         }
     }
 }

@@ -79,6 +79,17 @@ pub struct ConcurrencyConfig {
     /// the same number. Same fetched-vs-evaluated semantics as
     /// `bitmap_bucket_budget_tx`.
     pub bitmap_bucket_budget_event: u64,
+    /// EXPERIMENTAL (bucket-size A/B testing): override the tx-bitmap schema
+    /// version the reader queries. When `None`, uses the compiled-in
+    /// `transaction_bitmap_index::SCHEMA_VERSION`. Set together with
+    /// `tx_bitmap_bucket_size` to read an alternate-bucket-size backfill
+    /// written under a different version prefix.
+    pub tx_bitmap_schema_version: Option<u32>,
+    /// EXPERIMENTAL: override the tx-bitmap bucket size the reader assumes.
+    /// When `None`, uses `transaction_bitmap_index::BUCKET_SIZE`. Must match
+    /// the bucket size the target schema version was backfilled at, and must
+    /// be `> 0` and `<= u32::MAX` (roaring bit positions are u32).
+    pub tx_bitmap_bucket_size: Option<u64>,
 }
 
 impl Default for ConcurrencyConfig {
@@ -88,6 +99,8 @@ impl Default for ConcurrencyConfig {
             max_bitmap_filter_literals: 10,
             bitmap_bucket_budget_tx: 1000,
             bitmap_bucket_budget_event: 1000,
+            tx_bitmap_schema_version: None,
+            tx_bitmap_bucket_size: None,
         }
     }
 }
@@ -131,6 +144,19 @@ impl ConcurrencyConfig {
             self.bitmap_bucket_budget_event,
             self.max_bitmap_filter_literals,
         );
+        // Experimental tx-bitmap overrides must be set together (a version
+        // without a matching bucket size, or vice versa, would read rows under
+        // one schema while decoding bit positions under another).
+        anyhow::ensure!(
+            self.tx_bitmap_schema_version.is_some() == self.tx_bitmap_bucket_size.is_some(),
+            "tx_bitmap_schema_version and tx_bitmap_bucket_size must be set together (or neither)",
+        );
+        if let Some(size) = self.tx_bitmap_bucket_size {
+            anyhow::ensure!(
+                size > 0 && size <= u32::MAX as u64,
+                "tx_bitmap_bucket_size ({size}) must be in 1..=u32::MAX (roaring bit positions are u32)",
+            );
+        }
         Ok(())
     }
 }

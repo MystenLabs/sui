@@ -95,6 +95,24 @@ impl QueryContext {
         }
     }
 
+    /// Tx-bitmap index spec for reads, applying the EXPERIMENTAL schema-version
+    /// / bucket-size overrides from `ConcurrencyConfig` when set. With both
+    /// unset this is exactly `BitmapIndexSpec::tx()` (the compiled-in v1 /
+    /// 65536 baseline); with both set it points the reader at an
+    /// alternate-bucket-size backfill written under a different version prefix.
+    /// `table_name` and `bucket_id_width` are unchanged, so budget lookup and
+    /// row-key width stay correct.
+    pub(crate) fn tx_bitmap_spec(&self) -> BitmapIndexSpec {
+        let mut spec = BitmapIndexSpec::tx();
+        if let Some(version) = self.limits.tx_bitmap_schema_version {
+            spec.schema_version = version;
+        }
+        if let Some(bucket_size) = self.limits.tx_bitmap_bucket_size {
+            spec.bucket_size = bucket_size;
+        }
+        spec
+    }
+
     pub(crate) fn observe_response_render(&self, elapsed: std::time::Duration) {
         self.metrics.observe_response_render(self.method, elapsed);
     }

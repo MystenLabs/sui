@@ -8,7 +8,6 @@ use std::time::Instant;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
-use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
 use sui_rpc::field::FieldMaskTree;
@@ -135,12 +134,13 @@ pub(crate) async fn list_transactions(
     // keyspace directly, bounded by limit_items.
     let digest_stream: BoxStream<'static, Result<Watermarked<TxSeqDigestData>, anyhow::Error>> =
         if let Some(filter) = &request.filter {
-            let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
+            let tx_spec = ctx.tx_bitmap_spec();
+            let scan_budget = ctx.scan_budget(tx_spec);
             let query = ctx.transaction_filter_query(filter)?;
             let seq_stream = client.eval_bitmap_query_stream(
                 query,
                 tx_range.clone(),
-                BitmapIndexSpec::tx(),
+                tx_spec,
                 options.scan_direction(),
                 scan_budget,
                 ctx.bitmap_scan_observer(),
