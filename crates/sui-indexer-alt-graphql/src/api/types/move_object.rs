@@ -176,7 +176,7 @@ impl MoveObject {
         DynamicField::from_move_object(self, ctx).await
     }
 
-    /// How this address (interpreted as an object ID) was referenced by a specific transaction.
+    /// How this object was referenced by a specific transaction.
     ///
     /// Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
     ///

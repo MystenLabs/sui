@@ -631,7 +631,7 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	allowGlobalPause: Boolean
 	"""
-	How this address (interpreted as an object ID) was referenced by a specific transaction.
+	How this object was referenced by a specific transaction.
 	
 	Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
 	
@@ -1010,7 +1010,7 @@ type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
 	"""
-	How this address (interpreted as an object ID) was referenced by a specific transaction.
+	How this object was referenced by a specific transaction.
 	
 	Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
 	
@@ -1675,7 +1675,7 @@ interface IAddressable {
 	"""
 	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
 	"""
-	How this address (interpreted as an object ID) was referenced by a specific transaction.
+	How this addressable entity was referenced by a specific transaction.
 	
 	Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
 	
@@ -2319,7 +2319,7 @@ type MoveObject implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	asDynamicField: DynamicField
 	"""
-	How this address (interpreted as an object ID) was referenced by a specific transaction.
+	How this object was referenced by a specific transaction.
 	
 	Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
 	
@@ -2488,7 +2488,7 @@ type MovePackage implements Node & IAddressable & IObject {
 	"""
 	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
 	"""
-	How this address (interpreted as an object ID) was referenced by a specific transaction.
+	How this object was referenced by a specific transaction.
 	
 	Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
 	
@@ -3019,7 +3019,7 @@ type Object implements Node & IAddressable & IObject {
 	"""
 	asMovePackage: MovePackage
 	"""
-	How this address (interpreted as an object ID) was referenced by a specific transaction.
+	How this object was referenced by a specific transaction.
 	
 	Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
 	

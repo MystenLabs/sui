@@ -82,7 +82,7 @@ pub(crate) enum AddressTransactionRelationship {
         name = "as_transaction_object",
         arg(name = "transaction_digest", ty = "Option<Digest>"),
         ty = "Option<Result<TransactionObject, RpcError>>",
-        desc = "How this address (interpreted as an object ID) was referenced by a specific transaction.\n\nReturns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).\n\nThe `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.\n\nPassing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.",
+        desc = "How this addressable entity was referenced by a specific transaction.\n\nReturns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).\n\nThe `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.\n\nPassing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.",
     ),
     field(
         name = "balance",
