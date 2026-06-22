@@ -833,7 +833,6 @@ impl TemporaryStore<'_> {
         sender: &SuiAddress,
         sponsor: &Option<SuiAddress>,
         gas_charger: &GasCharger,
-        mutable_inputs: &HashSet<ObjectID>,
         input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
@@ -892,7 +891,8 @@ impl TemporaryStore<'_> {
             .filter(|id| {
                 // remove any non-mutable inputs. This will remove deleted or readonly shared
                 // objects
-                mutable_inputs.contains(id)
+                self.mutable_input_refs.contains_key(id)
+                    || self.non_exclusive_input_original_versions.contains_key(id)
             })
             .copied()
             // Add any object IDs generated in the object runtime during execution to the

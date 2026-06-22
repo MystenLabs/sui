@@ -358,6 +358,8 @@ const MAINNET_USDB: &str =
 //              Update gas prices for range proofs and ristretto group operations.
 //              Enable Ristretto255 group operations and bulletproofs verification on testnet.
 //              Enable timestamp_based_epoch_close on mainnet.
+//              Step-by-step gas-charging pipeline (gas_model v15). Replaces the
+//              monolithic charge_gas with discrete steps
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5027,6 +5029,8 @@ impl ProtocolConfig {
                     }
 
                     cfg.feature_flags.timestamp_based_epoch_close = true;
+
+                    cfg.gas_model_version = Some(15);
                 }
                 // Use this template when making changes:
                 //
