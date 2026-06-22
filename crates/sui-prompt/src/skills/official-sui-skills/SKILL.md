@@ -19,11 +19,6 @@ Mysten Labs. This bundle is a pointer, not embedded content.
 - Pinned snapshot (same upstream snapshot the audit catalog tracks):
   <https://github.com/MystenLabs/skills/tree/764f21a95e709f46c60877a59d6ee6f27d9ed91e>
 
-The upstream `SKILL.md` at that ref is the index. Fetch it (using whatever
-web-fetch primitive your environment provides — no specific tool prescribed):
-
-  <https://github.com/MystenLabs/skills/blob/764f21a95e709f46c60877a59d6ee6f27d9ed91e/SKILL.md>
-
 ## High-level scope at the pinned ref
 
 - `sui-move/` — Move on Sui: language fundamentals, events, coins

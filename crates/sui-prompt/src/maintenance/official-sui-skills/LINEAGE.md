@@ -20,8 +20,8 @@ When the pin in `maintenance/UPSTREAMS.md` bumps:
 
 1. Search-and-replace the old SHA with the new SHA in
    `skills/official-sui-skills/SKILL.md` (appears in multiple URLs).
-2. Re-fetch the upstream `SKILL.md` at the new SHA. Compare its directory list
-   to the *High-level scope at the pinned ref* section in
-   `skills/official-sui-skills/SKILL.md`. Update that list if upstream skill
-   directories were added, removed, or renamed.
+2. Inspect the upstream repository tree at the new SHA (browse on GitHub or
+   `ls` a clone). Compare its top-level directory list to the *High-level
+   scope at the pinned ref* section in `skills/official-sui-skills/SKILL.md`
+   and update it if upstream skill directories were added, removed, or renamed.
 3. Rebuild the Sui CLI so the embedded SKILL.md reflects the new ref.
