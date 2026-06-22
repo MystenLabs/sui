@@ -4,13 +4,8 @@ The SM-* rules in this catalog were derived (2026) by analyzing the constructive
 "how to write correct Sui Move" guidance in the public
 [`MystenLabs/skills`](https://github.com/MystenLabs/skills) repository. Each rule is the
 **inversion** of a "must / never / always" prescription in the upstream skills — every
-constructive rule implies a vulnerability when violated.
-
-## Pinned upstream snapshot
-
-- Repository: `https://github.com/MystenLabs/skills`
-- Ref at v1 derivation: `main` @ `764f21a95e709f46c60877a59d6ee6f27d9ed91e`
-- Title of HEAD commit: *"Merge pull request #19 from MystenLabs/fix/skill-gaps-from-dapp-builds"*
+constructive rule implies a vulnerability when violated. Pinned to the upstream ref
+documented in `maintenance/UPSTREAMS.md`.
 
 ## Files scanned at derivation time
 
@@ -49,14 +44,15 @@ To refresh the SM-* catalog against an updated `MystenLabs/skills` snapshot:
    ```sh
    git clone https://github.com/MystenLabs/skills.git /tmp/upstream-skills
    ```
-2. **Diff** the file set above against the previously-pinned ref:
+2. **Diff** the file set above against the previously-pinned ref (the current value
+   of which is recorded in `maintenance/UPSTREAMS.md`):
    ```sh
-   git -C /tmp/upstream-skills diff 764f21a95e709f46c60877a59d6ee6f27d9ed91e..HEAD -- <files>
+   git -C /tmp/upstream-skills diff <previously-pinned-ref>..HEAD -- <files>
    ```
 3. **Re-scan** each changed file with the lens: *"what constructive rules does this state,
    and does any SM-* rule cite it?"* Confirm existing rules still match; identify new
    prescriptions that imply a new SM-* rule.
-4. **Update** the affected SM-* reference file(s); bump the pinned ref in this `LINEAGE.md`.
+4. **Update** the affected SM-* reference file(s).
 5. **Large changes** (>5 affected rules) — re-run the original 3-agent thorough scan that
    built v1 (the prompt template isn't checked into this repo; reconstruct from the v1
    commit history or contact the catalog author).

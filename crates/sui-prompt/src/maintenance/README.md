@@ -1,17 +1,12 @@
 # `sui prompt` maintenance content
 
-This directory holds **all content related to maintaining `sui prompt`** — for example,
-agentic skills that help a maintainer (or a maintenance-bot agent) refresh or extend the
-embedded bundles, and any artifacts those workflows need.
+Refresh records and provenance for the embedded skill bundles. This directory
+is itself **not embedded** in the binary — `build.rs` walks `src/skills/` and
+`src/categories/` only, so anything under `maintenance/` is invisible to
+runtime agents.
 
-**Not embedded in the binary.** `crates/sui-prompt/build.rs` walks `src/skills/` and
-`src/categories/` only, so anything under `maintenance/` is invisible to runtime
-agents using `sui prompt`. The exclusion is by directory location — no skip-lists or
-filters.
+## Layout
 
-## What's currently here
-
-- `sui-move-security-review/LINEAGE.md` — provenance of the `SM-*` catalog (pinned
-  `MystenLabs/skills` ref, file set scanned at derivation, refresh protocol).
-
-Update this section as content lands.
+- `UPSTREAMS.md` — cross-cutting pinned upstream references.
+- `<skill>/LINEAGE.md` — per-skill derivation methodology and refresh
+  protocol. Currently: `sui-move-security-review/`, `official-sui-skills/`.
