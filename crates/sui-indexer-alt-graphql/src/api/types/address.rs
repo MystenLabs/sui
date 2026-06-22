@@ -79,6 +79,12 @@ pub(crate) enum AddressTransactionRelationship {
         desc = "Fetch the address as it was at a different root version, or checkpoint.\n\nIf no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.",
     ),
     field(
+        name = "as_transaction_object",
+        arg(name = "transaction_digest", ty = "Option<Digest>"),
+        ty = "Option<Result<TransactionObject, RpcError>>",
+        desc = "How this addressable entity was referenced by a specific transaction.\n\nReturns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).\n\nThe `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.\n\nPassing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.",
+    ),
+    field(
         name = "balance",
         arg(name = "coin_type", ty = "TypeInput"),
         ty = "Option<Result<Balance, RpcError<balance::Error>>>",

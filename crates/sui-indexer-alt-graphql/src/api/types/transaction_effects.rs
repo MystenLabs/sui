@@ -223,7 +223,7 @@ impl EffectsContents {
                 let transaction_digest = content.digest()?;
                 let timestamp_ms = content.timestamp_ms();
                 // Anchor the parent transaction (with hydrated contents) onto each yielded
-                // Event's scope, so descendant resolvers like `Address.asTransactionObject`
+                // Event's scope, so descendant resolvers like `IAddressable.asTransactionObject`
                 // default to it and `*Contents::fetch` short-circuits via the scope.
                 let event_scope = self
                     .scope
