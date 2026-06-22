@@ -317,8 +317,8 @@ pub(super) fn walk_children_mut(exp: &mut Exp, f: &mut impl FnMut(&mut Exp)) {
 /// A single-goto `Unstructured` collapses to a bare `Break`; a goto among other unstructured
 /// nodes becomes an `Unstructured(Statement(Break))` in place.
 ///
-/// Two refinements use this — `goto_to_break` and `hoist_shared_landing` — both at the point
-/// where they've decided some `Goto(target)` should redirect into a `Block(target, …)` wrap
+/// Two refinements use this - `goto_to_break` and `hoist_shared_landing` - both at the point
+/// where they've decided some `Goto(target)` should redirect into a `Block(target, ...)` wrap
 /// that now encloses it.
 pub(super) fn rewrite_gotos_as_breaks(exp: &mut Exp, target: Label) {
     if let Exp::Unstructured(nodes) = exp {

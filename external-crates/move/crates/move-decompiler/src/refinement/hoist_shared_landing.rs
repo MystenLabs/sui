@@ -6,9 +6,9 @@
 // -------------------------------------------------------------------------------------------------
 //
 // `goto_to_break` only rewrites a `Goto(N)` whose target `Block(N, body)` lives as a SIBLING
-// in the same `Seq` — it wraps the prefix and the labeled scope cleanly. When the dom-tree
+// in the same `Seq` - it wraps the prefix and the labeled scope cleanly. When the dom-tree
 // structurer instead inlined `Block(N, body)` inside a nested scope (a loop body, an IfElse
-// arm, …) and a `Goto(N)` survives in an OUTER `Seq` because the structurer couldn't reach
+// arm, ...) and a `Goto(N)` survives in an OUTER `Seq` because the structurer couldn't reach
 // the inlined position from there, we have a goto that no labeled-break can express: the
 // labeled scope `'label_N` sits *inside* the loop the goto sits *outside* of, so
 // `break 'label_N` from the outer position would target a scope that doesn't enclose it.
@@ -31,14 +31,14 @@
 // Path equivalence:
 //   - The original *inner* path through `Block(N, body)` executes `body` (which Returns).
 //     After the rewrite it `Break`s the wrap, control falls through to `body`, which
-//     still Returns — observationally identical.
+//     still Returns - observationally identical.
 //   - The original *outer* `Goto(N)` jumps to the inlined block and runs `body` (Returns).
-//     After the rewrite it's replaced by `body` directly — same `Return`.
+//     After the rewrite it's replaced by `body` directly - same `Return`.
 //
 // Soundness:
 //   - `body` must always terminate (Return / Abort). Otherwise the outer fall-through path
 //     would land somewhere new and diverge from the original (which had no fall-through).
-//   - The Block must be nested — *not* a direct sibling in the goto's Seq. The sibling case
+//   - The Block must be nested - *not* a direct sibling in the goto's Seq. The sibling case
 //     is `goto_to_break`'s domain; firing here too would double-wrap.
 //   - We require a *single* `Block(N, body)` in the rewrite region (no other definitions of
 //     the same label). Multiple definitions would mean ambiguous landings; we bail.
@@ -55,9 +55,9 @@ pub fn refine(exp: &mut Exp) -> bool {
 }
 
 fn walk(exp: &mut Exp, changed: &mut bool) {
-    // Post-order: recurse into children first, then try the lift at this `Seq`. The
+    // Post-order: recur into children first, then try the lift at this `Seq`. The
     // post-order matters when a lift would surface a new opportunity in an enclosing
-    // scope — the outer `walk` runs after this returns and the next outer refinement
+    // scope - the outer `walk` runs after this returns and the next outer refinement
     // iteration picks it up.
     walk_children_mut(exp, &mut |c| walk(c, changed));
     if let Exp::Seq(items) = exp {
@@ -84,7 +84,7 @@ fn singleton_goto(exp: &Exp) -> Option<Label> {
 fn try_lift_in_seq(items: &mut Vec<Exp>) -> bool {
     // Walk through items looking for a singleton goto at position `j` whose target `N` has
     // a nested `Block(N, body)` somewhere in `items[k]` for some `k < j`. Bail on:
-    //  - Any sibling at this Seq level is already `Block(N, ...)` — that's `goto_to_break`'s
+    //  - Any sibling at this Seq level is already `Block(N, ...)` - that's `goto_to_break`'s
     //    shape and we don't want to compete with it.
     //  - `body` doesn't always terminate (would leave a fall-through diverging from goto).
     //  - Multiple `Block(N, ...)` candidates exist across `items[0..j]` (ambiguous landing).
@@ -148,7 +148,7 @@ fn try_lift_in_seq(items: &mut Vec<Exp>) -> bool {
 }
 
 /// What we found when scanning a subtree for `Block(target, ...)`. The three cases are
-/// genuinely distinct decisions for the caller — `Absent` is a soft "skip this sibling,
+/// genuinely distinct decisions for the caller - `Absent` is a soft "skip this sibling,
 /// keep looking", `NonTerminating` is "bail the whole lift", `Terminating` is the only
 /// fireable case. Encoding them as an enum reads more clearly at the call site than a
 /// `Option<bool>` where each variant's meaning was non-obvious.
@@ -190,7 +190,7 @@ fn nested_block_status(exp: &Exp, target: Label) -> BlockStatus {
 
 /// True iff every path through `exp` ends in `Return`, `Abort`, or a `Break`/`Continue` to
 /// a label *other* than `self_label`. A `Break(Some(self_label))` is a self-loop on our own
-/// landing — not a real exit, refuses the lift.
+/// landing - not a real exit, refuses the lift.
 fn all_paths_exit(exp: &Exp, self_label: Label) -> bool {
     use Exp as E;
     match exp {
