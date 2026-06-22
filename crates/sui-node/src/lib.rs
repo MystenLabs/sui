@@ -671,20 +671,19 @@ impl SuiNode {
             checkpoint_store.clone(),
         );
 
-        let index_store =
-            if node_role.should_enable_index_processing() && config.enable_index_processing {
-                info!("creating jsonrpc index store");
-                Some(Arc::new(IndexStore::new(
-                    config.db_path().join("indexes"),
-                    &prometheus_registry,
-                    epoch_store
-                        .protocol_config()
-                        .max_move_identifier_len_as_option(),
-                    config.remove_deprecated_tables,
-                )))
-            } else {
-                None
-            };
+        let index_store = if node_role.is_fullnode() && config.enable_index_processing {
+            info!("creating jsonrpc index store");
+            Some(Arc::new(IndexStore::new(
+                config.db_path().join("indexes"),
+                &prometheus_registry,
+                epoch_store
+                    .protocol_config()
+                    .max_move_identifier_len_as_option(),
+                config.remove_deprecated_tables,
+            )))
+        } else {
+            None
+        };
 
         let chain_identifier = epoch_store.get_chain_identifier();
 
@@ -692,49 +691,48 @@ impl SuiNode {
         // mutually exclusive index backends; selecting the experimental
         // store skips building the old index and serves the index read
         // paths from the embedded store instead.
-        let (rpc_index, mut embedded_rpc_store) = if node_role.should_enable_index_processing()
-            && config.rpc().is_some_and(|rpc| rpc.enable_indexing())
-        {
-            if config
-                .rpc()
-                .is_some_and(|rpc| rpc.use_experimental_rpc_store())
-            {
-                info!("creating embedded rpc-store");
-                // The tip indexer pulls checkpoints from the node's local
-                // checkpoint / perpetual stores via a dedicated read handle.
-                let ingestion_source = RocksDbStore::new(
-                    cache_traits.clone(),
-                    committee_store.clone(),
-                    checkpoint_store.clone(),
-                );
-                let embedded_rpc_store = EmbeddedRpcStore::bootstrap(
-                    &config,
-                    &store,
-                    &checkpoint_store,
-                    ingestion_source,
-                    chain_identifier,
-                    &prometheus_registry,
-                )
-                .await?;
-                (None, Some(embedded_rpc_store))
-            } else {
-                info!("creating rpc index store");
-                let rpc_index = Arc::new(
-                    RpcIndexStore::new(
-                        &config.db_path(),
+        let (rpc_index, mut embedded_rpc_store) =
+            if node_role.is_fullnode() && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
+                if config
+                    .rpc()
+                    .is_some_and(|rpc| rpc.use_experimental_rpc_store())
+                {
+                    info!("creating embedded rpc-store");
+                    // The tip indexer pulls checkpoints from the node's local
+                    // checkpoint / perpetual stores via a dedicated read handle.
+                    let ingestion_source = RocksDbStore::new(
+                        cache_traits.clone(),
+                        committee_store.clone(),
+                        checkpoint_store.clone(),
+                    );
+                    let embedded_rpc_store = EmbeddedRpcStore::bootstrap(
+                        &config,
                         &store,
                         &checkpoint_store,
-                        &epoch_store,
-                        &cache_traits.backing_package_store,
-                        config.rpc().cloned().unwrap_or_default(),
+                        ingestion_source,
+                        chain_identifier,
+                        &prometheus_registry,
                     )
-                    .await,
-                );
-                (Some(rpc_index), None)
-            }
-        } else {
-            (None, None)
-        };
+                    .await?;
+                    (None, Some(embedded_rpc_store))
+                } else {
+                    info!("creating rpc index store");
+                    let rpc_index = Arc::new(
+                        RpcIndexStore::new(
+                            &config.db_path(),
+                            &store,
+                            &checkpoint_store,
+                            &epoch_store,
+                            &cache_traits.backing_package_store,
+                            config.rpc().cloned().unwrap_or_default(),
+                        )
+                        .await,
+                    );
+                    (Some(rpc_index), None)
+                }
+            } else {
+                (None, None)
+            };
 
         info!("creating archive reader");
         // Create network
@@ -1604,17 +1602,17 @@ impl SuiNode {
         );
 
         let checkpoint_output: Box<dyn CheckpointOutput> = if node_role.is_validator() {
-            Box::new(SubmitCheckpointToConsensus {
-                sender: consensus_adapter,
-                signer: state.secret.clone(),
-                authority: config.protocol_public_key(),
-                next_reconfiguration_timestamp_ms: epoch_start_timestamp_ms
+            Box::new(SubmitCheckpointToConsensus::new(
+                consensus_adapter,
+                state.secret.clone(),
+                config.protocol_public_key(),
+                epoch_start_timestamp_ms
                     .checked_add(epoch_duration_ms)
                     .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
-                metrics: checkpoint_metrics.clone(),
-            })
+                checkpoint_metrics.clone(),
+            ))
         } else {
-            LogCheckpointOutput::boxed()
+            Box::new(LogCheckpointOutput::new(checkpoint_metrics.clone()))
         };
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
@@ -2659,7 +2657,7 @@ async fn build_http_servers(
     Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
 )> {
     // Validators do not expose these APIs
-    if !node_role.should_run_rpc_servers() {
+    if !node_role.is_fullnode() {
         return Ok((HttpServers::default(), None));
     }
 
