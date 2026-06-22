@@ -516,7 +516,10 @@ impl WritebackCache {
             object_notify_read: NotifyRead::new(),
             store,
             backpressure_manager,
-            backpressure_threshold: config.backpressure_threshold(),
+            // TEMPORARY (perf experiment, revert before merge): force a high backpressure
+            // threshold regardless of deployment config, to test whether the writeback-cache
+            // backpressure trip at ~16k TPS is threshold-limited or genuinely drain-limited.
+            backpressure_threshold: config.backpressure_threshold().max(1_000_000),
             metrics,
         }
     }
