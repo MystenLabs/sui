@@ -525,7 +525,7 @@ tokio-rustls = { version = "0.26", default-features = false, features = [
   "tls12",
   "ring",
 ] }
-tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
+tokio-stream = { version = "0.1.14", features = ["sync", "net", "time"] }
 tokio-tungstenite = { version = "0.26.2", features = ["connect"] }
 tokio-util = "0.7.18"
 toml = { version = "0.7.4", features = ["preserve_order"] }

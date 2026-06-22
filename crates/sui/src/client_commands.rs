@@ -16,6 +16,7 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 use sui_rpc::proto::sui::rpc::v2::{self as proto};
 
@@ -118,6 +119,8 @@ use tracing::{debug, info};
 
 /// Concurrency level for fetching coin metadata for balances.
 const NUM_CONCURRENCY_REQS: usize = 8;
+/// Rate limit for RPC calls to avoid being throttled by the server. This is equivalent to 20rps.
+const RATE_LIMIT_MILLIS: u64 = 50;
 
 pub(crate) static USER_AGENT: &str =
     concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
@@ -3004,18 +3007,21 @@ async fn balance_outputs_for_address(
         client.list_balances(address).try_collect().await?
     };
 
-    futures::stream::iter(balances)
-        .map(|balance| async move {
-            let metadata = coin_metadata_for_balance(client, &balance).await?;
-            Ok(BalanceOutput {
-                metadata,
-                balance,
-                coins: Vec::new(),
-            })
+    tokio_stream::StreamExt::throttle(
+        futures::stream::iter(balances),
+        Duration::from_millis(RATE_LIMIT_MILLIS),
+    )
+    .map(|balance| async move {
+        let metadata = coin_metadata_for_balance(client, &balance).await?;
+        Ok(BalanceOutput {
+            metadata,
+            balance,
+            coins: Vec::new(),
         })
-        .buffered(NUM_CONCURRENCY_REQS)
-        .try_collect()
-        .await
+    })
+    .buffered(NUM_CONCURRENCY_REQS)
+    .try_collect()
+    .await
 }
 
 /// Best-effort metadata lookup for a balance returned by the balance API.
