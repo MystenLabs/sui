@@ -232,7 +232,8 @@ fn print_skill(bundle: &str, list: bool, file: Option<&str>, all: bool) -> anyho
         // Same order as `--all` (SKILL.md first, then alphabetical) so an agent can
         // map a `--list` entry to its position in `--all` output.
         let files = bundle_files_sorted(bundle);
-        let entries: Vec<(&str, usize)> = files.iter().map(|&f| (f, file_size(bundle, f))).collect();
+        let entries: Vec<(&str, usize)> =
+            files.iter().map(|&f| (f, file_size(bundle, f))).collect();
         let total: usize = entries.iter().map(|(_, n)| n).sum();
         let max_name = entries
             .iter()
@@ -296,7 +297,12 @@ fn print_categories() {
     println!("Embedded categories ({}):", entries.len());
     let max_name = entries.iter().map(|c| c.name.len()).max().unwrap_or(0);
     for c in &entries {
-        println!("  {:<width$}  — {}", c.name, c.description, width = max_name);
+        println!(
+            "  {:<width$}  — {}",
+            c.name,
+            c.description,
+            width = max_name
+        );
     }
     println!();
     // Plain-text command listing — see `print_skills` for the rationale.
