@@ -3008,9 +3008,19 @@ impl ExecutionSchedulerSender {
     }
 }
 
+/// Number of worker threads for the dedicated consensus-handler runtime. The commit handler loop
+/// is effectively single-threaded; the small pool exists only so any tasks spawned within its call
+/// tree still have workers to run on.
+const CONSENSUS_HANDLER_RUNTIME_WORKER_THREADS: usize = 3;
+
 /// Manages the lifetime of tasks handling the commits and transactions output by consensus.
 pub(crate) struct MysticetiConsensusHandler {
     tasks: JoinSet<()>,
+    // Dedicated runtime so the (single-threaded) consensus commit handler runs on its own named
+    // threads ("consensus-handler"), isolating it from the shared sui-node runtime and making it
+    // directly inspectable with `perf`/`top`. Wrapped in `Option` so it can be torn down via
+    // `shutdown_background` (see `abort`/`Drop`): dropping a `Runtime` on a runtime thread panics.
+    runtime: Option<tokio::runtime::Runtime>,
 }
 
 impl MysticetiConsensusHandler {
@@ -3025,8 +3035,14 @@ impl MysticetiConsensusHandler {
             last_processed_commit_at_startup,
             "Starting consensus replay"
         );
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("consensus-handler")
+            .worker_threads(CONSENSUS_HANDLER_RUNTIME_WORKER_THREADS)
+            .enable_all()
+            .build()
+            .expect("failed to create consensus-handler runtime");
         let mut tasks = JoinSet::new();
-        tasks.spawn(monitored_future!(async move {
+        tasks.spawn_on(monitored_future!(async move {
             // TODO: pause when execution is overloaded, so consensus can detect the backpressure.
             while let Some(consensus_commit) = commit_receiver.recv().await {
                 let commit_index = consensus_commit.commit_ref.index;
@@ -3044,12 +3060,30 @@ impl MysticetiConsensusHandler {
                 }
                 commit_consumer_monitor.set_highest_handled_commit(commit_index);
             }
-        }));
-        Self { tasks }
+        }), runtime.handle());
+        Self {
+            tasks,
+            runtime: Some(runtime),
+        }
     }
 
     pub(crate) async fn abort(&mut self) {
         self.tasks.shutdown().await;
+        // Shut the dedicated runtime down without joining its worker threads, so this is safe to
+        // call from within an async (runtime) context — unlike dropping the `Runtime` directly.
+        if let Some(runtime) = self.runtime.take() {
+            runtime.shutdown_background();
+        }
+    }
+}
+
+impl Drop for MysticetiConsensusHandler {
+    fn drop(&mut self) {
+        // Safety net for teardown paths that don't call `abort`: never drop the `Runtime` inline
+        // (it would block-join its worker threads and panic when dropped on a runtime thread).
+        if let Some(runtime) = self.runtime.take() {
+            runtime.shutdown_background();
+        }
     }
 }
 
