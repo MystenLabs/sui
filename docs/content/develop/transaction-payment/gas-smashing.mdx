@@ -24,7 +24,7 @@ You can smash at most 256 coins in a single PTB. Transactions with more than 256
 
 ## Gas smashing and address balance gas payment
 
-Gas smashing applies only to real `Coin<SUI>` objects that you supply as gas payment. When you provide multiple `Coin<SUI>` objects, the network merges them into a single coin and deducts the gas fee from that coin.
+In the basic case, gas smashing merges the real `Coin<SUI>` objects that you supply as gas payment. When you provide multiple `Coin<SUI>` objects, the network merges them into a single coin and deducts the gas fee from that coin.
 
 Address balance gas payment is different. When you pay gas from an address balance, you do not select or provide any coin objects. The network resolves the gas fee as a withdrawal from your reserved address balance funds, so there is no gas coin selection or merge workflow, and gas smashing is not needed.
 
