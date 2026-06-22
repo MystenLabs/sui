@@ -8,7 +8,7 @@
 // `structure_loop`'s multi-succ dispatch mode emits a `match (sel) { 0 => A_0, 1 => A_1,
 // ..., (N-1) => A_{N-1} }` where each arm A_k is the cascade tail starting at succ k. When
 // the loop's exits form a linear cascade in the CFG, the arms have a very specific shape:
-// each A_k is the concatenation `unique_prefix_k :: A_{k+1}` — i.e., each arm starts with
+// each A_k is the concatenation `unique_prefix_k :: A_{k+1}` - i.e., each arm starts with
 // some code unique to that entry and then duplicates everything that subsequent arms also
 // do. This is sound (it's literally NMG's "duplicated dispatch" step) but verbose.
 //
@@ -23,7 +23,7 @@
 //
 // Semantics: each `if (sel <= K)` runs unique_prefix_K only when we entered at or before
 // tag K, which is the same condition under which arm K's cascade included unique_prefix_K.
-// The final arm A_{N-1} runs unconditionally (every entry point ≤ N-1).
+// The final arm A_{N-1} runs unconditionally (every entry point <= N-1).
 //
 // **Detection.** For each `MatchLit(scrutinee, arms)` with arms in tag order:
 //   1. Treat each arm body as a flat list of items (flatten if it's a `Seq`).
@@ -137,7 +137,7 @@ fn try_compress(scrutinee: &Exp, arms: &[(u32, Exp)]) -> Option<Exp> {
         return None;
     }
     // Tags should be the dense range 0..N (structuring emits them in tag order). If they
-    // skip values or aren't sorted, bail — the `<=` cascade only makes sense for a dense
+    // skip values or aren't sorted, bail - the `<=` cascade only makes sense for a dense
     // ordered tag space.
     for (i, (tag, _)) in arms.iter().enumerate() {
         if *tag != i as u32 {
@@ -163,7 +163,7 @@ fn try_compress(scrutinee: &Exp, arms: &[(u32, Exp)]) -> Option<Exp> {
     }
     // Require at least one non-empty unique prefix; otherwise every arm is identical and
     // there's nothing to compress (we'd just emit the unconditional body, which is fine
-    // but redundant — could happen if structure_loop produces a degenerate cascade).
+    // but redundant - could happen if structure_loop produces a degenerate cascade).
     if prefix_lens.iter().all(|&n| n == 0) {
         return None;
     }
@@ -219,7 +219,7 @@ fn try_compress(scrutinee: &Exp, arms: &[(u32, Exp)]) -> Option<Exp> {
 
 /// Flatten a `Seq` into its items; non-Seq expressions become a single-item slice. We use
 /// this so `Exp::Seq([a, b])` and a hypothetical `Exp::Seq([Exp::Seq([a]), b])` compare
-/// equal — earlier refinements may have left nested Seqs that `flatten_seq` would later
+/// equal - earlier refinements may have left nested Seqs that `flatten_seq` would later
 /// collapse, but we don't want to depend on its order vs. ours.
 fn flatten_seq(exp: &Exp) -> Vec<&Exp> {
     fn go<'a>(exp: &'a Exp, out: &mut Vec<&'a Exp>) {
