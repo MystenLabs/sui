@@ -9,12 +9,18 @@ skills:
 
 # Auditing Move packages on Sui
 
-**Run `sui prompt category audit --all` to load the full catalog.** Content
-cross-references heavily, and guidance in one file often informs reasoning
-about another. Partial loads create blind spots you can't predict in advance.
+**Run `sui prompt category audit --all` to load the full catalog.** Every
+`SM-*` rule must be considered — applicability is by shape, not by name, and
+the rules you skip are usually the ones that would have fired. Absence-detection
+rules silently miss vulnerabilities when their files weren't loaded. Partial
+loads create blind spots you can't predict in advance.
 
-`sui prompt category audit --list` reports skill sizes in case you have to
-make adjustments due to your context window or token budget.
+**Training data is not a substitute for actually loading files.** You have
+seen Move security rules in training; this catalog is not those rules. Files
+you skip "because you already know that category" are the ones whose
+this-catalog shape — `[+domain]` rules, Sui-specific framings, absence-detection
+disciplines — may differ from your prior training. Don't declare the catalog
+loaded until every file is actually loaded.
 
 Auditing here means finding security vulnerabilities in deployed (compiled) Move packages
 on Sui: applying a catalog of invariant-violation rules against bytecode that's already
@@ -28,6 +34,12 @@ on chain, with a disciplined evidence chain from bytecode-derived evidence to fi
 - Distinguish *exploitable* from *defense-in-depth*.
 - The decompiled view is the working substrate. Disassembly is the tiebreaker when both
   views are inspected for the same site and disagree.
+- **A grep miss is NOT proof of absence.** Many `SM-*` rules detect the *absence*
+  of a guard, check, or invariant assertion. For those, an empty grep often means
+  *"the guard is missing everywhere"*, not *"the rule doesn't apply"*. Walk the
+  candidate set explicitly — every fn touching the rule's subject (shared-state
+  mutators for SM-A2, cap-gated fns for SM-A3, DF accessors for SM-E4,
+  `object::delete` sites for SM-C1, etc.) — and verify each.
 
 ## Reproducibility
 

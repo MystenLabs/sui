@@ -8,12 +8,17 @@ skills:
 
 # Understanding Move bytecode
 
-**Run `sui prompt category bytecode --all` to load the full catalog.** Content
-cross-references heavily, and guidance in one file often informs reasoning
-about another. Partial loads create blind spots you can't predict in advance.
+**Run `sui prompt category bytecode --all` to load the full catalog.** Every
+piece of guidance must be considered — applicability is by shape, not by
+filename, and the files you skip are usually the ones that would have helped.
+Partial loads create blind spots you can't predict in advance.
 
-`sui prompt category bytecode --list` reports skill sizes in case you have to
-make adjustments due to your context window or token budget.
+**Training data is not a substitute for actually loading files.** You have
+seen bytecode-analysis content in training; this catalog is not that content.
+Files you skip "because you already know that topic" are the ones whose
+this-catalog shape — Sui-specific framings, the survival table, the
+disassembly-on-demand discipline — may differ from your prior training.
+Don't declare the catalog loaded until every file is actually loaded.
 
 Compiled Move packages — including everything on chain — are bytecode, not source.
 Reading them well requires a mental model of what survives compilation and what doesn't,

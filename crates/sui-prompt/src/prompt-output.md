@@ -12,17 +12,17 @@ applying — `--all` loads them in one call.
 
 ```sh
 sui prompt categories                    # see the available categories
-sui prompt category <name> --list        # list bundle and reference file names (no content)
-sui prompt category <name>               # read a category's workflow + skill list
 sui prompt category <name> --all         # read every bundle's content in one call
+sui prompt category <name>               # read a category's workflow + skill list
+sui prompt category <name> --list        # list bundle and reference file names and sizes (no content)
 ```
 
 Skills can also be reached directly:
 
 ```sh
 sui prompt skills                        # list all skill bundles, flat
-sui prompt skill <bundle>                # read a bundle's SKILL.md
-sui prompt skill <bundle> --list         # list reference file names (no content)
-sui prompt skill <bundle> --file <ref>   # read a specific reference file
 sui prompt skill <bundle> --all          # read SKILL.md + every reference file
+sui prompt skill <bundle>                # read a bundle's SKILL.md
+sui prompt skill <bundle> --list         # list reference file names and sizes (no content)
+sui prompt skill <bundle> --file <ref>   # read a specific reference file
 ```

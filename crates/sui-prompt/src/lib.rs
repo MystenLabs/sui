@@ -182,18 +182,18 @@ fn print_skills() {
     // the descriptions line up. No `#`/`##` markdown headings; this is CLI output, not
     // a rendered README.
     let commands: &[(&str, &str)] = &[
+        (
+            "sui prompt skill <bundle> --all",
+            "read SKILL.md + every reference file",
+        ),
         ("sui prompt skill <bundle>", "read SKILL.md"),
         (
             "sui prompt skill <bundle> --list",
-            "list reference file names (no content)",
+            "list reference file names and sizes (no content)",
         ),
         (
             "sui prompt skill <bundle> --file <r>",
             "read a specific reference file",
-        ),
-        (
-            "sui prompt skill <bundle> --all",
-            "read SKILL.md + every reference file",
         ),
     ];
     let max_cmd = commands.iter().map(|(c, _)| c.len()).max().unwrap_or(0);
@@ -302,22 +302,22 @@ fn print_categories() {
     // Plain-text command listing — see `print_skills` for the rationale.
     let commands: &[(&str, &str)] = &[
         (
-            "sui prompt category <name> --list",
-            "list bundle and reference file names (no content)",
-        ),
-        ("sui prompt category <name>", "read the category's content"),
-        (
             "sui prompt category <name> --all",
             "read every bundle's content in one call",
         ),
-        ("sui prompt skills", "list all skill bundles (flat)"),
+        ("sui prompt category <name>", "read the category's content"),
         (
-            "sui prompt skill <bundle>",
-            "read a skill bundle's SKILL.md",
+            "sui prompt category <name> --list",
+            "list bundle and reference file names and sizes (no content)",
         ),
+        ("sui prompt skills", "list all skill bundles (flat)"),
         (
             "sui prompt skill <bundle> --all",
             "read SKILL.md + every reference file",
+        ),
+        (
+            "sui prompt skill <bundle>",
+            "read a skill bundle's SKILL.md",
         ),
     ];
     let max_cmd = commands.iter().map(|(c, _)| c.len()).max().unwrap_or(0);
