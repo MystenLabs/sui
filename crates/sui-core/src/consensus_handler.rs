@@ -11,6 +11,7 @@ use std::{
 
 use consensus_config::Committee as ConsensusCommittee;
 use consensus_core::{CommitConsumerMonitor, CommitIndex, CommitRef};
+use consensus_types::block::BlockRef;
 use consensus_types::block::TransactionIndex;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use lru::LruCache;
@@ -82,7 +83,7 @@ use crate::{
     },
     consensus_adapter::ConsensusAdapter,
     consensus_throughput_calculator::ConsensusThroughputCalculator,
-    consensus_types::consensus_output_api::ConsensusCommitAPI,
+    consensus_types::consensus_output_api::{ConsensusCommitAPI, ParsedTransaction},
     epoch::{
         randomness::{DkgStatus, RandomnessManager},
         reconfiguration::ReconfigState,
@@ -1078,13 +1079,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &mut self,
         consensus_commit: impl ConsensusCommitAPI,
     ) {
-        self.handle_consensus_commit(consensus_commit).await;
+        let transactions = consensus_commit.transactions();
+        self.handle_consensus_commit(consensus_commit, transactions)
+            .await;
     }
 
     #[instrument(level = "debug", skip_all, fields(epoch = self.epoch_store.epoch(), round = consensus_commit.leader_round()))]
     pub(crate) async fn handle_consensus_commit(
         &mut self,
         consensus_commit: impl ConsensusCommitAPI,
+        transactions: ParsedConsensusTransactions,
     ) {
         {
             let protocol_config = self.epoch_store.protocol_config();
@@ -1165,7 +1169,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         } = self.filter_consensus_txns(
             state.initial_reconfig_state.clone(),
             &commit_info,
-            &consensus_commit,
+            transactions,
         );
         // Buffer owned object locks for batch write.
         if !owned_object_locks.is_empty() {
@@ -2441,7 +2445,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &mut self,
         initial_reconfig_state: ReconfigState,
         commit_info: &ConsensusCommitInfo,
-        consensus_commit: &impl ConsensusCommitAPI,
+        block_transactions: ParsedConsensusTransactions,
     ) -> FilteredConsensusOutput {
         let _scope = monitored_scope("ConsensusCommitHandler::filter_consensus_txns");
         let mut transactions = Vec::new();
@@ -2449,7 +2453,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let epoch = self.epoch_store.epoch();
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
-        for (block, parsed_transactions) in consensus_commit.transactions() {
+        for (block, parsed_transactions) in block_transactions {
             let author = block.author.value();
             // TODO: consider only messages within 1~3 rounds of the leader?
             self.last_consensus_stats.stats.inc_num_messages(author);
@@ -3013,6 +3017,16 @@ impl ExecutionSchedulerSender {
 /// tree still have workers to run on.
 const CONSENSUS_HANDLER_RUNTIME_WORKER_THREADS: usize = 3;
 
+/// Capacity of the channel from the deserialize worker to the commit handler. Small/bounded: lets
+/// the worker prepare ~1 commit ahead (pipelining) while applying backpressure when the handler is
+/// behind, instead of buffering parsed commits unboundedly.
+const CONSENSUS_HANDLER_DESERIALIZE_CHANNEL_CAPACITY: usize = 2;
+
+/// Transactions BCS-deserialized out of a consensus commit, grouped by block. Produced by the
+/// deserialize worker and consumed by the commit handler, so parsing stays off the handler's
+/// critical path.
+type ParsedConsensusTransactions = Vec<(BlockRef, Vec<ParsedTransaction>)>;
+
 /// Manages the lifetime of tasks handling the commits and transactions output by consensus.
 pub(crate) struct MysticetiConsensusHandler {
     tasks: JoinSet<()>,
@@ -3042,25 +3056,63 @@ impl MysticetiConsensusHandler {
             .build()
             .expect("failed to create consensus-handler runtime");
         let mut tasks = JoinSet::new();
-        tasks.spawn_on(monitored_future!(async move {
-            // TODO: pause when execution is overloaded, so consensus can detect the backpressure.
-            while let Some(consensus_commit) = commit_receiver.recv().await {
-                let commit_index = consensus_commit.commit_ref.index;
-                if !node_role.process_consensus_commits() {
-                    debug!(
-                        commit_index,
-                        "Observer skipping consensus commit processing"
-                    );
-                } else if commit_index <= last_processed_commit_at_startup {
-                    consensus_handler.handle_prior_consensus_commit(consensus_commit);
-                } else {
-                    consensus_handler
-                        .handle_consensus_commit(consensus_commit)
-                        .await;
+
+        // Stage 1 — deserialize worker: BCS-parses each commit's transactions off the handler's
+        // critical path, so parsing overlaps the handler processing the previous commit. The
+        // channel is bounded (small) so the worker prepares ~1 commit ahead but applies
+        // backpressure (rather than buffering parsed commits unboundedly) when the handler is the
+        // bottleneck. Single-threaded; ordering is preserved (one worker, FIFO channel, one handler).
+        let (parsed_sender, mut parsed_receiver) = monitored_mpsc::channel(
+            "consensus_deserialized_commits",
+            CONSENSUS_HANDLER_DESERIALIZE_CHANNEL_CAPACITY,
+        );
+        tasks.spawn_on(
+            monitored_future!(async move {
+                while let Some(consensus_commit) = commit_receiver.recv().await {
+                    let _scope = monitored_scope("ConsensusCommitHandler::deserialize_worker");
+                    // Prior commits are only replayed for `observe_commit` metadata and don't use
+                    // the parsed transactions, so skip parsing them.
+                    let transactions: ParsedConsensusTransactions =
+                        if consensus_commit.commit_ref.index > last_processed_commit_at_startup {
+                            consensus_commit.transactions()
+                        } else {
+                            Vec::new()
+                        };
+                    if parsed_sender
+                        .send((consensus_commit, transactions))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
                 }
-                commit_consumer_monitor.set_highest_handled_commit(commit_index);
-            }
-        }), runtime.handle());
+            }),
+            runtime.handle(),
+        );
+
+        // Stage 2 — commit handler: processes pre-parsed commits in order.
+        tasks.spawn_on(
+            monitored_future!(async move {
+                // TODO: pause when execution is overloaded, so consensus can detect the backpressure.
+                while let Some((consensus_commit, transactions)) = parsed_receiver.recv().await {
+                    let commit_index = consensus_commit.commit_ref.index;
+                    if !node_role.process_consensus_commits() {
+                        debug!(
+                            commit_index,
+                            "Observer skipping consensus commit processing"
+                        );
+                    } else if commit_index <= last_processed_commit_at_startup {
+                        consensus_handler.handle_prior_consensus_commit(consensus_commit);
+                    } else {
+                        consensus_handler
+                            .handle_consensus_commit(consensus_commit, transactions)
+                            .await;
+                    }
+                    commit_consumer_monitor.set_highest_handled_commit(commit_index);
+                }
+            }),
+            runtime.handle(),
+        );
         Self {
             tasks,
             runtime: Some(runtime),
@@ -3559,7 +3611,8 @@ mod tests {
 
         // AND process the consensus commit once
         {
-            let waiter = consensus_handler.handle_consensus_commit(committed_sub_dag.clone());
+            let waiter =
+                consensus_handler.handle_consensus_commit_for_test(committed_sub_dag.clone());
             pin_mut!(waiter);
 
             // waiter should not complete within 5 seconds
@@ -3752,7 +3805,7 @@ mod tests {
             state.consensus_gasless_counter.clone(),
         );
 
-        handler.handle_consensus_commit(commit).await;
+        handler.handle_consensus_commit_for_test(commit).await;
 
         use crate::consensus_handler::SequencedConsensusTransactionKey as SK;
         use sui_types::messages_consensus::ConsensusTransactionKey as CK;
@@ -3878,7 +3931,7 @@ mod tests {
             state.consensus_gasless_counter.clone(),
         );
 
-        handler.handle_consensus_commit(commit).await;
+        handler.handle_consensus_commit_for_test(commit).await;
 
         use crate::consensus_handler::SequencedConsensusTransactionKey as SK;
         use sui_types::messages_consensus::ConsensusTransactionKey as CK;
