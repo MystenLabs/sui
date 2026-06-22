@@ -18,7 +18,7 @@
 // When every leaf of `if_tree` is a U32 constant and `s` has no uses outside the cascade
 // tests, we can:
 //   * For each cascade arm K, find the LCA node in `if_tree` of the set of leaves with
-//     value <= K — this must be an exact subtree (every leaf under the LCA has value <= K
+//     value <= K - this must be an exact subtree (every leaf under the LCA has value <= K
 //     and every leaf with value <= K is under the LCA). If no exact subtree exists for
 //     some K, bail.
 //   * Convert `if_tree` from a value-producing expression to a statement: drop the leaf
@@ -66,7 +66,7 @@ impl Refine for Inliner {
 /// applied. Recurses into nested Seqs via the outer `Refine` walker; this function only
 /// looks at the top-level items of `items`.
 fn try_inline(items: &mut Vec<Exp>) -> bool {
-    // Try every LetBind candidate — the dispatch selector binding is rarely at index 0.
+    // Try every LetBind candidate - the dispatch selector binding is rarely at index 0.
     let candidates: Vec<(usize, Var)> = items
         .iter()
         .enumerate()
@@ -117,7 +117,7 @@ fn try_inline_at(items: &mut Vec<Exp>, let_idx: usize, sel_name: &Var) -> bool {
 
     // Apply transformation:
     //  1. Build the new if_tree-as-statement: first strip leaf U32 values (we don't need
-    //     them anymore — the LCA paths are already computed), then insert each B_K at its
+    //     them anymore - the LCA paths are already computed), then insert each B_K at its
     //     LCA position. Stripping first ensures inserts don't leave the leaf's `K` value
     //     sandwiched between setup and the inserted body.
     //  2. Replace LetBind at let_idx with the transformed if_tree.
@@ -127,7 +127,7 @@ fn try_inline_at(items: &mut Vec<Exp>, let_idx: usize, sel_name: &Var) -> bool {
     //     assignment sites were originally cascade arms (post-let). Now the assignments
     //     live deeper inside the if-tree (earlier in flow); the Declares must precede the
     //     if-tree to keep use-before-declare from sneaking in.
-    //     NOTE:HOIST_DECL — this step is load-bearing only if `hoist_declarations` has
+    //     NOTE:HOIST_DECL - this step is load-bearing only if `hoist_declarations` has
     //     already run upstream. If pipeline order changes (the pass is moved or disabled),
     //     re-validate this assumption: a Declare not produced by `hoist_declarations`
     //     might not appear at all, in which case we'd be inserting a spurious one.
@@ -136,7 +136,7 @@ fn try_inline_at(items: &mut Vec<Exp>, let_idx: usize, sel_name: &Var) -> bool {
     // Insert deepest LCAs first. `insert_at_path` walks down through the IfElse arms
     // (peeking past `Seq` setup wrappers via `inner_ifelse_mut`); if a shallower body has
     // already been appended at an ancestor, the IfElse stops being the trailing item of
-    // that arm's `Seq` — the deeper insert then finds no IfElse to recur into and
+    // that arm's `Seq` - the deeper insert then finds no IfElse to recur into and
     // silently no-ops. Sorting placements by path length descending preserves the correct
     // nesting regardless of how the cascade bounds map onto subtree depths.
     let mut placements_by_depth: Vec<&(Vec<bool>, Exp)> = placements.iter().collect();
@@ -145,7 +145,7 @@ fn try_inline_at(items: &mut Vec<Exp>, let_idx: usize, sel_name: &Var) -> bool {
         insert_at_path(&mut new_tree, path, body.clone());
     }
 
-    // Collect names assigned inside any cascade body — these are the variables that moved
+    // Collect names assigned inside any cascade body - these are the variables that moved
     // from post-let positions into the if-tree, and whose Declares may need hoisting.
     let mut assigned_in_bodies: std::collections::HashSet<Var> = std::collections::HashSet::new();
     for c in &cascades {
@@ -167,7 +167,7 @@ fn try_inline_at(items: &mut Vec<Exp>, let_idx: usize, sel_name: &Var) -> bool {
         if cascade_set.contains(&i) {
             continue;
         }
-        // NOTE:HOIST_DECL — assumes `hoist_declarations` has placed Declares as siblings
+        // NOTE:HOIST_DECL - assumes `hoist_declarations` has placed Declares as siblings
         // of the cascade. If a Declare for an assigned-in-bodies variable lives AFTER
         // let_idx, split it into the hoisted portion and the rest.
         if i > let_idx
@@ -178,7 +178,7 @@ fn try_inline_at(items: &mut Vec<Exp>, let_idx: usize, sel_name: &Var) -> bool {
                 .cloned()
                 .partition(|n| assigned_in_bodies.contains(n));
             if !to_hoist.is_empty() {
-                // Hoisted Declares need to be inserted before the new_tree slot — but
+                // Hoisted Declares need to be inserted before the new_tree slot - but
                 // we've already passed let_idx. Insert into new_items right before the
                 // new_tree we just pushed.
                 let pos = new_items.len() - 1; // index of new_tree
@@ -290,7 +290,7 @@ fn collect_cascades(items: &[Exp], let_idx: usize, sel: &Var) -> Vec<CascadeArm>
     arms.sort_by_key(|a| a.bound);
     // Require K range to be 0..N contiguous (matching the form `compress_dispatch_cascade`
     // emits). Anything sparser means the cascade has been further transformed by some
-    // other pass — bail rather than partially fire.
+    // other pass - bail rather than partially fire.
     for (i, a) in arms.iter().enumerate() {
         if a.bound != i as u32 {
             return vec![];
@@ -390,8 +390,8 @@ fn contains_var(e: &Exp, sel: &Var) -> bool {
 }
 
 /// True if `exp` is an if-tree whose every leaf (the value-producing tail of each arm) is
-/// `Value(U32(_))`. Recurses through Seq wrappers in arms — an arm can be either a direct
-/// IfElse, a direct U32, or a `Seq[…setup…, IfElse-or-U32]`.
+/// `Value(U32(_))`. Recurses through Seq wrappers in arms - an arm can be either a direct
+/// IfElse, a direct U32, or a `Seq[...setup..., IfElse-or-U32]`.
 fn is_value_if_tree(exp: &Exp) -> bool {
     if leaf_value(exp).is_some() {
         return true;
@@ -426,7 +426,7 @@ fn leaf_value(exp: &Exp) -> Option<u32> {
 }
 
 /// Walk every leaf in `exp` (an if-tree) and call `f` with its value. Order is left-to-right.
-/// Peeks through Seq wrappers — an arm `Seq[setup, IfElse]` recurses into the IfElse.
+/// Peeks through Seq wrappers - an arm `Seq[setup, IfElse]` recurs into the IfElse.
 fn for_each_leaf(exp: &Exp, f: &mut impl FnMut(u32)) {
     if let Some(v) = leaf_value(exp) {
         f(v);
@@ -448,7 +448,7 @@ fn for_each_leaf(exp: &Exp, f: &mut impl FnMut(u32)) {
 /// Precondition: every leaf in the if-tree carries a tag value that comes from the
 /// dispatch synthesis in `structuring/mod.rs`, which assigns a dense `0..N-1` range
 /// to the owned succs. There is no sentinel "default" leaf above the cascade range,
-/// and the cascade arms cover every leaf — the `bound`s passed in stay within
+/// and the cascade arms cover every leaf - the `bound`s passed in stay within
 /// `0..cascade_arms.len()-1`. The debug_assert catches a future change that violates
 /// this (e.g. an arm dropped from the cascade after dispatch synthesis); a violation
 /// would fold partially and silently leave stale leaves behind.
@@ -499,7 +499,7 @@ fn find_exact_subtree_path(exp: &Exp, bound: u32) -> Option<Vec<bool>> {
             sub.insert(0, true);
             Some(sub)
         }
-        _ => None, // both sides have matching leaves but root isn't exact — not a subtree
+        _ => None, // both sides have matching leaves but root isn't exact - not a subtree
     }
 }
 
@@ -517,7 +517,7 @@ fn has_leq(exp: &Exp, bound: u32) -> bool {
 /// so `body` executes right after the IfElse completes. If `path` is empty, wrap `exp`
 /// itself.
 ///
-/// The IfElse may sit inside a `Seq[…setup…, IfElse]` arm; in that case we append to that
+/// The IfElse may sit inside a `Seq[...setup..., IfElse]` arm; in that case we append to that
 /// Seq rather than wrapping the IfElse alone (preserves the setup statements as siblings).
 fn insert_at_path(exp: &mut Exp, path: &[bool], body: Exp) {
     if path.is_empty() {
@@ -540,7 +540,7 @@ fn insert_at_path(exp: &mut Exp, path: &[bool], body: Exp) {
     insert_at_path(target, &path[1..], body);
 }
 
-/// Drill through Seq wrappers (`Seq[…setup…, X]`) to reach the trailing expression `X`
+/// Drill through Seq wrappers (`Seq[...setup..., X]`) to reach the trailing expression `X`
 /// mutably. Returns `exp` itself if not a Seq.
 fn inner_ifelse_mut(exp: &mut Exp) -> &mut Exp {
     if matches!(exp, Exp::Seq(items) if matches!(items.last(), Some(Exp::IfElse(_, _, _)))) {
@@ -561,7 +561,7 @@ fn append_after_tail(exp: &mut Exp, body: Exp) {
     *exp = Exp::Seq(vec![taken, body]);
 }
 
-/// Replace every U32 leaf in `exp` (the if-tree) with `Seq[setup_if_any]` — i.e., drop
+/// Replace every U32 leaf in `exp` (the if-tree) with `Seq[setup_if_any]` - i.e., drop
 /// the value but keep any setup statements. After this `exp` no longer produces a U32.
 fn strip_leaf_values(exp: &mut Exp) {
     if leaf_value(exp).is_some() {
@@ -576,7 +576,7 @@ fn strip_leaf_values(exp: &mut Exp) {
             }
         }
         Exp::Seq(items) => {
-            // Setup + nested-IfElse arm: recurse on the trailing item.
+            // Setup + nested-IfElse arm: recur on the trailing item.
             if let Some(last) = items.last_mut() {
                 strip_leaf_values(last);
             }

@@ -1,21 +1,21 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Flag elimination + `||`-fold. Recovers `if (stale_a || stale_b || …) { X }` from the
+//! Flag elimination + `||`-fold. Recovers `if (stale_a || stale_b || ...) { X }` from the
 //! structured form the reaching-condition structurer leaves:
 //!
 //! ```text
 //!   let f = true;
 //!   <setup_a>
-//!   if (cond_a) { f = false } else { <setup_b>; if (cond_b) { f = false } else { … } };
+//!   if (cond_a) { f = false } else { <setup_b>; if (cond_b) { f = false } else { ... } };
 //!   if (f) { T } else { E }
 //! ```
 //!
 //! `f` is a flag set `false` exactly on the "stale" paths and read once at the trailing
-//! `if (f)`, so its final value is `¬(cond_a ∨ cond_b ∨ …)` and the test becomes
-//! `if (cond_a ∨ cond_b ∨ …) { E } else { T }`. Each later condition's setup (reused
+//! `if (f)`, so its final value is `!(cond_a || cond_b || ...)` and the test becomes
+//! `if (cond_a || cond_b || ...) { E } else { T }`. Each later condition's setup (reused
 //! per-feed locals like `get_price_unsafe`) rides into its `||` operand as a block
-//! expression, preserving the original short-circuit — a later feed's price is only fetched
+//! expression, preserving the original short-circuit - a later feed's price is only fetched
 //! when the earlier ones are fresh. The flag's declaration and assignments drop out.
 
 use move_core_types::runtime_value::MoveValue as Value;
@@ -53,7 +53,7 @@ fn try_recover(items: &mut Vec<Exp>) -> bool {
             continue;
         };
 
-        // Pull the test apart: `f` false ⇒ run the else; `f` true ⇒ run the then.
+        // Pull the test apart: `f` false => run the else; `f` true => run the then.
         let Exp::IfElse(_, then_t, else_t) = items[test_idx].clone() else {
             continue;
         };
