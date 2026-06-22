@@ -47,7 +47,7 @@ preceding existence check that gates the access. In decompiled output: the bug i
 of a matching `dynamic_field::exists*(...)` / `bag::contains(...)` / `table::contains(...)`
 inside an `if (...)` guard or `assert!(...)` that reaches the specific access. The guard
 must precede the access on the path — an `exists*` / `contains` elsewhere in the function
-doesn't qualify. See `auditing-bytecode.md` SM-E4 for the structured per-rule signal.
+doesn't qualify.
 _Absence rule:_ walk every `dynamic_field::borrow*`/`bag::*`/`table::*` access; an
 `exists*`/`contains` *elsewhere* does not clear it — the guard must reach *this* access.
 Exploit: an attacker triggers the missing-field path to abort honest users' transactions (DoS

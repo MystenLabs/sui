@@ -24,15 +24,11 @@ Detect: `public`/`entry` fns that mutate shared/global state with no `&\w*Cap` p
 fees/config, pause, change ownership, or modify a deny list. In decompiled output: a function
 header with a `&mut <SharedT>` arg lacking either a `&<Name>Cap` arg in the signature or an
 `if (tx_context::sender(ctx) == <addr>) abort <code>` / `assert!(tx_context::sender(ctx) == <addr>, ...)`
-gate before the first state-mutating expression. See `auditing-bytecode.md` SM-A2 for the
-structured per-rule signal.
+gate before the first state-mutating expression.
 _Absence rule:_ walk every `public`/`entry` fn touching shared state; a `&*Cap` or
 `tx_context::sender(...)` gate *elsewhere* in the module does not clear an unguarded fn.
 Exploit: any address calls the privileged path directly via a PTB.
-Source: `MystenLabs/skills → sui-move/move.md` ("Every `public` or `entry` function that takes a
-`&mut SharedObject` is callable by any address. Verify that each one either (a) checks a capability,
-(b) checks `ctx.sender()` against a stored admin address, or (c) is intentionally permissionless."),
-`MystenLabs/skills → composable-move-functions/SKILL.md`.
+Source: `MystenLabs/skills → sui-move/move.md`, `MystenLabs/skills → composable-move-functions/SKILL.md`.
 
 ### SM-A3 — Capability not bound to the resource it governs   [Critical] [+domain]
 Invariant: when a cap governs a *specific* object (a pool, vault, treasury), the cap stores that
@@ -105,7 +101,6 @@ site's preceding code contains no read of `self.<state>` / `&self.<state>` /
 privileged path is unconditional — the high-severity shape.)
 _Absence rule:_ an `assert!`/`abort` *elsewhere* in the module does not clear the rule —
 verify the guard reaches *this* privileged op on the path.
-See `auditing-bytecode.md` SM-A6 for the structured per-rule signal.
 Exploit: caller invokes the release path while the object's state still forbids it — transfer a
 locked NFT, redeem before expiry, withdraw without the loan being marked repaid.
 Source: `MystenLabs/skills → object-model/transfers.md` (`transfer_if_unlocked` example:

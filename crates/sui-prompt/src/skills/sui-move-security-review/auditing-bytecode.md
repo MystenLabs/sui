@@ -41,11 +41,8 @@ decompiler renderings: `assert!(cond, code)` appears as `if (!cond) abort code;`
 empty structs gain a synthetic `dummy_field: bool`.
 
 ### Structural — read off struct/function headers and abilities
-- **SM-A1 cap ability hygiene.** Struct header: `struct *Cap has ... { ... }` (or
-  `public struct *Cap has ... { ... }`) containing `copy` or `drop` is the bug. The ability
-  set prints verbatim in decompiled output.
-- **SM-B1 object shape.** `struct T has ... key ...` with no `id: UID` field, OR an
-  authority/value type with `drop`. Both visible on the struct header line.
+- **SM-A1 cap ability hygiene.** Struct header carries `copy` or `drop`.
+- **SM-B1 object shape.** `struct T has key` with no `id: UID`, OR value/authority type with `drop`.
 - **SM-B2 broken soulbound via `store`.** A type marked `store` can be passed to any of
   the four `0x2::transfer` `public_*` variants from any module: `public_transfer` (move),
   `public_share_object` (share globally), `public_freeze_object` (freeze immutably),
@@ -62,8 +59,7 @@ empty structs gain a synthetic `dummy_field: bool`.
 - **SM-H1 OTW well-formedness.** Struct named `MODULE_NAME` (all caps) with `has drop` and a
   single synthetic `dummy_field: bool` (the "no fields" signal). Bug if it has other abilities or
   more fields; the synthetic field itself is **not** a finding.
-- **SM-J1 hot-potato weakening.** Receipt/ticket struct header carrying any of `copy/drop/store`
-  is the bug — its strength is exactly the ability set.
+- **SM-J1 hot-potato weakening.** Receipt/ticket struct header carries any of `copy/drop/store`.
 
 ### Authorization — dataflow over the function body
 - **SM-A2 missing authorization.** A `public`/`entry` function header that mutates shared state
