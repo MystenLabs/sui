@@ -137,3 +137,11 @@ public fun groth16_bn254_test() {
     assert!(groth16::verify_groth16_proof(&groth16::bn254(), &pvk, &public_inputs, &proof_points));
 }
 ```
+
+#### Verifier contract generator
+
+The independent open-source [export-sui-verifier](https://github.com/mysteryon88/export-sui-verifier) tool can generate Sui Move verifier packages for Groth16 circuits. The generated packages use Sui's native `sui::groth16` module and can include verifier code, package metadata, and optional Move tests when proof data is supplied.
+
+The tool supports `snarkjs`-compatible artifacts and Arkworks artifacts for BN254 and BLS12-381. This makes it usable across several proof-generation stacks: Circom/snarkjs pipelines can provide `snarkjs`-compatible JSON, Arkworks artifacts can be exported directly, and gnark circuits can be used after exporting or converting their verification key and proof data to `snarkjs`-compatible JSON with additional tooling such as [gnark-to-snarkjs](https://github.com/mysteryon88/gnark-to-snarkjs) or [ark-snarkjs](https://github.com/mysteryon88/ark-snarkjs).
+
+For end-to-end examples, see [zk-sui-examples](https://github.com/zk-examples/zk-sui-examples), which demonstrates generated Move verifier packages with Circom/snarkjs, gnark, and Arkworks artifacts. As with any generated verifier code, review and test it before production use.
