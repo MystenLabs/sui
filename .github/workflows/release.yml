@@ -173,8 +173,6 @@ jobs:
         if: ${{ env.s3_existing_archive == '' }}
         with:
           role-to-assume: ${{ env.SCCACHE_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ${{ matrix.os }}
 
       - name: Register cargo problem matcher
