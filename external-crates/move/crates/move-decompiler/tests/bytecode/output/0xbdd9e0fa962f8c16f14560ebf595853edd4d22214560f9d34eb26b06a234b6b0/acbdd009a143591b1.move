@@ -94,9 +94,6 @@ public(friend) fun a40f8bc58a06c8b33(l0: &A0ea878587b719a64, l1: &mut Ad1f26f3c0
                 } else {
                     l66 - l60
                 } < l53 / 2u64;
-                if (__c255) {
-                    
-                }
             };
             if (!(__c222) || !(__c255)) {
                 let l44 = a2ec4300f6df080d1::a7235c62aa5b27437(l40, l49, l50, l31, l30, l32, l55, l56, l29, l28, l26, l23, l47, false);

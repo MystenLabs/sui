@@ -70,9 +70,9 @@ fun init(l0: NFT_CLAIM, l1: &mut TxContext) {
 
 public entry fun mint_batch(l0: &mut ClaimCap, l1: vector<address>, l2: &mut TxContext) {
     let l3 = 0u64;
-    let l4 = &l1.len();
+    let l4 = l1.length();
     while (l3 < l4) {
-        let l5 = *(&(&l1)[l3]);
+        let l5 = (&l1)[l3];
         if (!(vec_set::contains(&l0.claimed, &l5))) {
             nft_claim::mint_single(l0, l5, l2)
         };

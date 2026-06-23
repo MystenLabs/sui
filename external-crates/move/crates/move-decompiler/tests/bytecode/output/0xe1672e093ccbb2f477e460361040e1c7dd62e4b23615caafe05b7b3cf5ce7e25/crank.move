@@ -94,35 +94,35 @@ public fun create_config(l0: &Clock, l1: &mut TxContext) {
 }
 
 public fun last_heartbeat_ms(l0: &CrankConfig): u64 {
-    return *(&l0.last_heartbeat_ms)
+    return l0.last_heartbeat_ms
 }
 
 public fun last_reroute_ms(l0: &CrankConfig): u64 {
-    return *(&l0.last_reroute_ms)
+    return l0.last_reroute_ms
 }
 
 public fun max_heartbeat_gap_ms(l0: &CrankConfig): u64 {
-    return *(&l0.max_heartbeat_gap_ms)
+    return l0.max_heartbeat_gap_ms
 }
 
 public fun max_swap_slippage_bps(l0: &CrankConfig): u64 {
-    return *(&l0.max_swap_slippage_bps)
+    return l0.max_swap_slippage_bps
 }
 
 public fun max_tvl_delta_bps(l0: &CrankConfig): u64 {
-    return *(&l0.max_tvl_delta_bps)
+    return l0.max_tvl_delta_bps
 }
 
 public fun min_apy_bps(l0: &CrankConfig): u64 {
-    return *(&l0.min_apy_bps)
+    return l0.min_apy_bps
 }
 
 public fun min_spread_bps(l0: &CrankConfig): u64 {
-    return *(&l0.min_spread_bps)
+    return l0.min_spread_bps
 }
 
 public fun reroute_cooldown_ms(l0: &CrankConfig): u64 {
-    return *(&l0.reroute_cooldown_ms)
+    return l0.reroute_cooldown_ms
 }
 
 public(friend) fun update_config(l0: &mut CrankConfig, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64, l6: u64, l7: u64) {
@@ -142,40 +142,33 @@ public(friend) fun update_config(l0: &mut CrankConfig, l1: u64, l2: u64, l3: u64
 
 public fun validate_heartbeat<T0>(l0: &mut CrankConfig, l1: &mut Vault<T0>, l2: &StrategyRegistry, l3: &Clock) {
     let l11 = clock::timestamp_ms(l3);
-    assert!(l11 - *(&l0.last_heartbeat_ms) >= *(&l0.min_heartbeat_interval_ms), C6);
+    assert!(l11 - l0.last_heartbeat_ms >= l0.min_heartbeat_interval_ms, C6);
     let l9 = strategy::borrow_protocol_access_cap(l2);
     vault::update_heartbeat_tvl(l1, l3, l9);
     *(&mut l0.last_heartbeat_ms) = l11;
     let l10 = vault::last_heartbeat_tvl(freeze(l1));
     let l5 = string::utf8(C14);
     let l7 = string::utf8(C15);
-    let __c24 = !(dynamic_field::exists_(&l0.id, l5));
-    let (__c114, __c62, __c91);
-    if (__c24) {
+    if (!(dynamic_field::exists_(&l0.id, l5))) {
         dynamic_field::add(&mut l0.id, l5, l10);
         dynamic_field::add(&mut l0.id, l7, l11)
     } else {
         let l6 = *(dynamic_field::borrow(&l0.id, l7));
-        __c62 = l11 - l6 > C13;
-        if (__c62) {
+        if (l11 - l6 > C13) {
             *(dynamic_field::borrow_mut(&mut l0.id, l5)) = l10;
             *(dynamic_field::borrow_mut(&mut l0.id, l7)) = l11
         } else {
             let l8 = *(dynamic_field::borrow(&l0.id, l5));
-            __c91 = l8 > 0u64;
-            if (__c91) {
-                __c114 = if (l10 > l8) {
+            if (l8 > 0u64) {
+                assert!(if (l10 > l8) {
                     l10 - l8
                 } else {
                     l8 - l10
-                }as u128 * 10000u128 / l8as u128as u64 <= C12;
-                assert!(__c114, C10)
+                }as u128 * 10000u128 / l8as u128as u64 <= C12, C10)
             }
         }
     };
-    if (((__c114 || __c24) || __c62) || !(__c91)) {
-        event::emit(HeartbeatEvent { timestamp_ms: l11 })
-    }
+    event::emit(HeartbeatEvent { timestamp_ms: l11 })
 }
 
 public fun validate_reroute<T0>(l0: &mut CrankConfig, l1: &ApyRegistry, l2: &StrategyRegistry, l3: &Vault<T0>, l4: u8, l5: u8, l6: &Clock) {
@@ -191,12 +184,12 @@ public fun validate_reroute<T0>(l0: &mut CrankConfig, l1: &ApyRegistry, l2: &Str
     } else {
         l12 - l8 * 10000u64 / l8
     };
-    assert!(l11 >= *(&l0.min_spread_bps), C3);
+    assert!(l11 >= l0.min_spread_bps, C3);
     floors::assert_spread(l11);
-    assert!(l12 >= *(&l0.min_apy_bps), C4);
+    assert!(l12 >= l0.min_apy_bps, C4);
     floors::assert_min_apy(l12);
-    let l9 = l10 - *(&l0.last_reroute_ms);
-    assert!(l9 >= *(&l0.reroute_cooldown_ms), C5);
+    let l9 = l10 - l0.last_reroute_ms;
+    assert!(l9 >= l0.reroute_cooldown_ms, C5);
     floors::assert_cooldown(l9);
     if (l4 != 0u8) {
         apy::assert_not_stale(l1, l4, l6)
@@ -204,15 +197,10 @@ public fun validate_reroute<T0>(l0: &mut CrankConfig, l1: &ApyRegistry, l2: &Str
     apy::assert_not_stale(l1, l5, l6);
     let reg_103;
     (reg_102, reg_103) = strategy::decode_strategy(l5);
-    let __c162 = reg_103 == 2u8;
-    let __c174;
-    if (__c162) {
-        __c174 = !(vault::is_depeg_active(l3));
-        assert!(__c174, C11)
+    if (reg_103 == 2u8) {
+        assert!(!(vault::is_depeg_active(l3)), C11)
     };
-    if (__c174 || !(__c162)) {
-        *(&mut l0.last_reroute_ms) = l10;
-        event::emit(RerouteValidatedEvent { current_strategy: l4, target_strategy: l5, current_apy: l8, target_apy: l12, spread_bps: l11, timestamp_ms: l10 })
-    }
+    *(&mut l0.last_reroute_ms) = l10;
+    event::emit(RerouteValidatedEvent { current_strategy: l4, target_strategy: l5, current_apy: l8, target_apy: l12, spread_bps: l11, timestamp_ms: l10 })
 }
 

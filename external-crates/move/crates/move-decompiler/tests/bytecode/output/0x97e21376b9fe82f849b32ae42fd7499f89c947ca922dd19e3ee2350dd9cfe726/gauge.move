@@ -138,7 +138,7 @@ const C24: vector<u8> = vector[103u8, 97u8, 117u8, 103u8, 101u8, 32u8, 110u8, 11
 // -- functions -- 
 
 public fun check_gauger_pool<T0, T1, T2>(l0: &Gauge<T0, T1, T2>, l1: &Pool<T0, T1>): bool {
-    return !(*(&l0.pool_id) != object::id(l1) || pool::get_magma_distribution_gauger_id(l1) != object::id(l0))
+    return !(l0.pool_id != object::id(l1) || pool::get_magma_distribution_gauger_id(l1) != object::id(l0))
 }
 
 fun check_voter_cap<T0, T1, T2>(l0: &Gauge<T0, T1, T2>, l1: &VoterCap) {
@@ -186,7 +186,7 @@ public fun deposit_position<T0, T1, T2>(l0: &GlobalConfig, l1: &DistributionConf
     let l13 = tx_context::sender(freeze(l6));
     let l10 = object::id(freeze(l3));
     let l11 = object::id(&l4);
-    assert!(object::id(l1) == *(&l2.distribution_config), 9223373235150651391u64);
+    assert!(object::id(l1) == l2.distribution_config, 9223373235150651391u64);
     assert!(x9_distribution_config::is_gauge_alive(l1, object::id(freeze(l2))), 9223373235152158744u64);
     assert!(gauge::check_gauger_pool(freeze(l2), freeze(l3)), 9223373239446077448u64);
     assert!(position::pool_id(&l4) == l10, 9223373243741175818u64);
@@ -201,27 +201,22 @@ public fun deposit_position<T0, T1, T2>(l0: &GlobalConfig, l1: &DistributionConf
     let l16 = reg_88;
     if (!(table::contains(&l2.stakes, l13))) {
         let l15 = vector[];
-        (&mut l15).push_back(l11);
+        l15.push_back(l11);
         table::add(&mut l2.stakes, l13, l15)
     } else {
         let l18 = table::borrow(&l2.stakes, l13);
         let l8 = 0u64;
         loop {
-            let __c163 = l8 < l18.len();
-            let __c168;
-            if (__c163) {
-                __c168 = *(&l18[l8]) == l11;
-                if (!(__c168)) {
+            if (l8 < l18.length()) {
+                if (l18[l8] != l11) {
                     l8 = l8 + 1u64;
                     continue
                 }
             };
-            if (__c168 || !(__c163)) {
-                if (l8 >= l18.len()) {
-                    (table::borrow_mut(&mut l2.stakes, l13)).push_back(l11)
-                };
-                break
-            }
+            if (l8 >= l18.length()) {
+                (table::borrow_mut(&mut l2.stakes, l13)).push_back(l11)
+            };
+            break
         }
     };
     object_table::add(&mut l2.staked_positions, l11, l4);
@@ -244,8 +239,8 @@ public fun earned_by_account<T0, T1, T2>(l0: &Gauge<T0, T1, T2>, l1: &Pool<T0, T
     let l4 = table::borrow(&l0.stakes, l2);
     let l5 = 0u64;
     let l8 = 0u64;
-    while (l5 < l4.len()) {
-        let l7 = *(&l4[l5]);
+    while (l5 < l4.length()) {
+        let l7 = l4[l5];
         l8 = l8 + gauge::earned_internal(l0, l1, l7, l6);
         l5 = l5 + 1u64;
     };
@@ -267,7 +262,7 @@ fun earned_internal<T0, T1, T2>(l0: &Gauge<T0, T1, T2>, l1: &Pool<T0, T1>, l2: I
     let l10 = pool::get_magma_distribution_reserve(l1)as u128 * C0;
     let l13 = pool::get_magma_distribution_staked_liquidity(l1);
     if (l5 >= 0u64 && (l10 > 0u128 && l13 > 0u128)) {
-        let l11 = *(&l0.reward_rate) * l5as u128;
+        let l11 = l0.reward_rate * l5as u128;
         if (l11 > l10) {
             l11 = l10;
         };
@@ -276,7 +271,7 @@ fun earned_internal<T0, T1, T2>(l0: &Gauge<T0, T1, T2>, l1: &Pool<T0, T1>, l2: I
     let l9 = object_table::borrow(&l0.staked_positions, l2);
     let (reg_47, reg_48) = position::tick_range(l9);
     let l8 = position::liquidity(l9);
-    let l12 = *(&(table::borrow(&l0.rewards, l2)).growth_inside);
+    let l12 = (table::borrow(&l0.rewards, l2)).growth_inside;
     return full_math_u128::mul_div_floor(pool::get_magma_distribution_growth_inside(l1, reg_47, reg_48, l6) - l12, l8, C0)as u64
 }
 
@@ -293,7 +288,7 @@ public fun get_reward<T0, T1, T2>(l0: &mut Gauge<T0, T1, T2>, l1: &mut Pool<T0, 
     let l16 = table::borrow(&l0.stakes, l12);
     let l14 = vector[];
     let l17 = l16;
-    let l4 = l17.len();
+    let l4 = l17.length();
     let l11 = 0u64;
     while (l11 < l4) {
         let l10 = l11;
@@ -305,8 +300,8 @@ public fun get_reward<T0, T1, T2>(l0: &mut Gauge<T0, T1, T2>, l1: &mut Pool<T0, 
     };
     let l7 = l14;
     let l9 = 0u64;
-    while (l9 < &l7.len()) {
-        let l13 = *(&(&l7)[l9]);
+    while (l9 < l7.length()) {
+        let l13 = (&l7)[l9];
         gauge::get_reward_internal(l0, l1, l13, l2, l3);
         l9 = l9 + 1u64;
     }
@@ -318,7 +313,7 @@ public fun get_reward_for<T0, T1, T2>(l0: &mut Gauge<T0, T1, T2>, l1: &mut Pool<
     let l16 = table::borrow(&l0.stakes, l2);
     let l14 = vector[];
     let l17 = l16;
-    let l5 = l17.len();
+    let l5 = l17.length();
     let l12 = 0u64;
     while (l12 < l5) {
         let l11 = l12;
@@ -330,8 +325,8 @@ public fun get_reward_for<T0, T1, T2>(l0: &mut Gauge<T0, T1, T2>, l1: &mut Pool<
     };
     let l8 = l14;
     let l10 = 0u64;
-    while (l10 < &l8.len()) {
-        let l13 = *(&(&l8)[l10]);
+    while (l10 < l8.length()) {
+        let l13 = (&l8)[l10];
         gauge::get_reward_internal(l0, l1, l13, l3, l4);
         l10 = l10 + 1u64;
     }
@@ -342,7 +337,7 @@ fun get_reward_internal<T0, T1, T2>(l0: &mut Gauge<T0, T1, T2>, l1: &mut Pool<T0
     let l7 = gauge::update_reward_internal(l0, l1, l2, reg_4, reg_5, l3);
     if (balance::value(&l7) > 0u64) {
         let l6 = balance::value(&l7);
-        let l5 = *(&(table::borrow(&l0.staked_position_infos, l2)).from);
+        let l5 = (table::borrow(&l0.staked_position_infos, l2)).from;
         transfer::public_transfer(coin::from_balance(l7, l4), l5);
         event::emit(EventClaimReward { from: tx_context::sender(freeze(l4)), position_id: l2, receiver: l5, amount: l6 })
     } else {
@@ -370,20 +365,18 @@ fun notify_reward_amount_internal<T0, T1, T2>(l0: &mut Gauge<T0, T1, T2>, l1: &m
     pool::update_magma_distribution_growth_global(l1, option::borrow(&l0.gauge_cap), l3);
     let l6 = l7 + l8;
     l2 = l2 + pool::get_magma_distribution_rollover(freeze(l1));
-    if (l7 >= *(&l0.period_finish)) {
+    if (l7 >= l0.period_finish) {
         *(&mut l0.reward_rate) = full_math_u128::mul_div_floor(l2as u128, C0, l8as u128);
-        pool::sync_magma_distribution_reward(l1, option::borrow(&l0.gauge_cap), *(&l0.reward_rate), l2, l6)
+        pool::sync_magma_distribution_reward(l1, option::borrow(&l0.gauge_cap), l0.reward_rate, l2, l6)
     } else {
-        let l5 = full_math_u128::mul_div_floor(l8as u128, *(&l0.reward_rate), C0);
+        let l5 = full_math_u128::mul_div_floor(l8as u128, l0.reward_rate, C0);
         *(&mut l0.reward_rate) = full_math_u128::mul_div_floor(l2as u128 + l5, C0, l8as u128);
-        pool::sync_magma_distribution_reward(l1, option::borrow(&l0.gauge_cap), *(&l0.reward_rate), l2 + l5as u64, l6)
+        pool::sync_magma_distribution_reward(l1, option::borrow(&l0.gauge_cap), l0.reward_rate, l2 + l5as u64, l6)
     };
-    if (table::contains(&l0.reward_rate_by_epoch, config::epoch_start(l7))) {
-        
-    };
-    table::add(&mut l0.reward_rate_by_epoch, config::epoch_start(l7), *(&l0.reward_rate));
-    assert!(*(&l0.reward_rate) != 0u128, 9223374081260453908u64);
-    assert!(*(&l0.reward_rate) <= full_math_u128::mul_div_floor(balance::value(&l0.reserves_balance)as u128, C0, l8as u128), 9223374085555552278u64);
+    let __c84 = table::contains(&l0.reward_rate_by_epoch, config::epoch_start(l7));
+    table::add(&mut l0.reward_rate_by_epoch, config::epoch_start(l7), l0.reward_rate);
+    assert!(l0.reward_rate != 0u128, 9223374081260453908u64);
+    assert!(l0.reward_rate <= full_math_u128::mul_div_floor(balance::value(&l0.reserves_balance)as u128, C0, l8as u128), 9223374085555552278u64);
     *(&mut l0.period_finish) = l6;
     event::emit(EventNotifyReward { sender: *(option::borrow(&l0.voter)), amount: l2 })
 }
@@ -397,11 +390,11 @@ public fun notify_reward_without_claim<T0, T1, T2>(l0: &mut Gauge<T0, T1, T2>, l
 }
 
 public fun period_finish<T0, T1, T2>(l0: &Gauge<T0, T1, T2>): u64 {
-    return *(&l0.period_finish)
+    return l0.period_finish
 }
 
 public fun pool_id<T0, T1, T2>(l0: &Gauge<T0, T1, T2>): ID {
-    return *(&l0.pool_id)
+    return l0.pool_id
 }
 
 public fun position_info<T0, T1, T2>(l0: &Gauge<T0, T1, T2>, l1: ID): &Position {
@@ -409,7 +402,7 @@ public fun position_info<T0, T1, T2>(l0: &Gauge<T0, T1, T2>, l1: ID): &Position 
 }
 
 public(friend) fun receive_gauge_cap<T0, T1, T2>(l0: &mut Gauge<T0, T1, T2>, l1: GaugeCap) {
-    assert!(*(&l0.pool_id) == x2_gauge_cap::get_pool_id(&l1), 9223373196495945727u64);
+    assert!(l0.pool_id == x2_gauge_cap::get_pool_id(&l1), 9223373196495945727u64);
     option::fill(&mut l0.gauge_cap, l1)
 }
 
@@ -418,7 +411,7 @@ public fun reserves_balance<T0, T1, T2>(l0: &Gauge<T0, T1, T2>): u64 {
 }
 
 public fun reward_rate<T0, T1, T2>(l0: &Gauge<T0, T1, T2>): u128 {
-    return *(&l0.reward_rate)
+    return l0.reward_rate
 }
 
 public fun reward_rate_by_epoch_start<T0, T1, T2>(l0: &Gauge<T0, T1, T2>, l1: u64): u128 {
@@ -438,7 +431,7 @@ public fun stakes<T0, T1, T2>(l0: &Gauge<T0, T1, T2>, l1: address): vector<ID> {
     let l10 = table::borrow(&l0.stakes, l1);
     let l8 = vector[];
     let l11 = l10;
-    let l2 = l11.len();
+    let l2 = l11.length();
     let l7 = 0u64;
     while (l7 < l2) {
         let l6 = l7;
@@ -455,14 +448,14 @@ fun update_reward_internal<T0, T1, T2>(l0: &mut Gauge<T0, T1, T2>, l1: &mut Pool
     let l9 = clock::timestamp_ms(l5) / 1000u64;
     let l8 = gauge::earned_internal(freeze(l0), freeze(l1), l2, l9);
     let l10 = table::borrow_mut(&mut l0.rewards, l2);
-    if (*(&l10.last_update_time) >= l9) {
+    if (l10.last_update_time >= l9) {
         return balance::zero()
     };
     pool::update_magma_distribution_growth_global(l1, option::borrow(&l0.gauge_cap), l5);
     *(&mut l10.last_update_time) = l9;
-    *(&mut l10.amount) = *(&l10.amount) + l8;
+    *(&mut l10.amount) = l10.amount + l8;
     *(&mut l10.growth_inside) = pool::get_magma_distribution_growth_inside(freeze(l1), l3, l4, 0u128);
-    let l7 = *(&l10.amount);
+    let l7 = l10.amount;
     *(&mut l10.amount) = 0u64;
     return if (l7 > 0u64) {
         balance::split(&mut l0.reserves_balance, l7)
@@ -477,8 +470,8 @@ public fun withdraw_position<T0, T1, T2>(l0: &mut Gauge<T0, T1, T2>, l1: &mut Po
         gauge::get_position_reward(l0, l1, l2, l3, l4)
     };
     let l8 = table::remove(&mut l0.staked_position_infos, l2);
-    assert!(*(&(&l8).received), 9223373707597905934u64);
-    assert!(*(&(&l8).from) == tx_context::sender(freeze(l4)), 9223373711892742156u64);
+    assert!((&l8).received, 9223373707597905934u64);
+    assert!((&l8).from == tx_context::sender(freeze(l4)), 9223373711892742156u64);
     let l7 = object_table::remove(&mut l0.staked_positions, l2);
     let l6 = position::liquidity(&l7);
     if (l6 > 0u128) {
@@ -486,7 +479,7 @@ public fun withdraw_position<T0, T1, T2>(l0: &mut Gauge<T0, T1, T2>, l1: &mut Po
         pool::unstake_from_magma_distribution(l1, option::borrow(&l0.gauge_cap), l6, reg_62, reg_63, l3)
     };
     pool::mark_position_unstaked(l1, option::borrow(&l0.gauge_cap), l2);
-    transfer::public_transfer(l7, *(&(&l8).from));
+    transfer::public_transfer(l7, (&l8).from);
     event::emit(EventWithdrawPosition { position_id: l2, gauger_id: object::id(freeze(l0)) })
 }
 

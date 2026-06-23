@@ -173,7 +173,7 @@ const C48: vector<u8> = vector[119u8, 105u8, 116u8, 104u8, 100u8, 114u8, 97u8, 1
 
 public fun claim_reward<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: &TxContext): Balance<T0> {
     version::version_check(l0);
-    assert!(!(*(&l1.transaction_suspended)), C7);
+    assert!(!(l1.transaction_suspended), C7);
     let l16 = dynamic_object_field::borrow_mut(&mut l1.id, l2);
     let l5 = &l16.reward_tokens;
     let l4 = type_name::get();
@@ -190,10 +190,10 @@ public fun claim_reward<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: &TxCon
     loop {
         assert!(l7 < l8, C12);
         let l11 = *(big_vector::borrow_from_slice(l12, l7 % l14));
-        if (*(&(&l11).user) == l15) {
-            l10 = *(&(&(&l11).share)[l9 + 5u64]);
+        if ((&l11).user == l15) {
+            l10 = (&(&l11).share)[l9 + 5u64];
             *(&mut (&mut (&mut l11).share)[l9 + 5u64]) = 0u64;
-            *(&mut (&mut l16.share_supply)[l9 + 5u64]) = *(&(&l16.share_supply)[l9 + 5u64]) - l10;
+            *(&mut (&mut l16.share_supply)[l9 + 5u64]) = (&l16.share_supply)[l9 + 5u64] - l10;
             assert!(l10 > 0u64, C8);
             break
         };
@@ -203,18 +203,18 @@ public fun claim_reward<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: &TxCon
         };
         l7 = l7 + 1u64;
     };
-    event::emit(UserEvent { action: ascii::string(C41), log: vector[l2, *(&(&l16.info)[C8]), l10], bcs_padding: C21 });
+    event::emit(UserEvent { action: ascii::string(C41), log: vector[l2, (&l16.info)[C8], l10], bcs_padding: C21 });
     return balance::split(dynamic_field::borrow_mut(&mut l16.id, type_name::get()), l10)
 }
 
 public fun deposit_scallop_basic<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: &xe_Version, l4: &mut Market, l5: &Clock, l6: &mut TxContext) {
     version::verify(l0, freeze(l6));
     let l11 = dynamic_object_field::borrow_mut(&mut l1.id, l2);
-    assert!(*(&(&l11.info)[C12]) == 1u64, C16);
-    assert!(clock::timestamp_ms(l5) < *(&(&l11.info)[C10]), C15);
-    assert!(*(&(&l11.info)[C11]) == 0u64, C14);
+    assert!((&l11.info)[C12] == 1u64, C16);
+    assert!(clock::timestamp_ms(l5) < (&l11.info)[C10], C15);
+    assert!((&l11.info)[C11] == 0u64, C14);
     *(&mut (&mut l11.info)[C11]) = 2u64;
-    let l7 = balance::split(dynamic_field::borrow_mut(&mut l11.id, ascii::string(C1)), *(&(&l11.share_supply)[C7]) + *(&(&l11.share_supply)[C8]));
+    let l7 = balance::split(dynamic_field::borrow_mut(&mut l11.id, ascii::string(C1)), (&l11.share_supply)[C7] + (&l11.share_supply)[C8]);
     let l8 = balance::value(&l7);
     if (l8 == 0u64) {
         balance::destroy_zero(l7)
@@ -222,18 +222,18 @@ public fun deposit_scallop_basic<T0>(l0: &Version, l1: &mut Registry, l2: u64, l
         let l9 = mint::mint(l3, l4, coin::from_balance(l7, l6), l5, l6);
         let l10 = coin::value(&l9);
         dynamic_object_field::add(&mut l11.id, ascii::string(C4), l9);
-        event::emit(ManagerEvent { action: ascii::string(C45), log: vector[l2, *(&(&l11.info)[C8]), l8, l10], bcs_padding: C21 })
+        event::emit(ManagerEvent { action: ascii::string(C45), log: vector[l2, (&l11.info)[C8], l8, l10], bcs_padding: C21 })
     }
 }
 
 public fun deposit_scallop_spool<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: &xe_Version, l4: &mut Market, l5: &mut Spool, l6: &Clock, l7: &mut TxContext) {
     version::verify(l0, freeze(l7));
     let l14 = dynamic_object_field::borrow_mut(&mut l1.id, l2);
-    assert!(*(&(&l14.info)[C12]) == 1u64, C16);
-    assert!(clock::timestamp_ms(l6) < *(&(&l14.info)[C10]), C15);
-    assert!(*(&(&l14.info)[C11]) == 0u64, C14);
+    assert!((&l14.info)[C12] == 1u64, C16);
+    assert!(clock::timestamp_ms(l6) < (&l14.info)[C10], C15);
+    assert!((&l14.info)[C11] == 0u64, C14);
     *(&mut (&mut l14.info)[C11]) = 1u64;
-    let l9 = balance::split(dynamic_field::borrow_mut(&mut l14.id, ascii::string(C1)), *(&(&l14.share_supply)[C7]) + *(&(&l14.share_supply)[C8]));
+    let l9 = balance::split(dynamic_field::borrow_mut(&mut l14.id, ascii::string(C1)), (&l14.share_supply)[C7] + (&l14.share_supply)[C8]);
     let l10 = balance::value(&l9);
     if (l10 == 0u64) {
         balance::destroy_zero(l9)
@@ -247,18 +247,18 @@ public fun deposit_scallop_spool<T0>(l0: &Version, l1: &mut Registry, l2: u64, l
         let l12 = coin::value(&l11);
         xe_user::stake(l5, &mut l13, l11, l6, freeze(l7));
         dynamic_object_field::add(&mut l14.id, ascii::string(C3), l13);
-        event::emit(ManagerEvent { action: ascii::string(C43), log: vector[l2, *(&(&l14.info)[C8]), l10, l12], bcs_padding: C21 })
+        event::emit(ManagerEvent { action: ascii::string(C43), log: vector[l2, (&l14.info)[C8], l10, l12], bcs_padding: C21 })
     }
 }
 
 public fun deposit_suilend<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: &mut LendingMarket<MAIN_POOL>, l4: u64, l5: &Clock, l6: &mut TxContext) {
     version::verify(l0, freeze(l6));
     let l13 = dynamic_object_field::borrow_mut(&mut l1.id, l2);
-    assert!(*(&(&l13.info)[C12]) == 1u64, C16);
-    assert!(clock::timestamp_ms(l5) < *(&(&l13.info)[C10]), C15);
-    assert!(*(&(&l13.info)[C11]) == 0u64, C14);
+    assert!((&l13.info)[C12] == 1u64, C16);
+    assert!(clock::timestamp_ms(l5) < (&l13.info)[C10], C15);
+    assert!((&l13.info)[C11] == 0u64, C14);
     *(&mut (&mut l13.info)[C11]) = 3u64;
-    let l8 = balance::split(dynamic_field::borrow_mut(&mut l13.id, ascii::string(C1)), *(&(&l13.share_supply)[C7]) + *(&(&l13.share_supply)[C8]));
+    let l8 = balance::split(dynamic_field::borrow_mut(&mut l13.id, ascii::string(C1)), (&l13.share_supply)[C7] + (&l13.share_supply)[C8]);
     let l9 = balance::value(&l8);
     if (l9 == 0u64) {
         balance::destroy_zero(l8)
@@ -272,7 +272,7 @@ public fun deposit_suilend<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: &mu
         let l11 = coin::value(&l10);
         lending_market::deposit_ctokens_into_obligation(l3, l4, &l12, l5, l10, l6);
         dynamic_object_field::add(&mut l13.id, ascii::string(C5), l12);
-        event::emit(ManagerEvent { action: ascii::string(C47), log: vector[l2, *(&(&l13.info)[C8]), l9, l11], bcs_padding: C21 })
+        event::emit(ManagerEvent { action: ascii::string(C47), log: vector[l2, (&l13.info)[C8], l9, l11], bcs_padding: C21 })
     }
 }
 
@@ -291,7 +291,7 @@ public(friend) fun get_user_share(l0: &Registry, l1: u64, l2: address): Option<S
                 };
                 break
             };
-            if (*(&(big_vector::borrow_from_slice(l6, l4 % l8)).user) == l2) {
+            if ((big_vector::borrow_from_slice(l6, l4 % l8)).user == l2) {
                 return option::some(*(big_vector::borrow_from_slice(l6, l4 % l8)))
             };
             if (l4 + 1u64 < l5 && l4 + 1u64 % l8 == 0u64) {
@@ -312,46 +312,40 @@ public fun incentivise<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: Balance
     let (reg_12, reg_13) = vector::index_of(l7, &l6);
     let l16 = reg_13;
     assert!(reg_12, C13);
-    let __c24 = l4;
-    let (__c26, __c46);
-    if (__c24) {
-        __c26 = *(&(&l22.info)[C15]) == 0u64;
-        assert!(__c26, C17);
+    if (l4) {
+        assert!((&l22.info)[C15] == 0u64, C17);
         *(&mut (&mut l22.info)[C15]) = 1u64
     } else {
-        __c46 = *(&(&l22.info)[C14]) == 0u64;
-        assert!(__c46, C17);
+        assert!((&l22.info)[C14] == 0u64, C17);
         *(&mut (&mut l22.info)[C14]) = 1u64
     };
-    if ((__c24 && __c26) || (__c46 && !(__c24))) {
-        let l11 = ascii::string(C34);
-        let l9 = &mut l11;
-        let l8 = if (l4) {
-            ascii::string(C35)
-        } else {
-            ascii::string(C36)
+    let l11 = ascii::string(C34);
+    let l9 = &mut l11;
+    let l8 = if (l4) {
+        ascii::string(C35)
+    } else {
+        ascii::string(C36)
+    };
+    ascii::append(l9, l8);
+    event::emit(ManagerEvent { action: l11, log: vector[l2, (&l22.info)[C8], balance::value(&l3)], bcs_padding: C21 });
+    let l12 = balance::value(&l3);
+    let l18 = (&l22.share_supply)[C7] + (&l22.share_supply)[C8];
+    let l14 = big_vector::length(&l22.share);
+    let l21 = big_vector::slice_size(&l22.share)as u64;
+    let l20 = 0u64;
+    let l19 = big_vector::borrow_slice_mut(&mut l22.share, l20);
+    let l13 = 0u64;
+    while (l13 < l14) {
+        let l17 = big_vector::borrow_from_slice_mut(l19, l13 % l21);
+        let l15 = l12as u128 * (&l17.share)[C7] + (&l17.share)[C8]as u128 / l18as u128as u64;
+        *(&mut (&mut l17.share)[l16 + 5u64]) = (&l17.share)[l16 + 5u64] + l15;
+        l12 = l12 - l15;
+        l18 = l18 - (&l17.share)[C11];
+        if (l13 + 1u64 < l14 && l13 + 1u64 % l21 == 0u64) {
+            l20 = big_vector::get_slice_idx(freeze(l19)) + 1u64;
+            l19 = big_vector::borrow_slice_mut(&mut l22.share, l20);
         };
-        ascii::append(l9, l8);
-        event::emit(ManagerEvent { action: l11, log: vector[l2, *(&(&l22.info)[C8]), balance::value(&l3)], bcs_padding: C21 });
-        let l12 = balance::value(&l3);
-        let l18 = *(&(&l22.share_supply)[C7]) + *(&(&l22.share_supply)[C8]);
-        let l14 = big_vector::length(&l22.share);
-        let l21 = big_vector::slice_size(&l22.share)as u64;
-        let l20 = 0u64;
-        let l19 = big_vector::borrow_slice_mut(&mut l22.share, l20);
-        let l13 = 0u64;
-        while (l13 < l14) {
-            let l17 = big_vector::borrow_from_slice_mut(l19, l13 % l21);
-            let l15 = l12as u128 * *(&(&l17.share)[C7]) + *(&(&l17.share)[C8])as u128 / l18as u128as u64;
-            *(&mut (&mut l17.share)[l16 + 5u64]) = *(&(&l17.share)[l16 + 5u64]) + l15;
-            l12 = l12 - l15;
-            l18 = l18 - *(&(&l17.share)[C11]);
-            if (l13 + 1u64 < l14 && l13 + 1u64 % l21 == 0u64) {
-                l20 = big_vector::get_slice_idx(freeze(l19)) + 1u64;
-                l19 = big_vector::borrow_slice_mut(&mut l22.share, l20);
-            };
-            l13 = l13 + 1u64;
-        }
+        l13 = l13 + 1u64;
     }
 }
 
@@ -369,7 +363,7 @@ entry fun new_vault<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: u64, l4: u
     let l17 = object::new(l11);
     dynamic_field::add(&mut l17, ascii::string(C1), balance::zero());
     let l18 = C23;
-    *(&mut (&mut l18)[C7]) = *(&l1.num_of_vault);
+    *(&mut (&mut l18)[C7]) = l1.num_of_vault;
     *(&mut (&mut l18)[C8]) = 0u64;
     *(&mut (&mut l18)[C9]) = l2;
     *(&mut (&mut l18)[C10]) = l3;
@@ -394,11 +388,11 @@ entry fun new_vault<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: u64, l4: u
     *(&mut (&mut l16)[C14]) = 0u64;
     let l19 = Vault { id: l17, deposit_token: type_name::get(), reward_tokens: vector[], info: l18, config: l16, share: big_vector::new(1000u32, l11), share_supply: C25, u64_padding: vector[], bcs_padding: vector[] };
     let l15 = ascii::string(C26);
-    let l14 = vector[*(&l1.num_of_vault), l2, l3, l4, l5, l6, l7, l8, l10];
+    let l14 = vector[l1.num_of_vault, l2, l3, l4, l5, l6, l7, l8, l10];
     let l13 = type_name::get();
     event::emit(ManagerEvent { action: l15, log: l14, bcs_padding: vector[bcs::to_bytes(&l13)] });
-    *(&mut l1.num_of_vault) = *(&l1.num_of_vault) + 1u64;
-    dynamic_object_field::add(&mut l1.id, *(&(&(&l19).info)[C7]), l19)
+    *(&mut l1.num_of_vault) = l1.num_of_vault + 1u64;
+    dynamic_object_field::add(&mut l1.id, (&(&l19).info)[C7], l19)
 }
 
 public fun post_bid_balance<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: Balance<T0>, l4: &mut TxContext) {
@@ -407,9 +401,9 @@ public fun post_bid_balance<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: Ba
         balance::destroy_zero(l3)
     } else {
         let l15 = dynamic_object_field::borrow_mut(&mut l1.id, l2);
-        event::emit(ManagerEvent { action: ascii::string(C33), log: vector[l2, *(&(&l15.info)[C8]), balance::value(&l3)], bcs_padding: C21 });
+        event::emit(ManagerEvent { action: ascii::string(C33), log: vector[l2, (&l15.info)[C8], balance::value(&l3)], bcs_padding: C21 });
         let l6 = balance::value(&l3);
-        let l14 = *(&(&l15.share_supply)[C11]);
+        let l14 = (&l15.share_supply)[C11];
         let l8 = big_vector::length(&l15.share);
         let l13 = big_vector::slice_size(&l15.share)as u64;
         let l12 = 0u64;
@@ -417,17 +411,17 @@ public fun post_bid_balance<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: Ba
         let l7 = 0u64;
         while (l7 < l8) {
             let l10 = big_vector::borrow_from_slice_mut(l11, l7 % l13);
-            let l9 = l6as u128 * *(&(&l10.share)[C11])as u128 / l14as u128as u64;
-            *(&mut (&mut l10.share)[C10]) = *(&(&l10.share)[C10]) + l9;
+            let l9 = l6as u128 * (&l10.share)[C11]as u128 / l14as u128as u64;
+            *(&mut (&mut l10.share)[C10]) = (&l10.share)[C10] + l9;
             l6 = l6 - l9;
-            l14 = l14 - *(&(&l10.share)[C11]);
+            l14 = l14 - (&l10.share)[C11];
             if (l7 + 1u64 < l8 && l7 + 1u64 % l13 == 0u64) {
                 l12 = big_vector::get_slice_idx(freeze(l11)) + 1u64;
                 l11 = big_vector::borrow_slice_mut(&mut l15.share, l12);
             };
             l7 = l7 + 1u64;
         };
-        *(&mut (&mut l15.share_supply)[C10]) = *(&(&l15.share_supply)[C10]) + balance::value(&l3)
+        *(&mut (&mut l15.share_supply)[C10]) = (&l15.share_supply)[C10] + balance::value(&l3)
     }
 }
 
@@ -439,7 +433,7 @@ public fun post_bid_receipt<T0: key + store>(l0: &Version, l1: &mut Registry, l2
         let l8 = option::destroy_some(l3);
         let l9 = dynamic_object_field::borrow_mut(&mut l1.id, l2);
         let l7 = ascii::string(C32);
-        let l6 = vector[l2, *(&(&l9.info)[C8])];
+        let l6 = vector[l2, (&l9.info)[C8]];
         let l5 = object::id_address(&l8);
         event::emit(ManagerEvent { action: l7, log: l6, bcs_padding: vector[bcs::to_bytes(&l5)] });
         dynamic_object_field::add(&mut l9.id, ascii::string(C2), l8)
@@ -454,9 +448,9 @@ public fun post_exercise<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: Balan
     let (reg_12, reg_13) = vector::index_of(l6, &l5);
     let l12 = reg_13;
     assert!(reg_12, C13);
-    event::emit(ManagerEvent { action: ascii::string(C31), log: vector[l2, *(&(&l18.info)[C8]), balance::value(&l3)], bcs_padding: C21 });
+    event::emit(ManagerEvent { action: ascii::string(C31), log: vector[l2, (&l18.info)[C8], balance::value(&l3)], bcs_padding: C21 });
     let l8 = balance::value(&l3);
-    let l17 = *(&(&l18.share_supply)[C11]);
+    let l17 = (&l18.share_supply)[C11];
     let l10 = big_vector::length(&l18.share);
     let l16 = big_vector::slice_size(&l18.share)as u64;
     let l15 = 0u64;
@@ -464,10 +458,10 @@ public fun post_exercise<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: Balan
     let l9 = 0u64;
     while (l9 < l10) {
         let l13 = big_vector::borrow_from_slice_mut(l14, l9 % l16);
-        let l11 = l8as u128 * *(&(&l13.share)[C11])as u128 / l17as u128as u64;
-        *(&mut (&mut l13.share)[l12 + 5u64]) = *(&(&l13.share)[l12 + 5u64]) + l11;
+        let l11 = l8as u128 * (&l13.share)[C11]as u128 / l17as u128as u64;
+        *(&mut (&mut l13.share)[l12 + 5u64]) = (&l13.share)[l12 + 5u64] + l11;
         l8 = l8 - l11;
-        l17 = l17 - *(&(&l13.share)[C11]);
+        l17 = l17 - (&l13.share)[C11];
         if (l9 + 1u64 < l10 && l9 + 1u64 % l16 == 0u64) {
             l15 = big_vector::get_slice_idx(freeze(l14)) + 1u64;
             l14 = big_vector::borrow_slice_mut(&mut l18.share, l15);
@@ -481,7 +475,7 @@ public fun pre_exercise<T0: key + store>(l0: &Version, l1: &mut Registry, l2: u6
     let l8 = dynamic_object_field::borrow_mut(&mut l1.id, l2);
     let l7 = dynamic_object_field::remove(&mut l8.id, ascii::string(C2));
     let l6 = ascii::string(C30);
-    let l5 = vector[l2, *(&(&l8.info)[C8])];
+    let l5 = vector[l2, (&l8.info)[C8]];
     let l4 = object::id_address(&l7);
     event::emit(ManagerEvent { action: l6, log: l5, bcs_padding: vector[bcs::to_bytes(&l4)] });
     return l7
@@ -489,7 +483,7 @@ public fun pre_exercise<T0: key + store>(l0: &Version, l1: &mut Registry, l2: u6
 
 public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l2: &mut TypusUserRegistry, l3: &Version, l4: &mut Registry, l5: u64, l6: Balance<T0>, l7: u64, l8: u64, l9: u64, l10: &Clock, l11: &mut TxContext) {
     version::version_check(l3);
-    assert!(!(*(&l4.transaction_suspended)), C7);
+    assert!(!(l4.transaction_suspended), C7);
     let l20 = clock::timestamp_ms(l10);
     let l34 = dynamic_field::remove(&mut l4.id, ascii::string(C6));
     let l36 = dynamic_object_field::borrow_mut(&mut l4.id, l5);
@@ -503,7 +497,7 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
     let (l24, l29);
     loop {
         if (l22 < l25) {
-            if (*(&(big_vector::borrow_from_slice(l31, l22 % l33)).user) != l35) {
+            if ((big_vector::borrow_from_slice(l31, l22 % l33)).user != l35) {
                 if (l22 + 1u64 < l25 && l22 + 1u64 % l33 == 0u64) {
                     l32 = big_vector::get_slice_idx(l31) + 1u64;
                     l31 = big_vector::borrow_slice(&l36.share, l32);
@@ -524,20 +518,20 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
     let (__c142, __c252, __c319, __c375, __c385, __c464, __c508, __c529, __c538, __c553, l13, l14, l15, l16, l17, l18, l19, l21, l23, l26, l27, l28, l30, reg_309, reg_310);
     match (__dispatch_58) {
         0 => {
-            while (l24 < &l36.reward_tokens.len()) {
-                (&mut l29).push_back(0u64);
+            while (l24 < (&l36.reward_tokens).length()) {
+                l29.push_back(0u64);
                 l24 = l24 + 1u64;
             };
             big_vector::push_back(&mut l36.share, Share { user: l35, share: l29, u64_padding: vector[0u64, l20], bcs_padding: C37 });
             l30 = big_vector::borrow_mut(&mut l36.share, l22);
-            l26 = *(&(&l30.u64_padding)[C7])as u256 * l20 - *(&(&l30.u64_padding)[C8])as u256 * *(&(&l36.config)[C12])as u256 / 3600000u256 / 10000u256as u64;
+            l26 = (&l30.u64_padding)[C7]as u256 * l20 - (&l30.u64_padding)[C8]as u256 * (&l36.config)[C12]as u256 / 3600000u256 / 10000u256as u64;
             *(&mut (&mut l30.u64_padding)[C8]) = l20;
             l19 = balance::value(&l6);
-            *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l19;
-            *(&mut (&mut l36.share_supply)[C10]) = *(&(&l36.share_supply)[C10]) + l19;
-            __c142 = *(&(&l30.share)[C8]) < l7;
+            *(&mut (&mut l30.share)[C10]) = (&l30.share)[C10] + l19;
+            *(&mut (&mut l36.share_supply)[C10]) = (&l36.share_supply)[C10] + l19;
+            __c142 = (&l30.share)[C8] < l7;
             if (__c142) {
-                l13 = *(&(&l30.share)[C8]);
+                l13 = (&l30.share)[C8];
                 unstructured {
                     goto 'label_252;
                 }
@@ -549,13 +543,13 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
             };
             /* block 252 */;
             l21 = l13;
-            *(&mut (&mut l30.share)[C7]) = *(&(&l30.share)[C7]) + l21;
-            *(&mut (&mut l36.share_supply)[C7]) = *(&(&l36.share_supply)[C7]) + l21;
-            *(&mut (&mut l30.share)[C8]) = *(&(&l30.share)[C8]) - l21;
-            *(&mut (&mut l36.share_supply)[C8]) = *(&(&l36.share_supply)[C8]) - l21;
-            __c252 = *(&(&l30.share)[C9]) < l8;
+            *(&mut (&mut l30.share)[C7]) = (&l30.share)[C7] + l21;
+            *(&mut (&mut l36.share_supply)[C7]) = (&l36.share_supply)[C7] + l21;
+            *(&mut (&mut l30.share)[C8]) = (&l30.share)[C8] - l21;
+            *(&mut (&mut l36.share_supply)[C8]) = (&l36.share_supply)[C8] - l21;
+            __c252 = (&l30.share)[C9] < l8;
             if (__c252) {
-                l14 = *(&(&l30.share)[C9]);
+                l14 = (&l30.share)[C9];
                 unstructured {
                     goto 'label_319;
                 }
@@ -567,10 +561,10 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
             };
             /* block 319 */;
             l23 = l14;
-            *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l23;
-            *(&mut (&mut l36.share_supply)[C10]) = *(&(&l36.share_supply)[C10]) + l23;
-            *(&mut (&mut l30.share)[C9]) = *(&(&l30.share)[C9]) - l23;
-            *(&mut (&mut l36.share_supply)[C9]) = *(&(&l36.share_supply)[C9]) - l23;
+            *(&mut (&mut l30.share)[C10]) = (&l30.share)[C10] + l23;
+            *(&mut (&mut l36.share_supply)[C10]) = (&l36.share_supply)[C10] + l23;
+            *(&mut (&mut l30.share)[C9]) = (&l30.share)[C9] - l23;
+            *(&mut (&mut l36.share_supply)[C9]) = (&l36.share_supply)[C9] - l23;
             l28 = 0u64;
             __c319 = l9 > 0u64;
             if (__c319) {
@@ -580,9 +574,9 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
                 l27 = reg_310;
                 __c375 = reg_309;
                 if (__c375) {
-                    __c385 = *(&(&l30.share)[l27 + 5u64]) < l9;
+                    __c385 = (&l30.share)[l27 + 5u64] < l9;
                     if (__c385) {
-                        l17 = *(&(&l30.share)[l27 + 5u64]);
+                        l17 = (&l30.share)[l27 + 5u64];
                         unstructured {
                             goto 'label_406;
                         }
@@ -594,10 +588,10 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
                     };
                     /* block 406 */;
                     l28 = l17;
-                    *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l28;
-                    *(&mut (&mut l36.share_supply)[C10]) = *(&(&l36.share_supply)[C10]) + l28;
-                    *(&mut (&mut l30.share)[l27 + 5u64]) = *(&(&l30.share)[l27 + 5u64]) - l28;
-                    *(&mut (&mut l36.share_supply)[l27 + 5u64]) = *(&(&l36.share_supply)[l27 + 5u64]) - l28;
+                    *(&mut (&mut l30.share)[C10]) = (&l30.share)[C10] + l28;
+                    *(&mut (&mut l36.share_supply)[C10]) = (&l36.share_supply)[C10] + l28;
+                    *(&mut (&mut l30.share)[l27 + 5u64]) = (&l30.share)[l27 + 5u64] - l28;
+                    *(&mut (&mut l36.share_supply)[l27 + 5u64]) = (&l36.share_supply)[l27 + 5u64] - l28;
                     unstructured {
                         goto 'label_464;
                     }
@@ -612,12 +606,12 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
                 }
             };
             /* block 464 */;
-            *(&mut (&mut l30.u64_padding)[C7]) = *(&(&l30.share)[C7]) + *(&(&l30.share)[C10])as u128 * *(&(&l36.info)[C13])as u128 / 10000u128as u64;
+            *(&mut (&mut l30.u64_padding)[C7]) = (&l30.share)[C7] + (&l30.share)[C10]as u128 * (&l36.info)[C13]as u128 / 10000u128as u64;
             __c464 = l19 + l21 + l23 + l28 > 0u64;
             assert!(__c464, C8);
-            __c508 = l19 >= *(&(&l36.config)[C8]);
+            __c508 = l19 >= (&l36.config)[C8];
             if (__c508) {
-                l18 = l19 % *(&(&l36.config)[C8]) == 0u64;
+                l18 = l19 % (&l36.config)[C8] == 0u64;
                 unstructured {
                     goto 'label_529;
                 }
@@ -630,24 +624,24 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
             /* block 529 */;
             __c529 = l18;
             assert!(__c529, C10);
-            __c538 = l19 >= *(&(&l36.config)[C9]);
+            __c538 = l19 >= (&l36.config)[C9];
             assert!(__c538, C11);
-            __c553 = *(&(&l36.share_supply)[C10]) + *(&(&l36.share_supply)[C7]) <= *(&(&l36.config)[C7]);
+            __c553 = (&l36.share_supply)[C10] + (&l36.share_supply)[C7] <= (&l36.config)[C7];
             assert!(__c553, C9);
-            event::emit(UserEvent { action: ascii::string(C39), log: vector[l5, *(&(&l36.info)[C8]), l19, l21, l23, l28, l26], bcs_padding: C21 });
+            event::emit(UserEvent { action: ascii::string(C39), log: vector[l5, (&l36.info)[C8], l19, l21, l23, l28, l26], bcs_padding: C21 });
             dynamic_field::add(&mut l4.id, ascii::string(C6), l34);
             return
         },
         1 => {
             l30 = big_vector::borrow_mut(&mut l36.share, l22);
-            l26 = *(&(&l30.u64_padding)[C7])as u256 * l20 - *(&(&l30.u64_padding)[C8])as u256 * *(&(&l36.config)[C12])as u256 / 3600000u256 / 10000u256as u64;
+            l26 = (&l30.u64_padding)[C7]as u256 * l20 - (&l30.u64_padding)[C8]as u256 * (&l36.config)[C12]as u256 / 3600000u256 / 10000u256as u64;
             *(&mut (&mut l30.u64_padding)[C8]) = l20;
             l19 = balance::value(&l6);
-            *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l19;
-            *(&mut (&mut l36.share_supply)[C10]) = *(&(&l36.share_supply)[C10]) + l19;
-            __c142 = *(&(&l30.share)[C8]) < l7;
+            *(&mut (&mut l30.share)[C10]) = (&l30.share)[C10] + l19;
+            *(&mut (&mut l36.share_supply)[C10]) = (&l36.share_supply)[C10] + l19;
+            __c142 = (&l30.share)[C8] < l7;
             if (__c142) {
-                l13 = *(&(&l30.share)[C8]);
+                l13 = (&l30.share)[C8];
                 unstructured {
                     goto 'label_252;
                 }
@@ -659,13 +653,13 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
             };
             /* block 252 */;
             l21 = l13;
-            *(&mut (&mut l30.share)[C7]) = *(&(&l30.share)[C7]) + l21;
-            *(&mut (&mut l36.share_supply)[C7]) = *(&(&l36.share_supply)[C7]) + l21;
-            *(&mut (&mut l30.share)[C8]) = *(&(&l30.share)[C8]) - l21;
-            *(&mut (&mut l36.share_supply)[C8]) = *(&(&l36.share_supply)[C8]) - l21;
-            __c252 = *(&(&l30.share)[C9]) < l8;
+            *(&mut (&mut l30.share)[C7]) = (&l30.share)[C7] + l21;
+            *(&mut (&mut l36.share_supply)[C7]) = (&l36.share_supply)[C7] + l21;
+            *(&mut (&mut l30.share)[C8]) = (&l30.share)[C8] - l21;
+            *(&mut (&mut l36.share_supply)[C8]) = (&l36.share_supply)[C8] - l21;
+            __c252 = (&l30.share)[C9] < l8;
             if (__c252) {
-                l14 = *(&(&l30.share)[C9]);
+                l14 = (&l30.share)[C9];
                 unstructured {
                     goto 'label_319;
                 }
@@ -677,10 +671,10 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
             };
             /* block 319 */;
             l23 = l14;
-            *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l23;
-            *(&mut (&mut l36.share_supply)[C10]) = *(&(&l36.share_supply)[C10]) + l23;
-            *(&mut (&mut l30.share)[C9]) = *(&(&l30.share)[C9]) - l23;
-            *(&mut (&mut l36.share_supply)[C9]) = *(&(&l36.share_supply)[C9]) - l23;
+            *(&mut (&mut l30.share)[C10]) = (&l30.share)[C10] + l23;
+            *(&mut (&mut l36.share_supply)[C10]) = (&l36.share_supply)[C10] + l23;
+            *(&mut (&mut l30.share)[C9]) = (&l30.share)[C9] - l23;
+            *(&mut (&mut l36.share_supply)[C9]) = (&l36.share_supply)[C9] - l23;
             l28 = 0u64;
             __c319 = l9 > 0u64;
             if (__c319) {
@@ -690,9 +684,9 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
                 l27 = reg_310;
                 __c375 = reg_309;
                 if (__c375) {
-                    __c385 = *(&(&l30.share)[l27 + 5u64]) < l9;
+                    __c385 = (&l30.share)[l27 + 5u64] < l9;
                     if (__c385) {
-                        l17 = *(&(&l30.share)[l27 + 5u64]);
+                        l17 = (&l30.share)[l27 + 5u64];
                         unstructured {
                             goto 'label_406;
                         }
@@ -704,10 +698,10 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
                     };
                     /* block 406 */;
                     l28 = l17;
-                    *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l28;
-                    *(&mut (&mut l36.share_supply)[C10]) = *(&(&l36.share_supply)[C10]) + l28;
-                    *(&mut (&mut l30.share)[l27 + 5u64]) = *(&(&l30.share)[l27 + 5u64]) - l28;
-                    *(&mut (&mut l36.share_supply)[l27 + 5u64]) = *(&(&l36.share_supply)[l27 + 5u64]) - l28;
+                    *(&mut (&mut l30.share)[C10]) = (&l30.share)[C10] + l28;
+                    *(&mut (&mut l36.share_supply)[C10]) = (&l36.share_supply)[C10] + l28;
+                    *(&mut (&mut l30.share)[l27 + 5u64]) = (&l30.share)[l27 + 5u64] - l28;
+                    *(&mut (&mut l36.share_supply)[l27 + 5u64]) = (&l36.share_supply)[l27 + 5u64] - l28;
                     unstructured {
                         goto 'label_464;
                     }
@@ -722,12 +716,12 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
                 }
             };
             /* block 464 */;
-            *(&mut (&mut l30.u64_padding)[C7]) = *(&(&l30.share)[C7]) + *(&(&l30.share)[C10])as u128 * *(&(&l36.info)[C13])as u128 / 10000u128as u64;
+            *(&mut (&mut l30.u64_padding)[C7]) = (&l30.share)[C7] + (&l30.share)[C10]as u128 * (&l36.info)[C13]as u128 / 10000u128as u64;
             __c464 = l19 + l21 + l23 + l28 > 0u64;
             assert!(__c464, C8);
-            __c508 = l19 >= *(&(&l36.config)[C8]);
+            __c508 = l19 >= (&l36.config)[C8];
             if (__c508) {
-                l18 = l19 % *(&(&l36.config)[C8]) == 0u64;
+                l18 = l19 % (&l36.config)[C8] == 0u64;
                 unstructured {
                     goto 'label_529;
                 }
@@ -740,11 +734,11 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
             /* block 529 */;
             __c529 = l18;
             assert!(__c529, C10);
-            __c538 = l19 >= *(&(&l36.config)[C9]);
+            __c538 = l19 >= (&l36.config)[C9];
             assert!(__c538, C11);
-            __c553 = *(&(&l36.share_supply)[C10]) + *(&(&l36.share_supply)[C7]) <= *(&(&l36.config)[C7]);
+            __c553 = (&l36.share_supply)[C10] + (&l36.share_supply)[C7] <= (&l36.config)[C7];
             assert!(__c553, C9);
-            event::emit(UserEvent { action: ascii::string(C39), log: vector[l5, *(&(&l36.info)[C8]), l19, l21, l23, l28, l26], bcs_padding: C21 });
+            event::emit(UserEvent { action: ascii::string(C39), log: vector[l5, (&l36.info)[C8], l19, l21, l23, l28, l26], bcs_padding: C21 });
             dynamic_field::add(&mut l4.id, ascii::string(C6), l34);
             return
         }
@@ -753,7 +747,7 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
 
 public fun reduce_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l2: &mut TypusUserRegistry, l3: &Version, l4: &mut Registry, l5: u64, l6: u64, l7: u64, l8: u64, l9: &Clock, l10: &mut TxContext): Balance<T0> {
     version::version_check(l3);
-    assert!(!(*(&l4.transaction_suspended)), C7);
+    assert!(!(l4.transaction_suspended), C7);
     let l17 = clock::timestamp_ms(l9);
     let l26 = dynamic_field::remove(&mut l4.id, ascii::string(C6));
     let l28 = dynamic_object_field::borrow_mut(&mut l4.id, l5);
@@ -765,11 +759,8 @@ public fun reduce_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, 
     let l23 = big_vector::borrow_slice(&l28.share, l24);
     let l18 = 0u64;
     loop {
-        let __c60 = l18 < l20;
-        let __c64;
-        if (__c60) {
-            __c64 = *(&(big_vector::borrow_from_slice(l23, l18 % l25)).user) == l27;
-            if (!(__c64)) {
+        if (l18 < l20) {
+            if ((big_vector::borrow_from_slice(l23, l18 % l25)).user != l27) {
                 if (l18 + 1u64 < l20 && l18 + 1u64 % l25 == 0u64) {
                     l24 = big_vector::get_slice_idx(l23) + 1u64;
                     l23 = big_vector::borrow_slice(&l28.share, l24);
@@ -778,60 +769,58 @@ public fun reduce_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, 
                 continue
             }
         };
-        if (__c64 || !(__c60)) {
-            assert!(l18 < l20, C12);
-            let l22 = big_vector::borrow_mut(&mut l28.share, l18);
-            let l21 = *(&(&l22.u64_padding)[C7])as u256 * l17 - *(&(&l22.u64_padding)[C8])as u256 * *(&(&l28.config)[C12])as u256 / 3600000u256 / 10000u256as u64;
-            *(&mut (&mut l22.u64_padding)[C8]) = l17;
-            let l29 = if (*(&(&l22.share)[C10]) < l6) {
-                *(&(&l22.share)[C10])
-            } else {
-                l6
-            };
-            *(&mut (&mut l22.share)[C10]) = *(&(&l22.share)[C10]) - l29;
-            *(&mut (&mut l28.share_supply)[C10]) = *(&(&l28.share_supply)[C10]) - l29;
-            let l15 = if (*(&(&l22.share)[C7]) < l7) {
-                *(&(&l22.share)[C7])
-            } else {
-                l7
-            };
-            *(&mut (&mut l22.share)[C7]) = *(&(&l22.share)[C7]) - l15;
-            *(&mut (&mut l28.share_supply)[C7]) = *(&(&l28.share_supply)[C7]) - l15;
-            *(&mut (&mut l22.share)[C8]) = *(&(&l22.share)[C8]) + l15;
-            *(&mut (&mut l28.share_supply)[C8]) = *(&(&l28.share_supply)[C8]) + l15;
-            let l19 = if (*(&(&l22.share)[C9]) < l8) {
-                *(&(&l22.share)[C9])
-            } else {
-                l8
-            };
-            *(&mut (&mut l22.share)[C9]) = *(&(&l22.share)[C9]) - l19;
-            *(&mut (&mut l28.share_supply)[C9]) = *(&(&l28.share_supply)[C9]) - l19;
-            *(&mut (&mut l22.u64_padding)[C7]) = *(&(&l22.share)[C7]) + *(&(&l22.share)[C10])as u128 * *(&(&l28.info)[C13])as u128 / 10000u128as u64;
-            assert!(l29 + l15 + l19 > 0u64, C8);
-            event::emit(UserEvent { action: ascii::string(C40), log: vector[l5, *(&(&l28.info)[C8]), l29, l15, l19, l21], bcs_padding: C21 });
-            dynamic_field::add(&mut l4.id, ascii::string(C6), l26);
-            return l16
-        }
+        assert!(l18 < l20, C12);
+        let l22 = big_vector::borrow_mut(&mut l28.share, l18);
+        let l21 = (&l22.u64_padding)[C7]as u256 * l17 - (&l22.u64_padding)[C8]as u256 * (&l28.config)[C12]as u256 / 3600000u256 / 10000u256as u64;
+        *(&mut (&mut l22.u64_padding)[C8]) = l17;
+        let l29 = if ((&l22.share)[C10] < l6) {
+            (&l22.share)[C10]
+        } else {
+            l6
+        };
+        *(&mut (&mut l22.share)[C10]) = (&l22.share)[C10] - l29;
+        *(&mut (&mut l28.share_supply)[C10]) = (&l28.share_supply)[C10] - l29;
+        let l15 = if ((&l22.share)[C7] < l7) {
+            (&l22.share)[C7]
+        } else {
+            l7
+        };
+        *(&mut (&mut l22.share)[C7]) = (&l22.share)[C7] - l15;
+        *(&mut (&mut l28.share_supply)[C7]) = (&l28.share_supply)[C7] - l15;
+        *(&mut (&mut l22.share)[C8]) = (&l22.share)[C8] + l15;
+        *(&mut (&mut l28.share_supply)[C8]) = (&l28.share_supply)[C8] + l15;
+        let l19 = if ((&l22.share)[C9] < l8) {
+            (&l22.share)[C9]
+        } else {
+            l8
+        };
+        *(&mut (&mut l22.share)[C9]) = (&l22.share)[C9] - l19;
+        *(&mut (&mut l28.share_supply)[C9]) = (&l28.share_supply)[C9] - l19;
+        *(&mut (&mut l22.u64_padding)[C7]) = (&l22.share)[C7] + (&l22.share)[C10]as u128 * (&l28.info)[C13]as u128 / 10000u128as u64;
+        assert!(l29 + l15 + l19 > 0u64, C8);
+        event::emit(UserEvent { action: ascii::string(C40), log: vector[l5, (&l28.info)[C8], l29, l15, l19, l21], bcs_padding: C21 });
+        dynamic_field::add(&mut l4.id, ascii::string(C6), l26);
+        return l16
     }
 }
 
 public fun refresh(l0: &Version, l1: &mut Registry, l2: u64, l3: u64, l4: u64, l5: &Clock, l6: &mut TxContext) {
     version::verify(l0, freeze(l6));
     let l16 = dynamic_object_field::borrow_mut(&mut l1.id, l2);
-    assert!(clock::timestamp_ms(l5) >= *(&(&l16.info)[C10]), C15);
-    assert!(*(&(&l16.info)[C11]) == 0u64, C14);
-    assert!(*(&(&l16.info)[C14]) == 1u64, C18);
-    assert!(*(&(&l16.info)[C15]) == 1u64, C18);
+    assert!(clock::timestamp_ms(l5) >= (&l16.info)[C10], C15);
+    assert!((&l16.info)[C11] == 0u64, C14);
+    assert!((&l16.info)[C14] == 1u64, C18);
+    assert!((&l16.info)[C15] == 1u64, C18);
     *(&mut (&mut l16.info)[C10]) = l3;
-    *(&mut (&mut l16.info)[C8]) = *(&(&l16.info)[C8]) + 1u64;
+    *(&mut (&mut l16.info)[C8]) = (&l16.info)[C8] + 1u64;
     *(&mut (&mut l16.info)[C13]) = l4;
-    let l7 = if (*(&(&l16.config)[C13]) > 0u64) {
+    let l7 = if ((&l16.config)[C13] > 0u64) {
         0u64
     } else {
         1u64
     };
     *(&mut (&mut l16.info)[C14]) = l7;
-    let l8 = if (*(&(&l16.config)[C14]) > 0u64) {
+    let l8 = if ((&l16.config)[C14] > 0u64) {
         0u64
     } else {
         1u64
@@ -844,10 +833,10 @@ public fun refresh(l0: &Version, l1: &mut Registry, l2: u64, l3: u64, l4: u64, l
     let l10 = 0u64;
     while (l10 < l11) {
         let l12 = big_vector::borrow_from_slice_mut(l13, l10 % l15);
-        *(&mut (&mut l12.share)[C11]) = *(&(&l12.share)[C7]) + *(&(&l12.share)[C8]);
-        *(&mut (&mut l12.share)[C9]) = *(&(&l12.share)[C9]) + *(&(&l12.share)[C8]);
+        *(&mut (&mut l12.share)[C11]) = (&l12.share)[C7] + (&l12.share)[C8];
+        *(&mut (&mut l12.share)[C9]) = (&l12.share)[C9] + (&l12.share)[C8];
         *(&mut (&mut l12.share)[C8]) = 0u64;
-        *(&mut (&mut l12.share)[C7]) = *(&(&l12.share)[C7]) + *(&(&l12.share)[C10]);
+        *(&mut (&mut l12.share)[C7]) = (&l12.share)[C7] + (&l12.share)[C10];
         *(&mut (&mut l12.share)[C10]) = 0u64;
         if (l10 + 1u64 < l11 && l10 + 1u64 % l15 == 0u64) {
             l14 = big_vector::get_slice_idx(freeze(l13)) + 1u64;
@@ -855,11 +844,11 @@ public fun refresh(l0: &Version, l1: &mut Registry, l2: u64, l3: u64, l4: u64, l
         };
         l10 = l10 + 1u64;
     };
-    event::emit(ManagerEvent { action: ascii::string(C29), log: vector[l2, *(&(&l16.info)[C8]), l3, l4, *(&(&l16.share_supply)[C7]), *(&(&l16.share_supply)[C8]), *(&(&l16.share_supply)[C9]), *(&(&l16.share_supply)[C10])], bcs_padding: C21 });
-    *(&mut (&mut l16.share_supply)[C11]) = *(&mut (&mut l16.share_supply)[C7]) + *(&mut (&mut l16.share_supply)[C8]);
-    *(&mut (&mut l16.share_supply)[C9]) = *(&mut (&mut l16.share_supply)[C9]) + *(&mut (&mut l16.share_supply)[C8]);
+    event::emit(ManagerEvent { action: ascii::string(C29), log: vector[l2, (&l16.info)[C8], l3, l4, (&l16.share_supply)[C7], (&l16.share_supply)[C8], (&l16.share_supply)[C9], (&l16.share_supply)[C10]], bcs_padding: C21 });
+    *(&mut (&mut l16.share_supply)[C11]) = (&mut l16.share_supply)[C7] + (&mut l16.share_supply)[C8];
+    *(&mut (&mut l16.share_supply)[C9]) = (&mut l16.share_supply)[C9] + (&mut l16.share_supply)[C8];
     *(&mut (&mut l16.share_supply)[C8]) = 0u64;
-    *(&mut (&mut l16.share_supply)[C7]) = *(&mut (&mut l16.share_supply)[C7]) + *(&mut (&mut l16.share_supply)[C10]);
+    *(&mut (&mut l16.share_supply)[C7]) = (&mut l16.share_supply)[C7] + (&mut l16.share_supply)[C10];
     *(&mut (&mut l16.share_supply)[C10]) = 0u64
 }
 
@@ -898,14 +887,14 @@ public fun set_reward_token<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: &m
     };
     dynamic_field::add(&mut l15.id, type_name::get(), balance::zero());
     let l9 = ascii::string(C28);
-    let l8 = vector[l2, *(&(&l15.info)[C8])];
+    let l8 = vector[l2, (&l15.info)[C8]];
     let l7 = type_name::get();
     event::emit(ManagerEvent { action: l9, log: l8, bcs_padding: vector[bcs::to_bytes(&l7)] })
 }
 
 public fun snapshot(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l2: &mut TypusUserRegistry, l3: &Version, l4: &mut Registry, l5: u64, l6: &Clock, l7: &mut TxContext) {
     version::version_check(l3);
-    assert!(!(*(&l4.transaction_suspended)), C7);
+    assert!(!(l4.transaction_suspended), C7);
     let l9 = clock::timestamp_ms(l6);
     let l17 = dynamic_field::remove(&mut l4.id, ascii::string(C6));
     let l19 = dynamic_object_field::borrow_mut(&mut l4.id, l5);
@@ -916,11 +905,8 @@ public fun snapshot(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l2: &mu
     let l14 = big_vector::borrow_slice(&l19.share, l15);
     let l10 = 0u64;
     loop {
-        let __c58 = l10 < l11;
-        let __c62;
-        if (__c58) {
-            __c62 = *(&(big_vector::borrow_from_slice(l14, l10 % l16)).user) == l18;
-            if (!(__c62)) {
+        if (l10 < l11) {
+            if ((big_vector::borrow_from_slice(l14, l10 % l16)).user != l18) {
                 if (l10 + 1u64 < l11 && l10 + 1u64 % l16 == 0u64) {
                     l15 = big_vector::get_slice_idx(l14) + 1u64;
                     l14 = big_vector::borrow_slice(&l19.share, l15);
@@ -929,19 +915,17 @@ public fun snapshot(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l2: &mu
                 continue
             }
         };
-        if (__c62 || !(__c58)) {
-            if (l10 == l11) {
-                dynamic_field::add(&mut l4.id, ascii::string(C6), l17);
-                return
-            };
-            let l13 = big_vector::borrow_mut(&mut l19.share, l10);
-            let l12 = *(&(&l13.u64_padding)[C7])as u256 * l9 - *(&(&l13.u64_padding)[C8])as u256 * *(&(&l19.config)[C12])as u256 / 3600000u256 / 10000u256as u64;
-            *(&mut (&mut l13.u64_padding)[C8]) = l9;
-            *(&mut (&mut l13.u64_padding)[C7]) = *(&(&l13.share)[C7]) + *(&(&l13.share)[C10])as u128 * *(&(&l19.info)[C13])as u128 / 10000u128as u64;
-            event::emit(UserEvent { action: ascii::string(C42), log: vector[l5, *(&(&l19.info)[C8]), l12], bcs_padding: C21 });
+        if (l10 == l11) {
             dynamic_field::add(&mut l4.id, ascii::string(C6), l17);
             return
-        }
+        };
+        let l13 = big_vector::borrow_mut(&mut l19.share, l10);
+        let l12 = (&l13.u64_padding)[C7]as u256 * l9 - (&l13.u64_padding)[C8]as u256 * (&l19.config)[C12]as u256 / 3600000u256 / 10000u256as u64;
+        *(&mut (&mut l13.u64_padding)[C8]) = l9;
+        *(&mut (&mut l13.u64_padding)[C7]) = (&l13.share)[C7] + (&l13.share)[C10]as u128 * (&l19.info)[C13]as u128 / 10000u128as u64;
+        event::emit(UserEvent { action: ascii::string(C42), log: vector[l5, (&l19.info)[C8], l12], bcs_padding: C21 });
+        dynamic_field::add(&mut l4.id, ascii::string(C6), l17);
+        return
     }
 }
 
@@ -954,32 +938,32 @@ entry fun suspend_transaction(l0: &Version, l1: &mut Registry, l2: &TxContext) {
 entry fun update_vault_config(l0: &Version, l1: &mut Registry, l2: u64, l3: u64, l4: u64, l5: &TxContext) {
     version::verify(l0, l5);
     let l6 = dynamic_object_field::borrow_mut(&mut l1.id, l2);
-    while (&l6.config.len() < l3 + 1u64) {
+    while ((&l6.config).length() < l3 + 1u64) {
         (&mut l6.config).push_back(0u64)
     };
-    event::emit(ManagerEvent { action: ascii::string(C27), log: vector[l2, *(&(&l6.info)[C8]), l3, *(&(&l6.config)[l3]), l4], bcs_padding: C21 });
+    event::emit(ManagerEvent { action: ascii::string(C27), log: vector[l2, (&l6.info)[C8], l3, (&l6.config)[l3], l4], bcs_padding: C21 });
     *(&mut (&mut l6.config)[l3]) = l4
 }
 
 public fun withdraw_scallop_basic<T0>(l0: &mut Version, l1: &mut Registry, l2: u64, l3: &xe_Version, l4: &mut Market, l5: &Clock, l6: &mut TxContext): Balance<T0> {
     version::verify(freeze(l0), freeze(l6));
     let l12 = dynamic_object_field::borrow_mut(&mut l1.id, l2);
-    assert!(*(&(&l12.info)[C11]) == 2u64, C14);
+    assert!((&l12.info)[C11] == 2u64, C14);
     *(&mut (&mut l12.info)[C11]) = 0u64;
     let l10 = dynamic_object_field::remove(&mut l12.id, ascii::string(C4));
     let l7 = coin::into_balance(redeem::redeem(l3, l4, l10, l5, l6));
     let l9 = balance::value(&l7);
-    let l11 = *(&(&l12.share_supply)[C7]) + *(&(&l12.share_supply)[C8]);
-    let l8 = balance::value(&l7)as u128 * *(&(&l12.config)[C10])as u128 / 10000u128as u64;
+    let l11 = (&l12.share_supply)[C7] + (&l12.share_supply)[C8];
+    let l8 = balance::value(&l7)as u128 * (&l12.config)[C10]as u128 / 10000u128as u64;
     version::charge_fee(l0, balance::split(&mut l7, l8));
-    event::emit(ManagerEvent { action: ascii::string(C46), log: vector[l2, *(&(&l12.info)[C8]), l11, l9, l8], bcs_padding: C21 });
+    event::emit(ManagerEvent { action: ascii::string(C46), log: vector[l2, (&l12.info)[C8], l11, l9, l8], bcs_padding: C21 });
     return l7
 }
 
 public fun withdraw_scallop_spool<T0, T1>(l0: &mut Version, l1: &mut Registry, l2: u64, l3: &xe_Version, l4: &mut Market, l5: &mut Spool, l6: &mut RewardsPool<T1>, l7: &Clock, l8: &mut TxContext): ( Balance<T0>, Balance<T1>) {
     version::verify(freeze(l0), freeze(l8));
     let l19 = dynamic_object_field::borrow_mut(&mut l1.id, l2);
-    assert!(*(&(&l19.info)[C11]) == 1u64, C14);
+    assert!((&l19.info)[C11] == 1u64, C14);
     *(&mut (&mut l19.info)[C11]) = 0u64;
     let l16 = dynamic_object_field::remove(&mut l19.id, ascii::string(C3));
     let l18 = spool_account::stake_amount(&l16);
@@ -993,21 +977,21 @@ public fun withdraw_scallop_spool<T0, T1>(l0: &mut Version, l1: &mut Registry, l
     dynamic_object_field::add(&mut l19.id, ascii::string(C3), l16);
     let l11 = balance::value(&l9);
     let l15 = balance::value(&l13);
-    let l17 = *(&(&l19.share_supply)[C7]) + *(&(&l19.share_supply)[C8]);
-    let l10 = balance::value(&l9)as u128 * *(&(&l19.config)[C10])as u128 / 10000u128as u64;
+    let l17 = (&l19.share_supply)[C7] + (&l19.share_supply)[C8];
+    let l10 = balance::value(&l9)as u128 * (&l19.config)[C10]as u128 / 10000u128as u64;
     version::charge_fee(l0, balance::split(&mut l9, l10));
-    let l14 = balance::value(&l13)as u128 * *(&(&l19.config)[C10])as u128 / 10000u128as u64;
+    let l14 = balance::value(&l13)as u128 * (&l19.config)[C10]as u128 / 10000u128as u64;
     version::charge_fee(l0, balance::split(&mut l13, l14));
-    event::emit(ManagerEvent { action: ascii::string(C44), log: vector[l2, *(&(&l19.info)[C8]), l17, l11, l15, l10, l14], bcs_padding: C21 });
+    event::emit(ManagerEvent { action: ascii::string(C44), log: vector[l2, (&l19.info)[C8], l17, l11, l15, l10, l14], bcs_padding: C21 });
     return (l9, l13)
 }
 
 public fun withdraw_suilend<T0>(l0: &mut Version, l1: &mut Registry, l2: u64, l3: &mut LendingMarket<MAIN_POOL>, l4: u64, l5: &Clock, l6: &mut TxContext): Balance<T0> {
     version::verify(freeze(l0), freeze(l6));
     let l14 = dynamic_object_field::borrow_mut(&mut l1.id, l2);
-    assert!(*(&(&l14.info)[C12]) == 1u64, C16);
-    assert!(clock::timestamp_ms(l5) < *(&(&l14.info)[C10]), C15);
-    assert!(*(&(&l14.info)[C11]) == 0u64, C14);
+    assert!((&l14.info)[C12] == 1u64, C16);
+    assert!(clock::timestamp_ms(l5) < (&l14.info)[C10], C15);
+    assert!((&l14.info)[C11] == 0u64, C14);
     *(&mut (&mut l14.info)[C11]) = 3u64;
     let l13 = if (dynamic_object_field::exists_(&l14.id, ascii::string(C5))) {
         dynamic_object_field::remove(&mut l14.id, ascii::string(C5))
@@ -1018,10 +1002,10 @@ public fun withdraw_suilend<T0>(l0: &mut Version, l1: &mut Registry, l2: u64, l3
     let l8 = coin::into_balance(lending_market::redeem_ctokens_and_withdraw_liquidity(l3, l4, l5, l11, option::none(), l6));
     dynamic_object_field::add(&mut l14.id, ascii::string(C5), l13);
     let l10 = balance::value(&l8);
-    let l12 = *(&(&l14.share_supply)[C7]) + *(&(&l14.share_supply)[C8]);
-    let l9 = balance::value(&l8)as u128 * *(&(&l14.config)[C10])as u128 / 10000u128as u64;
+    let l12 = (&l14.share_supply)[C7] + (&l14.share_supply)[C8];
+    let l9 = balance::value(&l8)as u128 * (&l14.config)[C10]as u128 / 10000u128as u64;
     version::charge_fee(l0, balance::split(&mut l8, l9));
-    event::emit(ManagerEvent { action: ascii::string(C48), log: vector[l2, *(&(&l14.info)[C8]), l12, l10, l9], bcs_padding: C21 });
+    event::emit(ManagerEvent { action: ascii::string(C48), log: vector[l2, (&l14.info)[C8], l12, l10, l9], bcs_padding: C21 });
     return l8
 }
 

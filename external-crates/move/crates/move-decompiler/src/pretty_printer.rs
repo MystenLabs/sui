@@ -943,8 +943,35 @@ fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
         }
     }
 
+    /// Receiver for method syntax (`.foo(...)`). Move's `.method` auto-borrows, so a
+    /// `Borrow(_, inner)` arg means we emit `inner.method(...)` rather than `&inner.method(...)`
+    /// - the latter parses as `&(inner.method())` and would give us the wrong type.
+    fn method_receiver(context: &Context, e: &Exp) -> Doc {
+        match e {
+            Exp::Borrow(_, inner) => maybe_parens(context, inner),
+            _ => maybe_parens(context, e),
+        }
+    }
+
     match op {
-        DataOp::ReadRef => D::text("*").concat(maybe_parens(context, &args[0])),
+        // `*(&x.f)` collapses to `x.f` (value form). Same for `*(&v[i])` and the `&mut`
+        // variants - the round-trip ref-then-deref reads as the field/element value.
+        DataOp::ReadRef => match &args[0] {
+            Exp::Data {
+                op: DataOp::ImmBorrowField(field_ref) | DataOp::MutBorrowField(field_ref),
+                args: inner,
+            } => maybe_parens(context, &inner[0])
+                .concat(D::text("."))
+                .concat(D::text(field_ref.field.name.as_str())),
+            Exp::Data {
+                op: DataOp::VecImmBorrow(_) | DataOp::VecMutBorrow(_),
+                args: inner,
+            } => maybe_parens(context, &inner[0])
+                .concat(D::text("["))
+                .concat(exp(context, &inner[1]))
+                .concat(D::text("]")),
+            _ => D::text("*").concat(maybe_parens(context, &args[0])),
+        },
 
         DataOp::WriteRef => D::text("*")
             .concat(maybe_parens(context, &args[0]))
@@ -966,7 +993,7 @@ fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
             .concat(exp_list(context, args))
             .concat(D::text("]")),
 
-        DataOp::VecLen(_) => exp(context, &args[0]).concat(D::text(".len()")),
+        DataOp::VecLen(_) => method_receiver(context, &args[0]).concat(D::text(".length()")),
 
         DataOp::VecImmBorrow(_) => D::text("&")
             .concat(maybe_parens(context, &args[0]))
@@ -980,14 +1007,14 @@ fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
             .concat(exp(context, &args[1]))
             .concat(D::text("]")),
 
-        DataOp::VecPushBack(_) => maybe_parens(context, &args[0])
+        DataOp::VecPushBack(_) => method_receiver(context, &args[0])
             .concat(D::text(".push_back("))
             .concat(exp(context, &args[1]))
             .concat(D::text(")")),
 
-        DataOp::VecPopBack(_) => maybe_parens(context, &args[0]).concat(D::text(".pop_back()")),
+        DataOp::VecPopBack(_) => method_receiver(context, &args[0]).concat(D::text(".pop_back()")),
 
-        DataOp::VecSwap(_) => maybe_parens(context, &args[0])
+        DataOp::VecSwap(_) => method_receiver(context, &args[0])
             .concat(D::text(".swap("))
             .concat(exp(context, &args[1]))
             .concat(D::text(", "))

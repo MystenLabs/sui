@@ -145,48 +145,43 @@ const C14: u8 = 2u8;
 // -- functions -- 
 
 public fun cancel_limit_order(l0: &mut OrderManager, l1: u64, l2: &Clock, l3: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l3)) == *(&l0.owner), C3);
-    assert!(!(*(&l0.is_paused)), C4);
+    assert!(tx_context::sender(freeze(l3)) == l0.owner, C3);
+    assert!(!(l0.is_paused), C4);
     assert!(vector::contains(&l0.active_orders, &l1), C0);
     let l6 = clock::timestamp_ms(l2);
     let l17 = table::remove(&mut l0.receipts, l1);
-    assert!(*(&(&l17).is_active), C6);
-    assert!(l6 > *(&(&l17).created_at), C5);
+    assert!((&l17).is_active, C6);
+    assert!(l6 > (&l17).created_at, C5);
     let l18 = l17;
-    let l16 = *(&(&l17).oco_group_id);
+    let l16 = (&l17).oco_group_id;
     if (option::is_some(&l16)) {
         let l15 = *(option::borrow(&l16));
         if (table::contains(&l0.oco_groups, l15)) {
             let l14 = table::remove(&mut l0.oco_groups, l15);
-            let l4 = if (*(&(&l14).order1_id) == l1) {
-                *(&(&l14).order2_id)
+            let l4 = if ((&l14).order1_id == l1) {
+                (&l14).order2_id
             } else {
-                *(&(&l14).order1_id)
+                (&l14).order1_id
             };
             *(&mut (&mut l14).is_active) = false;
             table::add(&mut l0.oco_groups, l15, l14);
             let l12 = l4;
             if (table::contains(&l0.receipts, l12)) {
                 let l13 = table::remove(&mut l0.receipts, l12);
-                if (*(&(&l13).is_active) && vector::contains(&l0.active_orders, &l12)) {
+                if ((&l13).is_active && vector::contains(&l0.active_orders, &l12)) {
                     *(&mut (&mut l13).is_active) = false;
                     *(&mut (&mut l13).cancelled_at) = option::some(l6);
                     let l7 = 0u64;
-                    let l9 = &l0.active_orders.len();
+                    let l9 = (&l0.active_orders).length();
                     loop {
-                        let __c157 = l7 < l9;
-                        let __c161;
-                        if (__c157) {
-                            __c161 = *(&(&l0.active_orders)[l7]) == l12;
-                            if (!(__c161)) {
+                        if (l7 < l9) {
+                            if ((&l0.active_orders)[l7] != l12) {
                                 l7 = l7 + 1u64;
                                 continue
                             }
                         };
-                        if (__c161 || !(__c157)) {
-                            event::emit(OCOOrderCancelledEvent { oco_group_id: l15, cancelled_order_id: l12, user: *(&l0.owner), cancelled_at: l6 });
-                            break
-                        }
+                        event::emit(OCOOrderCancelledEvent { oco_group_id: l15, cancelled_order_id: l12, user: l0.owner, cancelled_at: l6 });
+                        break
                     }
                 };
                 table::add(&mut l0.receipts, l12, l13)
@@ -197,21 +192,16 @@ public fun cancel_limit_order(l0: &mut OrderManager, l1: u64, l2: &Clock, l3: &m
     *(&mut (&mut l18).cancelled_at) = option::some(l6);
     table::add(&mut l0.receipts, l1, l18);
     let l8 = 0u64;
-    let l10 = &l0.active_orders.len();
+    let l10 = (&l0.active_orders).length();
     loop {
-        let __c214 = l8 < l10;
-        let __c218;
-        if (__c214) {
-            __c218 = *(&(&l0.active_orders)[l8]) == l1;
-            if (!(__c218)) {
+        if (l8 < l10) {
+            if ((&l0.active_orders)[l8] != l1) {
                 l8 = l8 + 1u64;
                 continue
             }
         };
-        if (__c218 || !(__c214)) {
-            event::emit(OrderCancelledEvent { order_id: l1, user: *(&l0.owner), cancelled_at: l6 });
-            return
-        }
+        event::emit(OrderCancelledEvent { order_id: l1, user: l0.owner, cancelled_at: l6 });
+        return
     }
 }
 
@@ -224,29 +214,29 @@ public entry fun cancel_multiple_orders_entry(l0: &mut OrderManager, l1: vector<
 }
 
 public fun cancel_multiple_orders_safe(l0: &mut OrderManager, l1: vector<u64>, l2: &Clock, l3: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l3)) == *(&l0.owner), C3);
-    assert!(!(*(&l0.is_paused)), C4);
-    let l5 = &l1.len();
+    assert!(tx_context::sender(freeze(l3)) == l0.owner, C3);
+    assert!(!(l0.is_paused), C4);
+    let l5 = l1.length();
     let l4 = 0u64;
     let l7 = vector[];
     while (l4 < l5) {
-        let l6 = *(&(&l1)[l4]);
+        let l6 = (&l1)[l4];
         if (vector::contains(&l0.active_orders, &l6)) {
-            if (*(&(table::borrow(&l0.receipts, l6)).is_active)) {
+            if ((table::borrow(&l0.receipts, l6)).is_active) {
                 orlim::cancel_limit_order(l0, l6, l2, l3);
-                (&mut l7).push_back(l6)
+                l7.push_back(l6)
             }
         };
         l4 = l4 + 1u64;
     };
     loop {
-        if (&l1.len() <= 0u64) {
+        if (l1.length() <= 0u64) {
             break
         }
     };
     std::vector::destroy_empty(l1);
     loop {
-        if (&l7.len() <= 0u64) {
+        if (l7.length() <= 0u64) {
             break
         }
     };
@@ -254,23 +244,23 @@ public fun cancel_multiple_orders_safe(l0: &mut OrderManager, l1: vector<u64>, l
 }
 
 public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &Clock, l3: &mut TxContext): ( Coin<u64>, Coin<u64>) {
-    assert!(tx_context::sender(freeze(l3)) == *(&l0.owner), C3);
-    assert!(!(*(&l0.is_paused)), C4);
-    assert!(*(&(&l1).owner) == *(&l0.owner), C3);
-    let l17 = *(&(&(&l1).order_data).order_id);
+    assert!(tx_context::sender(freeze(l3)) == l0.owner, C3);
+    assert!(!(l0.is_paused), C4);
+    assert!((&l1).owner == l0.owner, C3);
+    let l17 = (&(&l1).order_data).order_id;
     let l7 = clock::timestamp_ms(l2);
-    let l16 = *(&(&l1).order_data);
+    let l16 = (&l1).order_data;
     *(&mut (&mut l16).is_active) = false;
     *(&mut (&mut l16).cancelled_at) = option::some(l7);
     let l6 = coin::zero(l3);
     let l18 = coin::zero(l3);
     let l8 = 0u64;
-    let l10 = &l0.active_orders.len();
+    let l10 = (&l0.active_orders).length();
     let __dispatch_81;
     let (l11, l12, l14, l5, l9);
     loop {
         if (l8 < l10) {
-            if (*(&(&l0.active_orders)[l8]) != l17) {
+            if ((&l0.active_orders)[l8] != l17) {
                 l8 = l8 + 1u64;
                 continue
             }
@@ -279,19 +269,19 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
             l14 = *(option::borrow(&(&l16).oco_group_id));
             if (table::contains(&l0.oco_groups, l14)) {
                 let l13 = table::borrow_mut(&mut l0.oco_groups, l14);
-                if (*(&l13.is_active)) {
-                    l11 = if (*(&l13.order1_id) == l17) {
-                        *(&l13.order2_id)
+                if (l13.is_active) {
+                    l11 = if (l13.order1_id == l17) {
+                        l13.order2_id
                     } else {
-                        *(&l13.order1_id)
+                        l13.order1_id
                     };
                     if (table::contains(&l0.receipts, l11)) {
                         l12 = table::remove(&mut l0.receipts, l11);
-                        if (*(&(&l12).is_active)) {
+                        if ((&l12).is_active) {
                             *(&mut (&mut l12).is_active) = false;
                             *(&mut (&mut l12).cancelled_at) = option::some(l7);
                             l9 = 0u64;
-                            l5 = &l0.active_orders.len();
+                            l5 = (&l0.active_orders).length();
                             __dispatch_81 = 0u32;
                             break
                         };
@@ -314,26 +304,21 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
     match (__dispatch_81) {
         0 => {
             loop {
-                let __c173 = l9 < l5;
-                let __c177;
-                if (__c173) {
-                    __c177 = *(&(&l0.active_orders)[l9]) == l11;
-                    if (!(__c177)) {
+                if (l9 < l5) {
+                    if ((&l0.active_orders)[l9] != l11) {
                         l9 = l9 + 1u64;
                         continue
                     }
                 };
-                if (__c177 || !(__c173)) {
-                    event::emit(OCOOrderCancelledEvent { oco_group_id: l14, cancelled_order_id: l11, user: *(&l0.owner), cancelled_at: l7 });
-                    break
-                }
+                event::emit(OCOOrderCancelledEvent { oco_group_id: l14, cancelled_order_id: l11, user: l0.owner, cancelled_at: l7 });
+                break
             };
             table::add(&mut l0.receipts, l11, l12);
             l15 = table::remove(&mut l0.oco_groups, l14);
             *(&mut (&mut l15).is_active) = false;
             table::add(&mut l0.oco_groups, l14, l15);
             table::add(&mut l0.receipts, l17, l16);
-            event::emit(OrderCancelledByOwnerEvent { order_id: l17, owner: *(&l0.owner), cancelled_at: l7 });
+            event::emit(OrderCancelledByOwnerEvent { order_id: l17, owner: l0.owner, cancelled_at: l7 });
             let OrderReceipt { id: reg_174, order_data: reg_175, owner: reg_176 } = l1;
             object::delete(reg_174 : 0x2::object::UID);
             return (l6, l18)
@@ -344,7 +329,7 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
             *(&mut (&mut l15).is_active) = false;
             table::add(&mut l0.oco_groups, l14, l15);
             table::add(&mut l0.receipts, l17, l16);
-            event::emit(OrderCancelledByOwnerEvent { order_id: l17, owner: *(&l0.owner), cancelled_at: l7 });
+            event::emit(OrderCancelledByOwnerEvent { order_id: l17, owner: l0.owner, cancelled_at: l7 });
             let OrderReceipt { id: reg_174, order_data: reg_175, owner: reg_176 } = l1;
             object::delete(reg_174 : 0x2::object::UID);
             return (l6, l18)
@@ -354,14 +339,14 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
             *(&mut (&mut l15).is_active) = false;
             table::add(&mut l0.oco_groups, l14, l15);
             table::add(&mut l0.receipts, l17, l16);
-            event::emit(OrderCancelledByOwnerEvent { order_id: l17, owner: *(&l0.owner), cancelled_at: l7 });
+            event::emit(OrderCancelledByOwnerEvent { order_id: l17, owner: l0.owner, cancelled_at: l7 });
             let OrderReceipt { id: reg_174, order_data: reg_175, owner: reg_176 } = l1;
             object::delete(reg_174 : 0x2::object::UID);
             return (l6, l18)
         },
         3 => {
             table::add(&mut l0.receipts, l17, l16);
-            event::emit(OrderCancelledByOwnerEvent { order_id: l17, owner: *(&l0.owner), cancelled_at: l7 });
+            event::emit(OrderCancelledByOwnerEvent { order_id: l17, owner: l0.owner, cancelled_at: l7 });
             let OrderReceipt { id: reg_174, order_data: reg_175, owner: reg_176 } = l1;
             object::delete(reg_174 : 0x2::object::UID);
             return (l6, l18)
@@ -394,10 +379,10 @@ public entry fun create_order_manager_entry(l0: &Clock, l1: &mut TxContext) {
 }
 
 public fun create_order_receipt(l0: &mut OrderManager, l1: u64, l2: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l2)) == *(&l0.owner), C3);
+    assert!(tx_context::sender(freeze(l2)) == l0.owner, C3);
     assert!(table::contains(&l0.receipts, l1), C0);
     let l3 = table::remove(&mut l0.receipts, l1);
-    transfer::public_transfer(OrderReceipt { id: object::new(l2), order_data: l3, owner: *(&l0.owner) }, *(&l0.owner))
+    transfer::public_transfer(OrderReceipt { id: object::new(l2), order_data: l3, owner: l0.owner }, l0.owner)
 }
 
 public entry fun create_order_receipt_entry(l0: &mut OrderManager, l1: u64, l2: &mut TxContext) {
@@ -405,7 +390,7 @@ public entry fun create_order_receipt_entry(l0: &mut OrderManager, l1: u64, l2: 
 }
 
 public fun get_manager_owner(l0: &OrderManager): address {
-    return *(&l0.owner)
+    return l0.owner
 }
 
 public fun get_receipt_details(l0: &OrderManager, l1: u64): &OrderReceiptData {
@@ -413,7 +398,7 @@ public fun get_receipt_details(l0: &OrderManager, l1: u64): &OrderReceiptData {
 }
 
 public fun get_total_orders_created(l0: &OrderManager): u64 {
-    return *(&l0.total_orders_created)
+    return l0.total_orders_created
 }
 
 public fun get_user_orders(l0: &OrderManager): &vector<u64> {
@@ -421,21 +406,18 @@ public fun get_user_orders(l0: &OrderManager): &vector<u64> {
 }
 
 public fun handle_oco_fill(l0: &mut OrderManager, l1: u64, l2: &Clock, l3: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l3)) == *(&l0.owner), C3);
+    assert!(tx_context::sender(freeze(l3)) == l0.owner, C3);
     assert!(table::contains(&l0.receipts, l1), C0);
     let l6 = table::borrow(&l0.receipts, l1);
-    assert!(*(&l6.is_active), C8);
-    let __c45 = option::is_some(&l6.oco_group_id);
-    let __c49;
-    if (__c45) {
+    assert!(l6.is_active, C8);
+    if (option::is_some(&l6.oco_group_id)) {
         let l16 = *(option::borrow(&l6.oco_group_id));
-        __c49 = table::contains(&l0.oco_groups, l16);
-        assert!(__c49, C7);
+        assert!(table::contains(&l0.oco_groups, l16), C7);
         let l15 = table::remove(&mut l0.oco_groups, l16);
-        let l4 = if (*(&(&l15).order1_id) == l1) {
-            *(&(&l15).order2_id)
+        let l4 = if ((&l15).order1_id == l1) {
+            (&l15).order2_id
         } else {
-            *(&(&l15).order1_id)
+            (&l15).order1_id
         };
         *(&mut (&mut l15).is_active) = false;
         table::add(&mut l0.oco_groups, l16, l15);
@@ -443,24 +425,19 @@ public fun handle_oco_fill(l0: &mut OrderManager, l1: u64, l2: &Clock, l3: &mut 
         let l5 = clock::timestamp_ms(l2);
         if (table::contains(&l0.receipts, l13)) {
             let l14 = table::remove(&mut l0.receipts, l13);
-            if (*(&(&l14).is_active)) {
+            if ((&l14).is_active) {
                 *(&mut (&mut l14).is_active) = false;
                 *(&mut (&mut l14).cancelled_at) = option::some(l5);
                 let l8 = 0u64;
-                let l10 = &l0.active_orders.len();
+                let l10 = (&l0.active_orders).length();
                 loop {
-                    let __c133 = l8 < l10;
-                    let __c137;
-                    if (__c133) {
-                        __c137 = *(&(&l0.active_orders)[l8]) == l13;
-                        if (!(__c137)) {
+                    if (l8 < l10) {
+                        if ((&l0.active_orders)[l8] != l13) {
                             l8 = l8 + 1u64;
                             continue
                         }
                     };
-                    if (__c137 || !(__c133)) {
-                        break
-                    }
+                    break
                 }
             };
             table::add(&mut l0.receipts, l13, l14)
@@ -470,33 +447,25 @@ public fun handle_oco_fill(l0: &mut OrderManager, l1: u64, l2: &Clock, l3: &mut 
         *(&mut (&mut l7).is_fully_filled) = true;
         table::add(&mut l0.receipts, l1, l7);
         let l9 = 0u64;
-        let l11 = &l0.active_orders.len();
+        let l11 = (&l0.active_orders).length();
         loop {
-            let __c186 = l9 < l11;
-            let __c190;
-            if (__c186) {
-                __c190 = *(&(&l0.active_orders)[l9]) == l1;
-                if (!(__c190)) {
+            if (l9 < l11) {
+                if ((&l0.active_orders)[l9] != l1) {
                     l9 = l9 + 1u64;
                     continue
                 }
             };
-            if (__c190 || !(__c186)) {
-                event::emit(OCOOrderFilledEvent { oco_group_id: l16, filled_order_id: l1, cancelled_order_id: l13, user: *(&l0.owner), filled_at: l5 });
-                break
-            }
+            event::emit(OCOOrderFilledEvent { oco_group_id: l16, filled_order_id: l1, cancelled_order_id: l13, user: l0.owner, filled_at: l5 });
+            break
         }
-    };
-    if (__c49 || !(__c45)) {
-        
     }
 }
 
 public entry fun handle_oco_fill_entry(l0: &mut OrderManager, l1: OrderReceipt, l2: &Clock, l3: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l3)) == *(&(&l1).owner), C3);
-    assert!(!(*(&l0.is_paused)), C4);
-    assert!(tx_context::sender(freeze(l3)) == *(&l0.owner), C3);
-    let l4 = *(&(&(&l1).order_data).order_id);
+    assert!(tx_context::sender(freeze(l3)) == (&l1).owner, C3);
+    assert!(!(l0.is_paused), C4);
+    assert!(tx_context::sender(freeze(l3)) == l0.owner, C3);
+    let l4 = (&(&l1).order_data).order_id;
     orlim::handle_oco_fill(l0, l4, l2, l3);
     let OrderReceipt { id: reg_39, order_data: reg_40, owner: reg_41 } = l1;
     object::delete(reg_39 : 0x2::object::UID)
@@ -507,7 +476,7 @@ fun init(l0: &mut TxContext) {
 }
 
 public fun is_contract_paused(l0: &OrderManager): bool {
-    return *(&l0.is_paused)
+    return l0.is_paused
 }
 
 public fun is_order_active(l0: &OrderManager, l1: u64): bool {
@@ -515,38 +484,28 @@ public fun is_order_active(l0: &OrderManager, l1: u64): bool {
 }
 
 public fun modify_order(l0: &mut OrderManager, l1: u64, l2: Option<u64>, l3: Option<u64>, l4: &Clock, l5: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l5)) == *(&l0.owner), C3);
-    assert!(!(*(&l0.is_paused)), C4);
+    assert!(tx_context::sender(freeze(l5)) == l0.owner, C3);
+    assert!(!(l0.is_paused), C4);
     assert!(vector::contains(&l0.active_orders, &l1), C0);
     let l13 = table::borrow_mut(&mut l0.receipts, l1);
-    assert!(*(&l13.is_active), C6);
+    assert!(l13.is_active, C6);
     let l8 = clock::timestamp_ms(l4);
-    assert!(l8 > *(&l13.created_at), C5);
-    let l9 = *(&l13.price);
-    let l10 = *(&l13.quantity);
-    let __c69 = option::is_some(&l2);
-    let __c80;
-    if (__c69) {
+    assert!(l8 > l13.created_at, C5);
+    let l9 = l13.price;
+    let l10 = l13.quantity;
+    if (option::is_some(&l2)) {
         let l11 = option::destroy_some(l2);
-        __c80 = l11 > 0u64;
-        assert!(__c80, C1);
+        assert!(l11 > 0u64, C1);
         *(&mut l13.price) = l11
     };
-    if (__c80 || !(__c69)) {
-        let __c96 = option::is_some(&l3);
-        let __c99;
-        if (__c96) {
-            let l12 = option::destroy_some(l3);
-            __c99 = l12 > 0u64;
-            assert!(__c99, C2);
-            *(&mut l13.quantity) = l12
-        };
-        if (__c99 || !(__c96)) {
-            let l6 = *(&l13.price);
-            let l7 = *(&l13.quantity);
-            event::emit(OrderModifiedEvent { order_id: l1, old_price: l9, new_price: l6, old_quantity: l10, new_quantity: l7, modified_at: l8 })
-        }
-    }
+    if (option::is_some(&l3)) {
+        let l12 = option::destroy_some(l3);
+        assert!(l12 > 0u64, C2);
+        *(&mut l13.quantity) = l12
+    };
+    let l6 = l13.price;
+    let l7 = l13.quantity;
+    event::emit(OrderModifiedEvent { order_id: l1, old_price: l9, new_price: l6, old_quantity: l10, new_quantity: l7, modified_at: l8 })
 }
 
 public entry fun modify_order_entry(l0: &mut OrderManager, l1: u64, l2: u64, l3: u64, l4: &Clock, l5: &mut TxContext) {
@@ -556,45 +515,45 @@ public entry fun modify_order_entry(l0: &mut OrderManager, l1: u64, l2: u64, l3:
 }
 
 public fun place_limit_order(l0: &mut OrderManager, l1: vector<u8>, l2: u64, l3: u64, l4: bool, l5: &Clock, l6: &mut TxContext): u64 {
-    assert!(tx_context::sender(freeze(l6)) == *(&l0.owner), C3);
-    assert!(!(*(&l0.is_paused)), C4);
+    assert!(tx_context::sender(freeze(l6)) == l0.owner, C3);
+    assert!(!(l0.is_paused), C4);
     assert!(l2 > 0u64, C1);
     assert!(l3 > 0u64, C2);
     let l7 = clock::timestamp_ms(l5);
-    assert!(l7 > *(&l0.created_at), C5);
-    let l8 = l7 + *(&l0.total_orders_created);
+    assert!(l7 > l0.created_at, C5);
+    let l8 = l7 + l0.total_orders_created;
     (&mut l0.active_orders).push_back(l8);
-    *(&mut l0.total_orders_created) = *(&l0.total_orders_created) + 1u64;
+    *(&mut l0.total_orders_created) = l0.total_orders_created + 1u64;
     let l9 = OrderReceiptData { order_id: l8, deepbook_order_id: l8, pool_id: l1, price: l2, quantity: l3, original_quantity: l3, is_bid: l4, order_type: OrderType { value: C12 }, time_in_force: TimeInForce { value: C12 }, created_at: l7, is_active: true, is_fully_filled: false, cancelled_at: option::none(), oco_group_id: option::none(), expires_at: option::none() };
     table::add(&mut l0.receipts, l8, l9);
-    event::emit(OrderPlacedEvent { order_id: l8, pool_id: l1, user: *(&l0.owner), price: l2, quantity: l3, is_bid: l4, created_at: l7 });
+    event::emit(OrderPlacedEvent { order_id: l8, pool_id: l1, user: l0.owner, price: l2, quantity: l3, is_bid: l4, created_at: l7 });
     return l8
 }
 
 public entry fun place_limit_order_entry(l0: &mut OrderManager, l1: vector<u8>, l2: u64, l3: u64, l4: bool, l5: &Clock, l6: &mut TxContext) {}
 
 public fun place_limit_order_oco(l0: &mut OrderManager, l1: vector<u8>, l2: u64, l3: u64, l4: bool, l5: u64, l6: u64, l7: bool, l8: &Clock, l9: &mut TxContext): ( u64, u64) {
-    assert!(tx_context::sender(freeze(l9)) == *(&l0.owner), C3);
-    assert!(!(*(&l0.is_paused)), C4);
+    assert!(tx_context::sender(freeze(l9)) == l0.owner, C3);
+    assert!(!(l0.is_paused), C4);
     assert!(l2 > 0u64 && l5 > 0u64, C1);
     assert!(l3 > 0u64 && l6 > 0u64, C2);
     let l12 = clock::timestamp_ms(l8);
-    assert!(l12 > *(&l0.created_at), C5);
-    let l14 = l12 + *(&l0.total_orders_created);
+    assert!(l12 > l0.created_at, C5);
+    let l14 = l12 + l0.total_orders_created;
     let l15 = l14;
     let l16 = l14 + 1000000u64;
     (&mut l0.active_orders).push_back(l15);
     (&mut l0.active_orders).push_back(l16);
-    *(&mut l0.total_orders_created) = *(&l0.total_orders_created) + 2u64;
+    *(&mut l0.total_orders_created) = l0.total_orders_created + 2u64;
     let l13 = OCOGroup { id: object::new(l9), group_id: l14, order1_id: l15, order2_id: l16, created_at: l12, is_active: true };
     table::add(&mut l0.oco_groups, l14, l13);
     let l17 = OrderReceiptData { order_id: l15, deepbook_order_id: l15, pool_id: l1, price: l2, quantity: l3, original_quantity: l3, is_bid: l4, order_type: OrderType { value: C13 }, time_in_force: TimeInForce { value: C12 }, created_at: l12, is_active: true, is_fully_filled: false, cancelled_at: option::none(), oco_group_id: option::some(l14), expires_at: option::none() };
     table::add(&mut l0.receipts, l15, l17);
     let l18 = OrderReceiptData { order_id: l16, deepbook_order_id: l16, pool_id: vector[], price: l5, quantity: l6, original_quantity: l6, is_bid: l7, order_type: OrderType { value: C13 }, time_in_force: TimeInForce { value: C12 }, created_at: l12, is_active: true, is_fully_filled: false, cancelled_at: option::none(), oco_group_id: option::some(l14), expires_at: option::none() };
     table::add(&mut l0.receipts, l16, l18);
-    event::emit(OCOOrderPlacedEvent { oco_group_id: l14, order_id_1: l15, order_id_2: l16, user: *(&l0.owner), created_at: l12 });
-    event::emit(OrderPlacedEvent { order_id: l15, pool_id: vector[], user: *(&l0.owner), price: l2, quantity: l3, is_bid: l4, created_at: l12 });
-    event::emit(OrderPlacedEvent { order_id: l16, pool_id: vector[], user: *(&l0.owner), price: l5, quantity: l6, is_bid: l7, created_at: l12 });
+    event::emit(OCOOrderPlacedEvent { oco_group_id: l14, order_id_1: l15, order_id_2: l16, user: l0.owner, created_at: l12 });
+    event::emit(OrderPlacedEvent { order_id: l15, pool_id: vector[], user: l0.owner, price: l2, quantity: l3, is_bid: l4, created_at: l12 });
+    event::emit(OrderPlacedEvent { order_id: l16, pool_id: vector[], user: l0.owner, price: l5, quantity: l6, is_bid: l7, created_at: l12 });
     return (l15, l16)
 }
 
@@ -603,23 +562,21 @@ public entry fun place_limit_order_oco_entry(l0: &mut OrderManager, l1: vector<u
 }
 
 public fun place_limit_order_tif(l0: &mut OrderManager, l1: vector<u8>, l2: u64, l3: u64, l4: bool, l5: u8, l6: Coin<u64>, l7: Coin<u64>, l8: &Clock, l9: &mut TxContext): ( u64, Option<Coin<u64>>, Option<Coin<u64>>) {
-    assert!(tx_context::sender(freeze(l9)) == *(&l0.owner), C3);
-    assert!(!(*(&l0.is_paused)), C4);
+    assert!(tx_context::sender(freeze(l9)) == l0.owner, C3);
+    assert!(!(l0.is_paused), C4);
     assert!(l2 > 0u64, C1);
     assert!(l3 > 0u64, C2);
     assert!(l5 == C13 || l5 == C14, C9);
     let l28 = clock::timestamp_ms(l8);
-    assert!(l28 > *(&l0.created_at), C5);
-    let l33 = l28 + *(&l0.total_orders_created);
+    assert!(l28 > l0.created_at, C5);
+    let l33 = l28 + l0.total_orders_created;
     let l30 = 0u64;
     let l40 = l3;
     let l31 = true;
     let l32 = false;
     let l38 = option::none();
     let l39 = option::none();
-    let __c95 = l5 == C13;
-    let (__c177, __c181);
-    if (__c95) {
+    if (l5 == C13) {
         if (l40 > 0u64) {
             l31 = false;
             let l37 = l40as u128 * coin::value(&l6)as u128 / l3as u128;
@@ -633,16 +590,14 @@ public fun place_limit_order_tif(l0: &mut OrderManager, l1: vector<u8>, l2: u64,
             };
             option::fill(&mut l38, l25);
             option::fill(&mut l39, l34);
-            event::emit(OrderPartialFilledEvent { order_id: l33, filled_quantity: l30, remaining_quantity: l40, user: *(&l0.owner), filled_at: l28 })
+            event::emit(OrderPartialFilledEvent { order_id: l33, filled_quantity: l30, remaining_quantity: l40, user: l0.owner, filled_at: l28 })
         } else {
             l32 = true;
             l31 = false;
         }
     } else {
-        __c177 = l5 == C14;
-        if (__c177) {
-            __c181 = l40 > 0u64;
-            if (__c181) {
+        if (l5 == C14) {
+            if (l40 > 0u64) {
                 let l27 = coin::value(&l6);
                 let l26 = coin::split(&mut l6, l27, l9);
                 let l35 = coin::zero(l9);
@@ -654,7 +609,7 @@ public fun place_limit_order_tif(l0: &mut OrderManager, l1: vector<u8>, l2: u64,
                 };
                 option::fill(&mut l38, l26);
                 option::fill(&mut l39, l35);
-                event::emit(OrderExpiredEvent { order_id: l33, user: *(&l0.owner), expired_at: l28 });
+                event::emit(OrderExpiredEvent { order_id: l33, user: l0.owner, expired_at: l28 });
                 if (coin::value(&l6) > 0u64) {
                     transfer::public_transfer(l6, tx_context::sender(freeze(l9)))
                 } else {
@@ -671,35 +626,33 @@ public fun place_limit_order_tif(l0: &mut OrderManager, l1: vector<u8>, l2: u64,
             l31 = false;
         }
     };
-    if ((__c95 || !(__c177)) || !(__c181)) {
-        if (l31 || (l5 == C13 && l30 > 0u64)) {
-            (&mut l0.active_orders).push_back(l33);
-            *(&mut l0.total_orders_created) = *(&l0.total_orders_created) + 1u64;
-            let l24 = TimeInForce { value: l5 };
-            let l22 = l31;
-            let l21 = l32;
-            let l20 = if (l31) {
-                option::none()
-            } else {
-                option::some(l28)
-            };
-            let l36 = OrderReceiptData { order_id: l33, deepbook_order_id: l33, pool_id: l1, price: l2, quantity: l40, original_quantity: l3, is_bid: l4, order_type: OrderType { value: C14 }, time_in_force: l24, created_at: l28, is_active: l22, is_fully_filled: l21, cancelled_at: l20, oco_group_id: option::none(), expires_at: option::none() };
-            table::add(&mut l0.receipts, l33, l36);
-            event::emit(TIFOrderPlacedEvent { order_id: l33, tif_type: l5, user: *(&l0.owner), created_at: l28 });
-            event::emit(OrderPlacedEvent { order_id: l33, pool_id: l1, user: *(&l0.owner), price: l2, quantity: l3, is_bid: l4, created_at: l28 })
-        };
-        if (coin::value(&l6) > 0u64) {
-            transfer::public_transfer(l6, tx_context::sender(freeze(l9)))
+    if (l31 || (l5 == C13 && l30 > 0u64)) {
+        (&mut l0.active_orders).push_back(l33);
+        *(&mut l0.total_orders_created) = l0.total_orders_created + 1u64;
+        let l24 = TimeInForce { value: l5 };
+        let l22 = l31;
+        let l21 = l32;
+        let l20 = if (l31) {
+            option::none()
         } else {
-            coin::destroy_zero(l6)
+            option::some(l28)
         };
-        if (coin::value(&l7) > 0u64) {
-            transfer::public_transfer(l7, tx_context::sender(freeze(l9)))
-        } else {
-            coin::destroy_zero(l7)
-        };
-        return (l33, l38, l39)
-    }
+        let l36 = OrderReceiptData { order_id: l33, deepbook_order_id: l33, pool_id: l1, price: l2, quantity: l40, original_quantity: l3, is_bid: l4, order_type: OrderType { value: C14 }, time_in_force: l24, created_at: l28, is_active: l22, is_fully_filled: l21, cancelled_at: l20, oco_group_id: option::none(), expires_at: option::none() };
+        table::add(&mut l0.receipts, l33, l36);
+        event::emit(TIFOrderPlacedEvent { order_id: l33, tif_type: l5, user: l0.owner, created_at: l28 });
+        event::emit(OrderPlacedEvent { order_id: l33, pool_id: l1, user: l0.owner, price: l2, quantity: l3, is_bid: l4, created_at: l28 })
+    };
+    if (coin::value(&l6) > 0u64) {
+        transfer::public_transfer(l6, tx_context::sender(freeze(l9)))
+    } else {
+        coin::destroy_zero(l6)
+    };
+    if (coin::value(&l7) > 0u64) {
+        transfer::public_transfer(l7, tx_context::sender(freeze(l9)))
+    } else {
+        coin::destroy_zero(l7)
+    };
+    return (l33, l38, l39)
 }
 
 public entry fun place_limit_order_tif_entry(l0: &mut OrderManager, l1: vector<u8>, l2: u64, l3: u64, l4: bool, l5: u8, l6: Coin<u64>, l7: Coin<u64>, l8: &Clock, l9: &mut TxContext) {
@@ -732,8 +685,8 @@ public entry fun transfer_manager_entry(l0: OrderManager, l1: address, l2: &mut 
 }
 
 public fun transfer_order_ownership(l0: OrderReceipt, l1: address, l2: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l2)) == *(&(&l0).owner), C3);
-    let l3 = *(&(&(&l0).order_data).order_id);
+    assert!(tx_context::sender(freeze(l2)) == (&l0).owner, C3);
+    let l3 = (&(&l0).order_data).order_id;
     transfer::public_transfer(l0, l1);
     event::emit(OrderOwnershipTransferredEvent { order_id: l3, from: tx_context::sender(freeze(l2)), to: l1, transferred_at: 0u64 })
 }
@@ -746,22 +699,17 @@ public fun update_order_status(l0: &mut OrderManager, l1: u64, l2: bool) {
     if (table::contains(&l0.receipts, l1)) {
         let l6 = table::borrow_mut(&mut l0.receipts, l1);
         *(&mut l6.is_active) = l2;
-        if (!(l2) && *(&l6.is_active)) {
+        if (!(l2) && l6.is_active) {
             let l4 = 0u64;
-            let l5 = &l0.active_orders.len();
+            let l5 = (&l0.active_orders).length();
             loop {
-                let __c34 = l4 < l5;
-                let __c39;
-                if (__c34) {
-                    __c39 = *(&(&l0.active_orders)[l4]) == l1;
-                    if (!(__c39)) {
+                if (l4 < l5) {
+                    if ((&l0.active_orders)[l4] != l1) {
                         l4 = l4 + 1u64;
                         continue
                     }
                 };
-                if (__c39 || !(__c34)) {
-                    break
-                }
+                break
             }
         }
     }

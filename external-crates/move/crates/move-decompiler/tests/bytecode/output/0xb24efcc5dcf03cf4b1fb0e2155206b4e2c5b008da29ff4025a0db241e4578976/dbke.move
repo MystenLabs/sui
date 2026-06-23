@@ -92,17 +92,17 @@ public fun elf<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut CBM, l2: &mut Balance
         let l22 = vector[];
         let l19 = vector[];
         let l28 = 0u64;
-        while (l28 < &l11.len()) {
-            let l26 = *(&(&l14)[l28]);
+        while (l28 < l11.length()) {
+            let l26 = (&l14)[l28];
             if (l26 < clock::timestamp_ms(l3)) {
                 event::emit(EE { e: ct::e_order_expired(), l: 348u64 });
                 l28 = l28 + 1u64;
             } else {
-                let l34 = *(&(&l9)[l28]);
-                let l47 = *(&(&l10)[l28]);
-                let l27 = *(&(&l11)[l28]);
-                let l40 = *(&(&l12)[l28]);
-                let l29 = *(&(&l13)[l28]);
+                let l34 = (&l9)[l28];
+                let l47 = (&l10)[l28];
+                let l27 = (&l11)[l28];
+                let l40 = (&l12)[l28];
+                let l29 = (&l13)[l28];
                 let __c117 = l29;
                 let (__c144, __c157);
                 if (__c117) {
@@ -180,14 +180,13 @@ fun sp(l0: &vector<u64>, l1: &vector<u64>, l2: u64, l3: u64, l4: bool): u64 {
     if (l3 % l2 != 0u64) {
         return 0u64
     };
-    let __c12 = l4;
     let (__c17, __c28, __c39, __c52, __c63, __c74, l5);
-    l5 = if (__c12) {
-        __c17 = l1.len() == 0u64;
+    l5 = if (l4) {
+        __c17 = l1.length() == 0u64;
         if (__c17) {
             return l3
         };
-        let l8 = *(&l1[0u64]);
+        let l8 = l1[0u64];
         __c28 = l3 < l8;
         if (__c28) {
             return l3
@@ -199,11 +198,11 @@ fun sp(l0: &vector<u64>, l1: &vector<u64>, l2: u64, l3: u64, l4: bool): u64 {
         };
         l9
     } else {
-        __c52 = l0.len() == 0u64;
+        __c52 = l0.length() == 0u64;
         if (__c52) {
             return l3
         };
-        let l7 = *(&l0[0u64]);
+        let l7 = l0[0u64];
         __c63 = l3 > l7;
         if (__c63) {
             return l3
@@ -215,9 +214,7 @@ fun sp(l0: &vector<u64>, l1: &vector<u64>, l2: u64, l3: u64, l4: bool): u64 {
         };
         l10
     };
-    if ((((__c12 && !(__c17)) && !(__c28)) && !(__c39)) || (((!(__c12) && !(__c52)) && !(__c63)) && !(__c74))) {
-        return l5
-    }
+    return l5
 }
 
 fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64, l6: u64, l7: u64, l8: u64, l9: bool, l10: bool, l11: bool): ( u64, u64) {
@@ -233,9 +230,8 @@ fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64,
     if (l8 < l6) {
         return (0u64, ct::e_insufficient_quantity())
     };
-    let __c46 = l9;
     let (__c51, __c75, l15);
-    l15 = if (__c46) {
+    l15 = if (l9) {
         let l25 = l2as u128 * constants::float_scaling_u128() / l7as u128as u64;
         let l21 = l25 % l5 + l5;
         __c51 = l25 < l21;
@@ -253,21 +249,19 @@ fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64,
         let l20 = u64::max(l6, u64::min(l8, l1));
         l20 - l20 % l5
     };
-    if (!(__c46) || (!(__c51) && !(__c75))) {
-        let l26 = l15;
-        if (if (l11) {
-            let (reg_89, reg_90) = pool::get_order_deep_required(l0, l26, l7);
-            if (l10) {
-                reg_90
-            } else {
-                reg_89
-            }
+    let l26 = l15;
+    if (if (l11) {
+        let (reg_89, reg_90) = pool::get_order_deep_required(l0, l26, l7);
+        if (l10) {
+            reg_90
         } else {
-            0u64
-        } > l3) {
-            return (0u64, ct::e_insufficient_deep_balance())
-        };
-        return (l26, 0u64)
-    }
+            reg_89
+        }
+    } else {
+        0u64
+    } > l3) {
+        return (0u64, ct::e_insufficient_deep_balance())
+    };
+    return (l26, 0u64)
 }
 

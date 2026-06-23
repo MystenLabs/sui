@@ -550,42 +550,37 @@ const C58: vector<u8> = vector[78u8, 111u8, 32u8, 98u8, 111u8, 110u8, 117u8, 115
 // -- functions -- 
 
 public entry fun add_collection_to_slot<T0>(l0: &mut StakingPool<T0>, l1: u8, l2: String, l3: &Clock, l4: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l4)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l4)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     assert!(l1 >= C53 && l1 <= C52, C29);
     assert!(string::length(&l2) > 0u64, C23);
     let l7 = clock::timestamp_ms(l3);
     let l12 = object::id(freeze(l0));
     let l9 = 0u64;
-    let l10 = &l0.slot_configs.len();
+    let l10 = (&l0.slot_configs).length();
     let l8 = false;
     loop {
-        let __c71 = l9 < l10;
-        let __c75;
-        if (__c71) {
+        if (l9 < l10) {
             let l6 = &mut (&mut l0.slot_configs)[l9];
-            __c75 = *(&l6.slot_number) == l1;
-            if (!(__c75)) {
+            if (l6.slot_number != l1) {
                 l9 = l9 + 1u64;
                 continue
             };
-            let l11 = *(&l6.allowed_collections);
+            let l11 = l6.allowed_collections;
             if (!(vector::contains(&l6.allowed_collections, &l2))) {
                 (&mut l6.allowed_collections).push_back(l2);
                 *(&mut l6.is_open_to_all) = false
             };
             l8 = true;
-            event::emit(SlotCollectionsUpdated { pool_id: l12, slot_number: l1, old_collections: l11, new_collections: *(&l6.allowed_collections), is_open_to_all: *(&l6.is_open_to_all), updated_by: tx_context::sender(freeze(l4)), update_time: l7 })
+            event::emit(SlotCollectionsUpdated { pool_id: l12, slot_number: l1, old_collections: l11, new_collections: l6.allowed_collections, is_open_to_all: l6.is_open_to_all, updated_by: tx_context::sender(freeze(l4)), update_time: l7 })
         };
-        if (__c75 || !(__c71)) {
-            assert!(l8, C29);
-            return
-        }
+        assert!(l8, C29);
+        return
     }
 }
 
 public entry fun add_payment_custom_token<T0, T1>(l0: &mut StakingPool<T1>, l1: &Clock, l2: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l2)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l2)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     let l5 = demo::get_token_type_string_any();
     let l4 = dynamic_object_field::borrow_mut(&mut l0.id, PaymentTokenRegistryKey { dummy_field: false });
@@ -597,7 +592,7 @@ public entry fun add_payment_custom_token<T0, T1>(l0: &mut StakingPool<T1>, l1: 
 }
 
 public entry fun add_payment_token<T0>(l0: &mut StakingPool<T0>, l1: String, l2: &Clock, l3: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l3)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l3)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     assert!(string::length(&l1) > 0u64, C20);
     let l5 = dynamic_object_field::borrow_mut(&mut l0.id, PaymentTokenRegistryKey { dummy_field: false });
@@ -609,17 +604,17 @@ public entry fun add_payment_token<T0>(l0: &mut StakingPool<T0>, l1: String, l2:
 }
 
 public entry fun add_rewards<T0>(l0: &mut StakingPool<T0>, l1: Coin<T0>, l2: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l2)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l2)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     let l4 = coin::value(&l1);
     assert!(l4 > 0u64, C20);
     let l3 = demo::calculate_reserve(l4);
-    *(&mut l0.reserved_rewards) = demo::safe_add(*(&l0.reserved_rewards), l3);
-    *(&mut l0.total_rewards_added) = demo::safe_add(*(&l0.total_rewards_added), l4)
+    *(&mut l0.reserved_rewards) = demo::safe_add(l0.reserved_rewards, l3);
+    *(&mut l0.total_rewards_added) = demo::safe_add(l0.total_rewards_added, l4)
 }
 
 public entry fun add_supported_collection<T0>(l0: &mut StakingPool<T0>, l1: String, l2: &TxContext) {
-    assert!(tx_context::sender(l2) == *(&l0.admin), C1);
+    assert!(tx_context::sender(l2) == l0.admin, C1);
     assert!(string::length(&l1) > 0u64, C23);
     let reg_17;
     (reg_17, reg_18) = vector::index_of(&l0.supported_collections, &l1);
@@ -628,7 +623,7 @@ public entry fun add_supported_collection<T0>(l0: &mut StakingPool<T0>, l1: Stri
 }
 
 fun assert_not_paused<T0>(l0: &StakingPool<T0>) {
-    assert!(!(*(&l0.is_paused)), C19)
+    assert!(!(l0.is_paused), C19)
 }
 
 fun calculate_effective_reward_rate_enhanced(l0: u64, l1: u64, l2: u64, l3: u64): u64 {
@@ -698,34 +693,34 @@ fun calculate_slot_params(l0: u8): ( u64, u64) {
 
 public entry fun claim_slot_rewards<T0: key + store, T1>(l0: &mut StakingPool<T1>, l1: &StakeReceipt<T0, T1>, l2: &Clock, l3: &mut TxContext) {
     demo::assert_not_paused(freeze(l0));
-    assert!(*(&l1.pool_id) == object::id(freeze(l0)), C9);
+    assert!(l1.pool_id == object::id(freeze(l0)), C9);
     let l17 = tx_context::sender(freeze(l3));
-    assert!(*(&l1.owner) == l17, C0);
+    assert!(l1.owner == l17, C0);
     let l24 = type_name::get();
-    assert!(*(&l1.nft_type) == l24, C9);
-    let l22 = *(&l1.nft_id);
-    let l33 = *(&l1.slot_number);
+    assert!(l1.nft_type == l24, C9);
+    let l22 = l1.nft_id;
+    let l33 = l1.slot_number;
     let l36 = StakeKey { nft_id: l22, nft_type: l24 };
     assert!(dynamic_object_field::exists_(&l0.id, l36), C2);
     let l27 = object::id(freeze(l0));
     let l20 = clock::timestamp_ms(l2);
     let l34 = dynamic_object_field::borrow(&l0.id, l36);
-    assert!(*(&l34.slot_number) == l33, C29);
-    let l25 = *(&l34.owner);
-    let l26 = *(&l34.pending_rewards);
-    let l21 = *(&l34.last_claim_time);
-    let l37 = *(&l34.stake_time);
-    let l19 = *(&l34.collection);
+    assert!(l34.slot_number == l33, C29);
+    let l25 = l34.owner;
+    let l26 = l34.pending_rewards;
+    let l21 = l34.last_claim_time;
+    let l37 = l34.stake_time;
+    let l19 = l34.collection;
     let l29 = demo::get_slot_config(&l0.slot_configs, l33);
-    let l16 = *(&l0.default_reward_rate);
-    let l32 = *(&l29.reward_multiplier);
+    let l16 = l0.default_reward_rate;
+    let l32 = l29.reward_multiplier;
     let l23 = demo::get_effective_nft_multiplier(freeze(l0), l22, &l19);
     let l39 = demo::get_wallet_bonus_multiplier(freeze(l0), l25);
-    let l14 = demo::calculate_enhanced_slot_rewards(l37, l21, l20, l16, l32, l23, l39, *(&l0.end_time));
+    let l14 = demo::calculate_enhanced_slot_rewards(l37, l21, l20, l16, l32, l23, l39, l0.end_time);
     let l38 = demo::safe_add(l26, l14);
     assert!(l38 > 0u64, C4);
-    let l15 = if (balance::value(&l0.reward_balance) > *(&l0.reserved_rewards)) {
-        demo::safe_sub(balance::value(&l0.reward_balance), *(&l0.reserved_rewards))
+    let l15 = if (balance::value(&l0.reward_balance) > l0.reserved_rewards) {
+        demo::safe_sub(balance::value(&l0.reward_balance), l0.reserved_rewards)
     } else {
         0u64
     };
@@ -737,7 +732,7 @@ public entry fun claim_slot_rewards<T0: key + store, T1>(l0: &mut StakingPool<T1
     assert!(l18 > 0u64, C16);
     let l35 = dynamic_object_field::borrow_mut(&mut l0.id, l36);
     *(&mut l35.last_claim_time) = l20;
-    *(&mut l35.total_claimed) = demo::safe_add(*(&l35.total_claimed), l18);
+    *(&mut l35.total_claimed) = demo::safe_add(l35.total_claimed, l18);
     if (l18 < l38) {
         *(&mut l35.pending_rewards) = demo::safe_sub(l38, l18)
     } else {
@@ -746,7 +741,7 @@ public entry fun claim_slot_rewards<T0: key + store, T1>(l0: &mut StakingPool<T1
     let l31 = SlotDataKey { owner: l25, slot_number: l33 };
     let l30 = dynamic_object_field::borrow_mut(&mut l0.id, l31);
     *(&mut l30.last_claim_time) = l20;
-    *(&mut l30.total_claimed) = demo::safe_add(*(&l30.total_claimed), l18);
+    *(&mut l30.total_claimed) = demo::safe_add(l30.total_claimed, l18);
     if (l18 < l38) {
         *(&mut l30.pending_rewards) = demo::safe_sub(l38, l18)
     } else {
@@ -754,9 +749,9 @@ public entry fun claim_slot_rewards<T0: key + store, T1>(l0: &mut StakingPool<T1
     };
     let l28 = coin::from_balance(balance::split(&mut l0.reward_balance, l18), l3);
     demo::decrease_reserved_rewards(&mut l0.reserved_rewards, l18);
-    *(&mut l0.total_rewards_distributed) = demo::safe_add(*(&l0.total_rewards_distributed), l18);
+    *(&mut l0.total_rewards_distributed) = demo::safe_add(l0.total_rewards_distributed, l18);
     transfer::public_transfer(l28, l25);
-    let l9 = *(&l0.reward_token_type);
+    let l9 = l0.reward_token_type;
     let l8 = l18 < l38;
     let l7 = if (l18 < l38) {
         demo::safe_sub(l38, l18)
@@ -775,7 +770,7 @@ fun create_enhanced_slot_configs(): vector<SlotConfig> {
     let l2 = C53;
     while (l2 <= C52) {
         let (reg_6, reg_7) = demo::calculate_slot_params(l2);
-        (&mut l0).push_back(SlotConfig { slot_number: l2, unlock_cost: reg_6, reward_multiplier: reg_7, allowed_collections: vector[], is_open_to_all: true });
+        l0.push_back(SlotConfig { slot_number: l2, unlock_cost: reg_6, reward_multiplier: reg_7, allowed_collections: vector[], is_open_to_all: true });
         l2 = l2 + 1u8;
     };
     return l0
@@ -798,7 +793,7 @@ public fun create_enhanced_staking_pool<T0>(l0: Coin<T0>, l1: u64, l2: u64, l3: 
     table::add(&mut (&mut l21).supported_tokens, l20, true);
     (&mut (&mut l21).token_list).push_back(l20);
     dynamic_object_field::add(&mut (&mut l13).id, PaymentTokenRegistryKey { dummy_field: false }, l21);
-    event::emit(StakingPoolCreated { pool_id: l15, admin: l11, emergency_admin: l6, default_reward_rate: l1, start_time: l2, end_time: l3, reward_token_type: l18, min_staking_duration: l4, initial_reward_amount: l17, slot_configs: *(&(&l13).slot_configs), default_max_slots_per_wallet: l7 });
+    event::emit(StakingPoolCreated { pool_id: l15, admin: l11, emergency_admin: l6, default_reward_rate: l1, start_time: l2, end_time: l3, reward_token_type: l18, min_staking_duration: l4, initial_reward_amount: l17, slot_configs: (&l13).slot_configs, default_max_slots_per_wallet: l7 });
     return l13
 }
 
@@ -813,15 +808,15 @@ fun decrease_reserved_rewards(l0: &mut u64, l1: u64) {
 }
 
 public fun get_admin<T0>(l0: &StakingPool<T0>): address {
-    return *(&l0.admin)
+    return l0.admin
 }
 
 public fun get_available_rewards<T0>(l0: &StakingPool<T0>): u64 {
     let l2 = balance::value(&l0.reward_balance);
-    return if (l2 <= *(&l0.reserved_rewards)) {
+    return if (l2 <= l0.reserved_rewards) {
         0u64
     } else {
-        demo::safe_sub(l2, *(&l0.reserved_rewards))
+        demo::safe_sub(l2, l0.reserved_rewards)
     }
 }
 
@@ -829,24 +824,24 @@ public fun get_collection_multiplier_info<T0>(l0: &StakingPool<T0>, l1: String):
     let l3 = CollectionMultiplierKey { collection: l1 };
     return if (dynamic_object_field::exists_(&l0.id, l3)) {
         let l4 = dynamic_object_field::borrow(&l0.id, l3);
-        option::some(CollectionMultiplierInfo { default_multiplier: *(&l4.default_multiplier), set_by: *(&l4.set_by), set_time: *(&l4.set_time) })
+        option::some(CollectionMultiplierInfo { default_multiplier: l4.default_multiplier, set_by: l4.set_by, set_time: l4.set_time })
     } else {
         option::none()
     }
 }
 
 public fun get_default_reward_rate<T0>(l0: &StakingPool<T0>): u64 {
-    return *(&l0.default_reward_rate)
+    return l0.default_reward_rate
 }
 
 fun get_effective_nft_multiplier<T0>(l0: &StakingPool<T0>, l1: ID, l2: &String): u64 {
     let l4 = NftMultiplierKey { nft_id: l1, collection: *l2 };
     if (dynamic_object_field::exists_(&l0.id, l4)) {
-        return *(&(dynamic_object_field::borrow(&l0.id, l4)).multiplier)
+        return (dynamic_object_field::borrow(&l0.id, l4)).multiplier
     };
     let l3 = CollectionMultiplierKey { collection: *l2 };
     if (dynamic_object_field::exists_(&l0.id, l3)) {
-        return *(&(dynamic_object_field::borrow(&l0.id, l3)).default_multiplier)
+        return (dynamic_object_field::borrow(&l0.id, l3)).default_multiplier
     };
     return 10000u64
 }
@@ -856,14 +851,14 @@ public fun get_effective_nft_multiplier_view<T0>(l0: &StakingPool<T0>, l1: ID, l
 }
 
 public fun get_enhanced_slot_configs<T0>(l0: &StakingPool<T0>): vector<SlotConfig> {
-    return *(&l0.slot_configs)
+    return l0.slot_configs
 }
 
 public fun get_nft_multiplier_info<T0>(l0: &StakingPool<T0>, l1: ID, l2: String): Option<NftMultiplierInfo> {
     let l4 = NftMultiplierKey { nft_id: l1, collection: l2 };
     return if (dynamic_object_field::exists_(&l0.id, l4)) {
         let l5 = dynamic_object_field::borrow(&l0.id, l4);
-        option::some(NftMultiplierInfo { multiplier: *(&l5.multiplier), rarity_tier: *(&l5.rarity_tier), set_by: *(&l5.set_by), set_time: *(&l5.set_time) })
+        option::some(NftMultiplierInfo { multiplier: l5.multiplier, rarity_tier: l5.rarity_tier, set_by: l5.set_by, set_time: l5.set_time })
     } else {
         option::none()
     }
@@ -884,9 +879,9 @@ public fun get_pool_slot_limits<T0>(l0: &StakingPool<T0>): ( u8, u8, u64) {
     let (l1, l2, l3);
     l1 = if (__c0) {
         let l5 = dynamic_object_field::borrow(&l0.id, l4);
-        l3 = *(&l5.total_users_with_custom_limits);
-        l2 = *(&l5.absolute_max_slots);
-        *(&l5.default_max_slots_per_wallet)
+        l3 = l5.total_users_with_custom_limits;
+        l2 = l5.absolute_max_slots;
+        l5.default_max_slots_per_wallet
     } else {
         l3 = 0u64;
         l2 = C52;
@@ -901,16 +896,16 @@ public fun get_remaining_rewards<T0>(l0: &StakingPool<T0>): u64 {
 
 public fun get_slot_allowed_collections<T0>(l0: &StakingPool<T0>, l1: u8): ( vector<String>, bool) {
     let l2 = demo::get_slot_config(&l0.slot_configs, l1);
-    return (*(&l2.allowed_collections), *(&l2.is_open_to_all))
+    return (l2.allowed_collections, l2.is_open_to_all)
 }
 
 fun get_slot_config(l0: &vector<SlotConfig>, l1: u8): &SlotConfig {
     let l3 = 0u64;
-    let l4 = l0.len();
+    let l4 = l0.length();
     loop {
         assert!(l3 < l4, C29);
         let l2 = &l0[l3];
-        if (*(&l2.slot_number) == l1) {
+        if (l2.slot_number == l1) {
             return l2
         };
         l3 = l3 + 1u64;
@@ -921,7 +916,7 @@ public fun get_slot_data<T0>(l0: &StakingPool<T0>, l1: address, l2: u8): Option<
     let l5 = SlotDataKey { owner: l1, slot_number: l2 };
     return if (dynamic_object_field::exists_(&l0.id, l5)) {
         let l4 = dynamic_object_field::borrow(&l0.id, l5);
-        option::some(SlotDataInfo { owner: *(&l4.owner), slot_number: *(&l4.slot_number), staked_nft: *(&l4.staked_nft), staked_collection: *(&l4.staked_collection), stake_time: *(&l4.stake_time), last_claim_time: *(&l4.last_claim_time), pending_rewards: *(&l4.pending_rewards), total_claimed: *(&l4.total_claimed), is_unlocked: *(&l4.is_unlocked) })
+        option::some(SlotDataInfo { owner: l4.owner, slot_number: l4.slot_number, staked_nft: l4.staked_nft, staked_collection: l4.staked_collection, stake_time: l4.stake_time, last_claim_time: l4.last_claim_time, pending_rewards: l4.pending_rewards, total_claimed: l4.total_claimed, is_unlocked: l4.is_unlocked })
     } else {
         option::none()
     }
@@ -939,8 +934,8 @@ public fun get_slot_effective_rate<T0>(l0: &StakingPool<T0>, l1: address, l2: u8
     let l5 = *(option::borrow(&l8.staked_nft));
     let l4 = *(option::borrow(&l8.staked_collection));
     let l7 = demo::get_slot_config(&l0.slot_configs, l2);
-    let l3 = *(&l0.default_reward_rate);
-    let l10 = *(&l7.reward_multiplier);
+    let l3 = l0.default_reward_rate;
+    let l10 = l7.reward_multiplier;
     let l6 = demo::get_effective_nft_multiplier(l0, l5, &l4);
     let l11 = demo::get_wallet_bonus_multiplier(l0, l1);
     return demo::calculate_effective_reward_rate_enhanced(l3, l10, l6, l11)
@@ -959,12 +954,12 @@ public fun get_slot_pending_rewards<T0>(l0: &StakingPool<T0>, l1: address, l2: u
     let l8 = *(option::borrow(&l11.staked_nft));
     let l6 = *(option::borrow(&l11.staked_collection));
     let l10 = demo::get_slot_config(&l0.slot_configs, l2);
-    let l5 = *(&l0.default_reward_rate);
-    let l13 = *(&l10.reward_multiplier);
+    let l5 = l0.default_reward_rate;
+    let l13 = l10.reward_multiplier;
     let l9 = demo::get_effective_nft_multiplier(l0, l8, &l6);
     let l14 = demo::get_wallet_bonus_multiplier(l0, l1);
-    let l4 = demo::calculate_enhanced_slot_rewards(*(&l11.stake_time), *(&l11.last_claim_time), l7, l5, l13, l9, l14, *(&l0.end_time));
-    return demo::safe_add(*(&l11.pending_rewards), l4)
+    let l4 = demo::calculate_enhanced_slot_rewards(l11.stake_time, l11.last_claim_time, l7, l5, l13, l9, l14, l0.end_time);
+    return demo::safe_add(l11.pending_rewards, l4)
 }
 
 public fun get_slot_pending_rewards_realtime<T0>(l0: &StakingPool<T0>, l1: address, l2: u8, l3: &Clock): u64 {
@@ -972,7 +967,7 @@ public fun get_slot_pending_rewards_realtime<T0>(l0: &StakingPool<T0>, l1: addre
 }
 
 public fun get_slot_price<T0>(l0: &StakingPool<T0>, l1: u8): u64 {
-    return *(&(demo::get_slot_config(&l0.slot_configs, l1)).unlock_cost)
+    return (demo::get_slot_config(&l0.slot_configs, l1)).unlock_cost
 }
 
 public fun get_slot_token_price<T0>(l0: &StakingPool<T0>, l1: u8, l2: String): u64 {
@@ -994,13 +989,13 @@ public fun get_slot_token_price<T0>(l0: &StakingPool<T0>, l1: u8, l2: String): u
 }
 
 public fun get_supported_collections<T0>(l0: &StakingPool<T0>): vector<String> {
-    return *(&l0.supported_collections)
+    return l0.supported_collections
 }
 
 public fun get_supported_payment_tokens<T0>(l0: &StakingPool<T0>): vector<String> {
     let l2 = PaymentTokenRegistryKey { dummy_field: false };
     return if (dynamic_object_field::exists_(&l0.id, l2)) {
-        *(&(dynamic_object_field::borrow(&l0.id, l2)).token_list)
+        (dynamic_object_field::borrow(&l0.id, l2)).token_list
     } else {
         vector[]
     }
@@ -1009,7 +1004,7 @@ public fun get_supported_payment_tokens<T0>(l0: &StakingPool<T0>): vector<String
 public fun get_token_revenue<T0>(l0: &StakingPool<T0>, l1: String): u64 {
     let l3 = TokenRevenueKey { token_type: l1 };
     return if (dynamic_object_field::exists_(&l0.id, l3)) {
-        *(&(dynamic_object_field::borrow(&l0.id, l3)).total_collected)
+        (dynamic_object_field::borrow(&l0.id, l3)).total_collected
     } else {
         0u64
     }
@@ -1017,27 +1012,22 @@ public fun get_token_revenue<T0>(l0: &StakingPool<T0>, l1: String): u64 {
 
 fun get_token_type_string_any<T0>(): String {
     let l2 = ascii::into_bytes(type_name::into_string(type_name::get()));
-    let __c0 = &l2.len() > 0u64;
-    let __c9;
-    if (__c0) {
-        __c9 = *(&(&l2)[0u64]) == 76u8;
-        if (__c9) {
+    if (l2.length() > 0u64) {
+        if ((&l2)[0u64] == 76u8) {
             let l4 = vector[];
-            (&mut l4).push_back(48u8);
-            (&mut l4).push_back(120u8);
-            let l3 = &l2.len();
+            l4.push_back(48u8);
+            l4.push_back(120u8);
+            let l3 = l2.length();
             let l1 = 1u64;
             while (l1 < l3) {
-                let l0 = *(&(&l2)[l1]);
-                (&mut l4).push_back(l0);
+                let l0 = (&l2)[l1];
+                l4.push_back(l0);
                 l1 = l1 + 1u64;
             };
             return string::utf8(l4)
         }
     };
-    if (!(__c0) || !(__c9)) {
-        return string::utf8(l2)
-    }
+    return string::utf8(l2)
 }
 
 fun get_token_type_string_sui<T0>(): String {
@@ -1045,14 +1035,14 @@ fun get_token_type_string_sui<T0>(): String {
 }
 
 public fun get_total_staked<T0>(l0: &StakingPool<T0>): u64 {
-    return *(&l0.total_staked)
+    return l0.total_staked
 }
 
 public fun get_user_slot_allocation<T0>(l0: &StakingPool<T0>, l1: address): Option<UserSlotInfo> {
     let l4 = UserSlotAllocationKey { user: l1 };
     return if (dynamic_object_field::exists_(&l0.id, l4)) {
         let l3 = dynamic_object_field::borrow(&l0.id, l4);
-        option::some(UserSlotInfo { owner: *(&l3.owner), max_slots_allowed: *(&l3.max_slots_allowed), total_slots_unlocked: *(&l3.total_slots_unlocked), unlocked_slot_numbers: *(&l3.unlocked_slot_numbers) })
+        option::some(UserSlotInfo { owner: l3.owner, max_slots_allowed: l3.max_slots_allowed, total_slots_unlocked: l3.total_slots_unlocked, unlocked_slot_numbers: l3.unlocked_slot_numbers })
     } else {
         option::none()
     }
@@ -1066,13 +1056,13 @@ public fun get_user_total_claimed_rewards<T0>(l0: &StakingPool<T0>, l1: address)
     let l2 = dynamic_object_field::borrow(&l0.id, l9);
     let l8 = 0u64;
     let l3 = 0u64;
-    let l4 = &l2.unlocked_slot_numbers.len();
+    let l4 = (&l2.unlocked_slot_numbers).length();
     while (l3 < l4) {
-        let l7 = *(&(&l2.unlocked_slot_numbers)[l3]);
+        let l7 = (&l2.unlocked_slot_numbers)[l3];
         let l6 = SlotDataKey { owner: l1, slot_number: l7 };
         if (dynamic_object_field::exists_(&l0.id, l6)) {
             let l5 = dynamic_object_field::borrow(&l0.id, l6);
-            l8 = demo::safe_add(l8, *(&l5.total_claimed));
+            l8 = demo::safe_add(l8, l5.total_claimed);
         };
         l3 = l3 + 1u64;
     };
@@ -1087,9 +1077,9 @@ public fun get_user_total_pending_rewards<T0>(l0: &StakingPool<T0>, l1: address,
     let l3 = dynamic_object_field::borrow(&l0.id, l9);
     let l8 = 0u64;
     let l4 = 0u64;
-    let l5 = &l3.unlocked_slot_numbers.len();
+    let l5 = (&l3.unlocked_slot_numbers).length();
     while (l4 < l5) {
-        let l7 = *(&(&l3.unlocked_slot_numbers)[l4]);
+        let l7 = (&l3.unlocked_slot_numbers)[l4];
         if (demo::is_slot_occupied(l0, l1, l7)) {
             let l6 = demo::get_slot_pending_rewards(l0, l1, l7, l2);
             l8 = demo::safe_add(l8, l6);
@@ -1111,8 +1101,8 @@ public fun get_user_wallet_details<T0>(l0: &StakingPool<T0>, l1: address, l2: &C
     let (l3, l4);
     l3 = if (__c26) {
         let l39 = dynamic_object_field::borrow(&l0.id, l38);
-        l4 = *(&l39.reason);
-        *(&l39.bonus_multiplier)
+        l4 = l39.reason;
+        l39.bonus_multiplier
     } else {
         l4 = string::utf8(C58);
         0u64
@@ -1124,9 +1114,9 @@ public fun get_user_wallet_details<T0>(l0: &StakingPool<T0>, l1: address, l2: &C
     let l32 = 0u64;
     let l9 = 0u8;
     let l18 = 0u64;
-    let l20 = &l11.unlocked_slot_numbers.len();
+    let l20 = (&l11.unlocked_slot_numbers).length();
     while (l18 < l20) {
-        let l30 = *(&(&l11.unlocked_slot_numbers)[l18]);
+        let l30 = (&l11.unlocked_slot_numbers)[l18];
         let l28 = SlotDataKey { owner: l1, slot_number: l30 };
         let l25 = demo::get_slot_config(&l0.slot_configs, l30);
         if (dynamic_object_field::exists_(&l0.id, l28)) {
@@ -1136,13 +1126,13 @@ public fun get_user_wallet_details<T0>(l0: &StakingPool<T0>, l1: address, l2: &C
             l5 = if (l19) {
                 let l21 = *(option::borrow(&l26.staked_nft));
                 let l13 = *(option::borrow(&l26.staked_collection));
-                let l12 = *(&l0.default_reward_rate);
-                let l29 = *(&l25.reward_multiplier);
+                let l12 = l0.default_reward_rate;
+                let l29 = l25.reward_multiplier;
                 let l22 = demo::get_effective_nft_multiplier(l0, l21, &l13);
-                let l10 = demo::calculate_enhanced_slot_rewards(*(&l26.stake_time), *(&l26.last_claim_time), l14, l12, l29, l22, l36, *(&l0.end_time));
-                let l33 = demo::safe_add(*(&l26.pending_rewards), l10);
+                let l10 = demo::calculate_enhanced_slot_rewards(l26.stake_time, l26.last_claim_time, l14, l12, l29, l22, l36, l0.end_time);
+                let l33 = demo::safe_add(l26.pending_rewards, l10);
                 let l16 = demo::calculate_effective_reward_rate_enhanced(l12, l29, l22, l36);
-                let l15 = demo::safe_sub(l14, *(&l26.stake_time));
+                let l15 = demo::safe_sub(l14, l26.stake_time);
                 l9 = l9 + 1u8;
                 l8 = l22;
                 l7 = l15;
@@ -1159,20 +1149,20 @@ public fun get_user_wallet_details<T0>(l0: &StakingPool<T0>, l1: address, l2: &C
             let l17 = l6;
             let l24 = l5;
             l34 = demo::safe_add(l34, l24);
-            l32 = demo::safe_add(l32, *(&l26.total_claimed));
-            (&mut l27).push_back(UserSlotDetails { slot_number: l30, is_unlocked: *(&l26.is_unlocked), is_occupied: l19, staked_nft: *(&l26.staked_nft), staked_collection: *(&l26.staked_collection), stake_time: *(&l26.stake_time), last_claim_time: *(&l26.last_claim_time), pending_rewards: l24, total_claimed: *(&l26.total_claimed), effective_rate: l17, stake_duration: l31, slot_multiplier: *(&l25.reward_multiplier), nft_multiplier: l23, allowed_collections: *(&l25.allowed_collections), is_open_to_all: *(&l25.is_open_to_all), unlock_cost: *(&l25.unlock_cost) })
+            l32 = demo::safe_add(l32, l26.total_claimed);
+            l27.push_back(UserSlotDetails { slot_number: l30, is_unlocked: l26.is_unlocked, is_occupied: l19, staked_nft: l26.staked_nft, staked_collection: l26.staked_collection, stake_time: l26.stake_time, last_claim_time: l26.last_claim_time, pending_rewards: l24, total_claimed: l26.total_claimed, effective_rate: l17, stake_duration: l31, slot_multiplier: l25.reward_multiplier, nft_multiplier: l23, allowed_collections: l25.allowed_collections, is_open_to_all: l25.is_open_to_all, unlock_cost: l25.unlock_cost })
         } else {
-            (&mut l27).push_back(UserSlotDetails { slot_number: l30, is_unlocked: false, is_occupied: false, staked_nft: option::none(), staked_collection: option::none(), stake_time: 0u64, last_claim_time: 0u64, pending_rewards: 0u64, total_claimed: 0u64, effective_rate: 0u64, stake_duration: 0u64, slot_multiplier: *(&l25.reward_multiplier), nft_multiplier: 10000u64, allowed_collections: *(&l25.allowed_collections), is_open_to_all: *(&l25.is_open_to_all), unlock_cost: *(&l25.unlock_cost) })
+            l27.push_back(UserSlotDetails { slot_number: l30, is_unlocked: false, is_occupied: false, staked_nft: option::none(), staked_collection: option::none(), stake_time: 0u64, last_claim_time: 0u64, pending_rewards: 0u64, total_claimed: 0u64, effective_rate: 0u64, stake_duration: 0u64, slot_multiplier: l25.reward_multiplier, nft_multiplier: 10000u64, allowed_collections: l25.allowed_collections, is_open_to_all: l25.is_open_to_all, unlock_cost: l25.unlock_cost })
         };
         l18 = l18 + 1u64;
     };
-    return UserWalletDetails { owner: l1, max_slots_allowed: *(&l11.max_slots_allowed), total_slots_unlocked: *(&l11.total_slots_unlocked), unlocked_slot_numbers: *(&l11.unlocked_slot_numbers), wallet_bonus_multiplier: l36, wallet_bonus_reason: l37, total_pending_rewards: l34, total_claimed_rewards: l32, active_stakes_count: l9, slot_details: l27 }
+    return UserWalletDetails { owner: l1, max_slots_allowed: l11.max_slots_allowed, total_slots_unlocked: l11.total_slots_unlocked, unlocked_slot_numbers: l11.unlocked_slot_numbers, wallet_bonus_multiplier: l36, wallet_bonus_reason: l37, total_pending_rewards: l34, total_claimed_rewards: l32, active_stakes_count: l9, slot_details: l27 }
 }
 
 fun get_wallet_bonus_multiplier<T0>(l0: &StakingPool<T0>, l1: address): u64 {
     let l3 = WalletBonusMultiplierKey { wallet: l1 };
     return if (dynamic_object_field::exists_(&l0.id, l3)) {
-        *(&(dynamic_object_field::borrow(&l0.id, l3)).bonus_multiplier)
+        (dynamic_object_field::borrow(&l0.id, l3)).bonus_multiplier
     } else {
         0u64
     }
@@ -1182,7 +1172,7 @@ public fun get_wallet_bonus_multiplier_info<T0>(l0: &StakingPool<T0>, l1: addres
     let l3 = WalletBonusMultiplierKey { wallet: l1 };
     return if (dynamic_object_field::exists_(&l0.id, l3)) {
         let l4 = dynamic_object_field::borrow(&l0.id, l3);
-        option::some(WalletBonusMultiplierInfo { bonus_multiplier: *(&l4.bonus_multiplier), set_by: *(&l4.set_by), set_time: *(&l4.set_time), reason: *(&l4.reason) })
+        option::some(WalletBonusMultiplierInfo { bonus_multiplier: l4.bonus_multiplier, set_by: l4.set_by, set_time: l4.set_time, reason: l4.reason })
     } else {
         option::none()
     }
@@ -1198,38 +1188,32 @@ public fun has_wallet_bonus_multiplier<T0>(l0: &StakingPool<T0>, l1: address): b
 }
 
 public entry fun increase_user_slot_limit<T0>(l0: &mut StakingPool<T0>, l1: address, l2: u8, l3: &Clock, l4: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l4)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l4)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     assert!(l2 >= 1u8 && l2 <= C52, C40);
     let l13 = UserSlotAllocationKey { user: l1 };
     let l8 = clock::timestamp_ms(l3);
     let l10 = PoolSlotLimitsKey { dummy_field: false };
-    let l9 = *(&(dynamic_object_field::borrow(&l0.id, l10)).default_max_slots_per_wallet);
-    let __c42 = !(dynamic_object_field::exists_(&l0.id, l13));
-    let __c106;
-    if (__c42) {
+    let l9 = (dynamic_object_field::borrow(&l0.id, l10)).default_max_slots_per_wallet;
+    if (!(dynamic_object_field::exists_(&l0.id, l13))) {
         let l6 = UserSlotAllocation { id: object::new(l4), owner: l1, max_slots_allowed: l2, total_slots_unlocked: 0u8, unlocked_slot_numbers: vector[] };
         dynamic_object_field::add(&mut l0.id, l13, l6);
-        *(&mut l0.total_users_with_slots) = demo::safe_add(*(&l0.total_users_with_slots), 1u64);
+        *(&mut l0.total_users_with_slots) = demo::safe_add(l0.total_users_with_slots, 1u64);
         if (l2 != l9) {
             let l12 = dynamic_object_field::borrow_mut(&mut l0.id, l10);
-            *(&mut l12.total_users_with_custom_limits) = demo::safe_add(*(&l12.total_users_with_custom_limits), 1u64)
+            *(&mut l12.total_users_with_custom_limits) = demo::safe_add(l12.total_users_with_custom_limits, 1u64)
         }
     } else {
         let l7 = dynamic_object_field::borrow_mut(&mut l0.id, l13);
-        let l11 = *(&l7.max_slots_allowed);
-        __c106 = l2 > l11;
-        assert!(__c106, C40);
+        let l11 = l7.max_slots_allowed;
+        assert!(l2 > l11, C40);
         *(&mut l7.max_slots_allowed) = l2;
         event::emit(UserSlotLimitIncreased { pool_id: object::id(freeze(l0)), user: l1, old_limit: l11, new_limit: l2, increased_by: tx_context::sender(freeze(l4)), increase_time: l8 })
-    };
-    if (__c106 || __c42) {
-        
     }
 }
 
 fun is_collection_allowed_in_slot(l0: &SlotConfig, l1: &String): bool {
-    if (*(&l0.is_open_to_all)) {
+    if (l0.is_open_to_all) {
         return true
     };
     return vector::contains(&l0.allowed_collections, l1)
@@ -1240,7 +1224,7 @@ public fun is_collection_allowed_in_slot_view<T0>(l0: &StakingPool<T0>, l1: u8, 
 }
 
 public fun is_paused<T0>(l0: &StakingPool<T0>): bool {
-    return *(&l0.is_paused)
+    return l0.is_paused
 }
 
 public fun is_payment_token_supported<T0>(l0: &StakingPool<T0>, l1: String): bool {
@@ -1259,7 +1243,7 @@ fun is_slot_occupied<T0>(l0: &StakingPool<T0>, l1: address, l2: u8): bool {
 
 fun is_slot_unlocked<T0>(l0: &StakingPool<T0>, l1: address, l2: u8): bool {
     let l4 = SlotDataKey { owner: l1, slot_number: l2 };
-    return dynamic_object_field::exists_(&l0.id, l4) && *(&(dynamic_object_field::borrow(&l0.id, l4)).is_unlocked)
+    return dynamic_object_field::exists_(&l0.id, l4) && (dynamic_object_field::borrow(&l0.id, l4)).is_unlocked
 }
 
 fun is_sui_token<T0>(): bool {
@@ -1269,72 +1253,59 @@ fun is_sui_token<T0>(): bool {
 }
 
 public entry fun remove_collection_from_slot<T0>(l0: &mut StakingPool<T0>, l1: u8, l2: String, l3: &Clock, l4: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l4)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l4)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     assert!(l1 >= C53 && l1 <= C52, C29);
     let l8 = clock::timestamp_ms(l3);
     let l13 = object::id(freeze(l0));
     let l10 = 0u64;
-    let l11 = &l0.slot_configs.len();
+    let l11 = (&l0.slot_configs).length();
     let l9 = false;
     loop {
-        let __c57 = l10 < l11;
-        let __c61;
-        if (__c57) {
+        if (l10 < l11) {
             let l7 = &mut (&mut l0.slot_configs)[l10];
-            __c61 = *(&l7.slot_number) == l1;
-            if (!(__c61)) {
+            if (l7.slot_number != l1) {
                 l10 = l10 + 1u64;
                 continue
             };
-            let l12 = *(&l7.allowed_collections);
+            let l12 = l7.allowed_collections;
             let (reg_54, reg_55) = vector::index_of(&l7.allowed_collections, &l2);
             let l6 = reg_55;
-            if (reg_54) {
-                
-            };
+            let __c72 = reg_54;
             l9 = true;
-            event::emit(SlotCollectionsUpdated { pool_id: l13, slot_number: l1, old_collections: l12, new_collections: *(&l7.allowed_collections), is_open_to_all: *(&l7.is_open_to_all), updated_by: tx_context::sender(freeze(l4)), update_time: l8 })
+            event::emit(SlotCollectionsUpdated { pool_id: l13, slot_number: l1, old_collections: l12, new_collections: l7.allowed_collections, is_open_to_all: l7.is_open_to_all, updated_by: tx_context::sender(freeze(l4)), update_time: l8 })
         };
-        if (__c61 || !(__c57)) {
-            assert!(l9, C29);
-            return
-        }
+        assert!(l9, C29);
+        return
     }
 }
 
 public entry fun remove_payment_custom_token<T0, T1>(l0: &mut StakingPool<T1>, l1: &Clock, l2: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l2)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l2)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     let l6 = demo::get_token_type_string_any();
     let l5 = dynamic_object_field::borrow_mut(&mut l0.id, PaymentTokenRegistryKey { dummy_field: false });
     assert!(table::contains(&l5.supported_tokens, l6), C34);
     let (reg_35, reg_36) = vector::index_of(&l5.token_list, &l6);
     let l4 = reg_36;
-    if (reg_35) {
-        
-    };
     let l3 = clock::timestamp_ms(l1);
     event::emit(PaymentTokenRemoved { pool_id: object::id(freeze(l0)), token_type: l6, removed_by: tx_context::sender(freeze(l2)), remove_time: l3 })
 }
 
 public entry fun remove_payment_token<T0>(l0: &mut StakingPool<T0>, l1: String, l2: &Clock, l3: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l3)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l3)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     assert!(string::length(&l1) > 0u64, C20);
     let l6 = dynamic_object_field::borrow_mut(&mut l0.id, PaymentTokenRegistryKey { dummy_field: false });
     assert!(table::contains(&l6.supported_tokens, l1), C34);
     let (reg_42, reg_43) = vector::index_of(&l6.token_list, &l1);
     let l5 = reg_43;
-    if (reg_42) {
-        
-    };
     let l4 = clock::timestamp_ms(l2);
     event::emit(PaymentTokenRemoved { pool_id: object::id(freeze(l0)), token_type: l1, removed_by: tx_context::sender(freeze(l3)), remove_time: l4 })
 }
 
 public entry fun remove_wallet_bonus_multiplier<T0>(l0: &mut StakingPool<T0>, l1: address, l2: &Clock, l3: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l3)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l3)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     let l6 = WalletBonusMultiplierKey { wallet: l1 };
     assert!(dynamic_object_field::exists_(&l0.id, l6), C41);
@@ -1371,7 +1342,7 @@ fun safe_sub(l0: u64, l1: u64): u64 {
 }
 
 public entry fun set_collection_multiplier<T0>(l0: &mut StakingPool<T0>, l1: String, l2: u64, l3: &Clock, l4: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l4)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l4)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     assert!(l2 >= C50 && l2 <= C54, C36);
     assert!(string::length(&l1) > 0u64, C23);
@@ -1381,7 +1352,7 @@ public entry fun set_collection_multiplier<T0>(l0: &mut StakingPool<T0>, l1: Str
     let l7 = CollectionMultiplierKey { collection: l1 };
     let l10 = clock::timestamp_ms(l3);
     let l6 = if (dynamic_object_field::exists_(&l0.id, l7)) {
-        *(&(dynamic_object_field::borrow(&l0.id, l7)).default_multiplier)
+        (dynamic_object_field::borrow(&l0.id, l7)).default_multiplier
     } else {
         10000u64
     };
@@ -1398,7 +1369,7 @@ public entry fun set_collection_multiplier<T0>(l0: &mut StakingPool<T0>, l1: Str
 }
 
 public entry fun set_nft_multiplier<T0>(l0: &mut StakingPool<T0>, l1: ID, l2: String, l3: u64, l4: String, l5: &Clock, l6: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l6)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l6)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     assert!(l3 >= C50 && l3 <= C54, C36);
     assert!(string::length(&l2) > 0u64, C23);
@@ -1409,7 +1380,7 @@ public entry fun set_nft_multiplier<T0>(l0: &mut StakingPool<T0>, l1: ID, l2: St
     let l10 = NftMultiplierKey { nft_id: l1, collection: l2 };
     let l9 = clock::timestamp_ms(l5);
     let l8 = if (dynamic_object_field::exists_(&l0.id, l10)) {
-        *(&(dynamic_object_field::borrow(&l0.id, l10)).multiplier)
+        (dynamic_object_field::borrow(&l0.id, l10)).multiplier
     } else {
         10000u64
     };
@@ -1427,7 +1398,7 @@ public entry fun set_nft_multiplier<T0>(l0: &mut StakingPool<T0>, l1: ID, l2: St
 }
 
 public entry fun set_promotional_pricing<T0>(l0: &mut StakingPool<T0>, l1: u8, l2: u8, l3: u64, l4: String, l5: &Clock, l6: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l6)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l6)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     assert!(l1 >= C53 && l2 <= C52, C29);
     assert!(l1 <= l2, C20);
@@ -1439,46 +1410,41 @@ public entry fun set_promotional_pricing<T0>(l0: &mut StakingPool<T0>, l1: u8, l
 }
 
 public entry fun set_slot_allowed_collections<T0>(l0: &mut StakingPool<T0>, l1: u8, l2: vector<String>, l3: bool, l4: &Clock, l5: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l5)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l5)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     assert!(l1 >= C53 && l1 <= C52, C29);
     let l8 = clock::timestamp_ms(l4);
     let l13 = object::id(freeze(l0));
     let l10 = 0u64;
-    let l11 = &l0.slot_configs.len();
+    let l11 = (&l0.slot_configs).length();
     let l9 = false;
     loop {
-        let __c57 = l10 < l11;
-        let __c61;
-        if (__c57) {
+        if (l10 < l11) {
             let l7 = &mut (&mut l0.slot_configs)[l10];
-            __c61 = *(&l7.slot_number) == l1;
-            if (!(__c61)) {
+            if (l7.slot_number != l1) {
                 l10 = l10 + 1u64;
                 continue
             };
-            let l12 = *(&l7.allowed_collections);
+            let l12 = l7.allowed_collections;
             *(&mut l7.allowed_collections) = l2;
             *(&mut l7.is_open_to_all) = l3;
             l9 = true;
-            event::emit(SlotCollectionsUpdated { pool_id: l13, slot_number: l1, old_collections: l12, new_collections: *(&l7.allowed_collections), is_open_to_all: l3, updated_by: tx_context::sender(freeze(l5)), update_time: l8 })
+            event::emit(SlotCollectionsUpdated { pool_id: l13, slot_number: l1, old_collections: l12, new_collections: l7.allowed_collections, is_open_to_all: l3, updated_by: tx_context::sender(freeze(l5)), update_time: l8 })
         };
-        if (__c61 || !(__c57)) {
-            assert!(l9, C29);
-            return
-        }
+        assert!(l9, C29);
+        return
     }
 }
 
 public entry fun set_wallet_bonus_multiplier<T0>(l0: &mut StakingPool<T0>, l1: address, l2: u64, l3: String, l4: &Clock, l5: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l5)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l5)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     assert!(l2 <= C54, C36);
     assert!(string::length(&l3) > 0u64, C20);
     let l9 = WalletBonusMultiplierKey { wallet: l1 };
     let l7 = clock::timestamp_ms(l4);
     let l6 = if (dynamic_object_field::exists_(&l0.id, l9)) {
-        *(&(dynamic_object_field::borrow(&l0.id, l9)).bonus_multiplier)
+        (dynamic_object_field::borrow(&l0.id, l9)).bonus_multiplier
     } else {
         0u64
     };
@@ -1497,53 +1463,48 @@ public entry fun set_wallet_bonus_multiplier<T0>(l0: &mut StakingPool<T0>, l1: a
 
 public entry fun stake_nft_in_slot<T0: key + store, T1>(l0: &mut StakingPool<T1>, l1: &mut Kiosk, l2: &KioskOwnerCap, l3: ID, l4: String, l5: u8, l6: &Clock, l7: &mut TxContext) {
     demo::assert_not_paused(freeze(l0));
-    assert!(!(*(&l0.is_locked)), C5);
+    assert!(!(l0.is_locked), C5);
     assert!(string::length(&l4) > 0u64, C23);
     assert!(l5 >= C53 && l5 <= C52, C29);
     let l10 = clock::timestamp_ms(l6);
-    assert!(l10 >= *(&l0.start_time), C7);
-    let __c85 = *(&l0.end_time) > 0u64;
-    let __c91;
-    if (__c85) {
-        __c91 = l10 < *(&l0.end_time);
-        assert!(__c91, C10)
+    assert!(l10 >= l0.start_time, C7);
+    if (l0.end_time > 0u64) {
+        assert!(l10 < l0.end_time, C10)
     };
-    if (__c91 || !(__c85)) {
-        let l15 = tx_context::sender(freeze(l7));
-        let l18 = demo::get_slot_config(&l0.slot_configs, l5);
-        assert!(demo::is_collection_allowed_in_slot(l18, &l4), C8);
-        let l14 = type_name::get();
-        let l22 = StakeKey { nft_id: l3, nft_type: l14 };
-        assert!(!(dynamic_object_field::exists_(&l0.id, l22)), C12);
-        assert!(demo::is_slot_unlocked(freeze(l0), l15, l5), C27);
-        assert!(!(demo::is_slot_occupied(freeze(l0), l15, l5)), C28);
-        let l16 = object::id(freeze(l0));
-        let l12 = object::id(freeze(l1));
-        let l9 = *(&l0.default_reward_rate);
-        let l20 = *(&l18.reward_multiplier);
-        let l13 = demo::get_effective_nft_multiplier(freeze(l0), l3, &l4);
-        let l23 = demo::get_wallet_bonus_multiplier(freeze(l0), l15);
-        let l11 = demo::calculate_effective_reward_rate_enhanced(l9, l20, l13, l23);
-        let l19 = demo::get_or_create_slot_data(l0, l15, l5, l7);
-        *(&mut l19.staked_nft) = option::some(l3);
-        *(&mut l19.staked_collection) = option::some(l4);
-        *(&mut l19.stake_time) = l10;
-        *(&mut l19.last_claim_time) = l10;
-        *(&mut l19.nft_type) = option::some(l14);
-        *(&mut l19.pending_rewards) = 0u64;
-        let l17 = kiosk::list_with_purchase_cap(l1, l2, l3, 1000000000000u64, l7);
-        let l21 = StakeInfo { id: object::new(l7), nft_id: l3, owner: l15, kiosk_id: l12, collection: l4, purchase_cap: l17, stake_time: l10, last_claim_time: l10, pending_rewards: 0u64, nft_type: l14, total_claimed: 0u64, slot_number: l5 };
-        dynamic_object_field::add(&mut l0.id, l22, l21);
-        transfer::transfer(StakeReceipt { id: object::new(l7), pool_id: l16, nft_id: l3, kiosk_id: l12, owner: l15, stake_time: l10, nft_type: l14, slot_number: l5 }, l15);
-        *(&mut l0.total_staked) = demo::safe_add(*(&l0.total_staked), 1u64);
-        event::emit(NftStaked { pool_id: l16, nft_id: l3, kiosk_id: l12, owner: l15, collection: l4, stake_time: l10, nft_type: l14, slot_number: l5, base_reward_rate: l9, slot_multiplier: l20, nft_multiplier: l13, wallet_bonus_multiplier: l23, effective_reward_rate: l11 })
-    }
+    let l15 = tx_context::sender(freeze(l7));
+    let l18 = demo::get_slot_config(&l0.slot_configs, l5);
+    assert!(demo::is_collection_allowed_in_slot(l18, &l4), C8);
+    let l14 = type_name::get();
+    let l22 = StakeKey { nft_id: l3, nft_type: l14 };
+    assert!(!(dynamic_object_field::exists_(&l0.id, l22)), C12);
+    assert!(demo::is_slot_unlocked(freeze(l0), l15, l5), C27);
+    assert!(!(demo::is_slot_occupied(freeze(l0), l15, l5)), C28);
+    let l16 = object::id(freeze(l0));
+    let l12 = object::id(freeze(l1));
+    let l9 = l0.default_reward_rate;
+    let l20 = l18.reward_multiplier;
+    let l13 = demo::get_effective_nft_multiplier(freeze(l0), l3, &l4);
+    let l23 = demo::get_wallet_bonus_multiplier(freeze(l0), l15);
+    let l11 = demo::calculate_effective_reward_rate_enhanced(l9, l20, l13, l23);
+    let l19 = demo::get_or_create_slot_data(l0, l15, l5, l7);
+    *(&mut l19.staked_nft) = option::some(l3);
+    *(&mut l19.staked_collection) = option::some(l4);
+    *(&mut l19.stake_time) = l10;
+    *(&mut l19.last_claim_time) = l10;
+    *(&mut l19.nft_type) = option::some(l14);
+    *(&mut l19.pending_rewards) = 0u64;
+    let l17 = kiosk::list_with_purchase_cap(l1, l2, l3, 1000000000000u64, l7);
+    let l21 = StakeInfo { id: object::new(l7), nft_id: l3, owner: l15, kiosk_id: l12, collection: l4, purchase_cap: l17, stake_time: l10, last_claim_time: l10, pending_rewards: 0u64, nft_type: l14, total_claimed: 0u64, slot_number: l5 };
+    dynamic_object_field::add(&mut l0.id, l22, l21);
+    transfer::transfer(StakeReceipt { id: object::new(l7), pool_id: l16, nft_id: l3, kiosk_id: l12, owner: l15, stake_time: l10, nft_type: l14, slot_number: l5 }, l15);
+    *(&mut l0.total_staked) = demo::safe_add(l0.total_staked, 1u64);
+    event::emit(NftStaked { pool_id: l16, nft_id: l3, kiosk_id: l12, owner: l15, collection: l4, stake_time: l10, nft_type: l14, slot_number: l5, base_reward_rate: l9, slot_multiplier: l20, nft_multiplier: l13, wallet_bonus_multiplier: l23, effective_reward_rate: l11 })
 }
 
 public entry fun toggle_pause<T0>(l0: &mut StakingPool<T0>, l1: &mut TxContext) {
     let l3 = tx_context::sender(freeze(l1));
-    assert!(l3 == *(&l0.admin) || l3 == *(&l0.emergency_admin), C1);
-    *(&mut l0.is_paused) = !(*(&l0.is_paused))
+    assert!(l3 == l0.admin || l3 == l0.emergency_admin, C1);
+    *(&mut l0.is_paused) = !(l0.is_paused)
 }
 
 public entry fun unlock_slot<T0>(l0: &mut StakingPool<T0>, l1: u8, l2: Coin<SUI>, l3: &Clock, l4: &mut TxContext) {
@@ -1553,16 +1514,13 @@ public entry fun unlock_slot<T0>(l0: &mut StakingPool<T0>, l1: u8, l2: Coin<SUI>
     let l13 = coin::value(&l2);
     let l9 = clock::timestamp_ms(l3);
     let l17 = demo::get_slot_config(&l0.slot_configs, l1);
-    let l12 = *(&l17.is_open_to_all);
-    let l8 = *(&l17.allowed_collections);
-    let l15 = *(&l17.unlock_cost);
-    let __c25 = l15 == 0u64;
-    let __c60;
-    if (__c25) {
+    let l12 = l17.is_open_to_all;
+    let l8 = l17.allowed_collections;
+    let l15 = l17.unlock_cost;
+    if (l15 == 0u64) {
         transfer::public_transfer(l2, l22)
     } else {
-        __c60 = l13 >= l15;
-        assert!(__c60, C30);
+        assert!(l13 >= l15, C30);
         let l14 = coin::into_balance(l2);
         if (l13 > l15) {
             let l11 = demo::safe_sub(l13, l15);
@@ -1575,25 +1533,23 @@ public entry fun unlock_slot<T0>(l0: &mut StakingPool<T0>, l1: u8, l2: Coin<SUI>
             dynamic_object_field::add(&mut l0.id, l16, l19)
         };
         let l20 = dynamic_object_field::borrow_mut(&mut l0.id, l16);
-        *(&mut l20.total_collected) = demo::safe_add(*(&l20.total_collected), l15)
+        *(&mut l20.total_collected) = demo::safe_add(l20.total_collected, l15)
     };
-    if (__c25 || __c60) {
-        let l23 = UserSlotAllocationKey { user: l22 };
-        let l10 = *(&(dynamic_object_field::borrow(&l0.id, PoolSlotLimitsKey { dummy_field: false })).default_max_slots_per_wallet);
-        if (!(dynamic_object_field::exists_(&l0.id, l23))) {
-            let l6 = UserSlotAllocation { id: object::new(l4), owner: l22, max_slots_allowed: l10, total_slots_unlocked: 0u8, unlocked_slot_numbers: vector[] };
-            dynamic_object_field::add(&mut l0.id, l23, l6);
-            *(&mut l0.total_users_with_slots) = demo::safe_add(*(&l0.total_users_with_slots), 1u64)
-        };
-        assert!(!(demo::is_slot_unlocked(freeze(l0), l22, l1)), C32);
-        let l7 = dynamic_object_field::borrow_mut(&mut l0.id, l23);
-        assert!(l1 <= *(&l7.max_slots_allowed), C39);
-        assert!(*(&l7.total_slots_unlocked) < *(&l7.max_slots_allowed), C31);
-        (&mut l7.unlocked_slot_numbers).push_back(l1);
-        *(&mut l7.total_slots_unlocked) = *(&l7.total_slots_unlocked) + 1u8;
-        *(&mut (demo::get_or_create_slot_data(l0, l22, l1, l4)).is_unlocked) = true;
-        event::emit(SlotUnlocked { pool_id: object::id(freeze(l0)), user: l22, slot_number: l1, unlock_cost: l15, allowed_collections: l8, is_open_to_all: l12, unlock_time: l9 })
-    }
+    let l23 = UserSlotAllocationKey { user: l22 };
+    let l10 = (dynamic_object_field::borrow(&l0.id, PoolSlotLimitsKey { dummy_field: false })).default_max_slots_per_wallet;
+    if (!(dynamic_object_field::exists_(&l0.id, l23))) {
+        let l6 = UserSlotAllocation { id: object::new(l4), owner: l22, max_slots_allowed: l10, total_slots_unlocked: 0u8, unlocked_slot_numbers: vector[] };
+        dynamic_object_field::add(&mut l0.id, l23, l6);
+        *(&mut l0.total_users_with_slots) = demo::safe_add(l0.total_users_with_slots, 1u64)
+    };
+    assert!(!(demo::is_slot_unlocked(freeze(l0), l22, l1)), C32);
+    let l7 = dynamic_object_field::borrow_mut(&mut l0.id, l23);
+    assert!(l1 <= l7.max_slots_allowed, C39);
+    assert!(l7.total_slots_unlocked < l7.max_slots_allowed, C31);
+    (&mut l7.unlocked_slot_numbers).push_back(l1);
+    *(&mut l7.total_slots_unlocked) = l7.total_slots_unlocked + 1u8;
+    *(&mut (demo::get_or_create_slot_data(l0, l22, l1, l4)).is_unlocked) = true;
+    event::emit(SlotUnlocked { pool_id: object::id(freeze(l0)), user: l22, slot_number: l1, unlock_cost: l15, allowed_collections: l8, is_open_to_all: l12, unlock_time: l9 })
 }
 
 public entry fun unlock_slot_with_token<T0, T1>(l0: &mut StakingPool<T1>, l1: u8, l2: Coin<T0>, l3: &Clock, l4: &mut TxContext) {
@@ -1614,53 +1570,48 @@ public entry fun unlock_slot_with_token<T0, T1>(l0: &mut StakingPool<T1>, l1: u8
     } else {
         0u64
     };
-    let __c86 = l15 == 0u64;
-    let __c96;
-    if (__c86) {
+    if (l15 == 0u64) {
         transfer::public_transfer(l2, l22)
     } else {
-        __c96 = l12 == l15;
-        assert!(__c96, C30);
-        transfer::public_transfer(l2, *(&l0.admin));
+        assert!(l12 == l15, C30);
+        transfer::public_transfer(l2, l0.admin);
         let l16 = TokenRevenueKey { token_type: l20 };
         if (!(dynamic_object_field::exists_(&l0.id, l16))) {
             let l18 = TokenRevenue { id: object::new(l4), token_type: l20, total_collected: 0u64, sui_balance: balance::zero() };
             dynamic_object_field::add(&mut l0.id, l16, l18)
         };
         let l19 = dynamic_object_field::borrow_mut(&mut l0.id, l16);
-        *(&mut l19.total_collected) = demo::safe_add(*(&l19.total_collected), l15)
+        *(&mut l19.total_collected) = demo::safe_add(l19.total_collected, l15)
     };
-    if (__c86 || __c96) {
-        let l23 = UserSlotAllocationKey { user: l22 };
-        let l11 = *(&(dynamic_object_field::borrow(&l0.id, PoolSlotLimitsKey { dummy_field: false })).default_max_slots_per_wallet);
-        if (!(dynamic_object_field::exists_(&l0.id, l23))) {
-            let l8 = UserSlotAllocation { id: object::new(l4), owner: l22, max_slots_allowed: l11, total_slots_unlocked: 0u8, unlocked_slot_numbers: vector[] };
-            dynamic_object_field::add(&mut l0.id, l23, l8);
-            *(&mut l0.total_users_with_slots) = demo::safe_add(*(&l0.total_users_with_slots), 1u64)
-        };
-        assert!(!(demo::is_slot_unlocked(freeze(l0), l22, l1)), C32);
-        let l9 = dynamic_object_field::borrow_mut(&mut l0.id, l23);
-        assert!(l1 <= *(&l9.max_slots_allowed), C39);
-        assert!(*(&l9.total_slots_unlocked) < *(&l9.max_slots_allowed), C31);
-        (&mut l9.unlocked_slot_numbers).push_back(l1);
-        *(&mut l9.total_slots_unlocked) = *(&l9.total_slots_unlocked) + 1u8;
-        let l21 = *(&l9.total_slots_unlocked);
-        *(&mut (demo::get_or_create_slot_data(l0, l22, l1, l4)).is_unlocked) = true;
-        let l10 = clock::timestamp_ms(l3);
-        event::emit(SlotUnlockedWithToken { pool_id: object::id(freeze(l0)), user: l22, slot_number: l1, token_type: l20, payment_amount: l15, unlock_time: l10, total_slots_unlocked: l21 })
-    }
+    let l23 = UserSlotAllocationKey { user: l22 };
+    let l11 = (dynamic_object_field::borrow(&l0.id, PoolSlotLimitsKey { dummy_field: false })).default_max_slots_per_wallet;
+    if (!(dynamic_object_field::exists_(&l0.id, l23))) {
+        let l8 = UserSlotAllocation { id: object::new(l4), owner: l22, max_slots_allowed: l11, total_slots_unlocked: 0u8, unlocked_slot_numbers: vector[] };
+        dynamic_object_field::add(&mut l0.id, l23, l8);
+        *(&mut l0.total_users_with_slots) = demo::safe_add(l0.total_users_with_slots, 1u64)
+    };
+    assert!(!(demo::is_slot_unlocked(freeze(l0), l22, l1)), C32);
+    let l9 = dynamic_object_field::borrow_mut(&mut l0.id, l23);
+    assert!(l1 <= l9.max_slots_allowed, C39);
+    assert!(l9.total_slots_unlocked < l9.max_slots_allowed, C31);
+    (&mut l9.unlocked_slot_numbers).push_back(l1);
+    *(&mut l9.total_slots_unlocked) = l9.total_slots_unlocked + 1u8;
+    let l21 = l9.total_slots_unlocked;
+    *(&mut (demo::get_or_create_slot_data(l0, l22, l1, l4)).is_unlocked) = true;
+    let l10 = clock::timestamp_ms(l3);
+    event::emit(SlotUnlockedWithToken { pool_id: object::id(freeze(l0)), user: l22, slot_number: l1, token_type: l20, payment_amount: l15, unlock_time: l10, total_slots_unlocked: l21 })
 }
 
 public entry fun unstake_nft<T0: key + store, T1>(l0: &mut StakingPool<T1>, l1: &mut Kiosk, l2: StakeReceipt<T0, T1>, l3: &Clock, l4: &mut TxContext) {
     demo::assert_not_paused(freeze(l0));
-    assert!(*(&(&l2).pool_id) == object::id(freeze(l0)), C9);
+    assert!((&l2).pool_id == object::id(freeze(l0)), C9);
     let l5 = tx_context::sender(freeze(l4));
-    assert!(*(&(&l2).owner) == l5, C0);
+    assert!((&l2).owner == l5, C0);
     let l10 = type_name::get();
-    assert!(*(&(&l2).nft_type) == l10, C9);
+    assert!((&l2).nft_type == l10, C9);
     let l6 = clock::timestamp_ms(l3);
-    let l9 = *(&(&l2).nft_id);
-    let l15 = *(&(&l2).slot_number);
+    let l9 = (&l2).nft_id;
+    let l15 = (&l2).slot_number;
     let l16 = StakeKey { nft_id: l9, nft_type: l10 };
     assert!(dynamic_object_field::exists_(&l0.id, l16), C2);
     let StakeInfo { id: reg_58, nft_id: reg_59, owner: reg_60, kiosk_id: reg_61, collection: reg_62, purchase_cap: reg_63, stake_time: reg_64, last_claim_time: reg_65, pending_rewards: reg_66, nft_type: reg_67, total_claimed: reg_68, slot_number: reg_69 } = dynamic_object_field::remove(&mut l0.id, l16);
@@ -1668,7 +1619,7 @@ public entry fun unstake_nft<T0: key + store, T1>(l0: &mut StakingPool<T1>, l1: 
     let l8 = reg_61 : 0x2::object::ID;
     let l11 = reg_60 : address;
     assert!(l8 == object::id(freeze(l1)), C13);
-    assert!(l6 >= demo::safe_add(l17, *(&l0.min_staking_duration)), C11);
+    assert!(l6 >= demo::safe_add(l17, l0.min_staking_duration), C11);
     kiosk::return_purchase_cap(l1, reg_63 : 0x2::kiosk::PurchaseCap<T0>);
     let l14 = SlotDataKey { owner: l11, slot_number: l15 };
     let l13 = dynamic_object_field::borrow_mut(&mut l0.id, l14);
@@ -1681,80 +1632,70 @@ public entry fun unstake_nft<T0: key + store, T1>(l0: &mut StakingPool<T1>, l1: 
     object::delete(reg_58 : 0x2::object::UID);
     let StakeReceipt { id: reg_117, pool_id: reg_118, nft_id: reg_119, kiosk_id: reg_120, owner: reg_121, stake_time: reg_122, nft_type: reg_123, slot_number: reg_124 } = l2;
     object::delete(reg_117 : 0x2::object::UID);
-    *(&mut l0.total_staked) = demo::safe_sub(*(&l0.total_staked), 1u64);
+    *(&mut l0.total_staked) = demo::safe_sub(l0.total_staked, 1u64);
     let l18 = demo::safe_sub(l6, l17);
     event::emit(NftUnstaked { pool_id: object::id(freeze(l0)), nft_id: l9, kiosk_id: l8, owner: l11, unstake_time: l6, staking_duration: l18, nft_type: l10, slot_number: l15, final_reward_claimed: reg_68 : u64 })
 }
 
 public entry fun update_multiple_slot_rewards<T0>(l0: &mut StakingPool<T0>, l1: vector<address>, l2: vector<u8>, l3: &Clock, l4: &mut TxContext) {
     demo::assert_not_paused(freeze(l0));
-    assert!(&l1.len() == &l2.len(), C20);
+    assert!(l1.length() == l2.length(), C20);
     let l5 = 0u64;
-    let l6 = &l1.len();
+    let l6 = l1.length();
     while (l5 < l6) {
-        let l7 = *(&(&l1)[l5]);
-        let l8 = *(&(&l2)[l5]);
+        let l7 = (&l1)[l5];
+        let l8 = (&l2)[l5];
         demo::update_slot_rewards(l0, l7, l8, l3, l4);
         l5 = l5 + 1u64;
     }
 }
 
 public entry fun update_slot_multiplier<T0>(l0: &mut StakingPool<T0>, l1: u8, l2: u64, l3: &Clock, l4: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l4)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l4)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     assert!(l1 >= C53 && l1 <= C52, C29);
     assert!(l2 >= C50 && l2 <= C54, C36);
     let l8 = clock::timestamp_ms(l3);
     let l10 = 0u64;
-    let l11 = &l0.slot_configs.len();
+    let l11 = (&l0.slot_configs).length();
     let l9 = false;
     loop {
-        let __c75 = l10 < l11;
-        let __c79;
-        if (__c75) {
+        if (l10 < l11) {
             let l7 = &mut (&mut l0.slot_configs)[l10];
-            __c79 = *(&l7.slot_number) == l1;
-            if (!(__c79)) {
+            if (l7.slot_number != l1) {
                 l10 = l10 + 1u64;
                 continue
             };
-            let l12 = *(&l7.reward_multiplier);
+            let l12 = l7.reward_multiplier;
             *(&mut l7.reward_multiplier) = l2;
             l9 = true;
             event::emit(SlotMultiplierUpdated { pool_id: object::id(freeze(l0)), slot_number: l1, old_multiplier: l12, new_multiplier: l2, updated_by: tx_context::sender(freeze(l4)), update_time: l8 })
         };
-        if (__c79 || !(__c75)) {
-            assert!(l9, C29);
-            return
-        }
+        assert!(l9, C29);
+        return
     }
 }
 
 public entry fun update_slot_price<T0>(l0: &mut StakingPool<T0>, l1: u8, l2: String, l3: u64, l4: &Clock, l5: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l5)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l5)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     assert!(l1 >= C53 && l1 <= C52, C29);
     let l9 = clock::timestamp_ms(l4);
     if (l2 == demo::get_token_type_string_sui()) {
         let l10 = 0u64;
-        let l11 = &l0.slot_configs.len();
+        let l11 = (&l0.slot_configs).length();
         loop {
-            let __c55 = l10 < l11;
-            let __c59;
-            if (__c55) {
+            if (l10 < l11) {
                 let l8 = &mut (&mut l0.slot_configs)[l10];
-                __c59 = *(&l8.slot_number) == l1;
-                if (!(__c59)) {
+                if (l8.slot_number != l1) {
                     l10 = l10 + 1u64;
                     continue
                 };
-                let l12 = *(&l8.unlock_cost);
+                let l12 = l8.unlock_cost;
                 *(&mut l8.unlock_cost) = l3;
                 event::emit(SlotPriceUpdated { pool_id: object::id(freeze(l0)), slot_number: l1, token_type: l2, old_price: l12, new_price: l3, updated_by: tx_context::sender(freeze(l5)), update_time: l9 })
             };
-            if (__c59 || !(__c55)) {
-                break
-            }
+            break
         }
     };
     let l16 = SlotTokenPricingKey { slot_number: l1 };
@@ -1785,22 +1726,22 @@ public entry fun update_slot_rewards<T0>(l0: &mut StakingPool<T0>, l1: address, 
     if (!(!(dynamic_object_field::exists_(&l0.id, l16)))) {
         let l14 = dynamic_object_field::borrow(&l0.id, l16);
         if (!(option::is_none(&l14.staked_nft))) {
-            let l9 = *(&l14.last_claim_time);
-            let l18 = *(&l14.stake_time);
+            let l9 = l14.last_claim_time;
+            let l18 = l14.stake_time;
             let l7 = *(option::borrow(&l14.staked_collection));
             let l10 = *(option::borrow(&l14.staked_nft));
             let l8 = clock::timestamp_ms(l3);
             let l12 = object::id(freeze(l0));
             let l13 = demo::get_slot_config(&l0.slot_configs, l2);
-            let l6 = *(&l0.default_reward_rate);
-            let l17 = *(&l13.reward_multiplier);
+            let l6 = l0.default_reward_rate;
+            let l17 = l13.reward_multiplier;
             let l11 = demo::get_effective_nft_multiplier(freeze(l0), l10, &l7);
             let l20 = demo::get_wallet_bonus_multiplier(freeze(l0), l1);
-            let l5 = demo::calculate_enhanced_slot_rewards(l18, l9, l8, l6, l17, l11, l20, *(&l0.end_time));
+            let l5 = demo::calculate_enhanced_slot_rewards(l18, l9, l8, l6, l17, l11, l20, l0.end_time);
             let l15 = dynamic_object_field::borrow_mut(&mut l0.id, l16);
-            *(&mut l15.pending_rewards) = demo::safe_add(*(&l15.pending_rewards), l5);
+            *(&mut l15.pending_rewards) = demo::safe_add(l15.pending_rewards, l5);
             *(&mut l15.last_claim_time) = l8;
-            let l19 = *(&l15.pending_rewards);
+            let l19 = l15.pending_rewards;
             event::emit(RewardsUpdated { pool_id: l12, owner: l1, slot_number: l2, nft_id: l10, additional_rewards: l5, total_pending: l19, update_time: l8 })
         }
     }
@@ -1813,12 +1754,12 @@ public fun user_has_staked_nfts<T0>(l0: &StakingPool<T0>, l1: address): bool {
     };
     let l2 = dynamic_object_field::borrow(&l0.id, l6);
     let l3 = 0u64;
-    let l4 = &l2.unlocked_slot_numbers.len();
+    let l4 = (&l2.unlocked_slot_numbers).length();
     loop {
         if (l3 >= l4) {
             return false
         };
-        let l5 = *(&(&l2.unlocked_slot_numbers)[l3]);
+        let l5 = (&l2.unlocked_slot_numbers)[l3];
         if (demo::is_slot_occupied(l0, l1, l5)) {
             break
         };
@@ -1834,12 +1775,12 @@ fun verify_nft_ownership<T0: key + store>(l0: &Kiosk, l1: &KioskOwnerCap, l2: ID
 }
 
 public entry fun withdraw_sui_revenue<T0>(l0: &mut StakingPool<T0>, l1: u64, l2: &mut TxContext) {
-    assert!(tx_context::sender(freeze(l2)) == *(&l0.admin), C1);
+    assert!(tx_context::sender(freeze(l2)) == l0.admin, C1);
     demo::assert_not_paused(freeze(l0));
     let l3 = TokenRevenueKey { token_type: demo::get_token_type_string_sui() };
     assert!(dynamic_object_field::exists_(&l0.id, l3), C34);
     let l4 = dynamic_object_field::borrow_mut(&mut l0.id, l3);
     assert!(balance::value(&l4.sui_balance) >= l1, C16);
-    transfer::public_transfer(coin::from_balance(balance::split(&mut l4.sui_balance, l1), l2), *(&l0.admin))
+    transfer::public_transfer(coin::from_balance(balance::split(&mut l4.sui_balance, l1), l2), l0.admin)
 }
 

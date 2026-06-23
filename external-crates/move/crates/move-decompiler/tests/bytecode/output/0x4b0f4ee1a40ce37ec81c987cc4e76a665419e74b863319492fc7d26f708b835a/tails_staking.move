@@ -169,7 +169,7 @@ public fun claim_profit_sharing<T0>(l0: &mut Version, l1: &mut TailsStakingRegis
     loop {
         assert!(l5 < l6, C12);
         l14 = big_vector::borrow_from_slice_mut(l10, l5 % l13);
-        if (*(&l14.user) == l15) {
+        if (l14.user == l15) {
             break
         };
         if (l5 + 1u64 < l6 && l5 + 1u64 == l11 * l13 + l12) {
@@ -180,15 +180,15 @@ public fun claim_profit_sharing<T0>(l0: &mut Version, l1: &mut TailsStakingRegis
         l5 = l5 + 1u64;
     };
     let l9 = dynamic_field::borrow_mut(&mut l1.id, l7);
-    event::emit(ClaimProfitSharingEvent { tails: *(&l14.tails), profit_asset: l7, log: vector[*(&(&l14.profits)[l8])], bcs_padding: C17 });
-    let l4 = balance::split(l9, *(&(&l14.profits)[l8]));
+    event::emit(ClaimProfitSharingEvent { tails: l14.tails, profit_asset: l7, log: vector[(&l14.profits)[l8]], bcs_padding: C17 });
+    let l4 = balance::split(l9, (&l14.profits)[l8]);
     *(&mut (&mut l14.profits)[l8]) = 0u64;
     return l4
 }
 
 entry fun daily_sign_up(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: Coin<SUI>, l3: &Clock, l4: &TxContext) {
     ecosystem::version_check(freeze(l0));
-    assert!(coin::value(&l2) == *(&(&l1.config)[C5]), C4);
+    assert!(coin::value(&l2) == (&l1.config)[C5], C4);
     ecosystem::charge_fee(l0, coin::into_balance(l2));
     let l20 = tx_context::sender(l4);
     let l17 = bag::borrow(&l1.tails_metadata, C7);
@@ -202,7 +202,7 @@ entry fun daily_sign_up(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: Coi
     loop {
         assert!(l7 < l9, C12);
         l15 = big_vector::borrow_from_slice_mut(l11, l7 % l14);
-        if (*(&l15.user) == l20) {
+        if (l15.user == l20) {
             break
         };
         if (l7 + 1u64 < l9 && l7 + 1u64 == l12 * l14 + l13) {
@@ -213,18 +213,18 @@ entry fun daily_sign_up(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: Coi
         l7 = l7 + 1u64;
     };
     let l19 = clock::timestamp_ms(l3);
-    assert!(l19 / C0 - *(&(&l15.u64_padding)[C1]) / C0 != 0u64, C1);
+    assert!(l19 / C0 - (&l15.u64_padding)[C1] / C0 != 0u64, C1);
     *(&mut (&mut l15.u64_padding)[C1]) = l19;
     let l8 = 0u64;
-    let l10 = &l15.tails.len();
-    let l6 = *(&(&l1.config)[C4]);
+    let l10 = (&l15.tails).length();
+    let l6 = (&l1.config)[C4];
     while (l8 < l10) {
-        let l18 = *(&(&l15.tails)[l8]);
-        let l16 = object_table::borrow_mut(&mut l1.tails, *(&l17[l18 - 1u64]));
+        let l18 = (&l15.tails)[l8];
+        let l16 = object_table::borrow_mut(&mut l1.tails, l17[l18 - 1u64]);
         typus_nft::nft_exp_up(&l1.tails_manager_cap, l16, l6);
         l8 = l8 + 1u64;
     };
-    event::emit(DailySignUpEvent { tails: *(&l15.tails), log: vector[l6, *(&(&l1.config)[C5])], bcs_padding: C17 })
+    event::emit(DailySignUpEvent { tails: l15.tails, log: vector[l6, (&l1.config)[C5]], bcs_padding: C17 })
 }
 
 public fun exp_down(l0: &Version, l1: &mut TailsStakingRegistry, l2: &mut TypusUserRegistry, l3: address, l4: u64, l5: &TxContext) {
@@ -233,7 +233,7 @@ public fun exp_down(l0: &Version, l1: &mut TailsStakingRegistry, l2: &mut TypusU
 
 public fun exp_down_with_fee(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: &mut TypusUserRegistry, l3: address, l4: u64, l5: Coin<SUI>, l6: &TxContext) {
     let l14 = tx_context::sender(l6);
-    assert!(coin::value(&l5) == *(&(&l1.config)[C6]), C4);
+    assert!(coin::value(&l5) == (&l1.config)[C6], C4);
     ecosystem::charge_fee(l0, coin::into_balance(l5));
     assert!(!(!(object_table::contains(&l1.tails, l3))), C12);
     let l8 = object_table::borrow_mut(&mut l1.tails, l3);
@@ -256,7 +256,7 @@ public fun exp_down_without_staking(l0: &Version, l1: &TailsStakingRegistry, l2:
 
 public fun exp_down_without_staking_with_fee(l0: &mut Version, l1: &TailsStakingRegistry, l2: &mut TypusUserRegistry, l3: &mut Kiosk, l4: &KioskOwnerCap, l5: address, l6: u64, l7: Coin<SUI>, l8: &TxContext) {
     ecosystem::version_check(freeze(l0));
-    assert!(coin::value(&l7) == *(&(&l1.config)[C6]), C4);
+    assert!(coin::value(&l7) == (&l1.config)[C6], C4);
     ecosystem::charge_fee(l0, coin::into_balance(l7));
     let l10 = kiosk::borrow_mut(l3, l4, object::id_from_address(l5));
     typus_nft::nft_exp_down(&l1.tails_manager_cap, l10, l6);
@@ -303,7 +303,7 @@ public(friend) fun get_level_counts(l0: &Version, l1: &TailsStakingRegistry): ve
     while (l3 < l5) {
         let l12 = big_vector::borrow_from_slice(l8, l3 % l11);
         let l4 = 0u64;
-        let l6 = &l12.tails.len();
+        let l6 = (&l12.tails).length();
     };
     return l7
 }
@@ -323,9 +323,9 @@ public fun get_max_staking_level(l0: &Version, l1: &TailsStakingRegistry, l2: ad
         loop {
             if (l4 < l6) {
                 l13 = big_vector::borrow_from_slice(l9, l4 % l12);
-                if (*(&l13.user) == l2) {
+                if (l13.user == l2) {
                     l5 = 0u64;
-                    l7 = &l13.tails.len();
+                    l7 = (&l13.tails).length();
                     break
                 };
                 if (l4 + 1u64 < l6 && l4 + 1u64 == l10 * l12 + l11) {
@@ -341,9 +341,9 @@ public fun get_max_staking_level(l0: &Version, l1: &TailsStakingRegistry, l2: ad
             }
         };
         while (l5 < l7) {
-            let l15 = *(&(&l13.tails)[l5]);
-            if (*(&l14[l15 - 1u64]) > l8) {
-                l8 = *(&l14[l15 - 1u64]);
+            let l15 = (&l13.tails)[l5];
+            if (l14[l15 - 1u64] > l8) {
+                l8 = l14[l15 - 1u64];
             };
             l5 = l5 + 1u64;
         };
@@ -367,7 +367,7 @@ public(friend) fun get_staking_info(l0: &Version, l1: &TailsStakingRegistry, l2:
         if (l4 >= l5) {
             return C26
         };
-        if (*(&(big_vector::borrow_from_slice(l6, l4 % l9)).user) == l2) {
+        if ((big_vector::borrow_from_slice(l6, l4 % l9)).user == l2) {
             return bcs::to_bytes(big_vector::borrow_from_slice(l6, l4 % l9))
         };
         if (l4 + 1u64 < l5 && l4 + 1u64 == l7 * l9 + l8) {
@@ -389,8 +389,8 @@ public(friend) fun get_staking_infos(l0: &Version, l1: &TailsStakingRegistry, l2
     let l9 = big_vector::get_slice_length(l7);
     let l4 = 0u64;
     while (l4 < l5) {
-        if (*(&(big_vector::borrow_from_slice(l7, l4 % l10)).user) == l2) {
-            (&mut l6).push_back(bcs::to_bytes(big_vector::borrow_from_slice(l7, l4 % l10)))
+        if ((big_vector::borrow_from_slice(l7, l4 % l10)).user == l2) {
+            l6.push_back(bcs::to_bytes(big_vector::borrow_from_slice(l7, l4 % l10)))
         };
         if (l4 + 1u64 < l5 && l4 + 1u64 == l8 * l10 + l9) {
             l8 = big_vector::get_slice_idx(l7) + 1u64;
@@ -404,10 +404,10 @@ public(friend) fun get_staking_infos(l0: &Version, l1: &TailsStakingRegistry, l2
 
 public fun import_tails(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: vector<Tails>, l3: vector<address>, l4: &TxContext) {
     ecosystem::verify(freeze(l0), l4);
-    assert!(&l2.len() == &l3.len(), C5);
+    assert!(l2.length() == l3.length(), C5);
     while (!(vector::is_empty(&l2))) {
-        let l5 = (&mut l2).pop_back();
-        let l8 = (&mut l3).pop_back();
+        let l5 = l2.pop_back();
+        let l8 = l3.pop_back();
         if (typus_nft::contains_u64_padding(&l1.tails_manager_cap, &l5, string::utf8(C19))) {
             typus_nft::remove_u64_padding(&l1.tails_manager_cap, &mut l5, string::utf8(C19))
         };
@@ -573,7 +573,7 @@ entry fun set_profit_sharing<T0, T1>(l0: &Version, l1: &mut TailsStakingRegistry
         let l28 = big_vector::borrow_from_slice_mut(l23, l13 % l26);
         let l18 = 0u64;
         let l14 = 0u64;
-        let l16 = &l28.tails.len();
+        let l16 = (&l28.tails).length();
     };
     if (!(reg_8)) {
         (&mut l1.profit_assets).push_back(l19);
@@ -604,7 +604,7 @@ entry fun set_profit_sharing<T0, T1>(l0: &Version, l1: &mut TailsStakingRegistry
 
 public fun stake_tails(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: &mut Kiosk, l3: &KioskOwnerCap, l4: address, l5: Coin<SUI>, l6: &mut TxContext) {
     ecosystem::version_check(freeze(l0));
-    assert!(coin::value(&l5) == *(&(&l1.config)[C2]), C4);
+    assert!(coin::value(&l5) == (&l1.config)[C2], C4);
     ecosystem::charge_fee(l0, coin::into_balance(l5));
     kiosk::list(l2, l3, object::id_from_address(l4), 0u64);
     let (reg_29, reg_30) = kiosk::purchase(l2, object::id_from_address(l4), coin::zero(l6));
@@ -627,11 +627,8 @@ fun stake_tails_(l0: &mut TailsStakingRegistry, l1: Tails, l2: address) {
     let l9 = big_vector::get_slice_length(l7);
     let l4 = 0u64;
     loop {
-        let __c49 = l4 < l5;
-        let __c54;
-        if (__c49) {
-            __c54 = *(&(big_vector::borrow_from_slice(l7, l4 % l10)).user) == l2;
-            if (!(__c54)) {
+        if (l4 < l5) {
+            if ((big_vector::borrow_from_slice(l7, l4 % l10)).user != l2) {
                 if (l4 + 1u64 < l5 && l4 + 1u64 == l8 * l10 + l9) {
                     l8 = big_vector::get_slice_idx(l7) + 1u64;
                     l7 = big_vector::borrow_slice(&l0.staking_infos, l8);
@@ -641,42 +638,40 @@ fun stake_tails_(l0: &mut TailsStakingRegistry, l1: Tails, l2: address) {
                 continue
             }
         };
-        if (__c54 || !(__c49)) {
-            if (l4 == l5) {
-                let l6 = C14;
-                utility::pad_u64_vector(&mut l6, &l0.profit_assets.len() - 1u64);
-                big_vector::push_back(&mut l0.staking_infos, StakingInfo { user: l2, tails: C14, profits: l6, u64_padding: C25 })
-            };
-            let l11 = big_vector::borrow_mut(&mut l0.staking_infos, l4);
-            assert!(&l11.tails.len() < *(&(&l0.config)[C1]), C11);
-            (&mut l11.tails).push_back(typus_nft::tails_number(&l1));
-            if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C19))) {
-                typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C19))
-            };
-            if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C20))) {
-                typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C20))
-            };
-            if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C21))) {
-                typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C21))
-            };
-            if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C22))) {
-                typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C22))
-            };
-            if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C23))) {
-                typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C23))
-            };
-            if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C24))) {
-                typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C24))
-            };
-            object_table::add(&mut l0.tails, object::id_address(&l1), l1);
-            return
-        }
+        if (l4 == l5) {
+            let l6 = C14;
+            utility::pad_u64_vector(&mut l6, (&l0.profit_assets).length() - 1u64);
+            big_vector::push_back(&mut l0.staking_infos, StakingInfo { user: l2, tails: C14, profits: l6, u64_padding: C25 })
+        };
+        let l11 = big_vector::borrow_mut(&mut l0.staking_infos, l4);
+        assert!((&l11.tails).length() < (&l0.config)[C1], C11);
+        (&mut l11.tails).push_back(typus_nft::tails_number(&l1));
+        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C19))) {
+            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C19))
+        };
+        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C20))) {
+            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C20))
+        };
+        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C21))) {
+            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C21))
+        };
+        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C22))) {
+            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C22))
+        };
+        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C23))) {
+            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C23))
+        };
+        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C24))) {
+            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C24))
+        };
+        object_table::add(&mut l0.tails, object::id_address(&l1), l1);
+        return
     }
 }
 
 public fun transfer_tails(l0: &mut Version, l1: &TailsStakingRegistry, l2: &mut Kiosk, l3: &KioskOwnerCap, l4: address, l5: Coin<SUI>, l6: address, l7: &mut TxContext) {
     ecosystem::version_check(freeze(l0));
-    assert!(coin::value(&l5) == *(&(&l1.config)[C3]), C4);
+    assert!(coin::value(&l5) == (&l1.config)[C3], C4);
     ecosystem::charge_fee(l0, coin::into_balance(l5));
     kiosk::list(l2, l3, object::id_from_address(l4), 0u64);
     let (reg_29, reg_30) = kiosk::purchase(l2, object::id_from_address(l4), coin::zero(l7));
@@ -720,9 +715,9 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
             break
         };
         l12 = big_vector::borrow_from_slice_mut(l8, l4 % l11);
-        if (*(&l12.user) == l2) {
+        if (l12.user == l2) {
             l5 = 0u64;
-            l7 = &l12.tails.len();
+            l7 = (&l12.tails).length();
             __dispatch_27 = 0u32;
             break
         };
@@ -736,11 +731,9 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
     match (__dispatch_27) {
         0 => {
             while (l5 < l7) {
-                if (*(&l14[*(&(&l12.tails)[l5]) - 1u64]) == l1) {
+                if (l14[(&l12.tails)[l5] - 1u64] == l1) {
                     let l13 = object_table::remove(&mut l0.tails, l1);
-                    if (vector::is_empty(&l12.tails)) {
-                        
-                    };
+                    let __c70 = vector::is_empty(&l12.tails);
                     return l13
                 };
                 l5 = l5 + 1u64;
@@ -755,10 +748,10 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
 
 entry fun update_tails_staking_registry_config(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64, l3: u64, l4: &TxContext) {
     ecosystem::verify(l0, l4);
-    while (&l1.config.len() < l2 + 1u64) {
+    while ((&l1.config).length() < l2 + 1u64) {
         (&mut l1.config).push_back(0u64)
     };
-    event::emit(UpdateTailsStakingRegistryConfigEvent { index: l2, log: vector[*(&(&l1.config)[l2]), l3], bcs_padding: C17 });
+    event::emit(UpdateTailsStakingRegistryConfigEvent { index: l2, log: vector[(&l1.config)[l2], l3], bcs_padding: C17 });
     *(&mut (&mut l1.config)[l2]) = l3
 }
 
@@ -776,7 +769,7 @@ entry fun upload_ipfs_urls(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64,
     ecosystem::verify(l0, l4);
     let l5 = table::borrow_mut(bag::borrow_mut(&mut l1.tails_metadata, C9), l2);
     while (!(vector::is_empty(&l3))) {
-        big_vector::push_back(l5, (&mut l3).pop_back())
+        big_vector::push_back(l5, l3.pop_back())
     }
 }
 
@@ -799,7 +792,7 @@ entry fun upload_webp_bytes(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64
     } else {
         let l7 = table::borrow_mut(l6, l3 * 10000u64 + l2);
         while (!(vector::is_empty(&l4))) {
-            l7.push_back((&mut l4).pop_back())
+            l7.push_back(l4.pop_back())
         };
         unstructured {
             goto 'label_47;
@@ -822,9 +815,9 @@ public fun verify_staking(l0: &Version, l1: &TailsStakingRegistry, l2: address, 
             return false
         };
         l13 = big_vector::borrow_from_slice(l9, l5 % l12);
-        if (*(&l13.user) == l2) {
+        if (l13.user == l2) {
             l6 = 0u64;
-            l8 = &l13.tails.len();
+            l8 = (&l13.tails).length();
             break
         };
         if (l5 + 1u64 < l7 && l5 + 1u64 == l10 * l12 + l11) {
@@ -838,8 +831,8 @@ public fun verify_staking(l0: &Version, l1: &TailsStakingRegistry, l2: address, 
         if (l6 >= l8) {
             return false
         };
-        let l15 = *(&(&l13.tails)[l6]);
-        if (*(&l14[l15 - 1u64]) == l3) {
+        let l15 = (&l13.tails)[l6];
+        if (l14[l15 - 1u64] == l3) {
             return true
         };
         l6 = l6 + 1u64;
@@ -864,7 +857,7 @@ public fun verify_staking_identity(l0: &Version, l1: &TailsStakingRegistry, l2: 
             return false
         };
         l13 = big_vector::borrow_from_slice(l9, l5 % l12);
-        if (*(&l13.user) == l2) {
+        if (l13.user == l2) {
             break
         };
         if (l5 + 1u64 < l7 && l5 + 1u64 == l10 * l12 + l11) {
@@ -875,13 +868,13 @@ public fun verify_staking_identity(l0: &Version, l1: &TailsStakingRegistry, l2: 
         l5 = l5 + 1u64;
     };
     let l6 = 0u64;
-    let l8 = &l13.tails.len();
+    let l8 = (&l13.tails).length();
     loop {
         if (l6 >= l8) {
             return false
         };
-        let l15 = *(&(&l13.tails)[l6]);
-        if (*(&l14[l15 - 1u64]) >= l3) {
+        let l15 = (&l13.tails)[l6];
+        if (l14[l15 - 1u64] >= l3) {
             break
         };
         l6 = l6 + 1u64;

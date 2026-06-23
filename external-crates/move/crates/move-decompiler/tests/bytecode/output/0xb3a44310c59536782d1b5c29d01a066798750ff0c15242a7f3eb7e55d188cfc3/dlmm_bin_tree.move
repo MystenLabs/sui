@@ -53,7 +53,7 @@ public fun add(l0: &mut BinTree, l1: u32): bool {
             let l9 = l7 | 1u256 << l5 & C1as u256as u8;
             vec_map::insert(&mut l0.level1, l4, l9);
             if (l7 == 0u256) {
-                *(&mut l0.level0) = *(&l0.level0) | 1u256 << l4 & 255u256as u8
+                *(&mut l0.level0) = l0.level0 | 1u256 << l4 & 255u256as u8
             }
         };
         return true
@@ -87,110 +87,77 @@ public fun find_first_left(l0: &BinTree, l1: u32): ( u32, bool) {
     assert!(l1 >> 24u8 == 0u32, C2);
     let l2 = l1 & C1as u32as u8;
     let l13 = l1 >> 8u8as u256;
-    let __c11 = l2 < C1;
-    let (__c26, __c36);
-    if (__c11) {
-        __c26 = vec_map::contains(&l0.level2, &l13);
-        assert!(__c26, C4);
+    if (l2 < C1) {
+        assert!(vec_map::contains(&l0.level2, &l13), C4);
         let (reg_31, reg_32) = dlmm_bin_tree::closest_bit_left(*(vec_map::get(&l0.level2, &l13)), l2);
-        __c36 = reg_32;
-        if (__c36) {
+        if (reg_32) {
             return (l13 << 8u8 | reg_31as u256as u32, true)
         }
     };
-    if (!(__c11) || (__c26 && !(__c36))) {
-        let l11 = l13 >> 8u8;
-        let l3 = l13 & C1as u256as u8;
-        let __c58 = l3 < C1;
-        let (__c72, __c82);
-        if (__c58) {
-            __c72 = vec_map::contains(&l0.level1, &l11);
-            assert!(__c72, C3);
-            let (reg_66, reg_67) = dlmm_bin_tree::closest_bit_left(*(vec_map::get(&l0.level1, &l11)), l3);
-            __c82 = reg_67;
-            if (__c82) {
-                let l14 = l11 << 8u8 | reg_66as u256;
-                assert!(vec_map::contains(&l0.level2, &l14), C4);
-                let l16 = *(vec_map::get(&l0.level2, &l14));
-                return (l14 << 8u8 | bit_math::least_significant_bit(l16)as u256as u32, true)
-            }
-        };
-        if (!(__c58) || (__c72 && !(__c82))) {
-            let l4 = l11 & C1as u256as u8;
-            let __c126 = l4 < C1;
-            let __c136;
-            if (__c126) {
-                let (reg_107, reg_108) = dlmm_bin_tree::closest_bit_left(*(&l0.level0), l4);
-                __c136 = reg_108;
-                if (__c136) {
-                    let l12 = reg_107as u256;
-                    assert!(vec_map::contains(&l0.level1, &l12), C3);
-                    let l17 = *(vec_map::get(&l0.level1, &l12));
-                    let l15 = l12 << 8u8 | bit_math::least_significant_bit(l17)as u256;
-                    assert!(vec_map::contains(&l0.level2, &l15), C4);
-                    let l18 = *(vec_map::get(&l0.level2, &l15));
-                    return (l15 << 8u8 | bit_math::least_significant_bit(l18)as u256as u32, true)
-                }
-            };
-            if (!(__c126) || !(__c136)) {
-                return (0u32, false)
-            }
+    let l11 = l13 >> 8u8;
+    let l3 = l13 & C1as u256as u8;
+    if (l3 < C1) {
+        assert!(vec_map::contains(&l0.level1, &l11), C3);
+        let (reg_66, reg_67) = dlmm_bin_tree::closest_bit_left(*(vec_map::get(&l0.level1, &l11)), l3);
+        if (reg_67) {
+            let l14 = l11 << 8u8 | reg_66as u256;
+            assert!(vec_map::contains(&l0.level2, &l14), C4);
+            let l16 = *(vec_map::get(&l0.level2, &l14));
+            return (l14 << 8u8 | bit_math::least_significant_bit(l16)as u256as u32, true)
         }
-    }
+    };
+    let l4 = l11 & C1as u256as u8;
+    if (l4 < C1) {
+        let (reg_107, reg_108) = dlmm_bin_tree::closest_bit_left(l0.level0, l4);
+        if (reg_108) {
+            let l12 = reg_107as u256;
+            assert!(vec_map::contains(&l0.level1, &l12), C3);
+            let l17 = *(vec_map::get(&l0.level1, &l12));
+            let l15 = l12 << 8u8 | bit_math::least_significant_bit(l17)as u256;
+            assert!(vec_map::contains(&l0.level2, &l15), C4);
+            let l18 = *(vec_map::get(&l0.level2, &l15));
+            return (l15 << 8u8 | bit_math::least_significant_bit(l18)as u256as u32, true)
+        }
+    };
+    return (0u32, false)
 }
 
 public fun find_first_right(l0: &BinTree, l1: u32): ( u32, bool) {
     assert!(l1 >> 24u8 == 0u32, C2);
     let l2 = l1 & C1as u32as u8;
     let l13 = l1 >> 8u8as u256;
-    let __c11 = l2 > 0u8;
-    let (__c26, __c36);
-    if (__c11) {
-        __c26 = vec_map::contains(&l0.level2, &l13);
-        assert!(__c26, C4);
+    if (l2 > 0u8) {
+        assert!(vec_map::contains(&l0.level2, &l13), C4);
         let (reg_31, reg_32) = dlmm_bin_tree::closest_bit_right(*(vec_map::get(&l0.level2, &l13)), l2);
-        __c36 = reg_32;
-        if (__c36) {
+        if (reg_32) {
             return (l13 << 8u8 | reg_31as u256as u32, true)
         }
     };
-    if (!(__c11) || (__c26 && !(__c36))) {
-        let l11 = l13 >> 8u8;
-        let l3 = l13 & C1as u256as u8;
-        let __c58 = l3 > 0u8;
-        let __c72;
-        if (__c58) {
-            let (reg_60, reg_61) = dlmm_bin_tree::closest_bit_right(*(vec_map::get(&l0.level1, &l11)), l3);
-            __c72 = reg_61;
-            if (__c72) {
-                let l14 = l11 << 8u8 | reg_60as u256;
-                assert!(vec_map::contains(&l0.level2, &l14), C4);
-                let l16 = *(vec_map::get(&l0.level2, &l14));
-                return (l14 << 8u8 | bit_math::most_significant_bit(l16)as u256as u32, true)
-            }
-        };
-        if (!(__c58) || !(__c72)) {
-            let l4 = l11 & C1as u256as u8;
-            let __c116 = l4 > 0u8;
-            let __c126;
-            if (__c116) {
-                let (reg_101, reg_102) = dlmm_bin_tree::closest_bit_right(*(&l0.level0), l4);
-                __c126 = reg_102;
-                if (__c126) {
-                    let l12 = reg_101as u256;
-                    assert!(vec_map::contains(&l0.level1, &l12), C3);
-                    let l17 = *(vec_map::get(&l0.level1, &l12));
-                    let l15 = l12 << 8u8 | bit_math::most_significant_bit(l17)as u256;
-                    assert!(vec_map::contains(&l0.level2, &l15), C4);
-                    let l18 = *(vec_map::get(&l0.level2, &l15));
-                    return (l15 << 8u8 | bit_math::most_significant_bit(l18)as u256as u32, true)
-                }
-            };
-            if (!(__c116) || !(__c126)) {
-                return (0u32, false)
-            }
+    let l11 = l13 >> 8u8;
+    let l3 = l13 & C1as u256as u8;
+    if (l3 > 0u8) {
+        let (reg_60, reg_61) = dlmm_bin_tree::closest_bit_right(*(vec_map::get(&l0.level1, &l11)), l3);
+        if (reg_61) {
+            let l14 = l11 << 8u8 | reg_60as u256;
+            assert!(vec_map::contains(&l0.level2, &l14), C4);
+            let l16 = *(vec_map::get(&l0.level2, &l14));
+            return (l14 << 8u8 | bit_math::most_significant_bit(l16)as u256as u32, true)
         }
-    }
+    };
+    let l4 = l11 & C1as u256as u8;
+    if (l4 > 0u8) {
+        let (reg_101, reg_102) = dlmm_bin_tree::closest_bit_right(l0.level0, l4);
+        if (reg_102) {
+            let l12 = reg_101as u256;
+            assert!(vec_map::contains(&l0.level1, &l12), C3);
+            let l17 = *(vec_map::get(&l0.level1, &l12));
+            let l15 = l12 << 8u8 | bit_math::most_significant_bit(l17)as u256;
+            assert!(vec_map::contains(&l0.level2, &l15), C4);
+            let l18 = *(vec_map::get(&l0.level2, &l15));
+            return (l15 << 8u8 | bit_math::most_significant_bit(l18)as u256as u32, true)
+        }
+    };
+    return (0u32, false)
 }
 
 public fun remove(l0: &mut BinTree, l1: u32): bool {
@@ -212,7 +179,7 @@ public fun remove(l0: &mut BinTree, l1: u32): bool {
             let l8 = reg_54 & C0 - 1u256 << l4 & 255u256as u8;
             vec_map::insert(&mut l0.level1, l3, l8);
             if (l8 == 0u256) {
-                *(&mut l0.level0) = *(&l0.level0) & C0 - 1u256 << l3 & 255u256as u8
+                *(&mut l0.level0) = l0.level0 & C0 - 1u256 << l3 & 255u256as u8
             }
         };
         return true

@@ -7,6 +7,7 @@ mod bool_if_simplify;
 mod collapse_let_usage;
 mod collect_uses;
 mod dedupe_freeze;
+mod elide_post_assert_guards;
 mod flatten_seq;
 mod fuse_let;
 mod hoist_arm_assignments;
@@ -25,6 +26,7 @@ mod remove_trailing_return;
 mod simplify_borrow_deref;
 mod simplify_if;
 mod simplify_zero_compare;
+mod sink_declare;
 mod strip_loop_labels;
 mod swap_continue_break;
 mod swap_continue_break_else;
@@ -57,7 +59,14 @@ const REFINEMENTS: &[Refinement] = &[
     negate_comparison::refine,
     simplify_if::refine,
     bool_if_simplify::refine,
+    // Run after `simplify_if` so empty-arm drops and other if-shape rewrites have happened;
+    // the sink decision uses the post-rewrite use counts.
+    sink_declare::refine,
     recover_asserts::refine,
+    // Run after `recover_asserts` so `assert!(...)` calls are identifiable; the pass drops
+    // wrappers whose guards are implied by previous asserts, freeing the synthetic `__cN`
+    // locals for later inlining.
+    elide_post_assert_guards::refine,
     strip_loop_labels::refine,
     swap_continue_break::refine,
     swap_continue_break_else::refine,

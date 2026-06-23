@@ -86,7 +86,7 @@ public fun any_craps_numbers(): vector<u64> {
 }
 
 public fun bet_metadata(l0: &Bet): ( u64, u64, Option<u64>, address) {
-    return (*(&l0.bet_type), *(&l0.bet_size), *(&l0.bet_number), *(&l0.player))
+    return (l0.bet_type, l0.bet_size, l0.bet_number, l0.player)
 }
 
 public fun big_ones_bet(): u64 {
@@ -231,18 +231,13 @@ public fun get_bet_max_payout(l0: u64, l1: u64, l2: Option<u64>): u64 {
         return bet_manager::mul(l0, 150000000000u64)
     };
     assert!(l1 == C18, C0);
-    let __c426 = option::is_some(&l2);
-    let __c451;
-    if (__c426) {
+    if (option::is_some(&l2)) {
         let l27 = *(option::borrow(&l2));
-        __c451 = l27 == 2u64 || (l27 == 3u64 || l27 == 12u64);
-        if (__c451) {
+        if (l27 == 2u64 || (l27 == 3u64 || l27 == 12u64)) {
             return bet_manager::mul(l0, 3000000000u64)
         }
     };
-    if (!(__c426) || !(__c451)) {
-        return bet_manager::mul(l0, 7000000000u64)
-    }
+    return bet_manager::mul(l0, 7000000000u64)
 }
 
 public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &VecSet<u64>, l4: u64, l5: u64, l6: u64): ( bool, bool, u64) {
@@ -420,32 +415,7 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
         };
         return (false, true, 0u64)
     };
-    if (l0 == C11) {
-        if (l5 == 7u64) {
-            return (false, false, 0u64)
-        };
-        let l100 = *(option::borrow(&l1));
-        let __c882 = l100 == l5;
-        let (__c890, __c905, __c924);
-        if (__c882) {
-            let (reg_575, reg_576) = dice_interpreter::get_dice(l4);
-            __c890 = reg_575 == reg_576;
-            if (!(__c890)) {
-                return (false, false, 0u64)
-            };
-            __c905 = l100 == 4u64 || l100 == 10u64;
-            if (__c905) {
-                return (true, false, bet_manager::mul(l2, 7000000000u64))
-            };
-            __c924 = l100 == 6u64 || l100 == 8u64;
-            if (__c924) {
-                return (true, false, bet_manager::mul(l2, 9000000000u64))
-            }
-        };
-        if (!(__c882) || ((__c890 && !(__c905)) && !(__c924))) {
-            return (false, true, 0u64)
-        }
-    } else {
+    if (l0 != C11) {
         if (l0 == C9) {
             if (option::is_none(&l1)) {
                 if (l5 == 7u64 || l5 == 11u64) {
@@ -570,35 +540,42 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
             };
             return (false, true, 0u64)
         };
-        let __c1483 = l0 == C0;
-        let __c1487;
-        if (__c1483) {
-            __c1487 = l5 == l6;
-            if (__c1487) {
+        if (l0 == C0) {
+            if (l5 == l6) {
                 return (true, false, bet_manager::mul(l2, 1000000000u64))
             }
         };
-        if (!(__c1483) || !(__c1487)) {
-            let __c1497 = l0 == C14;
-            let __c1501;
-            if (__c1497) {
-                __c1501 = l5 == l6;
-                if (__c1501) {
-                    let l103 = *(option::borrow(&l1));
-                    if (l103 == 4u64 || l103 == 10u64) {
-                        return (true, false, bet_manager::mul(l2, 2000000000u64))
-                    };
-                    if (l103 == 5u64 || l103 == 9u64) {
-                        return (true, false, bet_manager::mul(l2, 1500000000u64))
-                    };
-                    return (true, false, bet_manager::mul(l2, 1200000000u64))
-                }
-            };
-            if (!(__c1497) || !(__c1501)) {
-                return (false, true, 0u64)
+        if (l0 == C14) {
+            if (l5 == l6) {
+                let l103 = *(option::borrow(&l1));
+                if (l103 == 4u64 || l103 == 10u64) {
+                    return (true, false, bet_manager::mul(l2, 2000000000u64))
+                };
+                if (l103 == 5u64 || l103 == 9u64) {
+                    return (true, false, bet_manager::mul(l2, 1500000000u64))
+                };
+                return (true, false, bet_manager::mul(l2, 1200000000u64))
             }
+        };
+        return (false, true, 0u64)
+    };
+    if (l5 == 7u64) {
+        return (false, false, 0u64)
+    };
+    let l100 = *(option::borrow(&l1));
+    if (l100 == l5) {
+        let (reg_575, reg_576) = dice_interpreter::get_dice(l4);
+        if (reg_575 != reg_576) {
+            return (false, false, 0u64)
+        };
+        if (l100 == 4u64 || l100 == 10u64) {
+            return (true, false, bet_manager::mul(l2, 7000000000u64))
+        };
+        if (l100 == 6u64 || l100 == 8u64) {
+            return (true, false, bet_manager::mul(l2, 9000000000u64))
         }
-    }
+    };
+    return (false, true, 0u64)
 }
 
 public fun hard_ways_bet(): u64 {
@@ -607,196 +584,133 @@ public fun hard_ways_bet(): u64 {
 
 public fun is_valid_bet(l0: u64, l1: u64, l2: Option<u64>, l3: u64, l4: vector<u64>, l5: &vector<Bet>) {
     assert!(l0 < 19u64 && l0 >= 0u64, C0);
-    let __c29 = l0 == C0 || l0 == C1;
-    let __c31;
-    if (__c29) {
-        __c31 = l3 == 0u64;
-        assert!(__c31, C0)
+    if (l0 == C0 || l0 == C1) {
+        assert!(l3 == 0u64, C0)
     };
-    if (__c31 || !(__c29)) {
-        if (l0 == C14) {
-            assert!(l3 == *(option::borrow(&l2)) && l3 != 0u64, C0);
-            let l26 = 0u64;
-            let l25 = false;
-            while (l26 < l5.len()) {
-                let l18 = &l5[l26];
-                let __c74 = *(&l18.bet_type) == C0;
-                let __c84;
-                if (__c74) {
-                    l25 = true;
-                    __c84 = l1 <= *(&l18.bet_size) * 5u64;
-                    assert!(__c84, C0)
-                };
-                if (__c84 || !(__c74)) {
-                    l26 = l26 + 1u64;
-                }
+    if (l0 == C14) {
+        assert!(l3 == *(option::borrow(&l2)) && l3 != 0u64, C0);
+        let l26 = 0u64;
+        let l25 = false;
+        while (l26 < l5.length()) {
+            let l18 = &l5[l26];
+            if (l18.bet_type == C0) {
+                l25 = true;
+                assert!(l1 <= l18.bet_size * 5u64, C0)
             };
-            assert!(l25, C0);
+            l26 = l26 + 1u64;
+        };
+        assert!(l25, C0);
+        unstructured {
+            goto 'label_113;
+        }
+    } else {
+        /* block 113 */;
+        let __c113 = l0 == C15;
+        /* block 113 */;
+        if (__c113) {
+            assert!(l3 == *(option::borrow(&l2)) && l3 != 0u64, C0);
+            let l27 = 0u64;
+            let l24 = false;
+            while (l27 < l5.length()) {
+                let l19 = &l5[l27];
+                if (l19.bet_type == C1) {
+                    l24 = true;
+                    assert!(l1 <= l19.bet_size * 5u64, C0)
+                };
+                l27 = l27 + 1u64;
+            };
+            assert!(l24, C0);
             unstructured {
-                goto 'label_113;
+                goto 'label_186;
             }
         } else {
-            /* block 113 */;
-            let __c113 = l0 == C15;
-            /* block 113 */;
-            if (__c113) {
-                assert!(l3 == *(option::borrow(&l2)) && l3 != 0u64, C0);
-                let l27 = 0u64;
-                let l24 = false;
-                while (l27 < l5.len()) {
-                    let l19 = &l5[l27];
-                    let __c147 = *(&l19.bet_type) == C1;
-                    let __c157;
-                    if (__c147) {
-                        l24 = true;
-                        __c157 = l1 <= *(&l19.bet_size) * 5u64;
-                        assert!(__c157, C0)
-                    };
-                    if (__c157 || !(__c147)) {
-                        l27 = l27 + 1u64;
-                    }
-                };
-                assert!(l24, C0);
-                unstructured {
-                    goto 'label_186;
-                }
-            } else {
-                /* block 186 */;
-                let __c186 = l0 == C9;
-                /* block 186 */;
-                let l13 = __c186 || l0 == C10;
-                let __c197 = l13;
-                let (__c199, __c207);
-                if (__c197) {
-                    __c199 = option::is_none(&l2);
-                    assert!(__c199, C0);
-                    __c207 = l3 != 0u64;
-                    assert!(__c207, C0)
-                };
-                if (!(__c197) || (__c199 && __c207)) {
-                    if (l0 == C16) {
-                        let l28 = 0u64;
-                        let l22 = false;
-                        loop {
-                            let __c224 = l28 >= l5.len();
-                            let (__c230, __c240, __c244, __c253);
-                            if (!(__c224)) {
-                                let l20 = &l5[l28];
-                                __c230 = *(&l20.bet_type) == C9;
-                                if (__c230) {
-                                    __c240 = option::is_some(&l20.bet_number);
-                                    if (__c240) {
-                                        __c244 = *(option::borrow(&l20.bet_number)) == *(option::borrow(&l2));
-                                        if (__c244) {
-                                            __c253 = l1 <= *(&l20.bet_size) * 5u64;
-                                            assert!(__c253, C0);
-                                            l22 = true;
-                                        }
-                                    }
-                                };
-                                if ((!(__c230) || !(__c240)) || !(__c244)) {
-                                    l28 = l28 + 1u64;
-                                    continue
+            /* block 186 */;
+            let __c186 = l0 == C9;
+            /* block 186 */;
+            let l13 = __c186 || l0 == C10;
+            if (l13) {
+                assert!(option::is_none(&l2), C0);
+                assert!(l3 != 0u64, C0)
+            };
+            if (l0 == C16) {
+                let l28 = 0u64;
+                let l22 = false;
+                loop {
+                    if (l28 < l5.length()) {
+                        let __c244;
+                        let __c240;
+                        let l20 = &l5[l28];
+                        let __c230 = l20.bet_type == C9;
+                        if (__c230) {
+                            __c240 = option::is_some(&l20.bet_number);
+                            if (__c240) {
+                                __c244 = *(option::borrow(&l20.bet_number)) == *(option::borrow(&l2));
+                                if (__c244) {
+                                    assert!(l1 <= l20.bet_size * 5u64, C0);
+                                    l22 = true;
                                 }
-                            };
-                            if (__c224 || (((__c230 && __c240) && __c244) && __c253)) {
-                                assert!(l22, C0);
-                                break
                             }
-                        }
-                    };
-                    if (l0 == C17) {
-                        let l29 = 0u64;
-                        let l23 = false;
-                        loop {
-                            let __c297 = l29 >= l5.len();
-                            let (__c305, __c315, __c319, __c328);
-                            if (!(__c297)) {
-                                let l21 = &l5[l29];
-                                __c305 = *(&l21.bet_type) == C10;
-                                if (__c305) {
-                                    __c315 = option::is_some(&l21.bet_number);
-                                    if (__c315) {
-                                        __c319 = *(option::borrow(&l21.bet_number)) == *(option::borrow(&l2));
-                                        if (__c319) {
-                                            __c328 = l1 <= *(&l21.bet_size) * 5u64;
-                                            assert!(__c328, C0);
-                                            l23 = true;
-                                        }
-                                    }
-                                };
-                                if ((!(__c305) || !(__c315)) || !(__c319)) {
-                                    l29 = l29 + 1u64;
-                                    continue
-                                }
-                            };
-                            if (__c297 || (((__c305 && __c315) && __c319) && __c328)) {
-                                assert!(l23, C0);
-                                break
-                            }
-                        }
-                    };
-                    let __c364 = l0 == C3;
-                    let (__c368, __c374);
-                    if (__c364) {
-                        __c368 = option::is_some(&l2);
-                        assert!(__c368, C1);
-                        __c374 = vector::contains(&C19, option::borrow(&l2));
-                        assert!(__c374, C1)
-                    };
-                    if (!(__c364) || (__c368 && __c374)) {
-                        let __c384 = l0 == C5;
-                        let (__c388, __c394);
-                        if (__c384) {
-                            __c388 = option::is_some(&l2);
-                            assert!(__c388, C1);
-                            __c394 = vector::contains(&C19, option::borrow(&l2));
-                            assert!(__c394, C1)
                         };
-                        if (!(__c384) || (__c388 && __c394)) {
-                            let __c404 = l0 == C4;
-                            let (__c408, __c414);
-                            if (__c404) {
-                                __c408 = option::is_some(&l2);
-                                assert!(__c408, C1);
-                                __c414 = vector::contains(&C19, option::borrow(&l2));
-                                assert!(__c414, C1)
-                            };
-                            if (!(__c404) || (__c408 && __c414)) {
-                                let __c424 = l0 == C11;
-                                let (__c428, __c434);
-                                if (__c424) {
-                                    __c428 = option::is_some(&l2);
-                                    assert!(__c428, C1);
-                                    __c434 = vector::contains(&C20, option::borrow(&l2));
-                                    assert!(__c434, C1)
-                                };
-                                if (!(__c424) || (__c428 && __c434)) {
-                                    let __c444 = l0 == C12;
-                                    let (__c448, __c467);
-                                    if (__c444) {
-                                        __c448 = option::is_some(&l2);
-                                        if (__c448) {
-                                            __c467 = vector::contains(&C21, option::borrow(&l2)) || *(option::borrow(&l2)) == 11u64;
-                                            assert!(__c467, C1)
-                                        }
-                                    };
-                                    if ((__c467 || !(__c444)) || !(__c448)) {
-                                        let __c490 = l0 == C6 || (l0 == C7 || l0 == C8);
-                                        let __c492;
-                                        if (__c490) {
-                                            __c492 = &l4.len() == 0u64;
-                                            assert!(__c492, C0)
-                                        };
-                                        if (__c492 || !(__c490)) {
-                                            
-                                        }
-                                    }
+                        if ((!(__c230) || !(__c240)) || !(__c244)) {
+                            l28 = l28 + 1u64;
+                            continue
+                        }
+                    };
+                    assert!(l22, C0);
+                    break
+                }
+            };
+            if (l0 == C17) {
+                let l29 = 0u64;
+                let l23 = false;
+                loop {
+                    if (l29 < l5.length()) {
+                        let __c319;
+                        let __c315;
+                        let l21 = &l5[l29];
+                        let __c305 = l21.bet_type == C10;
+                        if (__c305) {
+                            __c315 = option::is_some(&l21.bet_number);
+                            if (__c315) {
+                                __c319 = *(option::borrow(&l21.bet_number)) == *(option::borrow(&l2));
+                                if (__c319) {
+                                    assert!(l1 <= l21.bet_size * 5u64, C0);
+                                    l23 = true;
                                 }
                             }
+                        };
+                        if ((!(__c305) || !(__c315)) || !(__c319)) {
+                            l29 = l29 + 1u64;
+                            continue
                         }
-                    }
+                    };
+                    assert!(l23, C0);
+                    break
                 }
+            };
+            if (l0 == C3) {
+                assert!(option::is_some(&l2), C1);
+                assert!(vector::contains(&C19, option::borrow(&l2)), C1)
+            };
+            if (l0 == C5) {
+                assert!(option::is_some(&l2), C1);
+                assert!(vector::contains(&C19, option::borrow(&l2)), C1)
+            };
+            if (l0 == C4) {
+                assert!(option::is_some(&l2), C1);
+                assert!(vector::contains(&C19, option::borrow(&l2)), C1)
+            };
+            if (l0 == C11) {
+                assert!(option::is_some(&l2), C1);
+                assert!(vector::contains(&C20, option::borrow(&l2)), C1)
+            };
+            if (l0 == C12) {
+                if (option::is_some(&l2)) {
+                    assert!(vector::contains(&C21, option::borrow(&l2)) || *(option::borrow(&l2)) == 11u64, C1)
+                }
+            };
+            if (l0 == C6 || (l0 == C7 || l0 == C8)) {
+                assert!(l4.length() == 0u64, C0)
             }
         }
     }
@@ -804,22 +718,11 @@ public fun is_valid_bet(l0: u64, l1: u64, l2: Option<u64>, l3: u64, l4: vector<u
 
 public fun is_valid_remove(l0: u64, l1: Option<u64>, l2: u64, l3: u8, l4: vector<u64>, l5: &vector<Bet>) {
     assert!(l3 != 1u8, C2);
-    let __c18 = l0 == C0 || l0 == C1;
-    let __c20;
-    if (__c18) {
-        __c20 = l2 == 0u64;
-        assert!(__c20, C2)
+    if (l0 == C0 || l0 == C1) {
+        assert!(l2 == 0u64, C2)
     };
-    if (__c20 || !(__c18)) {
-        let __c38 = l0 == C9 || l0 == C10;
-        let __c40;
-        if (__c38) {
-            __c40 = option::is_none(&l1);
-            assert!(__c40, C2)
-        };
-        if (__c40 || !(__c38)) {
-            
-        }
+    if (l0 == C9 || l0 == C10) {
+        assert!(option::is_none(&l1), C2)
     }
 }
 

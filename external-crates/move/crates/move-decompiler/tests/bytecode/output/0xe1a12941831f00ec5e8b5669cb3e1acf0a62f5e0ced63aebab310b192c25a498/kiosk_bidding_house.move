@@ -388,53 +388,53 @@ public entry fun emergency_reset_listing<T0: key + store>(l0: &mut Kiosk_Bidding
 
 public fun get_accepted_bid_bidder<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): address {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C19);
-    return *(&(dynamic_object_field::borrow(&l0.id, l1)).bidder)
+    return (dynamic_object_field::borrow(&l0.id, l1)).bidder
 }
 
 public fun get_accepted_bid_timestamp<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): u64 {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C19);
-    return *(&(dynamic_object_field::borrow(&l0.id, l1)).timestamp)
+    return (dynamic_object_field::borrow(&l0.id, l1)).timestamp
 }
 
 public fun get_buyout_price<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): u64 {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
-    return *(&(dynamic_object_field::borrow(&l0.id, l1)).buyout_price)
+    return (dynamic_object_field::borrow(&l0.id, l1)).buyout_price
 }
 
 public fun get_highest_bid<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): u64 {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
-    return *(&(dynamic_object_field::borrow(&l0.id, l1)).highest_bid)
+    return (dynamic_object_field::borrow(&l0.id, l1)).highest_bid
 }
 
 public fun get_highest_bidder<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): Option<address> {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
-    return *(&(dynamic_object_field::borrow(&l0.id, l1)).highest_bidder)
+    return (dynamic_object_field::borrow(&l0.id, l1)).highest_bidder
 }
 
 public fun get_listing_expiration<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): u64 {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
-    return *(&(dynamic_object_field::borrow(&l0.id, l1)).expires_at)
+    return (dynamic_object_field::borrow(&l0.id, l1)).expires_at
 }
 
 public fun get_listing_status<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): u8 {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
-    return *(&(dynamic_object_field::borrow(&l0.id, l1)).status)
+    return (dynamic_object_field::borrow(&l0.id, l1)).status
 }
 
 public fun get_nft_id<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): ID {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
-    return *(&(dynamic_object_field::borrow(&l0.id, l1)).nft_id)
+    return (dynamic_object_field::borrow(&l0.id, l1)).nft_id
 }
 
 public fun get_seller<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): address {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
-    return *(&(dynamic_object_field::borrow(&l0.id, l1)).seller)
+    return (dynamic_object_field::borrow(&l0.id, l1)).seller
 }
 
 public fun is_listing_expired<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID, l2: &TxContext): bool {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
     let l3 = dynamic_object_field::borrow(&l0.id, l1);
-    return tx_context::epoch(l2) > *(&l3.expires_at)
+    return tx_context::epoch(l2) > l3.expires_at
 }
 
 public fun listing_exists<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): bool {
@@ -447,13 +447,13 @@ public fun place_bid<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: ID, l2: 
     let l8 = tx_context::sender(freeze(l3));
     let l9 = tx_context::epoch(freeze(l3));
     let l11 = dynamic_object_field::borrow(&l0.id, l1);
-    assert!(*(&l11.status) == C0, C4);
-    assert!(l9 <= *(&l11.expires_at), C15);
+    assert!(l11.status == C0, C4);
+    assert!(l9 <= l11.expires_at, C15);
     assert!(l7 > 0u64, C3);
-    let l4 = if (*(&l11.highest_bid) == 0u64) {
+    let l4 = if (l11.highest_bid == 0u64) {
         1u64
     } else {
-        *(&l11.highest_bid) + *(&l11.highest_bid) * C2as u64 / 10000u64
+        l11.highest_bid + l11.highest_bid * C2as u64 / 10000u64
     };
     assert!(l7 >= l4, C5);
     let l15 = option::none();

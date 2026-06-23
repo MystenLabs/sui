@@ -8,8 +8,9 @@ use crate::{
         utils::{always_terminates, negate},
     },
 };
+use move_stackless_bytecode_2::ast::PrimitiveOp;
 
-// Four local cleanups on `IfElse`:
+// Five local cleanups on `IfElse`:
 //
 // 1. If the then-arm `always_terminates` (abort/return/break/continue, or a Seq/IfElse
 //    that recursively does), the else-arm is unreachable as fall-through from inside the
@@ -25,6 +26,12 @@ use crate::{
 // 3. An empty else carries no information - drop it: `if (t) c else {}` -> `if (t) c`.
 //
 // 4. An empty then with a non-empty else inverts: `if (t) {} else { body }` -> `if (!t) { body }`.
+//
+// 5. Both arms empty (or absent else) and the test is pure - drop the whole `IfElse`.
+//    These come from NMG synthesizing a CFG-join basic block (no instructions of its own,
+//    just a fall-through point) into an item with empty body wrapped in a reaching-
+//    condition guard. The guard reads recovered `__cN` locals only, so eliding the test
+//    is semantics-preserving. Run after rules 3/4 so non-empty arms collapse first.
 //
 // Precedence between rules 1 and 2 when both could fire (both arms always_terminate):
 // prefer the rule that keeps an `Abort` in the conditional. When `else` is an `Abort` and
@@ -99,6 +106,13 @@ impl Refine for SimplifyIf {
             return true;
         }
 
+        // Rule 5: both arms empty (or no else) and test is pure - drop the whole thing.
+        let alt_empty = else_b.as_ref().as_ref().is_none_or(is_empty);
+        if is_empty(then_b) && alt_empty && is_pure_test(cond) {
+            *exp = Exp::Seq(vec![]);
+            return true;
+        }
+
         false
     }
 }
@@ -134,4 +148,18 @@ fn with_rest(if_exp: Exp, rest: Exp) -> Exp {
 
 fn is_empty(exp: &Exp) -> bool {
     matches!(exp, Exp::Seq(items) if items.is_empty())
+}
+
+/// True iff `exp` is the shape `Formula::to_exp` produces: locals (`Variable`), boolean
+/// constants (`Value`), and `Not`/`And`/`Or` over those. Evaluating such an `exp` is
+/// effect-free, so an empty-armed `IfElse(exp, _, _)` can be elided whole.
+fn is_pure_test(exp: &Exp) -> bool {
+    match exp {
+        Exp::Variable(_) | Exp::Value(_) => true,
+        Exp::Primitive { op, args } => {
+            matches!(op, PrimitiveOp::And | PrimitiveOp::Or | PrimitiveOp::Not)
+                && args.iter().all(is_pure_test)
+        }
+        _ => false,
+    }
 }

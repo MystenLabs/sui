@@ -122,13 +122,13 @@ const C20: vector<u64> = vector[];
 
 fun check_tick(l0: vector<u8>, l1: &mut Global): String {
     let l6 = string::utf8(l0);
-    assert!(&l0.len() == 4u64, C9);
+    assert!(l0.length() == 4u64, C9);
     loop {
         if (!(!(vector::is_empty(&l0)))) {
             assert!(!(bag::contains(&l1.sui20tokens, l6)), C11);
             break
         };
-        let l5 = (&mut l0).pop_back();
+        let l5 = l0.pop_back();
         assert!((l5 >= 97u8 && l5 <= 122u8) || (l5 >= 48u8 && l5 <= 57u8), C10)
     };
     return l6
@@ -155,11 +155,11 @@ public fun get_mint_data(l0: &mut Global, l1: String, l2: &mut TxContext) {
     let l7 = 0u64;
     if (table::contains(&l3.user_infos, l5)) {
         let l4 = table::borrow(&l3.user_infos, l5);
-        l8 = *(&l4.minted_amount);
-        l6 = *(&l4.hold_amount);
-        l7 = *(&l4.last_mint_at);
+        l8 = l4.minted_amount;
+        l6 = l4.hold_amount;
+        l7 = l4.last_mint_at;
     };
-    event::emit(QueryDataEvent { tick: *(&(&l3.meta).tick), start_at: *(&(&l3.meta).start_at), total_cap: *(&(&l3.meta).max), limit_per_mint: *(&(&l3.meta).limit), decimals: *(&(&l3.meta).decimals), mint_fee: *(&(&l3.meta).fee), total_minted: *(&l3.total_minted), remain_supply: *(&(&l3.meta).max) - *(&l3.total_minted), txs: *(&l3.txs), user_minted_amount: l8, user_hold_amount: l6, user_last_mint_at: l7 })
+    event::emit(QueryDataEvent { tick: (&l3.meta).tick, start_at: (&l3.meta).start_at, total_cap: (&l3.meta).max, limit_per_mint: (&l3.meta).limit, decimals: (&l3.meta).decimals, mint_fee: (&l3.meta).fee, total_minted: l3.total_minted, remain_supply: (&l3.meta).max - l3.total_minted, txs: l3.txs, user_minted_amount: l8, user_hold_amount: l6, user_last_mint_at: l7 })
 }
 
 public fun get_users_data(l0: &mut Global, l1: String, l2: &mut TxContext) {
@@ -167,18 +167,18 @@ public fun get_users_data(l0: &mut Global, l1: String, l2: &mut TxContext) {
     let l4 = bag::borrow_mut(&mut l0.sui20tokens, l1);
     let l8 = C20;
     let l5 = 0u64;
-    let l6 = &l4.users.len();
+    let l6 = (&l4.users).length();
     while (l5 < l6) {
-        let l9 = *(&(&l4.users)[l5]);
+        let l9 = (&l4.users)[l5];
         let l3 = if (table::contains(&l4.user_infos, l9)) {
-            *(&(table::borrow(&l4.user_infos, l9)).minted_amount)
+            (table::borrow(&l4.user_infos, l9)).minted_amount
         } else {
             0u64
         };
-        (&mut l8).push_back(l3);
+        l8.push_back(l3);
         l5 = l5 + 1u64;
     };
-    event::emit(QueryUsersEvent { users: *(&l4.users), minted_amounts: l8 })
+    event::emit(QueryUsersEvent { users: l4.users, minted_amounts: l8 })
 }
 
 fun init(l0: SUI20, l1: &mut TxContext) {
@@ -198,50 +198,43 @@ public fun mint(l0: &mut Global, l1: &Clock, l2: String, l3: u64, l4: Coin<SUI>,
     let l12 = clock::timestamp_ms(l1) / 1000u64;
     assert!(bag::contains(&l0.sui20tokens, l2), C2);
     let l7 = bag::borrow_mut(&mut l0.sui20tokens, l2);
-    assert!(l12 >= *(&(&l7.meta).start_at), C13);
-    assert!(l3 <= *(&(&l7.meta).limit), C3);
-    assert!(*(&l7.total_minted) + l3 <= *(&(&l7.meta).max), C4);
-    assert!(coin::value(&l4) >= *(&(&l7.meta).fee), C5);
-    *(&mut l7.total_minted) = *(&l7.total_minted) + l3;
-    *(&mut l7.txs) = *(&l7.txs) + 1u64;
+    assert!(l12 >= (&l7.meta).start_at, C13);
+    assert!(l3 <= (&l7.meta).limit, C3);
+    assert!(l7.total_minted + l3 <= (&l7.meta).max, C4);
+    assert!(coin::value(&l4) >= (&l7.meta).fee, C5);
+    *(&mut l7.total_minted) = l7.total_minted + l3;
+    *(&mut l7.txs) = l7.txs + 1u64;
     if (!(table::contains(&l7.user_infos, l15))) {
         table::add(&mut l7.user_infos, l15, UserInfo { minted_amount: 0u64, last_mint_at: 0u64, hold_amount: 0u64 })
     };
     let l9 = table::borrow_mut(&mut l7.user_infos, l15);
-    *(&mut l9.minted_amount) = *(&l9.minted_amount) + l3;
+    *(&mut l9.minted_amount) = l9.minted_amount + l3;
     *(&mut l9.last_mint_at) = l12;
-    *(&mut l9.hold_amount) = *(&l9.hold_amount) + l3;
-    let l16 = *(&l9.minted_amount);
-    let l10 = &l7.users.len();
+    *(&mut l9.hold_amount) = l9.hold_amount + l3;
+    let l16 = l9.minted_amount;
+    let l10 = (&l7.users).length();
     if (!(vector::contains(&l7.users, &l15))) {
         let l8 = 0u64;
         loop {
-            let __c178 = l8 < l10;
-            let __c183;
-            if (__c178) {
-                let l14 = *(&(&l7.users)[l8]);
+            if (l8 < l10) {
+                let l14 = (&l7.users)[l8];
                 let l13 = table::borrow(&l7.user_infos, l14);
-                __c183 = l16 > *(&l13.minted_amount);
-                if (!(__c183)) {
+                if (l16 <= l13.minted_amount) {
                     l8 = l8 + 1u64;
                     continue
                 };
                 vector::insert(&mut l7.users, l15, l8)
             };
-            if (__c183 || !(__c178)) {
-                let l11 = &l7.users.len();
-                if (l11 == l10 && l10 < C0) {
-                    (&mut l7.users).push_back(l15)
-                } else {
-                    if (l11 > C0) {
-                        
-                    }
-                };
-                break
-            }
+            let l11 = (&l7.users).length();
+            if (l11 == l10 && l10 < C0) {
+                (&mut l7.users).push_back(l15)
+            } else {
+                let __c233 = l11 > C0;
+            };
+            break
         }
     };
-    x2_transfer::public_transfer(Sui20 { id: object::new(l5), tick: *(&(&l7.meta).tick), amount: l3 }, l15);
+    x2_transfer::public_transfer(Sui20 { id: object::new(l5), tick: (&l7.meta).tick, amount: l3 }, l15);
     return l4
 }
 
@@ -256,16 +249,16 @@ public fun transfer(l0: &mut Global, l1: String, l2: vector<Sui20>, l3: address,
             assert!(l11 >= l4, C6);
             break
         };
-        let Sui20 { id: reg_26, tick: reg_27, amount: reg_28 } = (&mut l2).pop_back();
+        let Sui20 { id: reg_26, tick: reg_27, amount: reg_28 } = l2.pop_back();
         assert!(reg_27 : 0x1::string::String == l1, C12);
         object::delete(reg_26 : 0x2::object::UID);
         l11 = l11 + reg_28 : u64;
     };
     std::vector::destroy_empty(l2);
-    x2_transfer::public_transfer(Sui20 { id: object::new(l5), tick: *(&(&l8.meta).tick), amount: l4 }, l3);
+    x2_transfer::public_transfer(Sui20 { id: object::new(l5), tick: (&l8.meta).tick, amount: l4 }, l3);
     let l10 = l11 - l4;
     if (l10 > 0u64) {
-        x2_transfer::public_transfer(Sui20 { id: object::new(l5), tick: *(&(&l8.meta).tick), amount: l10 }, l12);
+        x2_transfer::public_transfer(Sui20 { id: object::new(l5), tick: (&l8.meta).tick, amount: l10 }, l12);
         unstructured {
             goto 'label_109;
         }
