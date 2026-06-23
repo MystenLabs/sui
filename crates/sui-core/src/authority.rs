@@ -1710,7 +1710,6 @@ impl AuthorityState {
         Option<ExecutionError>,
     )> {
         let _scope = monitored_scope("Execution::process_certificate");
-        let tx_digest = *certificate.digest();
 
         let input_objects = match self.read_objects_for_execution(
             tx_guard.as_lock_guard(),
@@ -1722,21 +1721,8 @@ impl AuthorityState {
             Err(e) => return ExecutionOutput::Fatal(e),
         };
 
-        let expected_effects_digest = match execution_env.expected_effects_digest {
-            Some(expected_effects_digest) => Some(expected_effects_digest),
-            None => {
-                // We could be re-executing a previously executed but uncommitted transaction, perhaps after
-                // restarting with a new binary. In this situation, if we have published an effects signature,
-                // we must be sure not to equivocate.
-                match epoch_store.get_signed_effects_digest(&tx_digest) {
-                    Ok(digest) => digest,
-                    Err(e) => return ExecutionOutput::Fatal(e),
-                }
-            }
-        };
-
         fail_point_if!("correlated-crash-process-certificate", || {
-            if sui_simulator::random::deterministic_probability_once(&tx_digest, 0.01) {
+            if sui_simulator::random::deterministic_probability_once(certificate.digest(), 0.01) {
                 sui_simulator::task::kill_current_node(None);
             }
         });
@@ -1749,7 +1735,6 @@ impl AuthorityState {
             execution_guard,
             certificate,
             input_objects,
-            expected_effects_digest,
             execution_env,
             epoch_store,
         )
@@ -1928,7 +1913,6 @@ impl AuthorityState {
         _execution_guard: &ExecutionLockReadGuard<'_>,
         certificate: &VerifiedExecutableTransaction,
         input_objects: InputObjects,
-        expected_effects_digest: Option<TransactionEffectsDigest>,
         execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> ExecutionOutput<(
@@ -2047,7 +2031,7 @@ impl AuthorityState {
             return ExecutionOutput::RetryLater;
         }
 
-        if let Some(expected_effects_digest) = expected_effects_digest
+        if let Some(expected_effects_digest) = execution_env.expected_effects_digest
             && effects.digest() != expected_effects_digest
         {
             // We dont want to mask the original error, so we log it and continue.
@@ -2185,7 +2169,6 @@ impl AuthorityState {
                 &execution_guard,
                 certificate,
                 input_objects,
-                None,
                 ExecutionEnv::default(),
                 epoch_store,
             )
@@ -5285,11 +5268,7 @@ impl AuthorityState {
 
                 let effects = SignedTransactionEffects::new_from_data_and_sig(effects, sig.clone());
 
-                epoch_store.insert_effects_digest_and_signature(
-                    &tx_digest,
-                    effects.digest(),
-                    &sig,
-                )?;
+                epoch_store.insert_effects_signature(&tx_digest, &sig)?;
 
                 effects
             }
@@ -6234,7 +6213,6 @@ impl AuthorityState {
                 &execution_guard,
                 &executable_tx,
                 input_objects,
-                None,
                 ExecutionEnv::default(),
                 epoch_store,
             )
