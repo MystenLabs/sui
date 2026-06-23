@@ -57,7 +57,7 @@ pub mod checked {
     /// Tracks the combined balance (`total_smashed`), the target location where the
     /// smashed value lives, and the original payment methods for bookkeeping.
     /// Note that the target location (`gas_charge_location`) may differ from the first payment
-    /// method in the list if it has ben overridden during execution.
+    /// method in the list if it has been overridden during execution.
     #[derive(Debug)]
     struct SmashMetadata {
         /// The location to charge gas from at the end of execution. Starts with the primary
@@ -90,7 +90,7 @@ pub mod checked {
         Smash(IndexMap<PaymentLocation, PaymentMethod>),
     }
 
-    /// A single source of SUI used to pay for gas: either an coin object or a withdrawal
+    /// A single source of SUI used to pay for gas: either a coin object or a withdrawal
     /// reservation from an address balance.
     #[derive(Debug)]
     pub enum PaymentMethod {
@@ -199,6 +199,15 @@ pub mod checked {
                     amount: metadata.total_smashed,
                 }),
             }
+        }
+
+        /// The coin that receives the final gas charge, or `None` when gas is paid from an address
+        /// balance (or there is no payment, e.g. unmetered/gasless).
+        pub fn gas_coin(&self) -> Option<ObjectID> {
+            self.gas_payment_amount().and_then(|gp| match gp.location {
+                PaymentLocation::Coin(coin_id) => Some(coin_id),
+                PaymentLocation::AddressBalance(_) => None,
+            })
         }
 
         pub(crate) fn gas_payment_location(&self) -> Option<PaymentLocation> {
