@@ -174,11 +174,10 @@ fn refine_initial_ast(mut items: Vec<(Formula, D::Structured)>) -> Vec<(Formula,
 /// One iteration of NMG's condition-based refinement. Returns `Some(refined)` if a
 /// factoring happened, `None` if no candidate produced a refinement.
 ///
-/// Strategy: scan top-level conjuncts that appear in 2+ items' guards. For the first such
-/// `c` found, partition items into `Vc` (have `c` as factor), `V_neg_c` (have `¬c` as
-/// factor), and the rest. If `|Vc| + |V_neg_c| >= 2`, build a `CondIf(c, Seq(Vc with c
-/// stripped), Some(Seq(V_neg_c with ¬c stripped)))` and splice it in at the earliest
-/// affected item's position.
+/// Strategy: scan top-level conjuncts that appear in 2+ items' guards. For each candidate
+/// `c`, partition items into `Vc` (have `c` as factor) and `V_neg_c` (have `¬c` as
+/// factor). If `|Vc| + |V_neg_c| >= 2`, splice a `CondIf(c, Seq(Vc with c stripped),
+/// Some(Seq(V_neg_c with ¬c stripped)))` at the earliest affected position.
 fn try_refine_once(items: &[(Formula, D::Structured)]) -> Option<Vec<(Formula, D::Structured)>> {
     let candidates = candidate_factors(items);
     for c in candidates {
@@ -196,20 +195,20 @@ fn try_refine_once(items: &[(Formula, D::Structured)]) -> Option<Vec<(Formula, D
             continue;
         }
 
-        // Build the new compound node. Children keep their R guards (formula minus the
-        // factor); recursive refinement happens after the splice.
+        // Children keep their R = guard \ factor. Re-simplify so the factored form is
+        // minimal before the recursive refine looks at it.
         let vc_items: Vec<(Formula, D::Structured)> = vc_indices
             .iter()
             .map(|&i| {
                 let (g, body) = &items[i];
-                (g.without_conjunct(&c), body.clone())
+                (g.without_conjunct(&c).simplify(), body.clone())
             })
             .collect();
         let vneg_items: Vec<(Formula, D::Structured)> = vneg_indices
             .iter()
             .map(|&i| {
                 let (g, body) = &items[i];
-                (g.without_conjunct(&neg_c), body.clone())
+                (g.without_conjunct(&neg_c).simplify(), body.clone())
             })
             .collect();
         let conseq = emit_seq_from_items(refine_initial_ast(vc_items));
@@ -220,8 +219,6 @@ fn try_refine_once(items: &[(Formula, D::Structured)]) -> Option<Vec<(Formula, D
         };
         let compound = D::Structured::CondIf(c, Box::new(conseq), Box::new(alt));
 
-        // Splice: replace the partitioned items with the compound at the earliest affected
-        // index, preserving topological order for the remaining (unaffected) items.
         let earliest = vc_indices
             .iter()
             .chain(vneg_indices.iter())

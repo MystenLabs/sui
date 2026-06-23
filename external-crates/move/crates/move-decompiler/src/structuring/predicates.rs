@@ -302,6 +302,30 @@ impl Formula {
         self.as_atom().and_then(cond_block_from_name)
     }
 
+    /// Substitute atom `name` with `value` (`true` or `false`) and minimize the result.
+    /// Used by NMG-style refinement to ask "what does this guard become if we know `c`'s
+    /// truth value?". If `name` doesn't appear, returns `self.simplify()`.
+    pub fn substitute(&self, name: Symbol, value: bool) -> Formula {
+        fn go(f: &Formula, name: Symbol, value: bool) -> Formula {
+            match &f.0 {
+                FormulaTree::True => true_(),
+                FormulaTree::False => false_(),
+                FormulaTree::Atom(s) if *s == name => {
+                    if value {
+                        true_()
+                    } else {
+                        false_()
+                    }
+                }
+                FormulaTree::Atom(_) => f.clone(),
+                FormulaTree::Not(inner) => not(go(inner, name, value)),
+                FormulaTree::And(fs) => and(fs.iter().map(|c| go(c, name, value)).collect()),
+                FormulaTree::Or(fs) => or(fs.iter().map(|c| go(c, name, value)).collect()),
+            }
+        }
+        go(self, name, value).simplify()
+    }
+
     /// Quine-McCluskey minimization. Maps atoms to `u8` variables, runs the crate's
     /// `simplify()`, picks the shortest result, and lowers back. Returns the original
     /// formula unchanged if the atom count exceeds the crate's u8 variable limit (32) or
