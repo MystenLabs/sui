@@ -567,7 +567,22 @@ fn strip_untargeted_blocks(exp: &mut Exp, targets: &HashSet<u64>) {
     }
 }
 
-fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Structured) -> Exp {
+fn generate_output(terms: BTreeMap<D::Label, Out::Exp>, structured: D::Structured) -> Exp {
+    let mut terms = terms;
+    generate_output_inner(&mut terms, structured)
+}
+
+/// `terms` is `&mut` so EVERY downstream reference shares consumption: each `__cN` is
+/// emitted exactly once, at its first reference (whether by a top-level Block, a guard's
+/// cond_atoms setup, or a CondIf arm's Block). Branching forms (Switch cases, SelectorMatch
+/// arms) clone because those are runtime-disjoint scopes -- only one runs at a time and
+/// each needs its own copy. CondIf conseq/alt threads through the parent's terms because
+/// conseq emitting `let __cN = ...` makes the binding scope-visible outside the if (Move
+/// `let` scopes to the enclosing block), so siblings shouldn't re-emit.
+fn generate_output_inner(
+    terms: &mut BTreeMap<D::Label, Out::Exp>,
+    structured: D::Structured,
+) -> Exp {
     match structured {
         D::Structured::Break(label) => Out::Exp::Break(Some(label.index() as u64)),
         D::Structured::Continue(label) => Out::Exp::Continue(Some(label.index() as u64)),
@@ -577,12 +592,14 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
         }
         D::Structured::Loop(label, body) => Out::Exp::Loop(
             Some(label.index() as u64),
-            Box::new(generate_output(terms, *body)),
+            Box::new(generate_output_inner(terms, *body)),
         ),
         D::Structured::Seq(seq) => {
+            // Thread `terms` through items so atom setups consumed by item i don't get
+            // re-emitted by item j>i.
             let items = seq
                 .into_iter()
-                .map(|s| generate_output(terms.clone(), s))
+                .map(|s| generate_output_inner(terms, s))
                 .collect();
             Out::Exp::Seq(items)
         }
@@ -590,23 +607,24 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             // Hoist each contributing condition block's term as setup. Each block ends in
             // `let __c{n} = <test>` (see `term_reconstruction`'s `JumpIf` arm), so the let
             // binding lands directly before the `if (__c{n})` we synthesize from
-            // `formula.to_exp()`. The single-atom case becomes `Seq(let __c{n} = e; if
-            // (__c{n}) ...)`; the `collapse_let_usage` refinement later folds the unique
-            // single-use read at the if's head position back into `if (e) ...` when nothing
-            // else references `__c{n}`. Compound formulas (recovered booleans from the
-            // diamond fold) keep the lets and produce `if (__c{i} || __c{j}) ...`,
-            // single-evaluation and side-effect-honest.
+            // `formula.to_exp()`. If the term is missing the binding was already emitted by
+            // an earlier sibling -- skip the setup, the variable is in scope.
             let mut setups: Vec<Exp> = Vec::new();
             for block_id in formula.cond_atoms() {
-                let term = terms.remove(&block_id).unwrap();
-                match term {
-                    Exp::Seq(seq) => setups.extend(seq),
-                    other => setups.push(other),
+                if let Some(term) = terms.remove(&block_id) {
+                    match term {
+                        Exp::Seq(seq) => setups.extend(seq),
+                        other => setups.push(other),
+                    }
                 }
             }
             let cond = formula.to_exp();
+            // Thread `terms` through both arms: a `let __cN = ...` emitted inside `conseq`
+            // is scope-visible outside the if (Move `let` scopes to the enclosing block),
+            // so siblings shouldn't re-emit. `alt` runs only when `conseq` doesn't, so
+            // they share consumption from the parent's terms.
             let alt_exp = alt.and_then(|a| {
-                let e = generate_output(terms.clone(), a);
+                let e = generate_output_inner(terms, a);
                 match &e {
                     Exp::Seq(items) if items.is_empty() => None,
                     _ => Some(e),
@@ -614,7 +632,7 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             });
             setups.push(Out::Exp::IfElse(
                 Box::new(cond),
-                Box::new(generate_output(terms.clone(), *conseq)),
+                Box::new(generate_output_inner(terms, *conseq)),
                 Box::new(alt_exp),
             ));
             // Single-atom case is the migrated `IfElse(Code, ...)`. Wrap in a labeled `Block`
@@ -635,7 +653,10 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
 
             let cases = cases
                 .into_iter()
-                .map(|(v, c)| (v, generate_output(terms.clone(), c)))
+                .map(|(v, c)| {
+                    let mut case_terms = terms.clone();
+                    (v, generate_output_inner(&mut case_terms, c))
+                })
                 .collect();
             exps.push(Out::Exp::Switch(
                 Box::new(cond),
@@ -688,7 +709,10 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
         D::Structured::SelectorMatch(name, arms) => {
             let translated_arms: Vec<(crate::ast::DispatchTag, Out::Exp)> = arms
                 .into_iter()
-                .map(|(tag, body)| (tag, generate_output(terms.clone(), body)))
+                .map(|(tag, body)| {
+                    let mut arm_terms = terms.clone();
+                    (tag, generate_output_inner(&mut arm_terms, body))
+                })
                 .collect();
             Out::Exp::MatchLit(Box::new(Out::Exp::Variable(name)), translated_arms)
         }

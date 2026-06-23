@@ -90,36 +90,374 @@ impl Mode {
 }
 
 fn structure_inner(
-    config: &config::Config,
-    terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
+    _config: &config::Config,
+    _terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
     structured_blocks: &BTreeMap<NodeIndex, D::Structured>,
     input: &BTreeMap<NodeIndex, D::Input>,
     entry: NodeIndex,
     members: &HashSet<NodeIndex>,
     mode: Mode,
 ) -> Option<D::Structured> {
-    let pdom = PostDom::build(input, members)?;
-    let mut ctx = Ctx {
-        config,
-        input,
-        structured_blocks,
-        pdom,
-        folded_any: false,
-        mode,
-        members,
-        visiting: HashSet::new(),
-        terms,
-    };
-    // Bypass the `node == stop` short-circuit on the region's entry: the entry may itself
-    // be out-of-region (a loop head with back-edges from inside), but the walker still needs
-    // to emit it once. Recursive descent honors `stop` and the membership check from there on.
-    let body = ctx.process_node(entry, None)?;
-    // Only take over when we actually folded; otherwise let the dom-tree structurer keep its
-    // existing output.
-    if !ctx.folded_any {
+    structure_nmg(structured_blocks, input, entry, members, mode)
+}
+
+// =================================================================================================
+// NMG-proper acyclic structurer (§IV-B steps 1+2)
+// =================================================================================================
+// Compute reaching conditions over the region's acyclic projection; lay out each node in
+// topological order guarded by its formula. NMG's "refinement" steps (condition-based
+// fusion, switch detection, reachability cascades) are handled by the refinement pipeline --
+// they ARE refinements.
+//
+// Projection rules:
+//   - Back-edges to `entry` from inside the region are redirected to a synthetic `Continue`
+//     sink (loop-body mode only; whole-function regions have no back-edges by assumption).
+//   - Edges to nodes outside `members` are redirected to per-target synthetic exit sinks.
+//   - The region is then acyclic and `reaching_conditions` succeeds.
+//
+// Bails (`None`) on `Variants` (NMG's switch case needs `subject == variant_K` atoms which
+// aren't modeled in the predicate algebra yet) or on `reaching_conditions` failure.
+
+fn structure_nmg(
+    structured_blocks: &BTreeMap<NodeIndex, D::Structured>,
+    input: &BTreeMap<NodeIndex, D::Input>,
+    entry: NodeIndex,
+    members: &HashSet<NodeIndex>,
+    mode: Mode,
+) -> Option<D::Structured> {
+    if input.values().any(|i| matches!(i, D::Input::Variants(..))) {
         return None;
     }
-    Some(body)
+    let proj = build_acyclic_projection(input, entry, members);
+    let reach = reaching_conditions(&proj.input, entry)?;
+    let topo = topological_order(&proj.input)?;
+
+    // Initial AST: `Seq[ if(c_r(n_1)) { n_1 }; ...; if(c_r(n_k)) { n_k } ]` per NMG §IV-B
+    // step 1. Drop nodes with `False` reaching condition (dead code) and entry is
+    // unconditional.
+    let mut items: Vec<(Formula, D::Structured)> = Vec::with_capacity(topo.len());
+    for n in topo {
+        let guard = if n == entry {
+            predicates::true_()
+        } else {
+            reach.get(&n).cloned().unwrap_or_else(predicates::true_)
+        };
+        if guard == predicates::false_() {
+            continue;
+        }
+        let body = render_projection_node(n, &proj, structured_blocks, mode, entry);
+        items.push((guard, body));
+    }
+
+    // NMG §IV-B step 2: condition-based refinement. Iteratively factor common top-level
+    // conjuncts out of sibling guards (and fuse complementary pairs) until fixed point.
+    items = refine_initial_ast(items);
+
+    Some(emit_seq_from_items(items))
+}
+
+/// Iteratively apply NMG's condition-based refinement to a flat sequence of guarded items
+/// until no more factoring is possible. After this, complementary pairs and common factors
+/// have been hoisted into `CondIf` constructs; the remaining items are emitted as-is.
+fn refine_initial_ast(mut items: Vec<(Formula, D::Structured)>) -> Vec<(Formula, D::Structured)> {
+    loop {
+        if let Some(new_items) = try_refine_once(&items) {
+            items = new_items;
+        } else {
+            return items;
+        }
+    }
+}
+
+/// One iteration of NMG's condition-based refinement. Returns `Some(refined)` if a
+/// factoring happened, `None` if no candidate produced a refinement.
+///
+/// Strategy: scan top-level conjuncts that appear in 2+ items' guards. For the first such
+/// `c` found, partition items into `Vc` (have `c` as factor), `V_neg_c` (have `¬c` as
+/// factor), and the rest. If `|Vc| + |V_neg_c| >= 2`, build a `CondIf(c, Seq(Vc with c
+/// stripped), Some(Seq(V_neg_c with ¬c stripped)))` and splice it in at the earliest
+/// affected item's position.
+fn try_refine_once(items: &[(Formula, D::Structured)]) -> Option<Vec<(Formula, D::Structured)>> {
+    let candidates = candidate_factors(items);
+    for c in candidates {
+        let neg_c = predicates::not(c.clone());
+        let mut vc_indices: Vec<usize> = Vec::new();
+        let mut vneg_indices: Vec<usize> = Vec::new();
+        for (i, (g, _)) in items.iter().enumerate() {
+            if g.has_conjunct(&c) {
+                vc_indices.push(i);
+            } else if g.has_conjunct(&neg_c) {
+                vneg_indices.push(i);
+            }
+        }
+        if vc_indices.len() + vneg_indices.len() < 2 {
+            continue;
+        }
+
+        // Build the new compound node. Children keep their R guards (formula minus the
+        // factor); recursive refinement happens after the splice.
+        let vc_items: Vec<(Formula, D::Structured)> = vc_indices
+            .iter()
+            .map(|&i| {
+                let (g, body) = &items[i];
+                (g.without_conjunct(&c), body.clone())
+            })
+            .collect();
+        let vneg_items: Vec<(Formula, D::Structured)> = vneg_indices
+            .iter()
+            .map(|&i| {
+                let (g, body) = &items[i];
+                (g.without_conjunct(&neg_c), body.clone())
+            })
+            .collect();
+        let conseq = emit_seq_from_items(refine_initial_ast(vc_items));
+        let alt = if vneg_items.is_empty() {
+            None
+        } else {
+            Some(emit_seq_from_items(refine_initial_ast(vneg_items)))
+        };
+        let compound = D::Structured::CondIf(c, Box::new(conseq), Box::new(alt));
+
+        // Splice: replace the partitioned items with the compound at the earliest affected
+        // index, preserving topological order for the remaining (unaffected) items.
+        let earliest = vc_indices
+            .iter()
+            .chain(vneg_indices.iter())
+            .min()
+            .copied()
+            .unwrap();
+        let affected: HashSet<usize> = vc_indices.into_iter().chain(vneg_indices).collect();
+        let mut new_items: Vec<(Formula, D::Structured)> = Vec::with_capacity(items.len());
+        for (i, item) in items.iter().enumerate() {
+            if i == earliest {
+                new_items.push((predicates::true_(), compound.clone()));
+            } else if !affected.contains(&i) {
+                new_items.push(item.clone());
+            }
+        }
+        return Some(new_items);
+    }
+    None
+}
+
+/// Collect top-level conjunct candidates appearing in 2+ items' guards. Returns each
+/// candidate as the positive form (a `c` and `¬c` partition uses both polarities).
+fn candidate_factors(items: &[(Formula, D::Structured)]) -> Vec<Formula> {
+    // Collect each distinct conjunct seen; for each, also derive its positive form (apply
+    // `not` once -- the smart constructor de-double-negates, so `not(not(c)) == c`).
+    let mut all_conjuncts: HashSet<Formula> = HashSet::new();
+    for (g, _) in items {
+        for c in g.conjuncts() {
+            all_conjuncts.insert(c.clone());
+            // De-negate for the candidate set so `c` and `¬c` don't both surface.
+            all_conjuncts.insert(predicates::not(c));
+        }
+    }
+    // Score each candidate by how many items contain it (or its negation) as a conjunct.
+    let mut scored: Vec<(Formula, usize)> = all_conjuncts
+        .into_iter()
+        .filter(|c| *c != predicates::true_() && *c != predicates::false_())
+        .map(|c| {
+            let neg = predicates::not(c.clone());
+            let n = items
+                .iter()
+                .filter(|(g, _)| g.has_conjunct(&c) || g.has_conjunct(&neg))
+                .count();
+            (c, n)
+        })
+        .filter(|(_, n)| *n >= 2)
+        .collect();
+    // Prefer factors that cover more items (greedy hoisting); de-duplicate `c`/`¬c` pairs
+    // by keeping only one direction (the one with the lower hash, deterministically).
+    scored.sort_by(|a, b| b.1.cmp(&a.1));
+    let mut seen: HashSet<Formula> = HashSet::new();
+    let mut out: Vec<Formula> = Vec::new();
+    for (c, _) in scored {
+        let neg = predicates::not(c.clone());
+        if seen.contains(&c) || seen.contains(&neg) {
+            continue;
+        }
+        seen.insert(c.clone());
+        out.push(c);
+    }
+    out
+}
+
+/// Emit a final `Structured` from a list of guarded items. `true` guards drop the wrapper.
+fn emit_seq_from_items(items: Vec<(Formula, D::Structured)>) -> D::Structured {
+    let mut out: Vec<D::Structured> = Vec::with_capacity(items.len());
+    for (guard, body) in items {
+        if guard == predicates::true_() {
+            out.push(body);
+        } else {
+            out.push(D::Structured::CondIf(guard, Box::new(body), Box::new(None)));
+        }
+    }
+    D::Structured::Seq(out)
+}
+
+/// The body of node `n` in the projection. Synthetic sinks emit exit-jumps (or empty for
+/// whole-function); real nodes emit `Block(code)` (Code/Condition/Variants) or pull the
+/// pre-structured form from `structured_blocks` (Reduced).
+fn render_projection_node(
+    n: NodeIndex,
+    proj: &AcyclicProjection,
+    structured_blocks: &BTreeMap<NodeIndex, D::Structured>,
+    mode: Mode,
+    entry: NodeIndex,
+) -> D::Structured {
+    if Some(n) == proj.back_edge_sink {
+        if mode.emit_exit_jumps() {
+            D::Structured::exit_jump(entry)
+        } else {
+            D::Structured::Seq(vec![])
+        }
+    } else if let Some(&target) = proj.exit_sinks.get(&n) {
+        if mode.emit_exit_jumps() {
+            D::Structured::exit_jump(target)
+        } else {
+            D::Structured::Seq(vec![])
+        }
+    } else {
+        match proj.input.get(&n) {
+            Some(D::Input::Code(_, code, _))
+            | Some(D::Input::Condition(_, code, _, _))
+            | Some(D::Input::Variants(_, code, _, _)) => D::Structured::Block(*code),
+            Some(D::Input::Reduced(label, _)) => structured_blocks
+                .get(label)
+                .cloned()
+                .unwrap_or_else(|| D::Structured::Seq(vec![])),
+            None => D::Structured::Seq(vec![]),
+        }
+    }
+}
+
+/// Acyclic projection of an `input` map: original nodes with their edges to out-of-region
+/// targets and to `entry` (back-edges) redirected to synthetic sinks, plus the sinks
+/// themselves as terminal `Code(_, 0, None)` entries.
+struct AcyclicProjection {
+    input: BTreeMap<NodeIndex, D::Input>,
+    /// Synthetic sink that absorbs back-edges to `entry`. `None` if no back-edges exist
+    /// (whole-function mode).
+    back_edge_sink: Option<NodeIndex>,
+    /// Maps each synthetic exit sink to the original out-of-region target. The reverse
+    /// map (target -> sink) is used during projection construction; we keep this direction
+    /// because the rendering step needs target.
+    exit_sinks: HashMap<NodeIndex, NodeIndex>,
+}
+
+fn build_acyclic_projection(
+    input: &BTreeMap<NodeIndex, D::Input>,
+    entry: NodeIndex,
+    members: &HashSet<NodeIndex>,
+) -> AcyclicProjection {
+    // 1. Discover unique exit targets and whether we need a back-edge sink.
+    let in_projection =
+        |n: NodeIndex| -> bool { members.contains(&n) || n == entry };
+    let mut needs_back_edge_sink = false;
+    let mut unique_exit_targets: Vec<NodeIndex> = Vec::new();
+    let mut seen_targets: HashSet<NodeIndex> = HashSet::new();
+    for (&node, inp) in input {
+        if !in_projection(node) {
+            continue;
+        }
+        for (_, v) in inp.edges() {
+            if v == entry && members.contains(&node) {
+                // Back-edge from inside.
+                needs_back_edge_sink = true;
+            } else if !in_projection(v) && seen_targets.insert(v) {
+                unique_exit_targets.push(v);
+            }
+        }
+    }
+
+    // 2. Allocate synthetic sink ids past anything in `input`.
+    let mut next_id = input.keys().map(|n| n.index() + 1).max().unwrap_or(0);
+    let back_edge_sink = if needs_back_edge_sink {
+        let id = NodeIndex::new(next_id);
+        next_id += 1;
+        Some(id)
+    } else {
+        None
+    };
+    // target -> sink (used to remap edges below).
+    let mut target_to_sink: HashMap<NodeIndex, NodeIndex> = HashMap::new();
+    // sink -> target (kept on the projection for rendering).
+    let mut exit_sinks: HashMap<NodeIndex, NodeIndex> = HashMap::new();
+    for target in unique_exit_targets {
+        let id = NodeIndex::new(next_id);
+        next_id += 1;
+        target_to_sink.insert(target, id);
+        exit_sinks.insert(id, target);
+    }
+
+    // 3. Build the projection: keep in-projection nodes, redirect their edges, add sinks.
+    let remap = |v: NodeIndex, from_member: bool| -> NodeIndex {
+        if v == entry && from_member && back_edge_sink.is_some() {
+            back_edge_sink.unwrap()
+        } else if let Some(&sink) = target_to_sink.get(&v) {
+            sink
+        } else {
+            v
+        }
+    };
+    let mut projection: BTreeMap<NodeIndex, D::Input> = BTreeMap::new();
+    for (&node, inp) in input {
+        if !in_projection(node) {
+            continue;
+        }
+        let from_member = members.contains(&node);
+        projection.insert(node, redirect_input(inp.clone(), |v| remap(v, from_member)));
+    }
+    if let Some(sink) = back_edge_sink {
+        projection.insert(sink, D::Input::Code(sink, 0, None));
+    }
+    for &sink in exit_sinks.keys() {
+        projection.insert(sink, D::Input::Code(sink, 0, None));
+    }
+
+    AcyclicProjection {
+        input: projection,
+        back_edge_sink,
+        exit_sinks,
+    }
+}
+
+/// Apply `f` to every edge target in `inp`, returning a fresh `Input` with the remapped
+/// edges.
+fn redirect_input(inp: D::Input, f: impl Fn(NodeIndex) -> NodeIndex) -> D::Input {
+    match inp {
+        D::Input::Condition(l, c, t, e) => D::Input::Condition(l, c, f(t), f(e)),
+        D::Input::Variants(l, c, en, items) => D::Input::Variants(
+            l,
+            c,
+            en,
+            items.into_iter().map(|(v, t)| (v, f(t))).collect(),
+        ),
+        D::Input::Code(l, c, Some(n)) => D::Input::Code(l, c, Some(f(n))),
+        D::Input::Code(l, c, None) => D::Input::Code(l, c, None),
+        D::Input::Reduced(l, succs) => D::Input::Reduced(l, succs.into_iter().map(f).collect()),
+    }
+}
+
+/// Topological order over the projection. Returns `None` if there's a cycle (shouldn't
+/// happen for a valid projection; defensive).
+fn topological_order(input: &BTreeMap<NodeIndex, D::Input>) -> Option<Vec<NodeIndex>> {
+    let mut g: DiGraph<NodeIndex, ()> = DiGraph::new();
+    let mut to_internal: HashMap<NodeIndex, NodeIndex> = HashMap::with_capacity(input.len());
+    for &n in input.keys() {
+        let idx = g.add_node(n);
+        to_internal.insert(n, idx);
+    }
+    for inp in input.values() {
+        for (u, v) in inp.edges() {
+            if let (Some(&ui), Some(&vi)) = (to_internal.get(&u), to_internal.get(&v)) {
+                g.add_edge(ui, vi, ());
+            }
+        }
+    }
+    let topo = algo::toposort(&g, None).ok()?;
+    Some(topo.into_iter().map(|i| g[i]).collect())
 }
 
 struct Ctx<'a> {

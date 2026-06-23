@@ -265,6 +265,37 @@ impl Formula {
         }
     }
 
+    /// The top-level conjuncts of `self`. `And(fs)` returns clones of `fs`; anything else
+    /// returns `[self]`. Used by NMG's condition-based refinement to find common factors
+    /// across sibling guards.
+    pub fn conjuncts(&self) -> Vec<Formula> {
+        match &self.0 {
+            FormulaTree::And(fs) => fs.clone(),
+            _ => vec![self.clone()],
+        }
+    }
+
+    /// Return the conjunction of `self`'s top-level conjuncts minus those equal to
+    /// `factor`. If `factor` doesn't appear, returns `self` unchanged. If stripping leaves
+    /// nothing, returns `True`. Used to extract a common factor out of guards.
+    pub fn without_conjunct(&self, factor: &Formula) -> Formula {
+        let remaining: Vec<Formula> = self
+            .conjuncts()
+            .into_iter()
+            .filter(|c| c != factor)
+            .collect();
+        if remaining.is_empty() {
+            true_()
+        } else {
+            and(remaining)
+        }
+    }
+
+    /// True iff `factor` is one of `self`'s top-level conjuncts.
+    pub fn has_conjunct(&self, factor: &Formula) -> bool {
+        self.conjuncts().iter().any(|c| c == factor)
+    }
+
     /// `Some(n)` iff `self` is a single condition-block atom parseable via the
     /// [`cond_var_name`] convention.
     pub fn as_cond_atom(&self) -> Option<NodeIndex> {
