@@ -2003,11 +2003,26 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        // TEMPORARY (perf experiment): skip the cross-commit existing-lock check.
-        // This avoids the get_owned_object_locks read against the
-        // owned_object_transaction_locks keyspace (a force-unload hotspot). Intra-commit
-        // conflicts are still caught above; cross-commit owned-object conflicts are
-        // assumed to be prevented by consensus ordering. Always return the new locks.
+        // Check quarantine and epoch store for existing locks.
+        let existing_locks = self
+            .get_owned_object_locks(owned_object_refs)
+            .unwrap_or_default();
+
+        // Check for conflicts with existing locks (from earlier commits or crash recovery)
+        for (lock, obj_ref) in existing_locks.iter().zip_debug_eq(owned_object_refs) {
+            if let Some(locked_tx_digest) = lock
+                && *locked_tx_digest != tx_digest
+            {
+                return Err(SuiErrorKind::ObjectLockConflict {
+                    obj_ref: *obj_ref,
+                    pending_transaction: *locked_tx_digest,
+                }
+                .into());
+            }
+        }
+
+        // No conflicts, so the consumed owned object versions are valid (from preconsensus validation)
+        // and available (from the checks above). Return the new locks to add.
         Ok(owned_object_refs
             .iter()
             .map(|obj_ref| (*obj_ref, tx_digest))
