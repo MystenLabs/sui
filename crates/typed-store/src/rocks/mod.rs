@@ -227,6 +227,41 @@ impl Database {
         }
     }
 
+    /// Returns whether `key` exists, without materializing the value. On tidehunter
+    /// this uses the native `exists` (an index/bloom presence check), which avoids
+    /// the value-record read that `get` performs and is therefore much cheaper.
+    fn contains(
+        &self,
+        cf: &ColumnFamily,
+        key: &[u8],
+        readopts: &ReadOptions,
+    ) -> Result<bool, TypedStoreError> {
+        match (&self.storage, cf) {
+            (Storage::Rocks(db), ColumnFamily::Rocks(_)) => {
+                let rocks_cf = cf.rocks_cf(db);
+                // `key_may_exist_cf_opt` can return false positives but never false
+                // negatives, so it short-circuits the common absent case before the
+                // real point lookup.
+                Ok(db.underlying.key_may_exist_cf_opt(&rocks_cf, key, readopts)
+                    && db
+                        .underlying
+                        .get_pinned_cf_opt(&rocks_cf, key, readopts)
+                        .map_err(typed_store_err_from_rocks_err)?
+                        .is_some())
+            }
+            (Storage::InMemory(db), ColumnFamily::InMemory(cf_name)) => {
+                Ok(db.get(cf_name, key).is_some())
+            }
+            #[cfg(tidehunter)]
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => db
+                .exists(*ks, &transform_th_key(key, prefix))
+                .map_err(typed_store_error_from_th_error),
+            _ => Err(TypedStoreError::RocksDBError(
+                "typed store invariant violation".to_string(),
+            )),
+        }
+    }
+
     fn multi_get<I, K>(
         &self,
         cf: &ColumnFamily,
@@ -1629,12 +1664,8 @@ where
     #[instrument(level = "trace", skip_all, err)]
     fn contains_key(&self, key: &K) -> Result<bool, TypedStoreError> {
         let key_buf = be_fix_int_ser(key);
-        let readopts = self.opts.readopts();
-        Ok(self.db.key_may_exist_cf(&self.cf, &key_buf, &readopts)
-            && self
-                .db
-                .get(&self.column_family, &key_buf, &readopts)?
-                .is_some())
+        self.db
+            .contains(&self.column_family, &key_buf, &self.opts.readopts())
     }
 
     #[instrument(level = "trace", skip_all, err)]
