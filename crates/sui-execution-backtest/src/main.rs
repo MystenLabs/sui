@@ -6,50 +6,59 @@
 //! recorded on chain. Useful for measuring the behavioral impact of an execution/protocol change
 //! before it ships.
 //!
-//! For each epoch it resolves the checkpoint range + protocol version from a fullnode, then streams
-//! the checkpoints through a two-stage pipeline (see [`pipeline`]): a prefetch stage fetches +
-//! indexes checkpoints with `--concurrency` in flight, feeding a bounded buffer that an execute
-//! stage drains, re-executing every programmable transaction matching `--status` (success / failed
-//! / all) against reconstructed state via the `sui-execution` Executor on blocking workers
-//! (`--execute-concurrency` at a time). Decoupling fetch from execute keeps the cores fed
-//! regardless of fetch latency — fetching is the usual bottleneck, so prefer a remote object store
-//! (`--remote-store-url https://checkpoints.<network>.sui.io`) over a fullnode `--rpc-api-url` for
-//! the checkpoint source. Any transaction whose recomputed success/failure status disagrees with
-//! its on-chain status is a *divergence*: it is written to an NDJSON file tagged with its on-chain
-//! status and the recomputed error (if any). `--status success` is the strict baseline (a tx that
-//! succeeded on chain now erroring); `all`/`failed` also replay failures, with each record carrying
-//! the on-chain status so the differential can be applied downstream.
+//! Runs as a `sui-indexer-alt-framework` concurrent pipeline (see [`handler`]): the framework's
+//! `Indexer` ingests the resolved checkpoint range with adaptive concurrency and runs the
+//! per-checkpoint processor with a configurable fanout. Each transaction matching `--status` is
+//! re-executed against reconstructed checkpoint state; any whose recomputed success/failure status
+//! disagrees with its on-chain status is recorded as a divergence. Output goes to a swappable sink
+//! (`--store`): postgres (durable + queryable) or an ndjson file (zero-setup).
 
+mod context;
 mod execute;
 mod grpc;
-mod pipeline;
+mod handler;
+mod ingestion;
+mod ndjson_store;
+mod rows;
+mod schema;
 mod store;
 
-use std::io::Write as _;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
 
 use anyhow::{Context as _, Result, bail};
 use clap::{Parser, ValueEnum};
-use futures::StreamExt as _;
+use diesel_migrations::EmbeddedMigrations;
+use diesel_migrations::embed_migrations;
 use prometheus::Registry;
-use sui_indexer_alt_framework::ingestion::ingestion_client::{
-    IngestionClient, IngestionClientArgs,
-};
+use sui_indexer_alt_framework::Indexer;
+use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::TaskArgs;
+use sui_indexer_alt_framework::ingestion::IngestionConfig;
+use sui_indexer_alt_framework::ingestion::IngestionService;
+use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
+use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_framework::metrics::IngestionMetrics;
+use sui_indexer_alt_framework::pipeline::ConcurrencyConfig;
+use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_indexer_alt_framework::postgres::{Db, DbArgs};
 use sui_protocol_config::Chain;
+use sui_types::digests::ChainIdentifier;
 use sui_types::metrics::ExecutionMetrics;
 use tracing::info;
 use url::Url;
 
-use crate::execute::CheckpointStats;
+use crate::context::{EpochCtx, resolve_epoch_work};
 use crate::grpc::RpcClient;
-use crate::pipeline::{
-    pipeline_channel, resolve_epoch_work, spawn_producer, stream_to_execution_results,
-};
+use crate::handler::{Backtest, CommitRows};
+use crate::ndjson_store::NdjsonStore;
 use crate::store::PackageCache;
+
+/// Backtest-specific migrations (the `divergence` and `run_stats` tables). The framework's
+/// watermark tables come from `sui-pg-db`'s own migrations, which `Db::run_migrations` applies
+/// alongside these.
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 /// Which on-chain transaction statuses to re-execute.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -62,6 +71,15 @@ pub(crate) enum StatusFilter {
     All,
 }
 
+/// Where divergence (and stats) rows are written.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum StoreKind {
+    /// Newline-delimited JSON file (zero-setup; no resumption across restarts).
+    Ndjson,
+    /// Postgres (durable, queryable, resumable).
+    Postgres,
+}
+
 #[derive(Parser)]
 #[clap(
     name = "sui-execution-backtest",
@@ -69,7 +87,7 @@ pub(crate) enum StatusFilter {
 )]
 struct Args {
     #[clap(flatten)]
-    ingestion: IngestionClientArgs,
+    client: IngestionClientArgs,
 
     /// Sui fullnode gRPC url used to resolve epochs and fetch packages. Defaults to `--rpc-api-url`
     /// when that is provided as the checkpoint source.
@@ -95,34 +113,40 @@ struct Args {
     #[clap(long, value_enum, default_value_t = StatusFilter::All)]
     status: StatusFilter,
 
-    /// I/O width: checkpoints fetched + indexed concurrently by the prefetch stage. This is now
-    /// purely the fetch pipeline width (execution width is `--execute-concurrency`). Fetching is the
-    /// usual bottleneck, so prefer a remote object store —
-    /// `--remote-store-url https://checkpoints.<network>.sui.io` — over a fullnode `--rpc-api-url`
-    /// (measured ~+40% throughput), and raise this if the prefetch buffer keeps running dry.
-    #[clap(long, default_value_t = 32)]
-    concurrency: usize,
-
-    /// CPU width: transactions executed concurrently on blocking workers. Defaults to ~2x the
-    /// machine's parallelism (each unit is one transaction, and per-transaction prep leaves some
-    /// slack, so mild oversubscription keeps the cores busy; measured best around 2-2.5x cores).
-    /// Decoupled from `--concurrency` so fetch latency can't starve the cores.
+    /// CPU width: the number of checkpoints processed (and thus re-executed) concurrently by the
+    /// pipeline's processor fanout. Defaults to the framework's adaptive scaling (up to the number
+    /// of CPUs). Each checkpoint's transactions are executed serially on one blocking worker.
     #[clap(long)]
     execute_concurrency: Option<usize>,
-
-    /// Depth of the prefetched-checkpoint buffer between the fetch and execute stages. A larger
-    /// buffer absorbs fetch-latency bursts at the cost of memory (each buffered checkpoint holds its
-    /// object set). Defaults to `--concurrency`.
-    #[clap(long)]
-    prefetch_depth: Option<usize>,
 
     /// Optional directory for an on-disk package cache (speeds up re-scans).
     #[clap(long)]
     cache: Option<PathBuf>,
 
-    /// Path to write divergent transactions to, as newline-delimited JSON.
+    /// Where to write divergence (and stats) rows.
+    #[clap(long, value_enum, default_value_t = StoreKind::Ndjson)]
+    store: StoreKind,
+
+    /// Postgres connection url (required for `--store postgres`).
     #[clap(long)]
-    output: PathBuf,
+    database_url: Option<Url>,
+
+    /// Output file for `--store ndjson` (required for that store).
+    #[clap(long)]
+    output: Option<PathBuf>,
+
+    /// Run identifier. Namespaces both the output rows (the `task` column, part of the primary key)
+    /// and the postgres watermark, so re-running under changed execution rules starts fresh instead
+    /// of resuming the previous run's watermark and skipping already-processed checkpoints. Omit to
+    /// derive it from the git revision the binary was built from — the HEAD commit, plus a sha of
+    /// uncommitted changes when the working tree is dirty — so a commit or local edit gets a fresh
+    /// namespace while re-running unchanged code resumes where it left off.
+    #[clap(long)]
+    task: Option<String>,
+
+    /// Skip emitting per-checkpoint `run_stats` rows (divergences are still recorded).
+    #[clap(long)]
+    no_stats: bool,
 }
 
 #[tokio::main]
@@ -138,52 +162,42 @@ async fn main() -> Result<()> {
             args.end_epoch
         );
     }
-    if args.concurrency == 0 {
-        bail!("--concurrency must be >= 1");
-    }
 
     let fullnode_url: Url = args
         .fullnode_url
         .clone()
-        .or_else(|| args.ingestion.rpc_api_url.clone())
+        .or_else(|| args.client.rpc_api_url.clone())
         .context("provide --fullnode-url (or --rpc-api-url) for epoch and package resolution")?;
     let rpc = RpcClient::new(fullnode_url)?;
 
     let registry = Registry::new();
-    let metrics = IngestionMetrics::new(None, &registry);
-    let ingestion = Arc::new(IngestionClient::new(args.ingestion, metrics)?);
-    // Execution metrics, shared across all epochs.
     let execution_metrics = Arc::new(ExecutionMetrics::new(&registry));
-
+    let ingestion_metrics = IngestionMetrics::new(None, &registry);
     let packages = Arc::new(PackageCache::new(
         rpc.clone(),
         tokio::runtime::Handle::current(),
         args.cache.clone(),
     )?);
 
-    // Divergences are rare, so buffer the output and flush on each progress tick / at the end rather
-    // than syscalling per record.
-    let mut output = std::io::BufWriter::new(
-        std::fs::File::create(&args.output)
-            .with_context(|| format!("creating output file {}", args.output.display()))?,
-    );
+    // The chain identifier comes from the fullnode's GetServiceInfo (cheap), not by fetching
+    // genesis. For a remote object store we wrap the ingestion client so it never derives the chain
+    // id from genesis (see [`ingestion`]); the gRPC source already uses GetServiceInfo and a local
+    // store is fast. This one client serves both the upfront epoch resolution and the indexer, so
+    // genesis is never fetched.
+    let chain_id = rpc.chain_id().await.context("fetching chain id")?;
+    let chain: Chain = chain_id.chain();
+    let ingestion_client = match &args.client.remote_store_url {
+        Some(url) => ingestion::remote_store_client(url, chain_id, ingestion_metrics.clone())?,
+        None => IngestionClient::new(args.client.clone(), ingestion_metrics.clone())?,
+    };
 
-    // Learn the chain identifier (needed to build the right ProtocolConfig) from the first
-    // checkpoint of the first epoch.
     let first_bounds = rpc
         .epoch_bounds(args.start_epoch)
         .await
         .with_context(|| format!("resolving epoch {}", args.start_epoch))?;
-    let chain: Chain = ingestion
-        .checkpoint(first_bounds.first_checkpoint)
-        .await
-        .with_context(|| format!("fetching checkpoint {}", first_bounds.first_checkpoint))?
-        .chain_id
-        .chain();
-
-    let work = resolve_epoch_work(
+    let (epochs, first_checkpoint, last_checkpoint) = resolve_epoch_work(
         &rpc,
-        &ingestion,
+        &ingestion_client,
         chain,
         args.start_epoch..=args.end_epoch,
         args.max_checkpoints_per_epoch,
@@ -191,103 +205,192 @@ async fn main() -> Result<()> {
         &execution_metrics,
     )
     .await?;
+    let epochs = Arc::new(epochs);
 
-    let total_work = work.len() as u64;
-    let fetch_concurrency = args.concurrency;
-    let execute_concurrency = args.execute_concurrency.unwrap_or_else(|| {
-        // Each unit is one transaction running on a blocking worker; per-transaction prep leaves a
-        // little slack, so target ~2x the cores to keep them busy without thrashing.
-        std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(8)
-            .saturating_mul(2)
-    });
-    let prefetch_depth = args.prefetch_depth.unwrap_or(fetch_concurrency).max(1);
-    let status = args.status;
-    info!(
-        total_checkpoints = total_work,
-        fetch_concurrency, execute_concurrency, prefetch_depth, "starting scan"
-    );
-
-    let (tx, rx) = pipeline_channel(prefetch_depth);
-    let producer = spawn_producer(
-        work,
-        ingestion.clone(),
-        packages.clone(),
-        fetch_concurrency,
-        tx,
-    );
-
-    let mut totals = CheckpointStats::default();
-    let mut processed: u64 = 0;
-    let checkpoints_done = Arc::new(AtomicU64::new(0));
-    let scan_start = Instant::now();
-    let mut results =
-        stream_to_execution_results(rx, status, execute_concurrency, checkpoints_done.clone());
-
-    while let Some(stats) = results.next().await {
-        totals.merge(stats);
-        for record in totals.records.drain(..) {
-            writeln!(output, "{record}").context("writing output record")?;
+    // The framework watermark is keyed by `{pipeline}@{task}`, so namespacing per run-id keeps a
+    // re-run under changed rules from resuming the previous run's watermark. When no `--task` is
+    // given, derive it from the git revision (HEAD commit, plus an uncommitted-changes sha when the
+    // tree is dirty): a commit or local edit to the execution rules gets a fresh namespace, while
+    // re-running unchanged code resumes. The reader interval is irrelevant here (this pipeline does
+    // no pruning and has no main pipeline), so it is set high.
+    const READER_INTERVAL_MS: u64 = 3_600_000;
+    let run_id = match args.task {
+        Some(run_id) => run_id,
+        None => {
+            let derived = derive_task_from_git().context("deriving task id from git revision")?;
+            info!(task = %derived, "no --task given; derived run identifier from git revision");
+            derived
         }
+    };
+    let indexer_task = TaskArgs::tasked(run_id.clone(), READER_INTERVAL_MS);
+    let row_task = run_id;
 
-        // `processed` counts pipeline units (transactions); checkpoints are tallied separately.
-        processed += 1;
-        if processed.is_multiple_of(5000) {
-            output.flush().ok();
-            let elapsed = scan_start.elapsed().as_secs_f64().max(1e-9);
-            log_progress(
-                checkpoints_done.load(Ordering::Relaxed),
-                total_work,
-                &totals,
-                elapsed,
-            );
+    let plan = BacktestPlan {
+        epochs,
+        packages,
+        chain_id,
+        status: args.status,
+        task: row_task,
+        indexer_task,
+        stats_enabled: !args.no_stats,
+        first_checkpoint,
+        last_checkpoint,
+        fanout: args
+            .execute_concurrency
+            .map(|value| ConcurrencyConfig::Fixed { value }),
+    };
+
+    let ingestion_service = IngestionService::with_clients(
+        ingestion_client,
+        None,
+        IngestionConfig::default(),
+        ingestion_metrics,
+    );
+
+    match args.store {
+        StoreKind::Ndjson => {
+            let output = args
+                .output
+                .context("--output is required for --store ndjson")?;
+            let store = NdjsonStore::create(&output)?;
+            run_backtest(store, ingestion_service, registry, plan).await
+        }
+        StoreKind::Postgres => {
+            let database_url = args
+                .database_url
+                .context("--database-url is required for --store postgres")?;
+            let store = Db::for_write(database_url, DbArgs::default())
+                .await
+                .context("connecting to postgres")?;
+            store
+                .run_migrations(Some(&MIGRATIONS))
+                .await
+                .context("running migrations")?;
+            run_backtest(store, ingestion_service, registry, plan).await
         }
     }
-    output.flush().context("flushing output")?;
-    producer.await.ok();
+}
 
-    let elapsed = scan_start.elapsed().as_secs_f64().max(1e-9);
-    log_summary(&totals, checkpoints_done.load(Ordering::Relaxed), elapsed);
+/// The default run identifier: the source revision the binary was built from. This is the HEAD
+/// commit's short sha, plus — when the working tree is dirty — a second sha fingerprinting the
+/// uncommitted (tracked) changes. So committed code re-runs under a stable id (resuming its
+/// watermark), while each distinct set of edits-under-test gets a fresh namespace.
+///
+/// Git runs against the build-time source tree (`CARGO_MANIFEST_DIR`), so the id reflects the code
+/// the binary came from regardless of the process's working directory. The dirty fingerprint is the
+/// diff against HEAD hashed into a git blob sha (`git diff HEAD | git hash-object --stdin`), which —
+/// unlike `git stash create` — carries no commit timestamp, so re-running the same edits yields the
+/// same id. It is empty when the tree is clean; untracked files are not captured. Errors out if git
+/// is unavailable or the source tree is gone — pass `--task` explicitly in that case.
+fn derive_task_from_git() -> Result<String> {
+    let dir = env!("CARGO_MANIFEST_DIR");
+
+    let head = run_git(dir, &["rev-parse", "--short=12", "HEAD"], None)
+        .context("resolving HEAD (pass --task to set a run id explicitly)")?;
+    let head = String::from_utf8(head).context("git HEAD not utf-8")?;
+    let head = head.trim();
+
+    let diff = run_git(dir, &["diff", "HEAD"], None).context("diffing working tree")?;
+    if diff.is_empty() {
+        return Ok(format!("git-{head}"));
+    }
+    let wip = run_git(dir, &["hash-object", "--stdin"], Some(&diff))
+        .context("hashing working-tree diff")?;
+    let wip = String::from_utf8(wip).context("git hash-object output not utf-8")?;
+    let wip = wip.trim();
+    Ok(format!("git-{head}-{}", &wip[..wip.len().min(12)]))
+}
+
+/// Run `git -C <dir> <args>`, optionally feeding `stdin`, and return raw stdout. Errors on a
+/// non-zero exit (carrying git's stderr). Output is bytes, not text, because `git diff` can contain
+/// non-UTF-8 content from binary files.
+fn run_git(dir: &str, args: &[&str], stdin: Option<&[u8]>) -> Result<Vec<u8>> {
+    use std::io::Write as _;
+    use std::process::{Command, Stdio};
+
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
+        .arg(dir)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if stdin.is_some() {
+        cmd.stdin(Stdio::piped());
+    }
+    let mut child = cmd.spawn().context("spawning git")?;
+    if let Some(bytes) = stdin {
+        child
+            .stdin
+            .take()
+            .expect("stdin piped")
+            .write_all(bytes)
+            .context("writing git stdin")?;
+    }
+    let out = child.wait_with_output().context("waiting on git")?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(out.stdout)
+}
+
+/// Everything needed to run the pipeline, independent of the sink. Grouped so [`run_backtest`] can
+/// be generic over the store with a small argument list.
+struct BacktestPlan {
+    epochs: Arc<BTreeMap<u64, Arc<EpochCtx>>>,
+    packages: Arc<PackageCache>,
+    chain_id: ChainIdentifier,
+    status: StatusFilter,
+    /// Run identifier written to the `task` row column.
+    task: String,
+    /// Framework task config that namespaces the watermark (matches `task` when set via `--task`).
+    indexer_task: TaskArgs,
+    stats_enabled: bool,
+    first_checkpoint: u64,
+    last_checkpoint: u64,
+    fanout: Option<ConcurrencyConfig>,
+}
+
+/// Build and run the indexer for a given sink. Generic over the store so the postgres and ndjson
+/// paths share all the wiring.
+async fn run_backtest<S: CommitRows>(
+    store: S,
+    ingestion_service: IngestionService,
+    registry: Registry,
+    plan: BacktestPlan,
+) -> Result<()> {
+    let indexer_args = IndexerArgs {
+        first_checkpoint: Some(plan.first_checkpoint),
+        last_checkpoint: Some(plan.last_checkpoint),
+        pipeline: Vec::new(),
+        task: plan.indexer_task,
+    };
+
+    let mut indexer =
+        Indexer::with_ingestion_service(store, indexer_args, ingestion_service, None, &registry)
+            .await?;
+
+    let handler = Backtest::new(
+        plan.epochs,
+        plan.packages,
+        plan.chain_id,
+        plan.status,
+        plan.task,
+        plan.stats_enabled,
+    );
+    let config = ConcurrentConfig {
+        fanout: plan.fanout,
+        ..Default::default()
+    };
+    indexer.concurrent_pipeline(handler, config).await?;
+
+    let service = indexer.run().await?;
+    service
+        .main()
+        .await
+        .map_err(|e| anyhow::anyhow!("indexer terminated: {e:?}"))?;
     Ok(())
-}
-
-/// Periodic progress line during the scan.
-fn log_progress(
-    checkpoints_done: u64,
-    total_checkpoints: u64,
-    totals: &CheckpointStats,
-    elapsed: f64,
-) {
-    info!(
-        checkpoints_done,
-        total_checkpoints,
-        total_checked = totals.checked,
-        total_divergences = totals.divergences,
-        total_reconstruction_errors = totals.reconstruction_errors,
-        total_fetch_errors = totals.fetch_errors,
-        tx_per_s = format!("{:.0}", totals.checked as f64 / elapsed),
-        cp_per_s = format!("{:.1}", checkpoints_done as f64 / elapsed),
-        "progress"
-    );
-}
-
-/// Final tally line at the end of the run.
-fn log_summary(totals: &CheckpointStats, checkpoints_done: u64, elapsed: f64) {
-    info!(
-        total_checked = totals.checked,
-        total_divergences = totals.divergences,
-        total_reconstruction_errors = totals.reconstruction_errors,
-        total_coin_reservation_skipped = totals.coin_reservation_skipped,
-        total_fetch_errors = totals.fetch_errors,
-        total_execute_skipped = totals.execute_skipped,
-        total_gas_from_balance = totals.gas_from_balance,
-        total_executed = totals.executed,
-        total_cancellation_excluded = totals.cancellation_excluded,
-        checkpoints_done,
-        elapsed_s = format!("{:.0}", elapsed),
-        tx_per_s = format!("{:.0}", totals.checked as f64 / elapsed),
-        cp_per_s = format!("{:.1}", checkpoints_done as f64 / elapsed),
-        "backtest complete"
-    );
 }

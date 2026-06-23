@@ -1,29 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A read-only `BackingStore` for executing a single transaction, backed by the objects present
-//! in a streamed checkpoint's object set, with a gRPC + on-disk package cache as a fallback for
-//! packages that the checkpoint does not carry. Dynamic-field child reads and `Receiving` reads are
-//! served from the same object set (a checkpoint carries the objects execution loaded).
+//! The read side of execution: a read-only `BackingStore` ([`ScanStore`]) for executing a single
+//! transaction, backed by the objects present in a streamed checkpoint's object set, plus the
+//! shared [`PackageCache`] those reads resolve packages against. Dynamic-field child reads and
+//! `Receiving` reads are served from the same object set (a checkpoint carries the objects
+//! execution loaded). [`prefetch_package_closure`] warms the cache with a checkpoint's package
+//! closure up front; a miss during execution falls back to a lazy gRPC + on-disk fetch.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use anyhow::Context as _;
+use move_core_types::language_storage::TypeTag;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiResult;
-use sui_types::full_checkpoint_content::ObjectSet;
+use sui_types::full_checkpoint_content::{Checkpoint, ObjectSet};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
     BackingPackageStore, ChildObjectResolver, ObjectKey, ObjectStore, PackageObject, ParentSync,
 };
 use sui_types::transaction::{
     InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind, TransactionData,
-    TransactionDataAPI,
+    TransactionDataAPI, TransactionKind,
 };
+use sui_types::{MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
 use tokio::runtime::Handle;
 use tracing::warn;
 
@@ -71,13 +75,16 @@ impl PackageCache {
         }
 
         // On-disk cache.
-        if let Some(path) = self.disk_path(id)
-            && let Ok(bytes) = std::fs::read(&path)
-            && let Ok(object) = bcs::from_bytes::<Object>(&bytes)
-        {
+        if let Some(object) = self.read_disk(id) {
             self.mem.write().unwrap().insert(id, Some(object.clone()));
             return Some(object);
         }
+
+        // Reaching here means neither the in-memory nor on-disk cache had the package, so the
+        // prefetch closure ([`prefetch_package_closure`]) did not warm it — the correctness net
+        // catching a closure gap. This should be rare; a steady stream of these points at a missing
+        // prefetch source worth adding (e.g. a new runtime-only package edge).
+        warn!(%id, "lazy package fetch during execution (prefetch miss)");
 
         // gRPC fetch. We may be on a `spawn_blocking` thread (the execution pipeline is synchronous),
         // where `block_on` is disallowed, so drive the async fetch by spawning it onto the runtime
@@ -109,6 +116,137 @@ impl PackageCache {
         self.mem.write().unwrap().insert(id, fetched.clone());
         fetched
     }
+
+    /// Read a package object from the on-disk cache, if present and decodable. No network.
+    fn read_disk(&self, id: ObjectID) -> Option<Object> {
+        let path = self.disk_path(id)?;
+        let bytes = std::fs::read(&path).ok()?;
+        bcs::from_bytes::<Object>(&bytes).ok()
+    }
+
+    /// Warm the cache with `ids` using a single batched multi-get for the ones not already cached
+    /// (in memory or on disk), returning every object now available for those ids. Async and called
+    /// from the prefetch stage (no `block_on` bridge); a miss here just isn't inserted and falls
+    /// through to the lazy [`Self::fetch`] during execution. Failures are logged and swallowed so a
+    /// prefetch hiccup degrades to the lazy path rather than aborting.
+    pub async fn prefetch(&self, ids: &[ObjectID]) -> Vec<Object> {
+        let mut have = Vec::new();
+        let mut to_fetch = Vec::new();
+        {
+            let mem = self.mem.read().unwrap();
+            for &id in ids {
+                match mem.get(&id) {
+                    // Present (`Some(obj)`) or a cached negative (`None`); either way, no fetch.
+                    Some(slot) => have.extend(slot.clone()),
+                    None => to_fetch.push(id),
+                }
+            }
+        }
+        // Disk hits next: load them into memory, off the network path.
+        to_fetch.retain(|&id| match self.read_disk(id) {
+            Some(object) => {
+                self.mem.write().unwrap().insert(id, Some(object.clone()));
+                have.push(object);
+                false
+            }
+            None => true,
+        });
+        if to_fetch.is_empty() {
+            return have;
+        }
+        match self.rpc.fetch_objects(&to_fetch).await {
+            Ok(fetched) => {
+                let mut mem = self.mem.write().unwrap();
+                for object in fetched {
+                    let id = object.id();
+                    if let Some(path) = self.disk_path(id)
+                        && let Ok(bytes) = bcs::to_bytes(&object)
+                    {
+                        let _ = std::fs::write(&path, bytes);
+                    }
+                    mem.insert(id, Some(object.clone()));
+                    have.push(object);
+                }
+            }
+            Err(e) => warn!("batch package prefetch failed: {e:#}"),
+        }
+        have
+    }
+}
+
+/// Warm `cache` with the package closure of `checkpoint`'s transactions, so the synchronous execute
+/// stage reads packages from memory instead of fetching mid-execution.
+///
+/// The closure is computed statically (no execution): collect the *roots* — the packages the
+/// commands reference (via the system's own [`input_objects`](sui_types::transaction::ProgrammableTransaction::input_objects)
+/// derivation) plus the defining packages of the checkpoint's object types — and seed the system
+/// packages unconditionally (they are loaded by nearly every transaction but rarely named
+/// statically). Then add, for each fetched root:
+///   - its **linkage table** — the (upgraded) storage ids of its transitive declared dependencies,
+///   - its **type-origin table** — the storage id of every package version that *introduced* one of
+///     its own types. A type added in an upgrade (e.g. a Cetus type first defined in v10) records
+///     that version as its origin, and the executor loads the module at that version; since such a
+///     type need never appear as a static type argument, the linkage table alone misses it.
+///
+/// This remains an over-approximation of what actually executes (and still misses some
+/// runtime-only edges, e.g. versions pinned only by a stored object's provenance); a miss falls
+/// through to the lazy [`PackageCache::fetch`], which is the correctness net.
+pub(crate) async fn prefetch_package_closure(checkpoint: &Checkpoint, cache: &PackageCache) {
+    let mut roots = collect_roots(checkpoint);
+    // System packages are loaded by almost every transaction yet seldom appear as a static
+    // reference (e.g. a `0x3` type reached only at runtime); they are tiny and always present.
+    roots.insert(MOVE_STDLIB_PACKAGE_ID);
+    roots.insert(SUI_FRAMEWORK_PACKAGE_ID);
+    roots.insert(SUI_SYSTEM_PACKAGE_ID);
+    let roots: Vec<ObjectID> = roots.into_iter().collect();
+    let root_pkgs = cache.prefetch(&roots).await;
+
+    let mut linked = BTreeSet::new();
+    for object in &root_pkgs {
+        if let Some(pkg) = object.data.try_as_package() {
+            for upgrade in pkg.linkage_table().values() {
+                linked.insert(upgrade.upgraded_id);
+            }
+            for origin in pkg.type_origin_table() {
+                linked.insert(origin.package);
+            }
+        }
+    }
+    let linked: Vec<ObjectID> = linked.into_iter().collect();
+    cache.prefetch(&linked).await;
+}
+
+/// The root package set: the packages the transactions' commands reference, plus the defining
+/// packages of every object type present in the checkpoint's object set.
+fn collect_roots(checkpoint: &Checkpoint) -> BTreeSet<ObjectID> {
+    let mut roots = BTreeSet::new();
+
+    for executed in &checkpoint.transactions {
+        let TransactionKind::ProgrammableTransaction(pt) = executed.transaction.kind() else {
+            continue;
+        };
+        // Reuse the system's own command package-input derivation: it yields a `MovePackage` for
+        // every package the commands reference — MoveCall targets and their type-argument packages,
+        // `MakeMoveVec` element types, and `Publish`/`Upgrade` dependency packages. (A miss here
+        // just falls through to the lazy fetch, so ignore the rare `input_objects` error.)
+        if let Ok(input_objects) = pt.input_objects() {
+            roots.extend(input_objects.into_iter().filter_map(|kind| match kind {
+                InputObjectKind::MovePackage(id) => Some(id),
+                _ => None,
+            }));
+        }
+    }
+
+    // Input object *types* aren't packages in `input_objects`, so pick up their defining packages
+    // (and those of their type parameters) from the materialized object set.
+    for object in checkpoint.object_set.iter() {
+        if let Some(mo) = object.data.try_as_move() {
+            let ty: TypeTag = mo.type_().clone().into();
+            roots.extend(ty.all_addresses().into_iter().map(ObjectID::from));
+        }
+    }
+
+    roots
 }
 
 /// Per-transaction read-only store over a checkpoint's object set, with package fallback.

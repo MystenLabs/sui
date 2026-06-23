@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Re-execution of a single historical transaction against reconstructed checkpoint state, and the
-//! per-checkpoint tally a worker returns. The pipeline (see [`crate::pipeline`]) drives this stage
+//! per-checkpoint tally a worker returns. The pipeline (see [`crate::handler`]) drives this stage
 //! per transaction on a blocking worker.
 
 use std::collections::BTreeMap;
@@ -29,7 +29,8 @@ use sui_types::transaction::{
 use tracing::error;
 
 use crate::StatusFilter;
-use crate::pipeline::{EpochCtx, PreparedCheckpoint};
+use crate::context::{EpochCtx, PreparedCheckpoint};
+use crate::rows::DivergenceRow;
 use crate::store::{ScanStore, resolve_input_objects};
 
 /// Per-checkpoint tally returned by a worker; merged by the sequential collector.
@@ -40,7 +41,6 @@ pub(crate) struct CheckpointStats {
     /// build failure, or a panicked pipeline) — counted, not reported as divergences.
     pub(crate) reconstruction_errors: u64,
     pub(crate) coin_reservation_skipped: u64,
-    pub(crate) fetch_errors: u64,
     /// Transactions skipped because they can't be faithfully executed (price-0, non-gasless).
     pub(crate) execute_skipped: u64,
     /// Transactions with empty gas payment (gas paid from address balance via the
@@ -55,8 +55,8 @@ pub(crate) struct CheckpointStats {
     /// randomness unavailable) and which therefore "succeed" in single-tx replay. Excluded from
     /// `divergences` since they're not reproducible.
     pub(crate) cancellation_excluded: u64,
-    /// Serialized NDJSON lines, one per divergent transaction.
-    pub(crate) records: Vec<String>,
+    /// One typed row per divergent transaction.
+    pub(crate) records: Vec<DivergenceRow>,
 }
 
 impl CheckpointStats {
@@ -68,7 +68,6 @@ impl CheckpointStats {
             checked,
             reconstruction_errors,
             coin_reservation_skipped,
-            fetch_errors,
             execute_skipped,
             gas_from_balance,
             executed,
@@ -79,7 +78,6 @@ impl CheckpointStats {
         self.checked += checked;
         self.reconstruction_errors += reconstruction_errors;
         self.coin_reservation_skipped += coin_reservation_skipped;
-        self.fetch_errors += fetch_errors;
         self.execute_skipped += execute_skipped;
         self.gas_from_balance += gas_from_balance;
         self.executed += executed;
@@ -141,6 +139,7 @@ pub(crate) fn execute_one_transaction(
     store: &ScanStore,
     idx: usize,
     status: StatusFilter,
+    task: &str,
 ) -> CheckpointStats {
     let mut stats = CheckpointStats::default();
     let ctx = &prepared.ctx;
@@ -255,26 +254,45 @@ pub(crate) fn execute_one_transaction(
     // erroring, or vice versa); the recomputed error, if any, is recorded for triage.
     if recomputed_ok != on_chain.is_success {
         stats.divergences += 1;
-        let recomputed_error = result.as_ref().err().map(|e| e.to_string());
-        log_divergence(
+        let err = result.as_ref().err();
+        let recomputed_error = err.map(|e| e.to_string());
+        let triage = log_divergence(
             executed,
             objects,
             &digest,
             on_chain.is_success,
             &recomputed_error,
         );
-        let record = serde_json::json!({
-            "digest": digest.to_string(),
-            "checkpoint": prepared.cp,
-            "epoch": ctx.epoch,
-            "original_status": on_chain.status_label,
-            "original_failure": on_chain.failure,
-            "recomputed_error": recomputed_error,
+        stats.records.push(DivergenceRow {
+            task: task.to_owned(),
+            epoch: ctx.epoch as i64,
+            checkpoint: prepared.cp as i64,
+            tx_digest: digest.to_string(),
+            original_status: on_chain.status_label.to_owned(),
+            original_failure_kind: on_chain.failure.clone(),
+            recomputed_status: if recomputed_ok { "success" } else { "failure" }.to_owned(),
+            recomputed_error_kind: err.map(|e| error_kind_name(e.kind())),
+            recomputed_error_detail: recomputed_error,
+            missing_modified: triage.missing_modified as i64,
+            missing_loaded: triage.missing_loaded as i64,
+            missing_consensus: triage.missing_consensus as i64,
+            digest_mismatches: triage.digest_mismatches as i64,
         });
-        stats.records.push(record.to_string());
     }
 
     stats
+}
+
+/// The bare variant name of an `ExecutionErrorKind` (the leading identifier of its `Debug`), so
+/// divergence rows can be grouped by error kind without the per-instance fields (abort codes,
+/// indices) that would otherwise split each kind into many groups.
+fn error_kind_name(kind: &ExecutionErrorKind) -> String {
+    let dbg = format!("{kind:?}");
+    dbg.split(|c: char| !c.is_alphanumeric() && c != '_')
+        .next()
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&dbg)
+        .to_owned()
 }
 
 fn derive_on_chain_status(effects: &TransactionEffects) -> OnChainStatus {
@@ -464,6 +482,16 @@ fn run_execution(
     (effects.status().is_ok(), exec_res)
 }
 
+/// Counts of the triage signals attached to a divergence row: how much of the transaction's read
+/// set our reconstructed object set was missing or disagreed on. Nonzero values point at a
+/// reconstruction gap rather than a genuine execution divergence.
+struct TriageCounts {
+    missing_modified: usize,
+    missing_loaded: usize,
+    missing_consensus: usize,
+    digest_mismatches: usize,
+}
+
 /// Log a divergence with triage diagnostics: which object versions the transaction read that our
 /// reconstructed object set is *missing* (a logic gap — a loaded dynamic-field child or consensus
 /// input the stream didn't carry, which makes the store serve stale/absent state), and which
@@ -475,7 +503,7 @@ fn log_divergence(
     digest: &TransactionDigest,
     on_chain_success: bool,
     recomputed_error: &Option<String>,
-) {
+) -> TriageCounts {
     let missing_modified: Vec<String> = executed
         .effects
         .modified_at_versions()
@@ -516,4 +544,11 @@ fn log_divergence(
             ?missing_modified, ?missing_loaded, ?missing_consensus, ?digest_mismatches,
             loaded_children = executed.unchanged_loaded_runtime_objects.len(),
             "execution diverges from on-chain");
+
+    TriageCounts {
+        missing_modified: missing_modified.len(),
+        missing_loaded: missing_loaded.len(),
+        missing_consensus: missing_consensus.len(),
+        digest_mismatches: digest_mismatches.len(),
+    }
 }
