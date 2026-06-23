@@ -14025,6 +14025,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tikv-jemalloc-ctl",
  "tokio",
+ "tokio-stream",
  "toml 0.7.4",
  "toml_edit 0.19.10",
  "tracing",
@@ -15484,6 +15485,7 @@ dependencies = [
  "tonic 0.14.6",
  "tower-http 0.5.2",
  "tracing",
+ "tracing-subscriber",
  "url",
  "uuid",
 ]
