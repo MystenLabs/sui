@@ -26,7 +26,7 @@ use petgraph::algo::{
     dominators::{self, Dominators},
 };
 use petgraph::graph::{DiGraph, NodeIndex};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 /// Structure an acyclic whole-function region. The region is the set of all `input` keys;
 /// out-of-region edges can only be CFG sinks (return/abort). Returns `None` to fall back to
@@ -242,20 +242,18 @@ fn try_refine_once(items: &[(Formula, D::Structured)]) -> Option<Vec<(Formula, D
     None
 }
 
-/// Collect top-level conjunct candidates appearing in 2+ items' guards. Returns each
-/// candidate as the positive form (a `c` and `¬c` partition uses both polarities).
+/// Collect top-level conjunct candidates appearing in 2+ items' guards. Order is fully
+/// deterministic: highest coverage first, then un-negated polarity, then `Formula`'s
+/// derived `Ord`. When both `c` and `¬c` appear, keep the un-negated form so the emitted
+/// `CondIf(c, Vc, V_neg)` reads as `if (c) ... else ...`.
 fn candidate_factors(items: &[(Formula, D::Structured)]) -> Vec<Formula> {
-    // Collect each distinct conjunct seen; for each, also derive its positive form (apply
-    // `not` once -- the smart constructor de-double-negates, so `not(not(c)) == c`).
-    let mut all_conjuncts: HashSet<Formula> = HashSet::new();
+    // `BTreeSet` (sorted) instead of `HashSet` so subsequent iteration order is fixed.
+    let mut all_conjuncts: BTreeSet<Formula> = BTreeSet::new();
     for (g, _) in items {
         for c in g.conjuncts() {
-            all_conjuncts.insert(c.clone());
-            // De-negate for the candidate set so `c` and `¬c` don't both surface.
-            all_conjuncts.insert(predicates::not(c));
+            all_conjuncts.insert(c);
         }
     }
-    // Score each candidate by how many items contain it (or its negation) as a conjunct.
     let mut scored: Vec<(Formula, usize)> = all_conjuncts
         .into_iter()
         .filter(|c| *c != predicates::true_() && *c != predicates::false_())
@@ -269,10 +267,14 @@ fn candidate_factors(items: &[(Formula, D::Structured)]) -> Vec<Formula> {
         })
         .filter(|(_, n)| *n >= 2)
         .collect();
-    // Prefer factors that cover more items (greedy hoisting); de-duplicate `c`/`¬c` pairs
-    // by keeping only one direction (the one with the lower hash, deterministically).
-    scored.sort_by(|a, b| b.1.cmp(&a.1));
-    let mut seen: HashSet<Formula> = HashSet::new();
+    scored.sort_by(|a, b| {
+        // Higher count first; then un-negated form first; then `Formula::Ord` for total
+        // determinism.
+        b.1.cmp(&a.1)
+            .then_with(|| is_negation(&a.0).cmp(&is_negation(&b.0)))
+            .then_with(|| a.0.cmp(&b.0))
+    });
+    let mut seen: BTreeSet<Formula> = BTreeSet::new();
     let mut out: Vec<Formula> = Vec::new();
     for (c, _) in scored {
         let neg = predicates::not(c.clone());
@@ -280,9 +282,28 @@ fn candidate_factors(items: &[(Formula, D::Structured)]) -> Vec<Formula> {
             continue;
         }
         seen.insert(c.clone());
-        out.push(c);
+        // Normalize: emit the un-negated direction when this candidate is `!x`.
+        if is_negation(&c) {
+            out.push(neg);
+        } else {
+            out.push(c);
+        }
     }
     out
+}
+
+/// True iff `not(f)` is structurally simpler than `f` -- used to detect that `f` is a
+/// negated form so we can pick the positive polarity when scoring candidate factors.
+fn is_negation(f: &Formula) -> bool {
+    // `not(not(f)) == f`; if applying `not` once collapses to something that, when negated
+    // again, yields `f`, then `f` itself was a negation.
+    let single = predicates::not(f.clone());
+    let double = predicates::not(single.clone());
+    single != *f && double == *f && {
+        // Count: the un-negated form should have one fewer Not at the top level. Compare
+        // string repr lengths as a cheap proxy.
+        format!("{single}").len() < format!("{f}").len()
+    }
 }
 
 /// Emit a final `Structured` from a list of guarded items. `true` guards drop the wrapper.
