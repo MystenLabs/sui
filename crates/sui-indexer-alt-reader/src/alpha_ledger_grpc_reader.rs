@@ -31,19 +31,15 @@ pub struct AlphaLedgerGrpcReader {
     timeout: Option<Duration>,
 }
 
-/// A page drained from a stream consisting of the items in stream order, the cursors of the first
-/// and latest frames the stream emitted, and why the stream stopped.
-///
-/// `start_cursor` is the cursor of the first frame seen.
-///
-/// `end_cursor` may be beyond the last item in the collected page.
-///
-/// `end_reason` is `None` only when the stream terminated before a `QueryEnd` was received.
+/// A page drained from a single gRPC list stream.
 #[derive(Debug, Clone)]
 pub struct StreamPage<I> {
+    /// Items that matched the filters, in stream order.
     pub items: Vec<I>,
-    pub start_cursor: Option<Bytes>,
-    pub end_cursor: Option<Bytes>,
+    /// First cursor recorded from an item or watermark.
+    pub first_cursor: Option<Bytes>,
+    /// Last cursor recorded from an item or watermark.
+    pub last_cursor: Option<Bytes>,
     pub end_reason: Option<grpc_alpha::QueryEndReason>,
 }
 
@@ -86,9 +82,6 @@ impl AlphaLedgerGrpcReader {
         Ok(Self { client, timeout })
     }
 
-    /// Consumes the stream returned from a `list_transactions` request until server timeout or
-    /// other terminal condition is met. The caller is responsible for resuming the next page from
-    /// the `end_cursor` if there are more results to yield after the current page.
     pub async fn list_transactions(
         &self,
         request: grpc_alpha::ListTransactionsRequest,
@@ -114,57 +107,61 @@ impl AlphaLedgerGrpcReader {
 }
 
 impl<I> StreamPage<I> {
-    /// Whether the caller can continue paginating from `next_cursor()`.
+    /// Whether further data may exist in the direction of pagination.
+    ///
+    /// `false` iff one of:
+    /// - `reason ∈ {LedgerTip, CheckpointBound}` — authoritative range terminals.
+    /// - `reason = CursorBound` AND no cursor was emitted - the server did not do any scanning and
+    ///   short-circuited. Typically implies that the cursors for the request fell outside the
+    ///   available range.
     pub fn has_more(&self) -> bool {
         use grpc_alpha::QueryEndReason as R;
         match self.end_reason {
             None => true,
             Some(R::Unspecified | R::ItemLimit | R::ScanLimit) => true,
             Some(R::LedgerTip | R::CheckpointBound) => false,
-            // Terminal only when no cursor was reported from gRPC, such as when the client's
-            // cursors fall outside the available range of the server. Otherwise, additional data
-            // may exist past the client's cursors until a terminal bound.
-            Some(R::CursorBound) => self.end_cursor.is_some(),
-            // `QueryEndReason` is non exhaustive.
+            Some(R::CursorBound) => self.last_cursor.is_some(),
+            // `QueryEndReason` is non exhaustive — conservatively `true` if a
+            // future variant slips past `apply()`'s `unwrap_or(Unspecified)`.
             Some(_) => true,
         }
     }
 
-    /// The latest cursor observed in the direction of pagination. A cursor is expected to exist if
+    /// The latest cursor observed in the direction of pagination. Expect `Some` whenever
     /// `has_more()` is true.
     pub fn next_cursor(&self) -> Option<&Bytes> {
         if self.has_more() {
             Some(
-                self.end_cursor
+                self.last_cursor
                     .as_ref()
-                    .expect("invariant: has_more implies end_cursor is Some"),
+                    .expect("invariant: has_more implies last_cursor is Some"),
             )
         } else {
-            self.end_cursor.as_ref()
+            self.last_cursor.as_ref()
         }
     }
 
-    /// Fold one frame into the page. Sets `start_cursor` to the first cursor seen; `end_cursor`
-    /// tracks the latest.
+    /// Fold one frame into the page. `first_cursor` is set once to the first cursor-bearing frame.
+    /// `last_cursor` continuously tracks the latest cursor-bearing frame.
     ///
     /// Returns `true` when the frame is the terminal `QueryEnd`.
     fn apply(&mut self, frame: FrameKind<I>) -> bool {
         match frame {
             FrameKind::Item { item, cursor } => {
                 if cursor.is_some() {
-                    if self.start_cursor.is_none() {
-                        self.start_cursor = cursor.clone();
+                    if self.first_cursor.is_none() {
+                        self.first_cursor = cursor.clone();
                     }
-                    self.end_cursor = cursor;
+                    self.last_cursor = cursor;
                 }
                 self.items.push(item);
             }
             FrameKind::Watermark { cursor } => {
                 if cursor.is_some() {
-                    if self.start_cursor.is_none() {
-                        self.start_cursor = cursor.clone();
+                    if self.first_cursor.is_none() {
+                        self.first_cursor = cursor.clone();
                     }
-                    self.end_cursor = cursor;
+                    self.last_cursor = cursor;
                 }
             }
             FrameKind::End { reason } => {
@@ -194,8 +191,8 @@ impl<I> Default for StreamPage<I> {
     fn default() -> Self {
         Self {
             items: Vec::new(),
-            start_cursor: None,
-            end_cursor: None,
+            first_cursor: None,
+            last_cursor: None,
             end_reason: None,
         }
     }
@@ -254,7 +251,7 @@ where
                 ) =>
             {
                 ensure!(
-                    !page.items.is_empty() || page.end_cursor.is_some(),
+                    !page.items.is_empty() || page.last_cursor.is_some(),
                     "{rpc_name} stream {:?} with no progress: {}",
                     status.code(),
                     status.message(),
@@ -267,10 +264,10 @@ where
         }
     }
 
-    // Either there's no more to paginate, or we must have a cursor to resume from
+    // If `has_more() promises further data, the cursor to resume from must be present.`
     ensure!(
-        !page.has_more() || page.end_cursor.is_some(),
-        "{rpc_name}: server reported more results but did not advance cursor — cannot resume",
+        !page.has_more() || page.last_cursor.is_some(),
+        "{rpc_name}: server reported more results but did not provide resume cursor — cannot continue",
     );
 
     Ok(page)
@@ -331,11 +328,11 @@ mod tests {
         page.apply(end_response(grpc_alpha::QueryEndReason::ItemLimit).into());
 
         assert_eq!(page.items.len(), 2);
-        // `start_cursor` latches on the first cursor-bearing frame (the item at `c1`) and stays
-        // there. `end_cursor` advances on every cursor-bearing frame — item OR standalone watermark
+        // `first_cursor` latches on the first cursor-bearing frame (the item at `c1`) and stays
+        // there. `last_cursor` advances on every cursor-bearing frame — item OR standalone watermark
         // — so it went `c1` → `c2` (the watermark between items) → `c3` (the last item).
-        assert_eq!(page.start_cursor.as_deref(), Some(b"c1".as_ref()));
-        assert_eq!(page.end_cursor.as_deref(), Some(b"c3".as_ref()));
+        assert_eq!(page.first_cursor.as_deref(), Some(b"c1".as_ref()));
+        assert_eq!(page.last_cursor.as_deref(), Some(b"c3".as_ref()));
         assert_eq!(page.end_reason, Some(grpc_alpha::QueryEndReason::ItemLimit));
     }
 
@@ -347,8 +344,8 @@ mod tests {
         page.apply(end_response(grpc_alpha::QueryEndReason::LedgerTip).into());
 
         assert!(page.items.is_empty());
-        assert_eq!(page.start_cursor.as_deref(), Some(b"w1".as_ref()));
-        assert_eq!(page.end_cursor.as_deref(), Some(b"w2".as_ref()));
+        assert_eq!(page.first_cursor.as_deref(), Some(b"w1".as_ref()));
+        assert_eq!(page.last_cursor.as_deref(), Some(b"w2".as_ref()));
         assert_eq!(page.end_reason, Some(grpc_alpha::QueryEndReason::LedgerTip));
     }
 
@@ -365,17 +362,17 @@ mod tests {
     }
 
     #[test]
-    fn start_cursor_latches_on_first_frame_and_does_not_update() {
-        // Multiple cursor-bearing frames: `start_cursor` should remain at the first one,
-        // `end_cursor` should track the latest.
+    fn first_cursor_latches_on_first_frame_and_does_not_update() {
+        // Multiple cursor-bearing frames: `first_cursor` should remain at the first one,
+        // `last_cursor` should track the latest.
         let mut page: StreamPage<grpc_alpha::TransactionItem> = StreamPage::default();
         page.apply(watermark_response(b"w1").into());
         page.apply(item_response(b"c2").into());
         page.apply(watermark_response(b"w3").into());
         page.apply(item_response(b"c4").into());
 
-        assert_eq!(page.start_cursor.as_deref(), Some(b"w1".as_ref()));
-        assert_eq!(page.end_cursor.as_deref(), Some(b"c4".as_ref()));
+        assert_eq!(page.first_cursor.as_deref(), Some(b"w1".as_ref()));
+        assert_eq!(page.last_cursor.as_deref(), Some(b"c4".as_ref()));
     }
 
     #[test]
@@ -419,7 +416,7 @@ mod tests {
         page.apply(item_response(b"c1").into());
         page.apply(end_response(grpc_alpha::QueryEndReason::CursorBound).into());
 
-        assert_eq!(page.end_cursor.as_deref(), Some(b"c1".as_ref()));
+        assert_eq!(page.last_cursor.as_deref(), Some(b"c1".as_ref()));
         assert!(
             page.has_more(),
             "CursorBound with tracked cursor should not be terminal"
@@ -450,8 +447,8 @@ mod tests {
         let mut page: StreamPage<grpc_alpha::TransactionItem> = StreamPage::default();
         page.apply(response.into());
         assert!(page.items.is_empty());
-        assert_eq!(page.start_cursor, None);
-        assert_eq!(page.end_cursor, None);
+        assert_eq!(page.first_cursor, None);
+        assert_eq!(page.last_cursor, None);
         assert_eq!(page.end_reason, None);
     }
 
@@ -466,7 +463,7 @@ mod tests {
         .expect("partial progress should be preserved");
 
         assert_eq!(page.items.len(), 2);
-        assert_eq!(page.end_cursor.as_deref(), Some(b"c2".as_ref()));
+        assert_eq!(page.last_cursor.as_deref(), Some(b"c2".as_ref()));
         assert_eq!(page.end_reason, None);
         assert!(page.has_more());
     }
@@ -507,7 +504,7 @@ mod tests {
             .expect("partial-progress half-close should succeed");
 
         assert_eq!(page.items.len(), 1);
-        assert_eq!(page.end_cursor.as_deref(), Some(b"c1".as_ref()));
+        assert_eq!(page.last_cursor.as_deref(), Some(b"c1".as_ref()));
         assert_eq!(page.end_reason, None);
     }
 }
