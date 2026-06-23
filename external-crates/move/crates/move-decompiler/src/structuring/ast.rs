@@ -28,6 +28,11 @@ pub enum Input {
         /* variant x label */ Vec<(Symbol, Label)>,
     ),
     Code(Label, Code, Option<Label>),
+    /// Already-structured abstract node (NMG §IV-C collapse). The structured form lives
+    /// in `structured_blocks[label]`; CFG-wise this node has `succs` as its out-edges.
+    /// Installed by `structure_loop` after a loop body is wrapped, so outer scopes treat
+    /// the loop as a single opaque block.
+    Reduced(Label, Vec<Label>),
 }
 
 /// Provenance for a surviving `Jump`/`JumpIf`. Each variant names the structurer path that
@@ -140,6 +145,7 @@ impl Input {
                 .collect::<Vec<_>>(),
             Input::Code(lbl, _, Some(to)) => vec![(*lbl, *to)],
             Input::Code(_, _, None) => vec![],
+            Input::Reduced(lbl, succs) => succs.iter().map(|s| (*lbl, *s)).collect(),
         }
     }
 
@@ -147,7 +153,8 @@ impl Input {
         match self {
             Input::Condition(lbl, _, _, _)
             | Input::Variants(lbl, _, _, _)
-            | Input::Code(lbl, _, _) => *lbl,
+            | Input::Code(lbl, _, _)
+            | Input::Reduced(lbl, _) => *lbl,
         }
     }
 }
