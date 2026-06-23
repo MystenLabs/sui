@@ -76,12 +76,12 @@ public fun get(l0: &vector<u8>, l1: u32): Option<vector<u8>> {
     let l6 = metadata::get_chunk_offset(l0, l1);
     let l5 = metadata::get_chunk_length_at_offset(l0, l6);
     let l4 = l0.len();
-    if (l5 == 0u32 || l4 < l6 + l5as u64) {
+    if (l5 == 0u32 || l4 < l6 + l5 as u64) {
         return option::none()
     };
     let l8 = vector[];
     let l7 = l6 + 8u64;
-    let l9 = l6 + l5as u64;
+    let l9 = l6 + l5 as u64;
     while (l7 < l9) {
         let l3 = *(&l0[l7]);
         (&mut l8).push_back(l3);
@@ -128,13 +128,13 @@ fun get_chunk_offset(l0: &vector<u8>, l1: u32): u64 {
             break
         };
         let l3 = metadata::u32_from_le_bytes_at_offset(l0, l4 + 4u64);
-        l4 = l4 + l3as u64;
+        l4 = l4 + l3 as u64;
     };
     return l4
 }
 
 public fun get_chunks_count(l0: &vector<u8>): u32 {
-    return &metadata::get_chunks_ids(l0).len()as u32
+    return &metadata::get_chunks_ids(l0).len() as u32
 }
 
 public fun get_chunks_ids(l0: &vector<u8>): vector<u32> {
@@ -145,7 +145,7 @@ public fun get_chunks_ids(l0: &vector<u8>): vector<u32> {
         let l2 = metadata::u32_from_le_bytes_at_offset(l0, l4);
         let l3 = metadata::u32_from_le_bytes_at_offset(l0, l4 + 4u64);
         (&mut l5).push_back(l2);
-        l4 = l4 + l3as u64;
+        l4 = l4 + l3 as u64;
     };
     return l5
 }
@@ -169,7 +169,7 @@ public fun get_option_any_u256(l0: &vector<u8>, l1: u32): Option<u256> {
     let l3 = 0u64;
     let l6 = 0u256;
     while (l3 < l5) {
-        l6 = l6 << 8u8 | *(&(&l2)[l3])as u256;
+        l6 = l6 << 8u8 | *(&(&l2)[l3]) as u256;
         l3 = l3 + 1u64;
     };
     return option::some(l6)
@@ -197,7 +197,7 @@ public fun get_option_any_vec_u256(l0: &vector<u8>, l1: u32): Option<vector<u256
         let l7 = 0u64;
         let l11 = 0u256;
         while (l7 < l6) {
-            l11 = l11 | *(&(&l9)[l5 + l7])as u256 << 8u8 * l7as u8;
+            l11 = l11 | *(&(&l9)[l5 + l7]) as u256 << 8u8 * l7 as u8;
             l7 = l7 + 1u64;
         };
         (&mut l10).push_back(l11);
@@ -346,7 +346,7 @@ public fun has_chunk(l0: &vector<u8>, l1: u32): bool {
     let l5 = metadata::get_chunk_offset(l0, l1);
     let l4 = metadata::get_chunk_length_at_offset(l0, l5);
     let l3 = l0.len();
-    if (l4 == 0u32 || l3 < l5 + l4as u64) {
+    if (l4 == 0u32 || l3 < l5 + l4 as u64) {
         return false
     };
     return true
@@ -395,7 +395,7 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
                     } else {
                         let l4 = C7;
                         if (l36 == &l4) {
-                            if (l38 == address::length()as u32) {
+                            if (l38 == address::length() as u32) {
                                 return true
                             }
                         } else {
@@ -445,7 +445,7 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
                                     }
                                 };
                                 let l41 = metadata::get_vec_length(l0, l1) * l43;
-                                if (l38as u64 < l41) {
+                                if (l38 as u64 < l41) {
                                     return false
                                 };
                                 if (l37) {
@@ -482,7 +482,7 @@ public fun remove_chunk(l0: &mut vector<u8>, l1: u32): bool {
     if (l2 == 0u32) {
         return false
     };
-    metadata::clamp(l0, l3, l2as u64);
+    metadata::clamp(l0, l3, l2 as u64);
     return true
 }
 
@@ -493,9 +493,9 @@ public fun set<T0>(l0: &mut vector<u8>, l1: u32, l2: &T0): bool {
     let l3 = bcs::to_bytes(l2);
     let l4 = &l3.len();
     if (l9 != 0u32) {
-        if (l4as u32 == l9as u32 - l5as u32) {
+        if (l4 as u32 == l9 as u32 - l5 as u32) {
             let l11 = freeze(l0).len();
-            let l12 = l10 + l9as u64;
+            let l12 = l10 + l9 as u64;
             while (!(vector::is_empty(&l3))) {
                 l12 = l12 - 1u64;
                 l0.push_back((&mut l3).pop_back());
@@ -504,14 +504,14 @@ public fun set<T0>(l0: &mut vector<u8>, l1: u32, l2: &T0): bool {
             std::vector::destroy_empty(l3);
             return true
         };
-        metadata::clamp(l0, l10, l9as u64)
+        metadata::clamp(l0, l10, l9 as u64)
     };
     if (freeze(l0).len() == 0u64) {
         l0.push_back(0u8)
     };
     let l6 = bcs::to_bytes(&l1);
     vector::append(l0, l6);
-    let l8 = bcs::to_bytes(&l4as u32 + l5as u32);
+    let l8 = bcs::to_bytes(&l4 as u32 + l5 as u32);
     vector::append(l0, l8);
     vector::append(l0, l3);
     return true
@@ -522,7 +522,7 @@ public fun single<T0>(l0: &T0): vector<u8> {
 }
 
 public fun u32_from_le_bytes_at_offset(l0: &vector<u8>, l1: u64): u32 {
-    return *(&l0[l1])as u32 << 0u8 + *(&l0[l1 + 1u64])as u32 << 8u8 + *(&l0[l1 + 2u64])as u32 << 16u8 + *(&l0[l1 + 3u64])as u32 << 24u8
+    return *(&l0[l1]) as u32 << 0u8 + *(&l0[l1 + 1u64]) as u32 << 8u8 + *(&l0[l1 + 2u64]) as u32 << 16u8 + *(&l0[l1 + 3u64]) as u32 << 24u8
 }
 
 public fun unpack_key(l0: u32): vector<u8> {

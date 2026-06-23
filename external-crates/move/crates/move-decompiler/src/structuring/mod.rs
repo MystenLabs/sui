@@ -631,8 +631,9 @@ fn unique_tail_jump_target(s: &D::Structured) -> Option<NodeIndex> {
         DS::Jump(_, target) => Some(*target),
         DS::Seq(items) => items.last().and_then(unique_tail_jump_target),
         DS::IfElse(_, conseq, alt) => {
+            let alt = (**alt).as_ref()?;
             let c = unique_tail_jump_target(conseq)?;
-            let a = unique_tail_jump_target(alt.as_ref().as_ref()?)?;
+            let a = unique_tail_jump_target(alt)?;
             (c == a).then_some(c)
         }
         DS::Switch(_, _, arms) => {

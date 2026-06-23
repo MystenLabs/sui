@@ -492,7 +492,7 @@ public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2
     let l48 = x2_balance::value(&l24);
     debug::print(&string::utf8(C57));
     debug::print(&l48);
-    *(&mut l36.lifetime_volume) = *(&l36.lifetime_volume) + x2_balance::value(&l24)as u128;
+    *(&mut l36.lifetime_volume) = *(&l36.lifetime_volume) + x2_balance::value(&l24) as u128;
     marketplace::update_collection_avg_price(l36, x2_balance::value(&l24));
     let l38 = x2_balance::value(&l24) * *(&l1.commission_pct) / 100u64;
     debug::print(&string::utf8(C58));
@@ -607,7 +607,7 @@ public fun accept_trait_bid_settle<T0: key + store, T1: key + store>(l0: &mut Ma
             linked_table::push_back(&mut l0.pending_claims, l22, l35)
         };
         let (l14, l15);
-        *(&mut l27.lifetime_volume) = *(&l27.lifetime_volume) + l36as u128;
+        *(&mut l27.lifetime_volume) = *(&l27.lifetime_volume) + l36 as u128;
         marketplace::update_collection_avg_price(l27, l36);
         l14 = if (*(&l27.ion_points_enabled)) {
             let l28 = if (*(&l27.ion_collection_multiplier) == 0u64) {
@@ -697,7 +697,7 @@ public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlace
         assert!(linked_table::contains(&l19.bids, l6), C17);
         let l20 = linked_table::remove(&mut l19.bids, l6);
     };
-    *(&mut l33.lifetime_volume) = *(&l33.lifetime_volume) + x2_balance::value(&l21)as u128;
+    *(&mut l33.lifetime_volume) = *(&l33.lifetime_volume) + x2_balance::value(&l21) as u128;
     marketplace::update_collection_avg_price(l33, x2_balance::value(&l21));
     let l35 = x2_balance::value(&l21) * *(&l1.commission_pct) / 100u64;
     let l17 = x2_balance::value(&l21) - l8;
@@ -805,8 +805,8 @@ fun award_ion_points_with_referral(l0: address, l1: &mut MarketPlaceStore, l2: &
         let l10 = ions::get_referrer(freeze(l2));
         if (option::is_some(&l10)) {
             option::fill(&mut l9, *(option::borrow(&l10)));
-            l8 = math::mul_div_u128(l3as u128, C6as u128, 100u128);
-            l6 = math::mul_div_u128(l3as u128, C3as u128, 100u128);
+            l8 = math::mul_div_u128(l3 as u128, C6 as u128, 100u128);
+            l6 = math::mul_div_u128(l3 as u128, C3 as u128, 100u128);
             if (linked_table::contains(&l1.referrals, *(option::borrow(&l9)))) {
                 let l7 = linked_table::borrow_mut(&mut l1.referrals, *(option::borrow(&l9)));
                 *l7 = *l7 + l8
@@ -869,7 +869,7 @@ public fun buy<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2: &mut 
     debug::print(&l48);
     debug::print(&string::utf8(C51));
     debug::print(&l47);
-    *(&mut l25.lifetime_volume) = *(&l25.lifetime_volume) + l48as u128;
+    *(&mut l25.lifetime_volume) = *(&l25.lifetime_volume) + l48 as u128;
     marketplace::update_collection_avg_price(l25, l48);
     assert!(coin::value(&l4) >= l48, C13);
     let l43 = coin::into_balance(l4);
@@ -1104,8 +1104,8 @@ public fun claim_referral_points(l0: &Clock, l1: &mut AnimaChef, l2: &mut Market
         let l11 = ions::get_referrer(freeze(l3));
         if (option::is_some(&l11)) {
             option::fill(&mut l10, *(option::borrow(&l11)));
-            l9 = math::mul_div_u128(l6as u128, C6as u128, 100u128);
-            l5 = math::mul_div_u128(l6as u128, C3as u128, 100u128);
+            l9 = math::mul_div_u128(l6 as u128, C6 as u128, 100u128);
+            l5 = math::mul_div_u128(l6 as u128, C3 as u128, 100u128);
             if (linked_table::contains(&l2.referrals, *(option::borrow(&l10)))) {
                 let l8 = linked_table::borrow_mut(&mut l2.referrals, *(option::borrow(&l10)));
                 *l8 = *l8 + l9

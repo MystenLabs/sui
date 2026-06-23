@@ -164,7 +164,7 @@ public fun validate_heartbeat<T0>(l0: &mut CrankConfig, l1: &mut Vault<T0>, l2: 
                     l10 - l8
                 } else {
                     l8 - l10
-                }as u128 * 10000u128 / l8as u128as u64 <= C12, C10)
+                } as u128 * 10000u128 / l8 as u128 as u64 <= C12, C10)
             }
         }
     };

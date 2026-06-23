@@ -656,12 +656,12 @@ fun calculate_enhanced_slot_rewards(l0: u64, l1: u64, l2: u64, l3: u64, l4: u64,
         return 0u64
     };
     let l14 = verse::safe_sub(l12, l13);
-    let l17 = l15as u128 * C47 / C46as u128;
-    let l16 = l14as u128 * l17 / C47;
-    return if (l16 > C48as u128) {
+    let l17 = l15 as u128 * C47 / C46 as u128;
+    let l16 = l14 as u128 * l17 / C47;
+    return if (l16 > C48 as u128) {
         C48
     } else {
-        l16as u64
+        l16 as u64
     }
 }
 
@@ -671,7 +671,7 @@ fun calculate_reserve(l0: u64): u64 {
 
 fun calculate_slot_params(l0: u8): ( u64, u64) {
     let (l3, l4);
-    let l11 = l0as u64;
+    let l11 = l0 as u64;
     l3 = if (l11 <= 10u64) {
         let l5 = l11 * 10000000000u64;
         l4 = 10000u64 + l11 - 1u64 * 2000u64;
@@ -1325,9 +1325,9 @@ public entry fun remove_wallet_bonus_multiplier<T0>(l0: &mut StakingPool<T0>, l1
 }
 
 fun safe_add(l0: u64, l1: u64): u64 {
-    let l2 = l0as u128 + l1as u128;
-    assert!(l2 <= C48as u128, C21);
-    return l2as u64
+    let l2 = l0 as u128 + l1 as u128;
+    assert!(l2 <= C48 as u128, C21);
+    return l2 as u64
 }
 
 fun safe_mul_div_precise(l0: u64, l1: u64, l2: u64): u64 {
@@ -1335,14 +1335,14 @@ fun safe_mul_div_precise(l0: u64, l1: u64, l2: u64): u64 {
         return 0u64
     };
     assert!(l2 != 0u64, C21);
-    let l4 = l0as u128;
-    let l5 = l1as u128;
-    let l6 = l2as u128;
+    let l4 = l0 as u128;
+    let l5 = l1 as u128;
+    let l6 = l2 as u128;
     let l7 = 340282366920938463463374607431768211455u128 / l5;
     assert!(l4 <= l7, C21);
     let l8 = l4 * l5 / l6;
-    assert!(l8 <= C48as u128, C21);
-    return l8as u64
+    assert!(l8 <= C48 as u128, C21);
+    return l8 as u64
 }
 
 fun safe_sub(l0: u64, l1: u64): u64 {

@@ -1030,7 +1030,7 @@ fun tweak_price<T0>(l0: &mut StateV1<T0>, l1: vector<CoinState>, l2: u64, l3: u2
             *(&mut (&mut (&mut l1)[l6]).last_price) = l7
         } else {
             let l28 = 1u64;
-            while (*(&l0.n_coins)as u64 > l28) {
+            while (*(&l0.n_coins) as u64 > l28) {
                 let l19 = &mut (&mut l1)[l28];
                 *(&mut l19.last_price) = fixed_point_wad::div_down(*(&l19.last_price), l7);
                 l28 = l28 + 1u64;

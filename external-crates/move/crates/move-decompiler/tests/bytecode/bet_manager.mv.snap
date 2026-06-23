@@ -713,9 +713,9 @@ public fun little_ones_bet(): u64 {
 }
 
 fun mul(l0: u64, l1: u64): u64 {
-    let l2 = l0as u128;
-    let l3 = l1as u128;
-    return l2 * l3 / C24as u64
+    let l2 = l0 as u128;
+    let l3 = l1 as u128;
+    return l2 * l3 / C24 as u64
 }
 
 public fun new_bet(l0: u64, l1: u64, l2: Option<u64>, l3: address, l4: &mut TxContext): Bet {

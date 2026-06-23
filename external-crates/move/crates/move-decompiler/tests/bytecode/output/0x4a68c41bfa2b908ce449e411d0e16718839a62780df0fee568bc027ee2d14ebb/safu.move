@@ -182,7 +182,7 @@ public fun claim_reward<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: &TxCon
     assert!(reg_17, C13);
     let l15 = tx_context::sender(l3);
     let l8 = big_vector::length(&l16.share);
-    let l14 = big_vector::slice_size(&l16.share)as u64;
+    let l14 = big_vector::slice_size(&l16.share) as u64;
     let l13 = 0u64;
     let l12 = big_vector::borrow_slice(&l16.share, l13);
     let l7 = 0u64;
@@ -280,7 +280,7 @@ public(friend) fun get_user_share(l0: &Registry, l1: u64, l2: address): Option<S
     if (dynamic_object_field::exists_(&l0.id, l1)) {
         let l9 = dynamic_object_field::borrow(&l0.id, l1);
         let l5 = big_vector::length(&l9.share);
-        let l8 = big_vector::slice_size(&l9.share)as u64;
+        let l8 = big_vector::slice_size(&l9.share) as u64;
         let l7 = 0u64;
         let l6 = big_vector::borrow_slice(&l9.share, l7);
         let l4 = 0u64;
@@ -331,13 +331,13 @@ public fun incentivise<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: Balance
     let l12 = balance::value(&l3);
     let l18 = *(&(&l22.share_supply)[C7]) + *(&(&l22.share_supply)[C8]);
     let l14 = big_vector::length(&l22.share);
-    let l21 = big_vector::slice_size(&l22.share)as u64;
+    let l21 = big_vector::slice_size(&l22.share) as u64;
     let l20 = 0u64;
     let l19 = big_vector::borrow_slice_mut(&mut l22.share, l20);
     let l13 = 0u64;
     while (l13 < l14) {
         let l17 = big_vector::borrow_from_slice_mut(l19, l13 % l21);
-        let l15 = l12as u128 * *(&(&l17.share)[C7]) + *(&(&l17.share)[C8])as u128 / l18as u128as u64;
+        let l15 = l12 as u128 * *(&(&l17.share)[C7]) + *(&(&l17.share)[C8]) as u128 / l18 as u128 as u64;
         *(&mut (&mut l17.share)[l16 + 5u64]) = *(&(&l17.share)[l16 + 5u64]) + l15;
         l12 = l12 - l15;
         l18 = l18 - *(&(&l17.share)[C11]);
@@ -405,13 +405,13 @@ public fun post_bid_balance<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: Ba
         let l6 = balance::value(&l3);
         let l14 = *(&(&l15.share_supply)[C11]);
         let l8 = big_vector::length(&l15.share);
-        let l13 = big_vector::slice_size(&l15.share)as u64;
+        let l13 = big_vector::slice_size(&l15.share) as u64;
         let l12 = 0u64;
         let l11 = big_vector::borrow_slice_mut(&mut l15.share, l12);
         let l7 = 0u64;
         while (l7 < l8) {
             let l10 = big_vector::borrow_from_slice_mut(l11, l7 % l13);
-            let l9 = l6as u128 * *(&(&l10.share)[C11])as u128 / l14as u128as u64;
+            let l9 = l6 as u128 * *(&(&l10.share)[C11]) as u128 / l14 as u128 as u64;
             *(&mut (&mut l10.share)[C10]) = *(&(&l10.share)[C10]) + l9;
             l6 = l6 - l9;
             l14 = l14 - *(&(&l10.share)[C11]);
@@ -452,13 +452,13 @@ public fun post_exercise<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: Balan
     let l8 = balance::value(&l3);
     let l17 = *(&(&l18.share_supply)[C11]);
     let l10 = big_vector::length(&l18.share);
-    let l16 = big_vector::slice_size(&l18.share)as u64;
+    let l16 = big_vector::slice_size(&l18.share) as u64;
     let l15 = 0u64;
     let l14 = big_vector::borrow_slice_mut(&mut l18.share, l15);
     let l9 = 0u64;
     while (l9 < l10) {
         let l13 = big_vector::borrow_from_slice_mut(l14, l9 % l16);
-        let l11 = l8as u128 * *(&(&l13.share)[C11])as u128 / l17as u128as u64;
+        let l11 = l8 as u128 * *(&(&l13.share)[C11]) as u128 / l17 as u128 as u64;
         *(&mut (&mut l13.share)[l12 + 5u64]) = *(&(&l13.share)[l12 + 5u64]) + l11;
         l8 = l8 - l11;
         l17 = l17 - *(&(&l13.share)[C11]);
@@ -489,7 +489,7 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
     let l36 = dynamic_object_field::borrow_mut(&mut l4.id, l5);
     let l35 = tx_context::sender(freeze(l11));
     let l25 = big_vector::length(&l36.share);
-    let l33 = big_vector::slice_size(&l36.share)as u64;
+    let l33 = big_vector::slice_size(&l36.share) as u64;
     let l32 = 0u64;
     let l31 = big_vector::borrow_slice(&l36.share, l32);
     let l22 = 0u64;
@@ -526,7 +526,7 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
             };
             big_vector::push_back(&mut l36.share, Share { user: l35, share: l29, u64_padding: vector[0u64, l20], bcs_padding: C37 });
             l30 = big_vector::borrow_mut(&mut l36.share, l22);
-            l26 = *(&(&l30.u64_padding)[C7])as u256 * l20 - *(&(&l30.u64_padding)[C8])as u256 * *(&(&l36.config)[C12])as u256 / 3600000u256 / 10000u256as u64;
+            l26 = *(&(&l30.u64_padding)[C7]) as u256 * l20 - *(&(&l30.u64_padding)[C8]) as u256 * *(&(&l36.config)[C12]) as u256 / 3600000u256 / 10000u256 as u64;
             *(&mut (&mut l30.u64_padding)[C8]) = l20;
             l19 = balance::value(&l6);
             *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l19;
@@ -570,7 +570,7 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
                     *(&mut (&mut l36.share_supply)[l27 + 5u64]) = *(&(&l36.share_supply)[l27 + 5u64]) - l28
                 }
             };
-            *(&mut (&mut l30.u64_padding)[C7]) = *(&(&l30.share)[C7]) + *(&(&l30.share)[C10])as u128 * *(&(&l36.info)[C13])as u128 / 10000u128as u64;
+            *(&mut (&mut l30.u64_padding)[C7]) = *(&(&l30.share)[C7]) + *(&(&l30.share)[C10]) as u128 * *(&(&l36.info)[C13]) as u128 / 10000u128 as u64;
             assert!(l19 + l21 + l23 + l28 > 0u64, C8);
             l18 = l19 >= *(&(&l36.config)[C8]) && l19 % *(&(&l36.config)[C8]) == 0u64;
             assert!(l18, C10);
@@ -582,7 +582,7 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
         },
         1 => {
             l30 = big_vector::borrow_mut(&mut l36.share, l22);
-            l26 = *(&(&l30.u64_padding)[C7])as u256 * l20 - *(&(&l30.u64_padding)[C8])as u256 * *(&(&l36.config)[C12])as u256 / 3600000u256 / 10000u256as u64;
+            l26 = *(&(&l30.u64_padding)[C7]) as u256 * l20 - *(&(&l30.u64_padding)[C8]) as u256 * *(&(&l36.config)[C12]) as u256 / 3600000u256 / 10000u256 as u64;
             *(&mut (&mut l30.u64_padding)[C8]) = l20;
             l19 = balance::value(&l6);
             *(&mut (&mut l30.share)[C10]) = *(&(&l30.share)[C10]) + l19;
@@ -626,7 +626,7 @@ public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l
                     *(&mut (&mut l36.share_supply)[l27 + 5u64]) = *(&(&l36.share_supply)[l27 + 5u64]) - l28
                 }
             };
-            *(&mut (&mut l30.u64_padding)[C7]) = *(&(&l30.share)[C7]) + *(&(&l30.share)[C10])as u128 * *(&(&l36.info)[C13])as u128 / 10000u128as u64;
+            *(&mut (&mut l30.u64_padding)[C7]) = *(&(&l30.share)[C7]) + *(&(&l30.share)[C10]) as u128 * *(&(&l36.info)[C13]) as u128 / 10000u128 as u64;
             assert!(l19 + l21 + l23 + l28 > 0u64, C8);
             l18 = l19 >= *(&(&l36.config)[C8]) && l19 % *(&(&l36.config)[C8]) == 0u64;
             assert!(l18, C10);
@@ -648,7 +648,7 @@ public fun reduce_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, 
     let l27 = tx_context::sender(freeze(l10));
     let l16 = balance::zero();
     let l20 = big_vector::length(&l28.share);
-    let l25 = big_vector::slice_size(&l28.share)as u64;
+    let l25 = big_vector::slice_size(&l28.share) as u64;
     let l24 = 0u64;
     let l23 = big_vector::borrow_slice(&l28.share, l24);
     let l18 = 0u64;
@@ -667,7 +667,7 @@ public fun reduce_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, 
         };
         assert!(l18 < l20, C12);
         let l22 = big_vector::borrow_mut(&mut l28.share, l18);
-        let l21 = *(&(&l22.u64_padding)[C7])as u256 * l17 - *(&(&l22.u64_padding)[C8])as u256 * *(&(&l28.config)[C12])as u256 / 3600000u256 / 10000u256as u64;
+        let l21 = *(&(&l22.u64_padding)[C7]) as u256 * l17 - *(&(&l22.u64_padding)[C8]) as u256 * *(&(&l28.config)[C12]) as u256 / 3600000u256 / 10000u256 as u64;
         *(&mut (&mut l22.u64_padding)[C8]) = l17;
         let l29 = if (*(&(&l22.share)[C10]) < l6) {
             *(&(&l22.share)[C10])
@@ -692,7 +692,7 @@ public fun reduce_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, 
         };
         *(&mut (&mut l22.share)[C9]) = *(&(&l22.share)[C9]) - l19;
         *(&mut (&mut l28.share_supply)[C9]) = *(&(&l28.share_supply)[C9]) - l19;
-        *(&mut (&mut l22.u64_padding)[C7]) = *(&(&l22.share)[C7]) + *(&(&l22.share)[C10])as u128 * *(&(&l28.info)[C13])as u128 / 10000u128as u64;
+        *(&mut (&mut l22.u64_padding)[C7]) = *(&(&l22.share)[C7]) + *(&(&l22.share)[C10]) as u128 * *(&(&l28.info)[C13]) as u128 / 10000u128 as u64;
         assert!(l29 + l15 + l19 > 0u64, C8);
         break;
         event::emit(UserEvent { action: ascii::string(C40), log: vector[l5, *(&(&l28.info)[C8]), l29, l15, l19, l21], bcs_padding: C21 });
@@ -724,7 +724,7 @@ public fun refresh(l0: &Version, l1: &mut Registry, l2: u64, l3: u64, l4: u64, l
     };
     *(&mut (&mut l16.info)[C15]) = l8;
     let l11 = big_vector::length(&l16.share);
-    let l15 = big_vector::slice_size(&l16.share)as u64;
+    let l15 = big_vector::slice_size(&l16.share) as u64;
     let l14 = 0u64;
     let l13 = big_vector::borrow_slice_mut(&mut l16.share, l14);
     let l10 = 0u64;
@@ -770,7 +770,7 @@ public fun set_reward_token<T0>(l0: &Version, l1: &mut Registry, l2: u64, l3: &m
     (&mut l15.reward_tokens).push_back(type_name::get());
     (&mut l15.share_supply).push_back(0u64);
     let l11 = big_vector::length(&l15.share);
-    let l14 = big_vector::slice_size(&l15.share)as u64;
+    let l14 = big_vector::slice_size(&l15.share) as u64;
     let l13 = 0u64;
     let l12 = big_vector::borrow_slice_mut(&mut l15.share, l13);
     let l10 = 0u64;
@@ -797,7 +797,7 @@ public fun snapshot(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l2: &mu
     let l19 = dynamic_object_field::borrow_mut(&mut l4.id, l5);
     let l18 = tx_context::sender(freeze(l7));
     let l11 = big_vector::length(&l19.share);
-    let l16 = big_vector::slice_size(&l19.share)as u64;
+    let l16 = big_vector::slice_size(&l19.share) as u64;
     let l15 = 0u64;
     let l14 = big_vector::borrow_slice(&l19.share, l15);
     let l10 = 0u64;
@@ -819,9 +819,9 @@ public fun snapshot(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l2: &mu
             return
         };
         let l13 = big_vector::borrow_mut(&mut l19.share, l10);
-        let l12 = *(&(&l13.u64_padding)[C7])as u256 * l9 - *(&(&l13.u64_padding)[C8])as u256 * *(&(&l19.config)[C12])as u256 / 3600000u256 / 10000u256as u64;
+        let l12 = *(&(&l13.u64_padding)[C7]) as u256 * l9 - *(&(&l13.u64_padding)[C8]) as u256 * *(&(&l19.config)[C12]) as u256 / 3600000u256 / 10000u256 as u64;
         *(&mut (&mut l13.u64_padding)[C8]) = l9;
-        *(&mut (&mut l13.u64_padding)[C7]) = *(&(&l13.share)[C7]) + *(&(&l13.share)[C10])as u128 * *(&(&l19.info)[C13])as u128 / 10000u128as u64;
+        *(&mut (&mut l13.u64_padding)[C7]) = *(&(&l13.share)[C7]) + *(&(&l13.share)[C10]) as u128 * *(&(&l19.info)[C13]) as u128 / 10000u128 as u64;
         event::emit(UserEvent { action: ascii::string(C42), log: vector[l5, *(&(&l19.info)[C8]), l12], bcs_padding: C21 });
         dynamic_field::add(&mut l4.id, ascii::string(C6), l17);
         return
@@ -853,7 +853,7 @@ public fun withdraw_scallop_basic<T0>(l0: &mut Version, l1: &mut Registry, l2: u
     let l7 = coin::into_balance(redeem::redeem(l3, l4, l10, l5, l6));
     let l9 = balance::value(&l7);
     let l11 = *(&(&l12.share_supply)[C7]) + *(&(&l12.share_supply)[C8]);
-    let l8 = balance::value(&l7)as u128 * *(&(&l12.config)[C10])as u128 / 10000u128as u64;
+    let l8 = balance::value(&l7) as u128 * *(&(&l12.config)[C10]) as u128 / 10000u128 as u64;
     version::charge_fee(l0, balance::split(&mut l7, l8));
     event::emit(ManagerEvent { action: ascii::string(C46), log: vector[l2, *(&(&l12.info)[C8]), l11, l9, l8], bcs_padding: C21 });
     return l7
@@ -877,9 +877,9 @@ public fun withdraw_scallop_spool<T0, T1>(l0: &mut Version, l1: &mut Registry, l
     let l11 = balance::value(&l9);
     let l15 = balance::value(&l13);
     let l17 = *(&(&l19.share_supply)[C7]) + *(&(&l19.share_supply)[C8]);
-    let l10 = balance::value(&l9)as u128 * *(&(&l19.config)[C10])as u128 / 10000u128as u64;
+    let l10 = balance::value(&l9) as u128 * *(&(&l19.config)[C10]) as u128 / 10000u128 as u64;
     version::charge_fee(l0, balance::split(&mut l9, l10));
-    let l14 = balance::value(&l13)as u128 * *(&(&l19.config)[C10])as u128 / 10000u128as u64;
+    let l14 = balance::value(&l13) as u128 * *(&(&l19.config)[C10]) as u128 / 10000u128 as u64;
     version::charge_fee(l0, balance::split(&mut l13, l14));
     event::emit(ManagerEvent { action: ascii::string(C44), log: vector[l2, *(&(&l19.info)[C8]), l17, l11, l15, l10, l14], bcs_padding: C21 });
     return (l9, l13)
@@ -902,7 +902,7 @@ public fun withdraw_suilend<T0>(l0: &mut Version, l1: &mut Registry, l2: u64, l3
     dynamic_object_field::add(&mut l14.id, ascii::string(C5), l13);
     let l10 = balance::value(&l8);
     let l12 = *(&(&l14.share_supply)[C7]) + *(&(&l14.share_supply)[C8]);
-    let l9 = balance::value(&l8)as u128 * *(&(&l14.config)[C10])as u128 / 10000u128as u64;
+    let l9 = balance::value(&l8) as u128 * *(&(&l14.config)[C10]) as u128 / 10000u128 as u64;
     version::charge_fee(l0, balance::split(&mut l8, l9));
     event::emit(ManagerEvent { action: ascii::string(C48), log: vector[l2, *(&(&l14.info)[C8]), l12, l10, l9], bcs_padding: C21 });
     return l8

@@ -262,10 +262,10 @@ fun earned_internal<T0, T1, T2>(l0: &Gauge<T0, T1, T2>, l1: &Pool<T0, T1>, l2: I
     let l7 = pool::get_magma_distribution_last_updated(l1);
     let l5 = l3 - l7;
     let l6 = pool::get_magma_distribution_growth_global(l1);
-    let l10 = pool::get_magma_distribution_reserve(l1)as u128 * C0;
+    let l10 = pool::get_magma_distribution_reserve(l1) as u128 * C0;
     let l13 = pool::get_magma_distribution_staked_liquidity(l1);
     if (l5 >= 0u64 && l10 > 0u128 && l13 > 0u128) {
-        let l11 = *(&l0.reward_rate) * l5as u128;
+        let l11 = *(&l0.reward_rate) * l5 as u128;
         if (l11 > l10) {
             l11 = l10;
         };
@@ -275,7 +275,7 @@ fun earned_internal<T0, T1, T2>(l0: &Gauge<T0, T1, T2>, l1: &Pool<T0, T1>, l2: I
     let (reg_47, reg_48) = position::tick_range(l9);
     let l8 = position::liquidity(l9);
     let l12 = *(&(table::borrow(&l0.rewards, l2)).growth_inside);
-    return full_math_u128::mul_div_floor(pool::get_magma_distribution_growth_inside(l1, reg_47, reg_48, l6) - l12, l8, C0)as u64
+    return full_math_u128::mul_div_floor(pool::get_magma_distribution_growth_inside(l1, reg_47, reg_48, l6) - l12, l8, C0) as u64
 }
 
 public fun get_position_reward<T0, T1, T2>(l0: &mut Gauge<T0, T1, T2>, l1: &mut Pool<T0, T1>, l2: ID, l3: &Clock, l4: &mut TxContext) {
@@ -369,19 +369,19 @@ fun notify_reward_amount_internal<T0, T1, T2>(l0: &mut Gauge<T0, T1, T2>, l1: &m
     let l6 = l7 + l8;
     l2 = l2 + pool::get_magma_distribution_rollover(freeze(l1));
     if (l7 >= *(&l0.period_finish)) {
-        *(&mut l0.reward_rate) = full_math_u128::mul_div_floor(l2as u128, C0, l8as u128);
+        *(&mut l0.reward_rate) = full_math_u128::mul_div_floor(l2 as u128, C0, l8 as u128);
         pool::sync_magma_distribution_reward(l1, option::borrow(&l0.gauge_cap), *(&l0.reward_rate), l2, l6)
     } else {
-        let l5 = full_math_u128::mul_div_floor(l8as u128, *(&l0.reward_rate), C0);
-        *(&mut l0.reward_rate) = full_math_u128::mul_div_floor(l2as u128 + l5, C0, l8as u128);
-        pool::sync_magma_distribution_reward(l1, option::borrow(&l0.gauge_cap), *(&l0.reward_rate), l2 + l5as u64, l6)
+        let l5 = full_math_u128::mul_div_floor(l8 as u128, *(&l0.reward_rate), C0);
+        *(&mut l0.reward_rate) = full_math_u128::mul_div_floor(l2 as u128 + l5, C0, l8 as u128);
+        pool::sync_magma_distribution_reward(l1, option::borrow(&l0.gauge_cap), *(&l0.reward_rate), l2 + l5 as u64, l6)
     };
     if (table::contains(&l0.reward_rate_by_epoch, config::epoch_start(l7))) {
         
     };
     table::add(&mut l0.reward_rate_by_epoch, config::epoch_start(l7), *(&l0.reward_rate));
     assert!(*(&l0.reward_rate) != 0u128, 9223374081260453908u64);
-    assert!(*(&l0.reward_rate) <= full_math_u128::mul_div_floor(balance::value(&l0.reserves_balance)as u128, C0, l8as u128), 9223374085555552278u64);
+    assert!(*(&l0.reward_rate) <= full_math_u128::mul_div_floor(balance::value(&l0.reserves_balance) as u128, C0, l8 as u128), 9223374085555552278u64);
     *(&mut l0.period_finish) = l6;
     event::emit(EventNotifyReward { sender: *(option::borrow(&l0.voter)), amount: l2 })
 }
