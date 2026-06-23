@@ -108,8 +108,8 @@ pub(super) fn structure_loop(
     // Hand reaching the live `input` restricted to `loop_nodes`. `members = loop_nodes \
     // {loop_head}` makes back-edges to `loop_head` fire `!in_region`, emitting exit-jumps
     // that `insert_breaks` rewrites to `Continue`. Inner sub-loops are `Input::Reduced`
-    // markers (post-order DFS) and walk via `process_reduced`. Dispatch mode is skipped
-    // pending §V-B (see `MULTI_EXIT_LOOPS.md`).
+    // markers (post-order DFS) and walk via `process_reduced`. Dispatch mode is gated --
+    // see notes in V_B_PLAN.md.
     let reaching_body: Option<D::Structured> = if !multi_successor_mode {
         let region_input: BTreeMap<D::Label, D::Input> = input
             .iter()

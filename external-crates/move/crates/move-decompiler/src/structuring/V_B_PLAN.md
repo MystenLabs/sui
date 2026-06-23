@@ -89,6 +89,36 @@ If `reaching_conditions` fails (region cycle, `Variants`) OR the resulting formu
 too many atoms to be readable (heuristic: `formula.cond_atoms().len() > N`), fall back to
 the existing `emit_dispatch_arms` path.
 
+## Gate-lift result (2026-06-22)
+
+Tried just dropping the `!multi_successor_mode` guard with the existing dispatch
+machinery (`emit_dispatch_arms` / `rewrite_jumps_for_dispatch`) intact -- expecting
+reaching to produce the body, dispatch synthesis to handle the exit jumps. **Pyth still
+duplicates the dispatch arm** with this setup.
+
+Diagnosis: the duplicate-arm fold (`fold_duplicate_arm_branches`) for the staleness
+diamond computes its `far_join` past the loop's continue point. The fold's `rest =
+structure_reachable_subregion(far_join, stop)` then walks into the dispatch-decision
+node and emits its structured form as a tail of the staleness arm. Result: the dispatch
+appears inside the `if (l12 < l14)` branch and again outside.
+
+Underlying cause: `code_chain_to(action_arm, K)` walks past the immediate continuation
+when the bytecode block layout fuses the action+continue into one block, so `K`
+(common continuation) ends up at the post-loop dispatch decision rather than at the
+immediate `l12 += 1` continue point.
+
+This means the gate-lift isn't trivially "use the existing dispatch as the cascade" --
+the fold's `code_chain_to` needs to learn to STOP at the loop back-edge first. Possible
+fixes:
+  1. Pass the loop's back-edge target as an additional stop in `code_chain_to`.
+  2. Detect when the chain crosses the back-edge and clamp `far_join` to the
+     immediately-preceding node.
+  3. Stop folding when one of the chains visits a node that has a back-edge to
+     `loop_head` (the chain's continuation is the loop boundary, not a real merge).
+
+Option 3 is probably the cleanest because the structurer already has back-edge info in
+`graph.back_edges`. Wire it as an additional constraint into the fold.
+
 ## Open questions
 
 - Is the heuristic for "formula too complex" worth having? NMG observed that DREAM produced
