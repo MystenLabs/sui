@@ -622,7 +622,7 @@ fun build_up_and_tear_down<K: copy + drop + store, V: copy + drop + store>(
     table.destroy_empty()
 }
 
-fun check_ordering<K: copy + drop + store, V: store + drop>(
+fun check_ordering<K: copy + drop + store, V: copy + store + drop>(
     table: &LinkedTable<K, V>,
     keys: vector<K>,
     values: Option<vector<V>>,
@@ -638,7 +638,7 @@ fun check_ordering<K: copy + drop + store, V: store + drop>(
     n.do!(|i| {
         let cur = keys[i];
         values.do_ref!(|values| {
-            assert_eq!(&table[cur], &values[i]);
+            assert_eq!(table[cur], values[i]);
         });
 
         if (i == 0) {
