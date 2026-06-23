@@ -5251,31 +5251,16 @@ impl AuthorityState {
         effects: TransactionEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransactionEffects> {
-        let tx_digest = *effects.transaction_digest();
-        let signed_effects = match epoch_store.get_effects_signature(&tx_digest)? {
-            Some(sig) => {
-                debug_assert!(sig.epoch == epoch_store.epoch());
-                SignedTransactionEffects::new_from_data_and_sig(effects, sig)
-            }
-            _ => {
-                let sig = AuthoritySignInfo::new(
-                    epoch_store.epoch(),
-                    &effects,
-                    Intent::sui_app(IntentScope::TransactionEffects),
-                    self.name,
-                    &*self.secret,
-                );
-
-                let effects = SignedTransactionEffects::new_from_data_and_sig(effects, sig.clone());
-
-                epoch_store.insert_effects_signature(&tx_digest, &sig)?;
-
-                effects
-            }
-        };
+        let sig = AuthoritySignInfo::new(
+            epoch_store.epoch(),
+            &effects,
+            Intent::sui_app(IntentScope::TransactionEffects),
+            self.name,
+            &*self.secret,
+        );
 
         Ok(VerifiedSignedTransactionEffects::new_unchecked(
-            signed_effects,
+            SignedTransactionEffects::new_from_data_and_sig(effects, sig),
         ))
     }
 

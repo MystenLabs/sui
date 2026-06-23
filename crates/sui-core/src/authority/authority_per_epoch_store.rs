@@ -448,11 +448,8 @@ pub struct AuthorityEpochTables {
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
     owned_object_locked_transactions: DBMap<ObjectRef, LockDetailsWrapper>,
 
-    /// Signatures over transaction effects that we have signed and returned to users.
-    /// We store this to avoid re-signing the same effects twice.
-    /// Note that this may contain signatures for effects from previous epochs, in the case
-    /// that a user requests a signature for effects from a previous epoch. However, the
-    /// signature is still epoch-specific and so is stored in the epoch store.
+    #[allow(dead_code)]
+    #[deprecated(note = "column family retained only for backward compatibility")]
     effects_signatures: DBMap<TransactionDigest, AuthoritySignInfo>,
 
     #[allow(dead_code)]
@@ -1869,18 +1866,6 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    pub fn insert_effects_signature(
-        &self,
-        tx_digest: &TransactionDigest,
-        effects_signature: &AuthoritySignInfo,
-    ) -> SuiResult {
-        let tables = self.tables()?;
-        tables
-            .effects_signatures
-            .insert(tx_digest, effects_signature)?;
-        Ok(())
-    }
-
     pub fn transactions_executed_in_cur_epoch(
         &self,
         digests: &[TransactionDigest],
@@ -1905,14 +1890,6 @@ impl AuthorityPerEpochStore {
                     .expect("db error")
             },
         ))
-    }
-
-    pub fn get_effects_signature(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> SuiResult<Option<AuthoritySignInfo>> {
-        let tables = self.tables()?;
-        Ok(tables.effects_signatures.get(tx_digest)?)
     }
 
     /// Gets owned object locks, checking quarantine first then falling back to DB.
@@ -2092,7 +2069,7 @@ impl AuthorityPerEpochStore {
             Err(e) if matches!(e.as_inner(), SuiErrorKind::EpochEnded(_)) => return Ok(()),
             Err(e) => return Err(e),
         };
-        let mut batch = tables.effects_signatures.batch();
+        let mut batch = tables.last_consensus_stats.batch();
 
         let seq = *checkpoint.sequence_number();
 
