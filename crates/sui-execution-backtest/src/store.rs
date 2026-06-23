@@ -19,6 +19,7 @@ use sui_types::committee::EpochId;
 use sui_types::effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiResult;
 use sui_types::full_checkpoint_content::{Checkpoint, ObjectSet};
+use sui_types::is_system_package;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
     BackingPackageStore, ChildObjectResolver, ObjectKey, ObjectStore, PackageObject, ParentSync,
@@ -27,7 +28,6 @@ use sui_types::transaction::{
     InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind, TransactionData,
     TransactionDataAPI, TransactionKind,
 };
-use sui_types::{MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
 use tokio::runtime::Handle;
 use tracing::warn;
 
@@ -179,26 +179,22 @@ impl PackageCache {
 ///
 /// The closure is computed statically (no execution): collect the *roots* — the packages the
 /// commands reference (via the system's own [`input_objects`](sui_types::transaction::ProgrammableTransaction::input_objects)
-/// derivation) plus the defining packages of the checkpoint's object types — and seed the system
-/// packages unconditionally (they are loaded by nearly every transaction but rarely named
-/// statically). Then add, for each fetched root:
+/// derivation) plus the defining packages of the checkpoint's object types. Then add, for each
+/// fetched root:
 ///   - its **linkage table** — the (upgraded) storage ids of its transitive declared dependencies,
 ///   - its **type-origin table** — the storage id of every package version that *introduced* one of
 ///     its own types. A type added in an upgrade (e.g. a Cetus type first defined in v10) records
 ///     that version as its origin, and the executor loads the module at that version; since such a
 ///     type need never appear as a static type argument, the linkage table alone misses it.
 ///
+/// System packages are not prefetched here: they are served version-correctly per epoch from the
+/// framework snapshot (see [`crate::context::EpochCtx`] and [`ScanStore::get_package_object`]).
+///
 /// This remains an over-approximation of what actually executes (and still misses some
 /// runtime-only edges, e.g. versions pinned only by a stored object's provenance); a miss falls
 /// through to the lazy [`PackageCache::fetch`], which is the correctness net.
 pub(crate) async fn prefetch_package_closure(checkpoint: &Checkpoint, cache: &PackageCache) {
-    let mut roots = collect_roots(checkpoint);
-    // System packages are loaded by almost every transaction yet seldom appear as a static
-    // reference (e.g. a `0x3` type reached only at runtime); they are tiny and always present.
-    roots.insert(MOVE_STDLIB_PACKAGE_ID);
-    roots.insert(SUI_FRAMEWORK_PACKAGE_ID);
-    roots.insert(SUI_SYSTEM_PACKAGE_ID);
-    let roots: Vec<ObjectID> = roots.into_iter().collect();
+    let roots: Vec<ObjectID> = collect_roots(checkpoint).into_iter().collect();
     let root_pkgs = cache.prefetch(&roots).await;
 
     let mut linked = BTreeSet::new();
@@ -262,6 +258,11 @@ pub struct ScanStore {
     /// `child_at_bound`.
     tombstones: Arc<BTreeMap<ObjectID, BTreeSet<SequenceNumber>>>,
     packages: Arc<PackageCache>,
+    /// The system (framework) packages live during this epoch, keyed by id. System packages share a
+    /// stable id across upgrades but differ in bytecode per protocol version, so they are served
+    /// from here (resolved version-correctly from the framework snapshot) rather than from the
+    /// fullnode, which only returns their latest version. See [`crate::context::EpochCtx`].
+    system_packages: Arc<BTreeMap<ObjectID, Object>>,
 }
 
 impl ScanStore {
@@ -295,12 +296,14 @@ impl ScanStore {
         latest: Arc<BTreeMap<ObjectID, SequenceNumber>>,
         tombstones: Arc<BTreeMap<ObjectID, BTreeSet<SequenceNumber>>>,
         packages: Arc<PackageCache>,
+        system_packages: Arc<BTreeMap<ObjectID, Object>>,
     ) -> Self {
         Self {
             objects,
             latest,
             tombstones,
             packages,
+            system_packages,
         }
     }
 }
@@ -318,6 +321,14 @@ impl ObjectStore for ScanStore {
 
 impl BackingPackageStore for ScanStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        // System packages are versioned per epoch (stable id, different bytecode per protocol
+        // version), so serve the epoch-correct snapshot copy rather than the fullnode's latest. Fall
+        // through if absent (e.g. a system package not yet published at this protocol version).
+        if is_system_package(*package_id)
+            && let Some(object) = self.system_packages.get(package_id)
+        {
+            return Ok(Some(PackageObject::new(object.clone())));
+        }
         // Prefer a package already present in the checkpoint's object set.
         if let Some(object) = self.get_object(package_id)
             && object.is_package()

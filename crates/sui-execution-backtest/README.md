@@ -113,17 +113,24 @@ Per transaction the tool builds a read-only `BackingStore` from:
   Shared objects are served at their per-transaction version (from the effects' input consensus
   objects), and dynamic-field child reads are tombstone-aware (within-checkpoint deletions are
   honored).
-- **Packages**: a per-checkpoint **closure prefetch** warms a shared cache (in-memory, layered over
-  the optional on-disk `--cache` dir) with every package the checkpoint's transactions could load.
-  The roots are the MoveCall targets, type-argument packages, and object-type packages, plus the
-  system packages (`0x1`/`0x2`/`0x3`, always included). For each fetched root we then add its
-  **linkage table** (the upgraded storage ids of its transitive dependencies) and its **type-origin
-  table** (the storage id of every package version that *introduced* one of its types) — the latter
-  catches types added in a package upgrade, whose introducing version need never appear as a static
-  reference yet is the id the executor loads. Reads during execution hit that cache; a rare miss
-  falls through to a lazy single gRPC fetch (with retry/backoff) into the same cache — the
-  correctness net for any runtime-only edge the static closure can't see. Over-fetching is harmless:
-  the prefetch only decides what is warm.
+- **User packages**: a per-checkpoint **closure prefetch** warms a shared cache (in-memory, layered
+  over the optional on-disk `--cache` dir) with every package the checkpoint's transactions could
+  load. The roots are the MoveCall targets, type-argument packages, and object-type packages. For
+  each fetched root we then add its **linkage table** (the upgraded storage ids of its transitive
+  dependencies) and its **type-origin table** (the storage id of every package version that
+  *introduced* one of its types) — the latter catches types added in a package upgrade, whose
+  introducing version need never appear as a static reference yet is the id the executor loads.
+  Reads during execution hit that cache; a rare miss falls through to a lazy single gRPC fetch (with
+  retry/backoff) into the same cache — the correctness net for any runtime-only edge the static
+  closure can't see. Over-fetching is harmless: the prefetch only decides what is warm. These
+  packages are immutable, so fetching their latest version is faithful.
+- **System (framework) packages** (`0x1`, `0x2`, `0x3`, `0xb`, `0xdee9`): these keep a stable id but
+  are *upgraded* (new bytecode) across protocol versions, so the fullnode's latest version is wrong
+  for a historical epoch. Instead they are loaded **version-correctly per epoch** from the on-disk
+  [`sui-framework-snapshot`](../sui-framework-snapshot) at the epoch's protocol version (the snapshot
+  is sparse, so the greatest snapshot ≤ the protocol version is used), and served directly by
+  `ScanStore` — never fetched from the network. A protocol version newer than any bundled snapshot
+  falls back to the newest available (update the snapshot crate if you need a newer framework).
 
 Execution is **metered** with the transaction's own budget/price (gasless txns are metered at the
 epoch RGP with the gasless compute cap, mirroring `sui-transaction-checks`).
@@ -163,9 +170,9 @@ Executor. Components, by module:
 | `main.rs` | CLI (`Args`), startup wiring, run-id derivation, sink selection; builds and runs the `Indexer`. |
 | `grpc.rs` | `RpcClient` — thin fullnode gRPC client: epoch bounds (`GetEpoch`), chain id (`GetServiceInfo`), and package fetches (`GetObject` / `BatchGetObjects`) with retry + backoff. |
 | `ingestion.rs` | Remote-store ingestion client with the chain id injected up front (`FixedChainId`), so it never derives it from a slow genesis fetch. |
-| `context.rs` | `EpochCtx` (version-correct executor + protocol config + reference gas price + epoch-start timestamp) and `resolve_epoch_work`, which turns an epoch range into per-epoch contexts plus the overall checkpoint range. |
+| `context.rs` | `EpochCtx` (version-correct executor + protocol config + reference gas price + epoch-start timestamp + the epoch's framework packages from the snapshot) and `resolve_epoch_work`, which turns an epoch range into per-epoch contexts plus the overall checkpoint range. |
 | `handler.rs` | `Backtest<S>` — the framework `Processor` + `Handler`. Per checkpoint: prefetch packages, reconstruct state, re-execute, emit rows; then batch and commit them through the `CommitRows` trait. |
-| `store.rs` | `PackageCache` (shared, in-memory → on-disk → gRPC) with `prefetch_package_closure`, and `ScanStore` — the read-only `BackingStore` execution runs against. |
+| `store.rs` | `PackageCache` (shared, in-memory → on-disk → gRPC) with `prefetch_package_closure`, and `ScanStore` — the read-only `BackingStore` execution runs against (serves system packages from the epoch's framework, user packages from the cache). |
 | `execute.rs` | `execute_one_transaction` — per-transaction gas planning, coin-reservation rewrite, metered execution, and divergence detection + triage. |
 | `ndjson_store.rs` | `NdjsonStore` — the zero-setup `ConcurrentStore` sink (file output + in-memory watermarks). |
 | `rows.rs` / `schema.rs` | Typed output rows (`DivergenceRow`, `RunStatsRow`) and their diesel/postgres schema. |

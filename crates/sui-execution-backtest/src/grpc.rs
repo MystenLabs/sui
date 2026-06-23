@@ -88,8 +88,10 @@ impl RpcClient {
         Ok(CheckpointDigest::from_str(response.chain_id())?.into())
     }
 
-    /// Fetch a package object by id (immutable, so the latest version is what executed against it).
-    /// Returns `None` if the fullnode does not have it. Retries transient errors (notably HTTP 429
+    /// Fetch a package object by id at its latest version. Non-system packages are immutable, so the
+    /// latest version is the one that executed against it; system packages (versioned per epoch) are
+    /// NOT fetched here — they are resolved version-correctly from the framework snapshot (see
+    /// [`crate::context`]). Returns `None` if the fullnode does not have it. Retries transient errors (notably HTTP 429
     /// rate-limiting) with exponential backoff, because a dropped package fetch would otherwise
     /// surface as a spurious execution failure rather than a real result.
     pub async fn fetch_object(&self, id: ObjectID) -> Result<Option<Object>> {

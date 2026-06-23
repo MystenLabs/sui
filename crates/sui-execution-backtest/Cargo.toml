@@ -35,6 +35,8 @@ move-core-types.workspace = true
 
 sui-types.workspace = true
 sui-protocol-config.workspace = true
+sui-framework.workspace = true
+sui-framework-snapshot.workspace = true
 sui-indexer-alt-framework = { workspace = true, default-features = false, features = ["postgres"] }
 sui-rpc.workspace = true
 
