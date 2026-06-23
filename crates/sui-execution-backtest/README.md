@@ -10,84 +10,100 @@ under the **current** execution rules and reports where the recomputed result di
 recorded on chain. Useful for measuring the behavioral impact of an execution/protocol change before
 it ships (e.g. a VM, gas, or linkage change).
 
-For a range of epochs it:
+It runs as a [`sui-indexer-alt-framework`](../sui-indexer-alt-framework) concurrent pipeline:
 
-1. Resolves each epoch's checkpoint range + protocol version from a fullnode (gRPC `GetEpoch`).
-2. Streams the epoch's checkpoints (via `sui-indexer-alt-framework`'s ingestion client) through a
-   two-stage pipeline: a prefetch stage fetches + indexes up to `--concurrency` checkpoints at once
-   into a bounded buffer, and an execute stage drains it, re-executing up to `--execute-concurrency`
-   transactions concurrently on blocking workers. Decoupling fetch from execute keeps the cores fed
-   regardless of fetch latency.
-3. For every programmable transaction whose on-chain status matches `--status` (default `all`),
-   fully re-executes it against reconstructed checkpoint state via the `sui-execution` Executor.
+1. Resolves each epoch's checkpoint range + protocol version + reference gas price from a fullnode
+   (gRPC `GetEpoch`), building a version-correct executor per epoch.
+2. Hands the resulting checkpoint range to the framework's `Indexer`, which ingests checkpoints with
+   adaptive concurrency and runs the per-checkpoint processor with a configurable fanout.
+3. For each checkpoint, prefetches the package closure its transactions could load (batched
+   multi-gets; see [Packages](#how-execution-context-is-reconstructed)), then re-executes every
+   programmable transaction whose on-chain status matches `--status` (default `all`) — serially, on
+   a blocking worker — against reconstructed checkpoint state via the `sui-execution` Executor.
 4. Records a **divergence** for any transaction whose recomputed success/failure status disagrees
-   with its on-chain status, writing it to an NDJSON file as it is found (flushed per progress tick,
-   so partial results survive an interrupted run).
-
-The strict baseline — "succeeded on chain, now errors" — is `--status success`, so any divergence is
-a clear regression. With `--status all`/`failed` the on-chain status is recorded per record so the
-differential can be applied downstream.
+   with its on-chain status, plus (unless `--no-stats`) a per-checkpoint `run_stats` row of
+   denominators. The framework's watermark gives crash-resumption.
 
 Divergence direction is recoverable from each record: a recomputed error (on-chain succeeded) has a
-non-null `recomputed_error`; a recomputed success (on-chain failed) has `recomputed_error: null`.
+non-null `recomputed_error_kind`; a recomputed success (on-chain failed) has it null. `--status
+success` is the strict baseline (a tx that succeeded on chain now erroring is a clear regression);
+`all`/`failed` also replay failures, each row carrying its on-chain status so the differential can
+be applied downstream.
 
 ## Run
 
+The output sink is selected with `--store`:
+
+- `--store ndjson --output <file>` — zero-setup, appends rows to a newline-delimited JSON file. No
+  resumption across restarts. Good for quick local runs.
+- `--store postgres --database-url <url>` — durable, queryable, and resumable (watermark-based).
+
 ```bash
+# Zero-setup ndjson run.
 cargo run --release -p sui-execution-backtest -- \
   --remote-store-url https://checkpoints.mainnet.sui.io \
-  --fullnode-url https://fullnode.mainnet.sui.io:443 \
-  --start-epoch 1146 \
-  --end-epoch 1147 \
-  --concurrency 64 \
+  --fullnode-url https://mysten-rpc.mainnet.sui.io:443 \
+  --start-epoch 1152 --end-epoch 1152 --status all \
   --execute-concurrency 24 \
-  --prefetch-depth 128 \
   --cache ./.package-cache \
-  --output ./divergences.ndjson
+  --store ndjson --output ./divergences.ndjson
+
+# Postgres run, with a run identifier (see --task below).
+cargo run --release -p sui-execution-backtest -- \
+  --remote-store-url https://checkpoints.mainnet.sui.io \
+  --fullnode-url https://mysten-rpc.mainnet.sui.io:443 \
+  --start-epoch 1152 --end-epoch 1152 --status all \
+  --cache ./.package-cache \
+  --store postgres --database-url postgres://localhost/backtest \
+  --task my-linkage-change
 ```
 
 - **Checkpoint source.** Prefer a remote object store (`--remote-store-url
-  https://checkpoints.<network>.sui.io`) — it is the fast archival path. A fullnode for epoch +
-  package resolution must then be supplied separately with `--fullnode-url`. Alternatively a single
-  `--rpc-api-url` fullnode can serve as both checkpoint source and resolver (slower; see the
-  rate-limit caveat below).
+  https://checkpoints.<network>.sui.io`) — the fast archival path. A fullnode for epoch + package
+  resolution must then be supplied separately with `--fullnode-url`. Alternatively a single
+  `--rpc-api-url` fullnode can serve as both (slower; see the rate-limit caveat below).
 - `--start-epoch` / `--end-epoch` select the inclusive epoch range.
 - `--max-checkpoints-per-epoch N` caps each epoch at its first `N` checkpoints (for bounded
   samples). Omit it to backtest whole epochs — note a mainnet epoch is ~300–390k checkpoints.
 - `--status {success,failed,all}` (default `all`) selects which on-chain statuses to re-execute.
-- `--concurrency` (default 32) is the **fetch** width: checkpoints fetched + indexed concurrently by
-  the prefetch stage.
-- `--execute-concurrency` (default ~2× cores) is the **CPU** width: transactions executed
-  concurrently on blocking workers.
-- `--prefetch-depth` (default `--concurrency`) is the buffer depth between the fetch and execute
-  stages; a larger buffer absorbs fetch-latency bursts at the cost of memory (each buffered
-  checkpoint holds its object set).
+- `--execute-concurrency N` is the **CPU** width: checkpoints processed (and re-executed)
+  concurrently. Each checkpoint's transactions run serially on one blocking worker. Omit it for the
+  framework's adaptive scaling (up to the number of CPUs). Throughput is fetch/memory-bound, not
+  CPU-bound, so this rarely needs raising.
 - `--cache` points at an on-disk package cache directory (speeds up re-scans).
+- `--no-stats` suppresses the per-checkpoint `run_stats` rows (divergences are still recorded).
 
-Each output line looks like:
+### `--task` and resumption
 
-```json
-{"digest":"…","checkpoint":282446861,"epoch":1147,"original_status":"success","original_failure":null,"recomputed_error":"ExecutionError { … kind: InvalidLinkage, source: Some(\"…conflicting resolutions…\") }"}
-```
+The postgres watermark lets an interrupted run resume from where it left off. But the watermark
+assumes a checkpoint's output is a pure function of the checkpoint — and the whole point of the
+backtest is that output also depends on the *execution rules under test*. So **`--task <run-id>`
+namespaces both the output rows (the `task` column / primary key) and the watermark.** Bump it
+whenever the rules under test change, otherwise a re-run would resume the previous run's watermark
+and skip every already-processed checkpoint, silently producing an empty differential. Reusing a
+task resumes — which is correct *only* if the rules are unchanged. (The ndjson sink keeps watermarks
+in memory only, so it never resumes across restarts and is unaffected.)
 
-The `backtest complete` log line reports the run totals: `total_checked`, `total_divergences`,
-`total_reconstruction_errors`, `total_executed`, `total_cancellation_excluded`, and the
-skip/count categories below, plus `tx_per_s` / `cp_per_s`.
+**Omitting `--task` derives the id from the git revision the binary was built from** — the HEAD
+commit, plus a hash of uncommitted changes when the working tree is dirty — so editing the execution
+rules and rebuilding automatically yields a fresh namespace, while re-running unchanged code
+resumes. Pass an explicit `--task` to override with a human-readable label.
 
-## Performance & tuning
+## Output
 
-Fetch and execute are separate pipeline stages, so fetch latency can't starve the cores and a deep
-`--prefetch-depth` only trades memory for burst tolerance. Tuning guidance (measured on a 20-core
-machine, warm `--cache`, remote object store as the checkpoint source):
+Two row types, written to two postgres tables (or interleaved as ndjson lines):
 
-- Throughput plateaus around **~2,200 tx/s / ~170 checkpoints/s**. The ceiling
-  is the fetch path / memory bandwidth, **not** CPU — a single process
-  saturates at around 10–12× effective parallelism regardless of the knobs.
-- `--execute-concurrency` has a bound around **16–24**; below it you lose throughput, above it does
-  nothing.
-- `--concurrency` is best around **48–64**; raising it further slightly *hurts*.
-- Sharding one box into multiple processes does **not** raise aggregate throughput (the bottleneck
-  is shared); to go faster, use a closer/faster checkpoint source.
+- **`divergence`** — one row per divergent transaction: `task, epoch, checkpoint, tx_digest`, the
+  on-chain outcome (`original_status`, `original_failure_kind`), the recomputed outcome
+  (`recomputed_status`, `recomputed_error_kind`, `recomputed_error_detail`), and triage columns
+  (`missing_modified`, `missing_loaded`, `missing_consensus`, `digest_mismatches`). The triage
+  columns count how much of the transaction's read set our reconstructed store was missing or
+  disagreed on — nonzero values point at a *reconstruction gap* rather than a genuine execution
+  divergence. `recomputed_error_kind` is the bare error variant, so divergences can be grouped by
+  kind (e.g. `… GROUP BY recomputed_error_kind`).
+- **`run_stats`** — per-checkpoint denominators (`checked`, `executed`, `divergences`,
+  `reconstruction_errors`, `coin_reservation_skipped`, `execute_skipped`, `gas_from_balance`,
+  `cancellation_excluded`), so divergence rates are queryable and comparable across runs (`task`).
 
 ## How execution context is reconstructed
 
@@ -97,13 +113,20 @@ Per transaction the tool builds a read-only `BackingStore` from:
   Shared objects are served at their per-transaction version (from the effects' input consensus
   objects), and dynamic-field child reads are tombstone-aware (within-checkpoint deletions are
   honored).
-- **Packages**: looked up in that object set first, then a process-wide cache (in-memory behind an
-  `RwLock`, layered over the optional on-disk `--cache` dir), then a gRPC fetch from the fullnode
-  (with retry + exponential backoff on rate-limit / transient errors).
+- **Packages**: a per-checkpoint **closure prefetch** warms a shared cache (in-memory, layered over
+  the optional on-disk `--cache` dir) with every package the checkpoint's transactions could load.
+  The roots are the MoveCall targets, type-argument packages, and object-type packages, plus the
+  system packages (`0x1`/`0x2`/`0x3`, always included). For each fetched root we then add its
+  **linkage table** (the upgraded storage ids of its transitive dependencies) and its **type-origin
+  table** (the storage id of every package version that *introduced* one of its types) — the latter
+  catches types added in a package upgrade, whose introducing version need never appear as a static
+  reference yet is the id the executor loads. Reads during execution hit that cache; a rare miss
+  falls through to a lazy single gRPC fetch (with retry/backoff) into the same cache — the
+  correctness net for any runtime-only edge the static closure can't see. Over-fetching is harmless:
+  the prefetch only decides what is warm.
 
 Execution is **metered** with the transaction's own budget/price (gasless txns are metered at the
-epoch RGP with the gasless compute cap, mirroring `sui-transaction-checks`). Because `BackingStore`
-is synchronous, each transaction runs on a blocking worker (`spawn_blocking`).
+epoch RGP with the gasless compute cap, mirroring `sui-transaction-checks`).
 
 Coin-reservation (address-balance) inputs — synthetic "fake coin" object refs that encode a
 withdrawal in their digest — are rewritten back into `FundsWithdrawal` args by re-deriving the
@@ -113,19 +136,98 @@ are counted in `coin_reservation_skipped` and skipped.
 ## Caveats
 
 - **Single-transaction replay can't model scheduling.** Transactions cancelled before execution by
-  consensus-layer congestion / randomness control (`ExecutionCancelledDueToSharedObjectCongestion`,
-  `ExecutionCancelledDueToRandomnessUnavailable`) never ran on chain, so they "succeed" here. These
+  consensus-layer congestion / randomness control never ran on chain, so they "succeed" here. These
   are detected from the on-chain effects and counted under `cancellation_excluded` rather than
   reported as divergences.
-- **Public-node rate limiting.** Package fetches (and, if `--rpc-api-url` is the checkpoint source,
-  checkpoint fetches) go to the fullnode; `fullnode.mainnet.sui.io` returns HTTP 429 under
-  concurrent load. The package fetcher retries with backoff so results aren't corrupted, but high
-  concurrency against a shared node mostly sleeps in backoff. Prefer `--remote-store-url` for
-  checkpoints plus a dedicated/archival fullnode; against the public fullnode keep `--concurrency`
-  low (≈4). Public nodes also **prune old epochs** — only recent epochs are available there.
+- **Public-node rate limiting.** Package fetches go to the fullnode; `fullnode.mainnet.sui.io`
+  returns HTTP 429 under concurrent load. The fetcher retries with backoff, but prefer
+  `--remote-store-url` for checkpoints plus a dedicated/archival fullnode. Public nodes also prune
+  old epochs — only recent epochs are available there.
 - Only `ProgrammableTransaction`s are considered; system/consensus transactions are out of scope.
 
 ## Analysis
 
-The backtest itself is change-agnostic — it just emits divergence records. Analysis specific to a
-particular change lives outside this crate.
+The backtest itself is change-agnostic — it just emits divergence (and stats) rows. Analysis
+specific to a particular change lives outside this crate; the typed `recomputed_error_kind` and the
+`run_stats` denominators are intended to make that analysis a matter of SQL.
+
+## Architecture
+
+The crate is a thin orchestration layer: the [`sui-indexer-alt-framework`](../sui-indexer-alt-framework)
+pipeline drives ingestion, scheduling, batching, and watermarks; this crate supplies a checkpoint
+*processor* that reconstructs state and re-executes with the [`sui-execution`](../../sui-execution)
+Executor. Components, by module:
+
+| Module | Responsibility |
+|---|---|
+| `main.rs` | CLI (`Args`), startup wiring, run-id derivation, sink selection; builds and runs the `Indexer`. |
+| `grpc.rs` | `RpcClient` — thin fullnode gRPC client: epoch bounds (`GetEpoch`), chain id (`GetServiceInfo`), and package fetches (`GetObject` / `BatchGetObjects`) with retry + backoff. |
+| `ingestion.rs` | Remote-store ingestion client with the chain id injected up front (`FixedChainId`), so it never derives it from a slow genesis fetch. |
+| `context.rs` | `EpochCtx` (version-correct executor + protocol config + reference gas price + epoch-start timestamp) and `resolve_epoch_work`, which turns an epoch range into per-epoch contexts plus the overall checkpoint range. |
+| `handler.rs` | `Backtest<S>` — the framework `Processor` + `Handler`. Per checkpoint: prefetch packages, reconstruct state, re-execute, emit rows; then batch and commit them through the `CommitRows` trait. |
+| `store.rs` | `PackageCache` (shared, in-memory → on-disk → gRPC) with `prefetch_package_closure`, and `ScanStore` — the read-only `BackingStore` execution runs against. |
+| `execute.rs` | `execute_one_transaction` — per-transaction gas planning, coin-reservation rewrite, metered execution, and divergence detection + triage. |
+| `ndjson_store.rs` | `NdjsonStore` — the zero-setup `ConcurrentStore` sink (file output + in-memory watermarks). |
+| `rows.rs` / `schema.rs` | Typed output rows (`DivergenceRow`, `RunStatsRow`) and their diesel/postgres schema. |
+
+### Startup and wiring
+
+Everything needed for replay is resolved up front, then handed to the framework's `Indexer`. The
+chain id comes from `GetServiceInfo` (cheap) rather than fetching genesis, and the one ingestion
+client serves both epoch resolution and the indexer.
+
+```mermaid
+flowchart TD
+    Args[CLI Args] --> Main[main.rs]
+    Main --> Rpc[RpcClient<br/>fullnode gRPC]
+    Rpc -->|GetServiceInfo| ChainId[chain id]
+    Rpc -->|GetEpoch| Resolve[resolve_epoch_work]
+    Resolve --> Ctx[(EpochCtx per epoch:<br/>executor + protocol config<br/>+ RGP + epoch-start ts)]
+    Resolve --> Range[checkpoint range]
+
+    Main --> Ingest[ingestion client<br/>remote store / rpc / local]
+    ChainId --> Ingest
+
+    Main --> Sink{--store}
+    Sink -->|postgres| Db[(Db)]
+    Sink -->|ndjson| Nd[(NdjsonStore)]
+
+    Ingest --> Indexer[framework Indexer]
+    Range --> Indexer
+    Ctx --> Handler[Backtest handler]
+    Handler --> Indexer
+    Db --> Indexer
+    Nd --> Indexer
+```
+
+### Per-checkpoint pipeline
+
+The `Indexer` ingests the checkpoint range with adaptive concurrency and runs `Backtest::process`
+per checkpoint (fanout = `--execute-concurrency`). Each checkpoint warms the shared package cache,
+reconstructs a read-only store, and re-executes its transactions serially on a blocking worker;
+the rows it emits are batched and committed, advancing the watermark for crash-resumption.
+
+```mermaid
+flowchart TD
+    Indexer[framework Indexer<br/>ingests checkpoint range] -->|checkpoint, fanout| Process[Backtest::process]
+
+    Process --> Prefetch[prefetch_package_closure]
+    Prefetch <-->|warm| Cache[(PackageCache<br/>mem → disk → gRPC)]
+
+    Process --> Build[build ScanStore<br/>objects + latest + tombstones + cache]
+    Build --> Blocking[spawn_blocking:<br/>for each transaction, serially]
+    Blocking --> Exec[execute_one_transaction]
+    Exec -->|reads packages| Cache
+    Exec -->|EpochCtx.executor| VM[sui-execution Executor]
+    Exec --> Cmp{recomputed status<br/>differs from on-chain?}
+    Cmp -->|yes| Div[DivergenceRow]
+    Blocking -->|tally per checkpoint| Stats[RunStatsRow]
+
+    Div --> Batch[Handler::batch + commit]
+    Stats --> Batch
+    Batch --> Out[(postgres / ndjson)]
+    Batch --> WM[watermark advances<br/>→ resume on restart]
+```
+
+See [How execution context is reconstructed](#how-execution-context-is-reconstructed) for the store
+and package-closure details.

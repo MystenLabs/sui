@@ -14954,11 +14954,16 @@ name = "sui-execution-backtest"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bcs",
  "clap",
- "futures",
+ "diesel",
+ "diesel-async",
+ "diesel_migrations",
  "move-core-types",
+ "object_store 0.13.0",
  "prometheus",
+ "serde",
  "serde_json",
  "sui-execution",
  "sui-indexer-alt-framework",
