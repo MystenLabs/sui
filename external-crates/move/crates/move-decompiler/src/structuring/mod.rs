@@ -82,22 +82,25 @@ pub(crate) fn structure(
         }
     }
 
+    // Dom-tree post-order: processes body nodes before loop heads (so each loop's body
+    // assembly finds children in `structured_blocks`) and writes each loop's wrapped
+    // `Loop` form into both `structured_blocks` (consumed by enclosing scopes' arm
+    // absorption) AND `loop_structured` (a copy preserved for NMG's `Reduced` rendering
+    // since the dom-tree path drains `structured_blocks` as it builds up).
+    let mut loop_structured: BTreeMap<D::Label, D::Structured> = BTreeMap::new();
     structure_nodes(
         ctx,
         &mut input,
         entry_node,
         &mut graph,
         &mut structured_blocks,
+        &mut loop_structured,
     );
 
-    // Reaching-condition function-level pass (No More Gotos): after `structure_nodes` runs,
-    // inner loops are `Input::Reduced` markers and acyclic nodes are still raw in `input`
-    // (the dom-tree path no longer drains). Reaching tries to fold guarded skips into
-    // compound conditions across the whole function; the `folded_any` gate means it only
-    // takes over when it actually improves something, otherwise we use the dom-tree's
-    // output for `entry_node` from `structured_blocks`.
+    // NMG function-level pass. Uses `loop_structured` for inner-loop `Reduced`
+    // renderings; the dom-tree pass above has fully populated it.
     if let Some(mut body) =
-        acyclic::structure_full_function(config, terms, &structured_blocks, &input, entry_node)
+        acyclic::structure_full_function(config, terms, &loop_structured, &input, entry_node)
     {
         flatten_sequence(&mut body);
         for n in &all_nodes {
@@ -107,21 +110,26 @@ pub(crate) fn structure(
         return (body, unemitted);
     }
 
+    // NMG declined: fall back to the dom-tree's output at `entry_node`.
     let mut result = structured_blocks.remove(&entry_node).unwrap();
     flatten_sequence(&mut result);
     let unemitted = graph.unemitted_from(&all_nodes);
     (result, unemitted)
 }
 
+/// Dom-tree post-order pass. Body nodes are processed before their loop heads (so
+/// `structure_loop`'s body assembly finds them in `structured_blocks`); each loop's
+/// wrapped form is also cloned into `loop_structured` so it survives the dom-tree's
+/// later arm absorption -- NMG needs it intact for `Reduced` renderings.
 fn structure_nodes(
     ctx: StructureContext<'_>,
     input: &mut BTreeMap<NodeIndex, ast::Input>,
     entry_node: NodeIndex,
     graph: &mut Graph,
     structured_blocks: &mut BTreeMap<NodeIndex, ast::Structured>,
+    loop_structured: &mut BTreeMap<NodeIndex, ast::Structured>,
 ) {
     let mut post_order = DfsPostOrder::new(&graph.cfg, entry_node);
-
     while let Some(node) = post_order.next(&graph.cfg) {
         if ctx.config.debug_print.structuring {
             println!("Trying to structure node {node:#?}");
@@ -129,6 +137,12 @@ fn structure_nodes(
         }
         if graph.loop_heads.contains(&node) {
             loops::structure_loop(ctx, graph, structured_blocks, node, input);
+            // Snapshot the wrapped Loop form before any outer-scope absorption can drain
+            // `structured_blocks[loop_head]`. NMG reads from `loop_structured` to render
+            // `Input::Reduced` markers without competing with the dom-tree's draining.
+            if let Some(form) = structured_blocks.get(&node) {
+                loop_structured.insert(node, form.clone());
+            }
         } else {
             acyclic::structure_acyclic_node(
                 ctx,

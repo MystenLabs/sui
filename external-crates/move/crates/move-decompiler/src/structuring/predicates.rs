@@ -302,6 +302,62 @@ impl Formula {
         self.as_atom().and_then(cond_block_from_name)
     }
 
+    /// Quine-McCluskey minimization. Maps atoms to `u8` variables, runs the crate's
+    /// `simplify()`, picks the shortest result, and lowers back. Returns the original
+    /// formula unchanged if the atom count exceeds the crate's u8 variable limit (32) or
+    /// if `simplify` returns an empty set.
+    pub fn simplify(&self) -> Formula {
+        use quine_mc_cluskey::Bool as Q;
+
+        let atoms: Vec<Symbol> = self.atoms().into_iter().collect();
+        if atoms.len() > 32 {
+            return self.clone();
+        }
+        let name_to_var: std::collections::BTreeMap<Symbol, u8> = atoms
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (*s, i as u8))
+            .collect();
+
+        fn to_q(f: &Formula, m: &std::collections::BTreeMap<Symbol, u8>) -> Q {
+            match &f.0 {
+                FormulaTree::True => Q::True,
+                FormulaTree::False => Q::False,
+                FormulaTree::Atom(s) => Q::Term(m[s]),
+                FormulaTree::Not(inner) => Q::Not(Box::new(to_q(inner, m))),
+                FormulaTree::And(fs) => Q::And(fs.iter().map(|f| to_q(f, m)).collect()),
+                FormulaTree::Or(fs) => Q::Or(fs.iter().map(|f| to_q(f, m)).collect()),
+            }
+        }
+
+        fn from_q(q: &Q, atoms: &[Symbol]) -> Formula {
+            match q {
+                Q::True => true_(),
+                Q::False => false_(),
+                Q::Term(i) => atom(atoms[*i as usize]),
+                Q::Not(inner) => not(from_q(inner, atoms)),
+                Q::And(fs) => and(fs.iter().map(|q| from_q(q, atoms)).collect()),
+                Q::Or(fs) => or(fs.iter().map(|q| from_q(q, atoms)).collect()),
+            }
+        }
+
+        let q = to_q(self, &name_to_var);
+        let simplified = q.simplify();
+        if simplified.is_empty() {
+            return self.clone();
+        }
+        // Pick the shortest minimal form by node count (operator + leaf count).
+        fn size(q: &Q) -> usize {
+            match q {
+                Q::True | Q::False | Q::Term(_) => 1,
+                Q::Not(inner) => 1 + size(inner),
+                Q::And(fs) | Q::Or(fs) => 1 + fs.iter().map(size).sum::<usize>(),
+            }
+        }
+        let best = simplified.iter().min_by_key(|q| size(q)).unwrap();
+        from_q(best, &atoms)
+    }
+
     /// Lower to an `Exp`. Atoms become `Variable(name)`; the surrounding `let __c{n}`
     /// bindings live in the structured form's setup (emitted by the caller - typically
     /// the `CondIf` handler in `translate.rs`, which hoists each contributing condition

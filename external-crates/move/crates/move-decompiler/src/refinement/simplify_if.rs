@@ -9,7 +9,7 @@ use crate::{
     },
 };
 
-// Three local cleanups on `IfElse`:
+// Four local cleanups on `IfElse`:
 //
 // 1. If the then-arm `always_terminates` (abort/return/break/continue, or a Seq/IfElse
 //    that recursively does), the else-arm is unreachable as fall-through from inside the
@@ -23,6 +23,8 @@ use crate::{
 //    rather than the equivalent `if (t) { rest }; (else-terminator-unreachable)` shape.
 //
 // 3. An empty else carries no information - drop it: `if (t) c else {}` -> `if (t) c`.
+//
+// 4. An empty then with a non-empty else inverts: `if (t) {} else { body }` -> `if (!t) { body }`.
 //
 // Precedence between rules 1 and 2 when both could fire (both arms always_terminate):
 // prefer the rule that keeps an `Abort` in the conditional. When `else` is an `Abort` and
@@ -83,6 +85,17 @@ impl Refine for SimplifyIf {
             && is_empty(alt)
         {
             **else_b = None;
+            return true;
+        }
+
+        // Rule 4: empty then + non-empty else inverts.
+        if let Some(alt) = else_b.as_ref().as_ref()
+            && is_empty(then_b)
+            && !is_empty(alt)
+        {
+            let mut neg = cond.as_ref().clone();
+            negate(&mut neg);
+            *exp = Exp::IfElse(Box::new(neg), Box::new(alt.clone()), Box::new(None));
             return true;
         }
 

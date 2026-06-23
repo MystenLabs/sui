@@ -1052,6 +1052,26 @@ fn primitive_op_doc(context: &Context, op: &PrimitiveOp, args: &[Exp]) -> Doc {
             .concat_space(D::text(sym.to_string()))
             .concat_space(exp(context, rhs))
     };
+    // `&&` / `||` parenthesize boolean-operator children so nested compound conditions
+    // read unambiguously: `a && b || c` becomes `(a && b) || c`, etc.
+    let is_bool_compound = |e: &Exp| {
+        matches!(
+            e,
+            Exp::Primitive {
+                op: PrimitiveOp::And | PrimitiveOp::Or,
+                ..
+            }
+        )
+    };
+    let bool_arg = |e: &Exp| {
+        let doc = exp(context, e);
+        if is_bool_compound(e) { doc.parens() } else { doc }
+    };
+    let bool_bin = |lhs: &Exp, sym: &str, rhs: &Exp| {
+        bool_arg(lhs)
+            .concat_space(D::text(sym.to_string()))
+            .concat_space(bool_arg(rhs))
+    };
 
     match op {
         PrimitiveOp::CastU8 => exp(context, &args[0]).concat(D::text("as u8")),
@@ -1069,8 +1089,8 @@ fn primitive_op_doc(context: &Context, op: &PrimitiveOp, args: &[Exp]) -> Doc {
         PrimitiveOp::BitOr => bin(&args[0], "|", &args[1]),
         PrimitiveOp::BitAnd => bin(&args[0], "&", &args[1]),
         PrimitiveOp::Xor => bin(&args[0], "^", &args[1]),
-        PrimitiveOp::Or => bin(&args[0], "||", &args[1]),
-        PrimitiveOp::And => bin(&args[0], "&&", &args[1]),
+        PrimitiveOp::Or => bool_bin(&args[0], "||", &args[1]),
+        PrimitiveOp::And => bool_bin(&args[0], "&&", &args[1]),
         PrimitiveOp::Equal => bin(&args[0], "==", &args[1]),
         PrimitiveOp::NotEqual => bin(&args[0], "!=", &args[1]),
         PrimitiveOp::LessThan => bin(&args[0], "<", &args[1]),

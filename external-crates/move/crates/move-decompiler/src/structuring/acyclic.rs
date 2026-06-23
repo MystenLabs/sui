@@ -133,15 +133,17 @@ fn structure_nmg(
     let topo = topological_order(&proj.input)?;
 
     // Initial AST: `Seq[ if(c_r(n_1)) { n_1 }; ...; if(c_r(n_k)) { n_k } ]` per NMG §IV-B
-    // step 1. Drop nodes with `False` reaching condition (dead code) and entry is
-    // unconditional.
+    // step 1. Each guard is minimized via Quine-McCluskey so duplicates / complementary
+    // pairs collapse before we look for common factors. Drop `False` guards (dead code);
+    // `entry` is unconditional.
     let mut items: Vec<(Formula, D::Structured)> = Vec::with_capacity(topo.len());
     for n in topo {
-        let guard = if n == entry {
+        let raw_guard = if n == entry {
             predicates::true_()
         } else {
             reach.get(&n).cloned().unwrap_or_else(predicates::true_)
         };
+        let guard = raw_guard.simplify();
         if guard == predicates::false_() {
             continue;
         }
