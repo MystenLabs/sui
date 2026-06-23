@@ -36,7 +36,10 @@ use std::time::Duration;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::TypeTag;
+use sui_types::accumulator_root::AccumulatorValue;
+use sui_types::balance::Balance;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
 use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::digests::TransactionDigest;
 use sui_types::gas_coin::GAS;
@@ -286,6 +289,10 @@ pub struct CompositeWorkloadConfig {
     pub shared_counter_hotness: f32,
     pub address_balance_amount: u64,
     pub address_balance_gas_probability: f32,
+    /// Probability that a tx's gas payment is built as a mix of a real coin and a coin-reservation
+    /// digest entry (in randomized order). Exercises the gas-smashing path that combines an
+    /// `ObjectRef` gas coin with an address-balance reservation.
+    pub mixed_gas_payment_probability: f32,
     pub conflicting_transaction_probability: f32,
     pub alias_tx_probability: f32,
     pub alias_txs_before_revoke: u32,
@@ -376,6 +383,7 @@ impl Default for CompositeWorkloadConfig {
             shared_counter_hotness: 0.5,
             address_balance_amount: 1000,
             address_balance_gas_probability: 0.5,
+            mixed_gas_payment_probability: 0.05,
             conflicting_transaction_probability: 0.1,
             alias_tx_probability: 0.0,
             alias_txs_before_revoke: 3,
@@ -485,6 +493,10 @@ enum BatchTxKind {
 #[derive(Clone)]
 struct BatchTxInfo {
     gas_idx: usize,
+    /// Index of a second real gas coin used by this tx (only populated by the
+    /// mixed-payment branch when it claims a spare from `current_batch_gas`). Its
+    /// tracked version must also be refreshed from effects.
+    extra_gas_idx: Option<usize>,
     op_set: OperationSet,
     kind: BatchTxKind,
 }
@@ -632,7 +644,7 @@ impl CompositePayload {
             }
         }
 
-        (tx_builder.build_and_sign(keypair), op_set)
+        (tx_builder.ensure_unique().build_and_sign(keypair), op_set)
     }
 
     fn generate_alias_transaction(
@@ -664,6 +676,7 @@ impl CompositePayload {
                             CallArg::Pure(bcs::to_bytes(&alias_state.alias_address).unwrap()),
                         ],
                     )
+                    .ensure_unique()
                     .build_and_sign(keypair);
                 alias_state.cycle_state = AliasRevokeCycleState::RemovePending { tx_digest: None };
                 (
@@ -675,6 +688,7 @@ impl CompositePayload {
             AliasRevokeCycleState::Active { .. } => {
                 let data = TestTransactionBuilder::new(sender, gas, rgp)
                     .transfer_sui(None, sender)
+                    .ensure_unique()
                     .build();
                 let tx = Transaction::from_data_and_signer(
                     data,
@@ -689,6 +703,7 @@ impl CompositePayload {
             AliasRevokeCycleState::Revoked => {
                 let data = TestTransactionBuilder::new(sender, gas, rgp)
                     .transfer_sui(None, sender)
+                    .ensure_unique()
                     .build();
                 let tx = Transaction::from_data_and_signer(
                     data,
@@ -717,6 +732,7 @@ impl CompositePayload {
                             CallArg::Pure(bcs::to_bytes(&alias_state.alias_address).unwrap()),
                         ],
                     )
+                    .ensure_unique()
                     .build_and_sign(keypair);
                 alias_state.cycle_state = AliasRevokeCycleState::AddPending { tx_digest: None };
                 (
@@ -736,6 +752,7 @@ impl CompositePayload {
             tx,
             BatchTxInfo {
                 gas_idx,
+                extra_gas_idx: None,
                 op_set,
                 kind,
             },
@@ -942,7 +959,13 @@ impl Payload for CompositePayload {
 
         let mut rng = get_rng();
 
+        // Spare gas coins available beyond the per-tx allocation and the optional alias
+        // slot. The mixed-payment branch can claim these to build 2-real-coin payments.
+        let alias_offset = if alias_tx_needed { 1 } else { 0 };
+        let mut next_spare_gas_idx = batch_size + alias_offset;
+
         for (i, gas) in current_batch_gas.iter().take(batch_size).enumerate() {
+            let mut extra_gas_idx_opt: Option<usize> = None;
             let builder = if !address_balance_gas_disabled
                 && rng.gen_bool(self.config.address_balance_gas_probability as f64)
             {
@@ -954,6 +977,40 @@ impl Payload for CompositePayload {
                     current_epoch,
                     nonce,
                 )
+            } else if !address_balance_gas_disabled
+                && rng.gen_bool(self.config.mixed_gas_payment_probability as f64)
+            {
+                used_gas.push(i);
+                // Mix 1-2 real coins with 1-2 coin-reservation digest entries and shuffle.
+                // When such a tx is cancelled for insufficient funds (IFFW), each
+                // address-balance entry left in the payment list is settled as a Split
+                // against the (possibly depleted) accumulator: the gas-smashing path under test.
+                let sui_balance_type = Balance::type_tag(GAS::type_tag());
+                let accumulator_obj_id = AccumulatorValue::get_field_id(sender, &sui_balance_type)
+                    .expect("Failed to compute accumulator object ID");
+                // Sized in the same order of magnitude as the AB amount: large enough that
+                // concurrent overdraw can leave it underfunded, but not so large that signing
+                // or scheduling rejects it. base+1 gives the second fake coin a distinct digest.
+                let base_reservation = std::cmp::max(1, self.config.address_balance_amount * 10);
+
+                let mut payment = vec![*gas];
+                if rng.gen_bool(0.5) && next_spare_gas_idx < current_batch_gas.len() {
+                    payment.push(current_batch_gas[next_spare_gas_idx]);
+                    extra_gas_idx_opt = Some(next_spare_gas_idx);
+                    next_spare_gas_idx += 1;
+                }
+                let num_fakes = if rng.gen_bool(0.5) { 2 } else { 1 };
+                for k in 0..num_fakes {
+                    let fake_coin = ParsedObjectRefWithdrawal::new(
+                        *accumulator_obj_id.inner(),
+                        current_epoch,
+                        base_reservation + k as u64,
+                    )
+                    .encode(SequenceNumber::new(), self.pool.chain_identifier);
+                    payment.push(fake_coin);
+                }
+                payment.shuffle(&mut rng);
+                TestTransactionBuilder::new_with_gas_objects(sender, payment, rgp)
             } else {
                 used_gas.push(i);
                 TestTransactionBuilder::new(sender, *gas, rgp)
@@ -963,6 +1020,7 @@ impl Payload for CompositePayload {
                 self.generate_transaction(builder, &account_state, &keypair, current_epoch);
             self.current_batch_txs.push(BatchTxInfo {
                 gas_idx: i,
+                extra_gas_idx: extra_gas_idx_opt,
                 op_set,
                 kind: BatchTxKind::Normal,
             });
@@ -983,6 +1041,7 @@ impl Payload for CompositePayload {
                     self.generate_transaction(builder, &account_state, &keypair, current_epoch);
                 self.current_batch_txs.push(BatchTxInfo {
                     gas_idx: *gas_idx,
+                    extra_gas_idx: None,
                     op_set,
                     kind: BatchTxKind::Normal,
                 });
@@ -1064,6 +1123,9 @@ impl Payload for CompositePayload {
                         metrics.record_abort(tx_info.op_set.clone());
                     }
                     update_gas!(&mut gas.0[tx_info.gas_idx], effects);
+                    if let Some(extra_idx) = tx_info.extra_gas_idx {
+                        update_gas!(&mut gas.0[extra_idx], effects);
+                    }
                 }
                 BatchedTransactionStatus::PermanentFailure { error } => {
                     permanent_failure_count += 1;
@@ -1355,6 +1417,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
         let transaction = TestTransactionBuilder::new(head.1, head.0, gas_price)
             .publish_async(path)
             .await
+            .ensure_unique()
             .build_and_sign(head.2.as_ref());
         let execution_result = execution_proxy.execute_transaction_block(transaction).await;
         let effects = execution_result.expect("Package publish should succeed");
@@ -1389,6 +1452,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
         for (gas, sender, keypair) in tail.iter() {
             let transaction = TestTransactionBuilder::new(*sender, *gas, gas_price)
                 .call_counter_create(self.package_id.unwrap())
+                .ensure_unique()
                 .build_and_sign(keypair.as_ref());
             let proxy_ref = execution_proxy.clone();
             futures.push(async move {
@@ -1483,7 +1547,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                         vec![coin_balance, recipient_arg],
                     );
                 }
-                let tx = tx_builder.build_and_sign(keypair.as_ref());
+                let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
                 let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
@@ -1506,6 +1570,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             let gas = &mut multi_gas[0];
             let tx = TestTransactionBuilder::new(*sender, *gas, gas_price)
                 .move_call(self.package_id.unwrap(), "balance_pool", "create", vec![])
+                .ensure_unique()
                 .build_and_sign(keypair.as_ref());
 
             let execution_result = execution_proxy.execute_transaction_block(tx).await;
@@ -1563,7 +1628,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     vec![pool_arg, coin_balance],
                 );
             }
-            let tx = tx_builder.build_and_sign(keypair.as_ref());
+            let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
             let execution_result = execution_proxy.execute_transaction_block(tx).await;
             let effects = execution_result.expect("Balance pool seed should succeed");
@@ -1582,6 +1647,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                         "create_cap",
                         vec![cap_ref.into()],
                     )
+                    .ensure_unique()
                     .build_and_sign(keypair.as_ref());
 
                 let execution_result = execution_proxy.execute_transaction_block(tx).await;
@@ -1621,7 +1687,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     vec![value_arg],
                 );
             }
-            let tx = tx_builder.build_and_sign(keypair.as_ref());
+            let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
             let execution_result = execution_proxy.execute_transaction_block(tx).await;
             let effects = execution_result.expect("Immutable object creation should succeed");
@@ -1685,7 +1751,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                             vec![balance, recipient_arg],
                         );
                     }
-                    let tx = tx_builder.build_and_sign(keypair.as_ref());
+                    let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
                     let execution_result = execution_proxy.execute_transaction_block(tx).await;
                     let effects = execution_result.expect("TEST_COIN seed deposit should succeed");
@@ -1737,6 +1803,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                             mutability: SharedObjectMutability::Mutable,
                         })],
                     )
+                    .ensure_unique()
                     .build_and_sign(keypair.as_ref());
 
                 let execution_result = execution_proxy.execute_transaction_block(enable_tx).await;
@@ -1797,7 +1864,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                         .collect();
                     builder.transfer_args(*sender, new_coin_args);
                 }
-                let tx = tx_builder.build_and_sign(keypair.as_ref());
+                let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
                 let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
                     let execution_result = proxy_ref.execute_transaction_block(tx).await;

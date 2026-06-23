@@ -57,6 +57,15 @@ async fn get_epoch() {
         .epoch
         .unwrap();
     assert!(epoch.system_state.is_some());
+
+    let status = client
+        .get_epoch(
+            GetEpochRequest::new(latest_epoch.epoch.unwrap() + 1000)
+                .with_read_mask(FieldMask::from_str("*")),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(status.code(), tonic::Code::NotFound);
 }
 
 #[sim_test]

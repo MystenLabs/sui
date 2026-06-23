@@ -115,7 +115,7 @@ async fn test_event_subscription_transaction_fields() {
     });
 }
 
-/// Verifies the `Address.asTransactionObject` resolver in streaming mode for the
+/// Verifies the `IAddressable.asTransactionObject` resolver in streaming mode for the
 /// `ObjectChange` variant.
 #[tokio::test]
 async fn test_event_subscription_as_transaction_object_change() {
@@ -169,7 +169,7 @@ async fn test_event_subscription_as_transaction_object_change() {
     });
 }
 
-/// Verifies the `Address.asTransactionObject` resolver in streaming mode for the
+/// Verifies the `IAddressable.asTransactionObject` resolver in streaming mode for the
 /// `ConsensusObjectRead` variant. The test tx takes the (read-only) shared clock as a
 /// consensus input and emits a `TestAddressEvent` whose payload is the clock's address.
 #[tokio::test]

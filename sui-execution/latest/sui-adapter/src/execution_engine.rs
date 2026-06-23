@@ -13,7 +13,7 @@ mod checked {
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
-    use mysten_common::{debug_fatal, in_test_configuration};
+    use mysten_common::{assert_reachable, debug_fatal, in_test_configuration};
     use std::collections::BTreeMap;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
@@ -314,6 +314,7 @@ mod checked {
         // fall through to the address-balance gas-payment pruning hotfix instead); everywhere else
         // it applies based on `early_exit_on_iffw`.
         if should_short_circuit_insufficient_funds(&execution_params, protocol_config) {
+            assert_reachable!("IFFW short-circuit fired");
             temporary_store.ensure_active_inputs_mutated();
             transaction_dependencies.remove(&TransactionDigest::genesis_marker());
 
@@ -459,62 +460,66 @@ mod checked {
             *epoch_id,
         );
 
-        metrics.vm_telemetry_metrics.try_update(|vm_metrics| {
-            let t = move_vm.get_telemetry_report();
-            vm_metrics
-                .move_vm_package_cache_count
-                .set(t.package_cache_count as i64);
-            vm_metrics
-                .move_vm_total_arena_size_bytes
-                .set(t.total_arena_size as i64);
-            vm_metrics.move_vm_module_count.set(t.module_count as i64);
-            vm_metrics
-                .move_vm_function_count
-                .set(t.function_count as i64);
-            vm_metrics.move_vm_type_count.set(t.type_count as i64);
-            vm_metrics.move_vm_interner_size.set(t.interner_size as i64);
-            vm_metrics
-                .move_vm_vtable_cache_count
-                .set(t.vtable_cache_count as i64);
-            vm_metrics
-                .move_vm_vtable_cache_hits
-                .set(t.vtable_cache_hits as i64);
-            vm_metrics
-                .move_vm_vtable_cache_misses
-                .set(t.vtable_cache_misses as i64);
-            vm_metrics
-                .move_vm_load_time_ms
-                .set(t.total_load_time as i64);
-            vm_metrics.move_vm_load_count.set(t.load_count as i64);
-            vm_metrics
-                .move_vm_validation_time_ms
-                .set(t.total_validation_time as i64);
-            vm_metrics
-                .move_vm_validation_count
-                .set(t.validation_count as i64);
-            vm_metrics.move_vm_jit_time_ms.set(t.total_jit_time as i64);
-            vm_metrics.move_vm_jit_count.set(t.jit_count as i64);
-            vm_metrics
-                .move_vm_execution_time_ms
-                .set(t.total_execution_time as i64);
-            vm_metrics
-                .move_vm_execution_count
-                .set(t.execution_count as i64);
-            vm_metrics
-                .move_vm_interpreter_time_ms
-                .set(t.total_interpreter_time as i64);
-            vm_metrics
-                .move_vm_interpreter_count
-                .set(t.interpreter_count as i64);
-            vm_metrics
-                .move_vm_max_callstack_size
-                .set(t.max_callstack_size as i64);
-            vm_metrics
-                .move_vm_max_valuestack_size
-                .set(t.max_valuestack_size as i64);
-            vm_metrics.move_vm_total_time_ms.set(t.total_time as i64);
-            vm_metrics.move_vm_total_count.set(t.total_count as i64);
-        });
+        // Skip VM telemetry on simulation paths (dev-inspect / dry-run) since a new runtime is
+        // spun-up each time.
+        if !Mode::TRACK_EXECUTION {
+            metrics.vm_telemetry_metrics.try_update(|vm_metrics| {
+                let t = move_vm.get_telemetry_report();
+                vm_metrics
+                    .move_vm_package_cache_count
+                    .set(t.package_cache_count as i64);
+                vm_metrics
+                    .move_vm_total_arena_size_bytes
+                    .set(t.total_arena_size as i64);
+                vm_metrics.move_vm_module_count.set(t.module_count as i64);
+                vm_metrics
+                    .move_vm_function_count
+                    .set(t.function_count as i64);
+                vm_metrics.move_vm_type_count.set(t.type_count as i64);
+                vm_metrics.move_vm_interner_size.set(t.interner_size as i64);
+                vm_metrics
+                    .move_vm_vtable_cache_count
+                    .set(t.vtable_cache_count as i64);
+                vm_metrics
+                    .move_vm_vtable_cache_hits
+                    .set(t.vtable_cache_hits as i64);
+                vm_metrics
+                    .move_vm_vtable_cache_misses
+                    .set(t.vtable_cache_misses as i64);
+                vm_metrics
+                    .move_vm_load_time_ms
+                    .set(t.total_load_time as i64);
+                vm_metrics.move_vm_load_count.set(t.load_count as i64);
+                vm_metrics
+                    .move_vm_validation_time_ms
+                    .set(t.total_validation_time as i64);
+                vm_metrics
+                    .move_vm_validation_count
+                    .set(t.validation_count as i64);
+                vm_metrics.move_vm_jit_time_ms.set(t.total_jit_time as i64);
+                vm_metrics.move_vm_jit_count.set(t.jit_count as i64);
+                vm_metrics
+                    .move_vm_execution_time_ms
+                    .set(t.total_execution_time as i64);
+                vm_metrics
+                    .move_vm_execution_count
+                    .set(t.execution_count as i64);
+                vm_metrics
+                    .move_vm_interpreter_time_ms
+                    .set(t.total_interpreter_time as i64);
+                vm_metrics
+                    .move_vm_interpreter_count
+                    .set(t.interpreter_count as i64);
+                vm_metrics
+                    .move_vm_max_callstack_size
+                    .set(t.max_callstack_size as i64);
+                vm_metrics
+                    .move_vm_max_valuestack_size
+                    .set(t.max_valuestack_size as i64);
+                vm_metrics.move_vm_total_time_ms.set(t.total_time as i64);
+                vm_metrics.move_vm_total_count.set(t.total_count as i64);
+            });
+        }
 
         (
             inner,
@@ -665,6 +670,24 @@ mod checked {
                 ExecutionErrorKind::InsufficientGas,
                 msg,
             ));
+        }
+
+        // Reject transactions whose per-key accumulator totals are not representable *before*
+        // charging gas. For SUI this bounds each per-key gross Merge/Split total to the total supply;
+        // for other balances it bounds them to u64. Doing so here means the rejected PTB-emitted
+        // accumulator events are dropped during the gas reset on the error path (only the bounded gas
+        // events remain). Bounding SUI to the supply (which is ~8.4B SUI below u64::MAX) leaves enough
+        // headroom that the gas-smash deposit / gas-charge events emitted *after* this point cannot
+        // push any per-key total past u64::MAX, so the fold in AccumulatorWriteV1::merge cannot
+        // overflow even though those gas events are not re-checked here.
+        //
+        // Ungated: this only ever turns a would-be arithmetic failure into a deterministic abort,
+        // which produces no committed effects and so cannot diverge from any previously-committed
+        // result, and it applies uniformly across protocol versions.
+        if result.is_ok()
+            && let Err(e) = temporary_store.check_accumulator_amounts_representable()
+        {
+            result = Err(e.into());
         }
 
         let cost_summary = gas_charger.charge_gas(temporary_store, protocol_config, &mut result);

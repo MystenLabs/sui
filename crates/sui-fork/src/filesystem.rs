@@ -141,6 +141,16 @@ struct ObjectLatestMetadata {
     state: ObjectLatestState,
 }
 
+/// Result of a bounded local object lookup.
+pub(crate) enum BoundedObjectLookup {
+    /// A live object version at or below the requested bound was found locally.
+    Hit(Object),
+    /// A local tombstone at or below the requested bound proves the object is absent.
+    NegativeHit,
+    /// Local storage has no authoritative answer for the requested bound.
+    Miss,
+}
+
 impl ObjectLatestMetadata {
     /// Construct numeric-only latest metadata for a live object version.
     fn live(version: u64) -> Self {
@@ -445,6 +455,40 @@ impl FilesystemStore {
         self.read_bcs_file(&version_file).map(Some)
     }
 
+    /// Get the highest locally persisted object version at or below `version_bound`.
+    pub(crate) fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version_bound: u64,
+    ) -> anyhow::Result<BoundedObjectLookup> {
+        let object_dir = self.objects_dir().join(object_id.to_string());
+        if !object_dir.exists() {
+            return Ok(BoundedObjectLookup::Miss);
+        }
+
+        if let Some(latest) = self.read_object_latest_metadata_if_exists(&object_dir)?
+            && latest.version <= version_bound
+        {
+            if latest.state.is_removed() {
+                return Ok(BoundedObjectLookup::NegativeHit);
+            }
+
+            let version_file = object_dir.join(latest.version.to_string());
+            return self
+                .read_bcs_file(&version_file)
+                .map(BoundedObjectLookup::Hit);
+        }
+
+        let Some(version) =
+            self.find_highest_object_version_lt_or_eq(&object_dir, version_bound)?
+        else {
+            return Ok(BoundedObjectLookup::Miss);
+        };
+
+        self.read_bcs_file(&object_dir.join(version.to_string()))
+            .map(BoundedObjectLookup::Hit)
+    }
+
     /// Write an object fetched from remote/cache paths. Existing deleted or wrapped current-state
     /// metadata is preserved so remote reads cannot resurrect local removals.
     pub(crate) fn write_object(&self, object: &Object) -> anyhow::Result<()> {
@@ -601,6 +645,54 @@ impl FilesystemStore {
         let latest_file = object_dir.join(LATEST_FILE);
         fs::write(&latest_file, latest.format())
             .with_context(|| format!("Failed to write latest file: {}", latest_file.display()))
+    }
+
+    /// Scan the object directory for the highest version at or below the bound, ignoring
+    /// non-version files.
+    fn find_highest_object_version_lt_or_eq(
+        &self,
+        object_dir: &Path,
+        version_bound: u64,
+    ) -> anyhow::Result<Option<u64>> {
+        let mut best = None;
+        for entry in fs::read_dir(object_dir)
+            .with_context(|| format!("Failed to read object directory: {}", object_dir.display()))?
+        {
+            let entry = entry.with_context(|| {
+                format!(
+                    "Failed to read object directory entry: {}",
+                    object_dir.display()
+                )
+            })?;
+
+            if !entry
+                .file_type()
+                .with_context(|| {
+                    format!(
+                        "Failed to read object file type: {}",
+                        entry.path().display()
+                    )
+                })?
+                .is_file()
+            {
+                continue;
+            }
+
+            let file_name = entry.file_name();
+            let Some(name) = file_name.to_str() else {
+                continue;
+            };
+            let Ok(version) = name.parse::<u64>() else {
+                continue;
+            };
+
+            // Compare the current best version with the candidate version, and update it if the
+            // candidate version is higher but still within bound.
+            if version <= version_bound && best.is_none_or(|best| version > best) {
+                best = Some(version);
+            }
+        }
+        Ok(best)
     }
 
     /// Read the owned-object index. Missing index files represent an empty index.

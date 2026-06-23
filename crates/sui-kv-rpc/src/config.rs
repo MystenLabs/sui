@@ -168,6 +168,13 @@ impl StagesConfig {
             PipelineStage::Checkpoints => self.checkpoints.as_ref(),
         }
     }
+
+    /// Resolved tunables for one pipeline stage. Unset stages fall back to the
+    /// built-in chunk size (`100`) and stage concurrency (`10`); the latter is
+    /// independent of `request_bigtable_concurrency`.
+    pub fn stage(&self, stage: PipelineStage) -> ResolvedStageConfig {
+        StageConfig::resolve(self.get(stage))
+    }
 }
 
 /// Tunables for the v2alpha ledger-history list APIs. Per-endpoint knobs live in
@@ -218,20 +225,6 @@ pub struct LedgerHistoryConfig {
     /// Defaults to `10` if not specified.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_bitmap_filter_literals: Option<usize>,
-
-    /// Per-request semaphore capacity gating downstream BigTable reads. Bitmap
-    /// scans are not gated by this; their fanout is bounded by
-    /// `max_bitmap_filter_literals`.
-    ///
-    /// Defaults to `10` if not specified.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub request_bigtable_concurrency: Option<usize>,
-
-    /// Per-table-stage pipeline tunables (chunk size and fan-out concurrency).
-    /// Bounded by `request_bigtable_concurrency` at runtime, which remains the
-    /// request-wide read ceiling.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stages: Option<StagesConfig>,
 }
 
 impl LedgerHistoryConfig {
@@ -268,18 +261,6 @@ impl LedgerHistoryConfig {
             .unwrap_or(DEFAULT_MAX_BITMAP_FILTER_LITERALS)
     }
 
-    pub fn request_bigtable_concurrency(&self) -> usize {
-        self.request_bigtable_concurrency
-            .unwrap_or(DEFAULT_REQUEST_BIGTABLE_CONCURRENCY)
-    }
-
-    /// Resolved tunables for one pipeline stage. Unset stages fall back to the
-    /// built-in chunk size (`100`) and stage concurrency (`10`); the latter is
-    /// independent of `request_bigtable_concurrency`.
-    pub fn stage(&self, stage: PipelineStage) -> ResolvedStageConfig {
-        StageConfig::resolve(self.stages.as_ref().and_then(|s| s.get(stage)))
-    }
-
     /// Reject configurations that cannot make forward progress. Each filter
     /// literal becomes one bitmap leaf that must fetch at least one bucket to
     /// emit its first watermark; if a per-request budget is below the literal
@@ -287,10 +268,6 @@ impl LedgerHistoryConfig {
     /// leaving the client a cursorless `QueryEnd` it cannot resume from. Mirrors
     /// the fullnode side's `LedgerHistoryConfig::validate`.
     pub fn validate(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(
-            self.request_bigtable_concurrency() > 0,
-            "ledger_history.request_bigtable_concurrency must be greater than zero",
-        );
         anyhow::ensure!(
             self.max_bitmap_filter_literals() > 0,
             "ledger_history.max_bitmap_filter_literals must be greater than zero",
@@ -311,22 +288,6 @@ impl LedgerHistoryConfig {
             self.bitmap_bucket_budget_event(),
             self.max_bitmap_filter_literals(),
         );
-        for stage in [
-            PipelineStage::TxSeqDigest,
-            PipelineStage::Transactions,
-            PipelineStage::Objects,
-            PipelineStage::Checkpoints,
-        ] {
-            let resolved = self.stage(stage);
-            anyhow::ensure!(
-                resolved.chunk_size > 0,
-                "ledger_history.stages.{stage:?} chunk_size must be greater than zero",
-            );
-            anyhow::ensure!(
-                resolved.concurrency > 0,
-                "ledger_history.stages.{stage:?} concurrency must be greater than zero",
-            );
-        }
         Ok(())
     }
 }
@@ -354,9 +315,6 @@ pub struct KvRpcConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_profile_id: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub checkpoint_bucket: Option<String>,
 
     /// Path to a GCP service account JSON key file. If unset, Application
     /// Default Credentials are used.
@@ -409,6 +367,21 @@ pub struct KvRpcConfig {
     /// Tunables for the v2alpha ledger-history list APIs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ledger_history: Option<LedgerHistoryConfig>,
+
+    /// Per-request semaphore capacity gating downstream BigTable reads, shared by
+    /// the point-get and list APIs. Bitmap scans are not gated by this; their
+    /// fanout is bounded by `ledger_history.max_bitmap_filter_literals`.
+    ///
+    /// Defaults to `10` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_bigtable_concurrency: Option<usize>,
+
+    /// Per-table-stage read pipeline tunables (chunk size and fan-out
+    /// concurrency), shared by the point-get and list APIs. Bounded by
+    /// `request_bigtable_concurrency` at runtime, which remains the request-wide
+    /// read ceiling.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stages: Option<StagesConfig>,
 }
 
 impl KvRpcConfig {
@@ -496,6 +469,43 @@ impl KvRpcConfig {
     pub fn ledger_history(&self) -> LedgerHistoryConfig {
         self.ledger_history.clone().unwrap_or_default()
     }
+
+    pub fn request_bigtable_concurrency(&self) -> usize {
+        self.request_bigtable_concurrency
+            .unwrap_or(DEFAULT_REQUEST_BIGTABLE_CONCURRENCY)
+    }
+
+    pub fn stages(&self) -> StagesConfig {
+        self.stages.clone().unwrap_or_default()
+    }
+
+    /// Reject configurations that cannot make forward progress. Validates the
+    /// shared read-pipeline knobs (concurrency and per-stage chunk/fan-out) and
+    /// delegates to [`LedgerHistoryConfig::validate`] for the list-API knobs.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.request_bigtable_concurrency() > 0,
+            "request_bigtable_concurrency must be greater than zero",
+        );
+        let stages = self.stages();
+        for stage in [
+            PipelineStage::TxSeqDigest,
+            PipelineStage::Transactions,
+            PipelineStage::Objects,
+            PipelineStage::Checkpoints,
+        ] {
+            let resolved = stages.stage(stage);
+            anyhow::ensure!(
+                resolved.chunk_size > 0,
+                "stages.{stage:?} chunk_size must be greater than zero",
+            );
+            anyhow::ensure!(
+                resolved.concurrency > 0,
+                "stages.{stage:?} concurrency must be greater than zero",
+            );
+        }
+        self.ledger_history().validate()
+    }
 }
 
 #[cfg(test)]
@@ -539,36 +549,35 @@ mod tests {
     #[test]
     fn stage_override_wins_and_siblings_default() {
         let yaml = r#"
-ledger-history:
-  stages:
-    objects:
-      concurrency: 4
-    transactions:
-      chunk-size: 25
+stages:
+  objects:
+    concurrency: 4
+  transactions:
+    chunk-size: 25
 "#;
         let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
-        let lh = cfg.ledger_history();
+        let stages = cfg.stages();
 
-        let objects = lh.stage(PipelineStage::Objects);
+        let objects = stages.stage(PipelineStage::Objects);
         assert_eq!(objects.concurrency, 4);
         // Unset sibling field on the same stage falls back to its default.
         assert_eq!(objects.chunk_size, 100);
 
-        let transactions = lh.stage(PipelineStage::Transactions);
+        let transactions = stages.stage(PipelineStage::Transactions);
         assert_eq!(transactions.chunk_size, 25);
         assert_eq!(transactions.concurrency, 10);
 
         // Untouched stage is fully default.
-        let checkpoints = lh.stage(PipelineStage::Checkpoints);
+        let checkpoints = stages.stage(PipelineStage::Checkpoints);
         assert_eq!(checkpoints.chunk_size, 100);
         assert_eq!(checkpoints.concurrency, 10);
 
-        lh.validate().unwrap();
+        cfg.validate().unwrap();
     }
 
     #[test]
     fn validate_rejects_zero_stage_knob() {
-        let cfg = LedgerHistoryConfig {
+        let cfg = KvRpcConfig {
             stages: Some(StagesConfig {
                 objects: Some(StageConfig {
                     chunk_size: Some(0),
@@ -581,7 +590,7 @@ ledger-history:
         let err = cfg.validate().expect_err("zero chunk_size must fail");
         assert!(err.to_string().contains("chunk_size"), "{err}");
 
-        let cfg = LedgerHistoryConfig {
+        let cfg = KvRpcConfig {
             stages: Some(StagesConfig {
                 transactions: Some(StageConfig {
                     chunk_size: None,

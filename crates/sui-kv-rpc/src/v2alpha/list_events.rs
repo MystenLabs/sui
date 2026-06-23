@@ -36,7 +36,7 @@ use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
 use crate::pipeline::resolve_watermarks;
 use crate::pipeline::take_items;
-use crate::v2::render_json;
+use crate::render::render_json;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::error_contains;
 use sui_rpc_api::ledger_history::query_options::CheckpointRange;
@@ -73,8 +73,8 @@ pub(crate) async fn list_events(
     let checkpoint_hi_exclusive = ctx.checkpoint_hi_exclusive();
     let lh = ctx.ledger_history();
     let endpoint = lh.list_events();
-    let tx_seq_digest_stage = lh.stage(PipelineStage::TxSeqDigest);
-    let transactions_stage = lh.stage(PipelineStage::Transactions);
+    let tx_seq_digest_stage = ctx.stage(PipelineStage::TxSeqDigest);
+    let transactions_stage = ctx.stage(PipelineStage::Transactions);
 
     let checkpoint_range = CheckpointRange::from_request(
         request.start_checkpoint,
@@ -87,7 +87,6 @@ pub(crate) async fn list_events(
         endpoint.default_limit_items,
         endpoint.max_limit_items,
         QueryType::Events,
-        request.filter.as_ref(),
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;
@@ -684,14 +683,7 @@ mod tests {
             Ordering::Descending => 1,
         };
 
-        QueryOptions::from_proto(
-            Some(&request),
-            100,
-            100,
-            QueryType::Events,
-            Option::<&sui_rpc::proto::sui::rpc::v2alpha::EventFilter>::None,
-        )
-        .unwrap()
+        QueryOptions::from_proto(Some(&request), 100, 100, QueryType::Events).unwrap()
     }
 
     fn tx_row(tx_sequence_number: u64, event_count: u32) -> TxSeqDigestData {

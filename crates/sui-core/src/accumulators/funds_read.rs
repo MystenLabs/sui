@@ -12,10 +12,20 @@ use sui_types::{
 };
 
 pub trait AccountFundsRead: Send + Sync {
-    /// Gets latest amount in account together with the version of the accumulator root object.
-    /// If the account does not exist, returns the current root accumulator version.
+    /// Gets the latest amount in an account. If the account does not exist, returns 0.
+    /// This does an unsequenced read and does not guarantee consistency with the root accumulator
+    /// version.
+    fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> u128;
+
+    /// Gets the account amount at a version consistent with a stable accumulator root version.
+    /// If the account object has advanced ahead of that root version, this returns the amount
+    /// at or before the root version instead of the latest account object amount. If the account
+    /// does not exist at that root version, returns 0 for the amount.
     /// It guarantees no data race between the read of the account object and the root accumulator version.
-    fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> (u128, SequenceNumber);
+    fn get_consistent_latest_account_amount_and_version(
+        &self,
+        account_id: &AccumulatorObjId,
+    ) -> (u128, SequenceNumber);
 
     /// Read the amount at a precise version. Care must be taken to only call this function if we
     /// can guarantee that objects behind this version have not yet been pruned.
@@ -33,7 +43,7 @@ pub trait AccountFundsRead: Send + Sync {
         requested_amounts: &BTreeMap<AccumulatorObjId, (u64, TypeTag)>,
     ) -> SuiResult {
         for (object_id, (requested_amount, _type_tag)) in requested_amounts {
-            let (actual_amount, _) = self.get_latest_account_amount(object_id);
+            let actual_amount = self.get_latest_account_amount(object_id);
 
             if actual_amount < *requested_amount as u128 {
                 return Err(SuiErrorKind::UserInputError {
@@ -61,7 +71,7 @@ pub trait AccountFundsRead: Send + Sync {
         min_amounts: &BTreeMap<TypeTag, u64>,
     ) -> SuiResult {
         for (object_id, (requested_amount, type_tag)) in requested_amounts {
-            let (actual_amount, _) = self.get_latest_account_amount(object_id);
+            let actual_amount = self.get_latest_account_amount(object_id);
             let remaining = actual_amount.saturating_sub(*requested_amount as u128);
             if remaining == 0 {
                 continue;

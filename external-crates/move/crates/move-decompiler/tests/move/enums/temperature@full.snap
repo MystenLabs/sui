@@ -20,8 +20,7 @@ public fun c(): Temperature {
 
 public fun dtor(l0: Temperature) {
     let l2 = l0;
-    let l1 = &l2;
-    match (l1) {
+    match (&l2) {
         Fahrenheit { pos0: reg_4 } => {
             let Temperature::Fahrenheit { pos0: reg_6 } = l2
         },
@@ -36,14 +35,12 @@ public fun f(): Temperature {
 }
 
 public fun is_temperature_fahrenheit(l0: &Temperature): bool {
-    let l2 = l0;
-    let l1 = match (l2) {
+    return match (l0) {
         Fahrenheit { pos0: reg_3 } => {
             true
         },
         Celcius => {
             false
         }
-    };
-    return l1
+    }
 }

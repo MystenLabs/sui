@@ -109,6 +109,7 @@ members = [
     "crates/sui-checkpoint-blob-indexer",
     "crates/sui-cluster-test",
     "crates/sui-config",
+    "crates/sui-consistent-store",
     "crates/sui-core",
     "crates/sui-cost",
     "crates/sui-data-ingestion-core",
@@ -177,6 +178,7 @@ members = [
     "crates/sui-rpc-benchmark",
     "crates/sui-rpc-loadgen",
     "crates/sui-rpc-resolver",
+    "crates/sui-rpc-store",
     "crates/sui-sdk",
     "crates/sui-security-watchdog",
     "crates/sui-simulator",
@@ -229,7 +231,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.74.0"
+version = "1.75.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -617,10 +619,10 @@ move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack"
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "239eed70b763f89fdb1e6c6866fe389690945c45" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "239eed70b763f89fdb1e6c6866fe389690945c45" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "239eed70b763f89fdb1e6c6866fe389690945c45", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "239eed70b763f89fdb1e6c6866fe389690945c45", features = [
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c6010b9080b00e29d039a48c08898d90c2c1cbdd" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c6010b9080b00e29d039a48c08898d90c2c1cbdd" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c6010b9080b00e29d039a48c08898d90c2c1cbdd", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c6010b9080b00e29d039a48c08898d90c2c1cbdd", features = [
   "experimental",
 ] }
 passkey-types = { version = "0.4.0" }
@@ -637,15 +639,15 @@ p384 = { version = "0.13.0", default-features = false, features = [
 ciborium = "0.2"
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "487f8bc739e535391a56e1aa1193084da9d64ce8" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "487f8bc739e535391a56e1aa1193084da9d64ce8" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "487f8bc739e535391a56e1aa1193084da9d64ce8" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "487f8bc739e535391a56e1aa1193084da9d64ce8" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f8555c5594a4966e850170cc11ecfcf557" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f8555c5594a4966e850170cc11ecfcf557" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f8555c5594a4966e850170cc11ecfcf557" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "b1bda3f8555c5594a4966e850170cc11ecfcf557" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5b41bc701525f1b94f1fe63008d4841bc6fb1065", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5b41bc701525f1b94f1fe63008d4841bc6fb1065", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5b41bc701525f1b94f1fe63008d4841bc6fb1065", features = [ "unstable" ] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "43c5bc13202ae398b1519a3eead1f40df8ca277b", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "43c5bc13202ae398b1519a3eead1f40df8ca277b", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "43c5bc13202ae398b1519a3eead1f40df8ca277b", features = [ "unstable" ] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -667,6 +669,7 @@ sui-bridge = { path = "crates/sui-bridge" }
 sui-bridge-schema = { path = "crates/sui-bridge-schema" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
+sui-consistent-store = { path = "crates/sui-consistent-store" }
 sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
@@ -744,6 +747,7 @@ sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
 sui-rpc-api = { path = "crates/sui-rpc-api" }
 sui-rpc-resolver = { path = "crates/sui-rpc-resolver" }
+sui-rpc-store = { path = "crates/sui-rpc-store" }
 sui-tool = { path = "crates/sui-tool" }
 sui-transaction-builder = { path = "crates/sui-transaction-builder" }
 sui-transaction-checks = { path = "crates/sui-transaction-checks" }

@@ -449,6 +449,20 @@ The service exposes an HTTP health check endpoint at `GET /health` on port 8081.
 
 For production deployments, enable TLS by providing `--tls-cert` and `--tls-key`. The service expects PEM-encoded certificate and private key files.
 
+:::tip
+
+Before you run the archival stack in production, work through this hardening checklist:
+
+- **Use least-privilege service accounts.** Scope the indexer to `roles/bigtable.user` and the gRPC service to `roles/bigtable.reader`, as described in the prerequisites. Do not share one broadly privileged account across both.
+- **Store credentials in a secret manager.** Keep service account JSON keys out of images and source control. Prefer [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) on GKE, or load credentials from a secret manager rather than plaintext files.
+- **Test backup and restore.** Configure automated [Bigtable backups](#backup-policy) and periodically verify that you can restore from them, not just that backups exist.
+- **Enable TLS and authentication.** Serve the gRPC API over TLS with `--tls-cert` and `--tls-key`, and restrict access to the service and its health check endpoint to trusted networks.
+- **Size rate limits appropriately.** Set `total-max-rows-per-second` to match your cluster size (see [Backfill rate limit sizing](#backfill-rate-limit-sizing)) so indexing cannot overwhelm Bigtable or degrade read latency.
+
+For the canonical operator guidance, see [Security Best Practices](/develop/security/best-practices).
+
+:::
+
 ## Monitoring
 
 Both the indexer and archival service export Prometheus metrics on port 9184 at `/metrics`.

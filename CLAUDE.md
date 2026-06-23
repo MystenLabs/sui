@@ -110,7 +110,9 @@ Use `#[cfg(test)]` for test-only code used within the same crate. Use `#[cfg(fea
    - Framework changes require snapshot updates
 2. **Protocol Config Changes**:
    - When modifying `crates/sui-protocol-config/src/lib.rs`, always invoke `/protocol-config` to verify changes are safe. Incorrect changes can break network consensus.
-3. **CRITICAL - Final Development Steps**:
+3. **Raising a PR**:
+   - When opening or updating a PR in this repo, always invoke the `/send-pr` skill.
+4. **CRITICAL - Final Development Steps**:
    - **ALWAYS run `cargo xclippy` after finishing development** to ensure code passes all linting checks
    - **NEVER disable or ignore tests** - all tests must pass and be enabled
    - **NEVER use `#[allow(dead_code)]`, `#[allow(unused)]`, or any other linting suppressions** - fix the underlying issues instead

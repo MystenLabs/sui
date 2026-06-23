@@ -36,6 +36,8 @@ pub struct TestEffectsBuilder {
     frozen_objects: BTreeSet<ObjectID>,
     /// Accumulator events.
     accumulator_events: Vec<AccumulatorEvent>,
+    /// Move package writes that create a new on-chain id
+    package_writes: Vec<(ObjectID, SequenceNumber)>,
 }
 
 impl TestEffectsBuilder {
@@ -52,6 +54,7 @@ impl TestEffectsBuilder {
             unwrapped_objects: vec![],
             frozen_objects: BTreeSet::new(),
             accumulator_events: vec![],
+            package_writes: vec![],
         }
     }
 
@@ -125,6 +128,16 @@ impl TestEffectsBuilder {
         events: impl IntoIterator<Item = AccumulatorEvent>,
     ) -> Self {
         self.accumulator_events.extend(events);
+        self
+    }
+
+    /// Add Move package writes that create a new on-chain id (a publish, or a
+    /// user upgrade that mints a new id). Each entry is `(id, version)`.
+    pub fn with_package_writes(
+        mut self,
+        packages: impl IntoIterator<Item = (ObjectID, SequenceNumber)>,
+    ) -> Self {
+        self.package_writes.extend(packages);
         self
     }
 
@@ -278,6 +291,16 @@ impl TestEffectsBuilder {
                         input_state: ObjectIn::NotExist,
                         output_state: ObjectOut::AccumulatorWriteV1(event.write),
                         id_operation: IDOperation::None,
+                    },
+                )
+            }))
+            .chain(self.package_writes.into_iter().map(|(id, version)| {
+                (
+                    id,
+                    EffectsObjectChange {
+                        input_state: ObjectIn::NotExist,
+                        output_state: ObjectOut::PackageWrite((version, ObjectDigest::random())),
+                        id_operation: IDOperation::Created,
                     },
                 )
             }))

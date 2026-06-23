@@ -619,7 +619,7 @@ impl Swarm {
     pub fn fullnodes(&self) -> impl Iterator<Item = &Node> {
         self.nodes
             .values()
-            .filter(|node| node.config().consensus_config.is_none())
+            .filter(|node| node.config().intended_node_role().is_fullnode())
     }
 
     pub async fn spawn_new_node(&mut self, config: NodeConfig) -> SuiNodeHandle {

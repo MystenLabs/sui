@@ -4,13 +4,10 @@
 use std::ops::Range;
 
 use bytes::Bytes;
-use fastcrypto::hash::HashFunction;
-use prost::Message;
 use sui_inverted_index::ScanDirection;
 use sui_rpc::proto::sui::rpc::v2alpha::Ordering as ProtoOrdering;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions as ProtoQueryOptions;
-use sui_types::crypto::DefaultHash;
 
 use crate::ErrorReason;
 use crate::RpcError;
@@ -46,7 +43,6 @@ pub struct QueryOptions {
     pub ordering: Ordering,
     after: Option<CursorToken>,
     before: Option<CursorToken>,
-    scope_digest: [u8; 32],
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -77,7 +73,6 @@ impl QueryOptions {
         default_limit_items: u32,
         max_limit_items: u32,
         query_type: QueryType,
-        filter: Option<&impl Message>,
     ) -> Result<Self, RpcError> {
         let limit_items = request
             .and_then(|options| options.limit_items)
@@ -95,18 +90,15 @@ impl QueryOptions {
             }
         };
 
-        let scope_digest = scope_digest(filter);
         let after = parse_cursor(
             "options.after",
             request.and_then(|options| options.after.as_ref()),
             query_type,
-            scope_digest,
         )?;
         let before = parse_cursor(
             "options.before",
             request.and_then(|options| options.before.as_ref()),
             query_type,
-            scope_digest,
         )?;
 
         Ok(Self {
@@ -115,7 +107,6 @@ impl QueryOptions {
             ordering,
             after,
             before,
-            scope_digest,
         })
     }
 
@@ -220,7 +211,6 @@ impl QueryOptions {
             kind,
             checkpoint,
             position,
-            scope_digest: self.scope_digest,
         })
     }
 }
@@ -376,12 +366,11 @@ struct CursorToken {
     kind: CursorKind,
     checkpoint: u64,
     position: u64,
-    scope_digest: [u8; 32],
 }
 
 impl CursorToken {
-    fn validate(&self, query_type: QueryType, scope_digest: [u8; 32]) -> bool {
-        self.query_type == query_type && self.scope_digest == scope_digest
+    fn validate(&self, query_type: QueryType) -> bool {
+        self.query_type == query_type
     }
 
     fn after_position_start(&self) -> Option<u64> {
@@ -403,13 +392,12 @@ fn parse_cursor(
     field: &'static str,
     cursor: Option<&Bytes>,
     query_type: QueryType,
-    scope_digest: [u8; 32],
 ) -> Result<Option<CursorToken>, RpcError> {
     cursor
         .map(|cursor| decode_cursor(field, cursor))
         .transpose()?
         .map(|token| {
-            if token.validate(query_type, scope_digest) {
+            if token.validate(query_type) {
                 Ok(token)
             } else {
                 Err(invalid_cursor(field, "invalid cursor"))
@@ -426,32 +414,6 @@ fn encode_cursor(cursor: CursorToken) -> Bytes {
     bcs::to_bytes(&cursor).unwrap().into()
 }
 
-// This digest is a cursor-scope guard, not a portable canonical protobuf hash.
-// We intentionally hash the server-side prost value after tonic/prost has
-// decoded the request and dropped unknown fields, then re-encode it with our
-// generated serializer. Protobuf wire bytes are not canonical, so do not
-// replace this with hashing raw request bytes. If cursors need to remain
-// compatible across proto/codegen/schema changes, replace this with a versioned
-// canonical digest over the validated internal query representation.
-fn scope_digest<F: Message>(filter: Option<&F>) -> [u8; 32] {
-    let mut hasher = DefaultHash::default();
-    hash_optional_message(&mut hasher, filter);
-    hasher.finalize().digest
-}
-
-fn hash_optional_message<M: Message>(hasher: &mut DefaultHash, message: Option<&M>) {
-    match message {
-        None => hasher.update([0]),
-        Some(message) => {
-            hasher.update([1]);
-            let bytes = message.encode_to_vec();
-            let len = u32::try_from(bytes.len()).expect("scan scope part should fit in u32");
-            hasher.update(len.to_be_bytes());
-            hasher.update(bytes);
-        }
-    }
-}
-
 fn invalid_cursor(field: &'static str, description: impl Into<String>) -> RpcError {
     FieldViolation::new(field)
         .with_description(description)
@@ -463,20 +425,10 @@ fn invalid_cursor(field: &'static str, description: impl Into<String>) -> RpcErr
 mod tests {
     use super::*;
 
-    fn scope_digest_for_filter() -> [u8; 32] {
-        scope_digest(Option::<&ProtoQueryOptions>::None)
-    }
-
     fn query_options_from_proto(
         request: Option<&ProtoQueryOptions>,
     ) -> Result<QueryOptions, RpcError> {
-        QueryOptions::from_proto(
-            request,
-            100,
-            1_000,
-            QueryType::Transactions,
-            Option::<&ProtoQueryOptions>::None,
-        )
+        QueryOptions::from_proto(request, 100, 1_000, QueryType::Transactions)
     }
 
     fn cursor_token(
@@ -490,7 +442,6 @@ mod tests {
             kind,
             checkpoint,
             position,
-            scope_digest: scope_digest_for_filter(),
         }
     }
 
@@ -586,22 +537,25 @@ mod tests {
     }
 
     #[test]
-    fn rejects_cursor_for_different_query_type_or_scan_scope() {
+    fn rejects_cursor_for_different_query_type() {
         let token = encode_cursor(item_cursor(1, 9, QueryType::Checkpoints));
         let mut request = ProtoQueryOptions::default();
         request.after = Some(token);
         assert!(query_options_from_proto(Some(&request)).is_err());
+    }
 
-        let token = encode_cursor(CursorToken {
-            query_type: QueryType::Transactions,
-            kind: CursorKind::Item,
-            checkpoint: 1,
-            position: 9,
-            scope_digest: [9; 32],
-        });
+    #[test]
+    fn accepts_cursor_regardless_of_filter_scope() {
+        // Cursors are portable across filters: a Transactions cursor must be
+        // accepted by a Transactions query even though `query_options_from_proto`
+        // applies no filter. Position is an absolute, filter-independent
+        // coordinate, so resuming under a different filter is correct.
+        let after = encode_cursor(item_cursor(1, 9, QueryType::Transactions));
+        let before = encode_cursor(item_cursor(3, 30, QueryType::Transactions));
         let mut request = ProtoQueryOptions::default();
-        request.before = Some(token);
-        assert!(query_options_from_proto(Some(&request)).is_err());
+        request.after = Some(after);
+        request.before = Some(before);
+        assert!(query_options_from_proto(Some(&request)).is_ok());
     }
 
     #[test]
@@ -625,7 +579,6 @@ mod tests {
             ordering: Ordering::Ascending,
             after: Some(item_cursor(1, 11, QueryType::Transactions)),
             before: None,
-            scope_digest: scope_digest_for_filter(),
         };
         assert_eq!(
             options.apply_cursor_bounds(resolved_range(10..20)).range,
@@ -670,7 +623,6 @@ mod tests {
             ordering: Ordering::Ascending,
             after: Some(boundary_cursor(2, 20, QueryType::Transactions)),
             before: None,
-            scope_digest: scope_digest_for_filter(),
         };
         assert_eq!(
             options.apply_cursor_bounds(resolved_range(10..30)).range,
@@ -732,7 +684,6 @@ mod tests {
             ordering: Ordering::Ascending,
             after: None,
             before: None,
-            scope_digest: scope_digest_for_filter(),
         };
         let token = options.cursor_for_item(1, 11);
 

@@ -43,8 +43,6 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
         Box::new(output),
         Box::new(certified_output),
         CheckpointMetrics::new_for_tests(),
-        3,
-        100_000,
     );
     checkpoint_service
         .spawn(epoch_store.clone(), None)

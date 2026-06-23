@@ -209,6 +209,19 @@ By default, the new `Cap` object transfers to the validator address, and you can
 
 To get the current valid `Cap` object's ID of a validator, use the Sui Client CLI `sui client objects` command after setting the holder as the active address.
 
+:::tip
+
+Strengthen operation-capability delegation with these practices:
+
+- **Delegate with least privilege.** Hand the operation cap only to the address that needs it for a specific task, and keep account keys offline and uninvolved in routine operations.
+- **Revoke after the task completes.** Once a delegated task is done, rotate the cap with `sui_system::rotate_operation_cap` to invalidate the old one, and rotate immediately if a delegatee key is lost or compromised.
+- **Keep an audit trail.** Record who held each cap, when you delegated it, and when you revoked it, so you can review operational actions after the fact.
+- **Roll out security fixes confidentially.** Apply urgent fixes through the [private security fixes](#private-security-fixes) process rather than disclosing them publicly before validators have patched.
+
+See [Security Best Practices](/develop/security/best-practices) for the canonical operator guidance.
+
+:::
+
 ### Updating the gas price survey quote
 
 To update the gas price survey quote of a validator, which the network uses to calculate the reference gas price at the end of the epoch, the sender needs to hold a valid [`UnverifiedValidatorOperationCap`](#operation-cap). The sender can be the validator itself or a trusted delegatee.
@@ -264,8 +277,8 @@ This release process is different, and you should expect that announcements of t
 
 A script is also available that downloads all the necessary signed binaries and Docker artifacts incorporating the security fixes.
 
-- Usage: `./download_private.sh <directory-name>`
+- Usage: `./download_private.sh <commit-sha>`
 
 You can also download and verify specific binaries that might not be included by the above script using the `download_and_verify_private_binary.sh` script.
 
-- Usage: `./download_and_verify_private_binary.sh <directory-name> <binary-name>`
+- Usage: `./download_and_verify_private_binary.sh <commit-sha> <binary-name>`

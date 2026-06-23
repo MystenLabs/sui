@@ -69,6 +69,7 @@ use tracing::info;
 use typed_store::DBMetrics;
 
 pub mod commands;
+pub mod db_shell;
 pub mod db_tool;
 mod formal_snapshot_util;
 #[cfg(all(feature = "tideconsole", not(windows)))]

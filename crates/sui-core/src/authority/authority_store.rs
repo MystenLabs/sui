@@ -14,7 +14,6 @@ use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfigura
 use crate::global_state_hasher::GlobalStateHashStore;
 use crate::rpc_index::RpcIndexStore;
 use crate::transaction_outputs::TransactionOutputs;
-use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
 use move_core_types::account_address::AccountAddress;
@@ -310,14 +309,6 @@ impl AuthorityStore {
         Ok(self.perpetual_tables.effects.get(effects_digest)?)
     }
 
-    /// Returns true if we have an effects structure for this transaction digest
-    pub fn effects_exists(&self, effects_digest: &TransactionEffectsDigest) -> SuiResult<bool> {
-        self.perpetual_tables
-            .effects
-            .contains_key(effects_digest)
-            .map_err(|e| e.into())
-    }
-
     pub fn get_events(
         &self,
         digest: &TransactionDigest,
@@ -431,26 +422,6 @@ impl AuthorityStore {
             Some(Err(e)) => Err(e.into()),
             None => Ok(None),
         }
-    }
-
-    /// Returns future containing the state hash for the given epoch
-    /// once available
-    pub async fn notify_read_root_state_hash(
-        &self,
-        epoch: EpochId,
-    ) -> SuiResult<(CheckpointSequenceNumber, GlobalStateHash)> {
-        // We need to register waiters _before_ reading from the database to avoid race conditions
-        let registration = self.root_state_notify_read.register_one(&epoch);
-        let hash = self.perpetual_tables.root_state_hash_by_epoch.get(&epoch)?;
-
-        let result = match hash {
-            // Note that Some() clause also drops registration that is already fulfilled
-            Some(ready) => Either::Left(futures::future::ready(ready)),
-            None => Either::Right(registration),
-        }
-        .await;
-
-        Ok(result)
     }
 
     // DEPRECATED -- use function of same name in AuthorityPerEpochStore
@@ -1073,18 +1044,6 @@ impl AuthorityStore {
             .get_latest_object_ref_or_tombstone(object_id)
     }
 
-    /// Returns the latest object reference if and only if the object is still live (i.e. it does
-    /// not return tombstones)
-    pub fn get_latest_object_ref_if_alive(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<Option<ObjectRef>, SuiError> {
-        match self.get_latest_object_ref_or_tombstone(object_id)? {
-            Some(objref) if objref.2.is_alive() => Ok(Some(objref)),
-            _ => Ok(None),
-        }
-    }
-
     /// Returns the latest object we have for this object_id in the objects table.
     ///
     /// If no entry for the object_id is found, return None.
@@ -1175,6 +1134,21 @@ impl AuthorityStore {
             .transactions
             .get(tx_digest)
             .map(|v| v.map(|v| v.into()))
+    }
+
+    pub fn list_transactions_from(
+        &self,
+        start: Option<TransactionDigest>,
+        limit: usize,
+    ) -> Result<Vec<TransactionDigest>, TypedStoreError> {
+        self.perpetual_tables.list_transactions_from(start, limit)
+    }
+
+    pub fn get_executed_effects_digest_for_tx(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<TransactionEffectsDigest>, TypedStoreError> {
+        self.perpetual_tables.get_executed_effects_digest(tx_digest)
     }
 
     /// This function reads the DB directly to get the system state object.
@@ -1515,6 +1489,7 @@ impl AuthorityStore {
             &self.perpetual_tables,
             checkpoint_store,
             rpc_index,
+            None,
             pruning_config,
             AuthorityStorePruningMetrics::new_for_test(),
             EPOCH_DURATION_MS_FOR_TESTING,
@@ -1689,11 +1664,6 @@ impl ModuleResolver for ResolverWrapper {
     }
 }
 
-pub enum UpdateType {
-    Transaction(TransactionEffectsDigest),
-    Genesis,
-}
-
 pub type SuiLockResult = SuiResult<ObjectLockStatus>;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1708,35 +1678,6 @@ pub enum LockDetailsWrapperDeprecated {
     V1(LockDetailsV1Deprecated),
 }
 
-impl LockDetailsWrapperDeprecated {
-    pub fn migrate(self) -> Self {
-        // TODO: when there are multiple versions, we must iteratively migrate from version N to
-        // N+1 until we arrive at the latest version
-        self
-    }
-
-    // Always returns the most recent version. Older versions are migrated to the latest version at
-    // read time, so there is never a need to access older versions.
-    pub fn inner(&self) -> &LockDetailsDeprecated {
-        match self {
-            Self::V1(v1) => v1,
-
-            // can remove #[allow] when there are multiple versions
-            #[allow(unreachable_patterns)]
-            _ => panic!("lock details should have been migrated to latest version at read time"),
-        }
-    }
-    pub fn into_inner(self) -> LockDetailsDeprecated {
-        match self {
-            Self::V1(v1) => v1,
-
-            // can remove #[allow] when there are multiple versions
-            #[allow(unreachable_patterns)]
-            _ => panic!("lock details should have been migrated to latest version at read time"),
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LockDetailsV1Deprecated {
     pub epoch: EpochId,
@@ -1744,10 +1685,3 @@ pub struct LockDetailsV1Deprecated {
 }
 
 pub type LockDetailsDeprecated = LockDetailsV1Deprecated;
-
-impl From<LockDetailsDeprecated> for LockDetailsWrapperDeprecated {
-    fn from(details: LockDetailsDeprecated) -> Self {
-        // always use latest version.
-        LockDetailsWrapperDeprecated::V1(details)
-    }
-}

@@ -105,7 +105,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 use self::authority_store::ExecutionLockWriteGuard;
 use self::authority_store_pruner::{AuthorityStorePruningMetrics, PrunerWatermarks};
-pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
+pub use authority_store::{AuthorityStore, ResolverWrapper};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 
 use crate::jsonrpc_index::IndexStore;
@@ -123,6 +123,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockEvents, TransactionFilter,
 };
 use sui_macros::{fail_point, fail_point_arg, fail_point_async, fail_point_if};
+use sui_rpc_store::Store as RpcStore;
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::accumulator_root::AccumulatorValue;
@@ -1280,12 +1281,6 @@ impl AuthorityState {
             .check_system_overload_at_signing
     }
 
-    pub fn check_system_overload_at_execution(&self) -> bool {
-        self.config
-            .authority_overload_config
-            .check_system_overload_at_execution
-    }
-
     pub(crate) fn check_system_overload(
         &self,
         tx_data: &SenderSignedData,
@@ -1631,25 +1626,6 @@ impl AuthorityState {
             assigned_shared_object_versions,
             epoch_store.epoch(),
         )
-    }
-
-    /// Test only wrapper for `try_execute_immediately()` above, useful for executing change epoch
-    /// transactions. Assumes execution will always succeed.
-    pub async fn try_execute_for_test(
-        &self,
-        certificate: &VerifiedCertificate,
-        execution_env: ExecutionEnv,
-    ) -> (VerifiedSignedTransactionEffects, Option<ExecutionError>) {
-        let epoch_store = self.epoch_store_for_testing();
-        let (effects, execution_error_opt) = self
-            .try_execute_immediately(
-                &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
-                execution_env,
-                &epoch_store,
-            )
-            .unwrap();
-        let signed_effects = self.sign_effects(effects, &epoch_store).unwrap();
-        (signed_effects, execution_error_opt)
     }
 
     pub async fn try_execute_executable_for_test(
@@ -2417,15 +2393,19 @@ impl AuthorityState {
             .into());
         }
 
-        // Cheap validity checks for a transaction, including input size limits.
-        transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
-
+        // Compute input/receiving object kinds before mock gas injection so the mock
+        // gas reference is not included in input_object_kinds (it is added to
+        // input_objects directly after object loading).
         let input_object_kinds = transaction.input_objects()?;
         let receiving_object_refs = transaction.receiving_objects();
 
-        // Create and inject mock gas coin before pre_object_load_checks so that
-        // funds withdrawal processing sees non-empty payment and doesn't incorrectly
-        // create an address balance withdrawal for gas.
+        // Inject mock gas coin before validity_check so that on protocol versions
+        // where address-balance gas payments are not yet enabled, the non-empty
+        // payment check in validity_check passes for simulate/dev-inspect requests
+        // submitted without explicit gas.
+        // Also required before pre_object_load_checks so that funds-withdrawal
+        // processing sees non-empty payment and doesn't create an address-balance
+        // withdrawal for gas.
         // Skip mock gas for gasless transactions — they don't use gas coins.
         let is_gasless = protocol_config.enable_gasless() && transaction.is_gasless_transaction();
         let mock_gas_object = if allow_mock_gas_coin && transaction.gas().is_empty() && !is_gasless
@@ -2444,6 +2424,9 @@ impl AuthorityState {
         } else {
             None
         };
+
+        // Full validity check including gas budget and price.
+        transaction.validity_check(&epoch_store.tx_validity_check_context())?;
 
         let declared_withdrawals = self.pre_object_load_checks(
             &transaction,
@@ -2556,7 +2539,7 @@ impl AuthorityState {
                 .iter()
                 .filter(|(id, _)| !address_funds.contains(id))
                 .any(|(id, max_withdraw)| {
-                    let (balance, _) = self.get_account_funds_read().get_latest_account_amount(id);
+                    let balance = self.get_account_funds_read().get_latest_account_amount(id);
                     balance < *max_withdraw
                 });
 
@@ -3541,6 +3524,7 @@ impl AuthorityState {
         committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
         rpc_index: Option<Arc<RpcIndexStore>>,
+        rpc_store: Option<RpcStore>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
         genesis_objects: &[Object],
@@ -3577,6 +3561,7 @@ impl AuthorityState {
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
             rpc_index.clone(),
+            rpc_store,
             indexes.clone(),
             config.authority_store_pruning_config.clone(),
             epoch_store.committee().authority_exists(&name),
@@ -3690,7 +3675,7 @@ impl AuthorityState {
 
     async fn init_object_funds_checker(&self) {
         let epoch_store = self.epoch_store.load();
-        if self.is_validator(&epoch_store)
+        if self.node_role(&epoch_store).runs_consensus()
             && epoch_store.protocol_config().enable_object_funds_withdraw()
         {
             if self.object_funds_checker.load().is_none() {
@@ -3738,12 +3723,6 @@ impl AuthorityState {
 
     pub fn get_object_store(&self) -> &Arc<dyn ObjectStore + Send + Sync> {
         &self.execution_cache_trait_pointers.object_store
-    }
-
-    pub fn pending_post_processing(
-        &self,
-    ) -> &Arc<DashMap<TransactionDigest, oneshot::Receiver<PostProcessingOutput>>> {
-        &self.pending_post_processing
     }
 
     pub async fn await_post_processing(
@@ -3802,6 +3781,18 @@ impl AuthorityState {
             .database_for_testing()
     }
 
+    /// Access to the underlying authority store for diagnostic tooling (db-shell).
+    ///
+    /// Goes through `testing_api` deliberately: db-shell is read-only diagnostics
+    /// that bypasses the writeback cache, and we want the execution path to have
+    /// no other route to the raw `AuthorityStore`. Using the testing API here
+    /// keeps that invariant visible — diagnostic code is the only non-test caller.
+    pub fn authority_store(&self) -> Arc<AuthorityStore> {
+        self.execution_cache_trait_pointers
+            .testing_api
+            .database_for_testing()
+    }
+
     pub fn cache_for_testing(&self) -> &WritebackCache {
         self.execution_cache_trait_pointers
             .testing_api
@@ -3819,6 +3810,7 @@ impl AuthorityState {
             &self.database_for_testing().perpetual_tables,
             &self.checkpoint_store,
             self.rpc_index.as_deref(),
+            None,
             config.authority_store_pruning_config,
             metrics,
             EPOCH_DURATION_MS_FOR_TESTING,
@@ -4453,30 +4445,6 @@ impl AuthorityState {
     /// Chain Identifier is the digest of the genesis checkpoint.
     pub fn get_chain_identifier(&self) -> ChainIdentifier {
         self.chain_identifier
-    }
-
-    pub fn get_fork_recovery_state(&self) -> Option<&ForkRecoveryState> {
-        self.fork_recovery_state.as_ref()
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_move_object<T>(&self, object_id: &ObjectID) -> SuiResult<T>
-    where
-        T: DeserializeOwned,
-    {
-        let o = self.get_object_read(object_id)?.into_object()?;
-        if let Some(move_object) = o.data.try_as_move() {
-            Ok(bcs::from_bytes(move_object.contents()).map_err(|e| {
-                SuiErrorKind::ObjectDeserializationError {
-                    error: format!("{e}"),
-                }
-            })?)
-        } else {
-            Err(SuiErrorKind::ObjectDeserializationError {
-                error: format!("Provided object : [{object_id}] is not a Move object."),
-            }
-            .into())
-        }
     }
 
     /// This function aims to serve rpc reads on past objects and
@@ -5226,8 +5194,7 @@ impl AuthorityState {
                     TransactionEvents::default()
                 };
                 // The cert_sig slot is permanently None: validators no longer aggregate or
-                // persist per-transaction quorum signatures (the transaction_cert_signatures
-                // table is deprecated and unwritten).
+                // persist per-transaction quorum signatures.
                 return Ok(Some((
                     (*transaction).clone().into_message(),
                     TransactionStatus::Executed(None, effects.into_inner(), events),

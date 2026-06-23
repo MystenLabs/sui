@@ -24,3 +24,4 @@ thiserror.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
+sui-test-transaction-builder.workspace = true

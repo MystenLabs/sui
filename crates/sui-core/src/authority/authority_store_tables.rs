@@ -663,6 +663,34 @@ impl AuthorityPerpetualTables {
         Ok(Some(transaction))
     }
 
+    pub fn list_transactions_from(
+        &self,
+        start: Option<TransactionDigest>,
+        limit: usize,
+    ) -> Result<Vec<TransactionDigest>, typed_store::TypedStoreError> {
+        let iter = self.transactions.safe_iter_with_bounds(start, None);
+        let mut result = Vec::with_capacity(limit);
+        for item in iter.take(limit) {
+            let (digest, _) = item?;
+            result.push(digest);
+        }
+        Ok(result)
+    }
+
+    pub fn get_executed_effects_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<TransactionEffectsDigest>, typed_store::TypedStoreError> {
+        self.executed_effects.get(tx_digest)
+    }
+
+    pub fn get_effects_by_digest(
+        &self,
+        effects_digest: &TransactionEffectsDigest,
+    ) -> Result<Option<TransactionEffects>, typed_store::TypedStoreError> {
+        self.effects.get(effects_digest)
+    }
+
     /// Batch insert executed transaction digests for a given epoch.
     /// Used by formal snapshot restore to backfill transaction digests from the previous epoch.
     pub fn insert_executed_transaction_digests_batch(
@@ -708,21 +736,6 @@ impl AuthorityPerpetualTables {
         Ok(self.executed_transactions_to_checkpoint.get(digest)?)
     }
 
-    pub fn get_newer_object_keys(
-        &self,
-        object: &(ObjectID, SequenceNumber),
-    ) -> SuiResult<Vec<ObjectKey>> {
-        let mut objects = vec![];
-        for result in self.objects.safe_iter_with_bounds(
-            Some(ObjectKey(object.0, object.1.next())),
-            Some(ObjectKey(object.0, VersionNumber::MAX)),
-        ) {
-            let (key, _) = result?;
-            objects.push(key);
-        }
-        Ok(objects)
-    }
-
     pub fn set_highest_pruned_checkpoint_without_wb(
         &self,
         checkpoint_number: CheckpointSequenceNumber,
@@ -766,13 +779,6 @@ impl AuthorityPerpetualTables {
     pub fn checkpoint_db(&self, path: &Path) -> SuiResult {
         // This checkpoints the entire db and not just objects table
         self.objects.checkpoint_db(path).map_err(Into::into)
-    }
-
-    pub fn get_root_state_hash(
-        &self,
-        epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>> {
-        Ok(self.root_state_hash_by_epoch.get(&epoch)?)
     }
 
     pub fn insert_root_state_hash(
@@ -873,13 +879,6 @@ impl LiveObject {
         match self {
             LiveObject::Normal(obj) => obj.compute_object_reference(),
             LiveObject::Wrapped(key) => (key.0, key.1, ObjectDigest::OBJECT_DIGEST_WRAPPED),
-        }
-    }
-
-    pub fn to_normal(self) -> Option<Object> {
-        match self {
-            LiveObject::Normal(object) => Some(object),
-            LiveObject::Wrapped(_) => None,
         }
     }
 }
