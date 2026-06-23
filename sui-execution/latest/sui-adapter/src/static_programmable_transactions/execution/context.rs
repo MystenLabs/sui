@@ -1022,23 +1022,16 @@ where
     //
     // Publish and Upgrade
     //
-
-    // is_upgrade is used for gas charging. Assumed to be a new publish if false.
     pub fn deserialize_modules(
         &mut self,
         module_bytes: &[Vec<u8>],
-        is_upgrade: bool,
     ) -> Result<Vec<CompiledModule>, Mode::Error> {
         assert_invariant!(
             !module_bytes.is_empty(),
             "empty package is checked in transaction input checker"
         );
         let total_bytes = module_bytes.iter().map(|v| v.len()).sum();
-        if is_upgrade {
-            self.gas_charger.charge_upgrade_package(total_bytes)?
-        } else {
-            self.gas_charger.charge_publish_package(total_bytes)?
-        }
+        self.gas_charger.charge_publish_package(total_bytes)?;
 
         let binary_config = self.env.protocol_config.binary_config(None);
         let modules = module_bytes
