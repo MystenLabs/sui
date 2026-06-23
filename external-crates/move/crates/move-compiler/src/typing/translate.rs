@@ -4845,8 +4845,9 @@ fn expand_macro(
 
     let valid = context.add_macro_expansion(m, f, call_loc);
     if !valid {
-        context
-            .assert_has_errors("ICE invalid macro expansion should have already resulted in an error");
+        context.assert_has_errors(
+            "ICE invalid macro expansion should have already resulted in an error",
+        );
         return (context.error_type(call_loc), TE::UnresolvedError);
     }
     let res = match macro_expand::call(context, call_loc, m, f, type_args.clone(), args, return_ty)
