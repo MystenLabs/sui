@@ -33,7 +33,7 @@ use sui_types::{
     SUI_RANDOMNESS_STATE_OBJECT_ID,
     authenticator_state::ActiveJwk,
     base_types::{
-        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, ObjectRef,
+        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, ObjectID, ObjectRef,
         SequenceNumber, TransactionDigest,
     },
     crypto::RandomnessRound,
@@ -53,7 +53,7 @@ use sui_types::{
     node_role::NodeRole,
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
-        SenderSignedData, TransactionDataAPI, TransactionKey, VerifiedTransaction,
+        InputObjectKind, SenderSignedData, TransactionDataAPI, TransactionKey, VerifiedTransaction,
         WithAliases,
     },
 };
@@ -2470,9 +2470,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let _scope =
             monitored_scope("ConsensusCommitHandler::handle_consensus_commit::filter_consensus_txns");
         let mut transactions = Vec::new();
-        // TEMPORARY (perf experiment): no longer mutated since the owned-object lock
-        // acquisition below is commented out.
-        let owned_object_locks = HashMap::new();
+        let mut owned_object_locks = HashMap::new();
         let epoch = self.epoch_store.epoch();
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
@@ -2633,47 +2631,54 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // This must happen AFTER all filtering checks above to avoid acquiring locks
                 // for transactions that will be dropped (e.g., during epoch change).
                 // Only applies to UserTransactionV2 - other transaction types don't need lock acquisition.
-                if let ConsensusTransactionKind::UserTransactionV2(_tx_with_claims) =
+                if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
                     &parsed.transaction.kind
                 {
-                    // TEMPORARY (perf experiment, revert before merge): the post-consensus
-                    // owned-object lock acquisition (try_acquire_owned_object_locks_post_consensus,
-                    // which hits the owned_object_transaction_locks keyspace) is commented out,
-                    // along with the input-object/owned-ref computation that only feeds it, to
-                    // isolate its cost in filter_consensus_txns. All UserTransactionV2 are treated
-                    // as finalized here without owned-object conflict detection.
-                    //
-                    // let immutable_object_ids: HashSet<ObjectID> =
-                    //     _tx_with_claims.get_immutable_objects().into_iter().collect();
-                    // let tx = _tx_with_claims.tx();
-                    //
-                    // let Ok(input_objects) = tx.transaction_data().input_objects() else {
-                    //     debug_fatal!("Invalid input objects for transaction {}", tx.digest());
-                    //     continue;
-                    // };
-                    //
-                    // // Filter ImmOrOwnedMoveObject inputs, excluding those claimed to be immutable.
-                    // let owned_object_refs: Vec<_> = input_objects
-                    //     .iter()
-                    //     .filter_map(|obj| match obj {
-                    //         InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
-                    //             if !immutable_object_ids.contains(&obj_ref.0) =>
-                    //         {
-                    //             Some(*obj_ref)
-                    //         }
-                    //         _ => None,
-                    //     })
-                    //     .collect();
-                    //
-                    // match self.epoch_store.try_acquire_owned_object_locks_post_consensus(
-                    //     &owned_object_refs, *tx.digest(), &owned_object_locks,
-                    // ) {
-                    //     Ok(new_locks) => { owned_object_locks.extend(new_locks.into_iter()); ... }
-                    //     Err(e) => { ...set Dropped...; continue; }
-                    // }
-                    self.epoch_store
-                        .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
-                    num_finalized_user_transactions[author] += 1;
+                    let immutable_object_ids: HashSet<ObjectID> =
+                        tx_with_claims.get_immutable_objects().into_iter().collect();
+                    let tx = tx_with_claims.tx();
+
+                    let Ok(input_objects) = tx.transaction_data().input_objects() else {
+                        debug_fatal!("Invalid input objects for transaction {}", tx.digest());
+                        continue;
+                    };
+
+                    // Filter ImmOrOwnedMoveObject inputs, excluding those claimed to be immutable.
+                    // Immutable objects don't need lock acquisition as they can be used concurrently.
+                    let owned_object_refs: Vec<_> = input_objects
+                        .iter()
+                        .filter_map(|obj| match obj {
+                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
+                                if !immutable_object_ids.contains(&obj_ref.0) =>
+                            {
+                                Some(*obj_ref)
+                            }
+                            _ => None,
+                        })
+                        .collect();
+
+                    match self
+                        .epoch_store
+                        .try_acquire_owned_object_locks_post_consensus(
+                            &owned_object_refs,
+                            *tx.digest(),
+                            &owned_object_locks,
+                        ) {
+                        Ok(new_locks) => {
+                            owned_object_locks.extend(new_locks.into_iter());
+                            // Lock acquisition succeeded - now set Finalized status
+                            self.epoch_store
+                                .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
+                            num_finalized_user_transactions[author] += 1;
+                        }
+                        Err(e) => {
+                            debug!("Dropping transaction {}: {}", tx.digest(), e);
+                            self.epoch_store
+                                .set_consensus_tx_status(position, ConsensusTxStatus::Dropped);
+                            self.epoch_store.set_rejection_vote_reason(position, &e);
+                            continue;
+                        }
+                    }
                 }
 
                 let transaction = SequencedConsensusTransactionKind::External(parsed.transaction);
