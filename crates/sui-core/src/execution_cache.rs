@@ -431,6 +431,20 @@ pub trait ObjectCacheRead: Send + Sync {
         receiving_keys: &'a HashSet<InputKey>,
         epoch: EpochId,
     ) -> BoxFuture<'a, ()>;
+
+    /// Wait until the system object `object_id` has been committed at a version greater than or
+    /// equal to `version`. Used by the waitable-system-object framework: when execution finds a
+    /// required system object not yet caught up, the transaction is retried once this resolves.
+    /// Returns immediately if the object is already at or beyond `version`.
+    ///
+    /// Only valid for system objects: the implementation relies on a live object of this id always
+    /// existing (to derive its full id, including the stable initial shared version of a consensus
+    /// object), which is guaranteed for system objects but not for arbitrary objects.
+    fn notify_read_system_object_at_version<'a>(
+        &'a self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> BoxFuture<'a, ()>;
 }
 
 pub trait TransactionCacheRead: Send + Sync {

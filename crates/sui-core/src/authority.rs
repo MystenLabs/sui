@@ -75,6 +75,7 @@ use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
+use sui_types::execution::ExecutionRetryError;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
@@ -1511,7 +1512,7 @@ impl AuthorityState {
             return ExecutionOutput::EpochEnded;
         }
 
-        let accumulator_version = execution_env.assigned_versions.accumulator_version;
+        let accumulator_version = execution_env.assigned_versions.accumulator_version();
 
         let (transaction_outputs, timings, execution_error_opt) = match self.process_certificate(
             &tx_guard,
@@ -1872,42 +1873,72 @@ impl AuthorityState {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
         signer: SuiAddress,
         tx_digest: TransactionDigest,
-    ) -> TransactionEffectsOutput<ExecutionError> {
-        let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
-            // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
-            .execute_transaction_to_effects_and_execution_error(
-                store,
-                protocol_config,
-                self.metrics.execution_metrics.clone(),
-                enable_expensive_checks,
-                execution_params,
-                epoch_id,
-                epoch_timestamp_ms,
-                input_objects,
-                gas_data,
-                gas_status,
-                kind,
-                rewritten_inputs,
-                signer,
-                tx_digest,
-                &mut None,
-            )
-            // TODO: handle the retry request here. No native produces one yet, so assume it never trips.
-            .expect("transaction retry is not yet handled");
-
-        (
-            inner_temp_store,
+    ) -> Result<TransactionEffectsOutput<ExecutionError>, ExecutionRetryError> {
+        // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
+        executor.execute_transaction_to_effects_and_execution_error(
+            store,
+            protocol_config,
+            self.metrics.execution_metrics.clone(),
+            enable_expensive_checks,
+            execution_params,
+            epoch_id,
+            epoch_timestamp_ms,
+            input_objects,
+            system_object_versions,
+            gas_data,
             gas_status,
-            effects,
-            timings,
-            execution_error,
+            kind,
+            rewritten_inputs,
+            signer,
+            tx_digest,
+            &mut None,
         )
+    }
+
+    /// Spawns a task that waits until `object_id` reaches the version this transaction requires,
+    /// then re-enqueues `certificate` for execution. Used by the waitable-system-object framework
+    /// when execution reports that a required system object had not yet caught up to the version
+    /// this transaction was sequenced against.
+    fn wait_for_system_object_and_reenqueue(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        object_id: ObjectID,
+        execution_env: &ExecutionEnv,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        let required_version = execution_env
+            .assigned_versions
+            .system_object_versions
+            .get(&object_id)
+            .copied()
+            .expect("a tx retrying on an unavailable system object must have its required version");
+        let cache_reader = self.get_object_cache_reader().clone();
+        let scheduler = self.execution_scheduler.clone();
+        let cert = certificate.clone();
+        let execution_env = execution_env.clone();
+        let epoch_store = epoch_store.clone();
+        tokio::task::spawn(async move {
+            // Bound the wait to the alive epoch: reconfiguration may finish while we wait.
+            let _ = epoch_store
+                .within_alive_epoch(async move {
+                    cache_reader
+                        .notify_read_system_object_at_version(object_id, required_version)
+                        .await;
+                    scheduler.send_transaction_for_execution(
+                        &cert,
+                        execution_env,
+                        tokio::time::Instant::now(),
+                    );
+                })
+                .await;
+        });
     }
 
     /// execute_certificate validates the transaction input, and executes the certificate,
@@ -1971,11 +2002,18 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
+        // Versions of system objects this transaction may read during execution, each at the version
+        // it was sequenced against. Execution gates reads on these (and retries if an object has not
+        // caught up); see `is_system_object_available`.
+        let system_object_versions = execution_env
+            .assigned_versions
+            .system_object_versions
+            .clone();
         // Mainnet-only: feed the accumulator (settlement) version so the address-balance gas-smash
         // short-circuit activates at its rollout version and replays bit-for-bit. Other chains pass
         // `None`, where the short-circuit applies unconditionally.
         let accumulator_version = if self.chain_identifier.chain() == Chain::Mainnet {
-            execution_env.assigned_versions.accumulator_version
+            execution_env.assigned_versions.accumulator_version()
         } else {
             None
         };
@@ -1992,7 +2030,7 @@ impl AuthorityState {
                 &*self.coin_reservation_resolver,
                 sender,
                 &mut kind,
-                execution_env.assigned_versions.accumulator_version,
+                execution_env.assigned_versions.accumulator_version(),
             )
             .expect("rewriting must succeed for a certified transaction")
         } else {
@@ -2002,7 +2040,7 @@ impl AuthorityState {
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
         #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
+        let (inner_temp_store, _, mut effects, timings, execution_error_opt) = match self
             .execute_transaction_to_effects(
                 &**epoch_store.executor(),
                 &tracking_store,
@@ -2019,13 +2057,29 @@ impl AuthorityState {
                     .epoch_data()
                     .epoch_start_timestamp(),
                 input_objects,
+                system_object_versions,
                 gas_data,
                 gas_status,
                 kind,
                 rewritten_inputs,
                 signer,
                 tx_digest,
-            );
+            ) {
+            Ok(output) => output,
+            // Execution needs a system object that has not yet caught up to the version this
+            // transaction requires. No effects were produced; wait for that object to reach the
+            // required version, then re-enqueue so execution runs again against the caught-up state.
+            Err(ExecutionRetryError::SystemObjectUnavailable { object_id }) => {
+                assert_reachable!("retry on unavailable system object");
+                self.wait_for_system_object_and_reenqueue(
+                    certificate,
+                    object_id,
+                    &execution_env,
+                    epoch_store,
+                );
+                return ExecutionOutput::RetryLater;
+            }
+        };
 
         let object_funds_checker = self.object_funds_checker.load();
         if let Some(object_funds_checker) = object_funds_checker.as_ref()

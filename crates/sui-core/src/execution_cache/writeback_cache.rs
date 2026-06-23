@@ -2006,6 +2006,43 @@ impl ObjectCacheRead for WritebackCache {
             .map(|_| ())
             .boxed()
     }
+
+    fn notify_read_system_object_at_version<'a>(
+        &'a self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> BoxFuture<'a, ()> {
+        // Object writes notify on `InputKey::VersionedObject { full_id, version }`. A consensus
+        // object's initial shared version is stable across versions, so derive the full id from
+        // whatever version of the object we currently have; the registered key then matches the key
+        // the write at `version` will notify on. A live object is guaranteed to exist because this
+        // is only called for system objects — for which we always hold some version — so we take its
+        // full id directly rather than guessing.
+        let full_id = ObjectCacheRead::get_object(self, &object_id)
+            .expect("a live system object must exist to wait on")
+            .full_id();
+        let key = InputKey::VersionedObject {
+            id: full_id,
+            version,
+        };
+        async move {
+            let keys = [key];
+            self.object_notify_read
+                .read(
+                    "notify_read_system_object_at_version",
+                    &keys,
+                    move |_keys| {
+                        vec![if self.object_exists_by_key(&object_id, version) {
+                            Some(())
+                        } else {
+                            None
+                        }]
+                    },
+                )
+                .await;
+        }
+        .boxed()
+    }
 }
 
 impl TransactionCacheRead for WritebackCache {

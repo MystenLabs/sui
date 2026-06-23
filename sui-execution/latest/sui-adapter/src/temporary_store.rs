@@ -32,7 +32,7 @@ use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     effects::EffectsObjectChange,
-    error::{ExecutionError, SuiResult},
+    error::{ExecutionError, SuiErrorKind, SuiResult},
     gas::GasCostSummary,
     object::Object,
     object::Owner,
@@ -99,6 +99,13 @@ pub struct TemporaryStore<'backing> {
     /// the PTB at most a handful of times.
     ptb_emitted_accumulator_event_ranges: Vec<std::ops::Range<usize>>,
 
+    /// Versions of system objects this transaction is allowed to read, keyed by object ID. A
+    /// system object is considered "available" once its latest committed version has reached the
+    /// recorded version; `is_system_object_available` consults this map. Every system object read
+    /// during execution must appear here — querying one that is absent is an invariant violation
+    /// (the transaction was not sequenced against it), so the check errors rather than allowing it.
+    system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+
     /// Recorded when execution determines the transaction must be retried later rather than
     /// committed; checked before gas finalization. A `RefCell` rather than a lock: execution is
     /// single-threaded, but the condition is detected behind `&self` (`RuntimeObjectResolver`) so the
@@ -116,6 +123,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -158,6 +166,7 @@ impl<'backing> TemporaryStore<'backing> {
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             ptb_emitted_accumulator_event_ranges: Vec::new(),
+            system_object_versions,
             retry_request: RefCell::new(None),
         }
     }
@@ -1573,6 +1582,30 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
             receive_object_at_version,
             epoch_id,
         )
+    }
+
+    fn is_system_object_available(&self, object_id: &ObjectID) -> SuiResult<bool> {
+        // Every system object read during execution must have an assigned version. Its absence
+        // here means the transaction is reading a system object it was not sequenced against,
+        // which is an invariant violation rather than an "unconstrained" object.
+        let Some(required_version) = self.system_object_versions.get(object_id).copied() else {
+            return Err(SuiErrorKind::GenericAuthorityError {
+                error: format!("system object {object_id} read without an assigned version"),
+            }
+            .into());
+        };
+        let latest_version = self.store.get_object(object_id).map(|o| o.version());
+        if latest_version.is_some_and(|v| v >= required_version) {
+            return Ok(true);
+        }
+        // Not yet available: mark the transaction for retry. The retry is signaled out-of-band via
+        // this interior-mutable state (the Move VM boundary can't carry it), and surfaces as
+        // `ExecutionRetryError` out of `execute_transaction_to_effects`. The authority then waits
+        // for `object_id` to reach `required_version` and re-enqueues.
+        *self.retry_request.borrow_mut() = Some(ExecutionRetryError::SystemObjectUnavailable {
+            object_id: *object_id,
+        });
+        Ok(false)
     }
 }
 
