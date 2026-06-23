@@ -88,7 +88,7 @@ pub(crate) fn call(
         ) {
             Ok(res) => res,
             Err(None) => {
-                context.assert_errors(
+                context.assert_has_errors(
                     "ICE macro recoloring failure should have already resulted in an error",
                 );
                 return None;
@@ -101,7 +101,8 @@ pub(crate) fn call(
     context.set_max_variable_color(max_color);
 
     if macro_type_params.len() != type_args.len() || macro_params.len() != args.len() {
-        context.assert_errors("ICE macro arity mismatch should have already resulted in an error");
+        context
+            .assert_has_errors("ICE macro arity mismatch should have already resulted in an error");
         return None;
     }
     // tparam subst
@@ -141,7 +142,7 @@ pub(crate) fn call(
             let tfunloc = unfolded.loc;
             let arg_exp = match arg {
                 Arg::ByValue(_) => {
-                    context.assert_errors("ICE lambda args should never be by value");
+                    context.assert_has_errors("ICE lambda args should never be by value");
                     continue;
                 }
                 Arg::ByName((e, _)) => e,
@@ -800,7 +801,7 @@ fn lvalue(context: &mut Context, sp!(_, lv_): &mut N::LValue) {
             if context.all_params.contains_key(&var.value) {
                 context
                     .core
-                    .assert_errors("ICE cannot assign to macro parameter");
+                    .assert_has_errors("ICE cannot assign to macro parameter");
                 *lv_ = N::LValue_::Ignore
             }
         }
@@ -868,7 +869,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                         if context.all_params.contains_key(&var.value) {
                             context
                                 .core
-                                .assert_errors("ICE cannot use macro parameter in pattern");
+                                .assert_has_errors("ICE cannot use macro parameter in pattern");
                             false
                         } else {
                             true
@@ -1172,9 +1173,9 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             if is_unbound_param {
                 assert!(!context.lambdas.contains_key(v_));
                 assert!(!context.by_name_args.contains_key(v_));
-                context
-                    .core
-                    .assert_errors("ICE unbound param should have already resulted in an error");
+                context.core.assert_has_errors(
+                    "ICE unbound param should have already resulted in an error",
+                );
                 *e_ = N::Exp_::UnresolvedError;
             }
         }
@@ -1187,9 +1188,9 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             if is_unbound_param {
                 assert!(!context.lambdas.contains_key(v_));
                 assert!(!context.by_name_args.contains_key(v_));
-                context
-                    .core
-                    .assert_errors("ICE unbound param should have already resulted in an error");
+                context.core.assert_has_errors(
+                    "ICE unbound param should have already resulted in an error",
+                );
                 *e_ = N::Exp_::UnresolvedError;
             }
         }
@@ -1252,7 +1253,7 @@ fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
             if context.all_params.contains_key(&var.value) {
                 context
                     .core
-                    .assert_errors("ICE cannot use macro parameter in pattern");
+                    .assert_has_errors("ICE cannot use macro parameter in pattern");
                 *p_ = MP::ErrorPat;
             }
         }
@@ -1264,7 +1265,7 @@ fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
             if context.all_params.contains_key(&var.value) {
                 context
                     .core
-                    .assert_errors("ICE cannot use macro parameter in pattern");
+                    .assert_has_errors("ICE cannot use macro parameter in pattern");
             }
             pat(context, inner);
         }

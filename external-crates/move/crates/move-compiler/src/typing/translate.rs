@@ -1765,7 +1765,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             );
             match ty_call_opt {
                 None => {
-                    context.assert_errors(
+                    context.assert_has_errors(
                         "ICE method call failure should have already resulted in an error",
                     );
                     (context.error_type(eloc), TE::UnresolvedError)
@@ -1799,7 +1799,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             );
             match ty_call_opt {
                 None => {
-                    context.assert_errors(
+                    context.assert_has_errors(
                         "ICE macro method call failure should have already resulted in an error",
                     );
                     (context.error_type(eloc), TE::UnresolvedError)
@@ -1832,7 +1832,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 };
                 (ret_ty, TE::UnresolvedError)
             } else {
-                context.assert_errors("ICE unbound var call. Should be expanded");
+                context.assert_has_errors("ICE unbound var call. Should be expanded");
                 (context.error_type(eloc), TE::UnresolvedError)
             }
         }
@@ -2171,7 +2171,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             (rhs, e_)
         }
         NE::UnresolvedError => {
-            context.assert_errors(
+            context.assert_has_errors(
                 "ICE unresolved expression should have already resulted in an error",
             );
             (context.error_type(eloc), TE::UnresolvedError)
@@ -3004,7 +3004,7 @@ fn lvalue(
             TL::Ignore
         }
         NL::Error => {
-            context.assert_errors("ICE error lvalue should have already resulted in an error");
+            context.assert_has_errors("ICE error lvalue should have already resulted in an error");
             TL::Ignore
         }
         NL::Var {
@@ -3860,14 +3860,14 @@ fn borrow_exp_dotted(
                 base_type: index_base_type,
             } => {
                 let Some(index_methods) = syntax_methods else {
-                    context.assert_errors(
+                    context.assert_has_errors(
                         "ICE missing index methods should have already resulted in an error",
                     );
                     exp = make_error_exp(context, loc);
                     break;
                 };
                 if matches!(index_base_type.value.inner(), TI::UnresolvedError) {
-                    context.assert_errors(
+                    context.assert_has_errors(
                         "ICE unresolved index base type should have already resulted in an error",
                     );
                     exp = make_error_exp(context, loc);
@@ -4199,7 +4199,7 @@ fn type_to_type_name_(
                     )
                 }
                 TI::UnresolvedError => {
-                    context.assert_errors(
+                    context.assert_has_errors(
                         "ICE unresolved type should have already resulted in an error",
                     );
                     return None;
@@ -4846,7 +4846,7 @@ fn expand_macro(
     let valid = context.add_macro_expansion(m, f, call_loc);
     if !valid {
         context
-            .assert_errors("ICE invalid macro expansion should have already resulted in an error");
+            .assert_has_errors("ICE invalid macro expansion should have already resulted in an error");
         return (context.error_type(call_loc), TE::UnresolvedError);
     }
     let res = match macro_expand::call(context, call_loc, m, f, type_args.clone(), args, return_ty)
