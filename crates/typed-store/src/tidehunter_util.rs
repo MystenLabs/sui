@@ -133,14 +133,22 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
     let batch_codec = metric_conf
         .enable_th_batch_compression
         .then_some(BatchCodec::Lz4);
+    // TEMPORARY (perf experiment, revert before merge): 10x the force-unload
+    // threshold. `snapshot_force_unload` spikes (in the `objects` and
+    // `owned_object_transaction_locks` keyspaces) correlate exactly with the
+    // sustained 15k->8k TPS drop and latency spike observed ~38 min into a load
+    // run. Multiplying respects any TH_SNAPSHOT_UNLOAD_THRESHOLD env override, so
+    // it scales whatever value is actually in effect on the deployment.
+    let snapshot_unload_threshold = parse_env_usize("TH_SNAPSHOT_UNLOAD_THRESHOLD", 1)
+        .unwrap_or(60 * 1024 * 1024 * 1024) as u64
+        * 10;
     let mut config = Config {
         frag_size,
         // run snapshot every 64 Gb written to wal
         snapshot_written_bytes: parse_env_usize("TH_SNAPSHOT_WRITTEN_BYTES", 1)
             .unwrap_or(64 * 1024 * 1024 * 1024) as u64,
         // force unloading dirty index entries if behind 60 Gb of wal
-        snapshot_unload_threshold: parse_env_usize("TH_SNAPSHOT_UNLOAD_THRESHOLD", 1)
-            .unwrap_or(60 * 1024 * 1024 * 1024) as u64,
+        snapshot_unload_threshold,
         unload_jitter_pct: 30,
         max_dirty_keys: default_max_dirty_keys(),
         max_maps,
