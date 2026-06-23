@@ -25,6 +25,7 @@ pub mod unnecessary_conditional;
 pub mod unnecessary_unit;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
+pub mod use_receiver_syntax;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
@@ -176,6 +177,12 @@ lints!(
         "combinable_comparisons",
         "comparison operations condition can be simplified"
     ),
+    (
+        UseReceiverSyntax,
+        LinterDiagnosticCategory::Style,
+        "use_receiver_syntax",
+        "consider using receiver (method) syntax"
+    ),
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -220,6 +227,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 unnecessary_unit::UnnecessaryUnit.visitor(),
                 equal_operands::EqualOperands.visitor(),
                 combinable_comparisons::CombinableComparisons.visitor(),
+                use_receiver_syntax::UseReceiverSyntax.visitor(),
             ]
         }
     }
