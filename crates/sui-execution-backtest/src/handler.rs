@@ -158,6 +158,7 @@ impl<S> Backtest<S> {
             Arc::new(latest),
             Arc::new(tombstones),
             self.packages.clone(),
+            ctx.system_packages.clone(),
         ));
         let prepared = Arc::new(PreparedCheckpoint {
             cp,

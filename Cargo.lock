@@ -14966,6 +14966,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sui-execution",
+ "sui-framework",
+ "sui-framework-snapshot",
  "sui-indexer-alt-framework",
  "sui-protocol-config",
  "sui-rpc",

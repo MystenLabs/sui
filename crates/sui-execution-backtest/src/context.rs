@@ -15,6 +15,7 @@ use anyhow::{Context as _, Result};
 use sui_execution::Executor;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_types::base_types::ObjectID;
 use sui_types::digests::ChainIdentifier;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::metrics::ExecutionMetrics;
@@ -39,6 +40,11 @@ pub(crate) struct EpochCtx {
     /// The epoch's reference gas price, used to meter execution faithfully (the gas accounting and
     /// `TxContext` differ from passing the tx's own price as the RGP).
     pub(crate) reference_gas_price: u64,
+    /// The system (framework) packages live during this epoch, keyed by id. Unlike normal packages,
+    /// these keep a stable id but are upgraded (new bytecode) across protocol versions, so they
+    /// can't be fetched "latest" and replayed faithfully — they are loaded version-correctly from
+    /// the framework snapshot for the epoch's protocol version (see [`load_epoch_system_packages`]).
+    pub(crate) system_packages: Arc<BTreeMap<ObjectID, Object>>,
 }
 
 /// A checkpoint that has been indexed and is ready to execute. Holds only cheap handles (Arcs); the
@@ -98,6 +104,10 @@ pub(crate) async fn resolve_epoch_work(
             .checkpoint
             .summary
             .timestamp_ms;
+        let system_packages = Arc::new(
+            load_epoch_system_packages(bounds.protocol_version)
+                .with_context(|| format!("resolving framework packages for epoch {epoch}"))?,
+        );
         let ctx = Arc::new(EpochCtx {
             epoch,
             protocol_config: Arc::new(protocol_config),
@@ -105,6 +115,7 @@ pub(crate) async fn resolve_epoch_work(
             metrics: execution_metrics.clone(),
             epoch_start_timestamp_ms,
             reference_gas_price: bounds.reference_gas_price,
+            system_packages,
         });
 
         let last = match max_checkpoints_per_epoch {
@@ -132,4 +143,23 @@ pub(crate) async fn resolve_epoch_work(
         epoch_ctxs.insert(epoch, ctx);
     }
     Ok((epoch_ctxs, first_checkpoint, last_checkpoint))
+}
+
+/// The system (framework) packages live at `protocol_version`, as package `Object`s keyed by id.
+/// `load_bytecode_snapshot` resolves the sparse protocol-version → snapshot mapping itself (the
+/// greatest snapshot at or below the version). The reconstructed object's version number is
+/// synthetic (`OBJECT_START_VERSION`); only its bytecode and linkage matter for execution, and
+/// those resolve system packages by id, not version.
+fn load_epoch_system_packages(protocol_version: u64) -> Result<BTreeMap<ObjectID, Object>> {
+    let packages =
+        sui_framework_snapshot::load_bytecode_snapshot(protocol_version).with_context(|| {
+            format!("loading framework snapshot for protocol version {protocol_version}")
+        })?;
+    Ok(packages
+        .into_iter()
+        .map(|package| {
+            let object = package.genesis_object();
+            (object.id(), object)
+        })
+        .collect())
 }
