@@ -3069,15 +3069,19 @@ impl MysticetiConsensusHandler {
         tasks.spawn_on(
             monitored_future!(async move {
                 while let Some(consensus_commit) = commit_receiver.recv().await {
-                    let _scope = monitored_scope("ConsensusCommitHandler::deserialize_worker");
                     // Prior commits are only replayed for `observe_commit` metadata and don't use
                     // the parsed transactions, so skip parsing them.
-                    let transactions: ParsedConsensusTransactions =
+                    let transactions: ParsedConsensusTransactions = {
+                        let _scope = monitored_scope("ConsensusCommitHandler::deserialize_worker");
                         if consensus_commit.commit_ref.index > last_processed_commit_at_startup {
                             consensus_commit.transactions()
                         } else {
                             Vec::new()
-                        };
+                        }
+                    };
+                    // The send is intentionally outside the scope above: on the bounded channel it
+                    // blocks when the handler is the bottleneck, and that idle-wait would otherwise
+                    // inflate the deserialize_worker scope (making it read as CPU work, not waiting).
                     if parsed_sender
                         .send((consensus_commit, transactions))
                         .await
