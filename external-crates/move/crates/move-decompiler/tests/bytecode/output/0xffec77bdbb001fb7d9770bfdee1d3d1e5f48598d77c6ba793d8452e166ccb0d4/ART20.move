@@ -238,22 +238,9 @@ const C42: vector<u8> = vector[104u8, 116u8, 116u8, 112u8, 115u8, 58u8, 47u8, 47
 // -- functions -- 
 
 public entry fun add_to_deny_list(l0: &mut CollectionCap, l1: vector<address>, l2: &mut TxContext) {
-    let l3;
     let l9 = tx_context::sender(freeze(l2));
     let l5 = &l1.len();
-    if (l5 > 0u64) {
-        l3 = l5 <= C29;
-        unstructured {
-            goto 'label_18;
-        }
-    } else {
-        l3 = false;
-        unstructured {
-            goto 'label_18;
-        }
-    };
-    /* block 18 */;
-    assert!(l3, C11);
+    assert!(l5 > 0u64 && l5 <= C29, C11);
     assert!(l9 == *(&l0.creator), C1);
     assert!(*(&l0.has_deny_list_authority), C8);
     let l6 = object::uid_to_inner(&l0.id);
@@ -285,25 +272,9 @@ public entry fun batch_burn_art20(l0: vector<NFT>, l1: &mut CollectionCap, l2: v
     let l14 = tx_context::sender(freeze(l3));
     let l11 = 0u64;
     while (l11 < l9) {
-        let l15 = (&mut l0).pop_back();
-        assert!(*(&(&l15).collection_id) == object::uid_to_inner(&l1.id), C5);
+        assert!(*(&(&(&mut l0).pop_back()).collection_id) == object::uid_to_inner(&l1.id), C5);
         let l8 = false;
         let l12 = 0u64;
-        loop {
-            if (l12 < &l2.len()) {
-                let l6 = &mut (&mut l2)[l12];
-                if (!(*(&l6.balance) > 0u64 && *(&l6.collection_id) == *(&(&l15).collection_id))) {
-                    l12 = l12 + 1u64;
-                    continue
-                };
-                *(&mut l6.balance) = xf_ART20::safe_sub(*(&l6.balance), 1u64);
-                l8 = true;
-            };
-            assert!(l8, C6);
-            xf_ART20::burn_single_art20(l15, l1, freeze(l3));
-            l11 = l11 + 1u64;
-            break
-        }
     };
     while (&l2.len() > 0u64) {
         let l7 = vector::remove(&mut l2, 0u64);
@@ -319,23 +290,10 @@ public entry fun batch_burn_art20(l0: vector<NFT>, l1: &mut CollectionCap, l2: v
 }
 
 public entry fun batch_burn_art20_by_asset_ids(l0: &mut CollectionCap, l1: vector<NFT>, l2: vector<UserBalance>, l3: vector<u64>, l4: &mut TxContext) {
-    let l5;
     let l22 = tx_context::sender(freeze(l4));
     let l13 = xf_ART20::get_collection_cap_id(freeze(l0));
     let l8 = &l3.len();
-    if (l8 > 0u64) {
-        l5 = l8 <= C29;
-        unstructured {
-            goto 'label_22;
-        }
-    } else {
-        l5 = false;
-        unstructured {
-            goto 'label_22;
-        }
-    };
-    /* block 22 */;
-    assert!(l5, C11);
+    assert!(l8 > 0u64 && l8 <= C29, C11);
     assert!(*(&l0.current_supply) >= l8, C4);
     let l21 = table::new(l4);
     let l23 = 0u64;
@@ -360,40 +318,6 @@ public entry fun batch_burn_art20_by_asset_ids(l0: &mut CollectionCap, l1: vecto
         table::add(&mut l21, l9, true);
         let l14 = false;
         let l24 = vector[];
-        while (!(vector::is_empty(&l1))) {
-            let l20 = (&mut l1).pop_back();
-            if (!(l14) && *(&(&l20).collection_id) == l13 && *(&(&l20).asset_id) == l9) {
-                assert!(l22 == *(&(&l20).creator), C3);
-                let l12 = false;
-                let l17 = 0u64;
-                loop {
-                    if (l17 < &l2.len()) {
-                        let l11 = &mut (&mut l2)[l17];
-                        if (!(*(&l11.balance) > 0u64 && *(&l11.collection_id) == l13)) {
-                            l17 = l17 + 1u64;
-                            continue
-                        };
-                        *(&mut l11.balance) = xf_ART20::safe_sub(*(&l11.balance), 1u64);
-                        l12 = true;
-                    };
-                    assert!(l12, C6);
-                    *(&mut l0.current_supply) = xf_ART20::safe_sub(*(&l0.current_supply), 1u64);
-                    event::emit(BurnEvent { owner: l22, id: object::uid_to_inner(&(&l20).id) });
-                    let NFT { id: reg_147, artinals_id: reg_148, creator: reg_149, name: reg_150, description: reg_151, uri: reg_152, logo_uri: reg_153, asset_id: reg_154, max_supply: reg_155, collection_id: reg_156, category: reg_157 } = l20;
-                    object::delete(reg_147 : 0x2::object::UID);
-                    l14 = true;
-                    break
-                }
-            } else {
-                (&mut l24).push_back(l20)
-            }
-        };
-        while (!(vector::is_empty(&l24))) {
-            (&mut l1).push_back((&mut l24).pop_back())
-        };
-        std::vector::destroy_empty(l24);
-        assert!(l14, C15);
-        l16 = l16 + 1u64;
     };
     while (l18 < &l2.len()) {
         if (xf_ART20::get_user_balance_amount(&(&l2)[l18]) == 0u64) {
@@ -419,20 +343,7 @@ public entry fun batch_update_art20_image_uri_by_asset_ids(l0: &CollectionCap, l
     xf_ART20::check_deny_list_restrictions(l0, l17);
     let l7 = &l2.len();
     assert!(l7 == &l3.len(), C0);
-    let l5;
-    if (l7 > 0u64) {
-        l5 = l7 <= C29;
-        unstructured {
-            goto 'label_45;
-        }
-    } else {
-        l5 = false;
-        unstructured {
-            goto 'label_45;
-        }
-    };
-    /* block 45 */;
-    assert!(l5, C11);
+    assert!(l7 > 0u64 && l7 <= C29, C11);
     let l11 = 0u64;
     let (l12, l16);
     loop {
@@ -457,22 +368,6 @@ public entry fun batch_update_art20_image_uri_by_asset_ids(l0: &CollectionCap, l
         table::add(&mut l16, l8, true);
         let l10 = false;
         let l18 = vector[];
-        while (!(vector::is_empty(&l1))) {
-            let l15 = (&mut l1).pop_back();
-            if (!(l10) && *(&(&l15).collection_id) == l9 && *(&(&l15).asset_id) == l8) {
-                assert!(l17 == *(&(&l15).creator), C1);
-                *(&mut (&mut l15).logo_uri) = url::new_unsafe_from_bytes(*l14);
-                event::emit(LogoURIUpdateEvent { id: object::uid_to_inner(&(&l15).id), artinals_id: *(&(&l15).artinals_id), new_logo_uri: *(&(&l15).logo_uri) });
-                l10 = true;
-            };
-            (&mut l18).push_back(l15)
-        };
-        while (!(vector::is_empty(&l18))) {
-            (&mut l1).push_back((&mut l18).pop_back())
-        };
-        std::vector::destroy_empty(l18);
-        assert!(l10, C15);
-        l12 = l12 + 1u64;
     };
     while (!(vector::is_empty(&l1))) {
         transfer::transfer((&mut l1).pop_back(), l17)
@@ -484,197 +379,137 @@ public entry fun batch_update_metadata(l0: &CollectionCap, l1: vector<NFT>, l2: 
     let l7 = &l1.len();
     let l10 = tx_context::sender(freeze(l6));
     let l8 = xf_ART20::get_collection_cap_id(l0);
-    if (option::is_some(&l2)) {
-        assert!(string::length(option::borrow(&l2)) <= 128u64, C10);
-        unstructured {
-            goto 'label_24;
-        }
-    } else {
-        unstructured {
-            goto 'label_24;
-        }
+    let __c0 = option::is_some(&l2);
+    let __c13;
+    if (__c0) {
+        __c13 = string::length(option::borrow(&l2)) <= 128u64;
+        assert!(__c13, C10)
     };
-    /* block 24 */;
-    if (option::is_some(&l3)) {
-        assert!(string::length(option::borrow(&l3)) <= 1000u64, C10);
-        unstructured {
-            goto 'label_38;
-        }
-    } else {
-        unstructured {
-            goto 'label_38;
-        }
-    };
-    /* block 38 */;
-    if (option::is_some(&l4)) {
-        assert!(option::borrow(&l4).len() <= 256u64, C10);
-        unstructured {
-            goto 'label_52;
-        }
-    } else {
-        unstructured {
-            goto 'label_52;
-        }
-    };
-    /* block 52 */;
-    if (option::is_some(&l5)) {
-        assert!(option::borrow(&l5).len() <= 256u64, C10);
-        unstructured {
-            goto 'label_66;
-        }
-    } else {
-        unstructured {
-            goto 'label_66;
-        }
-    };
-    /* block 66 */;
-    let l9 = 0u64;
-    while (l9 < l7) {
-        let l11 = &mut (&mut l1)[l9];
-        assert!(*(&l11.collection_id) == l8, C5);
-        assert!(*(&l0.is_mutable), C2);
-        assert!(l10 == *(&l11.creator), C1);
-        if (option::is_some(&l2)) {
-            *(&mut l11.name) = *(option::borrow(&l2))
+    if (__c13 || !(__c0)) {
+        let __c24 = option::is_some(&l3);
+        let __c27;
+        if (__c24) {
+            __c27 = string::length(option::borrow(&l3)) <= 1000u64;
+            assert!(__c27, C10)
         };
-        if (option::is_some(&l3)) {
-            *(&mut l11.description) = *(option::borrow(&l3))
-        };
-        if (option::is_some(&l4)) {
-            *(&mut l11.uri) = url::new_unsafe_from_bytes(*(option::borrow(&l4)))
-        };
-        if (option::is_some(&l5)) {
-            *(&mut l11.logo_uri) = url::new_unsafe_from_bytes(*(option::borrow(&l5)))
-        };
-        event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&l11.id), new_name: *(&l11.name), new_description: *(&l11.description) });
-        l9 = l9 + 1u64;
-    };
-    while (!(vector::is_empty(&l1))) {
-        transfer::transfer((&mut l1).pop_back(), l10)
-    };
-    std::vector::destroy_empty(l1)
+        if (__c27 || !(__c24)) {
+            let __c38 = option::is_some(&l4);
+            let __c41;
+            if (__c38) {
+                __c41 = option::borrow(&l4).len() <= 256u64;
+                assert!(__c41, C10)
+            };
+            if (__c41 || !(__c38)) {
+                let __c52 = option::is_some(&l5);
+                let __c55;
+                if (__c52) {
+                    __c55 = option::borrow(&l5).len() <= 256u64;
+                    assert!(__c55, C10)
+                };
+                if (__c55 || !(__c52)) {
+                    let l9 = 0u64;
+                    while (l9 < l7) {
+                        let l11 = &mut (&mut l1)[l9];
+                        assert!(*(&l11.collection_id) == l8, C5);
+                        assert!(*(&l0.is_mutable), C2);
+                        assert!(l10 == *(&l11.creator), C1);
+                        if (option::is_some(&l2)) {
+                            *(&mut l11.name) = *(option::borrow(&l2))
+                        };
+                        if (option::is_some(&l3)) {
+                            *(&mut l11.description) = *(option::borrow(&l3))
+                        };
+                        if (option::is_some(&l4)) {
+                            *(&mut l11.uri) = url::new_unsafe_from_bytes(*(option::borrow(&l4)))
+                        };
+                        if (option::is_some(&l5)) {
+                            *(&mut l11.logo_uri) = url::new_unsafe_from_bytes(*(option::borrow(&l5)))
+                        };
+                        event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&l11.id), new_name: *(&l11.name), new_description: *(&l11.description) });
+                        l9 = l9 + 1u64;
+                    };
+                    while (!(vector::is_empty(&l1))) {
+                        transfer::transfer((&mut l1).pop_back(), l10)
+                    };
+                    std::vector::destroy_empty(l1)
+                }
+            }
+        }
+    }
 }
 
 public entry fun batch_update_metadata_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>, l2: vector<u64>, l3: Option<String>, l4: Option<String>, l5: Option<vector<u8>>, l6: Option<vector<u8>>, l7: &mut TxContext) {
-    let l8;
     let l22 = tx_context::sender(freeze(l7));
     let l14 = xf_ART20::get_collection_cap_id(l0);
     let l10 = &l2.len();
-    if (l10 > 0u64) {
-        l8 = l10 <= C29;
-        unstructured {
-            goto 'label_21;
-        }
-    } else {
-        l8 = false;
-        unstructured {
-            goto 'label_21;
-        }
-    };
-    /* block 21 */;
-    assert!(l8, C11);
-    if (option::is_some(&l3)) {
+    assert!(l10 > 0u64 && l10 <= C29, C11);
+    let __c30 = option::is_some(&l3);
+    let (__c33, __c50, __c67);
+    if (__c30) {
         let l19 = option::borrow(&l3);
-        assert!(string::length(l19) <= 128u64, C10);
+        __c33 = string::length(l19) <= 128u64;
+        assert!(__c33, C10);
         let l12 = string::as_bytes(l19);
-        assert!(l12.len() <= 512u64, C10);
-        assert!(l12.len() > 0u64, C10);
-        unstructured {
-            goto 'label_79;
-        }
-    } else {
-        unstructured {
-            goto 'label_79;
-        }
+        __c50 = l12.len() <= 512u64;
+        assert!(__c50, C10);
+        __c67 = l12.len() > 0u64;
+        assert!(__c67, C10)
     };
-    /* block 79 */;
-    if (option::is_some(&l4)) {
-        let l15 = option::borrow(&l4);
-        assert!(string::length(l15) <= 1000u64, C10);
-        let l13 = string::as_bytes(l15);
-        assert!(l13.len() <= 4000u64, C10);
-        assert!(l13.len() > 0u64, C10);
-        unstructured {
-            goto 'label_128;
-        }
-    } else {
-        unstructured {
-            goto 'label_128;
-        }
-    };
-    /* block 128 */;
-    if (option::is_some(&l5)) {
-        let l24 = option::borrow(&l5);
-        assert!(l24.len() <= 256u64, C10);
-        assert!(l24.len() > 0u64, C10);
-        unstructured {
-            goto 'label_160;
-        }
-    } else {
-        unstructured {
-            goto 'label_160;
-        }
-    };
-    /* block 160 */;
-    if (option::is_some(&l6)) {
-        let l18 = option::borrow(&l6);
-        assert!(l18.len() <= 256u64, C10);
-        assert!(l18.len() > 0u64, C10);
-        unstructured {
-            goto 'label_192;
-        }
-    } else {
-        unstructured {
-            goto 'label_192;
-        }
-    };
-    let (l17, l21);
-    /* block 192 */;
-    l21 = table::new(l7);
-    l17 = 0u64;
-    loop {
-        if (l17 >= l10) {
-            table::drop(l21);
-            break
+    if (!(__c30) || ((__c33 && __c50) && __c67)) {
+        let __c79 = option::is_some(&l4);
+        let (__c116, __c82, __c99);
+        if (__c79) {
+            let l15 = option::borrow(&l4);
+            __c82 = string::length(l15) <= 1000u64;
+            assert!(__c82, C10);
+            let l13 = string::as_bytes(l15);
+            __c99 = l13.len() <= 4000u64;
+            assert!(__c99, C10);
+            __c116 = l13.len() > 0u64;
+            assert!(__c116, C10)
         };
-        let l11 = *(&(&l2)[l17]);
-        assert!(!(table::contains(&l21, l11)), C20);
-        table::add(&mut l21, l11, true);
-        let l16 = false;
-        let l23 = vector[];
-        while (!(vector::is_empty(&l1))) {
-            let l20 = (&mut l1).pop_back();
-            if (!(l16) && *(&(&l20).collection_id) == l14 && *(&(&l20).asset_id) == l11) {
-                assert!(*(&l0.is_mutable), C2);
-                assert!(l22 == *(&(&l20).creator), C1);
-                if (option::is_some(&l3)) {
-                    *(&mut (&mut l20).name) = *(option::borrow(&l3))
-                };
-                if (option::is_some(&l4)) {
-                    *(&mut (&mut l20).description) = *(option::borrow(&l4))
-                };
-                if (option::is_some(&l5)) {
-                    *(&mut (&mut l20).uri) = url::new_unsafe_from_bytes(*(option::borrow(&l5)))
-                };
-                if (option::is_some(&l6)) {
-                    *(&mut (&mut l20).logo_uri) = url::new_unsafe_from_bytes(*(option::borrow(&l6)))
-                };
-                event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&(&l20).id), new_name: *(&(&l20).name), new_description: *(&(&l20).description) });
-                l16 = true;
+        if (!(__c79) || ((__c116 && __c82) && __c99)) {
+            let __c128 = option::is_some(&l5);
+            let (__c131, __c148);
+            if (__c128) {
+                let l24 = option::borrow(&l5);
+                __c131 = l24.len() <= 256u64;
+                assert!(__c131, C10);
+                __c148 = l24.len() > 0u64;
+                assert!(__c148, C10)
             };
-            (&mut l23).push_back(l20)
-        };
-        while (!(vector::is_empty(&l23))) {
-            (&mut l1).push_back((&mut l23).pop_back())
-        };
-        std::vector::destroy_empty(l23);
-        assert!(l16, C15);
-        l17 = l17 + 1u64;
-    };
-    while (!(vector::is_empty(&l1))) {
-        transfer::transfer((&mut l1).pop_back(), l22)
-    };
-    std::vector::destroy_empty(l1)
+            if (!(__c128) || (__c131 && __c148)) {
+                let __c160 = option::is_some(&l6);
+                let (__c163, __c180);
+                if (__c160) {
+                    let l18 = option::borrow(&l6);
+                    __c163 = l18.len() <= 256u64;
+                    assert!(__c163, C10);
+                    __c180 = l18.len() > 0u64;
+                    assert!(__c180, C10)
+                };
+                if (!(__c160) || (__c163 && __c180)) {
+                    let l21 = table::new(l7);
+                    let l17 = 0u64;
+                    loop {
+                        if (l17 >= l10) {
+                            table::drop(l21);
+                            break
+                        };
+                        let l11 = *(&(&l2)[l17]);
+                        assert!(!(table::contains(&l21, l11)), C20);
+                        table::add(&mut l21, l11, true);
+                        let l16 = false;
+                        let l23 = vector[];
+                    };
+                    while (!(vector::is_empty(&l1))) {
+                        transfer::transfer((&mut l1).pop_back(), l22)
+                    };
+                    std::vector::destroy_empty(l1)
+                }
+            }
+        }
+    }
 }
 
 public entry fun batch_update_token_logo_uri(l0: vector<NFT>, l1: vector<vector<u8>>, l2: &CollectionCap, l3: &mut TxContext) {
@@ -683,20 +518,7 @@ public entry fun batch_update_token_logo_uri(l0: vector<NFT>, l1: vector<vector<
     let l9 = &l0.len();
     assert!(*(&l2.is_mutable), C2);
     assert!(l9 == &l1.len(), C0);
-    let l4;
-    if (l9 > 0u64) {
-        l4 = l9 <= C29;
-        unstructured {
-            goto 'label_40;
-        }
-    } else {
-        l4 = false;
-        unstructured {
-            goto 'label_40;
-        }
-    };
-    /* block 40 */;
-    assert!(l4, C11);
+    assert!(l9 > 0u64 && l9 <= C29, C11);
     xf_ART20::check_deny_list_restrictions(l2, l10);
     let l6 = 0u64;
     let (l13, l7);
@@ -837,16 +659,8 @@ public fun drop_collection_cap(l0: CollectionCap, l1: &mut TxContext) {
     let CollectionCap { id: reg_15, max_supply: reg_16, current_supply: reg_17, creator: reg_18, name: reg_19, description: reg_20, uri: reg_21, logo_uri: reg_22, is_mutable: reg_23, is_mintable: reg_24, has_deny_list_authority: reg_25, value_source: reg_26, is_api_source: reg_27 } = l0;
     let l2 = reg_15 : 0x2::object::UID;
     if (dynamic_field::exists_(&l2, DenyListKey { dummy_field: false })) {
-        table::drop(dynamic_field::remove(&mut l2, DenyListKey { dummy_field: false }));
-        unstructured {
-            goto 'label_45;
-        }
-    } else {
-        unstructured {
-            goto 'label_45;
-        }
+        table::drop(dynamic_field::remove(&mut l2, DenyListKey { dummy_field: false }))
     };
-    /* block 45 */;
     object::delete(l2)
 }
 
@@ -899,7 +713,6 @@ public fun get_collection_current_supply(l0: &CollectionCap): u64 {
 }
 
 public fun get_collection_details(l0: &CollectionCap): ( ID, address, String, String, Url, Url, u64, u64, bool, bool, u64) {
-    let l1;
     let l3 = xf_ART20::get_collection_cap_id(l0);
     let l2 = *(&l0.creator);
     let l11 = *(&l0.name);
@@ -910,18 +723,11 @@ public fun get_collection_details(l0: &CollectionCap): ( ID, address, String, St
     let l6 = *(&l0.max_supply);
     let l5 = *(&l0.is_mutable);
     let l4 = *(&l0.has_deny_list_authority);
-    if (xf_ART20::has_deny_list(l0)) {
-        l1 = xf_ART20::deny_list_size(l0);
-        unstructured {
-            goto 'label_50;
-        }
+    let l1 = if (xf_ART20::has_deny_list(l0)) {
+        xf_ART20::deny_list_size(l0)
     } else {
-        l1 = 0u64;
-        unstructured {
-            goto 'label_50;
-        }
+        0u64
     };
-    /* block 50 */;
     return (l3, l2, l11, l10, l9, l8, l7, l6, l5, l4, l1)
 }
 
@@ -1112,24 +918,6 @@ public fun get_nfts_by_asset_ids(l0: &CollectionCap, l1: &vector<NFT>, l2: vecto
         let l7 = false;
         let l12 = l1.len();
         let l10 = 0u64;
-        loop {
-            if (l10 < l12) {
-                let l11 = &l1[l10];
-                if (!(*(&l11.collection_id) == l6 && *(&l11.asset_id) == l5)) {
-                    l10 = l10 + 1u64;
-                    continue
-                };
-                (&mut l13).push_back(object::uid_to_inner(&l11.id));
-                (&mut l15).push_back(*(&l11.creator));
-                (&mut l8).push_back(l5);
-                l7 = true;
-            };
-            if (!(l7)) {
-                (&mut l14).push_back(l5)
-            };
-            l9 = l9 + 1u64;
-            break
-        }
     };
     return (l13, l15, l8, l14)
 }
@@ -1189,48 +977,35 @@ public fun is_denied(l0: &CollectionCap, l1: address): bool {
 public entry fun mint_additional_art20(l0: &mut CollectionCap, l1: u64, l2: &mut TokenIdCounter, l3: vector<UserBalance>, l4: &Clock, l5: &mut TxContext) {
     assert!(*(&l0.is_mutable), C21);
     assert!(tx_context::sender(freeze(l5)) == *(&l0.creator), C1);
-    let l6;
-    if (*(&l0.max_supply) == 0u64) {
-        l6 = true;
-        unstructured {
-            goto 'label_53;
-        }
-    } else {
-        l6 = *(&l0.current_supply) + l1 <= *(&l0.max_supply);
-        unstructured {
-            goto 'label_53;
-        }
-    };
-    /* block 53 */;
-    assert!(l6, C13);
+    assert!(*(&l0.max_supply) == 0u64 || *(&l0.current_supply) + l1 <= *(&l0.max_supply), C13);
     let l11 = object::uid_to_inner(&l0.id);
     let l14 = tx_context::sender(freeze(l5));
     if (vector::is_empty(&l3)) {
-        transfer::transfer(UserBalance { id: object::new(l5), collection_id: l11, balance: l1 }, l14);
-        unstructured {
-            goto 'label_132;
-        }
+        transfer::transfer(UserBalance { id: object::new(l5), collection_id: l11, balance: l1 }, l14)
     } else {
         let l10 = false;
         let l12 = 0u64;
         loop {
-            if (l12 < &l3.len()) {
+            let __c89 = l12 < &l3.len();
+            let __c94;
+            if (__c89) {
                 let l8 = &mut (&mut l3)[l12];
-                if (*(&l8.collection_id) != l11) {
+                __c94 = *(&l8.collection_id) == l11;
+                if (!(__c94)) {
                     l12 = l12 + 1u64;
                     continue
                 };
                 *(&mut l8.balance) = *(&l8.balance) + l1;
                 l10 = true;
             };
-            if (!(l10)) {
-                transfer::transfer(UserBalance { id: object::new(l5), collection_id: l11, balance: l1 }, l14);
+            if (__c94 || !(__c89)) {
+                if (!(l10)) {
+                    transfer::transfer(UserBalance { id: object::new(l5), collection_id: l11, balance: l1 }, l14)
+                };
                 break
-            };
-            break
+            }
         }
     };
-    /* block 132 */;
     let l13 = 0u64;
     while (l13 < l1) {
         *(&mut l2.last_id) = *(&l2.last_id) + 1u64;
@@ -1260,91 +1035,56 @@ public entry fun mint_art20<T0>(l0: vector<u8>, l1: vector<u8>, l2: u64, l3: u64
     assert!(l2 >= 0u64, C11);
     assert!(l2 <= C30, C14);
     let l20 = coin::value(&l12);
-    if (*(&l11.fee_amount) > 0u64) {
-        assert!(l20 >= *(&l11.fee_amount), C20);
-        assert!(type_name::get() == *(&l11.fee_coin_type), C20);
+    let __c66 = *(&l11.fee_amount) > 0u64;
+    let (__c75, __c92);
+    if (__c66) {
+        __c75 = l20 >= *(&l11.fee_amount);
+        assert!(__c75, C20);
+        __c92 = type_name::get() == *(&l11.fee_coin_type);
+        assert!(__c92, C20);
         if (l20 > *(&l11.fee_amount)) {
             let l21 = l20 - *(&l11.fee_amount);
-            transfer::public_transfer(coin::split(&mut l12, l21, l14), tx_context::sender(freeze(l14)));
-            unstructured {
-                goto 'label_129;
-            }
-        } else {
-            unstructured {
-                goto 'label_129;
-            }
+            transfer::public_transfer(coin::split(&mut l12, l21, l14), tx_context::sender(freeze(l14)))
         };
-        /* block 129 */;
-        transfer::public_transfer(l12, *(&l11.fee_collector));
-        unstructured {
-            goto 'label_142;
-        }
+        transfer::public_transfer(l12, *(&l11.fee_collector))
     } else {
-        transfer::public_transfer(l12, tx_context::sender(freeze(l14)));
-        unstructured {
-            goto 'label_142;
-        }
+        transfer::public_transfer(l12, tx_context::sender(freeze(l14)))
     };
-    /* block 142 */;
-    assert!(l3 <= C28, C13);
-    assert!(l2 <= C28, C13);
-    let l15;
-    if (l3 == 0u64) {
-        l15 = true;
-        unstructured {
-            goto 'label_179;
-        }
-    } else {
-        l15 = l2 <= l3;
-        unstructured {
-            goto 'label_179;
-        }
-    };
-    /* block 179 */;
-    assert!(l15, C19);
-    assert!(*(&l10.last_id) <= C27 - l2, C12);
-    let l17 = CollectionCap { id: object::new(l14), max_supply: l3, current_supply: l2, creator: tx_context::sender(freeze(l14)), name: string::utf8(l0), description: string::utf8(l1), uri: url::new_unsafe_from_bytes(l4), logo_uri: url::new_unsafe_from_bytes(l5), is_mutable: l8, is_mintable: true, has_deny_list_authority: l9, value_source: option::none(), is_api_source: false };
-    let l18 = object::uid_to_inner(&(&l17).id);
-    event::emit(CollectionCreatedEvent { collection_id: l18, creator: tx_context::sender(freeze(l14)), name: string::utf8(l0), description: string::utf8(l1), initial_supply: l2, max_supply: l3, is_mutable: l8, has_deny_list_authority: l9, timestamp: clock::timestamp_ms(l13) });
-    event::emit(CollectionMintEvent { collection_id: l18, amount: l2, current_supply: l2, max_supply: l3, creator: tx_context::sender(freeze(l14)), timestamp: clock::timestamp_ms(l13) });
-    dynamic_field::add(&mut (&mut l17).id, DenyListKey { dummy_field: false }, xf_ART20::create_deny_list(l14));
-    let l24 = UserBalance { id: object::new(l14), collection_id: l18, balance: l2 };
-    let l23 = vector[];
-    let l19 = 0u64;
-    while (l19 < l2) {
-        *(&mut l10.last_id) = *(&l10.last_id) + 1u64;
-        let l16 = *(&l10.last_id);
-        let l22 = NFT { id: object::new(l14), artinals_id: l16, creator: tx_context::sender(freeze(l14)), name: string::utf8(l0), description: string::utf8(l1), uri: url::new_unsafe_from_bytes(l4), logo_uri: url::new_unsafe_from_bytes(l5), asset_id: l19 + 1u64, max_supply: l3, collection_id: l18, category: l6 };
-        event::emit(NFTMintedEvent { id: object::uid_to_inner(&(&l22).id), artinals_id: *(&(&l22).artinals_id), creator: *(&(&l22).creator), name: *(&(&l22).name), asset_id: *(&(&l22).asset_id) });
-        event::emit(TransferEvent { from: tx_context::sender(freeze(l14)), to: tx_context::sender(freeze(l14)), id: object::uid_to_inner(&(&l22).id), royalty: 0u64, asset_id: *(&(&l22).asset_id) });
-        (&mut l23).push_back(l22);
-        l19 = l19 + 1u64;
-    };
-    while (!(vector::is_empty(&l23))) {
-        transfer::transfer((&mut l23).pop_back(), tx_context::sender(freeze(l14)))
-    };
-    std::vector::destroy_empty(l23);
-    transfer::share_object(l17);
-    transfer::transfer(l24, tx_context::sender(freeze(l14)))
+    if (!(__c66) || (__c75 && __c92)) {
+        assert!(l3 <= C28, C13);
+        assert!(l2 <= C28, C13);
+        assert!(l3 == 0u64 || l2 <= l3, C19);
+        assert!(*(&l10.last_id) <= C27 - l2, C12);
+        let l17 = CollectionCap { id: object::new(l14), max_supply: l3, current_supply: l2, creator: tx_context::sender(freeze(l14)), name: string::utf8(l0), description: string::utf8(l1), uri: url::new_unsafe_from_bytes(l4), logo_uri: url::new_unsafe_from_bytes(l5), is_mutable: l8, is_mintable: true, has_deny_list_authority: l9, value_source: option::none(), is_api_source: false };
+        let l18 = object::uid_to_inner(&(&l17).id);
+        event::emit(CollectionCreatedEvent { collection_id: l18, creator: tx_context::sender(freeze(l14)), name: string::utf8(l0), description: string::utf8(l1), initial_supply: l2, max_supply: l3, is_mutable: l8, has_deny_list_authority: l9, timestamp: clock::timestamp_ms(l13) });
+        event::emit(CollectionMintEvent { collection_id: l18, amount: l2, current_supply: l2, max_supply: l3, creator: tx_context::sender(freeze(l14)), timestamp: clock::timestamp_ms(l13) });
+        dynamic_field::add(&mut (&mut l17).id, DenyListKey { dummy_field: false }, xf_ART20::create_deny_list(l14));
+        let l24 = UserBalance { id: object::new(l14), collection_id: l18, balance: l2 };
+        let l23 = vector[];
+        let l19 = 0u64;
+        while (l19 < l2) {
+            *(&mut l10.last_id) = *(&l10.last_id) + 1u64;
+            let l16 = *(&l10.last_id);
+            let l22 = NFT { id: object::new(l14), artinals_id: l16, creator: tx_context::sender(freeze(l14)), name: string::utf8(l0), description: string::utf8(l1), uri: url::new_unsafe_from_bytes(l4), logo_uri: url::new_unsafe_from_bytes(l5), asset_id: l19 + 1u64, max_supply: l3, collection_id: l18, category: l6 };
+            event::emit(NFTMintedEvent { id: object::uid_to_inner(&(&l22).id), artinals_id: *(&(&l22).artinals_id), creator: *(&(&l22).creator), name: *(&(&l22).name), asset_id: *(&(&l22).asset_id) });
+            event::emit(TransferEvent { from: tx_context::sender(freeze(l14)), to: tx_context::sender(freeze(l14)), id: object::uid_to_inner(&(&l22).id), royalty: 0u64, asset_id: *(&(&l22).asset_id) });
+            (&mut l23).push_back(l22);
+            l19 = l19 + 1u64;
+        };
+        while (!(vector::is_empty(&l23))) {
+            transfer::transfer((&mut l23).pop_back(), tx_context::sender(freeze(l14)))
+        };
+        std::vector::destroy_empty(l23);
+        transfer::share_object(l17);
+        transfer::transfer(l24, tx_context::sender(freeze(l14)))
+    }
 }
 
 public entry fun remove_from_deny_list(l0: &mut CollectionCap, l1: vector<address>, l2: &mut TxContext) {
-    let l3;
     let l9 = tx_context::sender(freeze(l2));
     let l5 = &l1.len();
-    if (l5 > 0u64) {
-        l3 = l5 <= C29;
-        unstructured {
-            goto 'label_18;
-        }
-    } else {
-        l3 = false;
-        unstructured {
-            goto 'label_18;
-        }
-    };
-    /* block 18 */;
-    assert!(l3, C11);
+    assert!(l5 > 0u64 && l5 <= C29, C11);
     assert!(l9 == *(&l0.creator), C1);
     assert!(*(&l0.has_deny_list_authority), C8);
     let l6 = object::uid_to_inner(&l0.id);
@@ -1378,46 +1118,47 @@ fun safe_sub(l0: u64, l1: u64): u64 {
 public entry fun set_collection_value_source(l0: &mut CollectionCap, l1: vector<u8>, l2: bool, l3: &Clock, l4: &mut TxContext) {
     assert!(tx_context::sender(freeze(l4)) == *(&l0.creator), C1);
     let l9 = string::utf8(l1);
-    if (l2) {
+    let __c15 = l2;
+    let (__c20, __c37, __c93);
+    if (__c15) {
         let l8 = string::as_bytes(&l9);
-        assert!(l8.len() <= 256u64, C10);
+        __c20 = l8.len() <= 256u64;
+        assert!(__c20, C10);
         let l5 = C42;
         let l7 = &l5.len();
-        assert!(l8.len() >= l7, C16);
+        __c37 = l8.len() >= l7;
+        assert!(__c37, C16);
         let l6 = 0u64;
         let l10 = true;
         loop {
-            if (l6 < l7) {
-                if (*(&l8[l6]) == *(&(&l5)[l6])) {
+            let __c60 = l6 < l7;
+            let __c64;
+            if (__c60) {
+                __c64 = *(&l8[l6]) != *(&(&l5)[l6]);
+                if (!(__c64)) {
                     l6 = l6 + 1u64;
                     continue
                 };
                 l10 = false;
             };
-            assert!(l10, C16);
-            break
+            if (__c64 || !(__c60)) {
+                assert!(l10, C16);
+                break
+            }
         }
     } else {
-        assert!(string::length(&l9) == 64u64, C17);
-        unstructured {
-            goto 'label_105;
-        }
+        __c93 = string::length(&l9) == 64u64;
+        assert!(__c93, C17)
     };
-    /* block 105 */;
-    if (option::is_none(&l0.value_source)) {
-        *(&mut l0.value_source) = option::some(l9);
-        unstructured {
-            goto 'label_120;
-        }
-    } else {
-        *(option::borrow_mut(&mut l0.value_source)) = l9;
-        unstructured {
-            goto 'label_120;
-        }
-    };
-    /* block 120 */;
-    *(&mut l0.is_api_source) = l2;
-    event::emit(CollectionValueSourceUpdated { collection_id: object::uid_to_inner(&l0.id), is_api: l2, source: l9, timestamp: clock::timestamp_ms(l3) })
+    if (((__c15 && __c20) && __c37) || (__c93 && !(__c15))) {
+        if (option::is_none(&l0.value_source)) {
+            *(&mut l0.value_source) = option::some(l9)
+        } else {
+            *(option::borrow_mut(&mut l0.value_source)) = l9
+        };
+        *(&mut l0.is_api_source) = l2;
+        event::emit(CollectionValueSourceUpdated { collection_id: object::uid_to_inner(&l0.id), is_api: l2, source: l9, timestamp: clock::timestamp_ms(l3) })
+    }
 }
 
 public entry fun set_fee<T0>(l0: &mut FeeConfig, l1: u64, l2: &mut TxContext) {
@@ -1460,29 +1201,9 @@ public entry fun transfer_art20(l0: vector<NFT>, l1: vector<address>, l2: &Colle
         let l17 = *(&(&l1)[l14]);
         xf_ART20::check_deny_list_restrictions(l2, l17);
         let l18 = UserBalance { id: object::new(l5), collection_id: l12, balance: 1u64 };
-        let l21 = (&mut l0).pop_back();
-        assert!(*(&(&l21).collection_id) == l12, C5);
+        assert!(*(&(&(&mut l0).pop_back()).collection_id) == l12, C5);
         let l11 = false;
         let l15 = 0u64;
-        loop {
-            if (l15 < &l3.len()) {
-                let l9 = &mut (&mut l3)[l15];
-                if (!(*(&l9.balance) > 0u64 && *(&l9.collection_id) == l12)) {
-                    l15 = l15 + 1u64;
-                    continue
-                };
-                *(&mut l9.balance) = xf_ART20::safe_sub(*(&l9.balance), 1u64);
-                l11 = true;
-            };
-            assert!(l11, C6);
-            (&mut l23).push_back(object::uid_to_inner(&(&l21).id));
-            (&mut l7).push_back(1u64);
-            event::emit(TransferEvent { from: l20, to: l17, id: object::uid_to_inner(&(&l21).id), royalty: 0u64, asset_id: *(&(&l21).asset_id) });
-            transfer::transfer(l21, l17);
-            transfer::transfer(l18, l17);
-            l14 = l14 + 1u64;
-            break
-        }
     };
     while (&l3.len() > 0u64) {
         let l10 = vector::remove(&mut l3, 0u64);
@@ -1525,54 +1246,6 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
         let l20 = &l1.len();
         let l17 = 0u64;
         let l15 = false;
-        let __dispatch_81;
-        let (l13, l18);
-        loop {
-            if (l17 >= l20) {
-                __dispatch_81 = 1u32;
-                break
-            };
-            let l25 = &mut (&mut l1)[l17];
-            if (*(&l25.collection_id) == l14 && *(&l25.asset_id) == l11 && !(l15)) {
-                l13 = false;
-                l18 = 0u64;
-                __dispatch_81 = 0u32;
-                break
-            };
-            l17 = l17 + 1u64;
-        };
-        let __c191;
-        match (__dispatch_81) {
-            0 => {
-                loop {
-                    if (l18 < &l2.len()) {
-                        let l12 = &mut (&mut l2)[l18];
-                        if (!(*(&l12.collection_id) == l14 && *(&l12.balance) > 0u64)) {
-                            l18 = l18 + 1u64;
-                            continue
-                        };
-                        *(&mut l12.balance) = xf_ART20::safe_sub(*(&l12.balance), 1u64);
-                        l13 = true;
-                    };
-                    assert!(l13, C6);
-                    (&mut l26).push_back(l21);
-                    (&mut l9).push_back(1u64);
-                    transfer::transfer(vector::remove(&mut l1, l17), l4);
-                    l15 = true;
-                    break
-                };
-                __c191 = l15;
-                assert!(__c191, C15);
-                l16 = l16 + 1u64;
-                continue
-            },
-            1 => {
-                __c191 = l15;
-                assert!(__c191, C15);
-                l16 = l16 + 1u64;
-                continue
-            }
-        }
     };
     while (l19 < &l2.len()) {
         if (*(&(&mut (&mut l2)[l19]).balance) == 0u64) {
@@ -1684,14 +1357,19 @@ public entry fun update_art20_image_uri_by_asset_id(l0: &CollectionCap, l1: vect
             break
         };
         let l11 = (&mut l1).pop_back();
-        if (*(&(&l11).collection_id) == l6 && *(&(&l11).asset_id) == l2 && !(l7)) {
-            assert!(l10 == *(&(&l11).creator), C1);
+        let __c75 = *(&(&l11).collection_id) == l6 && (*(&(&l11).asset_id) == l2 && !(l7));
+        let __c77;
+        if (__c75) {
+            __c77 = l10 == *(&(&l11).creator);
+            assert!(__c77, C1);
             *(&mut (&mut l11).logo_uri) = url::new_unsafe_from_bytes(l3);
             event::emit(LogoURIUpdateEvent { id: object::uid_to_inner(&(&l11).id), artinals_id: *(&(&l11).artinals_id), new_logo_uri: *(&(&l11).logo_uri) });
             l7 = true;
         };
-        (&mut l12).push_back(l11);
-        l8 = l8 + 1u64;
+        if (__c77 || !(__c75)) {
+            (&mut l12).push_back(l11);
+            l8 = l8 + 1u64;
+        }
     };
     while (!(vector::is_empty(&l12))) {
         transfer::transfer((&mut l12).pop_back(), l10)
@@ -1707,155 +1385,142 @@ public fun update_collection_supply(l0: &mut CollectionCap, l1: u64) {
 public entry fun update_metadata_by_asset_id(l0: &CollectionCap, l1: vector<NFT>, l2: u64, l3: Option<String>, l4: Option<String>, l5: Option<vector<u8>>, l6: Option<vector<u8>>, l7: &mut TxContext) {
     let l18 = tx_context::sender(freeze(l7));
     let l10 = xf_ART20::get_collection_cap_id(l0);
-    if (option::is_some(&l3)) {
+    let __c0 = option::is_some(&l3);
+    let (__c10, __c25, __c40);
+    if (__c0) {
         let l15 = option::borrow(&l3);
-        assert!(string::length(l15) <= 128u64, C10);
+        __c10 = string::length(l15) <= 128u64;
+        assert!(__c10, C10);
         let l16 = string::as_bytes(l15);
-        assert!(l16.len() <= 512u64, C10);
-        assert!(l16.len() > 0u64, C10);
-        unstructured {
-            goto 'label_50;
-        }
-    } else {
-        unstructured {
-            goto 'label_50;
-        }
+        __c25 = l16.len() <= 512u64;
+        assert!(__c25, C10);
+        __c40 = l16.len() > 0u64;
+        assert!(__c40, C10)
     };
-    /* block 50 */;
-    if (option::is_some(&l4)) {
-        let l12 = option::borrow(&l4);
-        assert!(string::length(l12) <= 1000u64, C10);
-        let l11 = string::as_bytes(l12);
-        assert!(l11.len() <= 4000u64, C10);
-        assert!(l11.len() > 0u64, C10);
-        unstructured {
-            goto 'label_93;
-        }
-    } else {
-        unstructured {
-            goto 'label_93;
-        }
-    };
-    /* block 93 */;
-    if (option::is_some(&l5)) {
-        let l20 = option::borrow(&l5);
-        assert!(l20.len() <= 256u64, C10);
-        assert!(l20.len() > 0u64, C10);
-        unstructured {
-            goto 'label_121;
-        }
-    } else {
-        unstructured {
-            goto 'label_121;
-        }
-    };
-    /* block 121 */;
-    if (option::is_some(&l6)) {
-        let l14 = option::borrow(&l6);
-        assert!(l14.len() <= 256u64, C10);
-        assert!(l14.len() > 0u64, C10);
-        unstructured {
-            goto 'label_149;
-        }
-    } else {
-        unstructured {
-            goto 'label_149;
-        }
-    };
-    let (l13, l19);
-    /* block 149 */;
-    l19 = vector[];
-    l13 = false;
-    while (!(vector::is_empty(&l1)) && !(l13)) {
-        let l17 = (&mut l1).pop_back();
-        if (*(&(&l17).collection_id) == l10 && *(&(&l17).asset_id) == l2) {
-            assert!(*(&l0.is_mutable), C2);
-            assert!(l18 == *(&(&l17).creator), C1);
-            if (option::is_some(&l3)) {
-                *(&mut (&mut l17).name) = option::extract(&mut l3)
-            };
-            if (option::is_some(&l4)) {
-                *(&mut (&mut l17).description) = option::extract(&mut l4)
-            };
-            if (option::is_some(&l5)) {
-                *(&mut (&mut l17).uri) = url::new_unsafe_from_bytes(option::extract(&mut l5))
-            };
-            if (option::is_some(&l6)) {
-                *(&mut (&mut l17).logo_uri) = url::new_unsafe_from_bytes(option::extract(&mut l6))
-            };
-            event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&(&l17).id), new_name: *(&(&l17).name), new_description: *(&(&l17).description) });
-            l13 = true;
+    if (!(__c0) || ((__c10 && __c25) && __c40)) {
+        let __c50 = option::is_some(&l4);
+        let (__c53, __c68, __c83);
+        if (__c50) {
+            let l12 = option::borrow(&l4);
+            __c53 = string::length(l12) <= 1000u64;
+            assert!(__c53, C10);
+            let l11 = string::as_bytes(l12);
+            __c68 = l11.len() <= 4000u64;
+            assert!(__c68, C10);
+            __c83 = l11.len() > 0u64;
+            assert!(__c83, C10)
         };
-        (&mut l19).push_back(l17)
-    };
-    while (!(vector::is_empty(&l1))) {
-        (&mut l19).push_back((&mut l1).pop_back())
-    };
-    assert!(l13, C15);
-    while (!(vector::is_empty(&l19))) {
-        transfer::transfer((&mut l19).pop_back(), l18)
-    };
-    std::vector::destroy_empty(l1);
-    std::vector::destroy_empty(l19)
+        if (!(__c50) || ((__c53 && __c68) && __c83)) {
+            let __c93 = option::is_some(&l5);
+            let (__c111, __c96);
+            if (__c93) {
+                let l20 = option::borrow(&l5);
+                __c96 = l20.len() <= 256u64;
+                assert!(__c96, C10);
+                __c111 = l20.len() > 0u64;
+                assert!(__c111, C10)
+            };
+            if (!(__c93) || (__c111 && __c96)) {
+                let __c121 = option::is_some(&l6);
+                let (__c124, __c139);
+                if (__c121) {
+                    let l14 = option::borrow(&l6);
+                    __c124 = l14.len() <= 256u64;
+                    assert!(__c124, C10);
+                    __c139 = l14.len() > 0u64;
+                    assert!(__c139, C10)
+                };
+                if (!(__c121) || (__c124 && __c139)) {
+                    let l19 = vector[];
+                    let l13 = false;
+                    while (!(vector::is_empty(&l1)) && !(l13)) {
+                        let l17 = (&mut l1).pop_back();
+                        let __c183 = *(&(&l17).collection_id) == l10 && *(&(&l17).asset_id) == l2;
+                        let (__c185, __c194);
+                        if (__c183) {
+                            __c185 = *(&l0.is_mutable);
+                            assert!(__c185, C2);
+                            __c194 = l18 == *(&(&l17).creator);
+                            assert!(__c194, C1);
+                            if (option::is_some(&l3)) {
+                                *(&mut (&mut l17).name) = option::extract(&mut l3)
+                            };
+                            if (option::is_some(&l4)) {
+                                *(&mut (&mut l17).description) = option::extract(&mut l4)
+                            };
+                            if (option::is_some(&l5)) {
+                                *(&mut (&mut l17).uri) = url::new_unsafe_from_bytes(option::extract(&mut l5))
+                            };
+                            if (option::is_some(&l6)) {
+                                *(&mut (&mut l17).logo_uri) = url::new_unsafe_from_bytes(option::extract(&mut l6))
+                            };
+                            event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&(&l17).id), new_name: *(&(&l17).name), new_description: *(&(&l17).description) });
+                            l13 = true;
+                        };
+                        if (!(__c183) || (__c185 && __c194)) {
+                            (&mut l19).push_back(l17)
+                        }
+                    };
+                    while (!(vector::is_empty(&l1))) {
+                        (&mut l19).push_back((&mut l1).pop_back())
+                    };
+                    assert!(l13, C15);
+                    while (!(vector::is_empty(&l19))) {
+                        transfer::transfer((&mut l19).pop_back(), l18)
+                    };
+                    std::vector::destroy_empty(l1);
+                    std::vector::destroy_empty(l19)
+                }
+            }
+        }
+    }
 }
 
 public entry fun update_metadata_by_object(l0: &mut NFT, l1: &CollectionCap, l2: Option<String>, l3: Option<String>, l4: Option<vector<u8>>, l5: Option<vector<u8>>, l6: &mut TxContext) {
     assert!(*(&l0.collection_id) == xf_ART20::get_collection_cap_id(l1), C5);
     assert!(*(&l1.is_mutable), C2);
     assert!(tx_context::sender(freeze(l6)) == *(&l0.creator), C1);
-    if (option::is_some(&l2)) {
+    let __c40 = option::is_some(&l2);
+    let __c43;
+    if (__c40) {
         let l9 = option::extract(&mut l2);
-        assert!(string::length(&l9) <= 128u64, C10);
-        *(&mut l0.name) = l9;
-        unstructured {
-            goto 'label_60;
-        }
-    } else {
-        unstructured {
-            goto 'label_60;
-        }
+        __c43 = string::length(&l9) <= 128u64;
+        assert!(__c43, C10);
+        *(&mut l0.name) = l9
     };
-    /* block 60 */;
-    if (option::is_some(&l3)) {
-        let l7 = option::extract(&mut l3);
-        assert!(string::length(&l7) <= 1000u64, C10);
-        *(&mut l0.description) = l7;
-        unstructured {
-            goto 'label_80;
+    if (__c43 || !(__c40)) {
+        let __c60 = option::is_some(&l3);
+        let __c63;
+        if (__c60) {
+            let l7 = option::extract(&mut l3);
+            __c63 = string::length(&l7) <= 1000u64;
+            assert!(__c63, C10);
+            *(&mut l0.description) = l7
+        };
+        if (__c63 || !(__c60)) {
+            let __c80 = option::is_some(&l4);
+            let __c83;
+            if (__c80) {
+                let l10 = option::extract(&mut l4);
+                __c83 = &l10.len() <= 256u64;
+                assert!(__c83, C10);
+                *(&mut l0.uri) = url::new_unsafe_from_bytes(l10)
+            };
+            if (__c83 || !(__c80)) {
+                let __c101 = option::is_some(&l5);
+                let __c104;
+                if (__c101) {
+                    let l8 = option::extract(&mut l5);
+                    __c104 = &l8.len() <= 256u64;
+                    assert!(__c104, C10);
+                    *(&mut l0.logo_uri) = url::new_unsafe_from_bytes(l8)
+                };
+                if (__c104 || !(__c101)) {
+                    event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&l0.id), new_name: *(&l0.name), new_description: *(&l0.description) })
+                }
+            }
         }
-    } else {
-        unstructured {
-            goto 'label_80;
-        }
-    };
-    /* block 80 */;
-    if (option::is_some(&l4)) {
-        let l10 = option::extract(&mut l4);
-        assert!(&l10.len() <= 256u64, C10);
-        *(&mut l0.uri) = url::new_unsafe_from_bytes(l10);
-        unstructured {
-            goto 'label_101;
-        }
-    } else {
-        unstructured {
-            goto 'label_101;
-        }
-    };
-    /* block 101 */;
-    if (option::is_some(&l5)) {
-        let l8 = option::extract(&mut l5);
-        assert!(&l8.len() <= 256u64, C10);
-        *(&mut l0.logo_uri) = url::new_unsafe_from_bytes(l8);
-        unstructured {
-            goto 'label_122;
-        }
-    } else {
-        unstructured {
-            goto 'label_122;
-        }
-    };
-    /* block 122 */;
-    event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&l0.id), new_name: *(&l0.name), new_description: *(&l0.description) })
+    }
 }
 
 public fun validate_transfer(l0: &CollectionCap, l1: address, l2: address) {

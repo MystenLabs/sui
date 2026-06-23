@@ -129,7 +129,7 @@ fun check_tick(l0: vector<u8>, l1: &mut Global): String {
             break
         };
         let l5 = (&mut l0).pop_back();
-        assert!(l5 >= 97u8 && l5 <= 122u8 || l5 >= 48u8 && l5 <= 57u8, C10)
+        assert!((l5 >= 97u8 && l5 <= 122u8) || (l5 >= 48u8 && l5 <= 57u8), C10)
     };
     return l6
 }
@@ -141,15 +141,7 @@ public fun deploy(l0: &mut Global, l1: &Clock, l2: vector<u8>, l3: u64, l4: u64,
     let l9 = l10;
     if (l7 > l10) {
         l9 = l7;
-        unstructured {
-            goto 'label_30;
-        }
-    } else {
-        unstructured {
-            goto 'label_30;
-        }
     };
-    /* block 30 */;
     let l11 = Sui20Data { meta: Sui20Meta { tick: l12, max: l3, limit: l4, decimals: l5, fee: l6, start_at: l9 }, enable_to_coin: false, total_minted: 0u64, txs: 0u64, user_infos: table::new(l8), users: vector[], upgrade_bag: bag::new(l8) };
     bag::add(&mut l0.sui20tokens, l12, l11)
 }
@@ -166,15 +158,7 @@ public fun get_mint_data(l0: &mut Global, l1: String, l2: &mut TxContext) {
         l8 = *(&l4.minted_amount);
         l6 = *(&l4.hold_amount);
         l7 = *(&l4.last_mint_at);
-        unstructured {
-            goto 'label_47;
-        }
-    } else {
-        unstructured {
-            goto 'label_47;
-        }
     };
-    /* block 47 */;
     event::emit(QueryDataEvent { tick: *(&(&l3.meta).tick), start_at: *(&(&l3.meta).start_at), total_cap: *(&(&l3.meta).max), limit_per_mint: *(&(&l3.meta).limit), decimals: *(&(&l3.meta).decimals), mint_fee: *(&(&l3.meta).fee), total_minted: *(&l3.total_minted), remain_supply: *(&(&l3.meta).max) - *(&l3.total_minted), txs: *(&l3.txs), user_minted_amount: l8, user_hold_amount: l6, user_last_mint_at: l7 })
 }
 
@@ -221,16 +205,8 @@ public fun mint(l0: &mut Global, l1: &Clock, l2: String, l3: u64, l4: Coin<SUI>,
     *(&mut l7.total_minted) = *(&l7.total_minted) + l3;
     *(&mut l7.txs) = *(&l7.txs) + 1u64;
     if (!(table::contains(&l7.user_infos, l15))) {
-        table::add(&mut l7.user_infos, l15, UserInfo { minted_amount: 0u64, last_mint_at: 0u64, hold_amount: 0u64 });
-        unstructured {
-            goto 'label_137;
-        }
-    } else {
-        unstructured {
-            goto 'label_137;
-        }
+        table::add(&mut l7.user_infos, l15, UserInfo { minted_amount: 0u64, last_mint_at: 0u64, hold_amount: 0u64 })
     };
-    /* block 137 */;
     let l9 = table::borrow_mut(&mut l7.user_infos, l15);
     *(&mut l9.minted_amount) = *(&l9.minted_amount) + l3;
     *(&mut l9.last_mint_at) = l12;
@@ -240,31 +216,31 @@ public fun mint(l0: &mut Global, l1: &Clock, l2: String, l3: u64, l4: Coin<SUI>,
     if (!(vector::contains(&l7.users, &l15))) {
         let l8 = 0u64;
         loop {
-            if (l8 < l10) {
+            let __c178 = l8 < l10;
+            let __c183;
+            if (__c178) {
                 let l14 = *(&(&l7.users)[l8]);
                 let l13 = table::borrow(&l7.user_infos, l14);
-                if (l16 <= *(&l13.minted_amount)) {
+                __c183 = l16 > *(&l13.minted_amount);
+                if (!(__c183)) {
                     l8 = l8 + 1u64;
                     continue
                 };
                 vector::insert(&mut l7.users, l15, l8)
             };
-            let l11 = &l7.users.len();
-            if (l11 == l10 && l10 < C0) {
-                (&mut l7.users).push_back(l15);
+            if (__c183 || !(__c178)) {
+                let l11 = &l7.users.len();
+                if (l11 == l10 && l10 < C0) {
+                    (&mut l7.users).push_back(l15)
+                } else {
+                    if (l11 > C0) {
+                        
+                    }
+                };
                 break
-            };
-            if (l11 > C0) {
-                break
-            };
-            break
-        }
-    } else {
-        unstructured {
-            goto 'label_241;
+            }
         }
     };
-    /* block 241 */;
     x2_transfer::public_transfer(Sui20 { id: object::new(l5), tick: *(&(&l7.meta).tick), amount: l3 }, l15);
     return l4
 }

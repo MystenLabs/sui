@@ -149,49 +149,33 @@ public fun validate_heartbeat<T0>(l0: &mut CrankConfig, l1: &mut Vault<T0>, l2: 
     let l10 = vault::last_heartbeat_tvl(freeze(l1));
     let l5 = string::utf8(C14);
     let l7 = string::utf8(C15);
-    if (!(dynamic_field::exists_(&l0.id, l5))) {
+    let __c24 = !(dynamic_field::exists_(&l0.id, l5));
+    let (__c114, __c62, __c91);
+    if (__c24) {
         dynamic_field::add(&mut l0.id, l5, l10);
-        dynamic_field::add(&mut l0.id, l7, l11);
-        unstructured {
-            goto 'label_128;
-        }
+        dynamic_field::add(&mut l0.id, l7, l11)
     } else {
         let l6 = *(dynamic_field::borrow(&l0.id, l7));
-        if (l11 - l6 > C13) {
+        __c62 = l11 - l6 > C13;
+        if (__c62) {
             *(dynamic_field::borrow_mut(&mut l0.id, l5)) = l10;
-            *(dynamic_field::borrow_mut(&mut l0.id, l7)) = l11;
-            unstructured {
-                goto 'label_128;
-            }
+            *(dynamic_field::borrow_mut(&mut l0.id, l7)) = l11
         } else {
             let l8 = *(dynamic_field::borrow(&l0.id, l5));
-            if (l8 > 0u64) {
-                let l4;
-                if (l10 > l8) {
-                    l4 = l10 - l8;
-                    unstructured {
-                        goto 'label_114;
-                    }
+            __c91 = l8 > 0u64;
+            if (__c91) {
+                __c114 = if (l10 > l8) {
+                    l10 - l8
                 } else {
-                    l4 = l8 - l10;
-                    unstructured {
-                        goto 'label_114;
-                    }
-                };
-                /* block 114 */;
-                assert!(l4as u128 * 10000u128 / l8as u128as u64 <= C12, C10);
-                unstructured {
-                    goto 'label_128;
-                }
-            } else {
-                unstructured {
-                    goto 'label_128;
-                }
+                    l8 - l10
+                }as u128 * 10000u128 / l8as u128as u64 <= C12;
+                assert!(__c114, C10)
             }
         }
     };
-    /* block 128 */;
-    event::emit(HeartbeatEvent { timestamp_ms: l11 })
+    if (((__c114 || __c24) || __c62) || !(__c91)) {
+        event::emit(HeartbeatEvent { timestamp_ms: l11 })
+    }
 }
 
 public fun validate_reroute<T0>(l0: &mut CrankConfig, l1: &ApyRegistry, l2: &StrategyRegistry, l3: &Vault<T0>, l4: u8, l5: u8, l6: &Clock) {
@@ -202,20 +186,11 @@ public fun validate_reroute<T0>(l0: &mut CrankConfig, l1: &ApyRegistry, l2: &Str
     let l8 = apy::get_total_apy(l1, l4);
     let l12 = apy::get_total_apy(l1, l5);
     assert!(l12 > l8, C7);
-    let l7;
-    if (l8 == 0u64) {
-        l7 = 10000u64;
-        unstructured {
-            goto 'label_89;
-        }
+    let l11 = if (l8 == 0u64) {
+        10000u64
     } else {
-        l7 = l12 - l8 * 10000u64 / l8;
-        unstructured {
-            goto 'label_89;
-        }
+        l12 - l8 * 10000u64 / l8
     };
-    /* block 89 */;
-    let l11 = l7;
     assert!(l11 >= *(&l0.min_spread_bps), C3);
     floors::assert_spread(l11);
     assert!(l12 >= *(&l0.min_apy_bps), C4);
@@ -224,31 +199,20 @@ public fun validate_reroute<T0>(l0: &mut CrankConfig, l1: &ApyRegistry, l2: &Str
     assert!(l9 >= *(&l0.reroute_cooldown_ms), C5);
     floors::assert_cooldown(l9);
     if (l4 != 0u8) {
-        apy::assert_not_stale(l1, l4, l6);
-        unstructured {
-            goto 'label_162;
-        }
-    } else {
-        unstructured {
-            goto 'label_162;
-        }
+        apy::assert_not_stale(l1, l4, l6)
     };
-    /* block 162 */;
     apy::assert_not_stale(l1, l5, l6);
     let reg_103;
     (reg_102, reg_103) = strategy::decode_strategy(l5);
-    if (reg_103 == 2u8) {
-        assert!(!(vault::is_depeg_active(l3)), C11);
-        unstructured {
-            goto 'label_185;
-        }
-    } else {
-        unstructured {
-            goto 'label_185;
-        }
+    let __c162 = reg_103 == 2u8;
+    let __c174;
+    if (__c162) {
+        __c174 = !(vault::is_depeg_active(l3));
+        assert!(__c174, C11)
     };
-    /* block 185 */;
-    *(&mut l0.last_reroute_ms) = l10;
-    event::emit(RerouteValidatedEvent { current_strategy: l4, target_strategy: l5, current_apy: l8, target_apy: l12, spread_bps: l11, timestamp_ms: l10 })
+    if (__c174 || !(__c162)) {
+        *(&mut l0.last_reroute_ms) = l10;
+        event::emit(RerouteValidatedEvent { current_strategy: l4, target_strategy: l5, current_apy: l8, target_apy: l12, spread_bps: l11, timestamp_ms: l10 })
+    }
 }
 

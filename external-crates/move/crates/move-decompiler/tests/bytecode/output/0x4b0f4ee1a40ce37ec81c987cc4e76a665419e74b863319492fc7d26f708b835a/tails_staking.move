@@ -244,16 +244,8 @@ public fun exp_down_with_fee(l0: &mut Version, l1: &mut TailsStakingRegistry, l2
     let l11 = typus_nft::tails_level(freeze(l8));
     if (option::is_some(&l7)) {
         let l10 = bag::borrow(&l1.tails_metadata, C9);
-        typus_nft::update_image_url(&l1.tails_manager_cap, l8, *(big_vector::borrow(table::borrow(l10, l11), l13 - 1u64)));
-        unstructured {
-            goto 'label_109;
-        }
-    } else {
-        unstructured {
-            goto 'label_109;
-        }
+        typus_nft::update_image_url(&l1.tails_manager_cap, l8, *(big_vector::borrow(table::borrow(l10, l11), l13 - 1u64)))
     };
-    /* block 109 */;
     *(&mut (bag::borrow_mut(&mut l1.tails_metadata, C8))[l13 - 1u64]) = l11;
     event::emit(ExpDownEvent { tails: l9, log: vector[l13, l4], bcs_padding: C17 })
 }
@@ -274,16 +266,8 @@ public fun exp_down_without_staking_with_fee(l0: &mut Version, l1: &TailsStaking
     let l13 = typus_nft::tails_level(freeze(l10));
     if (option::is_some(&l9)) {
         let l12 = bag::borrow(&l1.tails_metadata, C9);
-        typus_nft::update_image_url(&l1.tails_manager_cap, l10, *(big_vector::borrow(table::borrow(l12, l13), l14 - 1u64)));
-        unstructured {
-            goto 'label_92;
-        }
-    } else {
-        unstructured {
-            goto 'label_92;
-        }
+        typus_nft::update_image_url(&l1.tails_manager_cap, l10, *(big_vector::borrow(table::borrow(l12, l13), l14 - 1u64)))
     };
-    /* block 92 */;
     event::emit(ExpDownEvent { tails: l11, log: vector[l14, l6], bcs_padding: C17 })
 }
 
@@ -320,18 +304,6 @@ public(friend) fun get_level_counts(l0: &Version, l1: &TailsStakingRegistry): ve
         let l12 = big_vector::borrow_from_slice(l8, l3 % l11);
         let l4 = 0u64;
         let l6 = &l12.tails.len();
-        while (l4 < l6) {
-            let l15 = *(&(&l12.tails)[l4]);
-            let l13 = *(&l14[l15 - 1u64]);
-            *(&mut (&mut l7)[l13 - 1u64]) = *(&(&l7)[l13 - 1u64]) + 1u64;
-            l4 = l4 + 1u64;
-        };
-        if (l3 + 1u64 < l6 && l3 + 1u64 == l9 * l11 + l10) {
-            l9 = big_vector::get_slice_idx(l8) + 1u64;
-            l8 = big_vector::borrow_slice(&l1.staking_infos, l9);
-            l10 = big_vector::get_slice_length(l8);
-        };
-        l3 = l3 + 1u64;
     };
     return l7
 }
@@ -375,10 +347,6 @@ public fun get_max_staking_level(l0: &Version, l1: &TailsStakingRegistry, l2: ad
             };
             l5 = l5 + 1u64;
         };
-        unstructured {
-            goto 'label_143;
-        }
-    } else {
         unstructured {
             goto 'label_143;
         }
@@ -492,18 +460,11 @@ entry fun level_up(l0: &Version, l1: &mut TailsStakingRegistry, l2: address, l3:
     let l8 = typus_nft::tails_level(freeze(l5));
     if (l3) {
         let l11 = bag::borrow(&l1.tails_metadata, C10);
-        typus_nft::update_image_url(&l1.tails_manager_cap, l5, *(table::borrow(l11, l8 * 10000u64 + l10)));
-        unstructured {
-            goto 'label_80;
-        }
+        typus_nft::update_image_url(&l1.tails_manager_cap, l5, *(table::borrow(l11, l8 * 10000u64 + l10)))
     } else {
         let l7 = bag::borrow(&l1.tails_metadata, C9);
-        typus_nft::update_image_url(&l1.tails_manager_cap, l5, *(big_vector::borrow(table::borrow(l7, l8), l10 - 1u64)));
-        unstructured {
-            goto 'label_80;
-        }
+        typus_nft::update_image_url(&l1.tails_manager_cap, l5, *(big_vector::borrow(table::borrow(l7, l8), l10 - 1u64)))
     };
-    /* block 80 */;
     *(&mut (bag::borrow_mut(&mut l1.tails_metadata, C8))[l10 - 1u64]) = l8;
     event::emit(LevelUpEvent { tails: l6, log: vector[l10, l8], bcs_padding: C17 })
 }
@@ -518,16 +479,8 @@ public fun public_exp_down(l0: &ManagerCap, l1: &Version, l2: &mut TailsStakingR
     let l9 = typus_nft::tails_level(freeze(l6));
     if (option::is_some(&typus_nft::level_up(&l2.tails_manager_cap, l6))) {
         let l8 = bag::borrow(&l2.tails_metadata, C9);
-        typus_nft::update_image_url(&l2.tails_manager_cap, l6, *(big_vector::borrow(table::borrow(l8, l9), l11 - 1u64)));
-        unstructured {
-            goto 'label_62;
-        }
-    } else {
-        unstructured {
-            goto 'label_62;
-        }
+        typus_nft::update_image_url(&l2.tails_manager_cap, l6, *(big_vector::borrow(table::borrow(l8, l9), l11 - 1u64)))
     };
-    /* block 62 */;
     *(&mut (bag::borrow_mut(&mut l2.tails_metadata, C8))[l11 - 1u64]) = l9;
     event::emit(ExpDownEvent { tails: l7, log: vector[l11, l4], bcs_padding: C17 })
 }
@@ -541,16 +494,8 @@ public fun public_exp_down_without_staking(l0: &ManagerCap, l1: &Version, l2: &T
     let l11 = typus_nft::tails_level(freeze(l8));
     if (option::is_some(&typus_nft::level_up(&l2.tails_manager_cap, l8))) {
         let l10 = bag::borrow(&l2.tails_metadata, C9);
-        typus_nft::update_image_url(&l2.tails_manager_cap, l8, *(big_vector::borrow(table::borrow(l10, l11), l12 - 1u64)));
-        unstructured {
-            goto 'label_55;
-        }
-    } else {
-        unstructured {
-            goto 'label_55;
-        }
+        typus_nft::update_image_url(&l2.tails_manager_cap, l8, *(big_vector::borrow(table::borrow(l10, l11), l12 - 1u64)))
     };
-    /* block 55 */;
     event::emit(ExpDownEvent { tails: l9, log: vector[l12, l6], bcs_padding: C17 })
 }
 
@@ -617,7 +562,6 @@ entry fun set_profit_sharing<T0, T1>(l0: &Version, l1: &mut TailsStakingRegistry
     let l19 = type_name::with_defining_ids();
     let (reg_8, reg_9) = vector::index_of(&l1.profit_assets, &l19);
     let l21 = reg_9;
-    let l20 = reg_8;
     let l30 = bag::borrow(&l1.tails_metadata, C8);
     let l15 = big_vector::length(&l1.staking_infos);
     let l26 = big_vector::slice_size(&l1.staking_infos)as u64;
@@ -630,26 +574,8 @@ entry fun set_profit_sharing<T0, T1>(l0: &Version, l1: &mut TailsStakingRegistry
         let l18 = 0u64;
         let l14 = 0u64;
         let l16 = &l28.tails.len();
-        while (l14 < l16) {
-            let l31 = *(&(&l28.tails)[l14]);
-            let l29 = *(&l30[l31 - 1u64]);
-            l18 = l18 + *(&(&l2)[l29 - 1u64]);
-            *(&mut (&mut l17)[l29 - 1u64]) = *(&(&l17)[l29 - 1u64]) + 1u64;
-            l14 = l14 + 1u64;
-        };
-        (&mut l28.profits).push_back(l18);
-        if (l20) {
-            
-        };
-        l32 = l32 + l18;
-        if (l13 + 1u64 < l16 && l13 + 1u64 == l24 * l26 + l25) {
-            l24 = big_vector::get_slice_idx(freeze(l23)) + 1u64;
-            l23 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l24);
-            l25 = big_vector::get_slice_length(freeze(l23));
-        };
-        l13 = l13 + 1u64;
     };
-    if (!(l20)) {
+    if (!(reg_8)) {
         (&mut l1.profit_assets).push_back(l19);
         if (!(dynamic_field::exists_(&l1.id, l19))) {
             dynamic_field::add(&mut l1.id, l19, balance::zero());
@@ -671,10 +597,9 @@ entry fun set_profit_sharing<T0, T1>(l0: &Version, l1: &mut TailsStakingRegistry
     let l27 = coin::value(&l3);
     assert!(balance::value(freeze(l22)) >= l32, C2);
     assert!(balance::value(freeze(l22)) == l32, C5);
-    let l10 = l17;
     let l9 = vector[l32, l27, l4, l5];
     let l8 = type_name::with_defining_ids();
-    event::emit(SetProfitSharingEvent { token: l19, level_profits: l2, level_counts: l10, log: l9, bcs_padding: vector[bcs::to_bytes(&l8)] })
+    event::emit(SetProfitSharingEvent { token: l19, level_profits: l2, level_counts: l17, log: l9, bcs_padding: vector[bcs::to_bytes(&l8)] })
 }
 
 public fun stake_tails(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: &mut Kiosk, l3: &KioskOwnerCap, l4: address, l5: Coin<SUI>, l6: &mut TxContext) {
@@ -702,10 +627,11 @@ fun stake_tails_(l0: &mut TailsStakingRegistry, l1: Tails, l2: address) {
     let l9 = big_vector::get_slice_length(l7);
     let l4 = 0u64;
     loop {
-        if (l4 < l5) {
-            if (*(&(big_vector::borrow_from_slice(l7, l4 % l10)).user) == l2) {
-                
-            } else {
+        let __c49 = l4 < l5;
+        let __c54;
+        if (__c49) {
+            __c54 = *(&(big_vector::borrow_from_slice(l7, l4 % l10)).user) == l2;
+            if (!(__c54)) {
                 if (l4 + 1u64 < l5 && l4 + 1u64 == l8 * l10 + l9) {
                     l8 = big_vector::get_slice_idx(l7) + 1u64;
                     l7 = big_vector::borrow_slice(&l0.staking_infos, l8);
@@ -715,34 +641,36 @@ fun stake_tails_(l0: &mut TailsStakingRegistry, l1: Tails, l2: address) {
                 continue
             }
         };
-        if (l4 == l5) {
-            let l6 = C14;
-            utility::pad_u64_vector(&mut l6, &l0.profit_assets.len() - 1u64);
-            big_vector::push_back(&mut l0.staking_infos, StakingInfo { user: l2, tails: C14, profits: l6, u64_padding: C25 })
-        };
-        let l11 = big_vector::borrow_mut(&mut l0.staking_infos, l4);
-        assert!(&l11.tails.len() < *(&(&l0.config)[C1]), C11);
-        (&mut l11.tails).push_back(typus_nft::tails_number(&l1));
-        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C19))) {
-            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C19))
-        };
-        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C20))) {
-            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C20))
-        };
-        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C21))) {
-            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C21))
-        };
-        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C22))) {
-            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C22))
-        };
-        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C23))) {
-            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C23))
-        };
-        if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C24))) {
-            typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C24))
-        };
-        object_table::add(&mut l0.tails, object::id_address(&l1), l1);
-        return
+        if (__c54 || !(__c49)) {
+            if (l4 == l5) {
+                let l6 = C14;
+                utility::pad_u64_vector(&mut l6, &l0.profit_assets.len() - 1u64);
+                big_vector::push_back(&mut l0.staking_infos, StakingInfo { user: l2, tails: C14, profits: l6, u64_padding: C25 })
+            };
+            let l11 = big_vector::borrow_mut(&mut l0.staking_infos, l4);
+            assert!(&l11.tails.len() < *(&(&l0.config)[C1]), C11);
+            (&mut l11.tails).push_back(typus_nft::tails_number(&l1));
+            if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C19))) {
+                typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C19))
+            };
+            if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C20))) {
+                typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C20))
+            };
+            if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C21))) {
+                typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C21))
+            };
+            if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C22))) {
+                typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C22))
+            };
+            if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C23))) {
+                typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C23))
+            };
+            if (typus_nft::contains_u64_padding(&l0.tails_manager_cap, &l1, string::utf8(C24))) {
+                typus_nft::remove_u64_padding(&l0.tails_manager_cap, &mut l1, string::utf8(C24))
+            };
+            object_table::add(&mut l0.tails, object::id_address(&l1), l1);
+            return
+        }
     }
 }
 
@@ -784,13 +712,18 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
     let l8 = big_vector::borrow_slice_mut(&mut l0.staking_infos, l9);
     let l10 = big_vector::get_slice_length(freeze(l8));
     let l4 = 0u64;
+    let __dispatch_27;
     let (l12, l5, l7);
     loop {
-        assert!(l4 < l6, C12);
+        if (l4 >= l6) {
+            __dispatch_27 = 1u32;
+            break
+        };
         l12 = big_vector::borrow_from_slice_mut(l8, l4 % l11);
         if (*(&l12.user) == l2) {
             l5 = 0u64;
             l7 = &l12.tails.len();
+            __dispatch_27 = 0u32;
             break
         };
         if (l4 + 1u64 < l6 && l4 + 1u64 == l9 * l11 + l10) {
@@ -800,15 +733,23 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
         };
         l4 = l4 + 1u64;
     };
-    while (l5 < l7) {
-        if (*(&l14[*(&(&l12.tails)[l5]) - 1u64]) == l1) {
-            let l13 = object_table::remove(&mut l0.tails, l1);
-            if (vector::is_empty(&l12.tails)) {
-                
+    match (__dispatch_27) {
+        0 => {
+            while (l5 < l7) {
+                if (*(&l14[*(&(&l12.tails)[l5]) - 1u64]) == l1) {
+                    let l13 = object_table::remove(&mut l0.tails, l1);
+                    if (vector::is_empty(&l12.tails)) {
+                        
+                    };
+                    return l13
+                };
+                l5 = l5 + 1u64;
             };
-            return l13
-        };
-        l5 = l5 + 1u64;
+            abort C12
+        },
+        1 => {
+            abort C12
+        }
     }
 }
 
@@ -854,9 +795,7 @@ entry fun upload_webp_bytes(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64
     let l6 = bag::borrow_mut(&mut l1.tails_metadata, C10);
     if (!(table::contains(freeze(l6), l3 * 10000u64 + l2))) {
         table::add(l6, l3 * 10000u64 + l2, l4);
-        unstructured {
-            goto 'label_47;
-        }
+        /* block 47 */
     } else {
         let l7 = table::borrow_mut(l6, l3 * 10000u64 + l2);
         while (!(vector::is_empty(&l4))) {
@@ -865,8 +804,7 @@ entry fun upload_webp_bytes(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64
         unstructured {
             goto 'label_47;
         }
-    };
-    /* block 47 */
+    }
 }
 
 public fun verify_staking(l0: &Version, l1: &TailsStakingRegistry, l2: address, l3: address): bool {

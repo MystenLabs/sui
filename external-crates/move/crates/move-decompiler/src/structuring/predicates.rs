@@ -296,6 +296,46 @@ impl Formula {
         self.conjuncts().iter().any(|c| c == factor)
     }
 
+    /// True iff `factor` can be pulled out of `self`. Mirrors how distribution works:
+    ///   - `self == factor`            -> trivially.
+    ///   - `And(fs)`                   -> any conjunct (recursively) has the factor;
+    ///                                    the others survive untouched.
+    ///   - `Or(fs)`                    -> every disjunct (recursively) has the factor.
+    ///   - otherwise                   -> false.
+    ///
+    /// The recursion is what makes nested-DNF guards factorable. A guard like
+    /// `And(Or(And(X, c24, c27), And(X, ¬c24)), __c38)` should still have X as a
+    /// factor because the inner `Or` always carries X.
+    ///
+    /// Note: this is structurally sufficient, not boolean-complete - cases like
+    /// `(X || Y) && (X || !Y) ⇒ X` aren't caught (neither conjunct alone has X), but
+    /// they don't arise in practice from reaching-condition guards.
+    pub fn has_factor(&self, factor: &Formula) -> bool {
+        if self == factor {
+            return true;
+        }
+        match &self.0 {
+            FormulaTree::And(fs) => fs.iter().any(|f| f.has_factor(factor)),
+            FormulaTree::Or(fs) => fs.iter().all(|f| f.has_factor(factor)),
+            _ => false,
+        }
+    }
+
+    /// Strip `factor` wherever it appears as a factor inside `self`. Mirror of
+    /// [`has_factor`]: recurses through `And`/`Or` so a nested `And(Or(.., X), Y)`
+    /// loses its X while keeping the surrounding structure intact. Caller has
+    /// verified `has_factor(factor)`.
+    pub fn without_factor(&self, factor: &Formula) -> Formula {
+        if self == factor {
+            return true_();
+        }
+        match &self.0 {
+            FormulaTree::And(fs) => and(fs.iter().map(|f| f.without_factor(factor)).collect()),
+            FormulaTree::Or(fs) => or(fs.iter().map(|d| d.without_factor(factor)).collect()),
+            _ => self.clone(),
+        }
+    }
+
     /// `Some(n)` iff `self` is a single condition-block atom parseable via the
     /// [`cond_var_name`] convention.
     pub fn as_cond_atom(&self) -> Option<NodeIndex> {

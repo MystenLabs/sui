@@ -840,7 +840,10 @@ fn build_body_acyclic_projection(
     let back_edge_sink = synthetic_sink_id(input);
     let mut projection: BTreeMap<D::Label, D::Input> = BTreeMap::new();
     for (&node, inp) in input.iter().filter(|(k, _)| loop_nodes.contains(k)) {
-        projection.insert(node, redirect_edges_to(inp.clone(), loop_head, back_edge_sink));
+        projection.insert(
+            node,
+            redirect_edges_to(inp.clone(), loop_head, back_edge_sink),
+        );
     }
     // Synthetic sink for the back-edges.
     projection.insert(back_edge_sink, D::Input::Code(back_edge_sink, 0, None));
@@ -873,8 +876,6 @@ fn redirect_edges_to(inp: D::Input, from: NodeIndex, to: NodeIndex) -> D::Input 
         ),
         D::Input::Code(l, c, Some(next)) => D::Input::Code(l, c, Some(remap(next))),
         D::Input::Code(l, c, None) => D::Input::Code(l, c, None),
-        D::Input::Reduced(l, succs) => {
-            D::Input::Reduced(l, succs.into_iter().map(remap).collect())
-        }
+        D::Input::Reduced(l, succs) => D::Input::Reduced(l, succs.into_iter().map(remap).collect()),
     }
 }

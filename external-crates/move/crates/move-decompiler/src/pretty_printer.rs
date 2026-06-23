@@ -1065,7 +1065,11 @@ fn primitive_op_doc(context: &Context, op: &PrimitiveOp, args: &[Exp]) -> Doc {
     };
     let bool_arg = |e: &Exp| {
         let doc = exp(context, e);
-        if is_bool_compound(e) { doc.parens() } else { doc }
+        if is_bool_compound(e) {
+            doc.parens()
+        } else {
+            doc
+        }
     };
     let bool_bin = |lhs: &Exp, sym: &str, rhs: &Exp| {
         bool_arg(lhs)

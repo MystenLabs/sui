@@ -157,99 +157,61 @@ public fun cancel_limit_order(l0: &mut OrderManager, l1: u64, l2: &Clock, l3: &m
     if (option::is_some(&l16)) {
         let l15 = *(option::borrow(&l16));
         if (table::contains(&l0.oco_groups, l15)) {
-            let l4;
             let l14 = table::remove(&mut l0.oco_groups, l15);
-            if (*(&(&l14).order1_id) == l1) {
-                l4 = *(&(&l14).order2_id);
-                unstructured {
-                    goto 'label_105;
-                }
+            let l4 = if (*(&(&l14).order1_id) == l1) {
+                *(&(&l14).order2_id)
             } else {
-                l4 = *(&(&l14).order1_id);
-                unstructured {
-                    goto 'label_105;
-                }
+                *(&(&l14).order1_id)
             };
-            /* block 105 */;
-            let l11 = l4;
             *(&mut (&mut l14).is_active) = false;
             table::add(&mut l0.oco_groups, l15, l14);
-            let l12 = l11;
+            let l12 = l4;
             if (table::contains(&l0.receipts, l12)) {
-                let l5;
                 let l13 = table::remove(&mut l0.receipts, l12);
-                if (*(&(&l13).is_active)) {
-                    l5 = vector::contains(&l0.active_orders, &l12);
-                    unstructured {
-                        goto 'label_140;
-                    }
-                } else {
-                    l5 = false;
-                    unstructured {
-                        goto 'label_140;
-                    }
-                };
-                /* block 140 */;
-                if (l5) {
+                if (*(&(&l13).is_active) && vector::contains(&l0.active_orders, &l12)) {
                     *(&mut (&mut l13).is_active) = false;
                     *(&mut (&mut l13).cancelled_at) = option::some(l6);
                     let l7 = 0u64;
                     let l9 = &l0.active_orders.len();
                     loop {
-                        if (l7 < l9) {
-                            if (*(&(&l0.active_orders)[l7]) == l12) {
-                                
-                            } else {
+                        let __c157 = l7 < l9;
+                        let __c161;
+                        if (__c157) {
+                            __c161 = *(&(&l0.active_orders)[l7]) == l12;
+                            if (!(__c161)) {
                                 l7 = l7 + 1u64;
                                 continue
                             }
                         };
-                        event::emit(OCOOrderCancelledEvent { oco_group_id: l15, cancelled_order_id: l12, user: *(&l0.owner), cancelled_at: l6 });
-                        break
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_188;
+                        if (__c161 || !(__c157)) {
+                            event::emit(OCOOrderCancelledEvent { oco_group_id: l15, cancelled_order_id: l12, user: *(&l0.owner), cancelled_at: l6 });
+                            break
+                        }
                     }
                 };
-                /* block 188 */;
-                table::add(&mut l0.receipts, l12, l13);
-                unstructured {
-                    goto 'label_194;
-                }
-            } else {
-                unstructured {
-                    goto 'label_194;
-                }
+                table::add(&mut l0.receipts, l12, l13)
             }
-        } else {
-            unstructured {
-                goto 'label_194;
-            }
-        }
-    } else {
-        unstructured {
-            goto 'label_194;
         }
     };
-    let (l10, l8);
-    /* block 194 */;
     *(&mut (&mut l18).is_active) = false;
     *(&mut (&mut l18).cancelled_at) = option::some(l6);
     table::add(&mut l0.receipts, l1, l18);
-    l8 = 0u64;
-    l10 = &l0.active_orders.len();
+    let l8 = 0u64;
+    let l10 = &l0.active_orders.len();
     loop {
-        if (l8 < l10) {
-            if (*(&(&l0.active_orders)[l8]) == l1) {
-                break
-            };
-            l8 = l8 + 1u64;
-            continue
+        let __c214 = l8 < l10;
+        let __c218;
+        if (__c214) {
+            __c218 = *(&(&l0.active_orders)[l8]) == l1;
+            if (!(__c218)) {
+                l8 = l8 + 1u64;
+                continue
+            }
         };
-        break;
-        event::emit(OrderCancelledEvent { order_id: l1, user: *(&l0.owner), cancelled_at: l6 });
-        return
+        if (__c218 || !(__c214)) {
+            event::emit(OrderCancelledEvent { order_id: l1, user: *(&l0.owner), cancelled_at: l6 });
+            return
+        }
     }
 }
 
@@ -308,9 +270,7 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
     let (l11, l12, l14, l5, l9);
     loop {
         if (l8 < l10) {
-            if (*(&(&l0.active_orders)[l8]) == l17) {
-                
-            } else {
+            if (*(&(&l0.active_orders)[l8]) != l17) {
                 l8 = l8 + 1u64;
                 continue
             }
@@ -354,16 +314,19 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
     match (__dispatch_81) {
         0 => {
             loop {
-                if (l9 < l5) {
-                    if (*(&(&l0.active_orders)[l9]) == l11) {
-                        
-                    } else {
+                let __c173 = l9 < l5;
+                let __c177;
+                if (__c173) {
+                    __c177 = *(&(&l0.active_orders)[l9]) == l11;
+                    if (!(__c177)) {
                         l9 = l9 + 1u64;
                         continue
                     }
                 };
-                event::emit(OCOOrderCancelledEvent { oco_group_id: l14, cancelled_order_id: l11, user: *(&l0.owner), cancelled_at: l7 });
-                break
+                if (__c177 || !(__c173)) {
+                    event::emit(OCOOrderCancelledEvent { oco_group_id: l14, cancelled_order_id: l11, user: *(&l0.owner), cancelled_at: l7 });
+                    break
+                }
             };
             table::add(&mut l0.receipts, l11, l12);
             l15 = table::remove(&mut l0.oco_groups, l14);
@@ -411,29 +374,15 @@ public entry fun cancel_order_by_object_entry(l0: &mut OrderManager, l1: OrderRe
     let l5 = reg_5;
     let l4 = reg_4;
     if (coin::value(&l4) > 0u64) {
-        transfer::public_transfer(l4, tx_context::sender(freeze(l3)));
-        unstructured {
-            goto 'label_20;
-        }
+        transfer::public_transfer(l4, tx_context::sender(freeze(l3)))
     } else {
-        coin::destroy_zero(l4);
-        unstructured {
-            goto 'label_20;
-        }
+        coin::destroy_zero(l4)
     };
-    /* block 20 */;
     if (coin::value(&l5) > 0u64) {
-        transfer::public_transfer(l5, tx_context::sender(freeze(l3)));
-        unstructured {
-            goto 'label_35;
-        }
+        transfer::public_transfer(l5, tx_context::sender(freeze(l3)))
     } else {
-        coin::destroy_zero(l5);
-        unstructured {
-            goto 'label_35;
-        }
-    };
-    /* block 35 */
+        coin::destroy_zero(l5)
+    }
 }
 
 public fun create_order_manager(l0: &Clock, l1: &mut TxContext) {
@@ -476,29 +425,22 @@ public fun handle_oco_fill(l0: &mut OrderManager, l1: u64, l2: &Clock, l3: &mut 
     assert!(table::contains(&l0.receipts, l1), C0);
     let l6 = table::borrow(&l0.receipts, l1);
     assert!(*(&l6.is_active), C8);
-    if (option::is_some(&l6.oco_group_id)) {
+    let __c45 = option::is_some(&l6.oco_group_id);
+    let __c49;
+    if (__c45) {
         let l16 = *(option::borrow(&l6.oco_group_id));
-        assert!(table::contains(&l0.oco_groups, l16), C7);
-        let l4;
+        __c49 = table::contains(&l0.oco_groups, l16);
+        assert!(__c49, C7);
         let l15 = table::remove(&mut l0.oco_groups, l16);
-        if (*(&(&l15).order1_id) == l1) {
-            l4 = *(&(&l15).order2_id);
-            unstructured {
-                goto 'label_86;
-            }
+        let l4 = if (*(&(&l15).order1_id) == l1) {
+            *(&(&l15).order2_id)
         } else {
-            l4 = *(&(&l15).order1_id);
-            unstructured {
-                goto 'label_86;
-            }
+            *(&(&l15).order1_id)
         };
-        let (l13, l5);
-        /* block 86 */;
-        let l12 = l4;
         *(&mut (&mut l15).is_active) = false;
         table::add(&mut l0.oco_groups, l16, l15);
-        l13 = l12;
-        l5 = clock::timestamp_ms(l2);
+        let l13 = l4;
+        let l5 = clock::timestamp_ms(l2);
         if (table::contains(&l0.receipts, l13)) {
             let l14 = table::remove(&mut l0.receipts, l13);
             if (*(&(&l14).is_active)) {
@@ -506,53 +448,48 @@ public fun handle_oco_fill(l0: &mut OrderManager, l1: u64, l2: &Clock, l3: &mut 
                 *(&mut (&mut l14).cancelled_at) = option::some(l5);
                 let l8 = 0u64;
                 let l10 = &l0.active_orders.len();
-                while (l8 < l10) {
-                    if (*(&(&l0.active_orders)[l8]) == l13) {
-                        break
+                loop {
+                    let __c133 = l8 < l10;
+                    let __c137;
+                    if (__c133) {
+                        __c137 = *(&(&l0.active_orders)[l8]) == l13;
+                        if (!(__c137)) {
+                            l8 = l8 + 1u64;
+                            continue
+                        }
                     };
-                    l8 = l8 + 1u64;
-                }
-            } else {
-                unstructured {
-                    goto 'label_156;
+                    if (__c137 || !(__c133)) {
+                        break
+                    }
                 }
             };
-            /* block 156 */;
-            table::add(&mut l0.receipts, l13, l14);
-            unstructured {
-                goto 'label_162;
-            }
-        } else {
-            unstructured {
-                goto 'label_162;
-            }
+            table::add(&mut l0.receipts, l13, l14)
         };
-        let (l11, l9);
-        /* block 162 */;
         let l7 = table::remove(&mut l0.receipts, l1);
         *(&mut (&mut l7).is_active) = false;
         *(&mut (&mut l7).is_fully_filled) = true;
         table::add(&mut l0.receipts, l1, l7);
-        l9 = 0u64;
-        l11 = &l0.active_orders.len();
+        let l9 = 0u64;
+        let l11 = &l0.active_orders.len();
         loop {
-            if (l9 < l11) {
-                if (*(&(&l0.active_orders)[l9]) == l1) {
-                    
-                } else {
+            let __c186 = l9 < l11;
+            let __c190;
+            if (__c186) {
+                __c190 = *(&(&l0.active_orders)[l9]) == l1;
+                if (!(__c190)) {
                     l9 = l9 + 1u64;
                     continue
                 }
             };
-            event::emit(OCOOrderFilledEvent { oco_group_id: l16, filled_order_id: l1, cancelled_order_id: l13, user: *(&l0.owner), filled_at: l5 });
-            break
-        }
-    } else {
-        unstructured {
-            goto 'label_225;
+            if (__c190 || !(__c186)) {
+                event::emit(OCOOrderFilledEvent { oco_group_id: l16, filled_order_id: l1, cancelled_order_id: l13, user: *(&l0.owner), filled_at: l5 });
+                break
+            }
         }
     };
-    /* block 225 */
+    if (__c49 || !(__c45)) {
+        
+    }
 }
 
 public entry fun handle_oco_fill_entry(l0: &mut OrderManager, l1: OrderReceipt, l2: &Clock, l3: &mut TxContext) {
@@ -587,35 +524,29 @@ public fun modify_order(l0: &mut OrderManager, l1: u64, l2: Option<u64>, l3: Opt
     assert!(l8 > *(&l13.created_at), C5);
     let l9 = *(&l13.price);
     let l10 = *(&l13.quantity);
-    if (option::is_some(&l2)) {
+    let __c69 = option::is_some(&l2);
+    let __c80;
+    if (__c69) {
         let l11 = option::destroy_some(l2);
-        assert!(l11 > 0u64, C1);
-        *(&mut l13.price) = l11;
-        unstructured {
-            goto 'label_96;
-        }
-    } else {
-        unstructured {
-            goto 'label_96;
-        }
+        __c80 = l11 > 0u64;
+        assert!(__c80, C1);
+        *(&mut l13.price) = l11
     };
-    /* block 96 */;
-    if (option::is_some(&l3)) {
-        let l12 = option::destroy_some(l3);
-        assert!(l12 > 0u64, C2);
-        *(&mut l13.quantity) = l12;
-        unstructured {
-            goto 'label_115;
+    if (__c80 || !(__c69)) {
+        let __c96 = option::is_some(&l3);
+        let __c99;
+        if (__c96) {
+            let l12 = option::destroy_some(l3);
+            __c99 = l12 > 0u64;
+            assert!(__c99, C2);
+            *(&mut l13.quantity) = l12
+        };
+        if (__c99 || !(__c96)) {
+            let l6 = *(&l13.price);
+            let l7 = *(&l13.quantity);
+            event::emit(OrderModifiedEvent { order_id: l1, old_price: l9, new_price: l6, old_quantity: l10, new_quantity: l7, modified_at: l8 })
         }
-    } else {
-        unstructured {
-            goto 'label_115;
-        }
-    };
-    /* block 115 */;
-    let l6 = *(&l13.price);
-    let l7 = *(&l13.quantity);
-    event::emit(OrderModifiedEvent { order_id: l1, old_price: l9, new_price: l6, old_quantity: l10, new_quantity: l7, modified_at: l8 })
+    }
 }
 
 public entry fun modify_order_entry(l0: &mut OrderManager, l1: u64, l2: u64, l3: u64, l4: &Clock, l5: &mut TxContext) {
@@ -645,34 +576,8 @@ public entry fun place_limit_order_entry(l0: &mut OrderManager, l1: vector<u8>, 
 public fun place_limit_order_oco(l0: &mut OrderManager, l1: vector<u8>, l2: u64, l3: u64, l4: bool, l5: u64, l6: u64, l7: bool, l8: &Clock, l9: &mut TxContext): ( u64, u64) {
     assert!(tx_context::sender(freeze(l9)) == *(&l0.owner), C3);
     assert!(!(*(&l0.is_paused)), C4);
-    let l10;
-    if (l2 > 0u64) {
-        l10 = l5 > 0u64;
-        unstructured {
-            goto 'label_42;
-        }
-    } else {
-        l10 = false;
-        unstructured {
-            goto 'label_42;
-        }
-    };
-    /* block 42 */;
-    assert!(l10, C1);
-    let l11;
-    if (l3 > 0u64) {
-        l11 = l6 > 0u64;
-        unstructured {
-            goto 'label_64;
-        }
-    } else {
-        l11 = false;
-        unstructured {
-            goto 'label_64;
-        }
-    };
-    /* block 64 */;
-    assert!(l11, C2);
+    assert!(l2 > 0u64 && l5 > 0u64, C1);
+    assert!(l3 > 0u64 && l6 > 0u64, C2);
     let l12 = clock::timestamp_ms(l8);
     assert!(l12 > *(&l0.created_at), C5);
     let l14 = l12 + *(&l0.total_orders_created);
@@ -702,20 +607,7 @@ public fun place_limit_order_tif(l0: &mut OrderManager, l1: vector<u8>, l2: u64,
     assert!(!(*(&l0.is_paused)), C4);
     assert!(l2 > 0u64, C1);
     assert!(l3 > 0u64, C2);
-    let l10;
-    if (l5 == C13) {
-        l10 = true;
-        unstructured {
-            goto 'label_68;
-        }
-    } else {
-        l10 = l5 == C14;
-        unstructured {
-            goto 'label_68;
-        }
-    };
-    /* block 68 */;
-    assert!(l10, C9);
+    assert!(l5 == C13 || l5 == C14, C9);
     let l28 = clock::timestamp_ms(l8);
     assert!(l28 > *(&l0.created_at), C5);
     let l33 = l28 + *(&l0.total_orders_created);
@@ -725,199 +617,89 @@ public fun place_limit_order_tif(l0: &mut OrderManager, l1: vector<u8>, l2: u64,
     let l32 = false;
     let l38 = option::none();
     let l39 = option::none();
-    if (l5 == C13) {
+    let __c95 = l5 == C13;
+    let (__c177, __c181);
+    if (__c95) {
         if (l40 > 0u64) {
             l31 = false;
             let l37 = l40as u128 * coin::value(&l6)as u128 / l3as u128;
             let l25 = coin::split(&mut l6, l37as u64, l9);
             let l34 = coin::zero(l9);
             if (option::is_some(&l38)) {
-                coin::destroy_zero(option::extract(&mut l38));
-                unstructured {
-                    goto 'label_150;
-                }
-            } else {
-                unstructured {
-                    goto 'label_150;
-                }
+                coin::destroy_zero(option::extract(&mut l38))
             };
-            /* block 150 */;
             if (option::is_some(&l39)) {
-                coin::destroy_zero(option::extract(&mut l39));
-                unstructured {
-                    goto 'label_156;
-                }
-            } else {
-                unstructured {
-                    goto 'label_156;
-                }
+                coin::destroy_zero(option::extract(&mut l39))
             };
-            /* block 156 */;
             option::fill(&mut l38, l25);
             option::fill(&mut l39, l34);
-            event::emit(OrderPartialFilledEvent { order_id: l33, filled_quantity: l30, remaining_quantity: l40, user: *(&l0.owner), filled_at: l28 });
-            unstructured {
-                goto 'label_259;
-            }
+            event::emit(OrderPartialFilledEvent { order_id: l33, filled_quantity: l30, remaining_quantity: l40, user: *(&l0.owner), filled_at: l28 })
         } else {
             l32 = true;
             l31 = false;
-            unstructured {
-                goto 'label_259;
-            }
         }
     } else {
-        if (l5 == C14) {
-            if (l40 > 0u64) {
+        __c177 = l5 == C14;
+        if (__c177) {
+            __c181 = l40 > 0u64;
+            if (__c181) {
                 let l27 = coin::value(&l6);
                 let l26 = coin::split(&mut l6, l27, l9);
                 let l35 = coin::zero(l9);
                 if (option::is_some(&l38)) {
-                    coin::destroy_zero(option::extract(&mut l38));
-                    unstructured {
-                        goto 'label_204;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_204;
-                    }
+                    coin::destroy_zero(option::extract(&mut l38))
                 };
-                /* block 204 */;
                 if (option::is_some(&l39)) {
-                    coin::destroy_zero(option::extract(&mut l39));
-                    unstructured {
-                        goto 'label_210;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_210;
-                    }
+                    coin::destroy_zero(option::extract(&mut l39))
                 };
-                /* block 210 */;
                 option::fill(&mut l38, l26);
                 option::fill(&mut l39, l35);
                 event::emit(OrderExpiredEvent { order_id: l33, user: *(&l0.owner), expired_at: l28 });
                 if (coin::value(&l6) > 0u64) {
-                    transfer::public_transfer(l6, tx_context::sender(freeze(l9)));
-                    unstructured {
-                        goto 'label_236;
-                    }
+                    transfer::public_transfer(l6, tx_context::sender(freeze(l9)))
                 } else {
-                    coin::destroy_zero(l6);
-                    unstructured {
-                        goto 'label_236;
-                    }
+                    coin::destroy_zero(l6)
                 };
-                /* block 236 */;
                 if (coin::value(&l7) > 0u64) {
-                    transfer::public_transfer(l7, tx_context::sender(freeze(l9)));
-                    unstructured {
-                        goto 'label_251;
-                    }
+                    transfer::public_transfer(l7, tx_context::sender(freeze(l9)))
                 } else {
-                    coin::destroy_zero(l7);
-                    unstructured {
-                        goto 'label_251;
-                    }
+                    coin::destroy_zero(l7)
                 };
-                /* block 251 */;
                 return (l33, l38, l39)
             };
             l32 = true;
             l31 = false;
-            unstructured {
-                goto 'label_259;
-            }
-        } else {
-            unstructured {
-                goto 'label_259;
-            }
         }
     };
-    let l18;
-    /* block 259 */;
-    if (l31) {
-        l18 = true;
-        unstructured {
-            goto 'label_277;
-        }
-    } else {
-        let l19;
-        if (l5 == C13) {
-            l19 = l30 > 0u64;
-            unstructured {
-                goto 'label_275;
-            }
-        } else {
-            l19 = false;
-            unstructured {
-                goto 'label_275;
-            }
+    if ((__c95 || !(__c177)) || !(__c181)) {
+        if (l31 || (l5 == C13 && l30 > 0u64)) {
+            (&mut l0.active_orders).push_back(l33);
+            *(&mut l0.total_orders_created) = *(&l0.total_orders_created) + 1u64;
+            let l24 = TimeInForce { value: l5 };
+            let l22 = l31;
+            let l21 = l32;
+            let l20 = if (l31) {
+                option::none()
+            } else {
+                option::some(l28)
+            };
+            let l36 = OrderReceiptData { order_id: l33, deepbook_order_id: l33, pool_id: l1, price: l2, quantity: l40, original_quantity: l3, is_bid: l4, order_type: OrderType { value: C14 }, time_in_force: l24, created_at: l28, is_active: l22, is_fully_filled: l21, cancelled_at: l20, oco_group_id: option::none(), expires_at: option::none() };
+            table::add(&mut l0.receipts, l33, l36);
+            event::emit(TIFOrderPlacedEvent { order_id: l33, tif_type: l5, user: *(&l0.owner), created_at: l28 });
+            event::emit(OrderPlacedEvent { order_id: l33, pool_id: l1, user: *(&l0.owner), price: l2, quantity: l3, is_bid: l4, created_at: l28 })
         };
-        /* block 275 */;
-        l18 = l19;
-        unstructured {
-            goto 'label_277;
-        }
-    };
-    /* block 277 */;
-    if (l18) {
-        let l20;
-        (&mut l0.active_orders).push_back(l33);
-        *(&mut l0.total_orders_created) = *(&l0.total_orders_created) + 1u64;
-        let l24 = TimeInForce { value: l5 };
-        let l22 = l31;
-        let l21 = l32;
-        if (l31) {
-            l20 = option::none();
-            unstructured {
-                goto 'label_322;
-            }
+        if (coin::value(&l6) > 0u64) {
+            transfer::public_transfer(l6, tx_context::sender(freeze(l9)))
         } else {
-            l20 = option::some(l28);
-            unstructured {
-                goto 'label_322;
-            }
+            coin::destroy_zero(l6)
         };
-        /* block 322 */;
-        let l36 = OrderReceiptData { order_id: l33, deepbook_order_id: l33, pool_id: l1, price: l2, quantity: l40, original_quantity: l3, is_bid: l4, order_type: OrderType { value: C14 }, time_in_force: l24, created_at: l28, is_active: l22, is_fully_filled: l21, cancelled_at: l20, oco_group_id: option::none(), expires_at: option::none() };
-        table::add(&mut l0.receipts, l33, l36);
-        event::emit(TIFOrderPlacedEvent { order_id: l33, tif_type: l5, user: *(&l0.owner), created_at: l28 });
-        event::emit(OrderPlacedEvent { order_id: l33, pool_id: l1, user: *(&l0.owner), price: l2, quantity: l3, is_bid: l4, created_at: l28 });
-        unstructured {
-            goto 'label_367;
-        }
-    } else {
-        unstructured {
-            goto 'label_367;
-        }
-    };
-    /* block 367 */;
-    if (coin::value(&l6) > 0u64) {
-        transfer::public_transfer(l6, tx_context::sender(freeze(l9)));
-        unstructured {
-            goto 'label_380;
-        }
-    } else {
-        coin::destroy_zero(l6);
-        unstructured {
-            goto 'label_380;
-        }
-    };
-    /* block 380 */;
-    if (coin::value(&l7) > 0u64) {
-        transfer::public_transfer(l7, tx_context::sender(freeze(l9)));
-        unstructured {
-            goto 'label_395;
-        }
-    } else {
-        coin::destroy_zero(l7);
-        unstructured {
-            goto 'label_395;
-        }
-    };
-    /* block 395 */;
-    return (l33, l38, l39)
+        if (coin::value(&l7) > 0u64) {
+            transfer::public_transfer(l7, tx_context::sender(freeze(l9)))
+        } else {
+            coin::destroy_zero(l7)
+        };
+        return (l33, l38, l39)
+    }
 }
 
 public entry fun place_limit_order_tif_entry(l0: &mut OrderManager, l1: vector<u8>, l2: u64, l3: u64, l4: bool, l5: u8, l6: Coin<u64>, l7: Coin<u64>, l8: &Clock, l9: &mut TxContext) {
@@ -926,27 +708,11 @@ public entry fun place_limit_order_tif_entry(l0: &mut OrderManager, l1: vector<u
     let l11 = reg_12;
     let l10 = reg_11;
     if (option::is_some(&l10)) {
-        transfer::public_transfer(option::extract(&mut l10), tx_context::sender(freeze(l9)));
-        unstructured {
-            goto 'label_23;
-        }
-    } else {
-        unstructured {
-            goto 'label_23;
-        }
+        transfer::public_transfer(option::extract(&mut l10), tx_context::sender(freeze(l9)))
     };
-    /* block 23 */;
     if (option::is_some(&l11)) {
-        transfer::public_transfer(option::extract(&mut l11), tx_context::sender(freeze(l9)));
-        unstructured {
-            goto 'label_35;
-        }
-    } else {
-        unstructured {
-            goto 'label_35;
-        }
+        transfer::public_transfer(option::extract(&mut l11), tx_context::sender(freeze(l9)))
     };
-    /* block 35 */;
     option::destroy_none(l10);
     option::destroy_none(l11)
 }
@@ -978,40 +744,26 @@ public entry fun transfer_order_ownership_entry(l0: OrderReceipt, l1: address, l
 
 public fun update_order_status(l0: &mut OrderManager, l1: u64, l2: bool) {
     if (table::contains(&l0.receipts, l1)) {
-        let l3;
         let l6 = table::borrow_mut(&mut l0.receipts, l1);
         *(&mut l6.is_active) = l2;
-        if (!(l2)) {
-            l3 = *(&l6.is_active);
-            unstructured {
-                goto 'label_26;
-            }
-        } else {
-            l3 = false;
-            unstructured {
-                goto 'label_26;
-            }
-        };
-        /* block 26 */;
-        if (l3) {
+        if (!(l2) && *(&l6.is_active)) {
             let l4 = 0u64;
             let l5 = &l0.active_orders.len();
-            while (l4 < l5) {
-                if (*(&(&l0.active_orders)[l4]) == l1) {
-                    break
+            loop {
+                let __c34 = l4 < l5;
+                let __c39;
+                if (__c34) {
+                    __c39 = *(&(&l0.active_orders)[l4]) == l1;
+                    if (!(__c39)) {
+                        l4 = l4 + 1u64;
+                        continue
+                    }
                 };
-                l4 = l4 + 1u64;
-            }
-        } else {
-            unstructured {
-                goto 'label_63;
+                if (__c39 || !(__c34)) {
+                    break
+                }
             }
         }
-    } else {
-        unstructured {
-            goto 'label_63;
-        }
-    };
-    /* block 63 */
+    }
 }
 

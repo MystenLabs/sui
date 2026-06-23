@@ -283,20 +283,7 @@ public fun add_liquidity_2_pool<T0, T1, T2>(l0: &mut InterestPool<Volatile>, l1:
 }
 
 public(friend) fun add_liquidity_2_pool_impl<T0, T1, T2>(l0: &mut InterestPool<Volatile>, l1: &Clock, l2: Coin<T0>, l3: Coin<T1>, l4: u64, l5: &mut TxContext): Coin<T2> {
-    let l6;
-    if (coin::value(&l2) != 0u64) {
-        l6 = true;
-        unstructured {
-            goto 'label_13;
-        }
-    } else {
-        l6 = coin::value(&l3) != 0u64;
-        unstructured {
-            goto 'label_13;
-        }
-    };
-    /* block 13 */;
-    assert!(l6, errors::must_supply_one_coin());
+    assert!(coin::value(&l2) != 0u64 || coin::value(&l3) != 0u64, errors::must_supply_one_coin());
     assert!(interest_pool::are_coins_ordered(freeze(l0), vector[x1_type_name::get(), x1_type_name::get()]), errors::coins_must_be_in_order());
     let (reg_25, reg_26) = interest_clamm_volatile::state_and_coin_states_mut(l0);
     let l9 = reg_25;
@@ -312,33 +299,7 @@ public fun add_liquidity_3_pool<T0, T1, T2, T3>(l0: &mut InterestPool<Volatile>,
 }
 
 public(friend) fun add_liquidity_3_pool_impl<T0, T1, T2, T3>(l0: &mut InterestPool<Volatile>, l1: &Clock, l2: Coin<T0>, l3: Coin<T1>, l4: Coin<T2>, l5: u64, l6: &mut TxContext): Coin<T3> {
-    let l7;
-    if (coin::value(&l2) != 0u64) {
-        l7 = true;
-        unstructured {
-            goto 'label_13;
-        }
-    } else {
-        l7 = coin::value(&l3) != 0u64;
-        unstructured {
-            goto 'label_13;
-        }
-    };
-    let l8;
-    /* block 13 */;
-    if (l7) {
-        l8 = true;
-        unstructured {
-            goto 'label_23;
-        }
-    } else {
-        l8 = coin::value(&l4) != 0u64;
-        unstructured {
-            goto 'label_23;
-        }
-    };
-    /* block 23 */;
-    assert!(l8, errors::must_supply_one_coin());
+    assert!((coin::value(&l2) != 0u64 || coin::value(&l3) != 0u64) || coin::value(&l4) != 0u64, errors::must_supply_one_coin());
     assert!(interest_pool::are_coins_ordered(freeze(l0), vector[x1_type_name::get(), x1_type_name::get(), x1_type_name::get()]), errors::coins_must_be_in_order());
     let (reg_32, reg_33) = interest_clamm_volatile::state_and_coin_states_mut(l0);
     let l11 = reg_32;
@@ -678,32 +639,16 @@ fun get_a_gamma<T0>(l0: &StateV1<T0>, l1: &Clock): ( u256, u256) {
         let l8 = l7 - l6;
         l3 = l2 * utils::to_u256(l8) + l3 * utils::to_u256(l6) / utils::to_u256(l7);
         l5 = l4 * utils::to_u256(l8) + l5 * utils::to_u256(l6) / utils::to_u256(l7);
-        unstructured {
-            goto 'label_78;
-        }
-    } else {
-        unstructured {
-            goto 'label_78;
-        }
     };
-    /* block 78 */;
     return (l3, l5)
 }
 
 fun increment_version<T0>(l0: &mut StateV1<T0>) {
-    let l1;
-    if (*(&l0.version) == C12) {
-        l1 = 0u256;
-        unstructured {
-            goto 'label_15;
-        }
+    let l1 = if (*(&l0.version) == C12) {
+        0u256
     } else {
-        l1 = *(&l0.version) + 1u256;
-        unstructured {
-            goto 'label_15;
-        }
+        *(&l0.version) + 1u256
     };
-    /* block 15 */;
     *(&mut l0.version) = l1
 }
 
@@ -818,7 +763,6 @@ public fun out_fee<T0>(l0: &mut InterestPool<Volatile>): u256 {
 }
 
 public fun quote_add_liquidity<T0>(l0: &mut InterestPool<Volatile>, l1: &Clock, l2: vector<u64>): u64 {
-    let l3;
     let (reg_1, reg_2) = interest_clamm_volatile::state_and_coin_states(l0);
     let l15 = reg_2;
     let l26 = reg_1;
@@ -827,23 +771,14 @@ public fun quote_add_liquidity<T0>(l0: &mut InterestPool<Volatile>, l1: &Clock, 
     let (reg_14, reg_15) = interest_clamm_volatile::get_a_gamma(l26, l1);
     let l9 = utils::empty_vector(*(&l26.n_coins));
     let l22 = interest_clamm_volatile::balances_in_price_impl(l26, l15);
-    if (*(&(&l26.a_gamma).future_time) != 0u64) {
-        l3 = volatile_math::invariant_(reg_14, reg_15, l22);
-        unstructured {
-            goto 'label_46;
-        }
+    let l23 = if (*(&(&l26.a_gamma).future_time) != 0u64) {
+        volatile_math::invariant_(reg_14, reg_15, l22)
     } else {
-        l3 = *(&l26.d);
-        unstructured {
-            goto 'label_46;
-        }
+        *(&l26.d)
     };
-    let (l13, l20, l21, l23);
-    /* block 46 */;
-    l23 = l3;
-    l13 = C15;
-    l20 = 0u64;
-    l21 = utils::to_u64(*(&l26.n_coins));
+    let l13 = C15;
+    let l20 = 0u64;
+    let l21 = utils::to_u64(*(&l26.n_coins));
     while (l21 > l20) {
         let l24 = &mut (&mut l12)[l20];
         let l14 = &(&l15)[l20];
@@ -996,20 +931,7 @@ public fun read_balance<T0, T1>(l0: &mut InterestPool<Volatile>, l1: &mut Balanc
 }
 
 public(friend) fun register_2_pool<T0, T1, T2>(l0: &mut InterestPool<Volatile>, l1: &Clock, l2: Coin<T0>, l3: Coin<T1>, l4: &CoinDecimals, l5: u256, l6: &mut TxContext): Coin<T2> {
-    let l7;
-    if (coin::value(&l2) != 0u64) {
-        l7 = coin::value(&l3) != 0u64;
-        unstructured {
-            goto 'label_13;
-        }
-    } else {
-        l7 = false;
-        unstructured {
-            goto 'label_13;
-        }
-    };
-    /* block 13 */;
-    assert!(l7, errors::no_zero_liquidity_amounts());
+    assert!(coin::value(&l2) != 0u64 && coin::value(&l3) != 0u64, errors::no_zero_liquidity_amounts());
     let l8 = interest_clamm_volatile::load_mut(interest_pool::state_mut(l0));
     interest_clamm_volatile::register_coin(l8, l4, C6, 0u64);
     interest_clamm_volatile::register_coin(l8, l4, l5, 1u64);
@@ -1017,33 +939,7 @@ public(friend) fun register_2_pool<T0, T1, T2>(l0: &mut InterestPool<Volatile>, 
 }
 
 public(friend) fun register_3_pool<T0, T1, T2, T3>(l0: &mut InterestPool<Volatile>, l1: &Clock, l2: Coin<T0>, l3: Coin<T1>, l4: Coin<T2>, l5: &CoinDecimals, l6: vector<u256>, l7: &mut TxContext): Coin<T3> {
-    let l8;
-    if (coin::value(&l2) != 0u64) {
-        l8 = coin::value(&l3) != 0u64;
-        unstructured {
-            goto 'label_13;
-        }
-    } else {
-        l8 = false;
-        unstructured {
-            goto 'label_13;
-        }
-    };
-    let l9;
-    /* block 13 */;
-    if (l8) {
-        l9 = coin::value(&l4) != 0u64;
-        unstructured {
-            goto 'label_23;
-        }
-    } else {
-        l9 = false;
-        unstructured {
-            goto 'label_23;
-        }
-    };
-    /* block 23 */;
-    assert!(l9, errors::no_zero_liquidity_amounts());
+    assert!((coin::value(&l2) != 0u64 && coin::value(&l3) != 0u64) && coin::value(&l4) != 0u64, errors::no_zero_liquidity_amounts());
     let l10 = interest_clamm_volatile::load_mut(interest_pool::state_mut(l0));
     interest_clamm_volatile::register_coin(l10, l5, C6, 0u64);
     interest_clamm_volatile::register_coin(l10, l5, *(&(&l6)[0u64]), 1u64);
@@ -1121,16 +1017,8 @@ public(friend) fun remove_liquidity_one_coin_impl<T0, T1>(l0: &mut InterestPool<
     let l13 = reg_43;
     let l7 = reg_39;
     if (l20 >= l6) {
-        *(&mut (&mut l19.a_gamma).future_time) = 1u64;
-        unstructured {
-            goto 'label_66;
-        }
-    } else {
-        unstructured {
-            goto 'label_66;
-        }
+        *(&mut (&mut l19.a_gamma).future_time) = 1u64
     };
-    /* block 66 */;
     let l10 = &mut (&mut l19.balances)[l13];
     *l10 = *l10 - l7;
     let l15 = utils::to_u256(balance::supply_value(&l19.lp_coin_supply));
@@ -1203,55 +1091,26 @@ public(friend) fun swap_impl<T0, T1, T2>(l0: &mut InterestPool<Volatile>, l1: &C
     if (l36 != 0u64) {
         if (*(&l18.index) != 0u64) {
             l26 = fixed_point_wad::mul_down(l26, *(&l18.price));
-            unstructured {
-                goto 'label_109;
-            }
-        } else {
-            unstructured {
-                goto 'label_109;
-            }
         };
-        /* block 109 */;
         let l16 = &mut (&mut l13)[*(&l18.index)];
         let l34 = *l16;
         *l16 = l26;
         *(&mut l35.d) = volatile_math::invariant_(l11, l25, l13);
         *(&mut (&mut l13)[*(&l18.index)]) = l34;
         if (l37 >= l36) {
-            *(&mut (&mut l35.a_gamma).future_time) = 1u64;
-            unstructured {
-                goto 'label_146;
-            }
-        } else {
-            unstructured {
-                goto 'label_146;
-            }
-        }
-    } else {
-        unstructured {
-            goto 'label_146;
+            *(&mut (&mut l35.a_gamma).future_time) = 1u64
         }
     };
-    let (l20, l6);
-    /* block 146 */;
     let l28 = volatile_math::y(l11, l25, &l13, *(&l35.d), *(&(&l22).index)) + 1u256;
     let l24 = *(&(&l13)[*(&(&l22).index)]);
-    l20 = l24 - math256::min(l24, l28);
+    let l20 = l24 - math256::min(l24, l28);
     let l31 = &mut (&mut l13)[*(&(&l22).index)];
     *l31 = *l31 - l20;
-    if (*(&(&l22).index) != 0u64) {
-        l6 = fixed_point_wad::div_down(l20, *(&(&l22).price));
-        unstructured {
-            goto 'label_199;
-        }
+    l20 = if (*(&(&l22).index) != 0u64) {
+        fixed_point_wad::div_down(l20, *(&(&l22).price))
     } else {
-        l6 = l20;
-        unstructured {
-            goto 'label_199;
-        }
+        l20
     };
-    /* block 199 */;
-    l20 = l6;
     l20 = l20 - interest_clamm_volatile::fee_impl(freeze(l35), l13) * l20 / 10000000000u256;
     let l12 = utils::to_u64(fixed_point_wad::mul_down(l20, *(&(&l22).decimals_scalar)));
     assert!(l12 >= l3, errors::slippage());
@@ -1260,82 +1119,22 @@ public(friend) fun swap_impl<T0, T1, T2>(l0: &mut InterestPool<Volatile>, l1: &C
     l21 = l21 - l20;
     if (*(&(&l22).index) != 0u64) {
         l21 = fixed_point_wad::mul_down(l21, *(&(&l22).price));
-        unstructured {
-            goto 'label_261;
-        }
-    } else {
-        unstructured {
-            goto 'label_261;
-        }
     };
-    let (l14, l29, l7);
-    /* block 261 */;
     *(&mut (&mut l13)[*(&(&l22).index)]) = l21;
-    l14 = fixed_point_wad::div_down(utils::to_u256(l19), *(&l18.decimals_scalar));
-    l29 = 0u256;
-    if (l14 > 100000u256) {
-        l7 = l20 > 100000u256;
-        unstructured {
-            goto 'label_290;
-        }
-    } else {
-        l7 = false;
-        unstructured {
-            goto 'label_290;
-        }
-    };
-    /* block 290 */;
-    if (l7) {
-        let l8;
-        if (*(&l18.index) != 0u64) {
-            l8 = *(&(&l22).index) != 0u64;
-            unstructured {
-                goto 'label_307;
-            }
+    let l14 = fixed_point_wad::div_down(utils::to_u256(l19), *(&l18.decimals_scalar));
+    let l29 = 0u256;
+    if (l14 > 100000u256 && l20 > 100000u256) {
+        l29 = if (*(&l18.index) != 0u64 && *(&(&l22).index) != 0u64) {
+            *(&l18.last_price) * l14 / l20
         } else {
-            l8 = false;
-            unstructured {
-                goto 'label_307;
-            }
-        };
-        let l10;
-        /* block 307 */;
-        if (l8) {
-            l10 = *(&l18.last_price) * l14 / l20;
-            unstructured {
-                goto 'label_341;
-            }
-        } else {
-            let l9;
             if (*(&l18.index) == 0u64) {
-                l9 = fixed_point_wad::div_down(l14, l20);
-                unstructured {
-                    goto 'label_339;
-                }
+                fixed_point_wad::div_down(l14, l20)
             } else {
                 l38 = *(&l18.index);
-                l9 = fixed_point_wad::div_down(l20, l14);
-                unstructured {
-                    goto 'label_339;
-                }
-            };
-            /* block 339 */;
-            l10 = l9;
-            unstructured {
-                goto 'label_341;
+                fixed_point_wad::div_down(l20, l14)
             }
         };
-        /* block 341 */;
-        l29 = l10;
-        unstructured {
-            goto 'label_346;
-        }
-    } else {
-        unstructured {
-            goto 'label_346;
-        }
     };
-    /* block 346 */;
     let l27 = utils::to_u256(balance::supply_value(&l35.lp_coin_supply));
     interest_clamm_volatile::tweak_price(l35, l23, l37, l11, l25, l13, l38, l29, 0u256, l27 * C1);
     pool_events::emit_swap(l30, l19, l12);
@@ -1358,211 +1157,196 @@ fun tweak_price<T0>(l0: &mut StateV1<T0>, l1: vector<CoinState>, l2: u64, l3: u2
             goto 'label_65;
         }
     } else {
-        unstructured {
-            goto 'label_65;
-        }
-    };
-    let l10;
-    /* block 65 */;
-    if (l8 == 0u256) {
-        l10 = volatile_math::invariant_(l3, l4, l5);
-        unstructured {
-            goto 'label_77;
-        }
-    } else {
-        l10 = l8;
-        unstructured {
-            goto 'label_77;
-        }
-    };
-    let l26;
-    /* block 77 */;
-    l26 = l10;
-    if (l7 != 0u256) {
-        if (l6 != 0u64) {
-            *(&mut (&mut (&mut l1)[l6]).last_price) = l7;
-            unstructured {
-                goto 'label_174;
+        /* block 65 */;
+        let __c65 = l8 == 0u256;
+        /* block 65 */;
+        let l10 = if (__c65) {
+            volatile_math::invariant_(l3, l4, l5)
+        } else {
+            l8
+        };
+        let l26 = l10;
+        if (l7 != 0u256) {
+            if (l6 != 0u64) {
+                *(&mut (&mut (&mut l1)[l6]).last_price) = l7
+            } else {
+                let l28 = 1u64;
+                while (*(&l0.n_coins)as u64 > l28) {
+                    let l19 = &mut (&mut l1)[l28];
+                    *(&mut l19.last_price) = fixed_point_wad::div_down(*(&l19.last_price), l7);
+                    l28 = l28 + 1u64;
+                }
             }
         } else {
-            let l28 = 1u64;
-            while (*(&l0.n_coins)as u64 > l28) {
-                let l19 = &mut (&mut l1)[l28];
-                *(&mut l19.last_price) = fixed_point_wad::div_down(*(&l19.last_price), l7);
-                l28 = l28 + 1u64;
-            }
-        }
-    } else {
-        let l50 = l5;
-        let l27 = utils::head(l50) / 1000000u256;
-        let l43 = &mut (&mut l50)[0u64];
-        *l43 = *l43 + l27;
-        let l29 = 1u64;
-        while (l36 > l29) {
-            let l20 = &mut (&mut l1)[l29];
-            *(&mut l20.last_price) = *(&l20.price) * l27 / *(&(&l5)[l29]) - volatile_math::y(l3, l4, &l50, l26, l29);
-            l29 = l29 + 1u64;
-        }
-    };
-    let (l30, l39, l40, l51);
-    /* block 174 */;
-    l40 = *(&l0.xcp_profit);
-    l39 = *(&l0.virtual_price);
-    l51 = vector[l26 / *(&l0.n_coins)];
-    l30 = 1u64;
-    while (l36 > l30) {
-        let l21 = &(&l1)[l30];
-        (&mut l51).push_back(fixed_point_wad::div_down(l26, *(&l0.n_coins) * *(&l21.price)));
-        l30 = l30 + 1u64;
-    };
-    let l49 = C6;
-    let l45 = C6;
-    if (l39 != 0u256) {
-        let l11;
-        l45 = fixed_point_wad::div_down(volatile_math::geometric_mean(l51, true), l9);
-        l49 = l40 * l45 / l39;
-        if (l39 > l45) {
-            l11 = *(&(&l0.a_gamma).future_time) == 0u64;
-            unstructured {
-                goto 'label_250;
-            }
-        } else {
-            l11 = false;
-            unstructured {
-                goto 'label_250;
+            let l50 = l5;
+            let l27 = utils::head(l50) / 1000000u256;
+            let l43 = &mut (&mut l50)[0u64];
+            *l43 = *l43 + l27;
+            let l29 = 1u64;
+            while (l36 > l29) {
+                let l20 = &mut (&mut l1)[l29];
+                *(&mut l20.last_price) = *(&l20.price) * l27 / *(&(&l5)[l29]) - volatile_math::y(l3, l4, &l50, l26, l29);
+                l29 = l29 + 1u64;
             }
         };
-        /* block 250 */;
-        assert!(!(l11), errors::incurred_a_loss());
-        if (*(&(&l0.a_gamma).future_time) == 1u64) {
-            *(&mut (&mut l0.a_gamma).future_time) = 0u64;
-            unstructured {
-                goto 'label_268;
-            }
-        } else {
-            unstructured {
-                goto 'label_268;
-            }
-        }
-    } else {
-        unstructured {
-            goto 'label_268;
-        }
-    };
-    let (l12, l37);
-    /* block 268 */;
-    *(&mut l0.xcp_profit) = l49;
-    l37 = *(&l0.not_adjusted);
-    if (!(l37)) {
-        l12 = l45 * 2u256 - C6 > l49 + 2u256 * *(&(&l0.rebalancing_params).extra_profit);
-        unstructured {
-            goto 'label_297;
-        }
-    } else {
-        l12 = false;
-        unstructured {
-            goto 'label_297;
-        }
-    };
-    /* block 297 */;
-    if (l12) {
-        l37 = true;
-        *(&mut l0.not_adjusted) = true;
-        unstructured {
-            goto 'label_305;
-        }
-    } else {
-        unstructured {
-            goto 'label_305;
-        }
-    };
-    /* block 305 */;
-    if (l37) {
-        let l15 = *(&(&l0.rebalancing_params).adjustment_step);
-        let l38 = 0u256;
-        let l31 = 1u64;
-        while (l36 > l31) {
-            let l22 = &(&l1)[l31];
-            let l42 = math256::diff(C6, fixed_point_wad::div_down(*(&l22.price_oracle), *(&l22.price)));
-            l38 = l38 + math256::pow(l42, 2u256);
-            l31 = l31 + 1u64;
+        let l40 = *(&l0.xcp_profit);
+        let l39 = *(&l0.virtual_price);
+        let l51 = vector[l26 / *(&l0.n_coins)];
+        let l30 = 1u64;
+        while (l36 > l30) {
+            let l21 = &(&l1)[l30];
+            (&mut l51).push_back(fixed_point_wad::div_down(l26, *(&l0.n_coins) * *(&l21.price)));
+            l30 = l30 + 1u64;
         };
-        let l13;
-        if (l38 > math256::pow(l15, 2u256)) {
-            l13 = l39 != 0u256;
-            unstructured {
-                goto 'label_358;
-            }
-        } else {
-            l13 = false;
-            unstructured {
-                goto 'label_358;
-            }
-        };
-        /* block 358 */;
-        if (l13) {
-            l38 = volatile_math::sqrt(l38 / C6);
-            let l41 = C17;
-            let l52 = l5;
-            let l32 = 1u64;
-            while (l36 > l32) {
-                let l23 = &(&l1)[l32];
-                let l44 = *(&l23.price) * l38 - l15 + l15 * *(&l23.price_oracle) / l38;
-                (&mut l41).push_back(l44);
-                let l46 = &mut (&mut l52)[l32];
-                *l46 = *l46 * l44 / *(&l23.price);
-                l32 = l32 + 1u64;
-            };
-            let l25 = volatile_math::invariant_(l3, l4, l52);
-            *(&mut (&mut l52)[0u64]) = l25 / *(&l0.n_coins);
-            let l33 = 1u64;
-            while (l36 > l33) {
-                *(&mut (&mut l52)[l33]) = fixed_point_wad::div_down(l25, *(&l0.n_coins) * *(&(&l41)[l33]));
-                l33 = l33 + 1u64;
-            };
-            let l14;
-            l39 = fixed_point_wad::div_down(volatile_math::geometric_mean(l52, true), l9);
-            if (l39 > C6) {
-                l14 = 2u256 * l39 - C6 > l49;
+        let l49 = C6;
+        let l45 = C6;
+        if (l39 != 0u256) {
+            let l11;
+            l45 = fixed_point_wad::div_down(volatile_math::geometric_mean(l51, true), l9);
+            l49 = l40 * l45 / l39;
+            if (l39 > l45) {
+                l11 = *(&(&l0.a_gamma).future_time) == 0u64;
                 unstructured {
-                    goto 'label_482;
+                    goto 'label_250;
                 }
             } else {
-                l14 = false;
+                l11 = false;
                 unstructured {
-                    goto 'label_482;
+                    goto 'label_250;
                 }
             };
-            /* block 482 */;
-            if (l14) {
-                let l34 = 1u64;
-                while (l36 > l34) {
-                    *(&mut (&mut (&mut l1)[l34]).price) = *(&(&l41)[l34]);
-                    l34 = l34 + 1u64;
-                };
-                interest_clamm_volatile::update_coin_state_prices(l0, l1);
-                *(&mut l0.d) = l25;
-                *(&mut l0.virtual_price) = l39;
-                return
-            };
-            *(&mut l0.not_adjusted) = false;
+            /* block 250 */;
+            assert!(!(l11), errors::incurred_a_loss());
+            if (*(&(&l0.a_gamma).future_time) == 1u64) {
+                *(&mut (&mut l0.a_gamma).future_time) = 0u64;
+                unstructured {
+                    goto 'label_268;
+                }
+            } else {
+                unstructured {
+                    goto 'label_268;
+                }
+            }
+        } else {
             unstructured {
-                goto 'label_523;
+                goto 'label_268;
+            }
+        };
+        let (l12, l37);
+        /* block 268 */;
+        *(&mut l0.xcp_profit) = l49;
+        l37 = *(&l0.not_adjusted);
+        if (!(l37)) {
+            l12 = l45 * 2u256 - C6 > l49 + 2u256 * *(&(&l0.rebalancing_params).extra_profit);
+            unstructured {
+                goto 'label_297;
+            }
+        } else {
+            l12 = false;
+            unstructured {
+                goto 'label_297;
+            }
+        };
+        /* block 297 */;
+        if (l12) {
+            l37 = true;
+            *(&mut l0.not_adjusted) = true;
+            unstructured {
+                goto 'label_305;
+            }
+        } else {
+            unstructured {
+                goto 'label_305;
+            }
+        };
+        /* block 305 */;
+        if (l37) {
+            let l15 = *(&(&l0.rebalancing_params).adjustment_step);
+            let l38 = 0u256;
+            let l31 = 1u64;
+            while (l36 > l31) {
+                let l22 = &(&l1)[l31];
+                let l42 = math256::diff(C6, fixed_point_wad::div_down(*(&l22.price_oracle), *(&l22.price)));
+                l38 = l38 + math256::pow(l42, 2u256);
+                l31 = l31 + 1u64;
+            };
+            let l13;
+            if (l38 > math256::pow(l15, 2u256)) {
+                l13 = l39 != 0u256;
+                unstructured {
+                    goto 'label_358;
+                }
+            } else {
+                l13 = false;
+                unstructured {
+                    goto 'label_358;
+                }
+            };
+            /* block 358 */;
+            if (l13) {
+                l38 = volatile_math::sqrt(l38 / C6);
+                let l41 = C17;
+                let l52 = l5;
+                let l32 = 1u64;
+                while (l36 > l32) {
+                    let l23 = &(&l1)[l32];
+                    let l44 = *(&l23.price) * l38 - l15 + l15 * *(&l23.price_oracle) / l38;
+                    (&mut l41).push_back(l44);
+                    let l46 = &mut (&mut l52)[l32];
+                    *l46 = *l46 * l44 / *(&l23.price);
+                    l32 = l32 + 1u64;
+                };
+                let l25 = volatile_math::invariant_(l3, l4, l52);
+                *(&mut (&mut l52)[0u64]) = l25 / *(&l0.n_coins);
+                let l33 = 1u64;
+                while (l36 > l33) {
+                    *(&mut (&mut l52)[l33]) = fixed_point_wad::div_down(l25, *(&l0.n_coins) * *(&(&l41)[l33]));
+                    l33 = l33 + 1u64;
+                };
+                let l14;
+                l39 = fixed_point_wad::div_down(volatile_math::geometric_mean(l52, true), l9);
+                if (l39 > C6) {
+                    l14 = 2u256 * l39 - C6 > l49;
+                    unstructured {
+                        goto 'label_482;
+                    }
+                } else {
+                    l14 = false;
+                    unstructured {
+                        goto 'label_482;
+                    }
+                };
+                /* block 482 */;
+                if (l14) {
+                    let l34 = 1u64;
+                    while (l36 > l34) {
+                        *(&mut (&mut (&mut l1)[l34]).price) = *(&(&l41)[l34]);
+                        l34 = l34 + 1u64;
+                    };
+                    interest_clamm_volatile::update_coin_state_prices(l0, l1);
+                    *(&mut l0.d) = l25;
+                    *(&mut l0.virtual_price) = l39;
+                    return
+                };
+                *(&mut l0.not_adjusted) = false;
+                unstructured {
+                    goto 'label_523;
+                }
+            } else {
+                unstructured {
+                    goto 'label_523;
+                }
             }
         } else {
             unstructured {
                 goto 'label_523;
             }
-        }
-    } else {
-        unstructured {
-            goto 'label_523;
-        }
-    };
-    /* block 523 */;
-    interest_clamm_volatile::update_coin_state_prices(l0, l1);
-    *(&mut l0.d) = l26;
-    *(&mut l0.virtual_price) = l45
+        };
+        /* block 523 */;
+        interest_clamm_volatile::update_coin_state_prices(l0, l1);
+        *(&mut l0.d) = l26;
+        *(&mut l0.virtual_price) = l45
+    }
 }
 
 fun update_coin_state_prices<T0>(l0: &mut StateV1<T0>, l1: vector<CoinState>) {
@@ -1579,7 +1363,6 @@ fun update_coin_state_prices<T0>(l0: &mut StateV1<T0>, l1: vector<CoinState>) {
 }
 
 public fun update_parameters<T0>(l0: &mut InterestPool<Volatile>, l1: &PoolAdmin, l2: &Clock, l3: BalancesRequest, l4: vector<Option<u256>>) {
-    let l5;
     interest_pool::assert_pool_admin(freeze(l0), l1);
     let l17 = interest_pool::addy(freeze(l0));
     let (reg_7, reg_8) = interest_clamm_volatile::state_and_coin_states_mut(l0);
@@ -1592,64 +1375,13 @@ public fun update_parameters<T0>(l0: &mut InterestPool<Volatile>, l1: &PoolAdmin
     let l11 = option::destroy_with_default(*(&(&l4)[4u64]), *(&(&l18.rebalancing_params).extra_profit));
     let l9 = option::destroy_with_default(*(&(&l4)[5u64]), *(&(&l18.rebalancing_params).adjustment_step));
     let l14 = option::destroy_with_default(*(&(&l4)[6u64]), *(&(&l18.rebalancing_params).ma_half_time));
-    if (l16 <= C3) {
-        l5 = l16 >= C2;
-        unstructured {
-            goto 'label_96;
-        }
-    } else {
-        l5 = false;
-        unstructured {
-            goto 'label_96;
-        }
-    };
-    /* block 96 */;
-    assert!(l5, errors::out_fee_out_of_range());
-    let l6;
-    if (l15 <= C3) {
-        l6 = C2 >= C2;
-        unstructured {
-            goto 'label_114;
-        }
-    } else {
-        l6 = false;
-        unstructured {
-            goto 'label_114;
-        }
-    };
-    /* block 114 */;
-    assert!(l6, errors::mid_fee_out_of_range());
+    assert!(l16 <= C3 && l16 >= C2, errors::out_fee_out_of_range());
+    assert!(l15 <= C3 && C2 >= C2, errors::mid_fee_out_of_range());
     assert!(l10 < C3, errors::admin_fee_is_too_big());
-    let l7;
-    if (l13 != 0u256) {
-        l7 = l13 <= C6;
-        unstructured {
-            goto 'label_141;
-        }
-    } else {
-        l7 = false;
-        unstructured {
-            goto 'label_141;
-        }
-    };
-    /* block 141 */;
-    assert!(l7, errors::gamma_fee_out_of_range());
+    assert!(l13 != 0u256 && l13 <= C6, errors::gamma_fee_out_of_range());
     assert!(l11 < C6, errors::extra_profit_is_too_big());
     assert!(l9 < C6, errors::adjustment_step_is_too_big());
-    let l8;
-    if (l14 >= 1000u256) {
-        l8 = l14 <= C4;
-        unstructured {
-            goto 'label_177;
-        }
-    } else {
-        l8 = false;
-        unstructured {
-            goto 'label_177;
-        }
-    };
-    /* block 177 */;
-    assert!(l8, errors::ma_half_time_out_of_range());
+    assert!(l14 >= 1000u256 && l14 <= C4, errors::ma_half_time_out_of_range());
     *(&mut (&mut l18.fees).admin_fee) = l10;
     *(&mut (&mut l18.fees).out_fee) = l16;
     *(&mut (&mut l18.fees).mid_fee) = l15;

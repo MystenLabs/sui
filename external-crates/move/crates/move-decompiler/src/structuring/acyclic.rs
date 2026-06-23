@@ -133,17 +133,18 @@ fn structure_nmg(
     let topo = topological_order(&proj.input)?;
 
     // Initial AST: `Seq[ if(c_r(n_1)) { n_1 }; ...; if(c_r(n_k)) { n_k } ]` per NMG §IV-B
-    // step 1. Each guard is minimized via Quine-McCluskey so duplicates / complementary
-    // pairs collapse before we look for common factors. Drop `False` guards (dead code);
-    // `entry` is unconditional.
+    // step 1. Keep guards in their *factored* form (raw `And`/`Or` from the smart
+    // constructors); calling `.simplify()` here distributes `And` over `Or` to DNF and
+    // destroys the structure that lets the refinement step find compound factors like
+    // a reaching condition shared as a top-level conjunct. We `.simplify()` only at
+    // emission time. Drop `False` guards (dead code); `entry` is unconditional.
     let mut items: Vec<(Formula, D::Structured)> = Vec::with_capacity(topo.len());
     for n in topo {
-        let raw_guard = if n == entry {
+        let guard = if n == entry {
             predicates::true_()
         } else {
             reach.get(&n).cloned().unwrap_or_else(predicates::true_)
         };
-        let guard = raw_guard.simplify();
         if guard == predicates::false_() {
             continue;
         }
@@ -158,26 +159,113 @@ fn structure_nmg(
     Some(emit_seq_from_items(items))
 }
 
-/// Iteratively apply NMG's condition-based refinement to a flat sequence of guarded items
-/// until no more factoring is possible. After this, complementary pairs and common factors
-/// have been hoisted into `CondIf` constructs; the remaining items are emitted as-is.
+/// Iteratively apply NMG's refinement steps to a flat sequence of guarded items until
+/// no more rewrites apply. Two phases per pass:
+///
+///   1. **Implication nesting**: when a later item's guard structurally implies an
+///      earlier item's (via `has_factor`), nest the later item inside the earlier
+///      one's body with a residual guard. This recovers Move's "definitely assigned"
+///      structure - e.g. `__c27 = check; assert!(__c27)` lives inside the same
+///      `if (__c24) { ... }` block so the read of `__c27` is on the path where it
+///      was just written.
+///
+///   2. **Condition-based factoring**: factor out common literals / top-level
+///      conjuncts across sibling guards. See [`try_refine_once`].
+///
+/// Order matters: implication nesting first keeps related items together, so the
+/// subsequent factoring doesn't drag a pair apart by picking a higher-coverage but
+/// scope-fracturing factor.
 fn refine_initial_ast(mut items: Vec<(Formula, D::Structured)>) -> Vec<(Formula, D::Structured)> {
     loop {
+        if let Some(new_items) = try_implication_nest(&items) {
+            items = new_items;
+            continue;
+        }
         if let Some(new_items) = try_refine_once(&items) {
             items = new_items;
-        } else {
-            return items;
+            continue;
         }
+        return items;
     }
+}
+
+/// Find the earliest item `i` such that one or more later items `j > i` have guards
+/// that structurally factor through `guard(i)` (via [`Formula::has_factor`]). Those
+/// implied items get pulled inside `i`'s body with their residual guards.
+///
+/// Skips items whose guard is `True` (the entry item) as the outer - nesting all
+/// implied items inside the entry would be vacuous.
+fn try_implication_nest(
+    items: &[(Formula, D::Structured)],
+) -> Option<Vec<(Formula, D::Structured)>> {
+    for i in 0..items.len() {
+        let g_i = &items[i].0;
+        if *g_i == predicates::true_() {
+            continue;
+        }
+        let mut implied: Vec<usize> = Vec::new();
+        for j in (i + 1)..items.len() {
+            if items[j].0.has_factor(g_i) {
+                implied.push(j);
+            }
+        }
+        if implied.is_empty() {
+            continue;
+        }
+
+        // Inner items: each gets its guard's `g_i` factor stripped, then we recursively
+        // refine the inner sequence so nested implications resolve too.
+        let inner: Vec<(Formula, D::Structured)> = implied
+            .iter()
+            .map(|&j| (items[j].0.without_factor(g_i), items[j].1.clone()))
+            .collect();
+        let inner_refined = refine_initial_ast(inner);
+        let inner_seq = emit_seq_from_items(inner_refined);
+
+        // Splice the original body and the new inner sequence into one Seq. Flatten
+        // when either side is already a Seq so we don't pile up empty wrappers.
+        let i_body = items[i].1.clone();
+        let new_body = splice_into_seq(i_body, inner_seq);
+
+        let implied_set: HashSet<usize> = implied.into_iter().collect();
+        let mut new_items: Vec<(Formula, D::Structured)> = Vec::with_capacity(items.len());
+        for (k, item) in items.iter().enumerate() {
+            if k == i {
+                new_items.push((g_i.clone(), new_body.clone()));
+            } else if !implied_set.contains(&k) {
+                new_items.push(item.clone());
+            }
+        }
+        return Some(new_items);
+    }
+    None
+}
+
+/// Concatenate two `Structured` values into a flat `Seq`, splicing through any
+/// top-level `Seq`s on either side.
+fn splice_into_seq(a: D::Structured, b: D::Structured) -> D::Structured {
+    use D::Structured as DS;
+    let mut out: Vec<DS> = Vec::new();
+    match a {
+        DS::Seq(items) => out.extend(items),
+        other => out.push(other),
+    }
+    match b {
+        DS::Seq(items) => out.extend(items),
+        other => out.push(other),
+    }
+    DS::Seq(out)
 }
 
 /// One iteration of NMG's condition-based refinement. Returns `Some(refined)` if a
 /// factoring happened, `None` if no candidate produced a refinement.
 ///
-/// Strategy: scan top-level conjuncts that appear in 2+ items' guards. For each candidate
-/// `c`, partition items into `Vc` (have `c` as factor) and `V_neg_c` (have `¬c` as
-/// factor). If `|Vc| + |V_neg_c| >= 2`, splice a `CondIf(c, Seq(Vc with c stripped),
-/// Some(Seq(V_neg_c with ¬c stripped)))` at the earliest affected position.
+/// Strategy: scan literal candidates (atom or negated atom) that can be factored out of
+/// 2+ items' guards via [`Formula::has_factor`] (which sees through DNF disjunctions).
+/// For each candidate `c`, partition items into `Vc` (have `c` as factor) and `V_neg_c`
+/// (have `¬c` as factor). If `|Vc| + |V_neg_c| >= 2`, splice a
+/// `CondIf(c, Seq(Vc with c stripped), Some(Seq(V_neg_c with ¬c stripped)))` at the
+/// earliest affected position.
 fn try_refine_once(items: &[(Formula, D::Structured)]) -> Option<Vec<(Formula, D::Structured)>> {
     let candidates = candidate_factors(items);
     for c in candidates {
@@ -185,9 +273,9 @@ fn try_refine_once(items: &[(Formula, D::Structured)]) -> Option<Vec<(Formula, D
         let mut vc_indices: Vec<usize> = Vec::new();
         let mut vneg_indices: Vec<usize> = Vec::new();
         for (i, (g, _)) in items.iter().enumerate() {
-            if g.has_conjunct(&c) {
+            if g.has_factor(&c) {
                 vc_indices.push(i);
-            } else if g.has_conjunct(&neg_c) {
+            } else if g.has_factor(&neg_c) {
                 vneg_indices.push(i);
             }
         }
@@ -195,20 +283,21 @@ fn try_refine_once(items: &[(Formula, D::Structured)]) -> Option<Vec<(Formula, D
             continue;
         }
 
-        // Children keep their R = guard \ factor. Re-simplify so the factored form is
-        // minimal before the recursive refine looks at it.
+        // Children keep their R = guard \ factor. Don't `.simplify()` here -- it would
+        // distribute the residual to DNF and break the next refinement layer's ability to
+        // find compound factors.
         let vc_items: Vec<(Formula, D::Structured)> = vc_indices
             .iter()
             .map(|&i| {
                 let (g, body) = &items[i];
-                (g.without_conjunct(&c).simplify(), body.clone())
+                (g.without_factor(&c), body.clone())
             })
             .collect();
         let vneg_items: Vec<(Formula, D::Structured)> = vneg_indices
             .iter()
             .map(|&i| {
                 let (g, body) = &items[i];
-                (g.without_conjunct(&neg_c).simplify(), body.clone())
+                (g.without_factor(&neg_c), body.clone())
             })
             .collect();
         let conseq = emit_seq_from_items(refine_initial_ast(vc_items));
@@ -239,38 +328,49 @@ fn try_refine_once(items: &[(Formula, D::Structured)]) -> Option<Vec<(Formula, D
     None
 }
 
-/// Collect top-level conjunct candidates appearing in 2+ items' guards. Order is fully
-/// deterministic: highest coverage first, then un-negated polarity, then `Formula`'s
-/// derived `Ord`. When both `c` and `¬c` appear, keep the un-negated form so the emitted
-/// `CondIf(c, Vc, V_neg)` reads as `if (c) ... else ...`.
+/// Collect factor candidates from `items` and score each by how many items it (or its
+/// negation) factors out of.
+///
+/// Two sources of candidates so we get both atom-level factoring (inside DNF disjuncts)
+/// and compound factoring (when an `Or` formula sits as a top-level conjunct alongside
+/// atom factors):
+///   - Every atom that appears anywhere in a guard - surfaces `__c38` even when guards
+///     are `Or(And(...,__c38,...), And(...,__c38,...))`.
+///   - Every top-level conjunct of each guard's `conjuncts()` - surfaces a compound
+///     `Or` formula `g` when items have guards like `g`, `g && __c41`, `g && !__c41`.
+///     Without this, the three items share `g` as a factor but no single atom is.
+///
+/// Order is fully deterministic: highest coverage first, then `Formula::Ord`.
 fn candidate_factors(items: &[(Formula, D::Structured)]) -> Vec<Formula> {
     // `BTreeSet` (sorted) instead of `HashSet` so subsequent iteration order is fixed.
-    let mut all_conjuncts: BTreeSet<Formula> = BTreeSet::new();
+    let mut candidates: BTreeSet<Formula> = BTreeSet::new();
     for (g, _) in items {
+        for s in g.atoms() {
+            candidates.insert(predicates::atom(s));
+        }
         for c in g.conjuncts() {
-            all_conjuncts.insert(c);
+            candidates.insert(c);
         }
     }
-    let mut scored: Vec<(Formula, usize)> = all_conjuncts
+    candidates.remove(&predicates::true_());
+    candidates.remove(&predicates::false_());
+    let mut scored: Vec<(Formula, usize)> = candidates
         .into_iter()
-        .filter(|c| *c != predicates::true_() && *c != predicates::false_())
         .map(|c| {
             let neg = predicates::not(c.clone());
             let n = items
                 .iter()
-                .filter(|(g, _)| g.has_conjunct(&c) || g.has_conjunct(&neg))
+                .filter(|(g, _)| g.has_factor(&c) || g.has_factor(&neg))
                 .count();
             (c, n)
         })
         .filter(|(_, n)| *n >= 2)
         .collect();
     scored.sort_by(|a, b| {
-        // Higher count first; then un-negated form first; then `Formula::Ord` for total
-        // determinism.
-        b.1.cmp(&a.1)
-            .then_with(|| is_negation(&a.0).cmp(&is_negation(&b.0)))
-            .then_with(|| a.0.cmp(&b.0))
+        // Higher count first; then `Formula::Ord` for total determinism.
+        b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0))
     });
+    // Dedup polarity: if both `c` and `!c` survived as candidates, keep the un-negated.
     let mut seen: BTreeSet<Formula> = BTreeSet::new();
     let mut out: Vec<Formula> = Vec::new();
     for (c, _) in scored {
@@ -279,38 +379,23 @@ fn candidate_factors(items: &[(Formula, D::Structured)]) -> Vec<Formula> {
             continue;
         }
         seen.insert(c.clone());
-        // Normalize: emit the un-negated direction when this candidate is `!x`.
-        if is_negation(&c) {
-            out.push(neg);
-        } else {
-            out.push(c);
-        }
+        out.push(c);
     }
     out
 }
 
-/// True iff `not(f)` is structurally simpler than `f` -- used to detect that `f` is a
-/// negated form so we can pick the positive polarity when scoring candidate factors.
-fn is_negation(f: &Formula) -> bool {
-    // `not(not(f)) == f`; if applying `not` once collapses to something that, when negated
-    // again, yields `f`, then `f` itself was a negation.
-    let single = predicates::not(f.clone());
-    let double = predicates::not(single.clone());
-    single != *f && double == *f && {
-        // Count: the un-negated form should have one fewer Not at the top level. Compare
-        // string repr lengths as a cheap proxy.
-        format!("{single}").len() < format!("{f}").len()
-    }
-}
-
-/// Emit a final `Structured` from a list of guarded items. `true` guards drop the wrapper.
+/// Emit a final `Structured` from a list of guarded items. `true` guards drop the
+/// wrapper. Each remaining guard is `.simplify()`-ed at this point (and not earlier,
+/// see [`structure_nmg`]) so the emitted form is minimal without sacrificing the
+/// factor structure the refinement loop relied on.
 fn emit_seq_from_items(items: Vec<(Formula, D::Structured)>) -> D::Structured {
     let mut out: Vec<D::Structured> = Vec::with_capacity(items.len());
     for (guard, body) in items {
-        if guard == predicates::true_() {
+        let g = guard.simplify();
+        if g == predicates::true_() {
             out.push(body);
-        } else {
-            out.push(D::Structured::CondIf(guard, Box::new(body), Box::new(None)));
+        } else if g != predicates::false_() {
+            out.push(D::Structured::CondIf(g, Box::new(body), Box::new(None)));
         }
     }
     D::Structured::Seq(out)
@@ -372,8 +457,7 @@ fn build_acyclic_projection(
     members: &HashSet<NodeIndex>,
 ) -> AcyclicProjection {
     // 1. Discover unique exit targets and whether we need a back-edge sink.
-    let in_projection =
-        |n: NodeIndex| -> bool { members.contains(&n) || n == entry };
+    let in_projection = |n: NodeIndex| -> bool { members.contains(&n) || n == entry };
     let mut needs_back_edge_sink = false;
     let mut unique_exit_targets: Vec<NodeIndex> = Vec::new();
     let mut seen_targets: HashSet<NodeIndex> = HashSet::new();
