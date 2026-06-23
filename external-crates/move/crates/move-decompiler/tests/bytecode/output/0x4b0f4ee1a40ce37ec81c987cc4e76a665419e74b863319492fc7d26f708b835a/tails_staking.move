@@ -160,7 +160,7 @@ public fun claim_profit_sharing<T0>(l0: &mut Version, l1: &mut TailsStakingRegis
     assert!(reg_6, C6);
     let l15 = tx_context::sender(freeze(l2));
     let l6 = big_vector::length(&l1.staking_infos);
-    let l13 = big_vector::slice_size(&l1.staking_infos)as u64;
+    let l13 = big_vector::slice_size(&l1.staking_infos) as u64;
     let l11 = 0u64;
     let l10 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l11);
     let l12 = big_vector::get_slice_length(freeze(l10));
@@ -193,7 +193,7 @@ entry fun daily_sign_up(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: Coi
     let l20 = tx_context::sender(l4);
     let l17 = bag::borrow(&l1.tails_metadata, C7);
     let l9 = big_vector::length(&l1.staking_infos);
-    let l14 = big_vector::slice_size(&l1.staking_infos)as u64;
+    let l14 = big_vector::slice_size(&l1.staking_infos) as u64;
     let l12 = 0u64;
     let l11 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l12);
     let l13 = big_vector::get_slice_length(freeze(l11));
@@ -295,7 +295,7 @@ public(friend) fun get_level_counts(l0: &Version, l1: &TailsStakingRegistry): ve
     let l7 = C18;
     let l14 = bag::borrow(&l1.tails_metadata, C8);
     let l5 = big_vector::length(&l1.staking_infos);
-    let l11 = big_vector::slice_size(&l1.staking_infos)as u64;
+    let l11 = big_vector::slice_size(&l1.staking_infos) as u64;
     let l9 = 0u64;
     let l8 = big_vector::borrow_slice(&l1.staking_infos, l9);
     let l10 = big_vector::get_slice_length(l8);
@@ -326,7 +326,7 @@ public fun get_max_staking_level(l0: &Version, l1: &TailsStakingRegistry, l2: ad
     let l14 = bag::borrow(&l1.tails_metadata, C8);
     let l6 = big_vector::length(&l1.staking_infos);
     if (l6 > 0u64) {
-        let l12 = big_vector::slice_size(&l1.staking_infos)as u64;
+        let l12 = big_vector::slice_size(&l1.staking_infos) as u64;
         let l10 = 0u64;
         let l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
         let l11 = big_vector::get_slice_length(l9);
@@ -367,7 +367,7 @@ public fun get_max_staking_level(l0: &Version, l1: &TailsStakingRegistry, l2: ad
 public(friend) fun get_staking_info(l0: &Version, l1: &TailsStakingRegistry, l2: address): vector<u8> {
     ecosystem::version_check(l0);
     let l5 = big_vector::length(&l1.staking_infos);
-    let l9 = big_vector::slice_size(&l1.staking_infos)as u64;
+    let l9 = big_vector::slice_size(&l1.staking_infos) as u64;
     let l7 = 0u64;
     let l6 = big_vector::borrow_slice(&l1.staking_infos, l7);
     let l8 = big_vector::get_slice_length(l6);
@@ -392,7 +392,7 @@ public(friend) fun get_staking_infos(l0: &Version, l1: &TailsStakingRegistry, l2
     ecosystem::version_check(l0);
     let l6 = C17;
     let l5 = big_vector::length(&l1.staking_infos);
-    let l10 = big_vector::slice_size(&l1.staking_infos)as u64;
+    let l10 = big_vector::slice_size(&l1.staking_infos) as u64;
     let l8 = 0u64;
     let l7 = big_vector::borrow_slice(&l1.staking_infos, l8);
     let l9 = big_vector::get_slice_length(l7);
@@ -541,7 +541,7 @@ entry fun remove_profit_sharing<T0>(l0: &Version, l1: &mut TailsStakingRegistry,
     let l9 = reg_8;
     assert!(reg_7, C6);
     let l7 = big_vector::length(&l1.staking_infos);
-    let l14 = big_vector::slice_size(&l1.staking_infos)as u64;
+    let l14 = big_vector::slice_size(&l1.staking_infos) as u64;
     let l12 = 0u64;
     let l11 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l12);
     let l13 = big_vector::get_slice_length(freeze(l11));
@@ -574,7 +574,7 @@ entry fun set_profit_sharing<T0, T1>(l0: &Version, l1: &mut TailsStakingRegistry
     let l20 = reg_8;
     let l30 = bag::borrow(&l1.tails_metadata, C8);
     let l15 = big_vector::length(&l1.staking_infos);
-    let l26 = big_vector::slice_size(&l1.staking_infos)as u64;
+    let l26 = big_vector::slice_size(&l1.staking_infos) as u64;
     let l24 = 0u64;
     let l23 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l24);
     let l25 = big_vector::get_slice_length(freeze(l23));
@@ -638,7 +638,7 @@ fun stake_tails_(l0: &mut TailsStakingRegistry, l1: Tails, l2: address) {
     *(&mut (bag::borrow_mut(&mut l0.tails_metadata, C7))[typus_nft::tails_number(&l1) - 1u64]) = object::id_address(&l1);
     *(&mut (bag::borrow_mut(&mut l0.tails_metadata, C8))[typus_nft::tails_number(&l1) - 1u64]) = typus_nft::tails_level(&l1);
     let l5 = big_vector::length(&l0.staking_infos);
-    let l10 = big_vector::slice_size(&l0.staking_infos)as u64;
+    let l10 = big_vector::slice_size(&l0.staking_infos) as u64;
     let l8 = 0u64;
     let l7 = big_vector::borrow_slice(&l0.staking_infos, l8);
     let l9 = big_vector::get_slice_length(l7);
@@ -721,7 +721,7 @@ public fun unstake_tails(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: &m
 fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tails {
     let l14 = bag::borrow(&l0.tails_metadata, C7);
     let l6 = big_vector::length(&l0.staking_infos);
-    let l11 = big_vector::slice_size(&l0.staking_infos)as u64;
+    let l11 = big_vector::slice_size(&l0.staking_infos) as u64;
     let l9 = 0u64;
     let l8 = big_vector::borrow_slice_mut(&mut l0.staking_infos, l9);
     let l10 = big_vector::get_slice_length(freeze(l8));
@@ -821,7 +821,7 @@ public fun verify_staking(l0: &Version, l1: &TailsStakingRegistry, l2: address, 
     ecosystem::version_check(l0);
     let l14 = bag::borrow(&l1.tails_metadata, C7);
     let l7 = big_vector::length(&l1.staking_infos);
-    let l12 = big_vector::slice_size(&l1.staking_infos)as u64;
+    let l12 = big_vector::slice_size(&l1.staking_infos) as u64;
     let l10 = 0u64;
     let l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
     let l11 = big_vector::get_slice_length(l9);
@@ -863,7 +863,7 @@ public fun verify_staking_identity(l0: &Version, l1: &TailsStakingRegistry, l2: 
     };
     let l14 = bag::borrow(&l1.tails_metadata, C8);
     let l7 = big_vector::length(&l1.staking_infos);
-    let l12 = big_vector::slice_size(&l1.staking_infos)as u64;
+    let l12 = big_vector::slice_size(&l1.staking_infos) as u64;
     let l10 = 0u64;
     let l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
     let l11 = big_vector::get_slice_length(l9);

@@ -582,8 +582,8 @@ public fun place_limit_order_tif(l0: &mut OrderManager, l1: vector<u8>, l2: u64,
     if (l5 == C13) {
         if (l40 > 0u64) {
             l31 = false;
-            let l37 = l40as u128 * coin::value(&l6)as u128 / l3as u128;
-            let l25 = coin::split(&mut l6, l37as u64, l9);
+            let l37 = l40 as u128 * coin::value(&l6) as u128 / l3 as u128;
+            let l25 = coin::split(&mut l6, l37 as u64, l9);
             let l34 = coin::zero(l9);
             if (option::is_some(&l38)) {
                 coin::destroy_zero(option::extract(&mut l38))
