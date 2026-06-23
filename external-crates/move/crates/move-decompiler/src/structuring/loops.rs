@@ -13,7 +13,7 @@ use crate::structuring::{
     StructureContext, acyclic,
     ast::{self as D, GotoSource},
     graph::Graph,
-    predicates,
+    predicates::{self, Formula},
 };
 
 use petgraph::{Direction, graph::NodeIndex};
@@ -798,6 +798,83 @@ fn elide_inter_item_gotos(items: &mut [D::Structured]) {
         if let Some(next_label) = entry_label(&items[i + 1]) {
             let (left, _) = items.split_at_mut(i + 1);
             elide_tail_jump_to(&mut left[i], next_label);
+        }
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// NMG §V-B helpers
+// -------------------------------------------------------------------------------------------------
+// Compute reaching condition formulas for each owned succ, so a downstream cascade can
+// replace the dispatch table. The body's acyclic projection drops back-edges to
+// `loop_head` (they go to a synthetic sink) and adds `owned_succs` as terminal sinks --
+// `acyclic::reaching_conditions` then produces `c(loop_head, succ)` for every owned succ.
+// See `V_B_PLAN.md` for the full plan.
+
+/// Compute `c(loop_head, succ)` for each `owned_succ`. Returns `None` if the body region
+/// has shapes `reaching_conditions` can't handle (e.g. `Variants`).
+#[allow(dead_code)] // wired in by the cascade emitter once landed
+pub(super) fn compute_owned_succ_formulas(
+    input: &BTreeMap<D::Label, D::Input>,
+    loop_nodes: &HashSet<NodeIndex>,
+    owned_succs: &[NodeIndex],
+    loop_head: NodeIndex,
+) -> Option<BTreeMap<NodeIndex, Formula>> {
+    let projection = build_body_acyclic_projection(input, loop_nodes, owned_succs, loop_head);
+    let reach = acyclic::reaching_conditions(&projection, loop_head)?;
+    let mut out = BTreeMap::new();
+    for &s in owned_succs {
+        out.insert(s, reach.get(&s).cloned()?);
+    }
+    Some(out)
+}
+
+/// Build the body's acyclic projection: input restricted to `loop_nodes`, with back-edges
+/// to `loop_head` redirected to a synthetic sink, plus `owned_succs` added as sinks.
+fn build_body_acyclic_projection(
+    input: &BTreeMap<D::Label, D::Input>,
+    loop_nodes: &HashSet<NodeIndex>,
+    owned_succs: &[NodeIndex],
+    loop_head: NodeIndex,
+) -> BTreeMap<D::Label, D::Input> {
+    let back_edge_sink = synthetic_sink_id(input);
+    let mut projection: BTreeMap<D::Label, D::Input> = BTreeMap::new();
+    for (&node, inp) in input.iter().filter(|(k, _)| loop_nodes.contains(k)) {
+        projection.insert(node, redirect_edges_to(inp.clone(), loop_head, back_edge_sink));
+    }
+    // Synthetic sink for the back-edges.
+    projection.insert(back_edge_sink, D::Input::Code(back_edge_sink, 0, None));
+    // Owned succs as terminal sinks. Their actual `input` entries live outside `loop_nodes`
+    // and may carry their own out-edges, but for reaching-condition purposes inside the body
+    // we just need them as nodes that receive flow.
+    for &succ in owned_succs {
+        projection.insert(succ, D::Input::Code(succ, 0, None));
+    }
+    projection
+}
+
+/// Allocate a `NodeIndex` past anything currently in `input`. Used to slot synthetic
+/// projection sinks without colliding with real node ids.
+fn synthetic_sink_id(input: &BTreeMap<D::Label, D::Input>) -> NodeIndex {
+    let max = input.keys().map(|n| n.index()).max().unwrap_or(0);
+    NodeIndex::new(max + 1)
+}
+
+/// Rewrite every target node in `inp` equal to `from` so it points at `to` instead.
+fn redirect_edges_to(inp: D::Input, from: NodeIndex, to: NodeIndex) -> D::Input {
+    let remap = |n: NodeIndex| if n == from { to } else { n };
+    match inp {
+        D::Input::Condition(l, c, then, els) => D::Input::Condition(l, c, remap(then), remap(els)),
+        D::Input::Variants(l, c, e, items) => D::Input::Variants(
+            l,
+            c,
+            e,
+            items.into_iter().map(|(v, t)| (v, remap(t))).collect(),
+        ),
+        D::Input::Code(l, c, Some(next)) => D::Input::Code(l, c, Some(remap(next))),
+        D::Input::Code(l, c, None) => D::Input::Code(l, c, None),
+        D::Input::Reduced(l, succs) => {
+            D::Input::Reduced(l, succs.into_iter().map(remap).collect())
         }
     }
 }
