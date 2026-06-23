@@ -1,15 +1,16 @@
 ---
 name: sui-move-security-review
 description: >
-  Use when auditing, reviewing, or hunting for vulnerabilities in Move code on Sui — including
-  deployed/decompiled packages. A checklist of invariants whose VIOLATION causes exploitable
-  bugs: access control & capabilities, struct abilities & type safety, object lifecycle &
-  ownership, shared-object and PTB attack surface, dynamic fields & collections, arithmetic &
-  coins, init/OTW/package upgrades, hot-potato composability, time & on-chain randomness, and
-  test-only code leakage. Trigger on "audit this Move code", "find vulnerabilities in this Sui
-  contract", "security review", "is this package safe?", "I suspect there's a bug in X",
-  "something is wrong with this contract", or when reasoning about whether a Move function can
-  be abused.
+  Use when auditing, reviewing, or hunting for vulnerabilities in Move code on Sui. Applies
+  equally to source code (.move files) and to disassembly of compiled bytecode (on-chain
+  packages). A checklist of invariants whose VIOLATION causes exploitable bugs: access
+  control & capabilities, struct abilities & type safety, object lifecycle & ownership,
+  shared-object and PTB attack surface, dynamic fields & collections, arithmetic & coins,
+  init/OTW/package upgrades, hot-potato composability, time & on-chain randomness, and
+  test-only code leakage. Trigger on "audit this Move code", "find vulnerabilities in this
+  Sui contract", "security review", "is this package safe?", "I suspect there's a bug in
+  X", "something is wrong with this contract", or when reasoning about whether a Move
+  function can be abused.
 ---
 
 # Move Security Review (on Sui)
@@ -17,10 +18,8 @@ description: >
 > **Self-bootstrap (any AI agent):** this skill is bundled inside the `sui` binary. **For
 > comprehensive audits, read every reference file in this bundle before applying the
 > routing table below** — default to `sui prompt skill sui-move-security-review --all`
-> for a one-shot load of all of them; if you need to budget context tighter, enumerate
-> with `sui prompt skill sui-move-security-review --list` then read each via `--file
-> <ref>`. The detection heuristics, severity ratings, exploit sketches, and bytecode
-> signals live in those per-category files; the routing table is a summary only.
+> for a one-shot load of all of them. The detection heuristics, severity ratings, and
+> exploit sketches live in those per-category files; the routing table is a summary only.
 > This skill belongs to one or more categories — run `sui prompt categories` to see them
 > and `sui prompt category <name>` to read the category's workflow. No filesystem install
 > is required — the binary is self-contained.
@@ -33,10 +32,10 @@ description: >
 > Verify on-chain facts against [docs.sui.io](https://docs.sui.io),
 > [move-book.com](https://move-book.com), or framework source.
 
-> **Auditing on-chain bytecode?** Use `sui-and-move-tools` to fetch + decompile; apply
-> `SM-*` rules to the decompiled `.move` files. See `auditing-bytecode.md` for workflow +
-> per-rule signals. Drop to disassembly only for abort-code values, failed decompilation,
-> or ambiguous excerpts.
+> **Representation.** The catalog is stated in Move semantics. Use `.move` files when
+> the target is a source repository. Use disassembly (`.asm`) when the target is a
+> deployed on-chain package: fetch bytecode with `sui-and-move-tools`, disassemble it,
+> then walk rules with `auditing-bytecode.md` as the per-rule opcode-signal bridge.
 
 ## How to audit with this skill
 
@@ -45,7 +44,7 @@ description: >
    every struct's ability set. PTB callers control argument order and supply arbitrary inputs —
    treat all entrypoints as adversarial.
 2. **Walk the catalog by category** (A–M). For each rule, run the `Detect` heuristic
-   against the code.
+   against the code representation.
    - **A grep hit is a *candidate*, not a finding.** Confirm the invariant is actually
      broken before reporting.
    - **A grep miss is NOT proof of absence — walk the candidate set explicitly.** Many
@@ -83,7 +82,7 @@ description: >
 | `composability-and-ptb.md` | J, K | hot-potato weakening, internal-transfer/leaky `_mut`, attacker-orchestrated PTB, gas-coin/sponsor |
 | `time-and-randomness.md` | L | `Clock` vs epoch time, **randomness test-and-abort** |
 | `test-and-offchain.md` | M + appendix | `#[test_only]` leakage; off-chain appendix (non-blocking) |
-| `auditing-bytecode.md` | all (on-chain) | applying the rules to the decompiled view (working substrate); per-rule signals in decompiled-source terms; disassembly fetched per-module on demand for specific verification cases |
+| `auditing-bytecode.md` | all (disassembly bridge) | per-rule disassembly opcode signals — load when your representation is `.asm` (compiled bytecode); skip when working with `.move` source |
 
 ## Known system addresses (sanity references)
 

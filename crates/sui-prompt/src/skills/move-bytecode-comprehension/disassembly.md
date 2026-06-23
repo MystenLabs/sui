@@ -1,14 +1,10 @@
 # Move bytecode disassembly
 
-Disassembly is 1:1 with the executed bytecode — no heuristic reconstruction. In this
-skill's workflow it's the **verification view**: open it on demand for a specific question
-that the decompiled view (the working substrate; see `decompilation.md`) can't answer —
-looking up an abort code's numeric value, confirming an ambiguous instruction sequence,
-or when decompilation broke for a particular module.
-
+Disassembly is 1:1 with the executed bytecode. For compiled Move packages — including
+everything deployed on chain — it is **the view**: there is no readable source available,
+only the `.mv` binary and the disassembly produced from it via `sui move disassemble`.
 Disassembly is faithful but low-level: a stack machine with numbered locals and basic
-blocks. `.asm` files are fetched per-module via the "Fetching disassembly on demand"
-section of `sui-and-move-tools/fetch-and-decompile.md`.
+blocks.
 
 ## How to read it
 
@@ -16,7 +12,7 @@ section of `sui-and-move-tools/fetch-and-decompile.md`.
   dependencies, fully address-qualified.
 - **Structs:** name + `has <abilities>` + fields. A fields-less source struct (e.g. an OTW
   named `MODULE_NAME`) is represented with a synthetic `dummy_field: bool` — expected, not
-  a bug.
+  a bug; it's how a zero-field struct is encoded.
 - **Functions:** signature line shows `name(Arg0: T, Arg1: U): Ret`, with `public` / `entry`
   prefixes when present. The module initializer `init(..., &mut TxContext)` has no
   visibility/`entry` prefix — it's the special initializer the framework calls once at
@@ -30,6 +26,27 @@ section of `sui-and-move-tools/fetch-and-decompile.md`.
   etc.); otherwise follow the local stack/dataflow into the abort site. Source names
   (e.g. `EUnauthorized`) don't survive — reason from the integer value and the guarded
   condition.
+
+## What's faithful (trust it)
+
+- **Struct names, field names, field types, and abilities** (`has key, store`). Capability /
+  hot-potato / non-transferability reasoning works directly from the struct header.
+- **Function visibility and `entry`**, parameter and return types (incl. `&`/`&mut`,
+  generics, phantom). Type-confusion reasoning works from signatures.
+- **Control and data flow** — branches, calls, field reads/writes, the order of operations.
+
+## What's lost (don't be fooled)
+
+- **Constants are renamed `C0, C1, …`** with raw values. Source names (`ENotAuthorized`,
+  `MAX_FEE`) and `#[error]` messages are gone. To decode a `vector<u8>` constant, read it
+  as ASCII (e.g. `[110, 97, 109, 101]` = `"name"`). Abort sites: key off the numeric
+  abort code and the guarded condition, not a name.
+- **Local variable names are invented** (`loc0`, `Arg0`, …). Never base a conclusion on a
+  local's name; follow the dataflow.
+- **Macros are expanded.** `assert!(c, e)` appears as `BrTrue` past an `LdConst[i]` + `Abort`
+  pair (or equivalent); loop macros (`n.do!(...)`) appear as explicit branch-based loops.
+  A `vector[..]` literal may appear as a built-up vector via `VecPack` / `VecPushBack`.
+  Recognize the shape, not the sugar.
 
 ## The opcodes you'll actually read
 

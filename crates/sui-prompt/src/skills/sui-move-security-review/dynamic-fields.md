@@ -43,8 +43,8 @@ can influence — an attacker can `remove`, an unrelated path may not have `add`
 path must first call `*::exists*` / `*::contains` and either branch to a safe path or abort with
 a clear, named error code.
 Detect: `dynamic_field::borrow*`/`remove*` / `bag::borrow*` / `table::borrow*` access with no
-preceding existence check that gates the access. In decompiled output: the bug is the absence
-of a matching `dynamic_field::exists*(...)` / `bag::contains(...)` / `table::contains(...)`
+preceding existence check that gates the access. Concretely: the bug is the absence of a
+matching `dynamic_field::exists*(...)` / `bag::contains(...)` / `table::contains(...)`
 inside an `if (...)` guard or `assert!(...)` that reaches the specific access. The guard
 must precede the access on the path — an `exists*` / `contains` elsewhere in the function
 doesn't qualify.

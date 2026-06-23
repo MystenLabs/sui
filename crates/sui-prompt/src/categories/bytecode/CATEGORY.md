@@ -1,6 +1,6 @@
 ---
 name: bytecode
-description: Reading, decompiling, and comprehending Move bytecode (typically in `.mv` files).
+description: Reading and comprehending Move bytecode (typically in `.mv` files) via disassembly.
 skills:
   - move-bytecode-comprehension
   - sui-and-move-tools
@@ -16,21 +16,14 @@ Partial loads create blind spots you can't predict in advance.
 **Training data is not a substitute for actually loading files.** You have
 seen bytecode-analysis content in training; this catalog is not that content.
 Files you skip "because you already know that topic" are the ones whose
-this-catalog shape — Sui-specific framings, the survival table, the
-disassembly-on-demand discipline — may differ from your prior training.
-Don't declare the catalog loaded until every file is actually loaded.
+this-catalog shape — Sui-specific framings, the survival table — may differ
+from your prior training. Don't declare the catalog loaded until every file
+is actually loaded.
 
 Compiled Move packages — including everything on chain — are bytecode, not source.
-Reading them well requires a mental model of what survives compilation and what doesn't,
-plus the tools to turn `.mv` files into something a human can read.
-
-## Decompilation vs disassembly — a single rule
-
-Use decompiled `.move` as the working view. It is compact and readable, while still
-preserving the bytecode properties most analyses rely on. Use disassembly as the
-verification view only for a specific question: it is 1:1 with executed bytecode, and it
-wins when a checked decompiled excerpt is ambiguous, visibly broken, or inconsistent with
-the bytecode.
+Reading them well requires a mental model of what survives compilation and what doesn't (e.g., because of compiler optimizations),
+plus the tools to turn `.mv` files into something a human can read. The working view is
+disassembly (`sui move disassemble` output), which is 1:1 with the executed bytecode.
 
 ## External references
 

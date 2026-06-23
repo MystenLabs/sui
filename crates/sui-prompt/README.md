@@ -42,7 +42,7 @@ explains how to navigate to them. An agent reads this first to learn the surface
 sui prompt categories
 ```
 
-Prints a Markdown list of embedded categories. Each entry includes the category name and
+Prints a list of embedded categories. Each entry includes the category name and
 the short frontmatter description used for routing. The list is followed by navigation
 commands for reading a category or switching to skill-bundle navigation.
 
@@ -52,8 +52,7 @@ commands for reading a category or switching to skill-bundle navigation.
 sui prompt category audit
 ```
 
-Prints the body of `categories/audit/CATEGORY.md` verbatim — the workflow, the skill
-references in order, the triage discipline, and external references. The category body is
+Prints the body of `categories/audit/CATEGORY.md` verbatim — the workflow, the triage discipline, external references, etc. The category body is
 where an agent learns *how to do this kind of work*.
 
 ### Example 4 — list skill bundles (flat)
@@ -116,22 +115,22 @@ see the deep inventory before deciding.
 ## Worked agent flow
 
 Realistic use case — point any AI agent at the binary with a prompt that names the kind
-of work (e.g. *"audit Sui mainnet package `0x<id>` for security vulnerabilities; use the
-`sui prompt` binary on PATH to find the right skills"*):
+of work (e.g. *"audit Sui mainnet package `0x<id>` for security vulnerabilities; execute the
+`sui prompt` binary to find the right skills"*):
 
 1. Agent calls `sui prompt` — learns the surface.
-2. Agent calls `sui prompt categories` — sees `audit` and `bytecode`.
-3. Agent calls `sui prompt category audit` — gets the workflow + the ordered skill list
-   + triage discipline + external references.
+2. Agent calls `sui prompt categories` — sees `audit`, `build`, `bytecode`, etc.
+3. Agent calls `sui prompt category audit` — gets the workflow, triage discipline, external references, etc.
 4. Agent loads the skill bundles the category names. The fewest round trips is
    `sui prompt category <name> --all` (one call for the whole category); a single
    bundle is `sui prompt skill <bundle> --all`; or it can enumerate file by file
    with `--list` + `--file <ref>`.
 5. Agent follows the workflow against the target package — fetch via one Sui GraphQL
-   call, decompile, walk the SM-* rules over the decompiled `.move` files.
+   call, disassemble every module with `sui move disassemble`, walk the SM-* rules
+   over the resulting `.asm` files (paired with `auditing-bytecode.md` for the
+   per-rule disassembly signal patterns).
 6. Agent produces findings in the format the audit category prescribes:
-   `SM-ID · module.move:<line>` with a decompiled excerpt as evidence (disassembly
-   added only when verification required it).
+   `SM-ID · module.asm:B<block>@i<index>` with a disassembly excerpt as evidence.
 
 The same shape applies to other categories: read the category's body, walk the skills it
 names, do the work.
@@ -152,9 +151,9 @@ A category is a single markdown file plus, optionally, references to existing sk
    ---
    ```
    The `skills:` list names skill bundles (directories under `src/skills/`). A
-   skill can appear in any number of categories — there's no duplication, the
+   skill bundle can appear in any number of categories — there's no duplication, the
    bundle's canonical location stays under `src/skills/`.
-3. Write the body: a workflow walking through the skills in order, optionally with a
+3. Write the body: a workflow, optionally with a
    "Discipline" or "Reproducibility" section, and an "External references" section if
    useful. Describe what is — not what's planned.
 4. Rebuild the Sui CLI. The build script picks up the new category automatically.

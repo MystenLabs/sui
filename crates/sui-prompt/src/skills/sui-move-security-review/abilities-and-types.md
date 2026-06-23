@@ -46,7 +46,7 @@ the caller could have minted.
 _Absence rule:_ walk every fn taking a protocol-type parameter (`&Pool`, `&mut Vault`, etc.)
 whose body reads its state; an `object::id(...)`/allow-list check *elsewhere* does not
 clear an unchecked fn.
-Example (decompiled-source):
+Example:
 ```move
 // Vulnerable: trusts the contents of `pool` without verifying its identity.
 public fun get_quote(pool: &Pool, amount_in: u64): u64 {
@@ -88,7 +88,7 @@ _Absence rule:_ walk every fn whose signature is generic over `T` (or takes `Coi
 similar) where the body uses `T` in an identity-sensitive way. A `T: <Trait>` constraint
 at the signature, or a `type_name::get<T>() == expected` runtime check *elsewhere*, does
 not clear an unchecked fn.
-Example (decompiled-source):
+Example:
 ```move
 // Vulnerable: credits a USDC-denominated balance with the value of any Coin<T>.
 public fun deposit_premium<T>(pool: &mut Pool<USDC>, payment: Coin<T>) {

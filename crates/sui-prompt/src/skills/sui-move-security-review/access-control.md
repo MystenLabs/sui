@@ -9,7 +9,8 @@ and (4) who can construct or obtain it.
 Invariant: `*Cap` / authority structs must NOT have `copy` (duplicable authority) or `drop`
 (silently destroyable → lockout); `store` only when transfer is genuinely intended.
 Detect: `struct\s+\w*Cap\b[^{]*has[^{]*\b(copy|drop)\b`; also any struct used as authority that
-carries `copy`/`drop`.
+carries `copy`/`drop`. The authority's **name doesn't matter** — it may not contain "Cap"
+(e.g., `Admin`, `Manager`, `License`, or any project-specific name)
 Exploit: clone an `AdminCap`/`TreasuryCap` and replay privileged calls; or grief by dropping the
 only cap and bricking administration.
 Source: `MystenLabs/skills → sui-move/move.md`, `MystenLabs/skills → naming-conventions/SKILL.md`.
@@ -21,8 +22,8 @@ address** — verify each one either (a) takes a capability parameter, (b) asser
 the code/comments label it as such**. Read-only getters are exempt.
 Detect: `public`/`entry` fns that mutate shared/global state with no `&\w*Cap` parameter and no
 `sender()`/address assertion. Pay particular attention to functions that mint, withdraw, set
-fees/config, pause, change ownership, or modify a deny list. In decompiled output: a function
-header with a `&mut <SharedT>` arg lacking either a `&<Name>Cap` arg in the signature or an
+fees/config, pause, change ownership, or modify a deny list. Concretely: a function header with
+a `&mut <SharedT>` arg lacking either a `&<Name>Cap` arg in the signature or an
 `if (tx_context::sender(ctx) == <addr>) abort <code>` / `assert!(tx_context::sender(ctx) == <addr>, ...)`
 gate before the first state-mutating expression.
 _Absence rule:_ walk every `public`/`entry` fn touching shared state; a `&*Cap` or
@@ -38,7 +39,7 @@ Detect: cap-gated fn taking `&SomeCap` + a target object, where `SomeCap` has no
 field, or has one but it is never compared to the target.
 _Absence rule:_ walk every fn taking `&*Cap` + target object; a
 `cap.<id> == object::id(target)` comparison *elsewhere* does not clear an unchecked fn.
-Example (decompiled-source):
+Example:
 ```move
 // Vulnerable: AdminCap has no pool binding; every Pool accepts it.
 public fun withdraw(cap: &AdminCap, pool: &mut Pool, amount: u64, ctx: &mut TxContext) {
@@ -94,11 +95,11 @@ runtime check.
 Detect: the privileged operation (`transfer::transfer<T>(...)`, `balance::join(...)`,
 `coin::take(...)`, `balance::split(...)`, internal state mutator) is reached on a path
 where the controlling field (`obj.unlocked`, `obj.expiry`, `obj.paid_back`, …) is read
-but never compared+gated, OR not read at all. In decompiled output: the privileged call
-site's preceding code contains no read of `self.<state>` / `&self.<state>` /
-`&mut self.<state>` followed by an `==` / `<` / `>` comparison and an `if (...) abort <code>`
-/ `assert!(...)` guard. (Cross-check: if the type has no controlling field at all, the
-privileged path is unconditional — the high-severity shape.)
+but never compared+gated, OR not read at all. Concretely: the privileged call site's
+preceding code contains no read of `self.<state>` / `&self.<state>` / `&mut self.<state>`
+followed by an `==` / `<` / `>` comparison and an `if (...) abort <code>` / `assert!(...)`
+guard. (Cross-check: if the type has no controlling field at all, the privileged path
+is unconditional — the high-severity shape.)
 _Absence rule:_ an `assert!`/`abort` *elsewhere* in the module does not clear the rule —
 verify the guard reaches *this* privileged op on the path.
 Exploit: caller invokes the release path while the object's state still forbids it — transfer a

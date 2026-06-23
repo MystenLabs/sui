@@ -1,8 +1,7 @@
 # The Move binary format
 
 A `.mv` file is a serialized `CompiledModule`. You rarely read the raw bytes — you read
-disassembly/decompilation — but knowing the structure explains *why* certain things survive and
-others don't.
+disassembly — but knowing the structure explains *why* certain things survive and others don't.
 
 Reference (public): [`move-binary-format/src/file_format.rs`](https://github.com/MystenLabs/sui/blob/main/external-crates/move/crates/move-binary-format/src/file_format.rs).
 Key definitions (line numbers approximate; they drift between refs — grep the enum name):

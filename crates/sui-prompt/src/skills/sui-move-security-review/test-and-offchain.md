@@ -17,9 +17,9 @@ Source: `MystenLabs/skills → move-unit-testing/SKILL.md`.
 
 ---
 
-## Off-chain appendix (non-blocking — scope is on-chain, but flag if encountered)
+## Off-chain appendix (non-blocking — scope is on-chain Move, but flag if encountered)
 
-These are out of primary scope (auditing deployed Move bytecode) but matter when a full
+These are out of primary scope (auditing on-chain Move code) but matter when a full
 integration is in view. Flag, don't deep-dive.
 
 - **Type-anchoring.** Object/type queries must use the **original** package ID (struct types stay

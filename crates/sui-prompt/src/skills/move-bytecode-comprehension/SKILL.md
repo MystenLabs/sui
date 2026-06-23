@@ -1,12 +1,11 @@
 ---
 name: move-bytecode-comprehension
 description: >
-  Use when reading or reasoning about compiled Move bytecode, `sui move disassemble`
-  output, or decompiled Move source (from `sui move decompile`). Mental model for the binary
-  format, what survives compilation (and what's lost), and how to read each output
-  soundly. Trigger on "what does this package do?", "read this .mv module", "interpret
-  this disassembly", "is the decompiled source trustworthy?", or whenever an analysis
-  needs to interpret bytecode faithfully.
+  Use when reading or reasoning about compiled Move bytecode or `sui move disassemble`
+  output. Mental model for the binary format, what survives compilation (and what's lost),
+  and how to read disassembly soundly. Trigger on "what does this package do?", "read this
+  .mv module", "interpret this disassembly", or whenever an analysis needs to interpret
+  bytecode faithfully.
 ---
 
 # Move Bytecode Comprehension
@@ -14,12 +13,11 @@ description: >
 > **Self-bootstrap:** before relying on the routing below, load every reference file —
 > default to `sui prompt skill move-bytecode-comprehension --all`, or `--list` + `--file
 > <ref>` when budget is tight. This SKILL.md is the mental-model wrapper; reference files
-> cover the binary format and the practice of reading disassembly / decompiled output.
+> cover the binary format and the practice of reading disassembly.
 
-On-chain Sui packages are compiled **Move bytecode** (`.mv`, magic `0xA11CEB0B`). You analyze it
-two ways: **disassembly** (stack-machine assembly, via `sui move disassemble`) and
-**decompilation** (reconstructed Move source, via `sui move decompile`). This skill is the mental model
-for both: the binary format, what survives, and how to read each output.
+On-chain Sui packages are compiled **Move bytecode** (`.mv`, magic `0xA11CEB0B`). For
+analysis you read it as **disassembly** (stack-machine, via `sui move disassemble`). This
+skill is the mental model for the binary format and for reading disassembly soundly.
 
 The single most important fact when reading Move bytecode: **abilities, visibility, the
 `entry` flag, signatures (incl. generics/phantom), and all on-chain identifiers —
@@ -29,56 +27,37 @@ macro structure. Tune reasoning accordingly.
 
 ## What survives compilation — the survival table
 
-| Source construct | In bytecode? | Disassembly | Decompiled | Implication |
-|---|---|---|---|---|
-| Module address + name | ✓ | `module <addr>.<name>` | `module <addr>::<name>;` | Identity is exact |
-| Struct names | ✓ | `struct Name ...` | `public struct Name ...` | Type-name reasoning is reliable |
-| Field names + types | ✓ | listed | listed | Field-level reasoning holds |
-| **Abilities** (key/store/copy/drop) | ✓ | `has store, key` | `has store, key` | **Capability / soulbound / hot-potato reasoning is reliable** |
-| **Visibility** (private/public/friend) | ✓ | keyword on fn | keyword on fn | **Call-surface reasoning is reliable** |
-| **`entry` flag** | ✓ | `entry` shown | `entry` shown | **Tx-entry reasoning is reliable** |
-| Function signatures | ✓ | full | full | Param/return reasoning holds |
-| Generics + phantom type params | ✓ | `<T>` / phantom | `<T>` | Type-identity reasoning holds |
-| Constant **values** | ✓ | `LdConst[i](..)` | `const C0: ... = ...;` | Values readable... |
-| Constant / error **names** | ✗ | `LdConst[i]` index | `C0, C1, ...` | **names gone → use abort *codes*/positions** |
-| `#[error]` messages | ✗ | — | — | Error intent lost; reason from the abort site |
-| Local variable names | ✗ | `loc0, Arg1` | invented | Don't trust names; trust dataflow |
-| Comments / doc | ✗ | — | — | No author intent text |
-| Macros (`assert!`, `1u8.do!`) | expanded | inlined ops | inlined / loops | A macro looks like its expansion |
-| Empty struct (e.g. OTW) | ✓ (as 1 field) | `dummy_field: bool` | `dummy_field: bool` | **OTW detect via name+`drop`+synthetic field** |
+| Source construct | In bytecode? | How it appears in disassembly | Implication |
+|---|---|---|---|
+| Module address + name | ✓ | `module <addr>.<name>` | Identity is exact |
+| Struct names | ✓ | `struct Name ...` | Type-name reasoning is reliable |
+| Field names + types | ✓ | listed on the struct | Field-level reasoning holds |
+| **Abilities** (key/store/copy/drop) | ✓ | `has store, key` | **Capability / soulbound / hot-potato reasoning is reliable** |
+| **Visibility** (private/public/friend) | ✓ | keyword on fn | **Call-surface reasoning is reliable** |
+| **`entry` flag** | ✓ | `entry` keyword | **Tx-entry reasoning is reliable** |
+| Function signatures | ✓ | full `(Arg0: T, ...): Ret` | Param/return reasoning holds |
+| Generics + phantom type params | ✓ | `<T>` / phantom | Type-identity reasoning holds |
+| Constant **values** | ✓ | `LdConst[i](T: ...)` | Values readable, names are not |
+| Constant / error **names** | ✗ | `LdConst[i]` index only | **Use abort *codes*/positions, not names** |
+| `#[error]` messages | ✗ | — | Error intent lost; reason from the abort site |
+| Local variable names | ✗ | `loc0`, `Arg1`, … | Don't trust names; trust dataflow |
+| Comments / doc | ✗ | — | No author intent text |
+| Macros (`assert!`, `1u8.do!`) | expanded | inlined opcodes / branches | A macro looks like its expansion |
+| Empty struct (e.g. OTW) | ✓ (as 1 field) | `dummy_field: bool` | **OTW detect via name+`drop`+synthetic field** |
 
-## How to read each output
+## How to read
 
 | File | Use for |
 |------|---------|
 | `format.md` | The binary format: tables, abilities, visibility, signatures, opcode categories. Read once. |
-| `disassembly.md` | Reading the disassembly view (stack machine, locals, the opcodes you'll actually see). |
-| `decompilation.md` | Reading the decompiled view (what's faithful, what's a decompiler artifact). |
+| `disassembly.md` | Reading the disassembly view: stack machine, basic blocks, locals, and the opcodes you'll actually see. |
 
 ## Practical stance
 
-- **Decompilation is the working view.** Apply analyses to the decompiled `.move` files
-  produced by `sui-and-move-tools/fetch-and-decompile.md`.
-  Abilities, visibility, the `entry` flag, function signatures, control flow, struct /
-  field shapes, and call patterns are byte-for-byte faithful — see `decompilation.md`'s
-  "What is faithful" list. Decompiler artifacts (renamed constants `C0/C1...`, invented
-  locals, expanded macros, synthetic `dummy_field` on empty structs) are recognized and
-  reasoned through, not treated as reasons to drop to disassembly.
-- **Drop to disassembly only when:**
-  - A determination needs the **numeric value** of an abort code (decompiled shows `C7`,
-    not the integer).
-  - Decompilation **visibly failed** for a specific module (broken output, parse errors).
-  - A specific question is **ambiguous** in decompiled and verification is required.
-- **Critical: never load both views for the same module simultaneously.** The default
-  workflow produces only `.move` files. When you need disassembly for a single module,
-  fetch it on demand per `sui-and-move-tools/fetch-and-decompile.md` ("Fetching
-  disassembly on demand") and read it surgically (`grep` / `sed` for the specific
-  function or basic block) rather than dumping the full `.asm` into context.
-- **Citation.** Decompiled-derived findings cite `<module>.move:<line>`. Disassembly-
-  derived findings (the rare verification cases) cite `<module>.asm:B<block>@i<index>`.
-  Pick whichever view supports the determination.
-- **Disagreement.** When both views are inspected for the same site and disagree, the
-  disassembly wins — it reflects the executed bytecode. Record the discrepancy as
-  decompiler imprecision, not as a re-opening of the finding.
+- **Disassembly is the view.** Apply analyses to the `.asm` files produced by
+  `sui-and-move-tools/fetch-and-disassemble.md`. Abilities, visibility, the `entry` flag,
+  signatures, struct/field shapes, control flow, and call patterns are all faithful.
+- **Citation.** Findings cite `<module>.asm:B<block>@i<index>` — the basic-block label
+  plus instruction index within the block.
 - Bytecode version is shown as `// Move bytecode vN`; note it — opcode availability
   varies by version.
