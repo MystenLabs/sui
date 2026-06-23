@@ -90,13 +90,6 @@ pub fn cond_atom(code: u64) -> Formula {
     atom(cond_var_name(NodeIndex::new(code as usize)))
 }
 
-/// `cond_atom(code)` if `positive`, otherwise its negation. Used where a branch is matched
-/// by either its `then` polarity or its `else` polarity depending on caller context.
-pub fn cond_atom_polarized(code: u64, positive: bool) -> Formula {
-    let a = cond_atom(code);
-    if positive { a } else { not(a) }
-}
-
 // -------------------------------------------------------------------------------------------------
 // Smart constructors (normalizing - see module-level comment for the invariants)
 // -------------------------------------------------------------------------------------------------
@@ -275,33 +268,11 @@ impl Formula {
         }
     }
 
-    /// Return the conjunction of `self`'s top-level conjuncts minus those equal to
-    /// `factor`. If `factor` doesn't appear, returns `self` unchanged. If stripping leaves
-    /// nothing, returns `True`. Used to extract a common factor out of guards.
-    pub fn without_conjunct(&self, factor: &Formula) -> Formula {
-        let remaining: Vec<Formula> = self
-            .conjuncts()
-            .into_iter()
-            .filter(|c| c != factor)
-            .collect();
-        if remaining.is_empty() {
-            true_()
-        } else {
-            and(remaining)
-        }
-    }
-
-    /// True iff `factor` is one of `self`'s top-level conjuncts.
-    pub fn has_conjunct(&self, factor: &Formula) -> bool {
-        self.conjuncts().iter().any(|c| c == factor)
-    }
-
     /// True iff `factor` can be pulled out of `self`. Mirrors how distribution works:
-    ///   - `self == factor`            -> trivially.
-    ///   - `And(fs)`                   -> any conjunct (recursively) has the factor;
-    ///                                    the others survive untouched.
-    ///   - `Or(fs)`                    -> every disjunct (recursively) has the factor.
-    ///   - otherwise                   -> false.
+    ///   - `self == factor` -> trivially.
+    ///   - `And(fs)` -> any conjunct (recursively) has the factor; the others survive.
+    ///   - `Or(fs)` -> every disjunct (recursively) has the factor.
+    ///   - otherwise -> false.
     ///
     /// The recursion is what makes nested-DNF guards factorable. A guard like
     /// `And(Or(And(X, c24, c27), And(X, ¬c24)), __c38)` should still have X as a
@@ -340,30 +311,6 @@ impl Formula {
     /// [`cond_var_name`] convention.
     pub fn as_cond_atom(&self) -> Option<NodeIndex> {
         self.as_atom().and_then(cond_block_from_name)
-    }
-
-    /// Substitute atom `name` with `value` (`true` or `false`) and minimize the result.
-    /// Used by NMG-style refinement to ask "what does this guard become if we know `c`'s
-    /// truth value?". If `name` doesn't appear, returns `self.simplify()`.
-    pub fn substitute(&self, name: Symbol, value: bool) -> Formula {
-        fn go(f: &Formula, name: Symbol, value: bool) -> Formula {
-            match &f.0 {
-                FormulaTree::True => true_(),
-                FormulaTree::False => false_(),
-                FormulaTree::Atom(s) if *s == name => {
-                    if value {
-                        true_()
-                    } else {
-                        false_()
-                    }
-                }
-                FormulaTree::Atom(_) => f.clone(),
-                FormulaTree::Not(inner) => not(go(inner, name, value)),
-                FormulaTree::And(fs) => and(fs.iter().map(|c| go(c, name, value)).collect()),
-                FormulaTree::Or(fs) => or(fs.iter().map(|c| go(c, name, value)).collect()),
-            }
-        }
-        go(self, name, value).simplify()
     }
 
     /// Quine-McCluskey minimization. Maps atoms to `u8` variables, runs the crate's

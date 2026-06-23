@@ -3,14 +3,17 @@
 
 //! Acyclic-region structuring. Two structurers live here:
 //!
-//! 1. **Reaching-condition (NMG)**: walks the region forward, folds duplicate-arm branches
-//!    via `fold_duplicate_arm_branches`, emits the recovered structure. Returns `None` on
-//!    anything unrecognized so the dom-tree structurer owns it.
+//! 1. **NMG-proper (reaching conditions)**: [`structure_nmg`] computes reaching
+//!    conditions over the region's acyclic projection, lays each node out in topo order
+//!    guarded by its formula, then runs [`refine_initial_ast`]'s two-phase refinement
+//!    (implication nesting + condition-based factoring) to recover nested control flow.
+//!    This is the primary path; returns `None` only on `Variants` (switch nodes), which
+//!    the dom-tree path then handles.
 //!
-//! 2. **Dominator-tree absorption**: `structure_acyclic_region` and friends. Builds the
-//!    IfElse/Switch from `ichildren` absorption + post-dom joins; hoists "orphan" dom-tree
-//!    children as siblings. Used as the fallback path and by `loops::structure_loop` for
-//!    body assembly when reaching can't handle the body's shape.
+//! 2. **Dominator-tree absorption**: [`structure_acyclic_region`] and friends. Builds
+//!    IfElse/Switch from `ichildren` absorption + post-dom joins; hoists "orphan"
+//!    dom-tree children as siblings. Used as the fallback path and by
+//!    `loops::structure_loop` for body assembly when NMG can't handle the body's shape.
 
 use crate::config;
 use crate::structuring::{
@@ -21,10 +24,7 @@ use crate::structuring::{
     predicates::{self, Formula},
 };
 use petgraph::Direction;
-use petgraph::algo::{
-    self,
-    dominators::{self, Dominators},
-};
+use petgraph::algo;
 use petgraph::graph::{DiGraph, NodeIndex};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -203,12 +203,12 @@ fn try_implication_nest(
         if *g_i == predicates::true_() {
             continue;
         }
-        let mut implied: Vec<usize> = Vec::new();
-        for j in (i + 1)..items.len() {
-            if items[j].0.has_factor(g_i) {
-                implied.push(j);
-            }
-        }
+        let implied: Vec<usize> = items
+            .iter()
+            .enumerate()
+            .skip(i + 1)
+            .filter_map(|(j, (g, _))| g.has_factor(g_i).then_some(j))
+            .collect();
         if implied.is_empty() {
             continue;
         }
@@ -497,8 +497,11 @@ fn build_acyclic_projection(
 
     // 3. Build the projection: keep in-projection nodes, redirect their edges, add sinks.
     let remap = |v: NodeIndex, from_member: bool| -> NodeIndex {
-        if v == entry && from_member && back_edge_sink.is_some() {
-            back_edge_sink.unwrap()
+        if let Some(sink) = back_edge_sink
+            && v == entry
+            && from_member
+        {
+            sink
         } else if let Some(&sink) = target_to_sink.get(&v) {
             sink
         } else {
@@ -564,393 +567,17 @@ fn topological_order(input: &BTreeMap<NodeIndex, D::Input>) -> Option<Vec<NodeIn
     Some(topo.into_iter().map(|i| g[i]).collect())
 }
 
-struct Ctx<'a> {
-    config: &'a config::Config,
-    input: &'a BTreeMap<NodeIndex, D::Input>,
-    /// Already-structured sub-regions (typically inner loops collapsed via `Input::Reduced`).
-    /// Consulted when the walker hits `Input::Reduced(label, _)` to look up the structured
-    /// form to emit. Read-only; the walker clones the form when emitting.
-    structured_blocks: &'a BTreeMap<NodeIndex, D::Structured>,
-    pdom: PostDom,
-    folded_any: bool,
-    mode: Mode,
-    /// Region membership. `in_region(n)` iff `members.contains(n)`. Defined by the caller
-    /// (the orchestrator for the function-level call, `loops::structure_loop` for a body),
-    /// so the walker doesn't have to guess from `input` keys + `region_exit` magic.
-    members: &'a HashSet<NodeIndex>,
-    /// Nodes currently being processed by `process_node`. A revisit means the region has an
-    /// inner cycle (typically a nested loop in our `input` snapshot), so we bail.
-    visiting: HashSet<NodeIndex>,
-    /// Per-block lowered `Exp`, consulted by `bodies_equivalent`.
-    terms: &'a BTreeMap<NodeIndex, crate::ast::Exp>,
-}
-
-impl Ctx<'_> {
-    fn emit_exit_jumps(&self) -> bool {
-        self.mode.emit_exit_jumps()
-    }
-
-    /// Build the `Structured` form rooted at `node`, walking forward up to (but not including)
-    /// `stop`. Returns `Some(Seq([]))` when `node == stop`; `None` on failure (cycle, Variants,
-    /// arm escape without a shared join).
-    fn structure_reachable_subregion(
-        &mut self,
-        node: NodeIndex,
-        stop: Option<NodeIndex>,
-    ) -> Option<D::Structured> {
-        if Some(node) == stop {
-            return Some(D::Structured::Seq(vec![]));
-        }
-        self.process_node(node, stop)
-    }
-
-    fn process_node(&mut self, node: NodeIndex, stop: Option<NodeIndex>) -> Option<D::Structured> {
-        if !self.visiting.insert(node) {
-            if self.config.debug_print.structuring {
-                println!("reaching: revisited node {node:?} (region cycle); bailing");
-            }
-            return None;
-        }
-        let result = self.process_node_inner(node, stop);
-        self.visiting.remove(&node);
-        result
-    }
-
-    /// Emit the structured form for a `Reduced` abstract node and follow its CFG out-edges
-    /// with the standard in-region / exit-jump / stop rules. Multi-succ Reduced (dispatch-mode
-    /// loops) isn't supported here; the dom-tree path handles those.
-    fn process_reduced(
-        &mut self,
-        label: NodeIndex,
-        succs: &[NodeIndex],
-        stop: Option<NodeIndex>,
-    ) -> Option<D::Structured> {
-        let head = self.structured_blocks.get(&label).cloned()?;
-        match succs {
-            [] => Some(head),
-            [next] if !self.in_region(*next) => {
-                if self.emit_exit_jumps() {
-                    Some(D::Structured::seq(head, D::Structured::exit_jump(*next)))
-                } else {
-                    Some(head)
-                }
-            }
-            [next] if Some(*next) == stop => Some(head),
-            [next] => {
-                let rest = self.structure_reachable_subregion(*next, stop)?;
-                Some(D::Structured::seq(head, rest))
-            }
-            _multi => None,
-        }
-    }
-
-    fn process_node_inner(
-        &mut self,
-        node: NodeIndex,
-        stop: Option<NodeIndex>,
-    ) -> Option<D::Structured> {
-        match self.input.get(&node)? {
-            D::Input::Variants(_, code, enum_, items) => {
-                // Structure as a `Switch`: each arm runs up to the immediate post-dom join,
-                // then control continues past the join. Mirrors the genuine-branch arm of
-                // `Condition`. Doesn't set `folded_any` -- structuring as a Switch is just
-                // matching what the dom-tree path would produce, not an improvement on its
-                // own; `folded_any` fires when reaching folds something nontrivial elsewhere
-                // in the function and Variants handling lets the walk continue past a
-                // switch instead of bailing.
-                let (code, enum_, items) = (*code, *enum_, items.clone());
-                let join = self.pdom.ipostdom(node);
-                let arms = items
-                    .into_iter()
-                    .map(|(v, target)| Some((v, self.structure_arm_target(target, join)?)))
-                    .collect::<Option<Vec<_>>>()?;
-                let switch = D::Structured::Switch(code, enum_, arms);
-                match join {
-                    Some(j) => Some(D::Structured::seq(
-                        switch,
-                        self.structure_reachable_subregion(j, stop)?,
-                    )),
-                    None => Some(switch),
-                }
-            }
-            D::Input::Reduced(label, succs) => {
-                let (label, succs) = (*label, succs.clone());
-                self.process_reduced(label, &succs, stop)
-            }
-            D::Input::Code(_, code, next) => {
-                let head = D::Structured::Block(*code);
-                match next {
-                    None => Some(head),
-                    Some(next) if !self.in_region(*next) => {
-                        // Edge leaves the region. Loop-body: emit a `Jump` for `insert_breaks`
-                        // to rewrite. Whole-function: the region IS the function, so a non-
-                        // region edge can only be a CFG sink (return/abort); the assert locks
-                        // that in, otherwise we'd silently swallow control flow.
-                        if self.emit_exit_jumps() {
-                            Some(D::Structured::seq(head, D::Structured::exit_jump(*next)))
-                        } else {
-                            debug_assert!(
-                                self.input
-                                    .get(next)
-                                    .map(|i| i.edges().is_empty())
-                                    .unwrap_or(true),
-                                "WholeFunction: dropping non-sink edge {node:?} -> {next:?}",
-                            );
-                            Some(head)
-                        }
-                    }
-                    Some(next) if Some(*next) == stop => Some(head),
-                    Some(next) => {
-                        let rest = self.structure_reachable_subregion(*next, stop)?;
-                        Some(D::Structured::seq(head, rest))
-                    }
-                }
-            }
-            D::Input::Condition(_, code, then, els) => {
-                let (code, then, els) = (*code, *then, *els);
-                if let Some(fold) = self.fold_duplicate_arm_branches(node, then, els) {
-                    self.folded_any = true;
-                    // then = kept arm body, else = continuation K up to far join J. J itself
-                    // is emitted after the CondIf so both arms reach it exactly once.
-                    let then_body = fold.arm_body;
-                    let else_body =
-                        self.structure_reachable_subregion(fold.continue_at, Some(fold.far_join))?;
-                    let cond_if = D::Structured::CondIf(
-                        fold.cond,
-                        Box::new(then_body),
-                        Box::new(else_body.non_empty()),
-                    );
-                    let rest = self.structure_reachable_subregion(fold.far_join, stop)?;
-                    Some(D::Structured::seq(cond_if, rest))
-                } else {
-                    // Genuine branch: structure both arms up to where they rejoin, then continue.
-                    let join = self.pdom.ipostdom(node);
-                    let then_s = self.structure_arm_target(then, join)?;
-                    let els_s = self.structure_arm_target(els, join)?;
-                    let if_s = D::Structured::CondIf(
-                        predicates::cond_atom(code),
-                        Box::new(then_s),
-                        Box::new(els_s.non_empty()),
-                    );
-                    match join {
-                        Some(j) => Some(D::Structured::seq(
-                            if_s,
-                            self.structure_reachable_subregion(j, stop)?,
-                        )),
-                        None => Some(if_s),
-                    }
-                }
-            }
-        }
-    }
-
-    /// Structure one branch's arm-target. In-region targets recur; out-of-region targets
-    /// emit an exit Jump (loop-body mode) or bail (whole-function mode, where there's no
-    /// outer scope to land in).
-    fn structure_arm_target(
-        &mut self,
-        target: NodeIndex,
-        join: Option<NodeIndex>,
-    ) -> Option<D::Structured> {
-        if self.in_region(target) {
-            self.structure_reachable_subregion(target, join)
-        } else if self.emit_exit_jumps() {
-            Some(D::Structured::exit_jump(target))
-        } else {
-            None
-        }
-    }
-
-    /// True iff `node` is part of the structured region. Defined by the caller-supplied
-    /// `members` set; the walker doesn't infer membership from `input` keys.
-    fn in_region(&self, node: NodeIndex) -> bool {
-        self.members.contains(&node)
-    }
-
-    /// Recognize and fold the "duplicate-arm branch" pattern: a binary outer condition whose
-    /// two arms each run an inner condition, and both inner conditions fire the *same* action
-    /// when they pass. The Pyth-style example, in source:
-    ///
-    ///     if (a > b) { if (a - b >= t) { x } } else { if (b - a >= t) { x } }
-    ///
-    /// The split-by-sign exists because `a - b` and `b - a` underflow under opposite outer
-    /// guards; the action `x` is the same on both sides. Fold into one `if` whose recovered
-    /// boolean preserves the outer guard so each inner check still short-circuits in the world
-    /// its operand direction is safe in:
-    ///
-    ///     if (a > b && a - b >= t || !(a > b) && b - a >= t) { x }
-    ///
-    /// CFG shape and names used below:
-    ///
-    ///      node ---then--> I1 --{A1 -> J,  K}
-    ///           ---else--> I2 --{A2 -> J,  K}
-    ///
-    ///   node    outer condition
-    ///   I1, I2  inner conditions, one per outer arm
-    ///   A1, A2  the two duplicate arms (the blocks that fire when the inner check passes)
-    ///   J       the far join where both A1 and A2 land
-    ///   K       the shared "neither arm fires" continuation
-    ///
-    /// Returns `None` unless the shape matches and `bodies_equivalent(A1, A2)` -- the latter
-    /// is the soundness guard for dropping A2's body and keeping only A1's.
-    fn fold_duplicate_arm_branches(
-        &mut self,
-        node: NodeIndex,
-        then: NodeIndex,
-        else_: NodeIndex,
-    ) -> Option<DuplicateArmFold> {
-        let (i1c, i1t, i1e) = self.as_condition(then)?;
-        let (i2c, i2t, i2e) = self.as_condition(else_)?;
-        // K = the single node both inner conditions branch to; each inner condition's other
-        // arm is the candidate duplicate-arm head (A1 / A2).
-        let k = [i1t, i1e].into_iter().find(|x| *x == i2t || *x == i2e)?;
-        if (i1t == k) == (i1e == k) {
-            return None; // both or neither inner-1 arm is the continuation
-        }
-        let a1 = if i1t == k { i1e } else { i1t };
-        let a2 = if i2t == k { i2e } else { i2t };
-        // Track which polarity of each inner check fires the duplicate-arm side, so the
-        // recovered boolean preserves the outer guard's gating.
-        let a1_then = a1 == i1t;
-        let a2_then = a2 == i2t;
-        // Both A1, A2 chains must end at the same far join.
-        let (a1_codes, j1) = self.code_chain_to(a1, k)?;
-        let (a2_codes, j2) = self.code_chain_to(a2, k)?;
-        if j1 != j2 {
-            return None;
-        }
-        if !bodies_equivalent(&a1_codes, &a2_codes, self.terms) {
-            return None;
-        }
-        // Recovered boolean: `(node && I1) || (!node && I2)`, with I1/I2 polarity-corrected
-        // to the side that fires the duplicate arm. Smart constructors normalize the result.
-        let node_cond = predicates::cond_atom(node.index() as u64);
-        let cond = predicates::or(vec![
-            predicates::and(vec![
-                node_cond.clone(),
-                predicates::cond_atom_polarized(i1c, a1_then),
-            ]),
-            predicates::and(vec![
-                predicates::not(node_cond),
-                predicates::cond_atom_polarized(i2c, a2_then),
-            ]),
-        ]);
-        Some(DuplicateArmFold {
-            cond,
-            arm_body: D::Structured::blocks_seq(&a1_codes),
-            continue_at: k,
-            far_join: j1,
-        })
-    }
-
-    fn as_condition(&self, n: NodeIndex) -> Option<(u64, NodeIndex, NodeIndex)> {
-        match self.input.get(&n)? {
-            D::Input::Condition(_, code, t, e) => Some((*code, *t, *e)),
-            _ => None,
-        }
-    }
-
-    /// Follow a straight-line `Code` chain from `start`, collecting block ids, until we either
-    /// hit `stop` (the shared continuation `K`), leave the region, or run into a non-Code
-    /// node (a `Condition`, a sink, or the loop-head back-edge target). Returns the collected
-    /// code-block ids and the stopping node. Returns `None` if `start` isn't a Code chain at
-    /// all.
-    fn code_chain_to(&self, start: NodeIndex, stop: NodeIndex) -> Option<(Vec<u64>, NodeIndex)> {
-        let mut codes = Vec::new();
-        let mut cur = start;
-        loop {
-            match self.input.get(&cur)? {
-                D::Input::Code(_, code, Some(next)) => {
-                    codes.push(*code);
-                    if *next == stop || !self.in_region(*next) {
-                        return Some((codes, *next));
-                    }
-                    match self.input.get(next)? {
-                        D::Input::Code(_, _, Some(_)) => cur = *next,
-                        _ => return Some((codes, *next)),
-                    }
-                }
-                _ => return None,
-            }
-        }
-    }
-}
-
-struct DuplicateArmFold {
-    cond: predicates::Formula,
-    arm_body: D::Structured,
-    continue_at: NodeIndex,
-    far_join: NodeIndex,
-}
-
-/// Structural-equivalence guard for the two arm bodies. Drops empty / Goto-only padding
-/// (CFG-anchor blocks the compiler sometimes emits on one arm but not the other) before
-/// comparing the rest pairwise via `exp_struct_eq`.
-///
-/// Purely structural on pre-refinement `Exp`. Conservative-by-design: `{ x = a + 0 }` vs
-/// `{ x = a }` fails (semantic equality is out of scope), and reordered statements fail
-/// (comparison is positional). See `non_uniform_arms` in
-/// `tests/move/staleness/sources/staleness.move` for the deliberate-failure fixture.
-fn bodies_equivalent(
-    s1_codes: &[u64],
-    s2_codes: &[u64],
-    terms: &BTreeMap<NodeIndex, crate::ast::Exp>,
-) -> bool {
-    use crate::ast::Exp;
-    use crate::ast::UnstructuredNode;
-    fn is_padding(exp: &Exp) -> bool {
-        match exp {
-            Exp::Seq(items) if items.is_empty() => true,
-            Exp::Seq(items) if items.len() == 1 => matches!(
-                &items[0],
-                Exp::Unstructured(nodes)
-                    if nodes.len() == 1
-                        && matches!(&nodes[0], UnstructuredNode::Goto(_))
-            ),
-            Exp::Unstructured(nodes) => {
-                nodes.len() == 1 && matches!(&nodes[0], UnstructuredNode::Goto(_))
-            }
-            _ => false,
-        }
-    }
-    let body_of = |code: u64| -> Option<&Exp> { terms.get(&NodeIndex::new(code as usize)) };
-    let s1: Vec<&Exp> = s1_codes
-        .iter()
-        .filter_map(|c| body_of(*c))
-        .filter(|e| !is_padding(e))
-        .collect();
-    let s2: Vec<&Exp> = s2_codes
-        .iter()
-        .filter_map(|c| body_of(*c))
-        .filter(|e| !is_padding(e))
-        .collect();
-    s1.len() == s2.len()
-        && s1
-            .iter()
-            .zip(s2.iter())
-            .all(|(a, b)| crate::ast::exp_eq::exp_struct_eq(a, b))
-}
-
-// Region-local post-dominators. Each region (whole-function or loop-body) needs its own
-// pdom: the convergence point for a branch inside a loop body is the loop's back-edge target
-// or break point, not the function-level convergence. Building per-region answers the
-// region-local question directly.
-
-struct PostDom {
-    /// Forward region CFG with a synthetic exit absorbing all escapes. Shared with
-    /// `reaching_conditions` via `algo::toposort`.
+// Forward region graph used by `reaching_conditions`. Built once and walked by the
+// topological order; the synthetic exit absorbs any out-of-region edges so the graph is
+// always acyclic and has a single sink.
+struct RegionGraph {
     graph: DiGraph<(), ()>,
-    doms: Dominators<NodeIndex>,
-    exit_internal: NodeIndex,
-    to_internal: HashMap<NodeIndex, NodeIndex>,
-    /// Inverse of `to_internal`. The synthetic exit's slot is `None`.
+    /// Inverse of the per-node mapping (graph index -> original `NodeIndex`). The
+    /// synthetic exit slot is `None`; skipped during reaching computation.
     from_internal: Vec<Option<NodeIndex>>,
 }
 
-impl PostDom {
-    /// Build post-dominators on a forward region CFG with a synthetic exit that absorbs every
-    /// escape (edge to a node outside `members`). Dominators run on the reversed view. `None`
-    /// if no node reaches a sink.
+impl RegionGraph {
     fn build(input: &BTreeMap<NodeIndex, D::Input>, members: &HashSet<NodeIndex>) -> Option<Self> {
         if input.is_empty() {
             return None;
@@ -987,24 +614,10 @@ impl PostDom {
         if !has_sink {
             return None;
         }
-        let doms = dominators::simple_fast(petgraph::visit::Reversed(&graph), exit_internal);
-        Some(PostDom {
+        Some(RegionGraph {
             graph,
-            doms,
-            exit_internal,
-            to_internal,
             from_internal,
         })
-    }
-
-    /// Immediate post-dominator (where this branch's arms rejoin), or `None` if the arms
-    /// don't rejoin before the function returns.
-    fn ipostdom(&self, node: NodeIndex) -> Option<NodeIndex> {
-        let n_int = *self.to_internal.get(&node)?;
-        match self.doms.immediate_dominator(n_int) {
-            Some(ip) if ip != self.exit_internal => self.from_internal[ip.index()],
-            _ => None,
-        }
     }
 }
 
@@ -1015,8 +628,7 @@ impl PostDom {
 //     R(n)     = OR_{p -> n}  R(p) && cond(p -> n)
 //
 // Atoms are named via the `__c{N}` convention so locals reassigned across regions don't
-// conflate. Folding the guarded sequence back into source-level booleans is the rest of the
-// file (`Ctx::fold_duplicate_arm_branches` and friends).
+// conflate.
 
 /// The predicate under which edge `p -> n` is taken, given `p`'s input node.
 fn edge_condition(pred_input: Option<&D::Input>, p: NodeIndex, n: NodeIndex) -> Formula {
@@ -1051,12 +663,12 @@ pub fn reaching_conditions(
         return None;
     }
     let members: HashSet<NodeIndex> = input.keys().copied().collect();
-    let pdom = PostDom::build(input, &members)?;
+    let rgraph = RegionGraph::build(input, &members)?;
 
-    // Toposort the same forward graph PostDom built. `Err(Cycle)` -> the region has a back
-    // edge and we can't compute reaching conditions; the synthetic exit slot in `from_internal`
-    // is `None` and gets skipped below.
-    let topo = algo::toposort(&pdom.graph, None).ok()?;
+    // Toposort the forward region graph. `Err(Cycle)` -> the region has a back edge and we
+    // can't compute reaching conditions; the synthetic exit slot in `from_internal` is `None`
+    // and gets skipped below.
+    let topo = algo::toposort(&rgraph.graph, None).ok()?;
 
     let mut preds: BTreeMap<NodeIndex, Vec<NodeIndex>> = BTreeMap::new();
     for inp in input.values() {
@@ -1068,7 +680,7 @@ pub fn reaching_conditions(
     let mut reach: BTreeMap<NodeIndex, Formula> = BTreeMap::new();
     reach.insert(entry, predicates::true_());
     for internal in topo {
-        let Some(n) = pdom.from_internal[internal.index()] else {
+        let Some(n) = rgraph.from_internal[internal.index()] else {
             continue; // synthetic exit
         };
         if n == entry {
