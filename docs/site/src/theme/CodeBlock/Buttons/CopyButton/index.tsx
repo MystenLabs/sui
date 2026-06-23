@@ -101,7 +101,7 @@ function OpenInPlayMoveButton({ className }: { className?: string }) {
         title="Open in Move Playground"
         className={clsx(
           className,
-          "!opacity-50 !hover:opacity-100 text-xs !pb-2 justify-center",
+          "!opacity-50 !hover:opacity-100 text-xs !pb-2 justify-center plausible-event-name=open+move+playground",
         )}
         onClick={handleClick}
       >

@@ -381,9 +381,11 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       announcementBar: {
-        id: "skills_launch",
+        id: "json_rpc_deprecation",
         content:
-          'New: <a href="/skills">Sui Agent Skills</a> — drop pre-built skills into Claude Code, Cursor, Codex, and other AI coding agents.',
+          'JSON-RPC public endpoints shutting down: Testnet week of July 6, Mainnet week of July 20. <a href="/develop/accessing-data/json-rpc-migration">Migrate now</a>.',
+        backgroundColor: '#FFF3CD',
+        textColor: '#664D03',
         isCloseable: true,
       },
       image: "img/sui-doc-og.png",
