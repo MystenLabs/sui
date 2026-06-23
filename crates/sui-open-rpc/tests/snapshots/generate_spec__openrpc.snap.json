@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "127",
+              "maxSupportedProtocolVersion": "128",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1320,6 +1320,7 @@
                 "bridge": false,
                 "cancel_for_failed_dkg_early": false,
                 "check_for_init_during_upgrade": false,
+                "check_object_funds_withdraw_in_execution": false,
                 "commit_root_state_digest": false,
                 "consensus_always_accept_system_transactions": false,
                 "consensus_batched_block_sync": false,
@@ -2141,6 +2142,7 @@
                 "buffer_stake_for_protocol_upgrade_bps": "5000",
                 "cancel_for_failed_dkg_early": false,
                 "check_for_init_during_upgrade": false,
+                "check_object_funds_withdraw_in_execution": false,
                 "commit_root_state_digest": false,
                 "consensus_always_accept_system_transactions": false,
                 "consensus_batched_block_sync": false,

@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 127;
+const MAX_PROTOCOL_VERSION: u64 = 128;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -356,6 +356,7 @@ const MAINNET_USDB: &str =
 //              shipped to mainnet out-of-band in #26816).
 // Version 127: Enable always_advance_dkg_to_resolution.
 //              Update gas prices for range proofs and ristretto group operations.
+// Version 128: Enable check_object_funds_withdraw_in_execution on devnet and testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1131,6 +1132,11 @@ struct FeatureFlags {
     // If true, exit early for IFWW transactions.
     #[serde(skip_serializing_if = "is_false")]
     early_exit_on_iffw: bool,
+
+    // If true, object funds-withdraw sufficiency is checked inside the Move VM during execution
+    // (requesting a retry when insufficient) instead of in a post-execution check.
+    #[serde(skip_serializing_if = "is_false")]
+    check_object_funds_withdraw_in_execution: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2876,6 +2882,10 @@ impl ProtocolConfig {
 
     pub fn early_exit_on_iffw(&self) -> bool {
         self.feature_flags.early_exit_on_iffw
+    }
+
+    pub fn check_object_funds_withdraw_in_execution(&self) -> bool {
+        self.feature_flags.check_object_funds_withdraw_in_execution
     }
 }
 
@@ -5019,6 +5029,11 @@ impl ProtocolConfig {
                     cfg.group_ops_ristretto_scalar_div_cost = Some(557);
                     cfg.group_ops_ristretto_point_div_cost = Some(2244);
                 }
+                128 => {
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -5496,6 +5511,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_object_funds_withdraw_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_object_funds_withdraw = val;
+    }
+
+    pub fn set_check_object_funds_withdraw_in_execution_for_testing(&mut self, val: bool) {
+        self.feature_flags.check_object_funds_withdraw_in_execution = val;
     }
 
     pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {

@@ -30,6 +30,7 @@ use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::resolver::SerializedPackage;
+use move_core_types::u256::U256;
 pub use object_store_trait::ObjectStore;
 pub use read_store::BalanceInfo;
 pub use read_store::BalanceIterator;
@@ -184,6 +185,18 @@ pub enum ObjectChange {
 pub trait StorageView: Storage + ParentSync + RuntimeObjectResolver {}
 impl<T: Storage + ParentSync + RuntimeObjectResolver> StorageView for T {}
 
+/// Outcome of checking whether an object owner holds enough funds for a withdrawal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObjectFundsSufficiency {
+    /// The owner holds at least the requested amount (net of earlier withdrawals in this tx).
+    Sufficient,
+    /// The owner does not hold the requested amount.
+    Insufficient,
+    /// The accumulator root has not yet caught up to the version this transaction requires, so the
+    /// balance cannot be determined yet; the transaction should be retried later.
+    Unknown,
+}
+
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
 pub trait RuntimeObjectResolver {
@@ -203,6 +216,22 @@ pub trait RuntimeObjectResolver {
     /// available.
     fn is_system_object_available(&self, _object_id: &ObjectID) -> SuiResult<bool> {
         Ok(true)
+    }
+
+    /// Checks whether `owner` holds at least `amount` of `type_`, accounting for earlier
+    /// withdrawals from the same account within this transaction. Only `TemporaryStore` implements
+    /// the real check; other resolvers are never the execution-time resolver, so the default
+    /// reports `Sufficient` and never blocks.
+    /// `deposited` is the amount already deposited to this account so far in the transaction, which
+    /// offsets the withdrawals (the check is against the net withdrawn).
+    fn check_object_funds_sufficiency(
+        &self,
+        _owner: SuiAddress,
+        _type_: &TypeTag,
+        _amount: U256,
+        _deposited: u128,
+    ) -> SuiResult<ObjectFundsSufficiency> {
+        Ok(ObjectFundsSufficiency::Sufficient)
     }
 
     /// `receiving_object_id` must have an `AddressOwner` ownership equal to `owner`.
