@@ -102,6 +102,7 @@ use crate::task::watermark::Watermarks;
 use super::StreamingPackageStore;
 use super::SubscriptionReadiness;
 use super::checkpoint_resume::scan_checkpoints;
+use super::gap_recovery::CheckpointFetcher;
 use super::gap_recovery::recover_gap;
 use super::processed_checkpoint::ProcessedCheckpoint;
 use super::processed_checkpoint::ProcessedTransaction;
@@ -217,10 +218,10 @@ impl SubscriptionBroadcast {
     ///
     /// Broadcast `Lagged` returns an error so the load balancer can redistribute the slow
     /// subscriber.
-    pub(crate) fn subscribe(
+    pub(crate) fn subscribe<F: CheckpointFetcher + Clone + Send + 'static>(
         self: Arc<Self>,
         resume_from: Option<u64>,
-        fetcher: LedgerGrpcReader,
+        fetcher: F,
         config: &SubscriptionConfig,
     ) -> impl Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>> + 'static {
         // Defensive cap on Phase 1 re-entries triggered by a pathological race. With the
@@ -744,4 +745,92 @@ fn add_tombstones(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::task::streaming::test_utils::MockFetcher;
+    use crate::task::streaming::test_utils::make_test_proto_checkpoint;
+    use crate::task::streaming::test_utils::test_broadcast;
+
+    /// Drain `n` items from the (pinned) stream, returning their sequence numbers. The stream
+    /// is borrowed via `Pin<&mut _>` so multiple `drain_n` calls can interleave with other test
+    /// operations (e.g., bumping the broadcast tip between phases).
+    async fn drain_n<S>(mut stream: std::pin::Pin<&mut S>, n: usize) -> Vec<u64>
+    where
+        S: Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>>,
+    {
+        use futures::StreamExt;
+        let mut out = Vec::with_capacity(n);
+        for _ in 0..n {
+            let item = stream.as_mut().next().await.unwrap().unwrap();
+            out.push(item.summary.sequence_number);
+        }
+        out
+    }
+
+    /// Send `seq` through the broadcast channel after processing it.
+    fn send(tx: &broadcast::Sender<Arc<ProcessedCheckpoint>>, seq: u64) {
+        let processed = process_checkpoint(make_test_proto_checkpoint(seq)).unwrap();
+        tx.send(Arc::new(processed)).ok();
+    }
+
+    #[tokio::test]
+    async fn subscribe_no_resume_yields_live_only() {
+        use futures::FutureExt;
+
+        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
+        // Fetcher is unused since resume_from is None.
+        let fetcher = MockFetcher::success_for_range(0..=0);
+
+        let stream = broadcast.subscribe(None, fetcher, &SubscriptionConfig::default());
+        tokio::pin!(stream);
+
+        // Poll once so the receiver gets pinned at tail=0 before any sends.
+        let _ = stream.as_mut().next().now_or_never();
+
+        send(&tx, 1);
+        send(&tx, 2);
+        send(&tx, 3);
+
+        let yielded = drain_n(stream.as_mut(), 3).await;
+        assert_eq!(yielded, vec![1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn subscribe_resume_before_tip_yields_scan_then_live() {
+        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
+        for seq in 1..=5 {
+            send(&tx, seq);
+        }
+        assert_eq!(broadcast.network_tip(), 5);
+
+        // resume_from = 2 → Phase 1 yields 3, 4, 5; then Phase 2 picks up live items.
+        let fetcher = MockFetcher::success_for_range(3..=5);
+        let stream = broadcast.subscribe(Some(2), fetcher, &SubscriptionConfig::default());
+        tokio::pin!(stream);
+
+        // Phase 1 catches up via scan.
+        assert_eq!(drain_n(stream.as_mut(), 3).await, vec![3, 4, 5]);
+
+        // Live items broadcast after Phase 1 are picked up by the mid-phase receiver.
+        send(&tx, 6);
+        send(&tx, 7);
+        assert_eq!(drain_n(stream.as_mut(), 2).await, vec![6, 7]);
+    }
+
+    #[tokio::test]
+    async fn subscribe_yields_error_when_channel_closes() {
+        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
+        let fetcher = MockFetcher::success_for_range(0..=0);
+        let stream = broadcast.subscribe(None, fetcher, &SubscriptionConfig::default());
+        tokio::pin!(stream);
+
+        // Dropping the sender closes the channel; subscriber should yield an error and end.
+        drop(tx);
+
+        assert!(stream.next().await.unwrap().is_err());
+        assert!(stream.next().await.is_none());
+    }
 }

@@ -83,3 +83,156 @@ pub(super) fn scan_checkpoints<F: CheckpointFetcher + Clone + Send + 'static>(
         throttle_interval,
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::task::streaming::test_utils::FetcherBehavior;
+    use crate::task::streaming::test_utils::MockFetcher;
+    use crate::task::streaming::test_utils::make_test_proto_checkpoint;
+    use crate::task::streaming::test_utils::test_broadcast;
+
+    #[tokio::test]
+    async fn scan_exits_when_caught_up_to_tip() {
+        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
+        for seq in 1..=5 {
+            let processed = process_checkpoint(make_test_proto_checkpoint(seq)).unwrap();
+            tx.send(Arc::new(processed)).ok();
+        }
+        assert_eq!(broadcast.network_tip(), 5);
+
+        let fetcher = MockFetcher::success_for_range(1..=5);
+        let stream = scan_checkpoints(fetcher, broadcast, 0, &SubscriptionConfig::default());
+        let yielded: Vec<u64> = stream
+            .map(|item| item.unwrap().summary.sequence_number)
+            .collect()
+            .await;
+        assert_eq!(yielded, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[tokio::test]
+    async fn scan_completes_through_transient_fetcher_errors() {
+        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
+        for seq in 1..=3 {
+            let processed = process_checkpoint(make_test_proto_checkpoint(seq)).unwrap();
+            tx.send(Arc::new(processed)).ok();
+        }
+        assert_eq!(broadcast.network_tip(), 3);
+
+        // Seq 2 errors twice before succeeding; scan should still yield 1..=3 in order.
+        let fetcher = MockFetcher::from_setup(&[
+            (1, FetcherBehavior::Success),
+            (2, FetcherBehavior::ErrorThenSuccess(2)),
+            (3, FetcherBehavior::Success),
+        ]);
+        let stream = scan_checkpoints(
+            fetcher.clone(),
+            broadcast,
+            0,
+            &SubscriptionConfig::default(),
+        );
+        let yielded: Vec<u64> = stream
+            .map(|item| item.unwrap().summary.sequence_number)
+            .collect()
+            .await;
+        assert_eq!(yielded, vec![1, 2, 3]);
+        // Seq 2 was retried twice before succeeding, so total 3 calls.
+        assert_eq!(fetcher.calls_for(2), 3);
+    }
+
+    #[tokio::test]
+    async fn scan_tracks_advancing_tip() {
+        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
+        // Initial tip = 3.
+        for seq in 1..=3 {
+            let processed = process_checkpoint(make_test_proto_checkpoint(seq)).unwrap();
+            tx.send(Arc::new(processed)).ok();
+        }
+        assert_eq!(broadcast.network_tip(), 3);
+
+        // Build the scan stream while tip is 3.
+        let fetcher = MockFetcher::success_for_range(1..=7);
+        let stream = scan_checkpoints(
+            fetcher,
+            broadcast.clone(),
+            0,
+            &SubscriptionConfig::default(),
+        );
+
+        // Advance the tip to 7 before consuming. The unfold reads `network_tip()` lazily per
+        // iteration, so the scan should yield through 7.
+        for seq in 4..=7 {
+            let processed = process_checkpoint(make_test_proto_checkpoint(seq)).unwrap();
+            tx.send(Arc::new(processed)).ok();
+        }
+        assert_eq!(broadcast.network_tip(), 7);
+
+        let yielded: Vec<u64> = stream
+            .map(|item| item.unwrap().summary.sequence_number)
+            .collect()
+            .await;
+        assert_eq!(yielded, vec![1, 2, 3, 4, 5, 6, 7]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn scan_respects_qps_cap() {
+        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
+        for seq in 1..=3 {
+            let processed = process_checkpoint(make_test_proto_checkpoint(seq)).unwrap();
+            tx.send(Arc::new(processed)).ok();
+        }
+
+        // qps = 1 → at most one emission per second; 3 items can't all emit in under 2s.
+        let config = SubscriptionConfig {
+            per_subscriber_scan_max_qps: 1,
+            ..SubscriptionConfig::default()
+        };
+        let fetcher = MockFetcher::success_for_range(1..=3);
+        let stream = scan_checkpoints(fetcher, broadcast, 0, &config);
+        let start = tokio::time::Instant::now();
+        let yielded: Vec<u64> = stream
+            .map(|item| item.unwrap().summary.sequence_number)
+            .collect()
+            .await;
+        let elapsed = start.elapsed();
+
+        assert_eq!(yielded, vec![1, 2, 3]);
+        assert!(
+            elapsed >= Duration::from_secs(2),
+            "expected throttle to take >= 2s for 3 items at 1 qps, got {elapsed:?}",
+        );
+    }
+
+    #[tokio::test]
+    async fn scan_skips_when_start_after_at_or_past_tip() {
+        let (tx, broadcast) = test_broadcast(/* first_live_checkpoint */ 1);
+        for seq in 1..=5 {
+            let processed = process_checkpoint(make_test_proto_checkpoint(seq)).unwrap();
+            tx.send(Arc::new(processed)).ok();
+        }
+        assert_eq!(broadcast.network_tip(), 5);
+
+        // start_after = tip → scan yields nothing.
+        let fetcher = MockFetcher::success_for_range(1..=5);
+        let stream = scan_checkpoints(
+            fetcher,
+            broadcast.clone(),
+            5,
+            &SubscriptionConfig::default(),
+        );
+        let yielded: Vec<u64> = stream
+            .map(|item| item.unwrap().summary.sequence_number)
+            .collect()
+            .await;
+        assert!(yielded.is_empty());
+
+        // start_after > tip → scan still yields nothing.
+        let fetcher = MockFetcher::success_for_range(1..=5);
+        let stream = scan_checkpoints(fetcher, broadcast, 10, &SubscriptionConfig::default());
+        let yielded: Vec<u64> = stream
+            .map(|item| item.unwrap().summary.sequence_number)
+            .collect()
+            .await;
+        assert!(yielded.is_empty());
+    }
+}

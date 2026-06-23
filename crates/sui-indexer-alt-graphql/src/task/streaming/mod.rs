@@ -46,6 +46,8 @@ mod package_eviction_task;
 mod processed_checkpoint;
 mod streamed_package_store;
 mod subscription_readiness;
+#[cfg(test)]
+mod test_utils;
 
 use std::sync::Arc;
 
