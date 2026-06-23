@@ -108,7 +108,10 @@ public fun insert_before<K: copy + drop + store, V: store>(
     let anchor_node = df::borrow_mut<K, Node<K, V>>(&mut table.id, anchor);
     let old_prev = anchor_node.prev.swap_or_fill(k);
     if (old_prev.is_some()) {
-        df::borrow_mut<K, Node<K, V>>(&mut table.id, old_prev.destroy_some()).next = option::some(k);
+        df::borrow_mut<K, Node<K, V>>(
+            &mut table.id,
+            old_prev.destroy_some(),
+        ).next = option::some(k);
     } else {
         table.head = option::some(k);
     };
@@ -131,7 +134,10 @@ public fun insert_after<K: copy + drop + store, V: store>(
     let anchor_node = df::borrow_mut<K, Node<K, V>>(&mut table.id, anchor);
     let old_next = anchor_node.next.swap_or_fill(k);
     if (old_next.is_some()) {
-        df::borrow_mut<K, Node<K, V>>(&mut table.id, old_next.destroy_some()).prev = option::some(k);
+        df::borrow_mut<K, Node<K, V>>(
+            &mut table.id,
+            old_next.destroy_some(),
+        ).prev = option::some(k);
     } else {
         table.tail = option::some(k);
     };

@@ -341,7 +341,10 @@ with the key <code>k: K</code>.
     <b>let</b> anchor_node = df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, anchor);
     <b>let</b> old_prev = anchor_node.<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>.swap_or_fill(k);
     <b>if</b> (old_prev.is_some()) {
-        df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, old_prev.destroy_some()).<a href="../sui/linked_table.md#sui_linked_table_next">next</a> = option::some(k);
+        df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(
+            &<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id,
+            old_prev.destroy_some(),
+        ).<a href="../sui/linked_table.md#sui_linked_table_next">next</a> = option::some(k);
     } <b>else</b> {
         <a href="../sui/table.md#sui_table">table</a>.head = option::some(k);
     };
@@ -384,7 +387,10 @@ with the key <code>k: K</code>.
     <b>let</b> anchor_node = df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, anchor);
     <b>let</b> old_next = anchor_node.<a href="../sui/linked_table.md#sui_linked_table_next">next</a>.swap_or_fill(k);
     <b>if</b> (old_next.is_some()) {
-        df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, old_next.destroy_some()).<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = option::some(k);
+        df::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(
+            &<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id,
+            old_next.destroy_some(),
+        ).<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = option::some(k);
     } <b>else</b> {
         <a href="../sui/table.md#sui_table">table</a>.tail = option::some(k);
     };
