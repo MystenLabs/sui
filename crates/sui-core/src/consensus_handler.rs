@@ -1190,20 +1190,25 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             new_jwks,
         } = self.build_commit_handler_input(transactions);
 
-        self.process_gasless_transactions(&commit_info, &user_transactions);
-        self.process_jwks(&mut state, &commit_info, new_jwks);
-        self.process_capability_notifications(capability_notifications);
-        self.process_execution_time_observations(&mut state, execution_time_observations);
-        self.process_checkpoint_signature_messages(checkpoint_signature_messages);
+        {
+            let _scope = monitored_scope(
+                "ConsensusCommitHandler::handle_consensus_commit::process_messages",
+            );
+            self.process_gasless_transactions(&commit_info, &user_transactions);
+            self.process_jwks(&mut state, &commit_info, new_jwks);
+            self.process_capability_notifications(capability_notifications);
+            self.process_execution_time_observations(&mut state, execution_time_observations);
+            self.process_checkpoint_signature_messages(checkpoint_signature_messages);
 
-        self.process_dkg_updates(
-            &mut state,
-            &commit_info,
-            randomness_manager.as_deref_mut(),
-            randomness_dkg_messages,
-            randomness_dkg_confirmations,
-        )
-        .await;
+            self.process_dkg_updates(
+                &mut state,
+                &commit_info,
+                randomness_manager.as_deref_mut(),
+                randomness_dkg_messages,
+                randomness_dkg_confirmations,
+            )
+            .await;
+        }
 
         let mut execution_time_estimator = self
             .epoch_store
@@ -1292,46 +1297,56 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         self.record_deferral_deletion(&mut state);
 
-        self.epoch_store
-            .consensus_quarantine
-            .write()
-            .push_consensus_output(state.output, &self.epoch_store)
-            .expect("push_consensus_output should not fail");
-
-        debug!(
-            ?commit_info.round,
-            "Notifying checkpoint service about new pending checkpoint(s)",
-        );
-        self.checkpoint_service
-            .notify_checkpoint()
-            .expect("failed to notify checkpoint service");
-
-        if let Some(randomness_round) = state.randomness_round {
-            randomness_manager
-                .as_ref()
-                .expect("randomness manager should exist if randomness round is provided")
-                .generate_randomness(epoch, randomness_round);
+        {
+            let _scope = monitored_scope(
+                "ConsensusCommitHandler::handle_consensus_commit::push_consensus_output",
+            );
+            self.epoch_store
+                .consensus_quarantine
+                .write()
+                .push_consensus_output(state.output, &self.epoch_store)
+                .expect("push_consensus_output should not fail");
         }
 
-        self.epoch_store.process_notifications(notifications.iter());
+        {
+            let _scope = monitored_scope(
+                "ConsensusCommitHandler::handle_consensus_commit::notify_and_finalize",
+            );
+            debug!(
+                ?commit_info.round,
+                "Notifying checkpoint service about new pending checkpoint(s)",
+            );
+            self.checkpoint_service
+                .notify_checkpoint()
+                .expect("failed to notify checkpoint service");
 
-        // pass lock by value to ensure that it is held until this point
-        self.log_final_round(lock, final_round);
-
-        // update the calculated throughput
-        self.throughput_calculator
-            .add_transactions(timestamp, num_schedulables as u64);
-
-        fail_point_if!("correlated-crash-after-consensus-commit-boundary", || {
-            let key = [commit_sub_dag_index, epoch];
-            if sui_simulator::random::deterministic_probability_once(&key, 0.01) {
-                sui_simulator::task::kill_current_node(None);
+            if let Some(randomness_round) = state.randomness_round {
+                randomness_manager
+                    .as_ref()
+                    .expect("randomness manager should exist if randomness round is provided")
+                    .generate_randomness(epoch, randomness_round);
             }
-        });
 
-        fail_point!("crash");
+            self.epoch_store.process_notifications(notifications.iter());
 
-        self.send_end_of_publish_if_needed().await;
+            // pass lock by value to ensure that it is held until this point
+            self.log_final_round(lock, final_round);
+
+            // update the calculated throughput
+            self.throughput_calculator
+                .add_transactions(timestamp, num_schedulables as u64);
+
+            fail_point_if!("correlated-crash-after-consensus-commit-boundary", || {
+                let key = [commit_sub_dag_index, epoch];
+                if sui_simulator::random::deterministic_probability_once(&key, 0.01) {
+                    sui_simulator::task::kill_current_node(None);
+                }
+            });
+
+            fail_point!("crash");
+
+            self.send_end_of_publish_if_needed().await;
+        }
     }
 
     fn handle_close_epoch(
@@ -1410,7 +1425,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         Option<Schedulable<VerifiedExecutableTransactionWithAliases>>,
     ) {
-        let _scope = monitored_scope("ConsensusCommitHandler::collect_transactions_to_schedule");
+        let _scope = monitored_scope(
+            "ConsensusCommitHandler::handle_consensus_commit::collect_transactions_to_schedule",
+        );
         let protocol_config = self.epoch_store.protocol_config();
         let epoch = self.epoch_store.epoch();
 
@@ -1558,6 +1575,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         final_round: bool,
     ) -> CheckpointHeight {
+        let _scope = monitored_scope(
+            "ConsensusCommitHandler::handle_consensus_commit::create_pending_checkpoints",
+        );
         let protocol_config = self.epoch_store.protocol_config();
         let epoch = self.epoch_store.epoch();
         let accumulators_enabled = self.epoch_store.accumulators_enabled();
@@ -2447,7 +2467,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         commit_info: &ConsensusCommitInfo,
         block_transactions: ParsedConsensusTransactions,
     ) -> FilteredConsensusOutput {
-        let _scope = monitored_scope("ConsensusCommitHandler::filter_consensus_txns");
+        let _scope =
+            monitored_scope("ConsensusCommitHandler::handle_consensus_commit::filter_consensus_txns");
         let mut transactions = Vec::new();
         let mut owned_object_locks = HashMap::new();
         let epoch = self.epoch_store.epoch();
@@ -2701,7 +2722,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         commit_info: &ConsensusCommitInfo,
         transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
     ) -> Vec<VerifiedSequencedConsensusTransaction> {
-        let _scope = monitored_scope("ConsensusCommitHandler::deduplicate_consensus_txns");
+        let _scope = monitored_scope(
+            "ConsensusCommitHandler::handle_consensus_commit::deduplicate_consensus_txns",
+        );
         let mut all_transactions = Vec::new();
 
         // Track occurrence counts for each transaction key within this commit.
@@ -2805,7 +2828,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &self,
         transactions: Vec<VerifiedSequencedConsensusTransaction>,
     ) -> CommitHandlerInput {
-        let _scope = monitored_scope("ConsensusCommitHandler::build_commit_handler_input");
+        let _scope = monitored_scope(
+            "ConsensusCommitHandler::handle_consensus_commit::build_commit_handler_input",
+        );
         let epoch = self.epoch_store.epoch();
         let mut commit_handler_input = CommitHandlerInput::default();
 
