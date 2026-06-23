@@ -30,6 +30,7 @@ use crate::{
     typing::{self, visitor::TypingVisitorObj},
     unit_test,
 };
+use indexmap::IndexMap;
 use move_command_line_common::files::{
     DEBUG_INFO_EXTENSION, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, extension_equals,
     find_filenames_and_keep_specified,
@@ -38,6 +39,7 @@ use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{
+    any::{Any, TypeId},
     collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     io::{Read, Write},
@@ -62,7 +64,7 @@ pub struct Compiler {
     pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
-    visitors: Vec<Visitor>,
+    visitors: IndexMap<TypeId, Visitor>,
     warning_filter: Option<FilterScope>,
     known_warning_filters: Vec<(
         /* Prefix */ Option<Symbol>,
@@ -203,7 +205,7 @@ impl Compiler {
             pre_compiled_lib: None,
             compiled_module_named_address_mapping: BTreeMap::new(),
             flags: Flags::empty(),
-            visitors: vec![],
+            visitors: IndexMap::new(),
             warning_filter: None,
             known_warning_filters: vec![],
             package_configs,
@@ -275,12 +277,17 @@ impl Compiler {
     }
 
     pub fn add_visitor(mut self, pass: impl Into<Visitor>) -> Self {
-        self.visitors.push(pass.into());
+        let visitor = pass.into();
+        // De-dup by concrete visitor type. First occurrence wins.
+        self.visitors.entry(visitor.type_id()).or_insert(visitor);
         self
     }
 
     pub fn add_visitors(mut self, passes: impl IntoIterator<Item = Visitor>) -> Self {
-        self.visitors.extend(passes);
+        for visitor in passes {
+            // De-dup by concrete visitor type. First occurrence wins.
+            self.visitors.entry(visitor.type_id()).or_insert(visitor);
+        }
         self
     }
 
@@ -395,7 +402,7 @@ impl Compiler {
         )?;
         let mut compilation_env = CompilationEnv::new(
             flags,
-            visitors,
+            visitors.into_values().collect(),
             save_hooks,
             warning_filter,
             package_configs,
@@ -1216,4 +1223,15 @@ fn run(
         }
     }
     rec(compilation_env, pre_compiled_lib, cur, until)
+}
+
+impl Visitor {
+    /// Returns the `TypeId` of the underlying visitor
+    fn type_id(&self) -> TypeId {
+        match self {
+            Visitor::TypingVisitor(v) => Any::type_id(&**v),
+            Visitor::CFGIRVisitor(v) => Any::type_id(&**v),
+            Visitor::AbsIntVisitor(v) => Any::type_id(&**v),
+        }
+    }
 }

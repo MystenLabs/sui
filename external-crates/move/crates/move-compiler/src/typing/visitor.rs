@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{any::Any, sync::Arc};
 
 use crate::{
     command_line::compiler::Visitor,
@@ -17,7 +17,7 @@ use move_proc_macros::growing_stack;
 
 pub type TypingVisitorObj = Box<dyn TypingVisitor>;
 
-pub trait TypingVisitor: Send + Sync {
+pub trait TypingVisitor: Send + Sync + Any {
     fn visit(&self, env: &CompilationEnv, program: &T::Program);
 
     fn visitor(self) -> Visitor
@@ -569,7 +569,7 @@ impl<V: TypingVisitor + 'static> From<V> for TypingVisitorObj {
     }
 }
 
-impl<V: TypingVisitorConstructor + Send + Sync> TypingVisitor for V {
+impl<V: TypingVisitorConstructor + Send + Sync + 'static> TypingVisitor for V {
     fn visit(&self, env: &CompilationEnv, program: &T::Program) {
         Self::visit(env, program)
     }
