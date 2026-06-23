@@ -144,7 +144,7 @@ impl<I> StreamPage<I> {
     /// Fold one frame into the page. `first_cursor` is set once to the first cursor-bearing frame.
     /// `last_cursor` continuously tracks the latest cursor-bearing frame.
     ///
-    /// Returns `true` when the frame is the terminal `QueryEnd`.
+    /// Returns `true` when the frame is `QueryEnd`.
     fn apply(&mut self, frame: FrameKind<I>) -> bool {
         match frame {
             FrameKind::Item { item, cursor } => {
@@ -350,13 +350,13 @@ mod tests {
     }
 
     #[test]
-    fn apply_signals_terminal_only_on_end_frame() {
+    fn apply_signals_stop_only_on_end_frame() {
         // The bool returned by `apply` is the drain loop's stop signal: `true` means "stop
-        // draining," `false` means "keep going." Only the terminal `End` frame should signal stop.
+        // draining," `false` means "keep going." Only the `End` frame should signal stop.
         let mut page: StreamPage<grpc_alpha::TransactionItem> = StreamPage::default();
         assert!(!page.apply(item_response(b"c1").into()));
         assert!(!page.apply(watermark_response(b"w1").into()));
-        // Outer message with no oneof set → `FrameKind::Unknown` → also non-terminal.
+        // Outer message with no oneof set → `FrameKind::Unknown` → continue.
         assert!(!page.apply(grpc_alpha::ListTransactionsResponse::default().into()));
         assert!(page.apply(end_response(grpc_alpha::QueryEndReason::LedgerTip).into()));
     }
@@ -387,7 +387,7 @@ mod tests {
             assert!(page.has_more(), "expected has_more for {reason:?}");
         }
 
-        // `end_reason == None` covers both the deadline cut-short case (no terminal frame
+        // `end_reason == None` covers both the deadline cut-short case (no end frame
         // received) and any unrecognized / future-added variant — defaulting to "may have more"
         // avoids silent truncation.
         let page: StreamPage<grpc_alpha::TransactionItem> = StreamPage::default();
