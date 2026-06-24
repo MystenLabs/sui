@@ -42,6 +42,7 @@ use sui_consistent_store::Db;
 use sui_consistent_store::DbOptions;
 use sui_consistent_store::PipelineTaskKey;
 use sui_consistent_store::Watermark;
+use sui_consistent_store::metrics::ColumnFamilyStatsCollector;
 use sui_consistent_store::restore::RestoreDriverConfig;
 use sui_consistent_store::restore::metrics::RestoreMetrics;
 use sui_indexer_alt_framework::IndexerArgs;
@@ -268,6 +269,15 @@ impl EmbeddedRpcStore {
         let path = config.db_path().join(RPC_STORE_DIR);
         let (db, schema) = open_db(&path).await?;
         let schema = Arc::new(schema);
+
+        // Expose per-CF RocksDB stats (sizes, compaction backlog,
+        // write-stall state) for the store's database.
+        registry
+            .register(Box::new(ColumnFamilyStatsCollector::new(
+                Some(METRICS_PREFIX),
+                &db,
+            )))
+            .context("registering the embedded rpc-store RocksDB stats collector")?;
 
         // The highest checkpoint whose transaction outputs are durably
         // committed to the perpetual store. This is the live cohort's restore
