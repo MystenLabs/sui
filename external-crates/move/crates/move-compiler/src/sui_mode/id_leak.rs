@@ -15,7 +15,7 @@ use crate::{
     diagnostics::{Diagnostic, Diagnostics},
     editions::Flavor,
     expansion::ast::ModuleIdent,
-    hlir::ast::{self as H, Exp, ModuleCall, SingleType, Type, Type_, Var},
+    hlir::ast::{self as H, Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
     parser::ast::{Ability_, TargetKind},
     shared::{Identifier, program_info::TypingProgramInfo},
     sui_mode::{

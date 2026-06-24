@@ -22,7 +22,7 @@ use crate::{
         Diagnostic, Diagnostics,
         codes::{DiagnosticInfo, Severity, custom},
     },
-    hlir::ast::{ModuleCall, Type, Type_, Var},
+    hlir::ast::{Label, ModuleCall, Type, Type_, Var},
     parser::ast::Ability_,
     sui_mode::{SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME},
 };

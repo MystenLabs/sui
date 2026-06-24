@@ -74,9 +74,9 @@ fn analyze(
     let reverse = &mut ReverseCFG::new(cfg, infinite_loop_starts);
     let initial_state = LivenessState::initial();
     let mut liveness = Liveness::new(reverse);
-    let result = analyze_function(&mut liveness, reverse, initial_state);
-    assert!(result.diags.is_empty());
-    (result.pre_states, liveness.states)
+    let (final_invariants, errors) = analyze_function(&mut liveness, reverse, initial_state);
+    assert!(errors.is_empty());
+    (final_invariants, liveness.states)
 }
 
 #[growing_stack]

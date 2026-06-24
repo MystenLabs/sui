@@ -229,6 +229,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
             missing_key::MissingKeyVisitor.visitor(),
             unnecessary_public_entry::UnnecessaryPublicEntry.visitor(),
             uncallable_function::UncallableFunction.visitor(),
+            unused_object_with_fields::UnusedObjWithFieldsVerifier.visitor(),
             // This is not on by default outside of Sui mode
             crate::linters::unused_return_value::UnusedReturnValue.visitor(),
         ],

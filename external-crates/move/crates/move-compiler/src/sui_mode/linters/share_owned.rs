@@ -23,8 +23,8 @@ use crate::{
     },
     expansion::ast::ModuleIdent,
     hlir::ast::{
-        BaseType, BaseType_, Exp, LValue, LValue_, ModuleCall, SingleType, SingleType_, Type,
-        Type_, TypeName_, UnannotatedExp_, Var,
+        BaseType, BaseType_, Exp, LValue, LValue_, Label, ModuleCall, SingleType, SingleType_,
+        Type, Type_, TypeName_, UnannotatedExp_, Var,
     },
     naming::ast::BuiltinTypeName_,
     parser::ast::{Ability_, DatatypeName},

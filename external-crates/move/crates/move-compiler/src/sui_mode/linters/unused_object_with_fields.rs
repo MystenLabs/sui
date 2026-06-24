@@ -45,7 +45,7 @@ use crate::{
     PreCompiledProgramInfo,
     cfgir::{
         CFGContext,
-        absint::{AnalysisResult, JoinResult},
+        absint::{BlockStates, JoinResult},
         cfg::{CFG, ImmForwardCFG},
         visitor::{
             LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
@@ -57,7 +57,7 @@ use crate::{
         codes::{DiagnosticInfo, Severity, custom},
     },
     hlir::ast::{
-        BaseType_, Command, Command_ as C, Exp, ModuleCall, SingleType, SingleType_, Type,
+        BaseType_, Command, Command_ as C, Exp, Label, ModuleCall, SingleType, SingleType_, Type,
         TypeName_, UnannotatedExp_, Var,
     },
     naming::ast::StructFields,
@@ -233,22 +233,23 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
     type State = State;
     type ExecutionContext = ExecutionContext;
 
-    fn finish(&mut self, result: AnalysisResult<State>) -> Diagnostics {
-        let AnalysisResult {
-            pre_states: _,
-            post_states,
-            mut diags,
-        } = result;
+    fn finish(
+        &mut self,
+        final_states: BTreeMap<Label, BlockStates<State>>,
+        mut diags: Diagnostics,
+    ) -> Diagnostics {
         // Union `used` across every reachable block's post-state: a root
         // used on any reachable path appears here. Unprocessed
-        // (unreachable) blocks are absent from `post_states` and so
-        // correctly contribute nothing. The union over *all* blocks (not
-        // just terminal ones) is what makes this correct for uses that
-        // never reach a terminal block — e.g. a use on an abort branch or
-        // inside a loop body.
+        // (unreachable) blocks have a `None` post-state and so correctly
+        // contribute nothing. The union over *all* blocks (not just
+        // terminal ones) is what makes this correct for uses that never
+        // reach a terminal block — e.g. a use on an abort branch or inside
+        // a loop body.
         let mut used: BTreeSet<Var> = BTreeSet::new();
-        for state in post_states.values() {
-            used.extend(state.used.iter().copied());
+        for block in final_states.values() {
+            if let Some(post) = &block.post {
+                used.extend(post.used.iter().copied());
+            }
         }
         for (var, loc) in &self.tracked_params {
             if !used.contains(var) {
@@ -265,13 +266,19 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
         diags
     }
 
-    fn start_command(&self, _: &mut State) -> ExecutionContext {
+    fn start_command(&self, _label: Label, _idx: usize, _: &mut State) -> ExecutionContext {
         ExecutionContext {
             diags: Diagnostics::new(),
         }
     }
 
-    fn finish_command(&self, context: ExecutionContext, _state: &mut State) -> Diagnostics {
+    fn finish_command(
+        &self,
+        _label: Label,
+        _idx: usize,
+        context: ExecutionContext,
+        _state: &mut State,
+    ) -> Diagnostics {
         let ExecutionContext { diags } = context;
         diags
     }

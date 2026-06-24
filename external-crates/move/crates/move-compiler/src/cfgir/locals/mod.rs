@@ -180,10 +180,10 @@ pub fn verify(
     } = context;
     let initial_state = LocalStates::initial(&signature.parameters, locals);
     let mut locals_safety = LocalsSafety::new(context, locals, signature);
-    let result = analyze_function(&mut locals_safety, cfg, initial_state);
+    let (final_state, ds) = analyze_function(&mut locals_safety, cfg, initial_state);
     unused_let_muts(context, locals, locals_safety.unused_mut);
-    context.add_diags(result.diags);
-    result.pre_states
+    context.add_diags(ds);
+    final_state
 }
 
 /// Generates warnings for unused mut declarations
