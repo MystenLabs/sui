@@ -59,6 +59,7 @@ use crate::indexer::events::Events;
 use crate::indexer::live_objects::LiveObjects;
 use crate::indexer::object_by_owner::ObjectByOwner;
 use crate::indexer::object_by_type::ObjectByType;
+use crate::indexer::object_version_by_checkpoint::ObjectVersionByCheckpoint;
 use crate::indexer::objects::Objects;
 use crate::indexer::package_versions::PackageVersions;
 use crate::indexer::transaction_bitmap::TransactionBitmap;
@@ -71,9 +72,11 @@ use crate::schema::pruning_watermark;
 
 /// The embedded fullnode's **live cohort**: the pipelines that
 /// [`restore_indexes`] bulk-loads and that are restored to the
-/// perpetual store's tip `T`, then follow live from there. They are
-/// bounded by the live object set, so a snapshot restore reproduces
-/// them exactly.
+/// perpetual store's tip `T`, then follow live from there. Each is
+/// reconstructable from the live object set, so a snapshot restore
+/// reproduces it exactly. Most are overwritten in place;
+/// `object_version_by_checkpoint` is seeded one row per live object at
+/// `T` and accrues per-checkpoint history forward (and is pruned).
 ///
 /// Matches the live half of
 /// [`PipelineLayer::embedded`](crate::config::PipelineLayer::embedded);
@@ -81,6 +84,7 @@ use crate::schema::pruning_watermark;
 /// together.
 pub const LIVE_COHORT: &[&str] = &[
     LiveObjects::NAME,
+    ObjectVersionByCheckpoint::NAME,
     ObjectByOwner::NAME,
     ObjectByType::NAME,
     Balance::NAME,
@@ -108,7 +112,7 @@ pub const HISTORY_COHORT: &[&str] = &[
 /// `layer` on a [`RestoreDriver`] bound to `db` / `schema` and
 /// `source`, then run the resulting [`Service`].
 ///
-/// The five derived-index pipelines are always registered; the raw
+/// The live-cohort pipelines are always registered; the raw
 /// [`Objects`] pipeline is only registered when `layer.objects` is
 /// set. The returned `Service`'s primary task completes once every
 /// registered pipeline transitions to [`RestoreState::Complete`].
@@ -123,8 +127,13 @@ pub fn restore_indexes<Src: RestoreSource>(
     layer: RestoreLayer,
     metrics: Arc<RestoreMetrics>,
 ) -> anyhow::Result<Service> {
+    // Capture the anchor before the driver consumes `source`: the
+    // checkpoint-pinned object index attributes every restored live
+    // object to it.
+    let target_checkpoint = source.target_checkpoint();
     let mut driver = RestoreDriver::new(db, schema, source, config, metrics);
     driver.register(LiveObjects)?;
+    driver.register(ObjectVersionByCheckpoint::for_restore(target_checkpoint))?;
     driver.register(ObjectByOwner)?;
     driver.register(ObjectByType)?;
     driver.register(Balance)?;
@@ -170,6 +179,7 @@ pub fn floor_unrestored_pipelines(
     let restored: &[&'static str] = if layer.objects {
         &[
             LiveObjects::NAME,
+            ObjectVersionByCheckpoint::NAME,
             ObjectByOwner::NAME,
             ObjectByType::NAME,
             Balance::NAME,
@@ -179,6 +189,7 @@ pub fn floor_unrestored_pipelines(
     } else {
         &[
             LiveObjects::NAME,
+            ObjectVersionByCheckpoint::NAME,
             ObjectByOwner::NAME,
             ObjectByType::NAME,
             Balance::NAME,
@@ -201,6 +212,7 @@ pub fn floor_unrestored_pipelines(
         Effects::NAME,
         Events::NAME,
         Objects::NAME,
+        ObjectVersionByCheckpoint::NAME,
         LiveObjects::NAME,
         ObjectByOwner::NAME,
         ObjectByType::NAME,
@@ -840,7 +852,7 @@ mod tests {
         let live: std::collections::BTreeSet<_> = LIVE_COHORT.iter().collect();
         let history: std::collections::BTreeSet<_> = HISTORY_COHORT.iter().collect();
         assert!(live.is_disjoint(&history), "cohorts must not overlap");
-        assert_eq!(live.len(), 5);
+        assert_eq!(live.len(), 6);
         assert_eq!(history.len(), 5);
     }
 }
