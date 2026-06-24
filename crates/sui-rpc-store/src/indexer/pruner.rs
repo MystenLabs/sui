@@ -1199,8 +1199,17 @@ mod tests {
                 .await
                 .unwrap()
             {
-                let (k, v) =
-                    object_version_by_checkpoint::store(row.id, row.checkpoint, row.version);
+                // Seed only the change rows; the floor candidates are
+                // exercised in the pipeline's own tests.
+                let crate::indexer::object_version_by_checkpoint::Row::Change {
+                    id,
+                    checkpoint,
+                    version,
+                } = row
+                else {
+                    continue;
+                };
+                let (k, v) = object_version_by_checkpoint::store(id, checkpoint, version);
                 batch
                     .put(&schema.object_version_by_checkpoint, &k, &v)
                     .unwrap();
