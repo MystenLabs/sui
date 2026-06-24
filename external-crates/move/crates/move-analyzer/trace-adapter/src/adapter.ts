@@ -1,10 +1,12 @@
 import {
     Breakpoint,
+    Event,
     Handles,
     Logger,
     logger,
     LoggingDebugSession,
     InitializedEvent,
+    OutputEvent,
     TerminatedEvent,
     StoppedEvent,
     Thread,
@@ -38,6 +40,11 @@ const SUMMARY_FRAME_SRC_REF = 42;
  * The source reference for the external event frame.
  */
 const EXT_EVENT_FRAME_SRC_REF = 7;
+
+/**
+ * Custom DAP event for warnings that should also surface in VS Code UI.
+ */
+const MOVE_WARNING_EVENT = 'moveWarning';
 
 
 const enum LogLevel {
@@ -131,6 +138,12 @@ export class MoveDebugSession extends LoggingDebugSession {
         });
         this.runtime.on(RuntimeEvents.end, () => {
             this.sendEvent(new TerminatedEvent());
+        });
+        this.runtime.on(RuntimeEvents.warning, (warning) => {
+            // Always log warnings to the Debug Console for later inspection.
+            this.sendEvent(new OutputEvent(warning.message + '\n', 'stderr'));
+            // Also notify the extension so it can show a de-duplicated UI warning.
+            this.sendEvent(new Event(MOVE_WARNING_EVENT, warning));
         });
 
     }

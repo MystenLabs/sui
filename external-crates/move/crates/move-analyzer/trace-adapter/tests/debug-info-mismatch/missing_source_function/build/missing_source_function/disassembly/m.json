@@ -1,0 +1,62 @@
+{
+  "version": 2,
+  "definition_location": {
+    "file_hash": "678b9158983df7b3561ee31890fa8ed7a19897cfdb429591e40033be59485967",
+    "start": 0,
+    "end": 4
+  },
+  "module_name": ["0x1", "m"],
+  "struct_map": {},
+  "enum_map": {},
+  "function_map": {
+    "0": {
+      "location": {
+        "file_hash": "678b9158983df7b3561ee31890fa8ed7a19897cfdb429591e40033be59485967",
+        "start": 0,
+        "end": 35
+      },
+      "definition_location": {
+        "file_hash": "678b9158983df7b3561ee31890fa8ed7a19897cfdb429591e40033be59485967",
+        "start": 0,
+        "end": 4
+      },
+      "type_parameters": [],
+      "parameters": [],
+      "locals": [],
+      "nops": {},
+      "code_map": {
+        "0": {
+          "file_hash": "678b9158983df7b3561ee31890fa8ed7a19897cfdb429591e40033be59485967",
+          "start": 11,
+          "end": 35
+        }
+      },
+      "is_native": false
+    },
+    "1": {
+      "location": {
+        "file_hash": "678b9158983df7b3561ee31890fa8ed7a19897cfdb429591e40033be59485967",
+        "start": 36,
+        "end": 65
+      },
+      "definition_location": {
+        "file_hash": "678b9158983df7b3561ee31890fa8ed7a19897cfdb429591e40033be59485967",
+        "start": 36,
+        "end": 55
+      },
+      "type_parameters": [],
+      "parameters": [],
+      "locals": [],
+      "nops": {},
+      "code_map": {
+        "0": {
+          "file_hash": "678b9158983df7b3561ee31890fa8ed7a19897cfdb429591e40033be59485967",
+          "start": 62,
+          "end": 65
+        }
+      },
+      "is_native": false
+    }
+  },
+  "constant_map": {}
+}
