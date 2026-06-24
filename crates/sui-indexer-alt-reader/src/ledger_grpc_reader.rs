@@ -23,7 +23,7 @@ use crate::metrics::GrpcMetricsService;
 
 const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
 
-#[derive(clap::Args, Debug, Clone, Default)]
+#[derive(clap::Args, Debug, Clone)]
 pub struct LedgerGrpcArgs {
     /// Timeout for gRPC statements to the ledger service, in milliseconds.
     #[arg(long)]
@@ -59,6 +59,11 @@ impl LedgerGrpcArgs {
     pub fn statement_timeout(&self) -> Option<std::time::Duration> {
         self.ledger_grpc_statement_timeout_ms
             .map(Duration::from_millis)
+    }
+
+    pub fn max_decoding_message_size(&self) -> usize {
+        self.ledger_grpc_max_decoding_message_size
+            .unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE)
     }
 }
 
@@ -195,5 +200,14 @@ impl LedgerGrpcReader {
             request.set_timeout(timeout);
         }
         request
+    }
+}
+
+impl Default for LedgerGrpcArgs {
+    fn default() -> Self {
+        Self {
+            ledger_grpc_statement_timeout_ms: None,
+            ledger_grpc_max_decoding_message_size: Some(DEFAULT_MAX_DECODING_MESSAGE_SIZE),
+        }
     }
 }
