@@ -1637,11 +1637,18 @@ impl KeyValueStoreReader for BigTableClient {
     }
 
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
+        let lower_limit = Bytes::from(Self::raw_object_key(&ObjectKey::min_for_id(object_id)));
         let upper_limit = Bytes::from(Self::raw_object_key(&ObjectKey::max_for_id(object_id)));
-        if let Some((_, row)) = self
+
+        tracing::debug!(
+            ?object_id,
+            "get_latest_object: scanning range from ObjectKey::min_for_id to ObjectKey::max_for_id"
+        );
+
+        if let Some((row_key, row)) = self
             .range_scan(
                 tables::objects::NAME,
-                None,
+                Some(lower_limit),
                 Some(upper_limit),
                 1,
                 true,
@@ -1650,8 +1657,22 @@ impl KeyValueStoreReader for BigTableClient {
             .await?
             .pop()
         {
-            return Ok(Some(tables::objects::decode(&row)?));
+            let object = tables::objects::decode(&row)?;
+            let row_key_hex = row_key
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<String>();
+            tracing::debug!(
+                ?object_id,
+                found_id = ?object.id(),
+                found_version = %object.version(),
+                row_key = %row_key_hex,
+                "get_latest_object: found object"
+            );
+            return Ok(Some(object));
         }
+
+        tracing::debug!(?object_id, "get_latest_object: object not found in range");
         Ok(None)
     }
 
