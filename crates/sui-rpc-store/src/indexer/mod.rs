@@ -29,6 +29,7 @@ pub mod events;
 pub mod live_objects;
 pub mod object_by_owner;
 pub mod object_by_type;
+pub mod object_version_by_checkpoint;
 pub mod objects;
 pub mod package_versions;
 pub mod pruner;
@@ -385,6 +386,7 @@ impl Indexer {
             events,
             objects,
             live_objects,
+            object_version_by_checkpoint,
             object_by_owner,
             object_by_type,
             balance,
@@ -437,6 +439,10 @@ impl Indexer {
         add!(self::events::Events, events);
         add!(self::objects::Objects, objects);
         add!(self::live_objects::LiveObjects, live_objects);
+        add!(
+            self::object_version_by_checkpoint::ObjectVersionByCheckpoint::default(),
+            object_version_by_checkpoint
+        );
 
         // Indexes.
         add!(self::object_by_owner::ObjectByOwner, object_by_owner);
@@ -692,6 +698,7 @@ mod tests {
                 "events",
                 "objects",
                 "live_objects",
+                "object_version_by_checkpoint",
                 // Indexes.
                 "object_by_owner",
                 "object_by_type",

@@ -92,7 +92,8 @@ pub struct ConsistencyConfig {
 /// (`transactions`, `effects`, `events`, `tx_metadata_by_seq`),
 /// per-checkpoint (`checkpoint_summary`, `checkpoint_contents`),
 /// digest-reverse-index (`tx_seq_by_digest`,
-/// `checkpoint_seq_by_digest`), superseded-`objects`-version, and
+/// `checkpoint_seq_by_digest`), superseded-`objects`-version,
+/// checkpoint-pinned `object_version_by_checkpoint`, and
 /// ledger-history bitmap CFs. The live-set-bounded indexes
 /// (`live_objects`, `object_by_owner`, `object_by_type`, `balance`,
 /// `package_versions`) and the tiny `epochs` CF are never pruned.
@@ -180,6 +181,7 @@ pub struct PipelineLayer {
     pub events: Option<CommitterLayer>,
     pub objects: Option<CommitterLayer>,
     pub live_objects: Option<CommitterLayer>,
+    pub object_version_by_checkpoint: Option<CommitterLayer>,
 
     // --- Indexes ---
     pub object_by_owner: Option<CommitterLayer>,
@@ -235,6 +237,7 @@ impl PipelineLayer {
             events: Some(CommitterLayer::default()),
             objects: Some(CommitterLayer::default()),
             live_objects: Some(CommitterLayer::default()),
+            object_version_by_checkpoint: Some(CommitterLayer::default()),
             object_by_owner: Some(CommitterLayer::default()),
             object_by_type: Some(CommitterLayer::default()),
             balance: Some(CommitterLayer::default()),
@@ -250,9 +253,9 @@ impl PipelineLayer {
     ///
     /// The raw chain-data CFs (`transactions`, `effects`, `events`,
     /// `objects`, `checkpoint_summary`, `checkpoint_contents`,
-    /// `checkpoint_seq_by_digest`) are left `None`: the perpetual
-    /// store already holds that data and serves it directly, so this
-    /// indexer must not double-write it.
+    /// `checkpoint_seq_by_digest`) are left `None`: the perpetual store
+    /// already holds that data and serves it directly, so this indexer
+    /// must not double-write it.
     ///
     /// The enabled pipelines form two cohorts. The
     /// [`Synchronizer`](sui_consistent_store::Synchronizer)
@@ -260,7 +263,8 @@ impl PipelineLayer {
     /// not by this layer, so both are simply registered here:
     ///
     /// - **Live cohort** — restored to the fullnode's tip and
-    ///   following live from there: `live_objects`, `object_by_owner`,
+    ///   following live from there: `live_objects`,
+    ///   `object_version_by_checkpoint`, `object_by_owner`,
     ///   `object_by_type`, `balance`, `package_versions`.
     /// - **History cohort** — seeded to the lowest available
     ///   checkpoint and backfilling upward: `epochs`,
@@ -273,6 +277,7 @@ impl PipelineLayer {
         Self {
             // Live cohort: restored to the tip, follows live.
             live_objects: Some(CommitterLayer::default()),
+            object_version_by_checkpoint: Some(CommitterLayer::default()),
             object_by_owner: Some(CommitterLayer::default()),
             object_by_type: Some(CommitterLayer::default()),
             balance: Some(CommitterLayer::default()),
@@ -363,6 +368,7 @@ mod tests {
         let layer = PipelineLayer::embedded();
         // Live cohort.
         assert!(layer.live_objects.is_some());
+        assert!(layer.object_version_by_checkpoint.is_some());
         assert!(layer.object_by_owner.is_some());
         assert!(layer.object_by_type.is_some());
         assert!(layer.balance.is_some());
