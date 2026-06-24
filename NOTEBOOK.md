@@ -61,3 +61,29 @@ Poison decision is now content-addressed (deterministic), so this is reproducibl
   2. Exclude poison txs from checkpoint/settlement at scheduling time on BOTH encounters (keyed on
      content-addressed should_poison), while still letting the first encounter execute->crash for
      recovery coverage. Requires separating "scheduled for execution" from "included in checkpoint".
+
+# iteration 2 — REFUTED settlement theory (user: settlement needs effects; poison tx crashes pre-exec)
+- maybe_crash fires at authority.rs:1503 BEFORE execution, so FsuFdYv produces NO effects and
+  cannot be in any settlement/checkpoint. Settlement theory is wrong.
+- EXPERIMENT 2: added `info!("CLAUDE: write_checkpoint seq=.. contents_digest=.. txs=[(tx,effects)]")`
+  at checkpoints/mod.rs write_checkpoint. Reproduced; dumped both cp210 builds.
+- RESULT (decisive): cp210 MEMBERSHIP differs by one transaction:
+    pre-crash  (5VGSLuf/HE4HZ2Vd): [7RPEEF1M (eff 3DqEToJS), 3WsLrYB7 (eff JCSRKDrp)]
+    post-crash (6FWarw7/G7KdDfKw): [6YPVs6yW (eff CCMb1D7F), 3WsLrYB7 (eff JCSRKDrp)]
+  tx2 (3WsLrYB7) identical; tx1 is a DIFFERENT user tx (7RPEEF1M -> 6YPVs6yW).
+- All three (FsuFdYv, 7RPEEF1M, 6YPVs6yW) are address-balance WITHDRAWAL user txs.
+
+# iteration 3 — ROOT CAUSE (revised)
+- Dropping the poison withdrawal FsuFdYv changes WHICH competing withdrawal is admitted into
+  checkpoint 210: pre-crash FsuFdYv is scheduled and 7RPEEF1M is included; post-crash FsuFdYv is
+  dropped at schedulables formation and 6YPVs6yW is included instead. The poison tx's participation
+  in the address-funds withdraw scheduler (a SCHEDULING-TIME side effect, like owned-object locks)
+  changes the admission of other withdrawals -> the locally-persisted cp210 cannot be reproduced
+  after recovery -> self-conflict fatal.
+- This is the SAME structural class as the original bug: the poison tx has scheduling-time side
+  effects on neighbors. The committed fix preserves owned-object LOCKS but NOT address-funds
+  scheduler state, so this manifestation survives. There are likely yet more scheduling-time side
+  effects (versions, congestion) that the "preserve each side effect" approach must cover.
+- IMPLICATION for fix: rather than preserving every individual scheduling side effect, make the
+  crash fire at the SAME pipeline stage as the drop (before the tx participates in scheduling), so
+  the poison tx never influences a built checkpoint in EITHER timeline.
