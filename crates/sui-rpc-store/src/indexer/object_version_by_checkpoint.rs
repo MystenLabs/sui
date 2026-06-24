@@ -59,13 +59,14 @@ use crate::schema::object_version_by_checkpoint;
 
 /// Pipeline marker for `object_version_by_checkpoint`.
 ///
-/// `restore_checkpoint` is set only for the restore registration: it
-/// is the anchor checkpoint every restored live object is attributed
-/// to. Tip indexing leaves it `None` and takes each row's checkpoint
-/// from the checkpoint being processed.
+/// `anchor` is the restore anchor `T`, used two ways: the restore impl
+/// writes its `from_restore` floor rows at `T`, and the processor only
+/// produces floor candidates within the backfill window `[L, T]`
+/// (checkpoints at or below `T`). It is `None` for a from-genesis build
+/// (no restore), which has no window and needs no floor rows.
 #[derive(Default)]
 pub struct ObjectVersionByCheckpoint {
-    restore_checkpoint: Option<u64>,
+    anchor: Option<u64>,
 }
 
 /// One staged write produced by [`process`](ObjectVersionByCheckpoint::process).
@@ -89,12 +90,19 @@ pub enum Row {
 }
 
 impl ObjectVersionByCheckpoint {
-    /// Restore marker attributing every restored live object to the
-    /// snapshot anchor `checkpoint`, as a `from_restore` floor row.
+    /// Marker for the restore-driver registration: writes `from_restore`
+    /// floor rows at the anchor `checkpoint`.
     pub fn for_restore(checkpoint: u64) -> Self {
         Self {
-            restore_checkpoint: Some(checkpoint),
+            anchor: Some(checkpoint),
         }
+    }
+
+    /// Marker for the tip/backfill registration, carrying the restore
+    /// anchor `T` (or `None` for a from-genesis build) so the processor
+    /// scopes floor candidates to the backfill window `[L, T]`.
+    pub fn with_anchor(anchor: Option<u64>) -> Self {
+        Self { anchor }
     }
 }
 
@@ -156,17 +164,21 @@ impl Processor for ObjectVersionByCheckpoint {
             });
         }
 
-        // Floor candidates: objects that existed *before* this
-        // checkpoint and were inputs to it (so they predate any creation
-        // this checkpoint), each carrying its incoming version. `commit`
-        // turns the first such appearance per object into a synthetic
-        // floor row.
-        for (id, (input, _)) in checkpoint_input_objects(checkpoint)? {
-            rows.push(Row::Floor {
-                id,
-                checkpoint: cp,
-                version: input.version(),
-            });
+        // Floor candidates, only within the backfill window `[L, T]`:
+        // objects that existed *before* this checkpoint and were inputs
+        // to it (so they predate any creation this checkpoint), each
+        // carrying its incoming version. `commit` turns the first such
+        // appearance per object into a synthetic floor row. Past `T` the
+        // restore floor already covers pre-window objects, so producing
+        // these (in the worker pool) would be wasted work.
+        if self.anchor.is_some_and(|t| cp <= t) {
+            for (id, (input, _)) in checkpoint_input_objects(checkpoint)? {
+                rows.push(Row::Floor {
+                    id,
+                    checkpoint: cp,
+                    version: input.version(),
+                });
+            }
         }
 
         Ok(rows)
@@ -189,7 +201,7 @@ impl Restore for ObjectVersionByCheckpoint {
         // be registered with the restore driver, so its absence is a
         // programmer error.
         let checkpoint = self
-            .restore_checkpoint
+            .anchor
             .context("object_version_by_checkpoint restored without a restore anchor checkpoint")?;
         // Mark these as restore-floor rows so a checkpoint-pinned read
         // below the anchor can tell a pre-window object (live) apart
@@ -217,14 +229,6 @@ impl sequential::Handler for ObjectVersionByCheckpoint {
     ) -> anyhow::Result<usize> {
         let cf = &conn.store.schema().object_version_by_checkpoint;
 
-        // The restore anchor `T`. Floor rows are only worth computing
-        // within the backfill window `[L, T]`; past `T` (tip indexing)
-        // the restore floor already covers every pre-window object, so
-        // the per-object dedup read is skipped. `None` when the pipeline
-        // was never restored (a from-genesis build), where every
-        // object's full history is indexed and no floor rows are needed.
-        let anchor = restored_anchor(conn.store.db())?;
-
         let mut count = 0;
         for row in batch {
             match row {
@@ -242,7 +246,11 @@ impl sequential::Handler for ObjectVersionByCheckpoint {
                     checkpoint,
                     version,
                 } => {
-                    if should_floor(cf, anchor, *id, *checkpoint)? {
+                    // The processor only emits floor candidates within
+                    // the backfill window, so all that is left is to
+                    // dedup repeated and re-indexed appearances: only the
+                    // object's first appearance writes the floor row.
+                    if is_first_appearance(cf, *id, *checkpoint)? {
                         let (k, v) = object_version_by_checkpoint::store(*id, 0, *version);
                         conn.batch.put(cf, &k, &v)?;
                         count += 1;
@@ -255,8 +263,9 @@ impl sequential::Handler for ObjectVersionByCheckpoint {
 }
 
 /// The restore anchor `T` (`__restore.restored_at`) for this pipeline,
-/// or `None` if it was never restored.
-fn restored_anchor(db: &Db) -> anyhow::Result<Option<u64>> {
+/// or `None` if it was never restored. Read once at registration so the
+/// processor can scope floor candidates to the backfill window `[L, T]`.
+pub(crate) fn restored_anchor(db: &Db) -> anyhow::Result<Option<u64>> {
     let key = PipelineTaskKey::new(ObjectVersionByCheckpoint::NAME);
     Ok(db
         .framework()
@@ -268,28 +277,16 @@ fn restored_anchor(db: &Db) -> anyhow::Result<Option<u64>> {
         }))
 }
 
-/// Whether a synthetic floor row should be written for object `id`,
-/// which entered `checkpoint` from before it.
-///
-/// True only when (a) the pipeline was restored (so there is a window),
-/// (b) `checkpoint` is at or below the restore anchor `T` -- i.e. we
-/// are still backfilling `[L, T]`, since past `T` the restore floor
-/// covers pre-window objects -- and (c) this is the object's first
-/// appearance: it has no row strictly below `checkpoint`. The restore
-/// floor sits at `T >= checkpoint`, so it is excluded from that check,
-/// as is the change row written for this same checkpoint.
-fn should_floor<R: Reader>(
+/// Whether `checkpoint` is the object's first appearance in the index:
+/// it has no row strictly below `checkpoint`. The restore floor sits at
+/// `T >= checkpoint`, so it is excluded, as is the change row written
+/// for this same checkpoint. Dedups repeated and re-indexed appearances
+/// so only the first writes the synthetic floor row.
+fn is_first_appearance<R: Reader>(
     cf: &DbMap<object_version_by_checkpoint::Key, object_version_by_checkpoint::Value, R>,
-    anchor: Option<u64>,
     id: ObjectID,
     checkpoint: u64,
 ) -> Result<bool, Error> {
-    let Some(t) = anchor else {
-        return Ok(false);
-    };
-    if checkpoint > t {
-        return Ok(false);
-    }
     let lo = object_version_by_checkpoint::Key { id, checkpoint: 0 };
     let hi = object_version_by_checkpoint::Key { id, checkpoint };
     let seen = cf
@@ -369,7 +366,9 @@ mod tests {
         let created_id = TestCheckpointBuilder::derive_object_id(0);
         let version = checkpoint.transactions[0].effects.lamport_version();
 
-        let rows = ObjectVersionByCheckpoint::default()
+        // Within the backfill window (anchor above this checkpoint), so
+        // the floor candidates are produced.
+        let rows = ObjectVersionByCheckpoint::with_anchor(Some(100))
             .process(&checkpoint)
             .await
             .unwrap();
@@ -442,7 +441,8 @@ mod tests {
         let obj = TestCheckpointBuilder::derive_object_id(0);
         let incoming = cp0.transactions[0].effects.lamport_version();
 
-        let rows = ObjectVersionByCheckpoint::default()
+        // Within the backfill window: the input object is floored.
+        let rows = ObjectVersionByCheckpoint::with_anchor(Some(100))
             .process(&cp1)
             .await
             .unwrap();
@@ -455,6 +455,36 @@ mod tests {
             _ => None,
         });
         assert_eq!(floor, Some((1, incoming)), "input object floor candidate");
+    }
+
+    /// Past the restore anchor (tip indexing), the processor produces no
+    /// floor candidates at all, even for input objects.
+    #[tokio::test]
+    async fn process_skips_floor_candidates_past_the_anchor() {
+        let mut builder = TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        let _cp0 = builder.build_checkpoint();
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .finish_transaction();
+        let cp1 = Arc::new(builder.build_checkpoint());
+
+        // Anchor below this checkpoint (cp 1 > T 0): tip indexing, so no
+        // floor candidates are produced.
+        let rows = ObjectVersionByCheckpoint::with_anchor(Some(0))
+            .process(&cp1)
+            .await
+            .unwrap();
+        assert!(!rows.iter().any(|r| matches!(r, Row::Floor { .. })));
+        // And likewise for a from-genesis build (no anchor).
+        let rows = ObjectVersionByCheckpoint::default()
+            .process(&cp1)
+            .await
+            .unwrap();
+        assert!(!rows.iter().any(|r| matches!(r, Row::Floor { .. })));
     }
 
     /// Restore writes a `from_restore` floor row at the anchor, which
@@ -493,46 +523,29 @@ mod tests {
     }
 
     #[test]
-    fn should_floor_requires_a_restore_anchor() {
+    fn is_first_appearance_true_with_no_prior_row() {
         let (_dir, _db, schema) = fresh_db();
         let id = ObjectID::random();
-        // No anchor (from-genesis build) -> never floor.
-        assert!(!should_floor(&schema.object_version_by_checkpoint, None, id, 50).unwrap());
+        assert!(is_first_appearance(&schema.object_version_by_checkpoint, id, 50).unwrap());
     }
 
     #[test]
-    fn should_floor_skips_past_the_anchor() {
-        let (_dir, _db, schema) = fresh_db();
-        let id = ObjectID::random();
-        // Tip indexing (checkpoint above the anchor) -> skip the read.
-        assert!(!should_floor(&schema.object_version_by_checkpoint, Some(100), id, 150).unwrap(),);
-    }
-
-    #[test]
-    fn should_floor_true_on_first_appearance_in_window() {
-        let (_dir, _db, schema) = fresh_db();
-        let id = ObjectID::random();
-        // In the window, no prior row -> first appearance, floor it.
-        assert!(should_floor(&schema.object_version_by_checkpoint, Some(100), id, 50).unwrap());
-    }
-
-    #[test]
-    fn should_floor_false_when_already_seen_in_window() {
+    fn is_first_appearance_false_when_already_seen() {
         let (_dir, db, schema) = fresh_db();
         let id = ObjectID::random();
-        // A prior in-window change row exists below the checkpoint.
+        // A prior row exists below the checkpoint.
         put(&schema, &db, id, 30, 5);
-        assert!(!should_floor(&schema.object_version_by_checkpoint, Some(100), id, 50).unwrap());
+        assert!(!is_first_appearance(&schema.object_version_by_checkpoint, id, 50).unwrap());
     }
 
     #[test]
-    fn should_floor_ignores_the_restore_row_at_the_anchor() {
+    fn is_first_appearance_ignores_rows_at_or_above_the_checkpoint() {
         let (_dir, db, schema) = fresh_db();
         let id = ObjectID::random();
-        // The restore floor row sits at the anchor (100), at or above
-        // the queried checkpoint, so it must not count as a prior row.
+        // The restore floor row sits at the anchor (100), at or above the
+        // queried checkpoint, so it must not count as a prior row.
         put(&schema, &db, id, 100, 9);
-        assert!(should_floor(&schema.object_version_by_checkpoint, Some(100), id, 50).unwrap());
+        assert!(is_first_appearance(&schema.object_version_by_checkpoint, id, 50).unwrap());
     }
 
     /// End-to-end shape for a pre-window object that first changes
@@ -563,7 +576,7 @@ mod tests {
 
         // That change is the object's first appearance in the window, so
         // the backfill writes a synthetic floor at `(id, 0)`.
-        assert!(should_floor(&schema.object_version_by_checkpoint, Some(anchor), id, 50).unwrap());
+        assert!(is_first_appearance(&schema.object_version_by_checkpoint, id, 50).unwrap());
         let mut batch = db.batch();
         let (fk, fv) = object_version_by_checkpoint::store(id, 0, window_entry);
         batch

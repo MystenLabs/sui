@@ -439,8 +439,13 @@ impl Indexer {
         add!(self::events::Events, events);
         add!(self::objects::Objects, objects);
         add!(self::live_objects::LiveObjects, live_objects);
+        // `object_version_by_checkpoint` needs its restore anchor `T` so
+        // its processor scopes floor candidates to the backfill window
+        // `[L, T]`. The restore (if any) has already run by the time
+        // pipelines are registered, so read it once here.
+        let ovbc_anchor = self::object_version_by_checkpoint::restored_anchor(self.store().db())?;
         add!(
-            self::object_version_by_checkpoint::ObjectVersionByCheckpoint::default(),
+            self::object_version_by_checkpoint::ObjectVersionByCheckpoint::with_anchor(ovbc_anchor),
             object_version_by_checkpoint
         );
 
