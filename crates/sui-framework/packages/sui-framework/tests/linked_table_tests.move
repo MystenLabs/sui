@@ -472,7 +472,7 @@ fun insert_after_then_pop() {
     let (k, v) = table.pop_back();
     assert_eq!(k, "b");
     assert_eq!(v, 1);
-    check_ordering(&table, vector["a"], option::some(vector[1]));
+    check_ordering(&table, vector["a"], option::some(vector[0]));
     let (k, v) = table.pop_front();
     assert_eq!(k, "a");
     assert_eq!(v, 0);
@@ -601,7 +601,7 @@ fun build_up_and_tear_down<K: copy + drop + store, V: copy + drop + store>(
             table.push_front(k, v);
             order.insert(k, 0);
         } else {
-            table.push_front(k, v);
+            table.push_back(k, v);
             order.push_back(k);
         };
     });
@@ -635,7 +635,8 @@ fun check_ordering<K: copy + drop + store, V: copy + store + drop>(
         return
     };
 
-    n.do!(|i| {
+    let mut i = 0;
+    while (i < n) {
         let cur = keys[i];
         values.do_ref!(|values| {
             assert_eq!(table[cur], values[i]);
@@ -653,5 +654,6 @@ fun check_ordering<K: copy + drop + store, V: copy + store + drop>(
         } else {
             assert_eq!(*table.next(cur).borrow(), keys[i + 1]);
         };
-    });
+        i = i + 1;
+    }
 }
