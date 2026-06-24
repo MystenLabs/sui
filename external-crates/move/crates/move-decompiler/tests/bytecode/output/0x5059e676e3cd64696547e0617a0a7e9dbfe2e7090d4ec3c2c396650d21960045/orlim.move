@@ -257,7 +257,7 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
     let l8 = 0u64;
     let l10 = (&l0.active_orders).length();
     let __dispatch_81;
-    let (l11, l12, l14, l5, l9);
+    let (l11, l14, l5, l9);
     loop {
         if (l8 < l10) {
             if ((&l0.active_orders)[l8] != l17) {
@@ -276,7 +276,7 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
                         l13.order1_id
                     };
                     if (table::contains(&l0.receipts, l11)) {
-                        l12 = table::remove(&mut l0.receipts, l11);
+                        let l12 = table::remove(&mut l0.receipts, l11);
                         if ((&l12).is_active) {
                             *(&mut (&mut l12).is_active) = false;
                             *(&mut (&mut l12).cancelled_at) = option::some(l7);
@@ -287,20 +287,15 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
                         };
                         __dispatch_81 = 1u32;
                         break
-                    };
-                    __dispatch_81 = 2u32;
-                    break
+                    }
                 };
                 __dispatch_81 = 2u32;
                 break
-            };
-            __dispatch_81 = 3u32;
-            break
+            }
         };
         __dispatch_81 = 3u32;
         break
     };
-    let (l15, reg_174 : 0x2::object::UID);
     match (__dispatch_81) {
         0 => {
             loop {
@@ -312,44 +307,16 @@ public fun cancel_order_by_object(l0: &mut OrderManager, l1: OrderReceipt, l2: &
                 };
                 event::emit(OCOOrderCancelledEvent { oco_group_id: l14, cancelled_order_id: l11, user: l0.owner, cancelled_at: l7 });
                 break
-            };
-            table::add(&mut l0.receipts, l11, l12);
-            l15 = table::remove(&mut l0.oco_groups, l14);
-            *(&mut (&mut l15).is_active) = false;
-            table::add(&mut l0.oco_groups, l14, l15);
-            table::add(&mut l0.receipts, l17, l16);
-            event::emit(OrderCancelledByOwnerEvent { order_id: l17, owner: l0.owner, cancelled_at: l7 });
-            let OrderReceipt { id: reg_174, order_data: reg_175, owner: reg_176 } = l1;
-            object::delete(reg_174 : 0x2::object::UID);
-            return (l6, l18)
+            }
         },
         1 => {
-            table::add(&mut l0.receipts, l11, l12);
-            l15 = table::remove(&mut l0.oco_groups, l14);
-            *(&mut (&mut l15).is_active) = false;
-            table::add(&mut l0.oco_groups, l14, l15);
-            table::add(&mut l0.receipts, l17, l16);
-            event::emit(OrderCancelledByOwnerEvent { order_id: l17, owner: l0.owner, cancelled_at: l7 });
-            let OrderReceipt { id: reg_174, order_data: reg_175, owner: reg_176 } = l1;
-            object::delete(reg_174 : 0x2::object::UID);
-            return (l6, l18)
+            
         },
         2 => {
-            l15 = table::remove(&mut l0.oco_groups, l14);
-            *(&mut (&mut l15).is_active) = false;
-            table::add(&mut l0.oco_groups, l14, l15);
-            table::add(&mut l0.receipts, l17, l16);
-            event::emit(OrderCancelledByOwnerEvent { order_id: l17, owner: l0.owner, cancelled_at: l7 });
-            let OrderReceipt { id: reg_174, order_data: reg_175, owner: reg_176 } = l1;
-            object::delete(reg_174 : 0x2::object::UID);
-            return (l6, l18)
+            
         },
         3 => {
-            table::add(&mut l0.receipts, l17, l16);
-            event::emit(OrderCancelledByOwnerEvent { order_id: l17, owner: l0.owner, cancelled_at: l7 });
-            let OrderReceipt { id: reg_174, order_data: reg_175, owner: reg_176 } = l1;
-            object::delete(reg_174 : 0x2::object::UID);
-            return (l6, l18)
+            
         }
     }
 }

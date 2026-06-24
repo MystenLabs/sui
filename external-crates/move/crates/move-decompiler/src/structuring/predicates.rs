@@ -98,6 +98,17 @@ pub fn cond_atom(code: u64) -> Formula {
     atom(cond_var_name(NodeIndex::new(code as usize)))
 }
 
+/// Prefix for synthetic variant-test atoms. A `Variants(switch, code, _, [(v_1, t_1), ...])`
+/// edge `switch -> t_k` fires when `subject == v_k`; we model that as an atom named
+/// `__match{code}_{variant}` and treat distinct `k` values as mutually exclusive at emission
+/// (not within the Formula algebra - the smart constructors don't model mutex).
+const MATCH_PREFIX: &str = "__match";
+
+/// `Atom` for the `code`'s edge taken on variant `variant`.
+pub fn match_atom(code: u64, variant: &str) -> Formula {
+    atom(Symbol::from(format!("{MATCH_PREFIX}{code}_{variant}")))
+}
+
 // -------------------------------------------------------------------------------------------------
 // Smart constructors (normalizing - see module-level comment for the invariants)
 // -------------------------------------------------------------------------------------------------
@@ -411,26 +422,11 @@ impl Formula {
                 .map(Formula::to_exp)
                 .reduce(|a, b| prim(PrimitiveOp::And, vec![a, b]))
                 .expect("non-empty And after normalization"),
-            FormulaTree::Or(fs) => {
-                // Reorder for Move's def-init check. Reaching-condition disjunctions for
-                // "we got past block G" emit as `X || !G` where `X` is conditionally
-                // bound under `G`. Emitting the `Atom` first reads `X` before `||`'s
-                // short-circuit can fire on `!G`, so Move rejects the result. Put `Not`
-                // children first; `||`'s left-to-right short-circuit then gates the read.
-                let mut order: Vec<&Formula> = fs.iter().collect();
-                order.sort_by(|a, b| {
-                    let key = |f: &Formula| match &f.0 {
-                        FormulaTree::Not(_) => 0,
-                        _ => 1,
-                    };
-                    key(a).cmp(&key(b)).then_with(|| a.cmp(b))
-                });
-                order
-                    .into_iter()
-                    .map(Formula::to_exp)
-                    .reduce(|a, b| prim(PrimitiveOp::Or, vec![a, b]))
-                    .expect("non-empty Or after normalization")
-            }
+            FormulaTree::Or(fs) => fs
+                .iter()
+                .map(Formula::to_exp)
+                .reduce(|a, b| prim(PrimitiveOp::Or, vec![a, b]))
+                .expect("non-empty Or after normalization"),
         }
     }
 }

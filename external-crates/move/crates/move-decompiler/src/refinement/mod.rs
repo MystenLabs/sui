@@ -7,7 +7,6 @@ mod bool_if_simplify;
 mod collapse_let_usage;
 mod collect_uses;
 mod dedupe_freeze;
-mod elide_post_assert_guards;
 mod flatten_seq;
 mod fuse_let;
 mod hoist_arm_assignments;
@@ -66,7 +65,6 @@ const REFINEMENTS: &[Refinement] = &[
     // Run after `recover_asserts` so `assert!(...)` calls are identifiable; the pass drops
     // wrappers whose guards are implied by previous asserts, freeing the synthetic `__cN`
     // locals for later inlining.
-    elide_post_assert_guards::refine,
     strip_loop_labels::refine,
     swap_continue_break::refine,
     swap_continue_break_else::refine,

@@ -96,70 +96,31 @@ pub(super) fn structure_loop(
         succ_nodes.iter().copied().min()
     };
 
-    acyclic::structure_acyclic_node(
-        ctx,
-        graph,
+    // NMG structures the loop body in one go from the raw `input`, restricted to
+    // `loop_nodes`. `members = loop_nodes \ {loop_head}` makes back-edges to `loop_head`
+    // fire the out-of-region rule, emitting exit-jumps that `insert_breaks` rewrites to
+    // `Continue`. Inner sub-loops are already `Input::Reduced` markers (post-order DFS).
+    let region_input: BTreeMap<D::Label, D::Input> = input
+        .iter()
+        .filter(|(k, _)| loop_nodes.contains(k))
+        .map(|(k, v)| (*k, v.clone()))
+        .collect();
+    let members: HashSet<NodeIndex> = loop_nodes
+        .iter()
+        .copied()
+        .filter(|n| *n != loop_head)
+        .collect();
+    let body = acyclic::structure_acyclic(
+        config,
+        terms,
         structured_blocks,
+        &region_input,
         loop_head,
-        input,
-        /*loop_successor*/ loop_successor,
-    );
-
-    // Hand reaching the live `input` restricted to `loop_nodes`. `members = loop_nodes \
-    // {loop_head}` makes back-edges to `loop_head` fire `!in_region`, emitting exit-jumps
-    // that `insert_breaks` rewrites to `Continue`. Inner sub-loops are `Input::Reduced`
-    // markers (post-order DFS) and walk via `process_reduced`. Dispatch mode is gated --
-    // see notes in V_B_PLAN.md.
-    let reaching_body: Option<D::Structured> = if !multi_successor_mode {
-        let region_input: BTreeMap<D::Label, D::Input> = input
-            .iter()
-            .filter(|(k, _)| loop_nodes.contains(k))
-            .map(|(k, v)| (*k, v.clone()))
-            .collect();
-        let members: HashSet<NodeIndex> = loop_nodes
-            .iter()
-            .copied()
-            .filter(|n| *n != loop_head)
-            .collect();
-        acyclic::structure_acyclic(
-            config,
-            terms,
-            structured_blocks,
-            &region_input,
-            loop_head,
-            &members,
-        )
-    } else {
-        None
-    };
-
-    let mut loop_body = vec![];
-    if let Some(body) = reaching_body {
-        // Discard dom-tree-produced structured forms for body nodes - reaching builds the
-        // whole body in one go from the raw input. Post-loop succ nodes (owned_succs that are
-        // outside `loop_nodes`) keep their entries; the wrapping logic below still consumes
-        // them for the post-loop append / dispatch arm assembly.
-        for n in &loop_nodes {
-            structured_blocks.remove(n);
-        }
-        let body_with_breaks = insert_breaks(&loop_nodes, loop_head, loop_successor, body);
-        loop_body.push(body_with_breaks);
-    } else {
-        // Dom-tree body assembly: emit body nodes in RPO over `loop_nodes`. RPO places each
-        // absorbed IfElse's post-dominator right after it, so `LatchKind::InLoop` Jumps in
-        // `insert_breaks` can be dropped without breaking fall-through.
-        let body_order = reverse_post_order_within(&graph.cfg, loop_head, &loop_nodes);
-        for node in body_order {
-            let Some(node) = structured_blocks.remove(&node) else {
-                continue;
-            };
-            let result = insert_breaks(&loop_nodes, loop_head, loop_successor, node);
-            loop_body.push(result);
-        }
-        // Drop tail-Jumps in body[i] that target body[i+1]'s entry: RPO adjacency makes them
-        // jumps to their own fall-through.
-        elide_inter_item_gotos(&mut loop_body);
-    }
+        &members,
+    )
+    .expect("NMG failed on loop body");
+    let body_with_breaks = insert_breaks(&loop_nodes, loop_head, loop_successor, body);
+    let loop_body = vec![body_with_breaks];
 
     let (result, absorbed_succs): (D::Structured, HashSet<NodeIndex>) = if multi_successor_mode {
         // Dispatch absorbs every owned succ into the SelectorMatch tail.
@@ -335,59 +296,29 @@ fn try_structure_loop_without_dispatch(
         .filter(|n| *n != primary)
         .collect();
 
-    acyclic::structure_acyclic_node(
-        ctx,
-        graph,
+    // NMG structures the loop body in one go. Same hook the main `structure_loop`
+    // path uses; inner sub-loops are already `Input::Reduced` markers.
+    let region_input: BTreeMap<D::Label, D::Input> = input
+        .iter()
+        .filter(|(k, _)| loop_nodes.contains(k))
+        .map(|(k, v)| (*k, v.clone()))
+        .collect();
+    let members: HashSet<NodeIndex> = loop_nodes
+        .iter()
+        .copied()
+        .filter(|n| *n != loop_head)
+        .collect();
+    let body = acyclic::structure_acyclic(
+        config,
+        terms,
         structured_blocks,
+        &region_input,
         loop_head,
-        input,
-        /*loop_successor*/ Some(primary),
-    );
-
-    // Reaching-condition acyclic structuring for the loop body - same hook the single-exit
-    // `structure_loop` path uses. We try reaching on the live `input` restricted to
-    // `loop_nodes`; inner sub-loops are already `Input::Reduced` markers (post-order DFS).
-    // On success the body is one Structured form ready for `insert_breaks` once. On failure
-    // we fall through to the dom-tree body assembly below.
-    let reaching_body: Option<D::Structured> = {
-        let region_input: BTreeMap<D::Label, D::Input> = input
-            .iter()
-            .filter(|(k, _)| loop_nodes.contains(k))
-            .map(|(k, v)| (*k, v.clone()))
-            .collect();
-        let members: HashSet<NodeIndex> = loop_nodes
-            .iter()
-            .copied()
-            .filter(|n| *n != loop_head)
-            .collect();
-        acyclic::structure_acyclic(
-            config,
-            terms,
-            structured_blocks,
-            &region_input,
-            loop_head,
-            &members,
-        )
-    };
-
-    let mut loop_body = vec![];
-    if let Some(body) = reaching_body {
-        for n in loop_nodes {
-            structured_blocks.remove(n);
-        }
-        let body_with_breaks = insert_breaks(loop_nodes, loop_head, Some(primary), body);
-        loop_body.push(body_with_breaks);
-    } else {
-        let body_order = reverse_post_order_within(&graph.cfg, loop_head, loop_nodes);
-        for node in body_order {
-            let Some(node) = structured_blocks.remove(&node) else {
-                continue;
-            };
-            let result = insert_breaks(loop_nodes, loop_head, Some(primary), node);
-            loop_body.push(result);
-        }
-        elide_inter_item_gotos(&mut loop_body);
-    }
+        &members,
+    )
+    .expect("NMG failed on speculative multi-succ loop body");
+    let body_with_breaks = insert_breaks(loop_nodes, loop_head, Some(primary), body);
+    let loop_body = vec![body_with_breaks];
 
     // Check: any residual `Jump`/`JumpIf` targeting a non-primary owned succ means the body
     // has real per-exit divergence we can't express without a selector. Bail to dispatch.
