@@ -71,7 +71,7 @@ bundle entry point, listing reference files, or reading a specific reference fil
 sui prompt skill sui-move-security-review
 ```
 
-SKILL.md is the bundle's routing table. Reading it alone is not enough — drill into the
+SKILL.md is the bundle's entry point. Reading it alone is not enough — drill into the
 reference files for the actual content.
 
 ### Example 6 — list reference files in a bundle

@@ -13,7 +13,8 @@ skills:
 `SM-*` rule must be considered — applicability is by shape, not by name, and
 the rules you skip are usually the ones that would have fired. Absence-detection
 rules silently miss vulnerabilities when their files weren't loaded. Partial
-loads create blind spots you can't predict in advance.
+loads create blind spots you can't predict in advance. Incremental loading is
+possible but should be the last resort. Even then, do not skip any files or rules to avoid creating blind spots.
 
 **Training data is not a substitute for actually loading files.** You have
 seen Move security rules in training; this catalog is not those rules. Files

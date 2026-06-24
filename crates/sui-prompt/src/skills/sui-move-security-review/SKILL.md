@@ -16,10 +16,10 @@ description: >
 # Move Security Review (on Sui)
 
 > **Self-bootstrap (any AI agent):** this skill is bundled inside the `sui` binary. **For
-> comprehensive audits, read every reference file in this bundle before applying the
-> routing table below** — default to `sui prompt skill sui-move-security-review --all`
-> for a one-shot load of all of them. The detection heuristics, severity ratings, and
-> exploit sketches live in those per-category files; the routing table is a summary only.
+> comprehensive audits, read every reference file in this bundle** — default to
+> `sui prompt skill sui-move-security-review --all` for a one-shot load of all of them.
+> Incremental loading is possible but should be the last resort. Even then, do not skip any files or rules to avoid creating blind spots. The detection heuristics, severity ratings, and exploit
+> sketches live in those per-category files.
 > This skill belongs to one or more categories — run `sui prompt categories` to see them
 > and `sui prompt category <name>` to read the category's workflow. No filesystem install
 > is required — the binary is self-contained.
@@ -68,21 +68,6 @@ description: >
 - **Critical** — direct loss/theft of funds or objects, unlimited mint, total authority seizure, or permanent asset lock.
 - **High** — privilege escalation, invariant bypass, or DoS of core functionality under realistic conditions.
 - **Medium** — conditional/limited-impact issues, information disclosure, griefing, or contention DoS.
-
-## Routing table (load the reference file for the category in scope)
-
-| File | Categories | Covers |
-|------|-----------|--------|
-| `access-control.md` | A, G(custody) | capability abilities, missing auth, cap↔resource binding, admin handoff, witness forging, treasury/deny custody |
-| `abilities-and-types.md` | B | object shape, irreversible `store`/soulbound, event/Display exposure, type-confusion / fake-object injection |
-| `object-lifecycle.md` | C, D | UID deletion & orphaned dynamic fields, accidental share, ungated shared-object delete, `Receiving<T>`, on-chain invariant enforcement, contention/equivocation |
-| `dynamic-fields.md` | E | DF key collision/predictability, DF vs DOF addressability, unbounded inline collections, cleanup |
-| `arithmetic-and-coins.md` | F, G | integer truncation via `as`, rounding/zero-amount, mint/burn gating, deny-list enforcement |
-| `init-otw-upgrades.md` | H, I | OTW well-formedness, unsafe `init`, `UpgradeCap` custody, versioning/migration gaps |
-| `composability-and-ptb.md` | J, K | hot-potato weakening, internal-transfer/leaky `_mut`, attacker-orchestrated PTB, gas-coin/sponsor |
-| `time-and-randomness.md` | L | `Clock` vs epoch time, **randomness test-and-abort** |
-| `test-and-offchain.md` | M + appendix | `#[test_only]` leakage; off-chain appendix (non-blocking) |
-| `auditing-bytecode.md` | all (disassembly bridge) | per-rule disassembly opcode signals — load when your representation is `.asm` (compiled bytecode); skip when working with `.move` source |
 
 ## Known system addresses (sanity references)
 
