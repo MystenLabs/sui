@@ -110,34 +110,15 @@ pub fn crash_recovery_probability() -> Option<f64> {
 
 /// Return `true` if `digest` should be treated as a poison transaction.
 ///
-/// Uses a process-global seed (initialised once from OS entropy via `OnceLock`) so that all
 /// Returns `false` if no crash probability has been set via `set_crash_recovery_probability`.
 ///
-/// In simtests a process-global random seed is mixed in so that different test seeds exercise
-/// different transactions.  Outside simtests (Antithesis, debug builds) the decision is purely
-/// content-addressed so that independent validator processes always agree on which transactions
-/// are poison.
+/// The decision is purely content-addressed so that independent validator processes always agree
+/// on which transactions are poison. Under msim, getrandom is intercepted and made deterministic,
+/// so this is equally reproducible there.
 pub fn should_poison_transaction(digest: &TransactionDigest) -> bool {
     let Some(prob) = crash_recovery_probability() else {
         return false;
     };
-
-    #[cfg(msim)]
-    {
-        use std::hash::{Hash, Hasher};
-        static CRASH_SEED: OnceLock<u64> = OnceLock::new();
-        let seed = *CRASH_SEED.get_or_init(|| {
-            use rand::Rng;
-            rand::thread_rng().r#gen::<u64>()
-        });
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        seed.hash(&mut hasher);
-        digest.hash(&mut hasher);
-        let threshold = (prob.clamp(0.0, 1.0) * u64::MAX as f64) as u64;
-        return hasher.finish() < threshold;
-    }
-
-    #[cfg(not(msim))]
     mysten_common::random::content_addressed_probability(digest.as_ref(), prob as f32)
 }
 
