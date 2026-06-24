@@ -587,7 +587,14 @@ fn generate_output_inner(
         D::Structured::Break(label) => Out::Exp::Break(Some(label.index() as u64)),
         D::Structured::Continue(label) => Out::Exp::Continue(Some(label.index() as u64)),
         D::Structured::Block(lbl) => {
-            let term = terms.remove(&(lbl as u32).into()).unwrap();
+            // A previous `CondIf` whose formula included `cond_atom(lbl)` may have already
+            // pulled this block's term as its setup. In that case the block's code-effect
+            // (the `let __c{N} = test;` binding plus any side-effecting computation in the
+            // test) has already been emitted, so emit an empty `Block` here rather than
+            // panic - same defensive shape `CondIf`'s setup loop uses.
+            let term = terms
+                .remove(&(lbl as u32).into())
+                .unwrap_or_else(|| Out::Exp::Seq(vec![]));
             Out::Exp::Block(lbl, Box::new(term))
         }
         D::Structured::Loop(label, body) => Out::Exp::Loop(
