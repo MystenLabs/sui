@@ -25,6 +25,42 @@ executed bytecode; findings derived from it are byte-for-byte faithful.
    findings as `<SM-ID> · <module>.asm:B<block>@i<index>` — the basic-block label plus
    instruction index within the block.
 
+## Reasoning idioms in disassembly
+
+Several rules below ask you to "trace", "walk", or "verify absence". In disassembly
+these are operational steps, not visual scans of source-shaped prose. Three idioms
+recur:
+
+1. **Verifying an absence-check across paths.** Find the privileged `Call` site
+   (mint, transfer, borrow_mut, …). Walk backward through `BrFalse`/`Branch`
+   predecessors to enumerate every basic block that *reaches* this Call. On each
+   reaching path the guard must be present: `[Imm/Mut]BorrowField(<state>)` or
+   `Call <getter>` + `Eq`/`Lt`/`Gt` + `BrFalse(<abort_block>)` where the abort
+   block holds `LdConst[i]` + `Abort`. A guard present on some paths does not
+   clear paths missing it; a guard elsewhere in the module (different function,
+   different branch that doesn't reach this Call) does not count.
+
+2. **Tracing a value backward through the stack machine.** From a use site (the
+   operand of a `Call`, `WriteRef`, `Pack`, or `Ret`), identify what produced the
+   operand: `MoveLoc[k]` / `CopyLoc[k]` ← the most recent `StLoc[k]` defined
+   `loc<k>`; `MutBorrowField(T.f)` ← read from the field of some `T` instance
+   (continue tracing `T` itself back); `Call <fn>(...): RetType` ← the return value
+   of `<fn>` (continue tracing inside `<fn>` if the question crosses the boundary).
+   Walk until you reach an `Arg<k>` (function parameter — the question becomes
+   "what does the caller pass") or a `Pack[i]` (locally constructed — the question
+   becomes "what fields did this module fill in").
+
+3. **Type tracking across opcodes.** The function signature line names each
+   `Arg<k>`'s type verbatim, including generics: `Arg0: &mut Pool<USDC>`,
+   `Arg1: Coin<Ty0>`. `Pack[i]` / `Unpack[i]` reference a specific declared type.
+   Generic instantiations appear in `Call` ops as `Call <fn><Ty0>(...)`. When a
+   generic-`Ty0` value flows into the same operation as a concrete-typed value
+   (e.g., an `Add` of a `Call coin::value<Ty0>` result over a
+   `MutBorrowField(Pool<USDC>.balance) + ReadRef`), the type mismatch *is* the
+   signal — Move's type system would normally reject this in source, so its
+   presence in disassembly means the function is generic over `Ty0` and never
+   constrained it.
+
 ## Per-rule disassembly signals
 
 Each entry below names the concrete assembly pattern to look for. Pair with the rule
