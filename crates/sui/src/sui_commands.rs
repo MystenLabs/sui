@@ -69,7 +69,6 @@ use sui_move_build::BuildConfig as SuiBuildConfig;
 use sui_package_alt::{SuiFlavor, find_environment};
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::{LocalDatabase, get_available_port};
-#[cfg(debug_assertions)]
 use sui_prompt::{self, execute_prompt_command};
 use sui_protocol_config::Chain;
 use sui_replay_2 as SR2;
@@ -382,7 +381,6 @@ pub enum SuiCommand {
     },
 
     /// Expert Sui and Move knowledge for AI agents (run `sui prompt` to start).
-    #[cfg(debug_assertions)]
     #[clap(name = "prompt")]
     Prompt(sui_prompt::Prompt),
 
@@ -721,7 +719,6 @@ impl SuiCommand {
                     }
                 }
             }
-            #[cfg(debug_assertions)]
             SuiCommand::Prompt(prompt) => {
                 execute_prompt_command(prompt)?;
                 Ok(())
