@@ -15,10 +15,14 @@ Source: `MystenLabs/skills → sui-move/move.md`.
 
 ### SM-B2 — Irreversible `store` breaks soulbound / locked invariants   [Critical]
 Invariant: objects intended to be non-transferable, locked, or under custom transfer rules must
-NOT have `store`. The `store` ability globally enables `public_transfer`, `public_share_object`,
-and `public_freeze_object` from *any* module — and cannot be removed later.
+NOT have `store`. The `store` ability globally enables the four `0x2::transfer` `public_*`
+variants from *any* module: `public_transfer` (move), `public_share_object` (share globally),
+`public_freeze_object` (freeze immutably), and `public_receive` (accept from `Receiving<T>`).
+The bare module-internal variants (`transfer::transfer`, `share_object`, `freeze_object`,
+`receive`) do not require `store`. Once added, `store` cannot be removed later.
 Detect: types described/used as "soulbound", bound, locked, or escrowed that carry `store`; or
-such types with module-exposed transfer functions.
+such types with module-exposed transfer functions. Soulbound (intended-non-transferable) is the
+most common motivation, but `store` similarly opens shared / frozen / receive misuse.
 Exploit: anyone calls `public_transfer` to move/steal the object, or `public_share_object` to
 force it into shared state, bypassing the intended binding.
 Source: `MystenLabs/skills → object-model/ownership.md`, `MystenLabs/skills → object-model/transfers.md`.
