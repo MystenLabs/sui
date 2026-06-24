@@ -1,13 +1,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
+use std::{any::Any, collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use crate::{
     PreCompiledProgramInfo,
     cfgir::{
         CFGContext,
-        absint::{AbstractDomain, AnalysisResult, JoinResult, TransferFunctions, analyze_function},
+        absint::{AbstractDomain, JoinResult, TransferFunctions},
         ast as G,
         cfg::ImmForwardCFG,
     },
@@ -25,7 +25,7 @@ use move_proc_macros::growing_stack;
 pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 pub type CFGIRVisitorObj = Box<dyn CFGIRVisitor>;
 
-pub trait CFGIRVisitor: Send + Sync {
+pub trait CFGIRVisitor: Send + Sync + Any {
     fn visit(
         &self,
         env: &CompilationEnv,
@@ -41,7 +41,7 @@ pub trait CFGIRVisitor: Send + Sync {
     }
 }
 
-pub trait AbstractInterpreterVisitor: Send + Sync {
+pub trait AbstractInterpreterVisitor: Send + Sync + Any {
     fn verify(&self, context: &CFGContext, cfg: &ImmForwardCFG) -> Diagnostics;
 
     fn visitor(self) -> Visitor
@@ -331,7 +331,7 @@ impl<V: CFGIRVisitor + 'static> From<V> for CFGIRVisitorObj {
     }
 }
 
-impl<V: CFGIRVisitorConstructor + Send + Sync> CFGIRVisitor for V {
+impl<V: CFGIRVisitorConstructor + Send + Sync + 'static> CFGIRVisitor for V {
     fn visit(
         &self,
         env: &CompilationEnv,
@@ -546,8 +546,9 @@ pub trait SimpleAbsIntConstructor: Sized {
         let Some(mut ai) = Self::new(context, cfg, &mut init_state) else {
             return Diagnostics::new();
         };
-        let result = analyze_function(&mut ai, cfg, init_state);
-        ai.finish(result)
+        let (final_states, ds) =
+            crate::cfgir::absint::analyze_function_with_post_states(&mut ai, cfg, init_state);
+        ai.finish(final_states, ds)
     }
 }
 
@@ -556,21 +557,36 @@ pub trait SimpleAbsInt: Sized {
     /// The execution context local to a command
     type ExecutionContext: SimpleExecutionContext;
 
-    /// A hook for additional processing after visiting all code, with access
-    /// to the analysis result: per-block pre-states (keyed by label),
-    /// post-states for each *reachable* block (unprocessed blocks are absent),
-    /// and the diagnostics collected during the analysis. The default just
-    /// forwards the diagnostics.
-    fn finish(&mut self, result: AnalysisResult<Self::State>) -> Diagnostics {
-        result.diags
-    }
+    /// A hook for an additional processing after visiting all codes. The `final_states` give the
+    /// pre- and post-states for each block (keyed by the label for the block); the post-state is
+    /// `None` if the block was never processed (e.g. unreachable). The `diags` are collected from
+    /// all code visited.
+    fn finish(
+        &mut self,
+        final_states: BTreeMap<Label, crate::cfgir::absint::BlockStates<Self::State>>,
+        diags: Diagnostics,
+    ) -> Diagnostics;
 
-    /// A hook for any pre-processing at the start of a command
-    fn start_command(&self, pre: &mut Self::State) -> Self::ExecutionContext;
+    /// Called once at the start of each block, with the block's pre-state.
+    fn start_block(&mut self, _label: Label, _pre: &Self::State) {}
 
-    /// A hook for any post-processing after a command has been visited
+    /// Called once at the end of each processed block, with the block's post-state.
+    fn finish_block(&mut self, _label: Label, _post: &Self::State) {}
+
+    /// A hook for any pre-processing at the start of a command, with the enclosing block's
+    /// label and the command's index in that block.
+    fn start_command(
+        &self,
+        label: Label,
+        idx: usize,
+        pre: &mut Self::State,
+    ) -> Self::ExecutionContext;
+
+    /// A hook for any post-processing after a command has been visited.
     fn finish_command(
         &self,
+        label: Label,
+        idx: usize,
         context: Self::ExecutionContext,
         state: &mut Self::State,
     ) -> Diagnostics;
@@ -809,16 +825,24 @@ pub fn default_values<V: Clone + Default>(c: usize) -> Vec<V> {
 impl<V: SimpleAbsInt> TransferFunctions for V {
     type State = V::State;
 
+    fn start_block(&mut self, label: Label, pre: &Self::State) {
+        SimpleAbsInt::start_block(self, label, pre)
+    }
+
+    fn finish_block(&mut self, label: Label, post: &Self::State) {
+        SimpleAbsInt::finish_block(self, label, post)
+    }
+
     fn execute(
         &mut self,
         pre: &mut Self::State,
-        _lbl: Label,
-        _idx: usize,
+        lbl: Label,
+        idx: usize,
         cmd: &Command,
     ) -> Diagnostics {
-        let mut context = self.start_command(pre);
+        let mut context = self.start_command(lbl, idx, pre);
         self.command(&mut context, pre, cmd);
-        self.finish_command(context, pre)
+        self.finish_command(lbl, idx, context, pre)
     }
 }
 
@@ -828,7 +852,7 @@ impl<V: AbstractInterpreterVisitor + 'static> From<V> for AbsIntVisitorObj {
     }
 }
 
-impl<V: SimpleAbsIntConstructor + Send + Sync> AbstractInterpreterVisitor for V {
+impl<V: SimpleAbsIntConstructor + Send + Sync + 'static> AbstractInterpreterVisitor for V {
     fn verify(&self, context: &CFGContext, cfg: &ImmForwardCFG) -> Diagnostics {
         <Self as SimpleAbsIntConstructor>::verify(context, cfg)
     }

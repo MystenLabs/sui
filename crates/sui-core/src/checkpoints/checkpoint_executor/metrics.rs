@@ -26,6 +26,7 @@ pub struct CheckpointExecutorMetrics {
     // TODO: delete once users are migrated to non-Mysten histogram.
     pub last_executed_checkpoint_age_ms: MystenHistogram,
     pub checkpoint_executor_validator_path: IntGauge,
+    pub checkpoint_executor_validator_sync_fallback_path: IntGauge,
 
     pub stage_wait_duration_ns: IntCounterVec,
     pub stage_active_duration_ns: IntCounterVec,
@@ -118,6 +119,12 @@ impl CheckpointExecutorMetrics {
             checkpoint_executor_validator_path: register_int_gauge_with_registry!(
                 "checkpoint_executor_validator_path",
                 "Number of checkpoints executed using the validator path",
+                registry
+            )
+            .unwrap(),
+            checkpoint_executor_validator_sync_fallback_path: register_int_gauge_with_registry!(
+                "checkpoint_executor_validator_sync_fallback_path",
+                "Number of checkpoints executed using the validator fallback path to synced checkpoints",
                 registry
             )
             .unwrap(),

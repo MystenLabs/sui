@@ -17,6 +17,12 @@ Keeping those private keys secure is the central responsibility of any wallet. H
 
 Both hot and cold wallets can be **self-custodial**, meaning you hold the private keys yourself and no third party can access or authorize transactions on your behalf. The alternative is a **custodial wallet**, where a third party (such as an exchange or a developer backend) holds the keys and manages accounts on your behalf.
 
+:::tip
+
+Match the wallet to the value it protects. Keep only spending balances in a hot wallet, and use a hardware or multisig wallet for large balances or privileged funds. Avoid blind signing: confirm the human-readable transaction intent before approving, and prefer wallets that display clear, decoded transaction details. See [user and operator key management](/develop/security/best-practices#user-and-operator-key-management).
+
+:::
+
 ## Sui wallets
 
 [**Slush**](/onchain-finance/asset-custody/wallets/slush): A wallet built and maintained by Mysten Labs. It combines self-custodial key management with a first-party interface optimized for Sui. Slush also exposes an [SDK for wallet and app integration](https://sdk.mystenlabs.com/slush-wallet).

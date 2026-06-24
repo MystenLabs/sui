@@ -349,8 +349,7 @@ fn execute_command<Mode: ExecutionMode>(
         }
         T::Command__::Publish(module_bytes, dep_ids, linkage) => {
             trace_utils::trace_publish_event(trace_builder_opt)?;
-            let modules =
-                context.deserialize_modules(&module_bytes, /* is upgrade */ false)?;
+            let modules = context.deserialize_modules(&module_bytes)?;
 
             let original_id =
                 context.publish_and_init_package(modules, &dep_ids, linkage, trace_builder_opt)?;
@@ -385,7 +384,7 @@ fn execute_command<Mode: ExecutionMode>(
                 ));
             }
             // deserialize modules and charge gas
-            let modules = context.deserialize_modules(&module_bytes, /* is upgrade */ true)?;
+            let modules = context.deserialize_modules(&module_bytes)?;
 
             let computed_digest = MovePackage::compute_digest_for_modules_and_deps(
                 &module_bytes,

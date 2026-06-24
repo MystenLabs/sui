@@ -93,6 +93,7 @@ const config = {
   clientModules: [
     require.resolve("./src/client/pushfeedback-toc.js"),
     require.resolve("./src/client/webmcp.js"),
+    require.resolve("./src/client/kapa-sidebar.js"),
   ],
   plugins: [
     function llmsTxtDirectivePlugin() {
@@ -344,15 +345,12 @@ const config = {
       "data-project-name": "Sui Knowledge",
       "data-project-color": "#298DFF",
       "data-button-hide": "true",
+      "data-view-mode": "sidebar",
       "data-modal-title": "Ask Sui AI",
       "data-modal-ask-ai-input-placeholder": "Ask me anything about Sui!",
       "data-modal-example-questions":"How do I deploy to Sui?,What is Mysticeti?,What are object ownership types for Sui Move?,What are programmable transaction blocks (PTBs)?",
-      "data-modal-body-bg-color": "#E0E2E6",
-      "data-source-link-bg-color": "#FFFFFF",
-      "data-source-link-border": "#298DFF",
-      "data-answer-feedback-button-bg-color": "#FFFFFF",
-      "data-answer-copy-button-bg-color" : "#FFFFFF",
-      "data-thread-clear-button-bg-color" : "#FFFFFF",
+      "data-modal-overlay-hidden": "true",
+      "data-modal-lock-scroll": "false",
       "data-modal-image": "/img/logo.svg",
       "data-mcp-enabled": "true",
       "data-mcp-server-url": "https://sui.mcp.kapa.ai",
@@ -383,9 +381,11 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       announcementBar: {
-        id: "skills_launch",
+        id: "json_rpc_deprecation",
         content:
-          'New: <a href="/skills">Sui Agent Skills</a> — drop pre-built skills into Claude Code, Cursor, Codex, and other AI coding agents.',
+          'JSON-RPC public endpoints shutting down: Testnet week of July 6, Mainnet week of July 20. <a href="/develop/accessing-data/json-rpc-migration">Migrate now</a>.',
+        backgroundColor: '#FFF3CD',
+        textColor: '#664D03',
         isCloseable: true,
       },
       image: "img/sui-doc-og.png",

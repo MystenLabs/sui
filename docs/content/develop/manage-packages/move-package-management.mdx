@@ -49,6 +49,12 @@ Finally, the `test-publish` command makes use of ephemeral publication files, ty
 
 Dependencies allow your package to use code from other packages.
 
+:::info Dependency security
+
+For audited or production builds, pin dependencies to exact revisions (a full 40-character commit hash or an `mvr` version that resolves to a fixed package ID) rather than relying on mutable branches that can change underneath you. Do not commit ephemeral publication files (`Pub.*.toml`) or local-dev addresses to source control. See [Security Best Practices](/develop/security/best-practices) for more.
+
+:::
+
 ### Adding dependencies
 
 To add a dependency, add a line to the `[dependencies]` section of your manifest. For example, to depend on the `mvr` package `@potatoes/ascii`, write:

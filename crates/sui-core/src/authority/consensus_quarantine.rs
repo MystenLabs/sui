@@ -801,10 +801,6 @@ impl ConsensusOutputQuarantine {
             .map(|(summary, _)| summary)
     }
 
-    pub(super) fn included_transaction_in_checkpoint(&self, digest: &TransactionDigest) -> bool {
-        self.builder_digest_to_checkpoint.contains_key(digest)
-    }
-
     pub(super) fn is_consensus_message_processed(
         &self,
         key: &SequencedConsensusTransactionKey,

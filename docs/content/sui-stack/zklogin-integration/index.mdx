@@ -15,6 +15,20 @@ Here is the high-level flow the wallet or frontend application must implement to
 
 The following sections cover the specific implementation details.
 
+:::caution
+
+Before going to production, harden your integration:
+
+- Run a production salt service with proper availability and backups. Losing salts means users permanently lose access to their addresses.
+- Serve all endpoints over HTTPS and configure CORS correctly so only your origins can reach your salt and proving backends.
+- Bind the OAuth `nonce` to both the JWT and the ephemeral public key, and validate it on return to prevent replay and token-substitution attacks.
+- Never log JWTs, ZK proofs, or salts, as these are sensitive credentials.
+- Keep separate Testnet and Mainnet configuration (OAuth clients, salt service, prover) so test credentials never reach production.
+
+See [Security Best Practices](/develop/security/best-practices).
+
+:::
+
 ## Install the zkLogin TypeScript SDK
 
 To use the zkLogin TypeScript SDK in your project, run the following command in your project root:

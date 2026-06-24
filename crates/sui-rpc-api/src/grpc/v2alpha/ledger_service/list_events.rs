@@ -95,7 +95,6 @@ pub(crate) async fn list_events(
         endpoint.default_limit_items,
         endpoint.max_limit_items,
         QueryType::Events,
-        filter.as_ref(),
     )?;
     let limit_items = options.limit_items;
     let ordering = options.ordering;

@@ -413,6 +413,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             committee_store,
             index_store,
             rpc_index,
+            None,
             checkpoint_store,
             &registry,
             genesis_objects_for_index,

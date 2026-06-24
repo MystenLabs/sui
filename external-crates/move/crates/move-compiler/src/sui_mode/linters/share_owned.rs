@@ -124,13 +124,27 @@ impl SimpleAbsInt for ShareOwnedVerifierAI<'_> {
     type State = State;
     type ExecutionContext = ExecutionContext;
 
-    fn start_command(&self, _: &mut State) -> ExecutionContext {
+    fn finish(
+        &mut self,
+        _final_states: BTreeMap<Label, crate::cfgir::absint::BlockStates<State>>,
+        diags: Diagnostics,
+    ) -> Diagnostics {
+        diags
+    }
+
+    fn start_command(&self, _label: Label, _idx: usize, _: &mut State) -> ExecutionContext {
         ExecutionContext {
             diags: Diagnostics::new(),
         }
     }
 
-    fn finish_command(&self, context: ExecutionContext, _state: &mut State) -> Diagnostics {
+    fn finish_command(
+        &self,
+        _label: Label,
+        _idx: usize,
+        context: ExecutionContext,
+        _state: &mut State,
+    ) -> Diagnostics {
         let ExecutionContext { diags } = context;
         diags
     }

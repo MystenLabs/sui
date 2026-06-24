@@ -23,7 +23,6 @@ use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::assert_reachable;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
-use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_common::{debug_fatal, in_test_configuration};
 use mysten_metrics::monitored_scope;
@@ -43,7 +42,7 @@ use sui_types::base_types::{
 use sui_types::base_types::{ConciseableName, ObjectRef};
 use sui_types::committee::Committee;
 use sui_types::committee::CommitteeTrait;
-use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo, RandomnessRound};
+use sui_types::crypto::{AuthoritySignInfo, RandomnessRound};
 use sui_types::digests::{ChainIdentifier, TransactionEffectsDigest};
 use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -71,9 +70,9 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::{
 };
 use sui_types::sui_system_state::{self, SuiSystemState};
 use sui_types::transaction::{
-    AuthenticatorStateUpdate, CertifiedTransaction, DeprecatedWithAliases, InputObjectKind,
-    ProgrammableTransaction, SenderSignedData, StoredExecutionTimeObservations, Transaction,
-    TransactionData, TransactionDataAPI, TransactionKey, TransactionKind, TxValidityCheckContext,
+    AuthenticatorStateUpdate, DeprecatedWithAliases, InputObjectKind, ProgrammableTransaction,
+    SenderSignedData, StoredExecutionTimeObservations, Transaction, TransactionData,
+    TransactionDataAPI, TransactionKey, TransactionKind, TxValidityCheckContext,
     VerifiedSignedTransaction, VerifiedTransaction, VerifiedTransactionWithAliases, WithAliases,
 };
 use tap::TapOptional;
@@ -180,30 +179,6 @@ type LocalExecutionTimeData = (
 pub enum CancelConsensusCertificateReason {
     CongestionOnObjects(Vec<ObjectID>),
     DkgFailed,
-}
-
-pub enum ConsensusCertificateResult {
-    /// The consensus message was ignored (e.g. because it has already been processed).
-    Ignored,
-    /// An executable transaction (can be a user tx or a system tx)
-    SuiTransaction(VerifiedExecutableTransaction),
-    /// The transaction should be re-processed at a future commit, specified by the DeferralKey
-    Deferred(DeferralKey),
-    /// A message was processed which updates randomness state.
-    RandomnessConsensusMessage,
-    /// Everything else, e.g. AuthorityCapabilities, CheckpointSignatures, etc.
-    ConsensusMessage,
-    /// A system message in consensus was ignored (e.g. because of end of epoch).
-    IgnoredSystem,
-    /// A will-be-cancelled transaction. It'll still go through execution engine (but not be executed),
-    /// unlock any owned objects, and return corresponding cancellation error according to
-    /// `CancelConsensusCertificateReason`.
-    Cancelled(
-        (
-            VerifiedExecutableTransaction,
-            CancelConsensusCertificateReason,
-        ),
-    ),
 }
 
 /// ConsensusStats is versioned because we may iterate on the struct, and it is
@@ -398,9 +373,6 @@ pub struct AuthorityPerEpochStore {
     /// Cancellation token used to signal epoch termination to all in-flight tasks.
     epoch_alive_token: CancellationToken,
 
-    /// Used to notify all epoch specific tasks that user certs are closed.
-    user_certs_closed_notify: NotifyOnce,
-
     /// This lock acts as a barrier for tasks that should not be executed in parallel with reconfiguration
     /// See comments in AuthorityPerEpochStore::epoch_terminated() on how this is used
     /// Crash recovery note: we write next epoch in the database first, and then use this lock to
@@ -498,8 +470,9 @@ pub struct AuthorityEpochTables {
 
     /// No longer used.
     #[allow(dead_code)]
-    #[deprecated(note = "column family retained only for backward DB compatibility")]
-    transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
+    #[deprecated(note = "column family retained only for tidehunter backward compatibility")]
+    transaction_cert_signatures:
+        DBMap<TransactionDigest, sui_types::crypto::AuthorityStrongQuorumSignInfo>,
 
     /// Next available shared object versions for each shared object.
     next_shared_object_versions_v2: DBMap<ConsensusObjectSequenceKey, SequenceNumber>,
@@ -914,13 +887,6 @@ impl AuthorityEpochTables {
         Ok(state)
     }
 
-    /// WARNING: This method is very subtle and can corrupt the database if used incorrectly.
-    /// It should only be used in one-off cases or tests after fully understanding the risk.
-    pub fn remove_executed_tx_subtle(&self, digest: &TransactionDigest) -> SuiResult {
-        self.executed_transactions_to_checkpoint.remove(digest)?;
-        Ok(())
-    }
-
     pub fn get_last_consensus_index(&self) -> SuiResult<Option<ExecutionIndices>> {
         Ok(self
             .last_consensus_stats
@@ -958,29 +924,6 @@ impl AuthorityEpochTables {
             .into_iter()
             .map(|l| l.map(|l| l.migrate().into_inner()))
             .collect())
-    }
-
-    pub fn write_transaction_locks(
-        &self,
-        signed_transaction: Option<VerifiedSignedTransaction>,
-        locks_to_write: impl Iterator<Item = (ObjectRef, LockDetails)>,
-    ) -> SuiResult {
-        let mut batch = self.owned_object_locked_transactions.batch();
-        batch.insert_batch(
-            &self.owned_object_locked_transactions,
-            locks_to_write.map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
-        )?;
-        if let Some(signed_transaction) = signed_transaction {
-            batch.insert_batch(
-                &self.signed_transactions,
-                std::iter::once((
-                    *signed_transaction.digest(),
-                    signed_transaction.serializable_ref(),
-                )),
-            )?;
-        }
-        batch.write()?;
-        Ok(())
     }
 
     fn get_all_deferred_transactions_v2(
@@ -1241,7 +1184,6 @@ impl AuthorityPerEpochStore {
             db_options,
             reconfig_state_mem: RwLock::new(reconfig_state),
             epoch_alive_token,
-            user_certs_closed_notify: NotifyOnce::new(),
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
             executed_transactions_to_checkpoint_notify_read: NotifyRead::new(),
@@ -1556,17 +1498,6 @@ impl AuthorityPerEpochStore {
             .running_root_state_hash
             .get(&checkpoint)
             .expect("db error"))
-    }
-
-    pub fn get_highest_running_root_state_hash(
-        &self,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>> {
-        Ok(self
-            .tables()?
-            .running_root_state_hash
-            .reversed_safe_iter_with_bounds(None, None)?
-            .next()
-            .transpose()?)
     }
 
     pub fn insert_running_root_state_hash(
@@ -2154,18 +2085,6 @@ impl AuthorityPerEpochStore {
             .unwrap_or_default())
     }
 
-    pub fn get_accumulators_in_checkpoint_range(
-        &self,
-        from_checkpoint: CheckpointSequenceNumber,
-        to_checkpoint: CheckpointSequenceNumber,
-    ) -> SuiResult<Vec<(CheckpointSequenceNumber, GlobalStateHash)>> {
-        self.tables()?
-            .state_hash_by_checkpoint
-            .safe_range_iter(from_checkpoint..=to_checkpoint)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(Into::into)
-    }
-
     /// Returns future containing the state accumulator for the given epoch
     /// once available.
     pub async fn notify_read_checkpoint_state_hasher(
@@ -2287,16 +2206,6 @@ impl AuthorityPerEpochStore {
             .tables()?
             .executed_transactions_to_checkpoint
             .contains_key(digest)?)
-    }
-
-    pub fn transactions_executed_in_checkpoint(
-        &self,
-        digests: impl Iterator<Item = TransactionDigest>,
-    ) -> SuiResult<Vec<bool>> {
-        Ok(self
-            .tables()?
-            .executed_transactions_to_checkpoint
-            .multi_contains_keys(digests)?)
     }
 
     pub fn get_transaction_checkpoint(
@@ -2583,35 +2492,6 @@ impl AuthorityPerEpochStore {
             .deferred_transactions
             .lock()
             .is_empty()
-    }
-
-    /// Check whether any certificates were processed by consensus.
-    /// This handles multiple certificates at once.
-    pub fn is_any_tx_certs_consensus_message_processed<'a>(
-        &self,
-        certificates: impl Iterator<Item = &'a CertifiedTransaction>,
-    ) -> SuiResult<bool> {
-        let keys = certificates.map(|cert| {
-            SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
-                *cert.digest(),
-            ))
-        });
-        Ok(self
-            .check_consensus_messages_processed(keys)?
-            .into_iter()
-            .any(|processed| processed))
-    }
-
-    /// Returns true if all messages with the given keys were processed by consensus.
-    pub fn all_external_consensus_messages_processed(
-        &self,
-        keys: impl Iterator<Item = ConsensusTransactionKey>,
-    ) -> SuiResult<bool> {
-        let keys = keys.map(SequencedConsensusTransactionKey::External);
-        Ok(self
-            .check_consensus_messages_processed(keys)?
-            .into_iter()
-            .all(|processed| processed))
     }
 
     pub fn is_consensus_message_processed(
@@ -3051,15 +2931,7 @@ impl AuthorityPerEpochStore {
         if epoch_close_time.is_none() {
             // Only update it the first time epoch is closed.
             *epoch_close_time = Some(Instant::now());
-
-            self.user_certs_closed_notify
-                .notify()
-                .expect("user_certs_closed_notify called twice on same epoch store");
         }
-    }
-
-    pub async fn user_certs_closed_notify(&self) {
-        self.user_certs_closed_notify.wait().await
     }
 
     /// Notify epoch is terminated, can only be called once on epoch store
@@ -3528,31 +3400,6 @@ impl AuthorityPerEpochStore {
             }
         }
         Ok(None)
-    }
-
-    pub fn builder_included_transactions_in_checkpoint<'a>(
-        &self,
-        digests: impl Iterator<Item = &'a TransactionDigest>,
-    ) -> SuiResult<Vec<bool>> {
-        let digests: Vec<_> = digests.cloned().collect();
-        let tables = self.tables()?;
-        Ok(do_fallback_lookup(
-            &digests,
-            |digest| {
-                let consensus_quarantine = self.consensus_quarantine.read();
-                if consensus_quarantine.included_transaction_in_checkpoint(digest) {
-                    CacheResult::Hit(true)
-                } else {
-                    CacheResult::Miss
-                }
-            },
-            |remaining| {
-                tables
-                    .builder_digest_to_checkpoint
-                    .multi_contains_keys(remaining)
-                    .expect("db error")
-            },
-        ))
     }
 
     pub(crate) fn record_epoch_pending_certs_process_time_metric(&self) {

@@ -131,7 +131,6 @@ mod test {
                 // Disable system overload checks for the test - during tests with crashes,
                 // it is possible for overload protection to trigger due to validators
                 // having queued certs which are missing dependencies.
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
@@ -154,7 +153,6 @@ mod test {
                 // Disable system overload checks for the test - during tests with crashes,
                 // it is possible for overload protection to trigger due to validators
                 // having queued certs which are missing dependencies.
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
@@ -983,7 +981,6 @@ mod test {
                 // Disable system overload checks for the test - during tests with crashes,
                 // it is possible for overload protection to trigger due to validators
                 // having queued certs which are missing dependencies.
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 max_txn_age_in_queue: Duration::from_secs(10000),
                 max_transaction_manager_queue_length: 10000,
@@ -1027,7 +1024,6 @@ mod test {
                 // Disable system overload checks for the test - during tests with crashes,
                 // it is possible for overload protection to trigger due to validators
                 // having queued certs which are missing dependencies.
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
@@ -2007,7 +2003,6 @@ mod test {
 
         let mut test_cluster = init_test_cluster_builder(1, 0)
             .with_authority_overload_config(AuthorityOverloadConfig {
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
@@ -2161,6 +2156,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_network_with_observer_node() {
         use consensus_config::{NetworkPublicKey, ObserverParameters, PeerRecord};
+        use sui_benchmark::workloads::composite::*;
         use sui_types::crypto::KeypairTraits;
 
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
@@ -2170,7 +2166,6 @@ mod test {
         // Build a 4-node validator network with observer server enabled on all validators
         let mut test_cluster = init_test_cluster_builder(4, 40_000)
             .with_authority_overload_config(AuthorityOverloadConfig {
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
@@ -2264,28 +2259,105 @@ mod test {
         // Let the Observer node stabilize
         tokio::time::sleep(Duration::from_secs(5)).await;
 
-        info!("Running network for a period to verify Observer node doesn't crash");
+        info!("Running object-funds workload to verify Observer node doesn't crash");
 
-        // Let the network run for a while to ensure the Observer node is stable
-        // Submit a few transactions to generate some network activity
-        let sender = test_cluster.get_address_0();
-        let rgp = test_cluster.get_reference_gas_price().await;
-
-        for i in 0..5 {
-            info!("Submitting transaction {}", i);
-            // Fund an address to generate some transaction activity
-            let _ = test_cluster
-                .fund_address_and_return_gas(rgp, None, sender)
-                .await;
-            tokio::time::sleep(Duration::from_secs(2)).await;
+        let composite_metrics = Arc::new(Mutex::new(CompositionMetrics::new()));
+        let composite_config = CompositeWorkloadConfig {
+            num_shared_counters: 1,
+            address_balance_amount: 1000,
+            address_balance_gas_probability: 0.0,
+            mixed_gas_payment_probability: 0.0,
+            conflicting_transaction_probability: 0.0,
+            alias_tx_probability: 0.0,
+            metrics: Some(composite_metrics.clone()),
+            ..Default::default()
         }
+        .with_probability(ObjectBalanceDeposit::NAME, 0.1)
+        .with_probability(ObjectBalanceWithdraw::NAME, 0.3)
+        .with_probability(ObjectBalanceOverdraw::NAME, 1.0)
+        .with_probability(AccumulatorBalanceRead::NAME, 0.2);
 
-        info!("Waiting for the network to advance...");
+        let test_cluster = Arc::new(test_cluster);
+        let mut simulated_load_config = SimulatedLoadConfig::composite_only(composite_config);
+        simulated_load_config.randomized_transaction_weight = 0;
+        test_simulated_load_with_test_config(
+            test_cluster.clone(),
+            20,
+            simulated_load_config,
+            Some(30),
+            Some(10),
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
 
-        // Let the network run longer to verify Observer stability
-        tokio::time::sleep(Duration::from_secs(40)).await;
+        let metrics_sum = composite_metrics.lock().unwrap().sum_all();
+        info!("observer object-funds workload metrics: {metrics_sum:#?}");
+        assert!(
+            metrics_sum.insufficient_funds_count > 0,
+            "observer workload must exercise object-funds insufficient execution"
+        );
 
-        // Check that the Observer node is still running and has the correct role
+        // Snapshot the latest checkpoint that the network has executed, as observed by the
+        // cluster's regular fullnode (which catches up via checkpoint sync). The Observer
+        // node instead catches up by streaming consensus blocks and finalizing checkpoints
+        // locally, so reaching this same sequence number proves block streaming keeps the
+        // Observer up to date with the rest of the network.
+        let target_checkpoint = test_cluster.fullnode_handle.sui_node.with(|node| {
+            node.state()
+                .get_checkpoint_store()
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("checkpoint store read failed")
+                .expect("fullnode should have executed checkpoints")
+        });
+        assert!(
+            target_checkpoint > 0,
+            "network should have produced checkpoints for the catch-up check to be meaningful"
+        );
+
+        info!(
+            "Waiting for Observer node to catch up to checkpoint {} via block streaming",
+            target_checkpoint
+        );
+
+        // Poll the Observer's checkpoint store until it has finalized at least the target
+        // checkpoint. The Observer streams blocks continuously, so it should reach this
+        // snapshot quickly; failing within the timeout means block streaming did not keep
+        // the Observer caught up to the latest checkpoint.
+        let catch_up_timeout = Duration::from_secs(60);
+        let read_observer_checkpoint = || {
+            observer_state
+                .get_checkpoint_store()
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("checkpoint store read failed")
+        };
+        let observer_checkpoint = tokio::time::timeout(catch_up_timeout, async {
+            loop {
+                if let Some(seq) = read_observer_checkpoint()
+                    && seq >= target_checkpoint
+                {
+                    return seq;
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Observer node failed to catch up to checkpoint {} via block streaming within \
+                 {:?}; highest finalized checkpoint was {:?}",
+                target_checkpoint,
+                catch_up_timeout,
+                read_observer_checkpoint(),
+            )
+        });
+
+        info!(
+            "Observer node caught up to checkpoint {} (target {}) via block streaming",
+            observer_checkpoint, target_checkpoint
+        );
+
+        // The Observer must still be running with the Observer role after catching up.
         let final_node_role = observer_state.epoch_store_for_testing().node_role();
         info!(
             "Observer node final check - node_role: {:?}, runs_consensus: {}",
@@ -2293,7 +2365,7 @@ mod test {
             final_node_role.runs_consensus()
         );
 
-        info!("Observer node test completed successfully - node ran without crashing");
+        info!("Observer node test completed successfully - caught up via block streaming");
     }
 
     /// Finds the most recent protocol version that uses an older execution version
@@ -2342,7 +2414,6 @@ mod test {
             sui_framework_snapshot::load_bytecode_snapshot(target_version).unwrap();
         let test_cluster = init_test_cluster_builder(2, 10_000)
             .with_authority_overload_config(AuthorityOverloadConfig {
-                check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })

@@ -2905,7 +2905,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let forking_mode_tx = SuiClientCommands::TransferSui {
+    let skip_signing_tx = SuiClientCommands::TransferSui {
         to: KeyIdentity::Address(address1),
         sui_coin_object_id: coin,
         amount: Some(1),
@@ -2915,14 +2915,14 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
         },
         processing: TxProcessingArgs {
             serialize_signed_transaction: true,
-            forking_mode: true,
+            skip_signing: true,
             ..Default::default()
         },
     }
     .execute(context)
     .await?;
 
-    let SuiClientCommandResult::SerializedSignedTransaction(sender_signed_data) = forking_mode_tx
+    let SuiClientCommandResult::SerializedSignedTransaction(sender_signed_data) = skip_signing_tx
     else {
         panic!("Expected SerializedSignedTransaction result");
     };
@@ -3555,6 +3555,36 @@ async fn test_send_funds_sui() -> Result<(), anyhow::Error> {
     let balance = client.get_balance(address2, &GAS::type_()).await?;
     assert_eq!(balance.address_balance(), amount);
     assert_eq!(balance.coin_balance(), 0);
+
+    let balance_output = SuiClientCommands::Balance {
+        address: Some(recipient1.clone()),
+        coin_type: None,
+        with_coins: false,
+    }
+    .execute(context)
+    .await?
+    .to_string();
+    assert!(
+        balance_output.contains(&amount.to_string()),
+        "{balance_output}"
+    );
+
+    let balance_with_coins_output = SuiClientCommands::Balance {
+        address: Some(recipient1.clone()),
+        coin_type: None,
+        with_coins: true,
+    }
+    .execute(context)
+    .await?
+    .to_string();
+    assert!(
+        balance_with_coins_output.contains("address balance"),
+        "{balance_with_coins_output}"
+    );
+    assert!(
+        balance_with_coins_output.contains(&amount.to_string()),
+        "{balance_with_coins_output}"
+    );
 
     Ok(())
 }

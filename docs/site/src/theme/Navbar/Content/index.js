@@ -64,6 +64,13 @@ function NavbarContentLayout({ left, right }) {
 function SearchLauncher() {
   const [open, setOpen] = React.useState(false);
 
+  // Allow other components (e.g. getting-started search bar) to open the modal
+  React.useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener("open-search-modal", handler);
+    return () => window.removeEventListener("open-search-modal", handler);
+  }, []);
+
   return (
     <>
       <button

@@ -37,7 +37,6 @@ sui-protocol-config.workspace = true
 sui-rpc.workspace = true
 sui-rpc-api.workspace = true
 sui-sdk-types.workspace = true
-sui-storage.workspace = true
 sui-types.workspace = true
 telemetry-subscribers.workspace = true
 thiserror.workspace = true
@@ -47,3 +46,7 @@ tonic-prost.workspace = true
 tonic-reflection.workspace = true
 prost.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+# `test-util` powers `#[tokio::test(start_paused = true)]` in the limiter tests.
+tokio = { workspace = true, features = ["test-util"] }

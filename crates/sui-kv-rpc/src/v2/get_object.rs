@@ -15,8 +15,8 @@ use sui_rpc_api::{
 };
 use sui_types::storage::ObjectKey;
 
-use super::render_json;
 use crate::PackageResolver;
+use crate::render::render_json;
 
 pub const MAX_BATCH_REQUESTS: usize = 1000;
 

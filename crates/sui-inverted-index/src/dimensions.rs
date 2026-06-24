@@ -65,6 +65,12 @@ pub enum IndexDimension {
     /// on this key, resolving `NOT D` as `range \ D` without an extra
     /// evaluator code path. No write path emits this dimension.
     TxUniverse = 0x09,
+    /// Global marker for every Move package write — first publishes and upgrades
+    /// alike, regardless of package. Singleton key (a placeholder byte): every
+    /// package write maps to the same row, so the read side can enumerate all
+    /// package writes chain-wide in checkpoint order without an id to key on.
+    /// Backs the global `Query.packages` listing.
+    AnyPackageWrite = 0x0a,
 }
 
 impl IndexDimension {
@@ -83,6 +89,7 @@ impl IndexDimension {
             tag if tag == Self::EventStreamHead.tag_byte() => Some(Self::EventStreamHead),
             tag if tag == Self::EventExtant.tag_byte() => Some(Self::EventExtant),
             tag if tag == Self::TxUniverse.tag_byte() => Some(Self::TxUniverse),
+            tag if tag == Self::AnyPackageWrite.tag_byte() => Some(Self::AnyPackageWrite),
             _ => None,
         }
     }
@@ -104,6 +111,12 @@ pub const EVENT_EXTANT_VALUE: &[u8] = &[0x00];
 /// length invariant. The key never reaches storage — backends recognize the
 /// tag at scan time and synthesize full buckets over the requested range.
 pub const TX_UNIVERSE_VALUE: &[u8] = &[0x00];
+
+/// Singleton value for the global [`IndexDimension::AnyPackageWrite`] marker:
+/// every package write maps to the same key. Like [`EVENT_EXTANT_VALUE`], it is
+/// a single placeholder byte so the encoded key keeps the standard
+/// `[tag, value...]` shape and passes `BitmapKey::new`'s length invariant.
+pub const ANY_PACKAGE_VALUE: &[u8] = &[0x00];
 
 /// Visit all tx-space dimensions for a transaction.
 ///
@@ -147,6 +160,17 @@ pub fn for_each_transaction_dimension(
         }
 
         f(IndexDimension::AffectedObject, change.id.as_ref());
+
+        // Move package writes — first publishes and upgrades alike — emit a
+        // single global marker so the read side can enumerate every package
+        // write chain-wide in checkpoint order.
+        if let Some(sui_types::object::Data::Package(_)) = change
+            .output_version
+            .and_then(|v| object_set.get(&ObjectKey(change.id, v)))
+            .map(|obj| &obj.data)
+        {
+            f(IndexDimension::AnyPackageWrite, ANY_PACKAGE_VALUE);
+        }
     }
 
     for (_, package_id, module, function) in tx_data.move_calls() {
@@ -690,5 +714,75 @@ mod tests {
             IndexDimension::AffectedAddress,
             balance_owner.as_ref()
         )));
+    }
+
+    #[test]
+    fn transaction_visitor_emits_package_write_marker() {
+        use std::collections::HashSet;
+        use sui_types::digests::TransactionDigest;
+        use sui_types::effects::TestEffectsBuilder;
+        use sui_types::full_checkpoint_content::ObjectSet;
+        use sui_types::move_package::MovePackage;
+        use sui_types::object::{Data, Object};
+
+        // A BCS-encoded `MovePackage` (id 0x0..0, version 2) holding one module
+        // "DUMMY" whose declared self-address is 0x0..0. We patch the id byte
+        // (offset 31) and version byte (offset 32) to model each write below.
+        let pkg_bytes = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 5, 68, 85, 77, 77, 89, 63, 161, 28, 235, 11, 7, 0,
+            0, 5, 4, 1, 0, 2, 5, 2, 1, 7, 3, 6, 8, 9, 32, 0, 0, 0, 5, 68, 85, 77, 77, 89, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ];
+
+        let tx = TestCheckpointBuilder::new(0)
+            .start_transaction(1)
+            .finish_transaction()
+            .build_checkpoint()
+            .transactions[0]
+            .transaction
+            .clone();
+        let signed_data = sui_types::transaction::SenderSignedData::new(tx.clone(), vec![]);
+
+        // Run the extractor over a single package write installed at `id_byte`
+        // and `version`. Returns the emitted keys.
+        let run = |id_byte: u8, version: u8| {
+            let mut bytes = pkg_bytes.clone();
+            bytes[31] = id_byte;
+            bytes[32] = version;
+            let pkg: MovePackage = bcs::from_bytes(&bytes).unwrap();
+            let pkg_id = pkg.id();
+            let pkg_version = pkg.version();
+
+            let mut object_set = ObjectSet::default();
+            object_set.insert(Object::new_package_from_data(
+                Data::Package(pkg),
+                TransactionDigest::random(),
+            ));
+
+            let effects = TestEffectsBuilder::new(&signed_data)
+                .with_package_writes(vec![(pkg_id, pkg_version)])
+                .build();
+
+            let mut keys = HashSet::new();
+            for_each_transaction_dimension(&tx, &effects, None, &object_set, |dim, value| {
+                keys.insert(encode_dimension_key(dim, value));
+            });
+            keys
+        };
+
+        let any_write = encode_dimension_key(IndexDimension::AnyPackageWrite, ANY_PACKAGE_VALUE);
+
+        // Every package write emits the single global marker regardless of
+        // publish-vs-upgrade or whether the upgrade reuses its id: a first
+        // publish (version 1), a user upgrade that mints a new id (version 2,
+        // new id), and a reused-id upgrade (version 2, original == id).
+        for (id_byte, version) in [(0, 1), (1, 2), (0, 2)] {
+            assert!(
+                run(id_byte, version).contains(&any_write),
+                "package write (id_byte={id_byte}, version={version}) emits AnyPackageWrite"
+            );
+        }
     }
 }

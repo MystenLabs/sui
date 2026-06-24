@@ -69,6 +69,11 @@ The example uses a single file to create the smart contract for the project (`re
 | `COIN_NAME` | The name of your regulated coin. |
 | `SUI_FULLNODE_URL` | The URL to the full node network that processes transactions. For Testnet this value is `https://fullnode.testnet.sui.io:443`. |
 
+:::caution
+
+The `ADMIN_SECRET_KEY` in this example is for test and development only. Never store a plaintext admin secret key in production. Production deployments should sign with a hardware wallet, HSM, KMS, or multisig rather than an exported private key. Treat the `TreasuryCap`, `DenyCapV2`, and `MetadataCap` as privileged custody objects: govern them transparently (for example, behind multisig or a governance module) and emit events on sensitive actions so holders and integrators can audit changes. See [coin and capability security](/develop/security/best-practices#coin-and-capability-security).
+
+:::
 
 The TypeScript and Rust clients handle the call to the `coin` package `mint` function. The `coin` package also includes a `mint_and_transfer` function you could use to perform the same task, but the composability of minting the coin in one command and transferring with another is preferable. Using 2 explicit commands allows you to implement future logic between minting and transfer. The structure of programmable transaction blocks means you still make and pay for a single transaction on the network.
 

@@ -57,9 +57,6 @@ struct App {
     /// (deprecated)
     #[clap(long = "app-profile-id")]
     app_profile_id: Option<String>,
-    /// (deprecated)
-    #[clap(long = "checkpoint-bucket")]
-    checkpoint_bucket: Option<String>,
     /// (deprecated) Pipeline watermark to include in GetServiceInfo checkpoint
     /// height. Repeat to include multiple pipelines.
     #[clap(
@@ -121,11 +118,6 @@ fn apply_deprecated_overrides(app: App, config: &mut KvRpcConfig) {
         &mut config.app_profile_id,
     );
     override_field(
-        "--checkpoint-bucket",
-        app.checkpoint_bucket,
-        &mut config.checkpoint_bucket,
-    );
-    override_field(
         "--bigtable-channel-timeout-ms",
         app.bigtable_channel_timeout_ms,
         &mut config.bigtable_channel_timeout_ms,
@@ -178,6 +170,7 @@ async fn main() -> Result<()> {
         None => KvRpcConfig::default(),
     };
     apply_deprecated_overrides(app, &mut config);
+    config.validate()?;
 
     let instance_id = config.instance_id.clone().context(
         "instance_id must be set via the config file (--config-path) or the \
@@ -194,7 +187,6 @@ async fn main() -> Result<()> {
         instance_id,
         config.bigtable_project.clone(),
         config.app_profile_id.clone(),
-        config.checkpoint_bucket.clone(),
         config.channel_timeout(),
         server_version,
         &registry,
@@ -202,6 +194,8 @@ async fn main() -> Result<()> {
         config.pool_config(),
         config.service_info_watermark_pipelines()?,
         config.ledger_history(),
+        config.request_bigtable_concurrency(),
+        config.stages(),
     )
     .await?;
 

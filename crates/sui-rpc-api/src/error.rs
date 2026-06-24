@@ -413,3 +413,28 @@ impl From<CheckpointNotFoundError> for crate::RpcError {
         Self::new(tonic::Code::NotFound, value.to_string())
     }
 }
+
+#[derive(Debug)]
+pub struct EpochNotFoundError {
+    epoch: sui_sdk_types::EpochId,
+}
+
+impl EpochNotFoundError {
+    pub fn new(epoch: sui_sdk_types::EpochId) -> Self {
+        Self { epoch }
+    }
+}
+
+impl std::fmt::Display for EpochNotFoundError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Epoch {} not found", self.epoch)
+    }
+}
+
+impl std::error::Error for EpochNotFoundError {}
+
+impl From<EpochNotFoundError> for crate::RpcError {
+    fn from(value: EpochNotFoundError) -> Self {
+        Self::new(tonic::Code::NotFound, value.to_string())
+    }
+}

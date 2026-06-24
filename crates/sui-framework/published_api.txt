@@ -3748,10 +3748,13 @@ g_div
 g_neg
 	public fun
 	0x2::ristretto255
+verify_bulletproofs_with_dst_ristretto255
+	public fun
+	0x2::rangeproofs
 verify_bulletproofs_ristretto255
 	public fun
 	0x2::rangeproofs
-verify_bulletproofs_ristretto255_internal
+verify_bulletproofs_with_dst_ristretto255_internal
 	fun
 	0x2::rangeproofs
 TableVec

@@ -60,6 +60,12 @@ sequenceDiagram
 Seal should not be used to protect highly sensitive data such as wallet keys, personal health information, or government-level secrets. Review the [Seal Terms of Service](https://seal-docs.wal.app/TermsOfService) and [security best practices](https://seal-docs.wal.app/) before deploying to production.
 :::
 
+:::caution
+
+Your `seal_approve*` access policy is only as trustworthy as the upgrade policy of the package that defines it. Anyone who can upgrade the package can rewrite the policy and grant themselves decryption access, so govern that upgrade path carefully (for example, with an immutable package or a multisig-controlled `UpgradeCap`). Diversify your key servers across independent operators so no single operator can recover plaintext, choose a threshold that balances availability against collusion resistance, and use envelope encryption for large or sensitive data rather than encrypting it directly with Seal. See the [Seal encryption and access control](/develop/security/best-practices#seal-encryption-and-access-control) section of the Security Best Practices guide.
+
+:::
+
 ### How Seal fits with Walrus
 
 Walrus stores all blobs publicly. Seal provides the encryption layer on top. The workflow is:

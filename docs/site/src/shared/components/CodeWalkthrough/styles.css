@@ -1,0 +1,177 @@
+/*
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+*/
+
+/* ---- Container: two-column split ---- */
+.cw-container {
+  display: flex;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+  align-items: flex-start;
+}
+
+/* ---- Left: scrollable steps ---- */
+.cw-steps {
+  flex: 1 1 50%;
+  min-width: 0;
+}
+
+/* ---- Right: sticky code panel ---- */
+.cw-code-panel {
+  flex: 1 1 50%;
+  min-width: 0;
+}
+
+.cw-code-sticky {
+  position: sticky;
+  top: 80px;
+  max-height: calc(100vh - 100px);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--ifm-code-border-radius);
+  border: 1px solid var(--ifm-color-emphasis-200);
+  overflow: hidden;
+  background: var(--prism-background-color);
+}
+
+[data-theme="light"] .cw-code-sticky {
+  border-color: #d0d7de;
+}
+
+/* ---- Code panel title ---- */
+.cw-code-title {
+  padding: 0.4rem 0.8rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+  color: var(--ifm-color-emphasis-600);
+  background: var(--prism-background-color);
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-theme="light"] .cw-code-title {
+  border-color: #d0d7de;
+}
+
+/* ---- Code pre block ---- */
+.cw-code-pre {
+  margin: 0;
+  padding: 0.75rem 0;
+  overflow: auto;
+  flex: 1;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+/* ---- Line styling ---- */
+.cw-line {
+  display: flex;
+  padding: 0 0.75rem;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.cw-line--highlighted {
+  background: var(--docusaurus-highlighted-code-line-bg, rgba(0, 0, 0, 0.1));
+}
+
+[data-theme="dark"] .cw-line--highlighted {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cw-line--dimmed {
+  opacity: 0.3;
+}
+
+.cw-line-number {
+  display: inline-block;
+  width: 2.5rem;
+  text-align: right;
+  padding-right: 1rem;
+  color: var(--ifm-color-emphasis-400);
+  user-select: none;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+.cw-line-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---- Step cards ---- */
+.cw-step {
+  padding: 1.25rem 1rem;
+  margin-bottom: 0.75rem;
+  border-radius: 8px;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.cw-step:hover {
+  background: var(--ifm-color-emphasis-100);
+}
+
+.cw-step--active {
+  border-left-color: var(--ifm-color-primary);
+  background: var(--ifm-color-emphasis-100);
+}
+
+[data-theme="light"] .cw-step--active {
+  background: #f0f4ff;
+  border-left-color: var(--ifm-color-primary);
+}
+
+.cw-step-title {
+  margin: 0 0 0.4rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.cw-step-title code {
+  font-size: 0.9em;
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  background: var(--ifm-color-emphasis-200);
+  font-weight: 500;
+}
+
+.cw-step-content {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.cw-step-content p {
+  margin-bottom: 0.5rem;
+}
+
+.cw-step-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- Loading ---- */
+.cw-loading {
+  padding: 2rem;
+  text-align: center;
+  color: var(--ifm-color-emphasis-500);
+}
+
+/* ---- Responsive: single column on mobile ---- */
+@media (max-width: 768px) {
+  .cw-container {
+    flex-direction: column;
+  }
+
+  .cw-code-panel {
+    order: -1;
+  }
+
+  .cw-code-sticky {
+    position: static;
+    max-height: 400px;
+  }
+}

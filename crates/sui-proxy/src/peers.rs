@@ -7,15 +7,22 @@ use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::ToFromBytes;
 use futures::stream::{self, StreamExt};
 use once_cell::sync::Lazy;
-use prometheus::{CounterVec, HistogramVec};
-use prometheus::{register_counter_vec, register_histogram_vec};
+use prometheus::{CounterVec, HistogramVec, IntGaugeVec};
+use prometheus::{register_counter_vec, register_histogram_vec, register_int_gauge_vec};
+use prost_types::Value as JsonValue;
+use prost_types::value::Kind as JsonKind;
 use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::str::FromStr;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
     time::Duration,
 };
+use sui_rpc::Client as SuiRpcClient;
+use sui_rpc::field::{FieldMask, FieldMaskUtil};
+use sui_rpc::proto::sui::rpc::v2::{GetObjectRequest, Object};
+use sui_sdk_types::{Address, TypeTag};
 use sui_tls::Allower;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeSummary;
@@ -44,6 +51,28 @@ static JSON_RPC_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
     .unwrap()
 });
 
+/// The on-chain hashi committee epoch as last observed by the resolver. A flatlining
+/// value relative to the actual chain epoch indicates the resolver is stuck.
+static HASHI_OBSERVED_EPOCH: Lazy<IntGaugeVec> = Lazy::new(|| {
+    register_int_gauge_vec!(
+        "hashi_proxy_observed_committee_epoch",
+        "Most recent hashi CommitteeSet.epoch observed by the resolver.",
+        &["hashi_object_id"]
+    )
+    .unwrap()
+});
+
+/// Number of hashi members currently in the allowlist (current + pending committee with
+/// a valid 32-byte tls_public_key).
+static HASHI_ALLOWED_MEMBERS: Lazy<IntGaugeVec> = Lazy::new(|| {
+    register_int_gauge_vec!(
+        "hashi_proxy_allowed_members",
+        "Number of hashi members on the proxy allowlist.",
+        &["hashi_object_id"]
+    )
+    .unwrap()
+});
+
 /// AllowedPeers is a mapping of public key to AllowedPeer data
 pub type AllowedPeers = Arc<RwLock<HashMap<Ed25519PublicKey, AllowedPeer>>>;
 
@@ -55,6 +84,11 @@ pub struct AllowedPeer {
     pub public_key: Ed25519PublicKey,
 }
 
+/// Cache of `SuiAddress -> validator name` from the latest sui system state poll.
+/// Used by bridge/hashi resolvers to label peers by friendly validator name without
+/// each resolver re-fetching the validator set.
+type ValidatorNames = Arc<RwLock<BTreeMap<SuiAddress, String>>>;
+
 /// SuiNodeProvider queries the sui blockchain and keeps a record of known validators based on the response from
 /// sui_getValidators.  The node name, public key and other info is extracted from the chain and stored in this
 /// data structure.  We pass this struct to the tls verifier and it depends on the state contained within.
@@ -63,9 +97,14 @@ pub struct AllowedPeer {
 pub struct SuiNodeProvider {
     sui_nodes: AllowedPeers,
     bridge_nodes: AllowedPeers,
+    hashi_nodes: AllowedPeers,
     static_nodes: AllowedPeers,
+    sui_validator_names: ValidatorNames,
     rpc_url: String,
     rpc_poll_interval: Duration,
+    /// Object ID of the `hashi::hashi::Hashi` shared object on the chain identified
+    /// by `rpc_url`. `None` disables the hashi resolver entirely.
+    hashi_object_id: Option<String>,
 }
 
 impl Allower for SuiNodeProvider {
@@ -73,6 +112,7 @@ impl Allower for SuiNodeProvider {
         self.static_nodes.read().unwrap().contains_key(key)
             || self.sui_nodes.read().unwrap().contains_key(key)
             || self.bridge_nodes.read().unwrap().contains_key(key)
+            || self.hashi_nodes.read().unwrap().contains_key(key)
     }
 }
 
@@ -81,6 +121,7 @@ impl SuiNodeProvider {
         rpc_url: String,
         rpc_poll_interval: Duration,
         static_peers: Vec<AllowedPeer>,
+        hashi_object_id: Option<String>,
     ) -> Self {
         // build our hashmap with the static pub keys. we only do this one time at binary startup.
         let static_nodes: HashMap<Ed25519PublicKey, AllowedPeer> = static_peers
@@ -90,12 +131,17 @@ impl SuiNodeProvider {
         let static_nodes = Arc::new(RwLock::new(static_nodes));
         let sui_nodes = Arc::new(RwLock::new(HashMap::new()));
         let bridge_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let hashi_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let sui_validator_names = Arc::new(RwLock::new(BTreeMap::new()));
         Self {
             sui_nodes,
             bridge_nodes,
+            hashi_nodes,
             static_nodes,
+            sui_validator_names,
             rpc_url,
             rpc_poll_interval,
+            hashi_object_id,
         }
     }
 
@@ -118,6 +164,13 @@ impl SuiNodeProvider {
         }
         // check bridge validators
         if let Some(v) = self.bridge_nodes.read().unwrap().get(key) {
+            return Some(AllowedPeer {
+                name: v.name.to_owned(),
+                public_key: v.public_key.to_owned(),
+            });
+        }
+        // check hashi committee members
+        if let Some(v) = self.hashi_nodes.read().unwrap().get(key) {
             return Some(AllowedPeer {
                 name: v.name.to_owned(),
                 public_key: v.public_key.to_owned(),
@@ -252,6 +305,19 @@ impl SuiNodeProvider {
     async fn update_sui_validator_set(&self) {
         match Self::get_validators(self.rpc_url.to_owned()).await {
             Ok(summary) => {
+                // Snapshot the validator-address -> name map for downstream resolvers
+                // (bridge/hashi) before we hand `summary.active_validators` off to the
+                // network-key extractor.
+                let names: BTreeMap<SuiAddress, String> = summary
+                    .active_validators
+                    .iter()
+                    .map(|v| (v.sui_address, v.name.clone()))
+                    .collect();
+                {
+                    let mut nw = self.sui_validator_names.write().unwrap();
+                    *nw = names;
+                }
+
                 let validators = extract(summary);
                 let mut allow = self.sui_nodes.write().unwrap();
                 allow.clear();
@@ -268,6 +334,37 @@ impl SuiNodeProvider {
                 error!("unable to refresh peer list: {error}");
             }
         };
+    }
+
+    async fn update_hashi_committee_set(&self, hashi_object_id: &str) {
+        let validator_names: BTreeMap<SuiAddress, String> =
+            self.sui_validator_names.read().unwrap().clone();
+
+        match resolve_hashi_committee(&self.rpc_url, hashi_object_id, &validator_names).await {
+            Ok(result) => {
+                HASHI_OBSERVED_EPOCH
+                    .with_label_values(&[hashi_object_id])
+                    .set(result.epoch as i64);
+                HASHI_ALLOWED_MEMBERS
+                    .with_label_values(&[hashi_object_id])
+                    .set(result.peers.len() as i64);
+                let mut allow = self.hashi_nodes.write().unwrap();
+                allow.clear();
+                allow.extend(result.peers);
+                info!(
+                    epoch = result.epoch,
+                    pending_epoch = ?result.pending_epoch,
+                    "{} hashi members on the allow list",
+                    allow.len(),
+                );
+            }
+            Err(error) => {
+                JSON_RPC_STATE
+                    .with_label_values(&["update_hashi_committee_set", "failed"])
+                    .inc();
+                error!("unable to refresh hashi peer list: {error:#}");
+            }
+        }
     }
 
     async fn update_bridge_validator_set(&self, metrics_keys: MetricsPubKeys) {
@@ -320,10 +417,17 @@ impl SuiNodeProvider {
             loop {
                 interval.tick().await;
 
+                // The sui validator set must update first; bridge and hashi resolvers
+                // read the cached `sui_validator_names` for friendly labeling.
                 cloned_self.update_sui_validator_set().await;
                 cloned_self
                     .update_bridge_validator_set(bridge_metrics_keys.clone())
                     .await;
+                if let Some(hashi_object_id) = cloned_self.hashi_object_id.as_deref() {
+                    cloned_self
+                        .update_hashi_committee_set(hashi_object_id)
+                        .await;
+                }
             }
         });
     }
@@ -537,6 +641,416 @@ fn append_path_segment(mut url: Url, segment: &str) -> Option<Url> {
     Some(url)
 }
 
+// Hashi committee resolver.
+//
+// Reads on-chain state via sui-rpc gRPC, requesting the `json` rendering of
+// each Move object and path-walking into the fields we need — keeps the
+// resolver resilient to hashi adding sibling fields. See
+// `sui-types/src/object/rpc_visitor/mod.rs` for the JSON encoding rules
+// (UID/ID flattened to address strings, u64 as string, vector<u8> as base64,
+// Option<T> as null or bare T).
+
+fn json_struct(v: &JsonValue) -> Option<&std::collections::BTreeMap<String, JsonValue>> {
+    if let Some(JsonKind::StructValue(s)) = &v.kind {
+        Some(&s.fields)
+    } else {
+        None
+    }
+}
+
+fn json_string(v: &JsonValue) -> Option<&str> {
+    if let Some(JsonKind::StringValue(s)) = &v.kind {
+        Some(s)
+    } else {
+        None
+    }
+}
+
+fn json_list(v: &JsonValue) -> Option<&[JsonValue]> {
+    if let Some(JsonKind::ListValue(l)) = &v.kind {
+        Some(&l.values)
+    } else {
+        None
+    }
+}
+
+fn json_field<'a>(v: &'a JsonValue, key: &str) -> Option<&'a JsonValue> {
+    json_struct(v)?.get(key)
+}
+
+fn json_at<'a>(v: &'a JsonValue, path: &[&str]) -> Option<&'a JsonValue> {
+    let mut cur = v;
+    for key in path {
+        cur = json_field(cur, key)?;
+    }
+    Some(cur)
+}
+
+/// Parse a stringly-encoded u64 (Move JSON encodes u64 as a string to preserve precision).
+fn json_u64(v: &JsonValue, name: &str) -> Result<u64> {
+    json_string(v)
+        .with_context(|| format!("{name}: expected JSON string-encoded u64"))?
+        .parse::<u64>()
+        .with_context(|| format!("parsing {name} as u64"))
+}
+
+/// Parse a Move `Option<u64>`: JSON null = None, bare value = Some.
+fn json_option_u64(v: &JsonValue, name: &str) -> Result<Option<u64>> {
+    match &v.kind {
+        Some(JsonKind::NullValue(_)) | None => Ok(None),
+        _ => Ok(Some(json_u64(v, name)?)),
+    }
+}
+
+/// Snapshot of the CommitteeSet metadata pulled from one Hashi `get_object` call.
+#[derive(Debug, Clone)]
+struct CommitteeSetSnapshot {
+    epoch: u64,
+    pending_epoch: Option<u64>,
+    members_bag_id: Address,
+    committees_bag_id: Address,
+}
+
+/// A single hashi member resolved from the on-chain `members` Bag. The
+/// `tls_public_key` may be empty for members that registered but haven't yet
+/// called `set_tls_public_key` — callers filter those out.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResolvedHashiMember {
+    pub validator_address: SuiAddress,
+    pub tls_public_key: Vec<u8>,
+}
+
+/// Output of `resolve_hashi_committee`: allowlist contents plus epoch info for
+/// observability metrics.
+#[derive(Debug)]
+struct HashiResolution {
+    epoch: u64,
+    pending_epoch: Option<u64>,
+    peers: Vec<(Ed25519PublicKey, AllowedPeer)>,
+}
+
+/// End-to-end resolve: gRPC reads + BCS decode -> peer allowlist entries.
+async fn resolve_hashi_committee(
+    rpc_url: &str,
+    hashi_object_id: &str,
+    validator_names: &BTreeMap<SuiAddress, String>,
+) -> Result<HashiResolution> {
+    let hashi_object_id = Address::from_str(hashi_object_id)
+        .with_context(|| format!("invalid hashi-object-id '{hashi_object_id}'"))?;
+    let mut client = SuiRpcClient::new(rpc_url.to_owned())
+        .with_context(|| format!("creating sui-rpc client for {rpc_url}"))?;
+
+    let snapshot = get_hashi_committee_snapshot(&mut client, hashi_object_id).await?;
+    debug!(
+        epoch = snapshot.epoch,
+        pending_epoch = ?snapshot.pending_epoch,
+        "fetched hashi committee snapshot"
+    );
+
+    // Union of validator_addresses across active and pending committees; the
+    // set tolerates the expected overlap during reconfig. A missing current
+    // Committee is not an error — at genesis the `committees` Bag is empty
+    // until the first `start_reconfig` runs.
+    let mut active_addrs: std::collections::HashSet<SuiAddress> =
+        match get_committee_validator_addresses(
+            &mut client,
+            snapshot.committees_bag_id,
+            snapshot.epoch,
+        )
+        .await
+        {
+            Ok(addrs) => addrs.into_iter().collect(),
+            Err(e) => {
+                debug!(
+                    epoch = snapshot.epoch,
+                    "no Committee at current epoch (pre-genesis or between reconfigs?): {e:#}"
+                );
+                std::collections::HashSet::new()
+            }
+        };
+    if let Some(next) = snapshot.pending_epoch {
+        match get_committee_validator_addresses(&mut client, snapshot.committees_bag_id, next).await
+        {
+            Ok(addrs) => active_addrs.extend(addrs),
+            Err(e) => warn!(
+                pending_epoch = next,
+                "could not fetch pending committee: {e:#}",
+            ),
+        }
+    }
+
+    // Fetch each member's MemberInfo concurrently. ~100 validators per chain,
+    // bounded concurrency keeps RPC load reasonable without serializing.
+    // sui_rpc::Client is cheap to clone — each clone shares the underlying
+    // tonic Channel so we don't open per-task connections.
+    let members: Vec<ResolvedHashiMember> = stream::iter(active_addrs)
+        .map(|addr| {
+            let mut client = client.clone();
+            let bag = snapshot.members_bag_id;
+            async move {
+                match get_hashi_member_info(&mut client, bag, addr).await {
+                    Ok(m) => Some(m),
+                    Err(e) => {
+                        warn!(addr =% addr, "could not fetch hashi MemberInfo: {e:#}");
+                        None
+                    }
+                }
+            }
+        })
+        .buffer_unordered(16)
+        .filter_map(|x| async move { x })
+        .collect()
+        .await;
+
+    let peers = extract_hashi(members, validator_names);
+
+    Ok(HashiResolution {
+        epoch: snapshot.epoch,
+        pending_epoch: snapshot.pending_epoch,
+        peers,
+    })
+}
+
+/// Filter to members with a valid 32-byte tls_public_key and build AllowedPeer
+/// entries labeled `hashi-<validator name>`.
+fn extract_hashi(
+    members: Vec<ResolvedHashiMember>,
+    validator_names: &BTreeMap<SuiAddress, String>,
+) -> Vec<(Ed25519PublicKey, AllowedPeer)> {
+    members
+        .into_iter()
+        .filter_map(|m| {
+            if m.tls_public_key.len() != 32 {
+                debug!(
+                    addr =% m.validator_address,
+                    "skipping hashi member with empty/invalid tls_public_key"
+                );
+                return None;
+            }
+            let pk = match Ed25519PublicKey::from_bytes(&m.tls_public_key) {
+                Ok(pk) => pk,
+                Err(error) => {
+                    warn!(
+                        addr =% m.validator_address,
+                        ?error,
+                        "invalid tls_public_key bytes for hashi member",
+                    );
+                    return None;
+                }
+            };
+            let name = validator_names
+                .get(&m.validator_address)
+                .cloned()
+                .unwrap_or_else(|| m.validator_address.to_string());
+            let labelled = format!("hashi-{name}");
+            debug!(
+                addr =% m.validator_address,
+                public_key = ?pk,
+                "adding hashi member to allow list as {labelled}",
+            );
+            Some((
+                pk.clone(),
+                AllowedPeer {
+                    name: labelled,
+                    public_key: pk,
+                },
+            ))
+        })
+        .collect()
+}
+
+async fn get_hashi_committee_snapshot(
+    client: &mut SuiRpcClient,
+    hashi_object_id: Address,
+) -> Result<CommitteeSetSnapshot> {
+    let rpc_method = "sui_rpc.LedgerService.GetObject:Hashi";
+    let _timer = JSON_RPC_DURATION
+        .with_label_values(&[rpc_method])
+        .start_timer();
+
+    let response = client
+        .ledger_client()
+        .get_object(
+            GetObjectRequest::new(&hashi_object_id)
+                .with_read_mask(FieldMask::from_paths([Object::path_builder().json()])),
+        )
+        .await
+        .with_context(|| {
+            JSON_RPC_STATE
+                .with_label_values(&[rpc_method, "failed_get"])
+                .inc();
+            format!("get_object failed for Hashi {hashi_object_id}")
+        })?;
+
+    let inner = response.into_inner();
+    let json = inner
+        .object_opt()
+        .and_then(|o| o.json_opt())
+        .with_context(|| {
+            JSON_RPC_STATE
+                .with_label_values(&[rpc_method, "missing_json"])
+                .inc();
+            format!("Hashi {hashi_object_id} response missing JSON rendering")
+        })?;
+
+    let cs = json_field(json, "committee_set").context("missing committee_set in Hashi JSON")?;
+    // Bag.id is a UID; the renderer flattens UID/ID to an address string.
+    let members_bag_id = json_at(cs, &["members", "id"])
+        .and_then(json_string)
+        .context("missing committee_set.members.id")?
+        .parse::<Address>()
+        .context("parsing members bag id as Address")?;
+    let committees_bag_id = json_at(cs, &["committees", "id"])
+        .and_then(json_string)
+        .context("missing committee_set.committees.id")?
+        .parse::<Address>()
+        .context("parsing committees bag id as Address")?;
+    let epoch = json_u64(
+        json_field(cs, "epoch").context("missing committee_set.epoch")?,
+        "committee_set.epoch",
+    )?;
+    let pending_epoch = json_option_u64(
+        json_field(cs, "pending_epoch_change")
+            .context("missing committee_set.pending_epoch_change")?,
+        "committee_set.pending_epoch_change",
+    )?;
+
+    JSON_RPC_STATE
+        .with_label_values(&[rpc_method, "success"])
+        .inc();
+
+    Ok(CommitteeSetSnapshot {
+        epoch,
+        pending_epoch,
+        members_bag_id,
+        committees_bag_id,
+    })
+}
+
+async fn get_committee_validator_addresses(
+    client: &mut SuiRpcClient,
+    committees_bag_id: Address,
+    epoch: u64,
+) -> Result<Vec<SuiAddress>> {
+    let rpc_method = "sui_rpc.LedgerService.GetObject:Committee";
+    let _timer = JSON_RPC_DURATION
+        .with_label_values(&[rpc_method])
+        .start_timer();
+
+    let field_id = committees_bag_id.derive_dynamic_child_id(
+        &TypeTag::U64,
+        &bcs::to_bytes(&epoch).expect("u64 always BCS-encodes"),
+    );
+
+    let response = client
+        .ledger_client()
+        .get_object(
+            GetObjectRequest::new(&field_id)
+                .with_read_mask(FieldMask::from_paths([Object::path_builder().json()])),
+        )
+        .await
+        .with_context(|| {
+            JSON_RPC_STATE
+                .with_label_values(&[rpc_method, "failed_get"])
+                .inc();
+            format!("get_object failed for Committee epoch={epoch} under {committees_bag_id}")
+        })?;
+
+    let inner = response.into_inner();
+    let json = inner
+        .object_opt()
+        .and_then(|o| o.json_opt())
+        .with_context(|| {
+            JSON_RPC_STATE
+                .with_label_values(&[rpc_method, "missing_json"])
+                .inc();
+            format!("Committee epoch={epoch} response missing JSON rendering")
+        })?;
+
+    let members = json_at(json, &["value", "members"])
+        .and_then(json_list)
+        .with_context(|| format!("Committee for epoch {epoch} missing value.members[]"))?;
+
+    let mut out = Vec::with_capacity(members.len());
+    for m in members {
+        let addr_str = json_field(m, "validator_address")
+            .and_then(json_string)
+            .context("missing CommitteeMember.validator_address")?;
+        let addr: SuiAddress = addr_str
+            .parse()
+            .with_context(|| format!("parsing CommitteeMember.validator_address: {addr_str}"))?;
+        out.push(addr);
+    }
+
+    JSON_RPC_STATE
+        .with_label_values(&[rpc_method, "success"])
+        .inc();
+    Ok(out)
+}
+
+async fn get_hashi_member_info(
+    client: &mut SuiRpcClient,
+    members_bag_id: Address,
+    validator_address: SuiAddress,
+) -> Result<ResolvedHashiMember> {
+    let rpc_method = "sui_rpc.LedgerService.GetObject:MemberInfo";
+    let _timer = JSON_RPC_DURATION
+        .with_label_values(&[rpc_method])
+        .start_timer();
+
+    let key = sui_address_to_sdk_address(validator_address);
+    let field_id = members_bag_id.derive_dynamic_child_id(
+        &TypeTag::Address,
+        &bcs::to_bytes(&key).expect("Address always BCS-encodes"),
+    );
+
+    let response = client
+        .ledger_client()
+        .get_object(
+            GetObjectRequest::new(&field_id)
+                .with_read_mask(FieldMask::from_paths([Object::path_builder().json()])),
+        )
+        .await
+        .with_context(|| {
+            JSON_RPC_STATE
+                .with_label_values(&[rpc_method, "failed_get"])
+                .inc();
+            format!("get_object failed for MemberInfo {validator_address}")
+        })?;
+
+    let inner = response.into_inner();
+    let json = inner
+        .object_opt()
+        .and_then(|o| o.json_opt())
+        .with_context(|| {
+            JSON_RPC_STATE
+                .with_label_values(&[rpc_method, "missing_json"])
+                .inc();
+            format!("MemberInfo {validator_address} response missing JSON rendering")
+        })?;
+
+    let tls_public_key = match json_at(json, &["value", "tls_public_key"]).and_then(json_string) {
+        Some(b64) => Base64::decode(b64)
+            .with_context(|| format!("base64-decode tls_public_key for {validator_address}"))?,
+        None => Vec::new(),
+    };
+
+    JSON_RPC_STATE
+        .with_label_values(&[rpc_method, "success"])
+        .inc();
+    Ok(ResolvedHashiMember {
+        validator_address,
+        tls_public_key,
+    })
+}
+
+/// Both sui-types and sui-sdk-types use 32-byte addresses; this swaps a
+/// `SuiAddress` into the `sui_sdk_types::Address` shape that `derive_dynamic_child_id`
+/// and `bcs::to_bytes` need for key encoding.
+fn sui_address_to_sdk_address(addr: SuiAddress) -> Address {
+    Address::new(addr.to_inner())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -717,5 +1231,134 @@ mod tests {
                 input_url
             );
         }
+    }
+
+    // Hashi resolver tests
+
+    fn addr(byte: u8) -> SuiAddress {
+        // Build a deterministic test SuiAddress from a single discriminator byte.
+        let mut bytes = [0u8; 32];
+        bytes[31] = byte;
+        SuiAddress::from_bytes(bytes).unwrap()
+    }
+
+    /// Generates a real Ed25519 public key. We can't just use `[byte; 32]` because
+    /// not every 32-byte string decompresses to a valid Ed25519 curve point —
+    /// `extract_hashi` calls `Ed25519PublicKey::from_bytes` which rejects invalid
+    /// points, so test inputs have to be genuine keys.
+    fn fresh_pk_bytes() -> Vec<u8> {
+        use fastcrypto::ed25519::Ed25519KeyPair;
+        use fastcrypto::traits::KeyPair;
+        let kp = Ed25519KeyPair::generate(&mut rand::thread_rng());
+        kp.public().as_bytes().to_vec()
+    }
+
+    #[test]
+    fn extract_hashi_keeps_members_with_valid_tls_key() {
+        let names: BTreeMap<SuiAddress, String> = [
+            (addr(0xAA), "alice".to_string()),
+            (addr(0xBB), "bob".to_string()),
+        ]
+        .into_iter()
+        .collect();
+        let members = vec![
+            ResolvedHashiMember {
+                validator_address: addr(0xAA),
+                tls_public_key: fresh_pk_bytes(),
+            },
+            ResolvedHashiMember {
+                validator_address: addr(0xBB),
+                tls_public_key: fresh_pk_bytes(),
+            },
+        ];
+
+        let peers = extract_hashi(members, &names);
+        assert_eq!(peers.len(), 2);
+
+        let names_out: std::collections::HashSet<_> =
+            peers.iter().map(|(_, p)| p.name.clone()).collect();
+        assert!(names_out.contains("hashi-alice"));
+        assert!(names_out.contains("hashi-bob"));
+    }
+
+    #[test]
+    fn extract_hashi_skips_members_with_empty_tls_key() {
+        // A member that registered but hasn't called set_tls_public_key yet should
+        // be silently dropped from the allowlist — they can't authenticate anyway.
+        let members = vec![
+            ResolvedHashiMember {
+                validator_address: addr(0xAA),
+                tls_public_key: fresh_pk_bytes(),
+            },
+            ResolvedHashiMember {
+                validator_address: addr(0xBB),
+                tls_public_key: vec![], // not yet set
+            },
+        ];
+        let peers = extract_hashi(members, &BTreeMap::new());
+        assert_eq!(
+            peers.len(),
+            1,
+            "only the member with a 32-byte key survives"
+        );
+    }
+
+    #[test]
+    fn extract_hashi_skips_members_with_wrong_length_tls_key() {
+        // Defensive: an on-chain bug could in principle let a non-32-byte vector
+        // through (Move asserts length at set time, but we don't want to depend
+        // on Move-side invariants for the proxy's auth correctness).
+        let members = vec![ResolvedHashiMember {
+            validator_address: addr(0xAA),
+            tls_public_key: vec![0x01; 16], // half-size
+        }];
+        let peers = extract_hashi(members, &BTreeMap::new());
+        assert!(peers.is_empty());
+    }
+
+    #[test]
+    fn extract_hashi_falls_back_to_address_label_when_name_missing() {
+        // Members whose validator address isn't in the cached validator-name map
+        // (e.g. resolver ran before the sui-validator-set poll finished, or the
+        // member's validator entry rotated since) should still be allowed — they're
+        // on chain — but labeled by raw address.
+        let member_addr = addr(0xCC);
+        let members = vec![ResolvedHashiMember {
+            validator_address: member_addr,
+            tls_public_key: fresh_pk_bytes(),
+        }];
+        let peers = extract_hashi(members, &BTreeMap::new());
+        assert_eq!(peers.len(), 1);
+        assert!(
+            peers[0].1.name.starts_with("hashi-0x"),
+            "expected fallback to address label, got {}",
+            peers[0].1.name,
+        );
+        assert!(peers[0].1.name.contains(&member_addr.to_string()));
+    }
+
+    #[test]
+    fn extract_hashi_dedups_pubkey_collision() {
+        // Two distinct validator_addresses with the same tls_public_key is a
+        // pathological case (operators reusing keys); the second insertion into
+        // the HashMap downstream of this fn wins. We just verify extract_hashi
+        // itself emits both entries and lets the caller's HashMap dedup.
+        let shared_key = fresh_pk_bytes();
+        let members = vec![
+            ResolvedHashiMember {
+                validator_address: addr(0xAA),
+                tls_public_key: shared_key.clone(),
+            },
+            ResolvedHashiMember {
+                validator_address: addr(0xBB),
+                tls_public_key: shared_key,
+            },
+        ];
+        let peers = extract_hashi(members, &BTreeMap::new());
+        assert_eq!(peers.len(), 2);
+        // Same pubkey → both entries are dropped into the same HashMap key on
+        // the consumer side; we confirm shared key here so the test fails loudly
+        // if we ever silently change that behavior.
+        assert_eq!(peers[0].0, peers[1].0);
     }
 }
