@@ -51,10 +51,8 @@ const C15: vector<u8> = vector[118u8, 101u8, 99u8, 116u8, 111u8, 114u8, 60u8, 98
 // -- functions -- 
 
 public fun clamp(l0: &mut vector<u8>, l1: u64, l2: u64) {
-    if (l2 == 0u64) {
-        
-    } else {
-        let l5 = freeze(l0).len();
+    if (l2 != 0u64) {
+        let l5 = (freeze(l0)).length();
         assert!(l1 + l2 <= l5, C1);
         let l3 = l1;
         let l4 = l5 - l2;
@@ -70,31 +68,18 @@ public fun clamp(l0: &mut vector<u8>, l1: u64, l2: u64) {
 }
 
 public fun get(l0: &vector<u8>, l1: u32): Option<vector<u8>> {
-    let l2;
     let l6 = metadata::get_chunk_offset(l0, l1);
     let l5 = metadata::get_chunk_length_at_offset(l0, l6);
-    let l4 = l0.len();
-    if (l5 == 0u32) {
-        l2 = true;
-        unstructured {
-            goto 'label_25;
-        }
-    } else {
-        l2 = l4 < l6 + l5as u64;
-        unstructured {
-            goto 'label_25;
-        }
-    };
-    /* block 25 */;
-    if (l2) {
+    let l4 = l0.length();
+    if (l5 == 0u32 || l4 < l6 + l5as u64) {
         return option::none()
     };
     let l8 = vector[];
     let l7 = l6 + 8u64;
     let l9 = l6 + l5as u64;
     while (l7 < l9) {
-        let l3 = *(&l0[l7]);
-        (&mut l8).push_back(l3);
+        let l3 = l0[l7];
+        l8.push_back(l3);
         l7 = l7 + 1u64;
     };
     return option::some(l8)
@@ -117,7 +102,7 @@ public fun get_bool(l0: &vector<u8>, l1: u32, l2: bool): bool {
 }
 
 fun get_chunk_length_at_offset(l0: &vector<u8>, l1: u64): u32 {
-    let l2 = l0.len();
+    let l2 = l0.length();
     if (l1 == l2) {
         return 0u32
     };
@@ -125,7 +110,7 @@ fun get_chunk_length_at_offset(l0: &vector<u8>, l1: u64): u32 {
 }
 
 fun get_chunk_offset(l0: &vector<u8>, l1: u32): u64 {
-    let l2 = l0.len();
+    let l2 = l0.length();
     if (l2 <= 1u64) {
         return 0u64
     };
@@ -144,17 +129,17 @@ fun get_chunk_offset(l0: &vector<u8>, l1: u32): u64 {
 }
 
 public fun get_chunks_count(l0: &vector<u8>): u32 {
-    return &metadata::get_chunks_ids(l0).len()as u32
+    return (metadata::get_chunks_ids(l0)).length()as u32
 }
 
 public fun get_chunks_ids(l0: &vector<u8>): vector<u32> {
     let l5 = vector[];
-    let l1 = l0.len();
+    let l1 = l0.length();
     let l4 = 1u64;
     while (l4 < l1) {
         let l2 = metadata::u32_from_le_bytes_at_offset(l0, l4);
         let l3 = metadata::u32_from_le_bytes_at_offset(l0, l4 + 4u64);
-        (&mut l5).push_back(l2);
+        l5.push_back(l2);
         l4 = l4 + l3as u64;
     };
     return l5
@@ -175,11 +160,11 @@ public fun get_option_any_u256(l0: &vector<u8>, l1: u32): Option<u256> {
     };
     let l2 = option::destroy_some(l4);
     vector::reverse(&mut l2);
-    let l5 = &l2.len();
+    let l5 = l2.length();
     let l3 = 0u64;
     let l6 = 0u256;
     while (l3 < l5) {
-        l6 = l6 << 8u8 | *(&(&l2)[l3])as u256;
+        l6 = l6 << 8u8 | (&l2)[l3]as u256;
         l3 = l3 + 1u64;
     };
     return option::some(l6)
@@ -190,24 +175,11 @@ public fun get_option_any_vec_u256(l0: &vector<u8>, l1: u32): Option<vector<u256
     if (option::is_none(&l8)) {
         return option::none()
     };
-    let l2;
     let l3 = bcs::new(option::destroy_some(l8));
     let l12 = bcs::peel_vec_length(&mut l3);
     let l9 = bcs::into_remainder_bytes(l3);
-    let l4 = &l9.len();
-    if (l12 == 0u64) {
-        l2 = true;
-        unstructured {
-            goto 'label_33;
-        }
-    } else {
-        l2 = l4 == 0u64;
-        unstructured {
-            goto 'label_33;
-        }
-    };
-    /* block 33 */;
-    if (l2) {
+    let l4 = l9.length();
+    if (l12 == 0u64 || l4 == 0u64) {
         return option::some(vector[])
     };
     if (l4 % l12 != 0u64) {
@@ -220,10 +192,10 @@ public fun get_option_any_vec_u256(l0: &vector<u8>, l1: u32): Option<vector<u256
         let l7 = 0u64;
         let l11 = 0u256;
         while (l7 < l6) {
-            l11 = l11 | *(&(&l9)[l5 + l7])as u256 << 8u8 * l7as u8;
+            l11 = l11 | (&l9)[l5 + l7]as u256 << 8u8 * l7as u8;
             l7 = l7 + 1u64;
         };
-        (&mut l10).push_back(l11);
+        l10.push_back(l11);
         l5 = l5 + l6;
     };
     return option::some(l10)
@@ -366,23 +338,10 @@ public fun get_vec_vec_u8(l0: &vector<u8>, l1: u32): vector<vector<u8>> {
 }
 
 public fun has_chunk(l0: &vector<u8>, l1: u32): bool {
-    let l2;
     let l5 = metadata::get_chunk_offset(l0, l1);
     let l4 = metadata::get_chunk_length_at_offset(l0, l5);
-    let l3 = l0.len();
-    if (l4 == 0u32) {
-        l2 = true;
-        unstructured {
-            goto 'label_25;
-        }
-    } else {
-        l2 = l3 < l5 + l4as u64;
-        unstructured {
-            goto 'label_25;
-        }
-    };
-    /* block 25 */;
-    if (l2) {
+    let l3 = l0.length();
+    if (l4 == 0u32 || l3 < l5 + l4as u64) {
         return false
     };
     return true
@@ -403,183 +362,65 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
                 return false
             };
             return true
-        };
-        unstructured {
-            goto 'label_383;
         }
     } else {
         let l24 = C3;
         if (l36 == &l24) {
             if (l38 == 1u32) {
                 return true
-            };
-            unstructured {
-                goto 'label_383;
             }
         } else {
             let l31 = C4;
             if (l36 == &l31) {
                 if (l38 == 8u32) {
                     return true
-                };
-                unstructured {
-                    goto 'label_383;
                 }
             } else {
                 let l33 = C5;
                 if (l36 == &l33) {
                     if (l38 == 16u32) {
                         return true
-                    };
-                    unstructured {
-                        goto 'label_383;
                     }
                 } else {
                     let l35 = C6;
                     if (l36 == &l35) {
                         if (l38 == 32u32) {
                             return true
-                        };
-                        unstructured {
-                            goto 'label_383;
                         }
                     } else {
                         let l4 = C7;
                         if (l36 == &l4) {
                             if (l38 == address::length()as u32) {
                                 return true
-                            };
-                            unstructured {
-                                goto 'label_383;
                             }
                         } else {
-                            let l6;
-                            if (l36.len() > 6u64) {
-                                l6 = *(&l36[0u64]) == 118u8;
-                                unstructured {
-                                    goto 'label_160;
-                                }
-                            } else {
-                                l6 = false;
-                                unstructured {
-                                    goto 'label_160;
-                                }
-                            };
-                            let l7;
-                            /* block 160 */;
-                            if (l6) {
-                                l7 = *(&l36[1u64]) == 101u8;
-                                unstructured {
-                                    goto 'label_172;
-                                }
-                            } else {
-                                l7 = false;
-                                unstructured {
-                                    goto 'label_172;
-                                }
-                            };
-                            let l8;
-                            /* block 172 */;
-                            if (l7) {
-                                l8 = *(&l36[2u64]) == 99u8;
-                                unstructured {
-                                    goto 'label_184;
-                                }
-                            } else {
-                                l8 = false;
-                                unstructured {
-                                    goto 'label_184;
-                                }
-                            };
-                            let l9;
-                            /* block 184 */;
-                            if (l8) {
-                                l9 = *(&l36[3u64]) == 116u8;
-                                unstructured {
-                                    goto 'label_196;
-                                }
-                            } else {
-                                l9 = false;
-                                unstructured {
-                                    goto 'label_196;
-                                }
-                            };
-                            let l10;
-                            /* block 196 */;
-                            if (l9) {
-                                l10 = *(&l36[4u64]) == 111u8;
-                                unstructured {
-                                    goto 'label_208;
-                                }
-                            } else {
-                                l10 = false;
-                                unstructured {
-                                    goto 'label_208;
-                                }
-                            };
-                            let l11;
-                            /* block 208 */;
-                            if (l10) {
-                                l11 = *(&l36[5u64]) == 114u8;
-                                unstructured {
-                                    goto 'label_220;
-                                }
-                            } else {
-                                l11 = false;
-                                unstructured {
-                                    goto 'label_220;
-                                }
-                            };
-                            /* block 220 */;
-                            if (l11) {
+                            if ((((((l36.length() > 6u64 && l36[0u64] == 118u8) && l36[1u64] == 101u8) && l36[2u64] == 99u8) && l36[3u64] == 116u8) && l36[4u64] == 111u8) && l36[5u64] == 114u8) {
                                 let l43 = 1u64;
                                 let l37 = false;
-                                if (*(&l36[7u64]) == 117u8) {
+                                if (l36[7u64] == 117u8) {
                                     let l12 = C8;
                                     if (l36 == &l12) {
                                         l43 = 1u64;
-                                        unstructured {
-                                            goto 'label_334;
-                                        }
                                     } else {
                                         let l15 = C9;
                                         if (l36 == &l15) {
                                             l43 = 8u64;
-                                            unstructured {
-                                                goto 'label_334;
-                                            }
                                         } else {
                                             let l17 = C10;
                                             if (l36 == &l17) {
                                                 l43 = 4u64;
-                                                unstructured {
-                                                    goto 'label_334;
-                                                }
                                             } else {
                                                 let l19 = C11;
                                                 if (l36 == &l19) {
                                                     l43 = 32u64;
-                                                    unstructured {
-                                                        goto 'label_334;
-                                                    }
                                                 } else {
                                                     let l21 = C12;
                                                     if (l36 == &l21) {
                                                         l43 = 2u64;
-                                                        unstructured {
-                                                            goto 'label_334;
-                                                        }
                                                     } else {
                                                         let l23 = C13;
                                                         if (l36 == &l23) {
                                                             l43 = 16u64;
-                                                            unstructured {
-                                                                goto 'label_334;
-                                                            }
-                                                        } else {
-                                                            unstructured {
-                                                                goto 'label_334;
-                                                            }
                                                         }
                                                     }
                                                 }
@@ -590,51 +431,29 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
                                     let l26 = C14;
                                     if (l36 == &l26) {
                                         l43 = 32u64;
-                                        unstructured {
-                                            goto 'label_334;
-                                        }
                                     } else {
                                         let l28 = C15;
                                         if (l36 == &l28) {
                                             l43 = 1u64;
                                             l37 = true;
-                                            unstructured {
-                                                goto 'label_334;
-                                            }
-                                        } else {
-                                            unstructured {
-                                                goto 'label_334;
-                                            }
                                         }
                                     }
                                 };
-                                /* block 334 */;
                                 let l41 = metadata::get_vec_length(l0, l1) * l43;
                                 if (l38as u64 < l41) {
                                     return false
                                 };
                                 if (l37) {
                                     let l45 = metadata::get_vec_u8(l0, l1);
-                                    let l42 = &l45.len();
+                                    let l42 = l45.length();
                                     while (l42 > 0u64) {
                                         l42 = l42 - 1u64;
-                                        if (*(&(&l45)[l42]) > 1u8) {
-                                            
-                                        } else {
-                                            continue
-                                        };
-                                        return false
-                                    }
-                                } else {
-                                    unstructured {
-                                        goto 'label_377;
+                                        if ((&l45)[l42] > 1u8) {
+                                            return false
+                                        }
                                     }
                                 };
-                                /* block 377 */;
                                 return true
-                            };
-                            unstructured {
-                                goto 'label_383;
                             }
                         }
                     }
@@ -642,7 +461,6 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
             }
         }
     };
-    /* block 383 */;
     return false
 }
 
@@ -665,40 +483,24 @@ public fun set<T0>(l0: &mut vector<u8>, l1: u32, l2: &T0): bool {
     let l9 = metadata::get_chunk_length_at_offset(freeze(l0), l10);
     let l5 = 8u8;
     let l3 = bcs::to_bytes(l2);
-    let l4 = &l3.len();
+    let l4 = l3.length();
     if (l9 != 0u32) {
         if (l4as u32 == l9as u32 - l5as u32) {
-            let l11 = freeze(l0).len();
+            let l11 = (freeze(l0)).length();
             let l12 = l10 + l9as u64;
             while (!(vector::is_empty(&l3))) {
                 l12 = l12 - 1u64;
-                l0.push_back((&mut l3).pop_back());
+                l0.push_back(l3.pop_back());
                 l0.swap(l11, l12)
             };
             std::vector::destroy_empty(l3);
             return true
         };
-        metadata::clamp(l0, l10, l9as u64);
-        unstructured {
-            goto 'label_72;
-        }
-    } else {
-        unstructured {
-            goto 'label_72;
-        }
+        metadata::clamp(l0, l10, l9as u64)
     };
-    /* block 72 */;
-    if (freeze(l0).len() == 0u64) {
-        l0.push_back(0u8);
-        unstructured {
-            goto 'label_81;
-        }
-    } else {
-        unstructured {
-            goto 'label_81;
-        }
+    if ((freeze(l0)).length() == 0u64) {
+        l0.push_back(0u8)
     };
-    /* block 81 */;
     let l6 = bcs::to_bytes(&l1);
     vector::append(l0, l6);
     let l8 = bcs::to_bytes(&l4as u32 + l5as u32);
@@ -712,7 +514,7 @@ public fun single<T0>(l0: &T0): vector<u8> {
 }
 
 public fun u32_from_le_bytes_at_offset(l0: &vector<u8>, l1: u64): u32 {
-    return *(&l0[l1])as u32 << 0u8 + *(&l0[l1 + 1u64])as u32 << 8u8 + *(&l0[l1 + 2u64])as u32 << 16u8 + *(&l0[l1 + 3u64])as u32 << 24u8
+    return l0[l1]as u32 << 0u8 + l0[l1 + 1u64]as u32 << 8u8 + l0[l1 + 2u64]as u32 << 16u8 + l0[l1 + 3u64]as u32 << 24u8
 }
 
 public fun unpack_key(l0: u32): vector<u8> {

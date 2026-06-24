@@ -180,41 +180,33 @@ fun sp(l0: &vector<u64>, l1: &vector<u64>, l2: u64, l3: u64, l4: bool): u64 {
     if (l3 % l2 != 0u64) {
         return 0u64
     };
-    let (__c17, __c28, __c39, __c52, __c63, __c74, l5);
-    l5 = if (l4) {
-        __c17 = l1.length() == 0u64;
-        if (__c17) {
+    return if (l4) {
+        if (l1.length() == 0u64) {
             return l3
         };
         let l8 = l1[0u64];
-        __c28 = l3 < l8;
-        if (__c28) {
+        if (l3 < l8) {
             return l3
         };
         let l9 = l8 - l2;
-        __c39 = l9 < l2;
-        if (__c39) {
+        if (l9 < l2) {
             return 0u64
         };
         l9
     } else {
-        __c52 = l0.length() == 0u64;
-        if (__c52) {
+        if (l0.length() == 0u64) {
             return l3
         };
         let l7 = l0[0u64];
-        __c63 = l3 > l7;
-        if (__c63) {
+        if (l3 > l7) {
             return l3
         };
         let l10 = l7 + l2;
-        __c74 = l10 > constants::max_u64() - l2;
-        if (__c74) {
+        if (l10 > constants::max_u64() - l2) {
             return 0u64
         };
         l10
-    };
-    return l5
+    }
 }
 
 fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64, l6: u64, l7: u64, l8: u64, l9: bool, l10: bool, l11: bool): ( u64, u64) {
@@ -230,17 +222,14 @@ fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64,
     if (l8 < l6) {
         return (0u64, ct::e_insufficient_quantity())
     };
-    let (__c51, __c75, l15);
-    l15 = if (l9) {
+    let l26 = if (l9) {
         let l25 = l2as u128 * constants::float_scaling_u128() / l7as u128as u64;
         let l21 = l25 % l5 + l5;
-        __c51 = l25 < l21;
-        if (__c51) {
+        if (l25 < l21) {
             return (0u64, ct::e_insufficient_quote_balance())
         };
         let l22 = l25 - l21;
-        __c75 = l22 < l6;
-        if (__c75) {
+        if (l22 < l6) {
             return (0u64, ct::e_insufficient_quote_balance())
         };
         let l19 = u64::max(l6, u64::min(l8, l22as u64));
@@ -249,7 +238,6 @@ fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64,
         let l20 = u64::max(l6, u64::min(l8, l1));
         l20 - l20 % l5
     };
-    let l26 = l15;
     if (if (l11) {
         let (reg_89, reg_90) = pool::get_order_deep_required(l0, l26, l7);
         if (l10) {

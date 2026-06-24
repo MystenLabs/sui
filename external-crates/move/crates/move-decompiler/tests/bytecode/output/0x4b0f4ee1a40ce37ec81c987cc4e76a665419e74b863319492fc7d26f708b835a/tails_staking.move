@@ -304,6 +304,18 @@ public(friend) fun get_level_counts(l0: &Version, l1: &TailsStakingRegistry): ve
         let l12 = big_vector::borrow_from_slice(l8, l3 % l11);
         let l4 = 0u64;
         let l6 = (&l12.tails).length();
+        while (l4 < l6) {
+            let l15 = (&l12.tails)[l4];
+            let l13 = l14[l15 - 1u64];
+            *(&mut (&mut l7)[l13 - 1u64]) = (&l7)[l13 - 1u64] + 1u64;
+            l4 = l4 + 1u64;
+        };
+        if (l3 + 1u64 < l6 && l3 + 1u64 == l9 * l11 + l10) {
+            l9 = big_vector::get_slice_idx(l8) + 1u64;
+            l8 = big_vector::borrow_slice(&l1.staking_infos, l9);
+            l10 = big_vector::get_slice_length(l8);
+        };
+        l3 = l3 + 1u64;
     };
     return l7
 }
@@ -346,9 +358,6 @@ public fun get_max_staking_level(l0: &Version, l1: &TailsStakingRegistry, l2: ad
                 l8 = l14[l15 - 1u64];
             };
             l5 = l5 + 1u64;
-        };
-        unstructured {
-            goto 'label_143;
         }
     };
     /* block 143 */;
@@ -562,6 +571,7 @@ entry fun set_profit_sharing<T0, T1>(l0: &Version, l1: &mut TailsStakingRegistry
     let l19 = type_name::with_defining_ids();
     let (reg_8, reg_9) = vector::index_of(&l1.profit_assets, &l19);
     let l21 = reg_9;
+    let l20 = reg_8;
     let l30 = bag::borrow(&l1.tails_metadata, C8);
     let l15 = big_vector::length(&l1.staking_infos);
     let l26 = big_vector::slice_size(&l1.staking_infos)as u64;
@@ -574,32 +584,37 @@ entry fun set_profit_sharing<T0, T1>(l0: &Version, l1: &mut TailsStakingRegistry
         let l18 = 0u64;
         let l14 = 0u64;
         let l16 = (&l28.tails).length();
+        while (l14 < l16) {
+            let l31 = (&l28.tails)[l14];
+            let l29 = l30[l31 - 1u64];
+            l18 = l18 + (&l2)[l29 - 1u64];
+            *(&mut (&mut l17)[l29 - 1u64]) = (&l17)[l29 - 1u64] + 1u64;
+            l14 = l14 + 1u64;
+        };
+        (&mut l28.profits).push_back(l18);
+        let __c107 = l20;
+        l32 = l32 + l18;
+        if (l13 + 1u64 < l16 && l13 + 1u64 == l24 * l26 + l25) {
+            l24 = big_vector::get_slice_idx(freeze(l23)) + 1u64;
+            l23 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l24);
+            l25 = big_vector::get_slice_length(freeze(l23));
+        };
+        l13 = l13 + 1u64;
     };
-    if (!(reg_8)) {
+    if (!(l20)) {
         (&mut l1.profit_assets).push_back(l19);
         if (!(dynamic_field::exists_(&l1.id, l19))) {
-            dynamic_field::add(&mut l1.id, l19, balance::zero());
-            unstructured {
-                goto 'label_188;
-            }
-        } else {
-            unstructured {
-                goto 'label_188;
-            }
-        }
-    } else {
-        unstructured {
-            goto 'label_188;
+            dynamic_field::add(&mut l1.id, l19, balance::zero())
         }
     };
-    /* block 188 */;
     let l22 = dynamic_field::borrow_mut(&mut l1.id, l19);
     let l27 = coin::value(&l3);
     assert!(balance::value(freeze(l22)) >= l32, C2);
     assert!(balance::value(freeze(l22)) == l32, C5);
+    let l10 = l17;
     let l9 = vector[l32, l27, l4, l5];
     let l8 = type_name::with_defining_ids();
-    event::emit(SetProfitSharingEvent { token: l19, level_profits: l2, level_counts: l17, log: l9, bcs_padding: vector[bcs::to_bytes(&l8)] })
+    event::emit(SetProfitSharingEvent { token: l19, level_profits: l2, level_counts: l10, log: l9, bcs_padding: vector[bcs::to_bytes(&l8)] })
 }
 
 public fun stake_tails(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: &mut Kiosk, l3: &KioskOwnerCap, l4: address, l5: Coin<SUI>, l6: &mut TxContext) {
@@ -737,11 +752,10 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
                     return l13
                 };
                 l5 = l5 + 1u64;
-            };
-            abort C12
+            }
         },
         1 => {
-            abort C12
+            
         }
     }
 }
@@ -787,15 +801,11 @@ entry fun upload_webp_bytes(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64
     ecosystem::verify(l0, l5);
     let l6 = bag::borrow_mut(&mut l1.tails_metadata, C10);
     if (!(table::contains(freeze(l6), l3 * 10000u64 + l2))) {
-        table::add(l6, l3 * 10000u64 + l2, l4);
-        /* block 47 */
+        table::add(l6, l3 * 10000u64 + l2, l4)
     } else {
         let l7 = table::borrow_mut(l6, l3 * 10000u64 + l2);
         while (!(vector::is_empty(&l4))) {
             l7.push_back(l4.pop_back())
-        };
-        unstructured {
-            goto 'label_47;
         }
     }
 }

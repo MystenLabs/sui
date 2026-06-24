@@ -423,12 +423,9 @@ const C63: vector<u8> = vector[44u8];
 
 public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2: &mut Kiosk, l3: &KioskOwnerCap, l4: &mut Kiosk, l5: ID, l6: ID, l7: address, l8: bool, l9: &TransferPolicy<T0>, l10: &mut AnimaIONs, l11: &mut AnimaChef, l12: &mut TxContext) {
     marketplace::validation_check(freeze(l1));
-    let l55;
-    l55 = clock::timestamp_ms(l0);
-    let l51;
-    l51 = tx_context::sender(freeze(l12));
-    let l45;
-    l45 = type_name::into_string(type_name::get());
+    let l55 = clock::timestamp_ms(l0);
+    let l51 = tx_context::sender(freeze(l12));
+    let l45 = type_name::into_string(type_name::get());
     debug::print(&string::utf8(C56));
     debug::print(&l51);
     debug::print(&l5);
@@ -436,19 +433,14 @@ public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2
     debug::print(&l8);
     debug::print(&l45);
     assert!(linked_table::contains(&l1.user_activity, l51), C20);
-    let l53;
-    l53 = (&linked_table::remove(&mut (linked_table::borrow_mut(&mut l1.user_activity, l51)).listings, l5)).last_points_claimed_at;
+    let l53 = (&linked_table::remove(&mut (linked_table::borrow_mut(&mut l1.user_activity, l51)).listings, l5)).last_points_claimed_at;
     assert!(linked_table::contains(&l1.user_activity, l7), C21);
-    let l29;
-    l29 = linked_table::borrow_mut(&mut l1.user_activity, l7);
-    let l32;
-    l32 = 0u64;
+    let l29 = linked_table::borrow_mut(&mut l1.user_activity, l7);
+    let l32 = 0u64;
     if (l8) {
         assert!(linked_table::contains(&l29.collection_bids, l45), C17);
-        let l34;
-        l34 = linked_table::borrow_mut(&mut l29.collection_bids, l45);
-        let l39;
-        l39 = 0u64;
+        let l34 = linked_table::borrow_mut(&mut l29.collection_bids, l45);
+        let l39 = 0u64;
         loop {
             if (l39 < (freeze(l34)).length()) {
                 if ((&(freeze(l34))[l39]).bid_id != l6) {
@@ -457,32 +449,24 @@ public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2
                 };
                 l32 = (&vector::remove(l34, l39)).last_points_claimed_at;
             };
-            if ((freeze(l34)).length() == 0u64) {
-                
-            };
+            let __c165 = (freeze(l34)).length() == 0u64;
             break
         }
     } else {
         assert!(linked_table::contains(&l29.bids, l5), C17);
         l32 = (&linked_table::remove(&mut l29.bids, l5)).last_points_claimed_at;
     };
-    let l36;
-    l36 = dynamic_object_field::borrow_mut(&mut l1.id, l45);
+    let l36 = dynamic_object_field::borrow_mut(&mut l1.id, l45);
     assert!(linked_table::contains(&l36.listings, l5), C11);
     let (reg_158, reg_159);
     (reg_158, reg_159, reg_160, reg_161) = marketplace::destroy_listing(linked_table::remove(&mut l36.listings, l5));
-    let l41;
-    l41 = reg_159;
-    let l49;
-    l49 = reg_158;
+    let l41 = reg_159;
+    let l49 = reg_158;
     assert!(l41 == object::id(freeze(l2)), C19);
-    let l24;
-    l24 = x2_balance::zero();
+    let l24 = x2_balance::zero();
     if (l8) {
-        let l35;
-        l35 = linked_table::borrow_mut(&mut l36.collection_bids, l7);
-        let l40;
-        l40 = 0u64;
+        let l35 = linked_table::borrow_mut(&mut l36.collection_bids, l7);
+        let l40 = 0u64;
         loop {
             if (l40 < (freeze(l35)).length()) {
                 if (object::uid_to_inner(&(&(freeze(l35))[l40]).id) != l6) {
@@ -499,67 +483,51 @@ public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2
     } else {
         assert!(object::uid_to_inner(&(&linked_table::remove(&mut (linked_table::borrow_mut(&mut l36.bids, l5)).bids, l7)).id) == l6, C26)
     };
-    let l48;
-    l48 = x2_balance::value(&l24);
+    let l48 = x2_balance::value(&l24);
     debug::print(&string::utf8(C57));
     debug::print(&l48);
     *(&mut l36.lifetime_volume) = l36.lifetime_volume + x2_balance::value(&l24)as u128;
     marketplace::update_collection_avg_price(l36, x2_balance::value(&l24));
-    let l38;
-    l38 = x2_balance::value(&l24) * l1.commission_pct / 100u64;
+    let l38 = x2_balance::value(&l24) * l1.commission_pct / 100u64;
     debug::print(&string::utf8(C58));
     debug::print(&l38);
     kiosk::return_purchase_cap(l2, l49);
     ions::destroy_or_transfer_balance(l24, l51, l12);
-    let l44;
-    l44 = kiosk::take(l2, l3, l5);
+    let l44 = kiosk::take(l2, l3, l5);
     kiosk::lock(l4, &l1.escrow_kiosk_cap, l9, l44);
-    let l46;
-    l46 = PendingClaim { buyer: l7, nft_type: l45, price: l48 - l38 };
+    let l46 = PendingClaim { buyer: l7, nft_type: l45, price: l48 - l38 };
     if (linked_table::contains(&l1.pending_claims, l7)) {
         linked_table::push_back(&mut (linked_table::borrow_mut(&mut l1.pending_claims, l7)).pending_claims, l5, l46)
     } else {
-        let l47;
-        l47 = PendingClaims { pending_claims: linked_table::new(l12) };
+        let l47 = PendingClaims { pending_claims: linked_table::new(l12) };
         linked_table::push_back(&mut (&mut l47).pending_claims, l5, l46);
         linked_table::push_back(&mut l1.pending_claims, l7, l47)
     };
+    let __c485 = l36.ion_points_enabled;
     let (l17, l18);
-    if (l36.ion_points_enabled) {
-        let l16;
-        if (l36.ion_collection_multiplier == 0u64) {
-            l16 = C5;
+    l17 = if (__c485) {
+        let l37 = if (l36.ion_collection_multiplier == 0u64) {
+            C5
         } else {
-            l16 = l36.ion_collection_multiplier;
+            l36.ion_collection_multiplier
         };
-        let l37;
-        l37 = l16;
-        let l27;
-        l27 = helpers::calculate_bid_proximity_multiplier(l48, l36.avg_sale_price);
-        let l42;
-        l42 = helpers::calculate_listing_proximity_multiplier(l48, l36.avg_sale_price);
-        let l28;
-        l28 = helpers::calculate_time_multiplier(l55 - l32, true);
-        let l43;
-        l43 = helpers::calculate_time_multiplier(l55 - l53, true);
-        let l54;
-        l54 = helpers::calculate_ion_points(l48, l37, l42, l43);
+        let l27 = helpers::calculate_bid_proximity_multiplier(l48, l36.avg_sale_price);
+        let l42 = helpers::calculate_listing_proximity_multiplier(l48, l36.avg_sale_price);
+        let l28 = helpers::calculate_time_multiplier(l55 - l32, true);
+        let l43 = helpers::calculate_time_multiplier(l55 - l53, true);
+        let l54 = helpers::calculate_ion_points(l48, l37, l42, l43);
         marketplace::award_ion_points_with_referral(l51, l1, l10, l54, l0, l11);
-        let l33;
-        l33 = helpers::calculate_ion_points(l48, l37, l27, l28);
-        let l30;
-        l30 = linked_table::borrow_mut(&mut l1.user_activity, l7);
+        let l33 = helpers::calculate_ion_points(l48, l37, l27, l28);
+        let l30 = linked_table::borrow_mut(&mut l1.user_activity, l7);
         *(&mut l30.claimable_points) = l30.claimable_points + l33;
         l18 = l54;
-        l17 = l33;
+        l33
     } else {
         l18 = 0u64;
-        l17 = 0u64;
+        0u64
     };
-    let l52;
-    l52 = l18;
-    let l31;
-    l31 = l17;
+    let l52 = l18;
+    let l31 = l17;
     debug::print(&string::utf8(C53));
     debug::print(&l31);
     debug::print(&string::utf8(C54));
@@ -570,31 +538,23 @@ public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2
 
 public fun accept_trait_bid<T0: key + store, T1: key + store>(l0: &mut MarketPlaceStore, l1: ID, l2: &mut Kiosk, l3: &KioskOwnerCap, l4: &mut TxContext): ( T0, T1, TraitBidsPotato) {
     marketplace::validation_check(freeze(l0));
-    let l11;
-    l11 = tx_context::sender(freeze(l4));
-    let l9;
-    l9 = type_name::into_string(type_name::get());
+    let l11 = tx_context::sender(freeze(l4));
+    let l9 = type_name::into_string(type_name::get());
     marketplace::validate_collection_exists(freeze(l0));
-    let l5;
-    l5 = dynamic_object_field::borrow_mut(&mut l0.id, l9);
+    let l5 = dynamic_object_field::borrow_mut(&mut l0.id, l9);
     assert!(dynamic_object_field::exists_(&l5.id, C1), C15);
     assert!(l5.are_trait_bids_enabled, C30);
-    let l13;
-    l13 = dynamic_object_field::remove(&mut l5.id, C1);
-    let l7;
-    l7 = TraitBidsPotato { id: object::id(&l13) };
+    let l13 = dynamic_object_field::remove(&mut l5.id, C1);
+    let l7 = TraitBidsPotato { id: object::id(&l13) };
     if (linked_table::contains(&(dynamic_object_field::borrow(&l0.id, l9)).listings, l1)) {
         assert!(linked_table::contains(&l0.user_activity, l11), C20);
         assert!(linked_table::contains(&(linked_table::borrow_mut(&mut l0.user_activity, l11)).listings, l1), C11);
-        let l6;
-        l6 = dynamic_object_field::borrow_mut(&mut l0.id, l9);
+        let l6 = dynamic_object_field::borrow_mut(&mut l0.id, l9);
         assert!(linked_table::contains(&l6.listings, l1), C18);
         let (reg_85, reg_86);
         (reg_85, reg_86, reg_87, reg_88) = marketplace::destroy_listing(linked_table::remove(&mut l6.listings, l1));
-        let l8;
-        l8 = reg_86;
-        let l10;
-        l10 = reg_85;
+        let l8 = reg_86;
+        let l10 = reg_85;
         assert!(l8 == object::id(freeze(l2)), C19);
         kiosk::return_purchase_cap(l2, l10)
     };
@@ -605,31 +565,19 @@ public fun accept_trait_bid_settle<T0: key + store, T1: key + store>(l0: &mut Ma
     marketplace::validation_check(freeze(l0));
     let TraitBidsPotato { id: reg_3 } = l2;
     assert!(object::id(&l1) == reg_3 : 0x2::object::ID, C24);
-    let l37;
-    l37 = tx_context::sender(freeze(l10));
-    let l33;
-    l33 = type_name::into_string(type_name::get());
-    let l41;
-    l41 = clock::timestamp_ms(l8);
-    let l22;
-    l22 = (&l5).bidder;
-    let l36;
-    l36 = (&l5).bid_price;
-    let l18;
-    l18 = object::id(&l5);
-    let l17;
-    l17 = (&l5).bid_at;
-    let l32;
-    l32 = object::id(&l6);
+    let l37 = tx_context::sender(freeze(l10));
+    let l33 = type_name::into_string(type_name::get());
+    let l41 = clock::timestamp_ms(l8);
+    let l22 = (&l5).bidder;
+    let l36 = (&l5).bid_price;
+    let l18 = object::id(&l5);
+    let l17 = (&l5).bid_at;
+    let l32 = object::id(&l6);
     assert!(linked_table::contains(&l0.user_activity, l22), C21);
-    let l23;
-    l23 = linked_table::borrow_mut(&mut l0.user_activity, l22);
-    let l26;
-    l26 = 0u64;
-    let l43;
-    l43 = linked_table::borrow_mut(&mut l23.trait_bids, l33);
-    let l31;
-    l31 = 0u64;
+    let l23 = linked_table::borrow_mut(&mut l0.user_activity, l22);
+    let l26 = 0u64;
+    let l43 = linked_table::borrow_mut(&mut l23.trait_bids, l33);
+    let l31 = 0u64;
     loop {
         if (l31 < (freeze(l43)).length()) {
             if ((&(freeze(l43))[l31]).bid_id != l18) {
@@ -639,66 +587,51 @@ public fun accept_trait_bid_settle<T0: key + store, T1: key + store>(l0: &mut Ma
             l26 = (&vector::remove(l43, l31)).last_points_claimed_at;
         };
         assert!(l26 != 0u64, C29);
-        let l27;
-        l27 = dynamic_object_field::borrow_mut(&mut l0.id, l33);
+        let l27 = dynamic_object_field::borrow_mut(&mut l0.id, l33);
         dynamic_object_field::add(&mut l27.id, C1, l1);
-        let l29;
-        l29 = l36 * l0.commission_pct / 100u64;
-        let l16;
-        l16 = marketplace::destroy_active_trait_bid(l5);
+        let l29 = l36 * l0.commission_pct / 100u64;
+        let l16 = marketplace::destroy_active_trait_bid(l5);
         helpers::destroy_or_transfer_balance(x2_balance::split(&mut l27.sui_trait_bids_pool, l16), l37, l10);
         kiosk::lock(l3, &l0.escrow_kiosk_cap, l4, l6);
-        let l34;
-        l34 = PendingClaim { buyer: l22, nft_type: l33, price: l36 - l29 };
+        let l34 = PendingClaim { buyer: l22, nft_type: l33, price: l36 - l29 };
         if (linked_table::contains(&l0.pending_claims, l22)) {
             linked_table::push_back(&mut (linked_table::borrow_mut(&mut l0.pending_claims, l22)).pending_claims, l32, l34)
         } else {
-            let l35;
-            l35 = PendingClaims { pending_claims: linked_table::new(l10) };
+            let l35 = PendingClaims { pending_claims: linked_table::new(l10) };
             linked_table::push_back(&mut (&mut l35).pending_claims, l32, l34);
             linked_table::push_back(&mut l0.pending_claims, l22, l35)
         };
         *(&mut l27.lifetime_volume) = l27.lifetime_volume + l36as u128;
         marketplace::update_collection_avg_price(l27, l36);
+        let __c222 = l27.ion_points_enabled;
         let (l14, l15);
-        if (l27.ion_points_enabled) {
-            let l11;
-            if (l27.ion_collection_multiplier == 0u64) {
-                l11 = C5;
+        l14 = if (__c222) {
+            let l28 = if (l27.ion_collection_multiplier == 0u64) {
+                C5
             } else {
-                l11 = l27.ion_collection_multiplier;
+                l27.ion_collection_multiplier
             };
-            let l28;
-            l28 = l11;
-            let l19;
-            l19 = helpers::calculate_bid_proximity_multiplier(l36, l27.avg_sale_price);
-            let l20;
-            l20 = helpers::calculate_time_multiplier(l41 - l26, true);
-            let l39;
-            l39 = helpers::calculate_ion_points(l36, l28, l19, l20);
-            let l12;
-            if (l26 == 0u64) {
-                l12 = l17;
+            let l19 = helpers::calculate_bid_proximity_multiplier(l36, l27.avg_sale_price);
+            let l20 = helpers::calculate_time_multiplier(l41 - l26, true);
+            let l39 = helpers::calculate_ion_points(l36, l28, l19, l20);
+            let l12 = if (l26 == 0u64) {
+                l17
             } else {
-                l12 = l26;
+                l26
             };
-            let l40;
-            l40 = helpers::calculate_time_multiplier(l41 - l12, true);
+            let l40 = helpers::calculate_time_multiplier(l41 - l12, true);
             l15 = l39;
-            l14 = helpers::calculate_ion_points(l36, l28, l19, l40);
+            helpers::calculate_ion_points(l36, l28, l19, l40)
         } else {
             l15 = 0u64;
-            l14 = 0u64;
+            0u64
         };
-        let l38;
-        l38 = l15;
-        let l25;
-        l25 = l14;
+        let l38 = l15;
+        let l25 = l14;
         if (l38 > 0u64) {
             marketplace::award_ion_points_with_referral(l37, l0, l7, l38, l8, l9)
         };
-        let l24;
-        l24 = linked_table::borrow_mut(&mut l0.user_activity, l22);
+        let l24 = linked_table::borrow_mut(&mut l0.user_activity, l22);
         *(&mut l24.claimable_points) = l24.claimable_points + l25;
         event::emit(TraitBidAcceptedEvent { nft_type: l33, nft_id: l32, seller: l37, buyer: l22, price: l36, commission: l29, buyer_ion_points: l25, seller_ion_points: l38 });
         return
@@ -707,24 +640,17 @@ public fun accept_trait_bid_settle<T0: key + store, T1: key + store>(l0: &mut Ma
 
 public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2: &mut Kiosk, l3: &mut Kiosk, l4: &KioskOwnerCap, l5: ID, l6: address, l7: ID, l8: u64, l9: bool, l10: &mut TransferPolicy<T0>, l11: &mut AnimaIONs, l12: &mut AnimaChef, l13: &mut TxContext): TransferRequest<T0> {
     marketplace::validation_check(freeze(l1));
-    let l46;
-    l46 = clock::timestamp_ms(l0);
-    let l43;
-    l43 = tx_context::sender(freeze(l13));
-    let l39;
-    l39 = type_name::into_string(type_name::get());
+    let l46 = clock::timestamp_ms(l0);
+    let l43 = tx_context::sender(freeze(l13));
+    let l39 = type_name::into_string(type_name::get());
     assert!(kiosk::has_item_with_type(freeze(l2), l5), C19);
     assert!(linked_table::contains(&l1.user_activity, l6), C21);
-    let l26;
-    l26 = linked_table::borrow_mut(&mut l1.user_activity, l6);
-    let l29;
-    l29 = 0u64;
+    let l26 = linked_table::borrow_mut(&mut l1.user_activity, l6);
+    let l29 = 0u64;
     if (l9) {
         assert!(linked_table::contains(&l26.collection_bids, l39), C17);
-        let l31;
-        l31 = linked_table::borrow_mut(&mut l26.collection_bids, l39);
-        let l36;
-        l36 = 0u64;
+        let l31 = linked_table::borrow_mut(&mut l26.collection_bids, l39);
+        let l36 = 0u64;
         loop {
             if (l36 < (freeze(l31)).length()) {
                 if ((&(freeze(l31))[l36]).bid_id != l7) {
@@ -733,24 +659,18 @@ public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlace
                 };
                 l29 = (&vector::remove(l31, l36)).last_points_claimed_at;
             };
-            if ((freeze(l31)).length() == 0u64) {
-                
-            };
+            let __c138 = (freeze(l31)).length() == 0u64;
             break
         }
     } else {
         assert!(linked_table::contains(&l26.bids, l5), C17);
         l29 = (&linked_table::remove(&mut l26.bids, l5)).last_points_claimed_at;
     };
-    let l33;
-    l33 = dynamic_object_field::borrow_mut(&mut l1.id, l39);
-    let l21;
-    l21 = x2_balance::zero();
+    let l33 = dynamic_object_field::borrow_mut(&mut l1.id, l39);
+    let l21 = x2_balance::zero();
     if (l9) {
-        let l32;
-        l32 = linked_table::borrow_mut(&mut l33.collection_bids, l6);
-        let l37;
-        l37 = 0u64;
+        let l32 = linked_table::borrow_mut(&mut l33.collection_bids, l6);
+        let l37 = 0u64;
         loop {
             if (l37 < (freeze(l32)).length()) {
                 if (object::uid_to_inner(&(&(freeze(l32))[l37]).id) != l7) {
@@ -766,79 +686,62 @@ public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlace
         }
     } else {
         assert!(linked_table::contains(&l33.bids, l5), C17);
-        let l19;
-        l19 = linked_table::borrow_mut(&mut l33.bids, l5);
+        let l19 = linked_table::borrow_mut(&mut l33.bids, l5);
         assert!(linked_table::contains(&l19.bids, l6), C17);
         let l20 = linked_table::remove(&mut l19.bids, l6);
     };
     *(&mut l33.lifetime_volume) = l33.lifetime_volume + x2_balance::value(&l21)as u128;
     marketplace::update_collection_avg_price(l33, x2_balance::value(&l21));
-    let l35;
-    l35 = x2_balance::value(&l21) * l1.commission_pct / 100u64;
-    let l17;
-    l17 = x2_balance::value(&l21) - l8;
+    let l35 = x2_balance::value(&l21) * l1.commission_pct / 100u64;
+    let l17 = x2_balance::value(&l21) - l8;
     kiosk::list(l2, l4, l5, l17);
-    let (reg_244, reg_245);
-    (reg_244, reg_245) = kiosk::purchase(l2, l5, coin::from_balance(x2_balance::split(&mut l21, l17), l13));
-    let l47;
-    l47 = reg_245;
-    let l38;
-    l38 = reg_244;
+    let (reg_244, reg_245) = kiosk::purchase(l2, l5, coin::from_balance(x2_balance::split(&mut l21, l17), l13));
+    let l47 = reg_245;
     royalty_rule::pay(l10, &mut l47, coin::from_balance(x2_balance::split(&mut l21, l8), l13));
-    let l42;
-    l42 = x2_balance::value(&l21);
+    let l42 = x2_balance::value(&l21);
     helpers::destroy_or_transfer_balance(l21, l43, l13);
-    kiosk::lock(l3, &l1.escrow_kiosk_cap, freeze(l10), l38);
-    let l40;
-    l40 = PendingClaim { buyer: l6, nft_type: l39, price: l42 - l35 };
+    kiosk::lock(l3, &l1.escrow_kiosk_cap, freeze(l10), reg_244);
+    let l40 = PendingClaim { buyer: l6, nft_type: l39, price: l42 - l35 };
     if (linked_table::contains(&l1.pending_claims, l6)) {
         linked_table::push_back(&mut (linked_table::borrow_mut(&mut l1.pending_claims, l6)).pending_claims, l5, l40)
     } else {
-        let l41;
-        l41 = PendingClaims { pending_claims: linked_table::new(l13) };
+        let l41 = PendingClaims { pending_claims: linked_table::new(l13) };
         linked_table::push_back(&mut (&mut l41).pending_claims, l5, l40);
         linked_table::push_back(&mut l1.pending_claims, l6, l41)
     };
+    let __c430 = l33.ion_points_enabled;
     let (l15, l16);
-    if (l33.ion_points_enabled) {
-        let l14;
-        if (l33.ion_collection_multiplier == 0u64) {
-            l14 = C5;
+    l15 = if (__c430) {
+        let l34 = if (l33.ion_collection_multiplier == 0u64) {
+            C5
         } else {
-            l14 = l33.ion_collection_multiplier;
+            l33.ion_collection_multiplier
         };
-        let l34;
-        l34 = l14;
-        let l24;
-        l24 = helpers::calculate_bid_proximity_multiplier(l42, l33.avg_sale_price);
-        let l25;
-        l25 = helpers::calculate_time_multiplier(l46 - l29, true);
-        let l45;
-        l45 = helpers::calculate_ion_points(l42, l34, l24, l25);
+        let l24 = helpers::calculate_bid_proximity_multiplier(l42, l33.avg_sale_price);
+        let l25 = helpers::calculate_time_multiplier(l46 - l29, true);
+        let l45 = helpers::calculate_ion_points(l42, l34, l24, l25);
         marketplace::award_ion_points_with_referral(l43, l1, l11, l45, l0, l12);
-        let l30;
-        l30 = helpers::calculate_ion_points(l42, l34, l24, l25);
-        let l27;
-        l27 = linked_table::borrow_mut(&mut l1.user_activity, l6);
+        let l30 = helpers::calculate_ion_points(l42, l34, l24, l25);
+        let l27 = linked_table::borrow_mut(&mut l1.user_activity, l6);
         *(&mut l27.claimable_points) = l27.claimable_points + l30;
         l16 = l45;
-        l15 = l30;
+        l30
     } else {
         l16 = 0u64;
-        l15 = 0u64;
+        0u64
     };
-    event::emit(BidAcceptedEvent { nft_type: l39, nft_id: l5, seller: l43, buyer: l6, is_collection_bid: l9, price: l42, commission: l35, escrow_kiosk: object::id(freeze(l3)), buyer_ion_points: l15, seller_ion_points: l16 });
+    let l44 = l16;
+    let l28 = l15;
+    event::emit(BidAcceptedEvent { nft_type: l39, nft_id: l5, seller: l43, buyer: l6, is_collection_bid: l9, price: l42, commission: l35, escrow_kiosk: object::id(freeze(l3)), buyer_ion_points: l28, seller_ion_points: l44 });
     return l47
 }
 
 public fun add_trait_bidding_support<T0: key + store, T1: key + store>(l0: &mut MarketPlaceStore, l1: &TraitBidsAdminCap, l2: T1, l3: &mut TxContext) {
     marketplace::validation_check(freeze(l0));
-    let l5;
-    l5 = type_name::into_string(type_name::get());
+    let l5 = type_name::into_string(type_name::get());
     assert!(linked_table::contains(&l0.active_collections, l5), C15);
     assert!(dynamic_object_field::exists_(&l0.id, l5), C15);
-    let l4;
-    l4 = dynamic_object_field::borrow_mut(&mut l0.id, l5);
+    let l4 = dynamic_object_field::borrow_mut(&mut l0.id, l5);
     dynamic_object_field::add(&mut l4.id, C1, l2);
     *(&mut l4.are_trait_bids_enabled) = true;
     event::emit(UpdateTraitBiddingSupportEvent { nft_type: l5, are_trait_bids_enabled: true })
@@ -846,59 +749,38 @@ public fun add_trait_bidding_support<T0: key + store, T1: key + store>(l0: &mut 
 
 public fun award_bid_ion_points<T0: key + store>(l0: &mut MarketPlaceStore, l1: address, l2: ID, l3: &mut AnimaIONs, l4: &Clock, l5: &mut AnimaChef) {
     marketplace::validation_check(freeze(l0));
-    let l15;
-    l15 = type_name::into_string(type_name::get());
-    let l13;
-    l13 = clock::timestamp_ms(l4);
+    let l15 = type_name::into_string(type_name::get());
+    let l13 = clock::timestamp_ms(l4);
     assert!(linked_table::contains(&l0.user_activity, l1), C10);
-    let l23;
-    l23 = linked_table::borrow_mut(&mut l0.user_activity, l1);
+    let l23 = linked_table::borrow_mut(&mut l0.user_activity, l1);
     assert!(linked_table::contains(&l23.bids, l2), C17);
-    let l9;
-    l9 = linked_table::borrow_mut(&mut l23.bids, l2);
-    let l6;
-    if (l9.last_points_claimed_at == 0u64) {
-        l6 = l9.bid_at;
+    let l9 = linked_table::borrow_mut(&mut l23.bids, l2);
+    let l6 = if (l9.last_points_claimed_at == 0u64) {
+        l9.bid_at
     } else {
-        l6 = l9.last_points_claimed_at;
+        l9.last_points_claimed_at
     };
-    let l21;
-    l21 = l13 - l6;
-    let l10;
-    l10 = dynamic_object_field::borrow(&l0.id, l15);
-    let l7;
-    if (l10.ion_points_enabled) {
-        l7 = l21 > 0u64;
-    } else {
-        l7 = false;
-    };
-    if (l7) {
-        let l22;
-        l22 = helpers::calculate_time_multiplier(l21, false);
+    let l21 = l13 - l6;
+    let l10 = dynamic_object_field::borrow(&l0.id, l15);
+    if (l10.ion_points_enabled && l21 > 0u64) {
+        let l22 = helpers::calculate_time_multiplier(l21, false);
         if (l22 > 0u64) {
-            let l17;
-            l17 = helpers::calculate_bid_proximity_multiplier(l9.bid_price, l10.avg_sale_price);
-            let l8;
-            if (l10.ion_collection_multiplier == 0u64) {
-                l8 = C5;
+            let l17 = helpers::calculate_bid_proximity_multiplier(l9.bid_price, l10.avg_sale_price);
+            let l8 = if (l10.ion_collection_multiplier == 0u64) {
+                C5
             } else {
-                l8 = l10.ion_collection_multiplier;
+                l10.ion_collection_multiplier
             };
-            let l16;
-            l16 = helpers::calculate_ion_points(l9.bid_price, l8, l17, l22);
+            let l16 = helpers::calculate_ion_points(l9.bid_price, l8, l17, l22);
             *(&mut l9.last_points_claimed_at) = l13;
             marketplace::award_ion_points_with_referral(l1, l0, l3, l16, l4, l5);
             if (ions::has_referrer(freeze(l3))) {
-                let l20;
-                l20 = ions::get_referrer(freeze(l3));
+                let l20 = ions::get_referrer(freeze(l3));
                 if (option::is_some(&l20)) {
-                    let l19;
-                    l19 = *(option::borrow(&l20));
-                    let l18;
-                    l18 = l16 * C6 / 100u64;
+                    let l19 = *(option::borrow(&l20));
+                    let l18 = l16 * C6 / 100u64;
                     if (linked_table::contains(&l0.referrals, l19)) {
-                        let l12;
-                        l12 = linked_table::borrow_mut(&mut l0.referrals, l19);
+                        let l12 = linked_table::borrow_mut(&mut l0.referrals, l19);
                         *l12 = *l12 + l18
                     } else {
                         linked_table::push_back(&mut l0.referrals, l19, l18)
@@ -910,22 +792,17 @@ public fun award_bid_ion_points<T0: key + store>(l0: &mut MarketPlaceStore, l1: 
 }
 
 fun award_ion_points_with_referral(l0: address, l1: &mut MarketPlaceStore, l2: &mut AnimaIONs, l3: u64, l4: &Clock, l5: &mut AnimaChef) {
-    let l9;
-    l9 = option::none();
-    let l8;
-    l8 = 0u64;
-    let l6;
-    l6 = 0u64;
+    let l9 = option::none();
+    let l8 = 0u64;
+    let l6 = 0u64;
     if (ions::has_referrer(freeze(l2))) {
-        let l10;
-        l10 = ions::get_referrer(freeze(l2));
+        let l10 = ions::get_referrer(freeze(l2));
         if (option::is_some(&l10)) {
             option::fill(&mut l9, *(option::borrow(&l10)));
             l8 = math::mul_div_u128(l3as u128, C6as u128, 100u128);
             l6 = math::mul_div_u128(l3as u128, C3as u128, 100u128);
             if (linked_table::contains(&l1.referrals, *(option::borrow(&l9)))) {
-                let l7;
-                l7 = linked_table::borrow_mut(&mut l1.referrals, *(option::borrow(&l9)));
+                let l7 = linked_table::borrow_mut(&mut l1.referrals, *(option::borrow(&l9)));
                 *l7 = *l7 + l8
             } else {
                 linked_table::push_back(&mut l1.referrals, *(option::borrow(&l9)), l8)
@@ -938,46 +815,29 @@ fun award_ion_points_with_referral(l0: address, l1: &mut MarketPlaceStore, l2: &
 
 public fun award_listing_ion_points<T0: key + store>(l0: &mut MarketPlaceStore, l1: address, l2: ID, l3: &mut AnimaIONs, l4: &Clock, l5: &mut AnimaChef) {
     marketplace::validation_check(freeze(l0));
-    let l14;
-    l14 = type_name::into_string(type_name::get());
-    let l11;
-    l11 = clock::timestamp_ms(l4);
+    let l14 = type_name::into_string(type_name::get());
+    let l11 = clock::timestamp_ms(l4);
     assert!(linked_table::contains(&l0.user_activity, l1), C10);
-    let l19;
-    l19 = linked_table::borrow_mut(&mut l0.user_activity, l1);
+    let l19 = linked_table::borrow_mut(&mut l0.user_activity, l1);
     assert!(linked_table::contains(&l19.listings, l2), C11);
-    let l13;
-    l13 = linked_table::borrow_mut(&mut l19.listings, l2);
-    let l6;
-    if (l13.last_points_claimed_at == 0u64) {
-        l6 = l13.listed_at;
+    let l13 = linked_table::borrow_mut(&mut l19.listings, l2);
+    let l6 = if (l13.last_points_claimed_at == 0u64) {
+        l13.listed_at
     } else {
-        l6 = l13.last_points_claimed_at;
+        l13.last_points_claimed_at
     };
-    let l17;
-    l17 = l11 - l6;
-    let l9;
-    l9 = dynamic_object_field::borrow(&l0.id, l14);
-    let l7;
-    if (l9.ion_points_enabled) {
-        l7 = l17 > 0u64;
-    } else {
-        l7 = false;
-    };
-    if (l7) {
-        let l18;
-        l18 = helpers::calculate_time_multiplier(l17, false);
+    let l17 = l11 - l6;
+    let l9 = dynamic_object_field::borrow(&l0.id, l14);
+    if (l9.ion_points_enabled && l17 > 0u64) {
+        let l18 = helpers::calculate_time_multiplier(l17, false);
         if (l18 > 0u64) {
-            let l16;
-            l16 = helpers::calculate_listing_proximity_multiplier(l13.price, l9.avg_sale_price);
-            let l8;
-            if (l9.ion_collection_multiplier == 0u64) {
-                l8 = C5;
+            let l16 = helpers::calculate_listing_proximity_multiplier(l13.price, l9.avg_sale_price);
+            let l8 = if (l9.ion_collection_multiplier == 0u64) {
+                C5
             } else {
-                l8 = l9.ion_collection_multiplier;
+                l9.ion_collection_multiplier
             };
-            let l15;
-            l15 = helpers::calculate_ion_points(l13.price, l8, l16, l18);
+            let l15 = helpers::calculate_ion_points(l13.price, l8, l16, l18);
             marketplace::award_ion_points_with_referral(l1, l0, l3, l15, l4, l5)
         }
     }
@@ -985,30 +845,20 @@ public fun award_listing_ion_points<T0: key + store>(l0: &mut MarketPlaceStore, 
 
 public fun buy<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2: &mut Kiosk, l3: ID, l4: Coin<SUI>, l5: &mut AnimaIONs, l6: &mut AnimaChef, l7: &mut TxContext): ( T0, TransferRequest<T0>, u64) {
     marketplace::validation_check(freeze(l1));
-    let l46;
-    l46 = clock::timestamp_ms(l0);
-    let l22;
-    l22 = tx_context::sender(freeze(l7));
-    let l37;
-    l37 = kiosk::owner(freeze(l2));
-    let l33;
-    l33 = type_name::into_string(type_name::get());
+    let l46 = clock::timestamp_ms(l0);
+    let l22 = tx_context::sender(freeze(l7));
+    let l37 = kiosk::owner(freeze(l2));
+    let l33 = type_name::into_string(type_name::get());
     debug::print(&string::utf8(C49));
     assert!(linked_table::contains(&l1.user_activity, l37), C10);
-    let l39;
-    l39 = linked_table::borrow_mut(&mut l1.user_activity, l37);
+    let l39 = linked_table::borrow_mut(&mut l1.user_activity, l37);
     assert!(linked_table::contains(&l39.listings, l3), C11);
-    let l29;
-    l29 = (&linked_table::remove(&mut l39.listings, l3)).last_points_claimed_at;
-    let l25;
-    l25 = dynamic_object_field::borrow_mut(&mut l1.id, l33);
+    let l29 = (&linked_table::remove(&mut l39.listings, l3)).last_points_claimed_at;
+    let l25 = dynamic_object_field::borrow_mut(&mut l1.id, l33);
     assert!(linked_table::contains(&l25.listings, l3), C18);
-    let l30;
-    l30 = linked_table::remove(&mut l25.listings, l3);
-    let l48;
-    l48 = (&l30).price;
-    let l47;
-    l47 = (&l30).commission;
+    let l30 = linked_table::remove(&mut l25.listings, l3);
+    let l48 = (&l30).price;
+    let l47 = (&l30).commission;
     debug::print(&string::utf8(C50));
     debug::print(&l48);
     debug::print(&string::utf8(C51));
@@ -1016,45 +866,26 @@ public fun buy<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2: &mut 
     *(&mut l25.lifetime_volume) = l25.lifetime_volume + l48as u128;
     marketplace::update_collection_avg_price(l25, l48);
     assert!(coin::value(&l4) >= l48, C13);
-    let l43;
-    l43 = coin::into_balance(l4);
-    let (reg_116, reg_117, reg_118, reg_119);
-    (reg_116, reg_117, reg_118, reg_119) = marketplace::destroy_listing(l30);
-    let l27;
-    l27 = reg_119;
-    let l34;
-    l34 = reg_118;
-    let l28;
-    l28 = reg_117;
-    let l36;
-    l36 = reg_116;
-    assert!(l28 == object::id(freeze(l2)), C19);
-    let l38;
-    l38 = l34 - l27;
-    let l44;
-    l44 = x2_balance::split(&mut l43, l38);
-    let (reg_145, reg_146);
-    (reg_145, reg_146) = kiosk::purchase_with_cap(l2, l36, coin::from_balance(l44, l7));
-    let l49;
-    l49 = reg_146;
-    let l32;
-    l32 = reg_145;
+    let l43 = coin::into_balance(l4);
+    let (reg_116, reg_117, reg_118, reg_119) = marketplace::destroy_listing(l30);
+    let l27 = reg_119;
+    let l34 = reg_118;
+    assert!(reg_117 == object::id(freeze(l2)), C19);
+    let l38 = l34 - l27;
+    let l44 = x2_balance::split(&mut l43, l38);
+    let (reg_145, reg_146) = kiosk::purchase_with_cap(l2, reg_116, coin::from_balance(l44, l7));
+    let l32 = reg_145;
+    let __c211 = l25.ion_points_enabled;
     let (l10, l9);
-    if (l25.ion_points_enabled) {
-        let l16;
-        if (l25.ion_collection_multiplier == 0u64) {
-            l16 = C5;
+    l9 = if (__c211) {
+        let l26 = if (l25.ion_collection_multiplier == 0u64) {
+            C5
         } else {
-            l16 = l25.ion_collection_multiplier;
+            l25.ion_collection_multiplier
         };
-        let l26;
-        l26 = l16;
-        let l35;
-        l35 = helpers::calculate_listing_proximity_multiplier(l48, l25.avg_sale_price);
-        let l45;
-        l45 = helpers::calculate_time_multiplier(l46 - l29, true);
-        let l42;
-        l42 = helpers::integer_sqrt(l34);
+        let l35 = helpers::calculate_listing_proximity_multiplier(l48, l25.avg_sale_price);
+        let l45 = helpers::calculate_time_multiplier(l46 - l29, true);
+        let l42 = helpers::integer_sqrt(l34);
         debug::print(&string::utf8(C35));
         debug::print(&string::utf8(C38));
         debug::print(&l26);
@@ -1064,22 +895,18 @@ public fun buy<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2: &mut 
         debug::print(&l45);
         debug::print(&string::utf8(C52));
         debug::print(&l42);
-        let l41;
-        l41 = helpers::calculate_ion_points(l42, l26, l35, l45);
+        let l41 = helpers::calculate_ion_points(l42, l26, l35, l45);
         *(&mut l39.claimable_points) = l39.claimable_points + l41;
-        let l24;
-        l24 = helpers::calculate_ion_points(l42, l26, l35, C5);
+        let l24 = helpers::calculate_ion_points(l42, l26, l35, C5);
         marketplace::award_ion_points_with_referral(l22, l1, l5, l24, l0, l6);
         l10 = l41;
-        l9 = l24;
+        l24
     } else {
         l10 = 0u64;
-        l9 = 0u64;
+        0u64
     };
-    let l40;
-    l40 = l10;
-    let l23;
-    l23 = l9;
+    let l40 = l10;
+    let l23 = l9;
     debug::print(&string::utf8(C53));
     debug::print(&l23);
     debug::print(&string::utf8(C54));
@@ -1087,19 +914,15 @@ public fun buy<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2: &mut 
     event::emit(BuyEvent { nft_type: l33, nft_id: object::id(&l32), buyer: l22, seller: l37, seller_kiosk: object::id(freeze(l2)), price: l34, commission: l27, buyer_ion_points: l23, seller_ion_points: l40 });
     debug::print(&string::utf8(C55));
     helpers::destroy_or_transfer_balance(l43, l22, l7);
-    return (l32, l49, l34 - l27)
+    return (l32, reg_146, l34 - l27)
 }
 
 public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>, l2: ID, l3: &mut AnimaIONs, l4: &Clock, l5: &mut AnimaChef, l6: &mut TxContext) {
     marketplace::validation_check(freeze(l0));
-    let l27;
-    l27 = tx_context::sender(freeze(l6));
-    let l37;
-    l37 = type_name::into_string(type_name::get());
-    let l33;
-    l33 = !(option::is_some(&l1));
-    let l43;
-    l43 = clock::timestamp_ms(l4);
+    let l27 = tx_context::sender(freeze(l6));
+    let l37 = type_name::into_string(type_name::get());
+    let l33 = !(option::is_some(&l1));
+    let l43 = clock::timestamp_ms(l4);
     debug::print(&string::utf8(C45));
     debug::print(&l27);
     debug::print(&l1);
@@ -1107,21 +930,16 @@ public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>
     debug::print(&l33);
     debug::print(&l37);
     assert!(linked_table::contains(&l0.active_collections, l37), C15);
-    let l28;
-    l28 = dynamic_object_field::borrow_mut(&mut l0.id, l37);
-    let l40;
-    l40 = x2_balance::zero();
+    let l28 = dynamic_object_field::borrow_mut(&mut l0.id, l37);
+    let l40 = x2_balance::zero();
     if (!(l33)) {
-        let l35;
-        l35 = *(option::borrow(&l1));
+        let l35 = *(option::borrow(&l1));
         assert!(linked_table::contains(&l28.bids, l35), C17);
         let l21 = linked_table::remove(&mut (linked_table::borrow_mut(&mut l28.bids, l35)).bids, l27);
     } else {
         assert!(linked_table::contains(&l28.collection_bids, l27), C17);
-        let l20;
-        l20 = linked_table::borrow_mut(&mut l28.collection_bids, l27);
-        let l30;
-        l30 = 0u64;
+        let l20 = linked_table::borrow_mut(&mut l28.collection_bids, l27);
+        let l30 = 0u64;
         loop {
             if (l30 < (freeze(l20)).length()) {
                 if (object::uid_to_inner(&(&(freeze(l20))[l30]).id) != l2) {
@@ -1140,61 +958,43 @@ public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>
     debug::print(&x2_balance::value(&l40));
     helpers::destroy_or_transfer_balance(l40, l27, l6);
     assert!(linked_table::contains(&l0.user_activity, l27), C10);
-    let l44;
-    l44 = linked_table::borrow_mut(&mut l0.user_activity, l27);
-    let l26;
-    l26 = 0u64;
-    let l34;
-    l34 = 0u64;
+    let l44 = linked_table::borrow_mut(&mut l0.user_activity, l27);
+    let l26 = 0u64;
+    let l34 = 0u64;
     if (l33) {
         assert!(linked_table::contains(&l44.collection_bids, l37), C17);
-        let l25;
-        l25 = linked_table::borrow_mut(&mut l44.collection_bids, l37);
-        let l31;
-        l31 = 0u64;
+        let l25 = linked_table::borrow_mut(&mut l44.collection_bids, l37);
+        let l31 = 0u64;
         loop {
             if (l31 < (freeze(l25)).length()) {
                 if ((&(freeze(l25))[l31]).bid_id != l2) {
                     l31 = l31 + 1u64;
                     continue
                 };
-                let l23;
-                l23 = vector::remove(l25, l31);
+                let l23 = vector::remove(l25, l31);
                 l26 = (&l23).bid_price;
                 l34 = (&l23).last_points_claimed_at;
             };
-            if ((freeze(l25)).length() == 0u64) {
-                
-            };
+            let __c269 = (freeze(l25)).length() == 0u64;
             break
         }
     } else {
-        let l36;
-        l36 = *(option::borrow(&l1));
+        let l36 = *(option::borrow(&l1));
         assert!(linked_table::contains(&l44.bids, l36), C17);
-        let l24;
-        l24 = linked_table::remove(&mut l44.bids, l36);
+        let l24 = linked_table::remove(&mut l44.bids, l36);
         l26 = (&l24).bid_price;
         l34 = (&l24).last_points_claimed_at;
     };
-    let l41;
-    l41 = l43 - l34;
-    let l9;
-    if (l28.ion_points_enabled) {
-        let l42;
-        l42 = helpers::calculate_time_multiplier(l41, false);
-        let l39;
-        l39 = helpers::calculate_bid_proximity_multiplier(l26, l28.avg_sale_price);
-        let l14;
-        if (l28.ion_collection_multiplier == 0u64) {
-            l14 = C5;
+    let l41 = l43 - l34;
+    let l32 = if (l28.ion_points_enabled) {
+        let l42 = helpers::calculate_time_multiplier(l41, false);
+        let l39 = helpers::calculate_bid_proximity_multiplier(l26, l28.avg_sale_price);
+        let l29 = if (l28.ion_collection_multiplier == 0u64) {
+            C5
         } else {
-            l14 = l28.ion_collection_multiplier;
+            l28.ion_collection_multiplier
         };
-        let l29;
-        l29 = l14;
-        let l38;
-        l38 = helpers::calculate_ion_points(l26, l29, l39, l42);
+        let l38 = helpers::calculate_ion_points(l26, l29, l39, l42);
         debug::print(&string::utf8(C35));
         debug::print(&string::utf8(C34));
         debug::print(&l41);
@@ -1207,12 +1007,10 @@ public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>
         debug::print(&string::utf8(C39));
         debug::print(&l38);
         marketplace::award_ion_points_with_referral(l27, l0, l3, l38, l4, l5);
-        l9 = l38;
+        l38
     } else {
-        l9 = 0u64;
+        0u64
     };
-    let l32;
-    l32 = l9;
     debug::print(&string::utf8(C47));
     debug::print(&l32);
     debug::print(&string::utf8(C48));
@@ -1221,16 +1019,12 @@ public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>
 
 public fun cancel_trait_bid<T0: key + store, T1: key + store>(l0: &mut MarketPlaceStore, l1: &mut TxContext): ( T1, TraitBidsPotato) {
     marketplace::validation_check(freeze(l0));
-    let l4;
-    l4 = type_name::into_string(type_name::get());
+    let l4 = type_name::into_string(type_name::get());
     marketplace::validate_collection_exists(freeze(l0));
-    let l2;
-    l2 = dynamic_object_field::borrow_mut(&mut l0.id, l4);
+    let l2 = dynamic_object_field::borrow_mut(&mut l0.id, l4);
     assert!(dynamic_object_field::exists_(&l2.id, C1), C15);
-    let l5;
-    l5 = dynamic_object_field::remove(&mut l2.id, C1);
-    let l3;
-    l3 = TraitBidsPotato { id: object::id(&l5) };
+    let l5 = dynamic_object_field::remove(&mut l2.id, C1);
+    let l3 = TraitBidsPotato { id: object::id(&l5) };
     return (l5, l3)
 }
 
@@ -1238,26 +1032,17 @@ public fun cancel_trait_bid_settle<T0: key + store, T1: key + store>(l0: &Clock,
     marketplace::validation_check(freeze(l1));
     let TraitBidsPotato { id: reg_3 } = l4;
     assert!(object::id(&l3) == reg_3 : 0x2::object::ID, C24);
-    let l23;
-    l23 = type_name::into_string(type_name::get());
-    let l27;
-    l27 = clock::timestamp_ms(l0);
-    let l15;
-    l15 = (&l2).bidder;
-    let l13;
-    l13 = (&l2).bid_at;
-    let l14;
-    l14 = object::id(&l2);
+    let l23 = type_name::into_string(type_name::get());
+    let l27 = clock::timestamp_ms(l0);
+    let l15 = (&l2).bidder;
+    let l13 = (&l2).bid_at;
+    let l14 = object::id(&l2);
     assert!(linked_table::contains(&l1.user_activity, l15), C10);
-    let l30;
-    l30 = linked_table::borrow_mut(&mut l1.user_activity, l15);
-    let l22;
-    l22 = 0u64;
+    let l30 = linked_table::borrow_mut(&mut l1.user_activity, l15);
+    let l22 = 0u64;
     if (linked_table::contains(&l30.trait_bids, l23)) {
-        let l29;
-        l29 = linked_table::borrow_mut(&mut l30.trait_bids, l23);
-        let l20;
-        l20 = 0u64;
+        let l29 = linked_table::borrow_mut(&mut l30.trait_bids, l23);
+        let l20 = 0u64;
         loop {
             if (l20 < (freeze(l29)).length()) {
                 if ((&(freeze(l29))[l20]).bid_id != l14) {
@@ -1269,44 +1054,32 @@ public fun cancel_trait_bid_settle<T0: key + store, T1: key + store>(l0: &Clock,
             break
         }
     };
-    let l16;
-    l16 = dynamic_object_field::borrow_mut(&mut l1.id, l23);
+    let l16 = dynamic_object_field::borrow_mut(&mut l1.id, l23);
     dynamic_object_field::add(&mut l16.id, C1, l3);
-    let l25;
-    l25 = marketplace::destroy_active_trait_bid(l2);
+    let l25 = marketplace::destroy_active_trait_bid(l2);
     helpers::destroy_or_transfer_balance(x2_balance::split(&mut l16.sui_trait_bids_pool, l25), l15, l7);
-    let l17;
-    l17 = dynamic_object_field::borrow(&l1.id, l23);
-    let l12;
-    if (l17.ion_points_enabled) {
-        let l8;
-        if (l22 == 0u64) {
-            l8 = l13;
+    let l17 = dynamic_object_field::borrow(&l1.id, l23);
+    let l21 = if (l17.ion_points_enabled) {
+        let l8 = if (l22 == 0u64) {
+            l13
         } else {
-            l8 = l22;
+            l22
         };
-        let l26;
-        l26 = helpers::calculate_time_multiplier(l27 - l8, false);
-        let l11;
+        let l26 = helpers::calculate_time_multiplier(l27 - l8, false);
         if (l26 > 0u64) {
-            let l24;
-            l24 = helpers::calculate_bid_proximity_multiplier(l25, l17.avg_sale_price);
-            let l10;
-            if (l17.ion_collection_multiplier == 0u64) {
-                l10 = C5;
+            let l24 = helpers::calculate_bid_proximity_multiplier(l25, l17.avg_sale_price);
+            let l10 = if (l17.ion_collection_multiplier == 0u64) {
+                C5
             } else {
-                l10 = l17.ion_collection_multiplier;
+                l17.ion_collection_multiplier
             };
-            l11 = helpers::calculate_ion_points(l25, l10, l24, l26);
+            helpers::calculate_ion_points(l25, l10, l24, l26)
         } else {
-            l11 = 0u64;
-        };
-        l12 = l11;
+            0u64
+        }
     } else {
-        l12 = 0u64;
+        0u64
     };
-    let l21;
-    l21 = l12;
     if (l21 > 0u64) {
         marketplace::award_ion_points_with_referral(l15, l1, l5, l21, l0, l6)
     };
@@ -1315,36 +1088,28 @@ public fun cancel_trait_bid_settle<T0: key + store, T1: key + store>(l0: &Clock,
 
 public fun claim_referral_points(l0: &Clock, l1: &mut AnimaChef, l2: &mut MarketPlaceStore, l3: &mut AnimaIONs, l4: &mut TxContext) {
     marketplace::validation_check(freeze(l2));
-    let l7;
-    l7 = tx_context::sender(freeze(l4));
-    let l10;
-    l10 = option::none();
-    let l9;
-    l9 = 0u64;
-    let l5;
-    l5 = 0u64;
+    let l7 = tx_context::sender(freeze(l4));
+    let l10 = option::none();
+    let l9 = 0u64;
+    let l5 = 0u64;
     assert!(linked_table::contains(&l2.referrals, l7), C10);
-    let l6;
-    l6 = *(linked_table::borrow(&l2.referrals, l7));
+    let l6 = *(linked_table::borrow(&l2.referrals, l7));
     *(linked_table::borrow_mut(&mut l2.referrals, l7)) = 0u64;
     if (ions::has_referrer(freeze(l3))) {
-        let l11;
-        l11 = ions::get_referrer(freeze(l3));
+        let l11 = ions::get_referrer(freeze(l3));
         if (option::is_some(&l11)) {
             option::fill(&mut l10, *(option::borrow(&l11)));
             l9 = math::mul_div_u128(l6as u128, C6as u128, 100u128);
             l5 = math::mul_div_u128(l6as u128, C3as u128, 100u128);
             if (linked_table::contains(&l2.referrals, *(option::borrow(&l10)))) {
-                let l8;
-                l8 = linked_table::borrow_mut(&mut l2.referrals, *(option::borrow(&l10)));
+                let l8 = linked_table::borrow_mut(&mut l2.referrals, *(option::borrow(&l10)));
                 *l8 = *l8 + l9
             } else {
                 linked_table::push_back(&mut l2.referrals, *(option::borrow(&l10)), l9)
             }
         }
     };
-    let l12;
-    l12 = l9 + l5;
+    let l12 = l9 + l5;
     ions::award_ion_points(&l2.points_admin_cap, l0, l1, l3, l12);
     event::emit(ReferralPointsClaimedEvent { user_address: l7, claimable_points: l6, referral_points: l9, bonus_points: l5, total_points: l12 })
 }
@@ -1359,16 +1124,13 @@ public fun complete_trait_bid<T0: key + store, T1: key + store>(l0: &mut MarketP
     marketplace::validation_check(freeze(l0));
     let TraitBidsPotato { id: reg_3 } = l2;
     assert!(object::id(&l1) == reg_3 : 0x2::object::ID, C24);
-    let l5;
-    l5 = type_name::into_string(type_name::get());
+    let l5 = type_name::into_string(type_name::get());
     dynamic_object_field::add(&mut (dynamic_object_field::borrow_mut(&mut l0.id, l5)).id, C1, l1)
 }
 
 fun create_trait_summary(l0: Option<String>, l1: Option<String>, l2: Option<String>): String {
-    let l4;
-    l4 = ascii::string(C2);
-    let l3;
-    l3 = true;
+    let l4 = ascii::string(C2);
+    let l3 = true;
     if (option::is_some(&l0)) {
         if (!(l3)) {
             ascii::append(&mut l4, ascii::string(C63))
@@ -1411,8 +1173,7 @@ fun destroy_listing<T0: key + store>(l0: Listing<T0>): ( PurchaseCap<T0>, ID, u6
 
 fun ensure_user_activity_exists(l0: &mut LinkedTable<address, UserInfo>, l1: address, l2: &mut TxContext) {
     if (!(linked_table::contains(freeze(l0), l1))) {
-        let l3;
-        l3 = UserInfo { id: object::new(l2), listings: linked_table::new(l2), bids: linked_table::new(l2), collection_bids: linked_table::new(l2), trait_bids: linked_table::new(l2), claimable_points: 0u64 };
+        let l3 = UserInfo { id: object::new(l2), listings: linked_table::new(l2), bids: linked_table::new(l2), collection_bids: linked_table::new(l2), trait_bids: linked_table::new(l2), claimable_points: 0u64 };
         linked_table::push_back(l0, l1, l3)
     }
 }
@@ -1431,52 +1192,29 @@ public fun get_active_bid_info(l0: &ActiveTraitBid): (
 }
 
 public fun get_bids_for_any_nft<T0: key + store>(l0: &MarketPlaceStore, l1: ID, l2: Option<address>, l3: u64): ( vector<address>, vector<ID>, vector<u64>, vector<u64>, u64, bool) {
-    let l16;
-    l16 = type_name::into_string(type_name::get());
-    let l11;
-    l11 = vector[];
-    let l9;
-    l9 = vector[];
-    let l10;
-    l10 = vector[];
-    let l7;
-    l7 = vector[];
+    let l16 = type_name::into_string(type_name::get());
+    let l11 = vector[];
+    let l9 = vector[];
+    let l10 = vector[];
+    let l7 = vector[];
     if (!(dynamic_object_field::exists_(&l0.id, l16))) {
         return (l11, l9, l10, l7, 0u64, false)
     };
-    let l12;
-    l12 = dynamic_object_field::borrow(&l0.id, l16);
-    let l15;
-    l15 = linked_table::contains(&l12.listings, l1);
+    let l12 = dynamic_object_field::borrow(&l0.id, l16);
+    let l15 = linked_table::contains(&l12.listings, l1);
     if (!(linked_table::contains(&l12.bids, l1))) {
         return (l11, l9, l10, l7, 0u64, l15)
     };
-    let l6;
-    l6 = linked_table::borrow(&l12.bids, l1);
-    let l4;
-    if (option::is_some(&l2)) {
-        l4 = l2;
+    let l6 = linked_table::borrow(&l12.bids, l1);
+    let l13 = if (option::is_some(&l2)) {
+        l2
     } else {
-        l4 = *(linked_table::front(&l6.bids));
+        *(linked_table::front(&l6.bids))
     };
-    let l13;
-    l13 = l4;
-    let l14;
-    l14 = 0u64;
-    loop {
-        let l5;
-        if (option::is_some(&l13)) {
-            l5 = l14 < l3;
-        } else {
-            l5 = false;
-        };
-        if (!(l5)) {
-            break
-        };
-        let l17;
-        l17 = option::borrow(&l13);
-        let l8;
-        l8 = linked_table::borrow(&l6.bids, *l17);
+    let l14 = 0u64;
+    while (option::is_some(&l13) && l14 < l3) {
+        let l17 = option::borrow(&l13);
+        let l8 = linked_table::borrow(&l6.bids, *l17);
         l11.push_back(*l17);
         l9.push_back(object::uid_to_inner(&l8.id));
         l10.push_back(l8.bid_price);
@@ -1488,50 +1226,28 @@ public fun get_bids_for_any_nft<T0: key + store>(l0: &MarketPlaceStore, l1: ID, 
 }
 
 public fun get_bids_for_listing<T0: key + store>(l0: &MarketPlaceStore, l1: ID, l2: Option<address>, l3: u64): ( vector<address>, vector<ID>, vector<u64>, vector<u64>, u64) {
-    let l15;
-    l15 = type_name::into_string(type_name::get());
-    let l11;
-    l11 = vector[];
-    let l9;
-    l9 = vector[];
-    let l10;
-    l10 = vector[];
-    let l7;
-    l7 = vector[];
+    let l15 = type_name::into_string(type_name::get());
+    let l11 = vector[];
+    let l9 = vector[];
+    let l10 = vector[];
+    let l7 = vector[];
     if (!(dynamic_object_field::exists_(&l0.id, l15))) {
         return (l11, l9, l10, l7, 0u64)
     };
-    let l12;
-    l12 = dynamic_object_field::borrow(&l0.id, l15);
+    let l12 = dynamic_object_field::borrow(&l0.id, l15);
     if (!(linked_table::contains(&l12.bids, l1))) {
         return (l11, l9, l10, l7, 0u64)
     };
-    let l6;
-    l6 = linked_table::borrow(&l12.bids, l1);
-    let l4;
-    if (option::is_some(&l2)) {
-        l4 = l2;
+    let l6 = linked_table::borrow(&l12.bids, l1);
+    let l13 = if (option::is_some(&l2)) {
+        l2
     } else {
-        l4 = *(linked_table::front(&l6.bids));
+        *(linked_table::front(&l6.bids))
     };
-    let l13;
-    l13 = l4;
-    let l14;
-    l14 = 0u64;
-    loop {
-        let l5;
-        if (option::is_some(&l13)) {
-            l5 = l14 < l3;
-        } else {
-            l5 = false;
-        };
-        if (!(l5)) {
-            break
-        };
-        let l16;
-        l16 = option::borrow(&l13);
-        let l8;
-        l8 = linked_table::borrow(&l6.bids, *l16);
+    let l14 = 0u64;
+    while (option::is_some(&l13) && l14 < l3) {
+        let l16 = option::borrow(&l13);
+        let l8 = linked_table::borrow(&l6.bids, *l16);
         l11.push_back(*l16);
         l9.push_back(object::uid_to_inner(&l8.id));
         l10.push_back(l8.bid_price);
@@ -1543,41 +1259,22 @@ public fun get_bids_for_listing<T0: key + store>(l0: &MarketPlaceStore, l1: ID, 
 }
 
 public fun get_collection_bidders_for_collection<T0: key + store>(l0: &MarketPlaceStore, l1: Option<address>, l2: u64): ( vector<address>, vector<u64>, u64) {
-    let l11;
-    l11 = type_name::into_string(type_name::get());
-    let l5;
-    l5 = vector[];
-    let l6;
-    l6 = vector[];
+    let l11 = type_name::into_string(type_name::get());
+    let l5 = vector[];
+    let l6 = vector[];
     if (!(dynamic_object_field::exists_(&l0.id, l11))) {
         return (l5, l6, 0u64)
     };
-    let l8;
-    l8 = dynamic_object_field::borrow(&l0.id, l11);
-    let l3;
-    if (option::is_some(&l1)) {
-        l3 = l1;
+    let l8 = dynamic_object_field::borrow(&l0.id, l11);
+    let l9 = if (option::is_some(&l1)) {
+        l1
     } else {
-        l3 = *(linked_table::front(&l8.collection_bids));
+        *(linked_table::front(&l8.collection_bids))
     };
-    let l9;
-    l9 = l3;
-    let l10;
-    l10 = 0u64;
-    loop {
-        let l4;
-        if (option::is_some(&l9)) {
-            l4 = l10 < l2;
-        } else {
-            l4 = false;
-        };
-        if (!(l4)) {
-            break
-        };
-        let l12;
-        l12 = option::borrow(&l9);
-        let l7;
-        l7 = linked_table::borrow(&l8.collection_bids, *l12);
+    let l10 = 0u64;
+    while (option::is_some(&l9) && l10 < l2) {
+        let l12 = option::borrow(&l9);
+        let l7 = linked_table::borrow(&l8.collection_bids, *l12);
         l5.push_back(*l12);
         l6.push_back(l7.length());
         l9 = *(linked_table::next(&l8.collection_bids, *l12));
@@ -1587,40 +1284,22 @@ public fun get_collection_bidders_for_collection<T0: key + store>(l0: &MarketPla
 }
 
 public fun get_collection_bids_by_user_for_collection<T0: key + store>(l0: &MarketPlaceStore, l1: address, l2: u64, l3: u64): ( vector<ID>, vector<u64>, vector<u64>, vector<u64>, u64) {
-    let l13;
-    l13 = type_name::into_string(type_name::get());
-    let l9;
-    l9 = vector[];
-    let l10;
-    l10 = vector[];
-    let l7;
-    l7 = vector[];
-    let l8;
-    l8 = vector[];
+    let l13 = type_name::into_string(type_name::get());
+    let l9 = vector[];
+    let l10 = vector[];
+    let l7 = vector[];
+    let l8 = vector[];
     if (!(dynamic_object_field::exists_(&l0.id, l13))) {
         return (l9, l10, l7, l8, 0u64)
     };
-    let l11;
-    l11 = dynamic_object_field::borrow(&l0.id, l13);
+    let l11 = dynamic_object_field::borrow(&l0.id, l13);
     if (!(linked_table::contains(&l11.collection_bids, l1))) {
         return (l9, l10, l7, l8, 0u64)
     };
-    let l6;
-    l6 = linked_table::borrow(&l11.collection_bids, l1);
-    let l12;
-    l12 = l2;
-    loop {
-        let l4;
-        if (l12 < l6.length()) {
-            l4 = l12 < l3;
-        } else {
-            l4 = false;
-        };
-        if (!(l4)) {
-            break
-        };
-        let l5;
-        l5 = &l6[l12];
+    let l6 = linked_table::borrow(&l11.collection_bids, l1);
+    let l12 = l2;
+    while (l12 < l6.length() && l12 < l3) {
+        let l5 = &l6[l12];
         l9.push_back(object::uid_to_inner(&l5.id));
         l10.push_back(l5.bid_price);
         l7.push_back(x2_balance::value(&l5.balance));
@@ -1635,58 +1314,34 @@ public fun get_collection_fee(l0: &MarketPlaceStore): u64 {
 }
 
 public fun get_collection_marketplace_info<T0: key + store>(l0: &MarketPlaceStore): ( u64, u64, u64, u128, bool, u64, u64) {
-    let l2;
-    l2 = type_name::into_string(type_name::get());
+    let l2 = type_name::into_string(type_name::get());
     if (!(dynamic_object_field::exists_(&l0.id, l2))) {
         return (0u64, 0u64, 0u64, 0u128, false, 0u64, 0u64)
     };
-    let l1;
-    l1 = dynamic_object_field::borrow(&l0.id, l2);
+    let l1 = dynamic_object_field::borrow(&l0.id, l2);
     return (linked_table::length(&l1.listings), linked_table::length(&l1.bids), linked_table::length(&l1.collection_bids), l1.lifetime_volume, l1.ion_points_enabled, l1.ion_collection_multiplier, l1.avg_sale_price)
 }
 
 public fun get_listings_for_marketplace<T0: key + store>(l0: &MarketPlaceStore, l1: Option<ID>, l2: u64): ( vector<address>, vector<ID>, vector<ID>, vector<u64>, vector<u64>, u64) {
-    let l13;
-    l13 = type_name::into_string(type_name::get());
-    let l15;
-    l15 = vector[];
-    let l9;
-    l9 = vector[];
-    let l12;
-    l12 = vector[];
-    let l14;
-    l14 = vector[];
-    let l6;
-    l6 = vector[];
+    let l13 = type_name::into_string(type_name::get());
+    let l15 = vector[];
+    let l9 = vector[];
+    let l12 = vector[];
+    let l14 = vector[];
+    let l6 = vector[];
     if (!(dynamic_object_field::exists_(&l0.id, l13))) {
         return (l15, l9, l12, l14, l6, 0u64)
     };
-    let l5;
-    l5 = dynamic_object_field::borrow(&l0.id, l13);
-    let l3;
-    if (option::is_some(&l1)) {
-        l3 = l1;
+    let l5 = dynamic_object_field::borrow(&l0.id, l13);
+    let l7 = if (option::is_some(&l1)) {
+        l1
     } else {
-        l3 = *(linked_table::front(&l5.listings));
+        *(linked_table::front(&l5.listings))
     };
-    let l7;
-    l7 = l3;
-    let l8;
-    l8 = 0u64;
-    loop {
-        let l4;
-        if (option::is_some(&l7)) {
-            l4 = l8 < l2;
-        } else {
-            l4 = false;
-        };
-        if (!(l4)) {
-            break
-        };
-        let l11;
-        l11 = option::borrow(&l7);
-        let l10;
-        l10 = linked_table::borrow(&l5.listings, *l11);
+    let l8 = 0u64;
+    while (option::is_some(&l7) && l8 < l2) {
+        let l11 = option::borrow(&l7);
+        let l10 = linked_table::borrow(&l5.listings, *l11);
         l12.push_back(*l11);
         l15.push_back(l10.seller);
         l9.push_back(l10.kiosk_id);
@@ -1703,13 +1358,11 @@ public fun get_marketplace_info(l0: &MarketPlaceStore): ( address, bool, u64, u6
 }
 
 public fun get_referral_points_balance(l0: &MarketPlaceStore, l1: address): u64 {
-    let l2;
-    if (linked_table::contains(&l0.referrals, l1)) {
-        l2 = *(linked_table::borrow(&l0.referrals, l1));
+    return if (linked_table::contains(&l0.referrals, l1)) {
+        *(linked_table::borrow(&l0.referrals, l1))
     } else {
-        l2 = 0u64;
-    };
-    return l2
+        0u64
+    }
 }
 
 public fun get_trait_bid_details(l0: &MarketPlaceStore, l1: address, l2: ID): (
@@ -1720,27 +1373,21 @@ public fun get_trait_bid_details(l0: &MarketPlaceStore, l1: address, l2: ID): (
     if (!(linked_table::contains(&l0.user_activity, l1))) {
         return (ascii::string(C2), 0u64, option::none(), option::none(), option::none(), option::none(), option::none(), option::none(), 0u64, 0u64)
     };
-    let l8;
-    l8 = linked_table::borrow(&l0.user_activity, l1);
-    let l3;
-    l3 = *(linked_table::front(&l8.trait_bids));
+    let l8 = linked_table::borrow(&l0.user_activity, l1);
+    let l3 = *(linked_table::front(&l8.trait_bids));
     loop {
         if (!(option::is_some(&l3))) {
             return (ascii::string(C2), 0u64, option::none(), option::none(), option::none(), option::none(), option::none(), option::none(), 0u64, 0u64)
         };
-        let l5;
-        l5 = option::borrow(&l3);
-        let l7;
-        l7 = linked_table::borrow(&l8.trait_bids, *l5);
-        let l4;
-        l4 = 0u64;
+        let l5 = option::borrow(&l3);
+        let l7 = linked_table::borrow(&l8.trait_bids, *l5);
+        let l4 = 0u64;
         loop {
             if (l4 >= l7.length()) {
                 l3 = *(linked_table::next(&l8.trait_bids, *l5));
                 break
             };
-            let l6;
-            l6 = &l7[l4];
+            let l6 = &l7[l4];
             if (l6.bid_id == l2) {
                 return (l6.nft_type, l6.bid_price, l6.trait_key1, l6.trait_value1, l6.trait_key2, l6.trait_value2, l6.trait_key3, l6.trait_value3, l6.bid_at, l6.last_points_claimed_at)
             };
@@ -1750,50 +1397,35 @@ public fun get_trait_bid_details(l0: &MarketPlaceStore, l1: address, l2: ID): (
 }
 
 public fun get_user_activity_overview(l0: &MarketPlaceStore, l1: address): ( u64, u64, u64, u64, u64) {
+    let __c0 = !(linked_table::contains(&l0.user_activity, l1));
     let (l2, l3, l4, l5, l6);
-    if (!(linked_table::contains(&l0.user_activity, l1))) {
+    l2 = if (__c0) {
         l6 = 0u64;
         l5 = 0u64;
         l4 = 0u64;
         l3 = 0u64;
-        l2 = 0u64;
+        0u64
     } else {
-        let l7;
-        l7 = linked_table::borrow(&l0.user_activity, l1);
+        let l7 = linked_table::borrow(&l0.user_activity, l1);
         l6 = l7.claimable_points;
         l5 = linked_table::length(&l7.trait_bids);
         l4 = linked_table::length(&l7.collection_bids);
         l3 = linked_table::length(&l7.bids);
-        l2 = linked_table::length(&l7.listings);
+        linked_table::length(&l7.listings)
     };
     return (l2, l3, l4, l5, l6)
 }
 
 public fun get_user_addresses_list(l0: &MarketPlaceStore, l1: Option<address>, l2: u64): ( vector<address>, u64) {
-    let l8;
-    l8 = vector[];
-    let l3;
-    if (option::is_some(&l1)) {
-        l3 = l1;
+    let l8 = vector[];
+    let l5 = if (option::is_some(&l1)) {
+        l1
     } else {
-        l3 = *(linked_table::front(&l0.user_activity));
+        *(linked_table::front(&l0.user_activity))
     };
-    let l5;
-    l5 = l3;
-    let l6;
-    l6 = 0u64;
-    loop {
-        let l4;
-        if (option::is_some(&l5)) {
-            l4 = l6 < l2;
-        } else {
-            l4 = false;
-        };
-        if (!(l4)) {
-            break
-        };
-        let l7;
-        l7 = option::borrow(&l5);
+    let l6 = 0u64;
+    while (option::is_some(&l5) && l6 < l2) {
+        let l7 = option::borrow(&l5);
         l8.push_back(*l7);
         l5 = *(linked_table::next(&l0.user_activity, *l7));
         l6 = l6 + 1u64;
@@ -1802,47 +1434,25 @@ public fun get_user_addresses_list(l0: &MarketPlaceStore, l1: Option<address>, l
 }
 
 public fun get_user_bids_info(l0: &MarketPlaceStore, l1: address, l2: Option<ID>, l3: u64): ( vector<ID>, vector<String>, vector<ID>, vector<u64>, vector<u64>, vector<u64>, u64) {
-    let l14;
-    l14 = vector[];
-    let l15;
-    l15 = vector[];
-    let l7;
-    l7 = vector[];
-    let l9;
-    l9 = vector[];
-    let l6;
-    l6 = vector[];
-    let l12;
-    l12 = vector[];
+    let l14 = vector[];
+    let l15 = vector[];
+    let l7 = vector[];
+    let l9 = vector[];
+    let l6 = vector[];
+    let l12 = vector[];
     if (!(linked_table::contains(&l0.user_activity, l1))) {
         return (l14, l15, l7, l9, l6, l12, 0u64)
     };
-    let l16;
-    l16 = linked_table::borrow(&l0.user_activity, l1);
-    let l4;
-    if (option::is_some(&l2)) {
-        l4 = l2;
+    let l16 = linked_table::borrow(&l0.user_activity, l1);
+    let l10 = if (option::is_some(&l2)) {
+        l2
     } else {
-        l4 = *(linked_table::front(&l16.bids));
+        *(linked_table::front(&l16.bids))
     };
-    let l10;
-    l10 = l4;
-    let l11;
-    l11 = 0u64;
-    loop {
-        let l5;
-        if (option::is_some(&l10)) {
-            l5 = l11 < l3;
-        } else {
-            l5 = false;
-        };
-        if (!(l5)) {
-            break
-        };
-        let l13;
-        l13 = option::borrow(&l10);
-        let l8;
-        l8 = linked_table::borrow(&l16.bids, *l13);
+    let l11 = 0u64;
+    while (option::is_some(&l10) && l11 < l3) {
+        let l13 = option::borrow(&l10);
+        let l8 = linked_table::borrow(&l16.bids, *l13);
         l14.push_back(*l13);
         l15.push_back(l8.nft_type);
         l7.push_back(l8.bid_id);
@@ -1856,40 +1466,22 @@ public fun get_user_bids_info(l0: &MarketPlaceStore, l1: address, l2: Option<ID>
 }
 
 public fun get_user_collection_bids_for_type(l0: &MarketPlaceStore, l1: address, l2: String, l3: u64, l4: u64): ( vector<ID>, vector<u64>, vector<u64>, vector<u64>, u64) {
-    let l7;
-    l7 = vector[];
-    let l9;
-    l9 = vector[];
-    let l6;
-    l6 = vector[];
-    let l12;
-    l12 = vector[];
+    let l7 = vector[];
+    let l9 = vector[];
+    let l6 = vector[];
+    let l12 = vector[];
     if (!(linked_table::contains(&l0.user_activity, l1))) {
         return (l7, l9, l6, l12, 0u64)
     };
-    let l14;
-    l14 = linked_table::borrow(&l0.user_activity, l1);
+    let l14 = linked_table::borrow(&l0.user_activity, l1);
     if (!(linked_table::contains(&l14.collection_bids, l2))) {
         return (l7, l9, l6, l12, 0u64)
     };
-    let l10;
-    l10 = linked_table::borrow(&l14.collection_bids, l2);
-    let l11;
-    l11 = l3;
-    let l13;
-    l13 = l10.length();
-    loop {
-        let l5;
-        if (l11 < l13) {
-            l5 = l11 < l4;
-        } else {
-            l5 = false;
-        };
-        if (!(l5)) {
-            break
-        };
-        let l8;
-        l8 = &l10[l11];
+    let l10 = linked_table::borrow(&l14.collection_bids, l2);
+    let l11 = l3;
+    let l13 = l10.length();
+    while (l11 < l13 && l11 < l4) {
+        let l8 = &l10[l11];
         l7.push_back(l8.bid_id);
         l9.push_back(l8.bid_price);
         l6.push_back(l8.bid_at);
@@ -1900,39 +1492,21 @@ public fun get_user_collection_bids_for_type(l0: &MarketPlaceStore, l1: address,
 }
 
 public fun get_user_collection_bids_info(l0: &MarketPlaceStore, l1: address, l2: Option<String>, l3: u64): ( vector<String>, vector<u64>, u64) {
-    let l11;
-    l11 = vector[];
-    let l6;
-    l6 = vector[];
+    let l11 = vector[];
+    let l6 = vector[];
     if (!(linked_table::contains(&l0.user_activity, l1))) {
         return (l11, l6, 0u64)
     };
-    let l12;
-    l12 = linked_table::borrow(&l0.user_activity, l1);
-    let l4;
-    if (option::is_some(&l2)) {
-        l4 = l2;
+    let l12 = linked_table::borrow(&l0.user_activity, l1);
+    let l8 = if (option::is_some(&l2)) {
+        l2
     } else {
-        l4 = *(linked_table::front(&l12.collection_bids));
+        *(linked_table::front(&l12.collection_bids))
     };
-    let l8;
-    l8 = l4;
-    let l9;
-    l9 = 0u64;
-    loop {
-        let l5;
-        if (option::is_some(&l8)) {
-            l5 = l9 < l3;
-        } else {
-            l5 = false;
-        };
-        if (!(l5)) {
-            break
-        };
-        let l10;
-        l10 = option::borrow(&l8);
-        let l7;
-        l7 = linked_table::borrow(&l12.collection_bids, *l10);
+    let l9 = 0u64;
+    while (option::is_some(&l8) && l9 < l3) {
+        let l10 = option::borrow(&l8);
+        let l7 = linked_table::borrow(&l12.collection_bids, *l10);
         l11.push_back(*l10);
         l6.push_back(l7.length());
         l8 = *(linked_table::next(&l12.collection_bids, *l10));
@@ -1942,43 +1516,23 @@ public fun get_user_collection_bids_info(l0: &MarketPlaceStore, l1: address, l2:
 }
 
 public fun get_user_listings_info(l0: &MarketPlaceStore, l1: address, l2: Option<ID>, l3: u64): ( vector<ID>, vector<String>, vector<u64>, vector<u64>, u64) {
-    let l11;
-    l11 = vector[];
-    let l13;
-    l13 = vector[];
-    let l12;
-    l12 = vector[];
-    let l8;
-    l8 = vector[];
+    let l11 = vector[];
+    let l13 = vector[];
+    let l12 = vector[];
+    let l8 = vector[];
     if (!(linked_table::contains(&l0.user_activity, l1))) {
         return (l11, l13, l12, l8, 0u64)
     };
-    let l14;
-    l14 = linked_table::borrow(&l0.user_activity, l1);
-    let l4;
-    if (option::is_some(&l2)) {
-        l4 = l2;
+    let l14 = linked_table::borrow(&l0.user_activity, l1);
+    let l6 = if (option::is_some(&l2)) {
+        l2
     } else {
-        l4 = *(linked_table::front(&l14.listings));
+        *(linked_table::front(&l14.listings))
     };
-    let l6;
-    l6 = l4;
-    let l7;
-    l7 = 0u64;
-    loop {
-        let l5;
-        if (option::is_some(&l6)) {
-            l5 = l7 < l3;
-        } else {
-            l5 = false;
-        };
-        if (!(l5)) {
-            break
-        };
-        let l10;
-        l10 = option::borrow(&l6);
-        let l9;
-        l9 = linked_table::borrow(&l14.listings, *l10);
+    let l7 = 0u64;
+    while (option::is_some(&l6) && l7 < l3) {
+        let l10 = option::borrow(&l6);
+        let l9 = linked_table::borrow(&l14.listings, *l10);
         l11.push_back(*l10);
         l13.push_back(l9.nft_type);
         l12.push_back(l9.price);
@@ -1990,41 +1544,22 @@ public fun get_user_listings_info(l0: &MarketPlaceStore, l1: address, l2: Option
 }
 
 public fun get_user_pending_claims(l0: &MarketPlaceStore, l1: address, l2: Option<ID>, l3: u64): ( vector<ID>, vector<String>, u64) {
-    let l12;
-    l12 = vector[];
-    let l11;
-    l11 = vector[];
-    let l13;
-    l13 = vector[];
+    let l12 = vector[];
+    let l11 = vector[];
+    let l13 = vector[];
     if (!(linked_table::contains(&l0.pending_claims, l1))) {
         return (vector[], vector[], 0u64)
     };
-    let l10;
-    l10 = linked_table::borrow(&l0.pending_claims, l1);
-    let l4;
-    if (option::is_some(&l2)) {
-        l4 = l2;
+    let l10 = linked_table::borrow(&l0.pending_claims, l1);
+    let l6 = if (option::is_some(&l2)) {
+        l2
     } else {
-        l4 = *(linked_table::front(&l10.pending_claims));
+        *(linked_table::front(&l10.pending_claims))
     };
-    let l6;
-    l6 = l4;
-    let l8;
-    l8 = 0u64;
-    loop {
-        let l5;
-        if (option::is_some(&l6)) {
-            l5 = l8 < l3;
-        } else {
-            l5 = false;
-        };
-        if (!(l5)) {
-            break
-        };
-        let l7;
-        l7 = option::borrow(&l6);
-        let l9;
-        l9 = linked_table::borrow(&l10.pending_claims, *l7);
+    let l8 = 0u64;
+    while (option::is_some(&l6) && l8 < l3) {
+        let l7 = option::borrow(&l6);
+        let l9 = linked_table::borrow(&l10.pending_claims, *l7);
         l12.push_back(*l7);
         l11.push_back(l9.nft_type);
         l13.push_back(l9.price);
@@ -2035,64 +1570,31 @@ public fun get_user_pending_claims(l0: &MarketPlaceStore, l1: address, l2: Optio
 }
 
 public fun get_user_trait_bids_info(l0: &MarketPlaceStore, l1: address, l2: Option<String>, l3: u64): ( vector<ID>, vector<String>, vector<u64>, vector<String>, u64) {
-    let l7;
-    l7 = vector[];
-    let l15;
-    l15 = vector[];
-    let l8;
-    l8 = vector[];
-    let l22;
-    l22 = vector[];
-    let l17;
-    l17 = 0u64;
+    let l7 = vector[];
+    let l15 = vector[];
+    let l8 = vector[];
+    let l22 = vector[];
+    let l17 = 0u64;
     if (!(linked_table::contains(&l0.user_activity, l1))) {
         return (l7, l15, l8, l22, 0u64)
     };
-    let l24;
-    l24 = linked_table::borrow(&l0.user_activity, l1);
-    let l4;
-    if (option::is_some(&l2)) {
-        l4 = l2;
+    let l24 = linked_table::borrow(&l0.user_activity, l1);
+    let l11 = if (option::is_some(&l2)) {
+        l2
     } else {
-        l4 = *(linked_table::front(&l24.trait_bids));
+        *(linked_table::front(&l24.trait_bids))
     };
-    let l11;
-    l11 = l4;
-    let l9;
-    l9 = 0u64;
-    loop {
-        let l5;
-        if (option::is_some(&l11)) {
-            l5 = l9 < l3;
-        } else {
-            l5 = false;
-        };
-        if (!(l5)) {
-            break
-        };
-        let l12;
-        l12 = option::borrow(&l11);
-        let l20;
-        l20 = linked_table::borrow(&l24.trait_bids, *l12);
-        let l13;
-        l13 = 0u64;
-        loop {
-            let l6;
-            if (l13 < l20.length()) {
-                l6 = l9 < l3;
-            } else {
-                l6 = false;
-            };
-            if (!(l6)) {
-                break
-            };
-            let l19;
-            l19 = &l20[l13];
+    let l9 = 0u64;
+    while (option::is_some(&l11) && l9 < l3) {
+        let l12 = option::borrow(&l11);
+        let l20 = linked_table::borrow(&l24.trait_bids, *l12);
+        let l13 = 0u64;
+        while (l13 < l20.length() && l9 < l3) {
+            let l19 = &l20[l13];
             l7.push_back(l19.bid_id);
             l15.push_back(l19.nft_type);
             l8.push_back(l19.bid_price);
-            let l23;
-            l23 = marketplace::create_trait_summary(l19.trait_key1, l19.trait_key2, l19.trait_key3);
+            let l23 = marketplace::create_trait_summary(l19.trait_key1, l19.trait_key2, l19.trait_key3);
             l22.push_back(l23);
             l13 = l13 + 1u64;
             l9 = l9 + 1u64;
@@ -2100,19 +1602,16 @@ public fun get_user_trait_bids_info(l0: &MarketPlaceStore, l1: address, l2: Opti
         };
         l11 = *(linked_table::next(&l24.trait_bids, *l12));
     };
-    let l16;
-    l16 = 0u64;
-    let l10;
-    l10 = *(linked_table::front(&l24.trait_bids));
+    let l16 = 0u64;
+    let l10 = *(linked_table::front(&l24.trait_bids));
     while (option::is_some(&l10)) {
-        let l14;
-        l14 = option::borrow(&l10);
-        let l21;
-        l21 = linked_table::borrow(&l24.trait_bids, *l14);
+        let l14 = option::borrow(&l10);
+        let l21 = linked_table::borrow(&l24.trait_bids, *l14);
         l16 = l16 + l21.length();
         l10 = *(linked_table::next(&l24.trait_bids, *l14));
     };
-    return (l7, l15, l8, l22, l16)
+    let l18 = l16;
+    return (l7, l15, l8, l22, l18)
 }
 
 fun init(l0: &mut TxContext) {
@@ -2123,27 +1622,16 @@ fun init(l0: &mut TxContext) {
 }
 
 public fun init_marketplace(l0: &AdminCap, l1: PointsAdminCap, l2: &mut TxContext) {
-    let (reg_1, reg_2);
-    (reg_1, reg_2) = kiosk::new(l2);
-    let l13;
-    l13 = reg_2;
-    let l12;
-    l12 = reg_1;
-    let l14;
-    l14 = kiosk::kiosk_owner_cap_for(&l13);
-    transfer::public_share_object(l12);
-    let l3;
-    l3 = object::new(l2);
-    let l8;
-    l8 = x2_balance::zero();
-    let l9;
-    l9 = linked_table::new(l2);
-    let l10;
-    l10 = linked_table::new(l2);
-    let l11;
-    l11 = linked_table::new(l2);
-    let l6;
-    l6 = linked_table::new(l2);
+    let (reg_1, reg_2) = kiosk::new(l2);
+    let l13 = reg_2;
+    let l14 = kiosk::kiosk_owner_cap_for(&l13);
+    transfer::public_share_object(reg_1);
+    let l3 = object::new(l2);
+    let l8 = x2_balance::zero();
+    let l9 = linked_table::new(l2);
+    let l10 = linked_table::new(l2);
+    let l11 = linked_table::new(l2);
+    let l6 = linked_table::new(l2);
     transfer::share_object(MarketPlaceStore { id: l3, points_admin_cap: l1, is_permissionless: false, new_collection_fee: C7, commission_pct: C8, available_sui: l8, user_activity: l9, active_collections: l10, referrals: l11, kiosk_id: l14, escrow_kiosk_cap: l13, pending_claims: l6, version: C0 })
 }
 
@@ -2154,12 +1642,10 @@ public fun is_permissionless(l0: &MarketPlaceStore): bool {
 public fun launchpad_add_collection<T0: key + store>(l0: &mut MarketPlaceStore, l1: &LaunchpadCap, l2: bool, l3: u64, l4: &mut TxContext) {
     marketplace::validation_check(freeze(l0));
     assert!(l3 <= C4, C22);
-    let l6;
-    l6 = type_name::into_string(type_name::get());
+    let l6 = type_name::into_string(type_name::get());
     assert!(!(linked_table::contains(&l0.active_collections, l6)), C15);
     linked_table::push_back(&mut l0.active_collections, l6, true);
-    let l5;
-    l5 = CollectionMarketPlace { id: object::new(l4), listings: linked_table::new(l4), bids: linked_table::new(l4), collection_bids: linked_table::new(l4), sui_trait_bids_pool: x2_balance::zero(), are_trait_bids_enabled: false, lifetime_volume: 0u128, ion_points_enabled: l2, ion_collection_multiplier: l3, avg_sale_price: 0u64, recent_sale_prices: vector[] };
+    let l5 = CollectionMarketPlace { id: object::new(l4), listings: linked_table::new(l4), bids: linked_table::new(l4), collection_bids: linked_table::new(l4), sui_trait_bids_pool: x2_balance::zero(), are_trait_bids_enabled: false, lifetime_volume: 0u128, ion_points_enabled: l2, ion_collection_multiplier: l3, avg_sale_price: 0u64, recent_sale_prices: vector[] };
     dynamic_object_field::add(&mut l0.id, l6, l5);
     event::emit(UpdateActiveCollectionsEvent { nft_type: l6, boolean: true });
     event::emit(UpdateIONMultiplierEvent { nft_type: l6, is_ion_points_enabled: l2, ion_collection_multiplier: l3 })
@@ -2168,19 +1654,13 @@ public fun launchpad_add_collection<T0: key + store>(l0: &mut MarketPlaceStore, 
 public entry fun list<T0: key + store>(l0: &mut MarketPlaceStore, l1: &mut Kiosk, l2: &KioskOwnerCap, l3: ID, l4: u64, l5: &Clock, l6: &mut TxContext) {
     debug::print(&string::utf8(C31));
     marketplace::validation_check(freeze(l0));
-    let l19;
-    l19 = tx_context::sender(freeze(l6));
-    let l16;
-    l16 = object::id(freeze(l1));
-    let l18;
-    l18 = type_name::into_string(type_name::get());
-    let l20;
-    l20 = clock::timestamp_ms(l5);
+    let l19 = tx_context::sender(freeze(l6));
+    let l16 = object::id(freeze(l1));
+    let l18 = type_name::into_string(type_name::get());
+    let l20 = clock::timestamp_ms(l5);
     marketplace::validate_collection_exists(freeze(l0));
-    let l15;
-    l15 = l4 * l0.commission_pct / 100u64;
-    let l17;
-    l17 = Listing { seller: l19, kiosk_id: l16, nft_id: l3, cap: kiosk::list_with_purchase_cap(l1, l2, l3, l4 - l15, l6), price: l4, commission: l15, listed_at: l20 };
+    let l15 = l4 * l0.commission_pct / 100u64;
+    let l17 = Listing { seller: l19, kiosk_id: l16, nft_id: l3, cap: kiosk::list_with_purchase_cap(l1, l2, l3, l4 - l15, l6), price: l4, commission: l15, listed_at: l20 };
     linked_table::push_back(&mut (dynamic_object_field::borrow_mut(&mut l0.id, l18)).listings, l3, l17);
     marketplace::ensure_user_activity_exists(&mut l0.user_activity, l19, l6);
     linked_table::push_back(&mut (linked_table::borrow_mut(&mut l0.user_activity, l19)).listings, l3, ListingInfo { nft_type: l18, price: l4, listed_at: l20, last_points_claimed_at: l20 });
@@ -2190,14 +1670,10 @@ public entry fun list<T0: key + store>(l0: &mut MarketPlaceStore, l1: &mut Kiosk
 
 public entry fun make_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>, l2: u64, l3: Coin<SUI>, l4: &Clock, l5: &mut TxContext) {
     marketplace::validation_check(freeze(l0));
-    let l16;
-    l16 = tx_context::sender(freeze(l5));
-    let l21;
-    l21 = type_name::into_string(type_name::get());
-    let l18;
-    l18 = !(option::is_some(&l1));
-    let l23;
-    l23 = clock::timestamp_ms(l4);
+    let l16 = tx_context::sender(freeze(l5));
+    let l21 = type_name::into_string(type_name::get());
+    let l18 = !(option::is_some(&l1));
+    let l23 = clock::timestamp_ms(l4);
     debug::print(&string::utf8(C42));
     debug::print(&l16);
     debug::print(&l1);
@@ -2205,27 +1681,20 @@ public entry fun make_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option
     debug::print(&l18);
     debug::print(&l21);
     marketplace::validate_collection_exists(freeze(l0));
-    let l17;
-    l17 = dynamic_object_field::borrow_mut(&mut l0.id, l21);
-    let l22;
-    l22 = coin::into_balance(l3);
-    let l9;
-    l9 = ActiveBid { id: object::new(l5), bidder: l16, bid_price: l2, balance: x2_balance::split(&mut l22, l2), bid_at: l23 };
-    let l14;
-    l14 = object::id(&l9);
+    let l17 = dynamic_object_field::borrow_mut(&mut l0.id, l21);
+    let l22 = coin::into_balance(l3);
+    let l9 = ActiveBid { id: object::new(l5), bidder: l16, bid_price: l2, balance: x2_balance::split(&mut l22, l2), bid_at: l23 };
+    let l14 = object::id(&l9);
     debug::print(&string::utf8(C43));
     debug::print(&l14);
     if (!(l18)) {
-        let l19;
-        l19 = *(option::borrow(&l1));
+        let l19 = *(option::borrow(&l1));
         if (linked_table::contains(&l17.bids, l19)) {
-            let l10;
-            l10 = linked_table::borrow_mut(&mut l17.bids, l19);
+            let l10 = linked_table::borrow_mut(&mut l17.bids, l19);
             assert!(!(linked_table::contains(&l10.bids, l16)), C16);
             linked_table::push_back(&mut l10.bids, l16, l9)
         } else {
-            let l11;
-            l11 = ActiveBids { id: object::new(l5), bids: linked_table::new(l5) };
+            let l11 = ActiveBids { id: object::new(l5), bids: linked_table::new(l5) };
             linked_table::push_back(&mut (&mut l11).bids, l16, l9);
             linked_table::push_back(&mut l17.bids, l19, l11)
         }
@@ -2233,29 +1702,24 @@ public entry fun make_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option
         if (linked_table::contains(&l17.collection_bids, l16)) {
             (linked_table::borrow_mut(&mut l17.collection_bids, l16)).push_back(l9)
         } else {
-            let l12;
-            l12 = vector[];
+            let l12 = vector[];
             l12.push_back(l9);
             linked_table::push_back(&mut l17.collection_bids, l16, l12)
         }
     };
-    let l15;
-    l15 = BidInfo { bid_id: l14, nft_type: l21, bid_price: l2, is_collection_bid: l18, bid_at: l23, last_points_claimed_at: l23 };
+    let l15 = BidInfo { bid_id: l14, nft_type: l21, bid_price: l2, is_collection_bid: l18, bid_at: l23, last_points_claimed_at: l23 };
     marketplace::ensure_user_activity_exists(&mut l0.user_activity, l16, l5);
-    let l24;
-    l24 = linked_table::borrow_mut(&mut l0.user_activity, l16);
+    let l24 = linked_table::borrow_mut(&mut l0.user_activity, l16);
     if (l18) {
         if (linked_table::contains(&l24.collection_bids, l21)) {
             (linked_table::borrow_mut(&mut l24.collection_bids, l21)).push_back(l15)
         } else {
-            let l13;
-            l13 = vector[];
+            let l13 = vector[];
             l13.push_back(l15);
             linked_table::push_back(&mut l24.collection_bids, l21, l13)
         }
     } else {
-        let l20;
-        l20 = *(option::borrow(&l1));
+        let l20 = *(option::borrow(&l1));
         assert!(!(linked_table::contains(&l24.bids, l20)), C16);
         linked_table::push_back(&mut l24.bids, l20, l15)
     };
@@ -2266,42 +1730,29 @@ public entry fun make_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option
 
 public fun make_trait_bid<T0: key + store, T1: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2: Coin<SUI>, l3: Option<String>, l4: Option<vector<String>>, l5: Option<String>, l6: Option<vector<String>>, l7: Option<String>, l8: Option<vector<String>>, l9: &mut TxContext): ( ActiveTraitBid, T1, TraitBidsPotato) {
     marketplace::validation_check(freeze(l1));
-    let l14;
-    l14 = tx_context::sender(freeze(l9));
-    let l17;
-    l17 = type_name::into_string(type_name::get());
-    let l18;
-    l18 = clock::timestamp_ms(l0);
+    let l14 = tx_context::sender(freeze(l9));
+    let l17 = type_name::into_string(type_name::get());
+    let l18 = clock::timestamp_ms(l0);
     marketplace::validate_collection_exists(freeze(l1));
-    let l15;
-    l15 = dynamic_object_field::borrow_mut(&mut l1.id, l17);
+    let l15 = dynamic_object_field::borrow_mut(&mut l1.id, l17);
     assert!(dynamic_object_field::exists_(&l15.id, C1), C23);
     assert!(l15.are_trait_bids_enabled, C30);
-    let l11;
-    l11 = coin::value(&l2);
-    let l12;
-    l12 = coin::into_balance(l2);
-    let l10;
-    l10 = ActiveTraitBid { id: object::new(l9), bidder: l14, bid_price: l11, bid_at: l18, trait_key1: l3, trait_value1: l4, trait_key2: l5, trait_value2: l6, trait_key3: l7, trait_value3: l8 };
-    let l13;
-    l13 = object::id(&l10);
+    let l11 = coin::value(&l2);
+    let l12 = coin::into_balance(l2);
+    let l10 = ActiveTraitBid { id: object::new(l9), bidder: l14, bid_price: l11, bid_at: l18, trait_key1: l3, trait_value1: l4, trait_key2: l5, trait_value2: l6, trait_key3: l7, trait_value3: l8 };
+    let l13 = object::id(&l10);
     marketplace::ensure_user_activity_exists(&mut l1.user_activity, l14, l9);
-    let l22;
-    l22 = linked_table::borrow_mut(&mut l1.user_activity, l14);
-    let l19;
-    l19 = TraitBidInfo { bid_id: l13, nft_type: l17, bid_price: l11, trait_key1: l3, trait_value1: l4, trait_key2: l5, trait_value2: l6, trait_key3: l7, trait_value3: l8, bid_at: l18, last_points_claimed_at: l18 };
+    let l22 = linked_table::borrow_mut(&mut l1.user_activity, l14);
+    let l19 = TraitBidInfo { bid_id: l13, nft_type: l17, bid_price: l11, trait_key1: l3, trait_value1: l4, trait_key2: l5, trait_value2: l6, trait_key3: l7, trait_value3: l8, bid_at: l18, last_points_claimed_at: l18 };
     if (linked_table::contains(&l22.trait_bids, l17)) {
         (linked_table::borrow_mut(&mut l22.trait_bids, l17)).push_back(l19)
     } else {
-        let l20;
-        l20 = vector[];
+        let l20 = vector[];
         l20.push_back(l19);
         linked_table::push_back(&mut l22.trait_bids, l17, l20)
     };
-    let l21;
-    l21 = dynamic_object_field::remove(&mut l15.id, C1);
-    let l16;
-    l16 = TraitBidsPotato { id: object::id(&l21) };
+    let l21 = dynamic_object_field::remove(&mut l15.id, C1);
+    let l16 = TraitBidsPotato { id: object::id(&l21) };
     helpers::destroy_or_transfer_balance(l12, l14, l9);
     event::emit(TraitBidMadeEvent { nft_type: l17, bidder: l14, bid_id: l13, bid_amount: l11, trait_key1: l3, trait_value1: l4, trait_key2: l5, trait_value2: l6, trait_key3: l7, trait_value3: l8, bid_at: l18 });
     return (l10, l21, l16)
@@ -2310,64 +1761,48 @@ public fun make_trait_bid<T0: key + store, T1: key + store>(l0: &Clock, l1: &mut
 public fun permissionless_add_collection<T0: key + store>(l0: &mut MarketPlaceStore, l1: Coin<SUI>, l2: &mut TxContext) {
     marketplace::validation_check(freeze(l0));
     assert!(l0.is_permissionless, C15);
-    let l4;
-    l4 = type_name::into_string(type_name::get());
+    let l4 = type_name::into_string(type_name::get());
     assert!(!(linked_table::contains(&l0.active_collections, l4)), C15);
     assert!(coin::value(&l1) >= l0.new_collection_fee, C13);
-    let l5;
-    l5 = coin::into_balance(l1);
-    let l6;
-    l6 = tx_context::sender(freeze(l2));
+    let l5 = coin::into_balance(l1);
+    let l6 = tx_context::sender(freeze(l2));
     helpers::destroy_or_transfer_balance(l5, l6, l2);
     linked_table::push_back(&mut l0.active_collections, l4, true);
-    let l3;
-    l3 = CollectionMarketPlace { id: object::new(l2), listings: linked_table::new(l2), bids: linked_table::new(l2), collection_bids: linked_table::new(l2), sui_trait_bids_pool: x2_balance::zero(), are_trait_bids_enabled: false, lifetime_volume: 0u128, ion_points_enabled: false, ion_collection_multiplier: 0u64, avg_sale_price: 0u64, recent_sale_prices: vector[] };
+    let l3 = CollectionMarketPlace { id: object::new(l2), listings: linked_table::new(l2), bids: linked_table::new(l2), collection_bids: linked_table::new(l2), sui_trait_bids_pool: x2_balance::zero(), are_trait_bids_enabled: false, lifetime_volume: 0u128, ion_points_enabled: false, ion_collection_multiplier: 0u64, avg_sale_price: 0u64, recent_sale_prices: vector[] };
     dynamic_object_field::add(&mut l0.id, l4, l3);
     event::emit(UpdateActiveCollectionsEvent { nft_type: l4, boolean: true })
 }
 
 public fun process_pending_claim<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2: &mut Kiosk, l3: &mut Kiosk, l4: &KioskOwnerCap, l5: ID, l6: &mut TxContext): TransferRequest<T0> {
     marketplace::validation_check(freeze(l1));
-    let l10;
-    l10 = tx_context::sender(freeze(l6));
-    let l16;
-    l16 = clock::timestamp_ms(l0);
+    let l10 = tx_context::sender(freeze(l6));
+    let l16 = clock::timestamp_ms(l0);
     debug::print(&string::utf8(C60));
     debug::print(&l10);
     debug::print(&l5);
     assert!(linked_table::contains(&l1.pending_claims, l10), C27);
-    let l14;
-    l14 = linked_table::borrow_mut(&mut l1.pending_claims, l10);
+    let l14 = linked_table::borrow_mut(&mut l1.pending_claims, l10);
     assert!(linked_table::contains(&l14.pending_claims, l5), C28);
-    let l13;
-    l13 = linked_table::remove(&mut l14.pending_claims, l5);
+    let l13 = linked_table::remove(&mut l14.pending_claims, l5);
     assert!((&l13).buyer == l10, C25);
     let PendingClaim { buyer: reg_53, nft_type: reg_54, price: reg_55 } = l13;
     debug::print(&string::utf8(C61));
     debug::print(&l10);
     assert!(kiosk::kiosk_owner_cap_for(l4) == object::id(freeze(l3)), C19);
-    let l15;
-    l15 = kiosk::list_with_purchase_cap(l2, &l1.escrow_kiosk_cap, l5, 0u64, l6);
-    let (reg_84, reg_85);
-    (reg_84, reg_85) = kiosk::purchase_with_cap(l2, l15, coin::from_balance(x2_balance::zero(), l6));
-    let l17;
-    l17 = reg_85;
-    let l11;
-    l11 = reg_84;
-    kiosk::place(l3, l4, l11);
+    let l15 = kiosk::list_with_purchase_cap(l2, &l1.escrow_kiosk_cap, l5, 0u64, l6);
+    let (reg_84, reg_85) = kiosk::purchase_with_cap(l2, l15, coin::from_balance(x2_balance::zero(), l6));
+    kiosk::place(l3, l4, reg_84);
     debug::print(&string::utf8(C62));
     event::emit(NFTClaimedEvent { nft_type: reg_54 : 0x1::ascii::String, nft_id: l5, buyer: l10, buyer_kiosk: object::id(freeze(l3)), claimed_at: l16 });
-    return l17
+    return reg_85
 }
 
 public fun remove_trait_bidding_support<T0: key + store, T1: key + store>(l0: &mut MarketPlaceStore, l1: &TraitBidsAdminCap, l2: &mut TxContext): T1 {
     marketplace::validation_check(freeze(l0));
-    let l4;
-    l4 = type_name::into_string(type_name::get());
+    let l4 = type_name::into_string(type_name::get());
     assert!(linked_table::contains(&l0.active_collections, l4), C15);
     assert!(dynamic_object_field::exists_(&l0.id, l4), C15);
-    let l3;
-    l3 = dynamic_object_field::borrow_mut(&mut l0.id, l4);
+    let l3 = dynamic_object_field::borrow_mut(&mut l0.id, l4);
     *(&mut l3.are_trait_bids_enabled) = false;
     event::emit(UpdateTraitBiddingSupportEvent { nft_type: l4, are_trait_bids_enabled: false });
     return dynamic_object_field::remove(&mut l3.id, C1)
@@ -2375,56 +1810,39 @@ public fun remove_trait_bidding_support<T0: key + store, T1: key + store>(l0: &m
 
 public fun switch_trait_bidding_support<T0: key + store>(l0: &mut MarketPlaceStore, l1: &TraitBidsAdminCap, l2: &mut TxContext) {
     marketplace::validation_check(freeze(l0));
-    let l4;
-    l4 = type_name::into_string(type_name::get());
+    let l4 = type_name::into_string(type_name::get());
     assert!(linked_table::contains(&l0.active_collections, l4), C15);
     assert!(dynamic_object_field::exists_(&l0.id, l4), C15);
-    let l3;
-    l3 = dynamic_object_field::borrow_mut(&mut l0.id, l4);
+    let l3 = dynamic_object_field::borrow_mut(&mut l0.id, l4);
     *(&mut l3.are_trait_bids_enabled) = !(l3.are_trait_bids_enabled);
     event::emit(UpdateTraitBiddingSupportEvent { nft_type: l4, are_trait_bids_enabled: l3.are_trait_bids_enabled })
 }
 
 public fun unlist<T0: key + store>(l0: &mut MarketPlaceStore, l1: &mut Kiosk, l2: ID, l3: &mut AnimaIONs, l4: &Clock, l5: &mut AnimaChef, l6: &mut TxContext) {
     marketplace::validation_check(freeze(l0));
-    let l28;
-    l28 = tx_context::sender(freeze(l6));
-    let l24;
-    l24 = type_name::into_string(type_name::get());
-    let l31;
-    l31 = clock::timestamp_ms(l4);
+    let l28 = tx_context::sender(freeze(l6));
+    let l24 = type_name::into_string(type_name::get());
+    let l31 = clock::timestamp_ms(l4);
     debug::print(&string::utf8(C33));
     assert!(linked_table::contains(&l0.user_activity, l28), C10);
-    let l21;
-    l21 = linked_table::borrow_mut(&mut l0.user_activity, l28);
+    let l21 = linked_table::borrow_mut(&mut l0.user_activity, l28);
     assert!(linked_table::contains(&l21.listings, l2), C11);
-    let l23;
-    l23 = linked_table::remove(&mut l21.listings, l2);
-    let l18;
-    l18 = dynamic_object_field::borrow_mut(&mut l0.id, l24);
+    let l23 = linked_table::remove(&mut l21.listings, l2);
+    let l18 = dynamic_object_field::borrow_mut(&mut l0.id, l24);
     assert!(linked_table::contains(&l18.listings, l2), C11);
-    let l22;
-    l22 = linked_table::remove(&mut l18.listings, l2);
-    let l29;
-    l29 = l31 - (&l23).last_points_claimed_at;
+    let l22 = linked_table::remove(&mut l18.listings, l2);
+    let l29 = l31 - (&l23).last_points_claimed_at;
     debug::print(&string::utf8(C34));
     debug::print(&l29);
-    let l17;
-    if (l18.ion_points_enabled) {
-        let l30;
-        l30 = helpers::calculate_time_multiplier(l29, false);
-        let l26;
-        l26 = helpers::calculate_listing_proximity_multiplier((&l22).price, l18.avg_sale_price);
-        let l11;
-        if (l18.ion_collection_multiplier == 0u64) {
-            l11 = C5;
+    let l20 = if (l18.ion_points_enabled) {
+        let l30 = helpers::calculate_time_multiplier(l29, false);
+        let l26 = helpers::calculate_listing_proximity_multiplier((&l22).price, l18.avg_sale_price);
+        let l19 = if (l18.ion_collection_multiplier == 0u64) {
+            C5
         } else {
-            l11 = l18.ion_collection_multiplier;
+            l18.ion_collection_multiplier
         };
-        let l19;
-        l19 = l11;
-        let l25;
-        l25 = helpers::calculate_ion_points((&l22).price, l19, l26, l30);
+        let l25 = helpers::calculate_ion_points((&l22).price, l19, l26, l30);
         debug::print(&string::utf8(C35));
         debug::print(&string::utf8(C36));
         debug::print(&l30);
@@ -2435,12 +1853,10 @@ public fun unlist<T0: key + store>(l0: &mut MarketPlaceStore, l1: &mut Kiosk, l2
         debug::print(&string::utf8(C39));
         debug::print(&l25);
         marketplace::award_ion_points_with_referral(l28, l0, l3, l25, l4, l5);
-        l17 = l25;
+        l25
     } else {
-        l17 = 0u64;
+        0u64
     };
-    let l20;
-    l20 = l17;
     debug::print(&string::utf8(C40));
     debug::print(&l20);
     event::emit(UnlistEvent { nft_type: l24, seller: l28, nft_id: l2, kiosk_id: object::id(freeze(l1)), price: (&l22).price, unlisted_at: l31, ion_points_awarded: l20 });
@@ -2451,8 +1867,7 @@ public fun unlist<T0: key + store>(l0: &mut MarketPlaceStore, l1: &mut Kiosk, l2
 
 public fun update_active_collections<T0: key + store>(l0: &mut MarketPlaceStore, l1: &AdminCap, l2: bool, l3: &mut TxContext) {
     marketplace::validation_check(freeze(l0));
-    let l7;
-    l7 = type_name::into_string(type_name::get());
+    let l7 = type_name::into_string(type_name::get());
     if (l2) {
         if (!(linked_table::contains(&l0.active_collections, l7))) {
             linked_table::push_back(&mut l0.active_collections, l7, true)
@@ -2460,8 +1875,7 @@ public fun update_active_collections<T0: key + store>(l0: &mut MarketPlaceStore,
             *(linked_table::borrow_mut(&mut l0.active_collections, l7)) = true
         };
         if (!(dynamic_object_field::exists_(&l0.id, l7))) {
-            let l6;
-            l6 = CollectionMarketPlace { id: object::new(l3), listings: linked_table::new(l3), bids: linked_table::new(l3), collection_bids: linked_table::new(l3), sui_trait_bids_pool: x2_balance::zero(), are_trait_bids_enabled: false, lifetime_volume: 0u128, ion_points_enabled: false, ion_collection_multiplier: 0u64, avg_sale_price: 0u64, recent_sale_prices: vector[] };
+            let l6 = CollectionMarketPlace { id: object::new(l3), listings: linked_table::new(l3), bids: linked_table::new(l3), collection_bids: linked_table::new(l3), sui_trait_bids_pool: x2_balance::zero(), are_trait_bids_enabled: false, lifetime_volume: 0u128, ion_points_enabled: false, ion_collection_multiplier: 0u64, avg_sale_price: 0u64, recent_sale_prices: vector[] };
             dynamic_object_field::add(&mut l0.id, l7, l6)
         }
     } else {
@@ -2473,10 +1887,8 @@ public fun update_active_collections<T0: key + store>(l0: &mut MarketPlaceStore,
 fun update_collection_avg_price<T0: key + store>(l0: &mut CollectionMarketPlace<T0>, l1: u64) {
     let __c0 = (&l0.recent_sale_prices).length() >= C3;
     (&mut l0.recent_sale_prices).push_back(l1);
-    let l3;
-    l3 = 0u64;
-    let l2;
-    l2 = 0u64;
+    let l3 = 0u64;
+    let l2 = 0u64;
     while (l2 < (&l0.recent_sale_prices).length()) {
         l3 = l3 + (&l0.recent_sale_prices)[l2];
         l2 = l2 + 1u64;
@@ -2498,10 +1910,8 @@ public fun update_commission_pct(l0: &mut MarketPlaceStore, l1: &AdminCap, l2: u
 public fun update_ion_point_multiplier<T0: key + store>(l0: &mut MarketPlaceStore, l1: &AdminCap, l2: bool, l3: u64) {
     marketplace::validation_check(freeze(l0));
     assert!(l3 <= C4, C22);
-    let l5;
-    l5 = type_name::into_string(type_name::get());
-    let l4;
-    l4 = dynamic_object_field::borrow_mut(&mut l0.id, l5);
+    let l5 = type_name::into_string(type_name::get());
+    let l4 = dynamic_object_field::borrow_mut(&mut l0.id, l5);
     *(&mut l4.ion_points_enabled) = l2;
     *(&mut l4.ion_collection_multiplier) = l3;
     event::emit(UpdateIONMultiplierEvent { nft_type: l5, is_ion_points_enabled: l2, ion_collection_multiplier: l3 })
@@ -2519,8 +1929,7 @@ public fun update_permissionless_status(l0: &mut MarketPlaceStore, l1: &AdminCap
 }
 
 fun validate_collection_exists<T0: key + store>(l0: &MarketPlaceStore) {
-    let l1;
-    l1 = type_name::into_string(type_name::get());
+    let l1 = type_name::into_string(type_name::get());
     assert!(linked_table::contains(&l0.active_collections, l1), C15);
     assert!(*(linked_table::borrow(&l0.active_collections, l1)), C15);
     assert!(dynamic_object_field::exists_(&l0.id, l1), C15)

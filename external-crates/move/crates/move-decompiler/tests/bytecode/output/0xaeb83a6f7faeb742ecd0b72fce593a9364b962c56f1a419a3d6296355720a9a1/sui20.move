@@ -258,16 +258,8 @@ public fun transfer(l0: &mut Global, l1: String, l2: vector<Sui20>, l3: address,
     x2_transfer::public_transfer(Sui20 { id: object::new(l5), tick: (&l8.meta).tick, amount: l4 }, l3);
     let l10 = l11 - l4;
     if (l10 > 0u64) {
-        x2_transfer::public_transfer(Sui20 { id: object::new(l5), tick: (&l8.meta).tick, amount: l10 }, l12);
-        unstructured {
-            goto 'label_109;
-        }
-    } else {
-        unstructured {
-            goto 'label_109;
-        }
-    };
-    /* block 109 */
+        x2_transfer::public_transfer(Sui20 { id: object::new(l5), tick: (&l8.meta).tick, amount: l10 }, l12)
+    }
 }
 
 public fun update_enable_to_coin(l0: &mut Global, l1: &AdminCap, l2: String, l3: bool, l4: &mut TxContext) {

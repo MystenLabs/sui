@@ -1,18 +1,17 @@
 ---
 source: crates/move-decompiler/tests/tests.rs
+assertion_line: 21
 ---
+{ 0 }
 if (0) {
     { 1 }
-    jump<CB> NodeIndex(3);
 } else {
     { 2 }
-    jump<CB> NodeIndex(3);
 }
+{ 3 }
 if (3) {
     { 4 }
-    jump<CB> NodeIndex(6);
 } else {
     { 5 }
-    jump<CB> NodeIndex(6);
 }
 { 6 }
