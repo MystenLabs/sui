@@ -1,0 +1,11 @@
+[package]
+name = "missing_source_module"
+version = "0.0.0"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../../move-stdlib" }
+
+[addresses]
+missing_source_module = "0x0"
+std = "0x1"
