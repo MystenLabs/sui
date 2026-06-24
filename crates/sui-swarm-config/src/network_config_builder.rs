@@ -763,7 +763,7 @@ mod test {
                 &protocol_config,
                 metrics,
                 expensive_checks,
-                ExecutionOrEarlyError::Ok(()),
+                ExecutionOrEarlyError::ok(None),
                 &epoch.epoch_id(),
                 epoch.epoch_start_timestamp(),
                 input_objects,

@@ -50,7 +50,6 @@ pub enum PeerId {
     /// A validator node identified by its authority index.
     Validator(AuthorityIndex),
     /// An observer node identified by its network public key.
-    #[allow(dead_code)]
     Observer(Box<NodeId>),
 }
 
@@ -239,14 +238,32 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
 }
 
+/// Handler for randomness round signatures exchanged between validators and
+/// observer nodes via the consensus block stream.
+pub trait RandomnessSignatureHandler: Send + Sync + 'static {
+    /// Called by the observer subscriber for each randomness round signature
+    /// received from the block stream.
+    fn handle_randomness_signature(&self, data: Bytes);
+
+    /// Returns a receiver for broadcast randomness signatures. Called by
+    /// the observer service to merge signatures into the outgoing block stream.
+    fn subscribe_randomness_signatures(&self) -> tokio::sync::broadcast::Receiver<Bytes>;
+}
+
+/// A single item in the observer block stream, carrying both blocks and auxiliary data.
+pub(crate) struct ObserverStreamItem {
+    pub(crate) blocks: Vec<Bytes>,
+    pub(crate) auxiliary_data: observer::AuxiliaryData,
+}
+
 /// Observer block stream type.
-pub(crate) type ObserverBlockStream = Pin<Box<dyn Stream<Item = Vec<Bytes>> + Send + 'static>>;
+pub(crate) type ObserverBlockStream =
+    Pin<Box<dyn Stream<Item = ObserverStreamItem> + Send + 'static>>;
 
 /// Observer network service for handling requests from observer nodes.
 /// Unlike ValidatorNetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
 /// to identify peers since observers are not part of the committee.
 #[async_trait]
-#[allow(dead_code)]
 pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
     /// Handles a block received from a peer subscription. Used by ObserverSubscriber to process
     /// blocks streamed from validators or other observers.
@@ -262,7 +279,6 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
     ) -> ConsensusResult<ObserverBlockStream>;
 
     /// Handles the request to fetch blocks by references from an observer peer.
-    #[allow(unused)]
     async fn handle_fetch_blocks(
         &self,
         peer: NodeId,
@@ -272,7 +288,6 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
     ) -> ConsensusResult<Vec<Bytes>>;
 
     /// Handles the request to fetch commits by index range from an observer peer.
-    #[allow(unused)]
     /// Returns serialized commits and certifier blocks.
     async fn handle_fetch_commits(
         &self,
@@ -285,7 +300,6 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
 /// Unlike ValidatorNetworkClient which uses AuthorityIndex, this uses PeerId to identify peers
 /// since the observer server can serve both validators and observer nodes.
 #[async_trait]
-#[allow(dead_code)]
 pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
     /// Initiates block streaming with a peer (validator or observer).
     /// Returns a stream of blocks with the highest commit index.
@@ -331,7 +345,6 @@ pub(crate) trait NetworkManager: Send + Sync {
     fn validator_client(&self) -> Arc<Self::ValidatorClient>;
 
     /// Returns the observer network client.
-    #[allow(dead_code)]
     fn observer_client(&self) -> Arc<Self::ObserverClient>;
 
     /// Starts the validator network server with the provided service.

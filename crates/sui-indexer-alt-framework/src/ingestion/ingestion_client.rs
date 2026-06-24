@@ -53,7 +53,7 @@ const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
 const SLOW_OPERATION_WARNING_THRESHOLD: Duration = Duration::from_secs(60);
 
 #[async_trait]
-pub(crate) trait IngestionClientTrait: Send + Sync {
+pub trait IngestionClientTrait: Send + Sync {
     async fn chain_id(&self) -> anyhow::Result<ChainIdentifier>;
 
     async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult;
@@ -260,7 +260,7 @@ impl IngestionClient {
             store,
             Some(metrics.total_ingested_bytes.clone()),
         ));
-        Ok(Self::new_impl(client, metrics))
+        Ok(Self::from_trait(client, metrics))
     }
 
     /// An ingestion client that fetches checkpoints from a fullnode, over gRPC.
@@ -283,10 +283,24 @@ impl IngestionClient {
         } else {
             client
         };
-        Ok(Self::new_impl(Arc::new(client), metrics))
+        Ok(Self::from_trait(Arc::new(client), metrics))
     }
 
-    pub(crate) fn new_impl(
+    /// The metrics handle this client reports against. Callers constructing peer services (e.g. an
+    /// [`IngestionService`]) against the same client should reuse this Arc rather than building a
+    /// second [`IngestionMetrics`] from the same registry, which would double-register the metric
+    /// vectors.
+    ///
+    /// [`IngestionService`]: crate::ingestion::IngestionService
+    pub fn metrics(&self) -> &Arc<IngestionMetrics> {
+        &self.metrics
+    }
+
+    /// Wrap an arbitrary [`IngestionClientTrait`] implementation in an [`IngestionClient`]. Use
+    /// this when the source of checkpoints is not one of the built-in remote object stores or gRPC
+    /// endpoints — for example, when embedding the indexer in a fullnode that already has
+    /// checkpoint data on hand.
+    pub fn from_trait(
         client: Arc<dyn IngestionClientTrait>,
         metrics: Arc<IngestionMetrics>,
     ) -> Self {
@@ -599,7 +613,7 @@ pub(crate) mod tests {
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
         let metrics = IngestionMetrics::new(None, &registry);
         let mock_client = Arc::new(MockIngestionClient::default());
-        let client = IngestionClient::new_impl(mock_client.clone(), metrics);
+        let client = IngestionClient::from_trait(mock_client.clone(), metrics);
         (client, mock_client)
     }
 

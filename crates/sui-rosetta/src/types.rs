@@ -29,6 +29,9 @@ use crate::operations::Operations;
 pub use internal_operation::InternalOperation;
 
 pub mod internal_operation;
+pub mod transaction_envelope;
+
+pub use transaction_envelope::{AuxData, RosettaTransaction};
 
 pub type BlockHeight = u64;
 

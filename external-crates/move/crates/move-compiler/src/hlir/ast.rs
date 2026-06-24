@@ -9,8 +9,8 @@ use crate::{
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_, DatatypeTypeParameter, TParam},
     parser::ast::{
-        self as P, BinOp, ConstantName, DatatypeName, ENTRY_MODIFIER, Field, FunctionName,
-        TargetKind, UnaryOp, VariantName,
+        self as P, Ability_, BinOp, ConstantName, DatatypeName, ENTRY_MODIFIER, Field,
+        FunctionName, TargetKind, UnaryOp, VariantName,
     },
     shared::{
         Name, NumericalAddress, TName, ast_debug::*, program_info::TypingProgramInfo,
@@ -661,6 +661,15 @@ impl BaseType_ {
         }
     }
 
+    pub fn has_ability_(&self, ability: Ability_) -> bool {
+        match self {
+            BaseType_::Apply(abilities, _, _) | BaseType_::Param(TParam { abilities, .. }) => {
+                abilities.has_ability_(ability)
+            }
+            BaseType_::Unreachable | BaseType_::UnresolvedError => true,
+        }
+    }
+
     pub fn bool(loc: Loc) -> BaseType {
         Self::builtin(loc, BuiltinTypeName_::Bool, vec![])
     }
@@ -757,6 +766,13 @@ impl SingleType_ {
         match self {
             SingleType_::Ref(_, _) => AbilitySet::references(loc),
             SingleType_::Base(b) => b.value.abilities(loc),
+        }
+    }
+
+    pub fn has_ability_(&self, ability: Ability_) -> bool {
+        match self {
+            SingleType_::Ref(_, _) => AbilitySet::REFERENCES.contains(&ability),
+            SingleType_::Base(b) => b.value.has_ability_(ability),
         }
     }
 

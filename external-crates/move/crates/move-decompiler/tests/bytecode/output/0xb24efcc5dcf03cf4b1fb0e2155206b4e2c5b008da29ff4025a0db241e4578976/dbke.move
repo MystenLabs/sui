@@ -45,37 +45,22 @@ public fun caw<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut BalanceManager, l2: &
 }
 
 fun cim(l0: u8): bool {
-    let l14 = l0;
-    let l13 = &l14;
-    let l7 = l13;
+    let l13 = &l0;
     let l6 = ct::cpsos();
-    let l5 = if (l7 == &l6) {
-        true
-    } else {
-        let l9 = l13;
+    return l13 == &l6 || {
         let l8 = constants::post_only();
-        let l4 = if (l9 == &l8) {
-            true
-        } else {
-            let l11 = l13;
+        l13 == &l8 || {
             let l10 = constants::immediate_or_cancel();
-            let l3 = if (l11 == &l10) {
-                false
-            } else {
-                let l1 = l13;
+            l13 != &l10 && {
                 let l12 = constants::fill_or_kill();
-                let l2 = if (l1 == &l12) {
+                if (l13 == &l12) {
                     false
                 } else {
                     false
-                };
-                l2
-            };
-            l3
-        };
-        l4
-    };
-    return l5
+                }
+            }
+        }
+    }
 }
 
 public fun elf<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut CBM, l2: &mut BalanceManager, l3: &Clock, l4: &mut SQR, l5: u64, l6: bool, l7: u64, l8: u64, l9: vector<u8>, l10: vector<u8>, l11: vector<u64>, l12: vector<u64>, l13: vector<bool>, l14: vector<u64>, l15: &mut TxContext) {
@@ -89,23 +74,20 @@ public fun elf<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut CBM, l2: &mut Balance
         };
         let (reg_31, reg_32, reg_33) = pool::pool_book_params(freeze(l0));
         let l32 = reg_33;
-        let l31 = reg_32;
         let l51 = reg_31;
         let l20 = balance_manager::balance(freeze(l2));
         let l43 = balance_manager::balance(freeze(l2));
         let l23 = balance_manager::balance(freeze(l2));
-        let l16 = if (l20 > l7) {
+        let l21 = if (l20 > l7) {
             l20 - l7
         } else {
             0u64
         };
-        let l21 = l16;
-        let l17 = if (l43 > l8) {
+        let l44 = if (l43 > l8) {
             l43 - l8
         } else {
             0u64
         };
-        let l44 = l17;
         let l50 = false;
         let l22 = vector[];
         let l19 = vector[];
@@ -154,14 +136,13 @@ public fun elf<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut CBM, l2: &mut Balance
                         l34 = constants::post_only();
                     }
                 } else {
-                    let (reg_170, reg_171) = dbke::vbac(freeze(l0), l21, l44, l23, l51, l31, l32, l37, l40, l29, l30, true);
+                    let (reg_170, reg_171) = dbke::vbac(freeze(l0), l21, l44, l23, l51, reg_32, l32, l37, l40, l29, l30, true);
                     let l24 = reg_171;
-                    let l53 = reg_170;
                     l28 = if (l24 != ct::e_no_error()) {
                         event::emit(EE { e: l24, l: 404u64 });
                         l28 + 1u64
                     } else {
-                        let l33 = pool::place_limit_order(l0, l2, &l52, l28, l34, l47, l37, l53, l29, true, l26, l3, freeze(l15));
+                        let l33 = pool::place_limit_order(l0, l2, &l52, l28, l34, l47, l37, reg_170, l29, true, l26, l3, freeze(l15));
                         let l35 = order_info::original_quantity(&l33);
                         let l25 = order_info::executed_quantity(&l33);
                         let l36 = order_info::paid_fees(&l33);
@@ -191,8 +172,7 @@ fun sp(l0: &vector<u64>, l1: &vector<u64>, l2: u64, l3: u64, l4: bool): u64 {
     if (l3 % l2 != 0u64) {
         return 0u64
     };
-    let l6 = l4;
-    let l5 = if (*(&l6)) {
+    return if (l4) {
         if (l1.len() == 0u64) {
             return l3
         };
@@ -218,8 +198,7 @@ fun sp(l0: &vector<u64>, l1: &vector<u64>, l2: u64, l3: u64, l4: bool): u64 {
             return 0u64
         };
         l10
-    };
-    return l5
+    }
 }
 
 fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64, l6: u64, l7: u64, l8: u64, l9: bool, l10: bool, l11: bool): ( u64, u64) {
@@ -229,19 +208,13 @@ fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64,
     if (l7 % l4 != 0u64) {
         return (0u64, ct::e_invalid_price())
     };
-    let l12 = if (!(l9)) {
-        l1 < l6
-    } else {
-        false
-    };
-    if (l12) {
+    if (!(l9) && l1 < l6) {
         return (0u64, ct::e_insufficient_base_balance())
     };
     if (l8 < l6) {
         return (0u64, ct::e_insufficient_quantity())
     };
-    let l16 = l9;
-    let l15 = if (*(&l16)) {
+    let l26 = if (l9) {
         let l25 = l2as u128 * constants::float_scaling_u128() / l7as u128as u64;
         let l21 = l25 % l5 + l5;
         if (l25 < l21) {
@@ -257,23 +230,16 @@ fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64,
         let l20 = u64::max(l6, u64::min(l8, l1));
         l20 - l20 % l5
     };
-    let l26 = l15;
-    let l17 = l11;
-    let l14 = if (*(&l17)) {
+    if (if (l11) {
         let (reg_89, reg_90) = pool::get_order_deep_required(l0, l26, l7);
-        let l23 = reg_90;
-        let l24 = reg_89;
-        let l18 = l10;
-        let l13 = if (*(&l18)) {
-            l23
+        if (l10) {
+            reg_90
         } else {
-            l24
-        };
-        l13
+            reg_89
+        }
     } else {
         0u64
-    };
-    if (l14 > l3) {
+    } > l3) {
         return (0u64, ct::e_insufficient_deep_balance())
     };
     return (l26, 0u64)

@@ -20,6 +20,7 @@ use crate::execution_cache::build_execution_cache;
 use crate::jsonrpc_index::IndexStore;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
+use crate::randomness_round_receiver::RandomnessRoundReceiverHandle;
 use crate::rpc_index::RpcIndexStore;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
@@ -412,6 +413,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             committee_store,
             index_store,
             rpc_index,
+            None,
             checkpoint_store,
             &registry,
             genesis_objects_for_index,
@@ -435,6 +437,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 consensus_client,
                 randomness::Handle::new_stub(),
                 Some(config.protocol_key_pair()),
+                RandomnessRoundReceiverHandle::new_for_testing(),
             )
             .await;
             if let Some(randomness_manager) = randomness_manager {
@@ -461,7 +464,6 @@ impl<'a> TestAuthorityBuilder<'a> {
                 ExecutionEnv::new(),
                 &state.epoch_store_for_testing(),
             )
-            .await
             .unwrap();
 
         let batch = state

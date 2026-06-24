@@ -50,14 +50,11 @@ use sui_open_rpc::Module;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
-use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::display_registry;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiError, SuiObjectResponseError};
-use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp,
-};
+use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::object::{Object, ObjectRead, PastObjectRead};
 use sui_types::sui_serde::BigInt;
 use sui_types::transaction::TransactionDataAPI;
@@ -278,37 +275,31 @@ impl ReadApi {
         let verified_checkpoints = transaction_kv_store
             .multi_get_checkpoints_summaries(&checkpoint_numbers)
             .await?;
-
-        let checkpoint_summaries_and_signatures: Vec<(
-            CheckpointSummary,
-            AggregateAuthoritySignature,
-        )> = verified_checkpoints
-            .into_iter()
-            .flatten()
-            .map(|check| {
-                (
-                    check.clone().into_summary_and_sequence().1,
-                    check.get_validator_signature(),
-                )
-            })
-            .collect();
-
         let checkpoint_contents = transaction_kv_store
             .multi_get_checkpoints_contents(&checkpoint_numbers)
             .await?;
-        let contents: Vec<CheckpointContents> = checkpoint_contents.into_iter().flatten().collect();
 
-        let mut checkpoints: Vec<Checkpoint> = vec![];
-
-        for (summary_and_sig, content) in checkpoint_summaries_and_signatures
+        // Summaries and contents are resolved from separate tables, and checkpoint
+        // pruning can delete a checkpoint's contents while leaving its
+        // sequence-addressable summary in place. Pair each summary with the
+        // contents for the *same* sequence number by zipping the two `Option`
+        // vectors index-by-index. Independently dropping the `None`s and zipping
+        // the dense remainders would shift later contents onto earlier summaries,
+        // yielding response rows whose summary and transaction list describe
+        // different checkpoints.
+        let mut checkpoints = Vec::with_capacity(checkpoint_numbers.len());
+        for (maybe_summary, maybe_contents) in verified_checkpoints
             .into_iter()
-            .zip_debug_eq(contents.into_iter())
+            .zip_debug_eq(checkpoint_contents)
         {
-            checkpoints.push(Checkpoint::from((
-                summary_and_sig.0,
-                content,
-                summary_and_sig.1,
-            )));
+            // Skip any sequence number whose summary or contents are unavailable
+            // (e.g. pruned) rather than pairing it with another checkpoint's data.
+            let (Some(summary), Some(contents)) = (maybe_summary, maybe_contents) else {
+                continue;
+            };
+            let signature = summary.auth_sig().signature.clone();
+            let summary = summary.into_summary_and_sequence().1;
+            checkpoints.push(Checkpoint::from((summary, contents, signature)));
         }
 
         Ok(checkpoints)
@@ -1600,6 +1591,26 @@ fn calculate_checkpoint_numbers(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::authority_state::MockStateRead;
+    use mockall::mock;
+    use roaring::RoaringBitmap;
+    use std::collections::HashMap;
+    use sui_storage::key_value_store::{
+        KVStoreCheckpointData, KVStoreTransactionData, TransactionKeyValueStoreTrait,
+    };
+    use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
+    use sui_types::base_types::ExecutionDigests;
+    use sui_types::crypto::AuthorityStrongQuorumSignInfo;
+    use sui_types::digests::TransactionEffectsDigest;
+    use sui_types::effects::TransactionEvents;
+    use sui_types::error::SuiResult;
+    use sui_types::gas::GasCostSummary;
+    use sui_types::message_envelope::Envelope;
+    use sui_types::messages_checkpoint::{
+        CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest, CheckpointSummary,
+    };
+    use sui_types::object::Object;
+    use sui_types::storage::ObjectKey;
 
     #[test]
     fn test_calculate_checkpoint_numbers() {
@@ -1677,5 +1688,170 @@ mod tests {
             calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
 
         assert_eq!(checkpoint_numbers, (0..=15).rev().collect::<Vec<_>>());
+    }
+
+    mock! {
+        CheckpointKvStore {}
+        #[async_trait]
+        impl TransactionKeyValueStoreTrait for CheckpointKvStore {
+            async fn multi_get(
+                &self,
+                transactions: &[TransactionDigest],
+                effects: &[TransactionDigest],
+            ) -> SuiResult<KVStoreTransactionData>;
+
+            async fn multi_get_checkpoints(
+                &self,
+                checkpoint_summaries: &[CheckpointSequenceNumber],
+                checkpoint_contents: &[CheckpointSequenceNumber],
+                checkpoint_summaries_by_digest: &[CheckpointDigest],
+            ) -> SuiResult<KVStoreCheckpointData>;
+
+            async fn deprecated_get_transaction_checkpoint(
+                &self,
+                digest: TransactionDigest,
+            ) -> SuiResult<Option<CheckpointSequenceNumber>>;
+
+            async fn get_object(
+                &self,
+                object_id: ObjectID,
+                version: SequenceNumber,
+            ) -> SuiResult<Option<Object>>;
+
+            async fn multi_get_objects(
+                &self,
+                object_keys: &[ObjectKey],
+            ) -> SuiResult<Vec<Option<Object>>>;
+
+            async fn multi_get_transaction_checkpoint(
+                &self,
+                digests: &[TransactionDigest],
+            ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>>;
+
+            async fn multi_get_events_by_tx_digests(
+                &self,
+                digests: &[TransactionDigest],
+            ) -> SuiResult<Vec<Option<TransactionEvents>>>;
+        }
+    }
+
+    // Builds `CheckpointContents` whose single transaction digest uniquely
+    // encodes `seq`, so a returned `Checkpoint` can be traced back to the
+    // sequence number whose contents it actually carries.
+    fn test_checkpoint_contents(seq: CheckpointSequenceNumber) -> CheckpointContents {
+        let mut tx = [0u8; 32];
+        tx[0] = 0xA;
+        tx[1..9].copy_from_slice(&seq.to_le_bytes());
+        let mut fx = [0u8; 32];
+        fx[0] = 0xE;
+        fx[1..9].copy_from_slice(&seq.to_le_bytes());
+        CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::new(
+            TransactionDigest::new(tx),
+            TransactionEffectsDigest::new(fx),
+        )])
+    }
+
+    // Builds a certified summary for `seq`. The aggregate signature is a
+    // placeholder; `get_checkpoints_internal` never verifies it.
+    fn test_certified_summary(
+        seq: CheckpointSequenceNumber,
+        contents: &CheckpointContents,
+    ) -> CertifiedCheckpointSummary {
+        let summary = CheckpointSummary::new(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+            0,
+            seq,
+            seq,
+            contents,
+            None,
+            GasCostSummary::default(),
+            None,
+            0,
+            Vec::new(),
+            Vec::new(),
+        );
+        let auth_sig = AuthorityStrongQuorumSignInfo {
+            epoch: 0,
+            signature: Default::default(),
+            signers_map: RoaringBitmap::new(),
+        };
+        Envelope::new_from_data_and_sig(summary, auth_sig)
+    }
+
+    // Regression test for a pruning-induced misalignment: when a checkpoint's
+    // contents are pruned but its sequence-addressable summary survives,
+    // `get_checkpoints_internal` must not pair that summary (or any later one)
+    // with a different checkpoint's contents.
+    #[tokio::test]
+    async fn test_get_checkpoints_internal_preserves_alignment_across_pruned_contents() {
+        let max_checkpoint: CheckpointSequenceNumber = 13;
+        // Contents for this sequence are pruned while its summary remains. It
+        // sits in the interior of the requested range to show that alignment is
+        // preserved regardless of where the hole falls.
+        let pruned_seq: CheckpointSequenceNumber = 11;
+
+        let mut all_contents: HashMap<CheckpointSequenceNumber, CheckpointContents> =
+            HashMap::new();
+        for seq in 0..=max_checkpoint {
+            all_contents.insert(seq, test_checkpoint_contents(seq));
+        }
+
+        let mut mock_state = MockStateRead::new();
+        mock_state
+            .expect_get_latest_checkpoint_sequence_number()
+            .returning(move || Ok(max_checkpoint));
+
+        let store_contents = all_contents.clone();
+        let mut mock_kv = MockCheckpointKvStore::new();
+        mock_kv.expect_multi_get_checkpoints().times(2).returning(
+            move |summaries, contents, _by_digest| {
+                // Summaries survive pruning for every requested sequence.
+                let summaries = summaries
+                    .iter()
+                    .map(|seq| Some(test_certified_summary(*seq, &store_contents[seq])))
+                    .collect();
+                // Contents are missing for the pruned sequence only.
+                let contents = contents
+                    .iter()
+                    .map(|seq| (*seq != pruned_seq).then(|| store_contents[seq].clone()))
+                    .collect();
+                Ok((summaries, contents, vec![]))
+            },
+        );
+
+        let state: Arc<dyn StateRead> = Arc::new(mock_state);
+        let kv_store = Arc::new(TransactionKeyValueStore::new(
+            "test",
+            KeyValueStoreMetrics::new_for_tests(),
+            Arc::new(mock_kv),
+        ));
+
+        // cursor = 9, ascending, limit 4 => requested sequences [10, 11, 12, 13].
+        let checkpoints = ReadApi::get_checkpoints_internal(state, kv_store, Some(9), 4, false)
+            .await
+            .unwrap();
+
+        // The pruned sequence is omitted; every other sequence is returned once.
+        assert_eq!(
+            checkpoints
+                .iter()
+                .map(|c| c.sequence_number)
+                .collect::<Vec<_>>(),
+            vec![10, 12, 13],
+        );
+
+        // Crucially, each returned checkpoint still carries the transactions of
+        // its own sequence number rather than a neighbor's.
+        for checkpoint in &checkpoints {
+            let expected: Vec<TransactionDigest> = all_contents[&checkpoint.sequence_number]
+                .iter()
+                .map(|digests| digests.transaction)
+                .collect();
+            assert_eq!(
+                checkpoint.transactions, expected,
+                "checkpoint {} was paired with another checkpoint's contents",
+                checkpoint.sequence_number,
+            );
+        }
     }
 }

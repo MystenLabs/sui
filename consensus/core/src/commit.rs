@@ -176,7 +176,7 @@ impl TrustedCommit {
         Self::new_trusted(commit, serialized)
     }
 
-    pub(crate) fn reference(&self) -> CommitRef {
+    pub fn reference(&self) -> CommitRef {
         CommitRef {
             index: self.index(),
             digest: self.digest(),

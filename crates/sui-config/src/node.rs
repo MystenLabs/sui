@@ -111,6 +111,16 @@ pub struct NodeConfig {
     /// - 'both' for both a websocket and http based service (deprecated)
     pub jsonrpc_server_type: Option<ServerType>,
 
+    /// When true, the JSON-RPC HTTP service is not started. This only stops the
+    /// node from serving JSON-RPC requests; it is independent of JSON-RPC
+    /// indexing (see `enable_index_processing`), which continues to run. This
+    /// lets a node keep indexing while no longer exposing the JSON-RPC service,
+    /// and it does not affect the gRPC/REST service served on the same address.
+    /// Defaults to false so the service stays enabled unless explicitly turned
+    /// off.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub disable_json_rpc: bool,
+
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
 
@@ -974,6 +984,13 @@ impl NodeConfig {
         self.jsonrpc_server_type.unwrap_or(ServerType::Http)
     }
 
+    /// Whether the JSON-RPC HTTP service should be served. This gates only the
+    /// JSON-RPC endpoints; the gRPC/REST service and JSON-RPC indexing are
+    /// unaffected.
+    pub fn json_rpc_enabled(&self) -> bool {
+        !self.disable_json_rpc
+    }
+
     pub fn rpc(&self) -> Option<&crate::RpcConfig> {
         self.rpc.as_ref()
     }
@@ -1401,11 +1418,6 @@ pub struct AuthorityOverloadConfig {
     #[serde(default = "default_check_system_overload_at_signing")]
     pub check_system_overload_at_signing: bool,
 
-    // When set to true, transaction execution may be rejected when the validator
-    // is overloaded.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub check_system_overload_at_execution: bool,
-
     // Reject a transaction if transaction manager queue length is above this threshold.
     // 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
     #[serde(default = "default_max_transaction_manager_queue_length")]
@@ -1510,7 +1522,6 @@ impl Default for AuthorityOverloadConfig {
                 default_min_load_shedding_percentage_above_hard_limit(),
             safe_transaction_ready_rate: default_safe_transaction_ready_rate(),
             check_system_overload_at_signing: true,
-            check_system_overload_at_execution: false,
             max_transaction_manager_queue_length: default_max_transaction_manager_queue_length(),
             max_transaction_manager_per_object_queue_length:
                 default_max_transaction_manager_per_object_queue_length(),

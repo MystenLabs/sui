@@ -627,6 +627,16 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	allowGlobalPause: Boolean
 	"""
+	How this object was referenced by a specific transaction.
+	
+	Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
+	
+	The `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.
+	
+	Passing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.
+	"""
+	asTransactionObject(transactionDigest: String): TransactionObject
+	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
 	If the address does not own any coins of that type, a balance of zero is returned.
@@ -995,6 +1005,16 @@ type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
 	"""
 	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
+	"""
+	How this object was referenced by a specific transaction.
+	
+	Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
+	
+	The `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.
+	
+	Passing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.
+	"""
+	asTransactionObject(transactionDigest: String): TransactionObject
 	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
@@ -1651,6 +1671,16 @@ interface IAddressable {
 	"""
 	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
 	"""
+	How this addressable entity was referenced by a specific transaction.
+	
+	Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
+	
+	The `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.
+	
+	Passing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.
+	"""
+	asTransactionObject(transactionDigest: String): TransactionObject
+	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
 	If the address does not own any coins of that type, a balance of zero is returned.
@@ -2285,6 +2315,16 @@ type MoveObject implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	asDynamicField: DynamicField
 	"""
+	How this object was referenced by a specific transaction.
+	
+	Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
+	
+	The `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.
+	
+	Passing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.
+	"""
+	asTransactionObject(transactionDigest: String): TransactionObject
+	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
 	If the address does not own any coins of that type, a balance of zero is returned.
@@ -2443,6 +2483,16 @@ type MovePackage implements Node & IAddressable & IObject {
 	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
 	"""
 	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
+	"""
+	How this object was referenced by a specific transaction.
+	
+	Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
+	
+	The `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.
+	
+	Passing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.
+	"""
+	asTransactionObject(transactionDigest: String): TransactionObject
 	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
@@ -2964,6 +3014,16 @@ type Object implements Node & IAddressable & IObject {
 	Attempts to convert the object into a MovePackage.
 	"""
 	asMovePackage: MovePackage
+	"""
+	How this object was referenced by a specific transaction.
+	
+	Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
+	
+	The `transactionDigest` argument may be omitted when the query is scoped under a transaction context (e.g. a parent `Transaction`, `TransactionEffects`, or `Event`); the field then resolves against the in-scope transaction.
+	
+	Passing an explicit `transactionDigest` other than the in-scope transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.
+	"""
+	asTransactionObject(transactionDigest: String): TransactionObject
 	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	

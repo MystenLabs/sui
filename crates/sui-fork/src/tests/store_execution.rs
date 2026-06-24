@@ -136,6 +136,28 @@ fn object_at_checkpoint_response(object: &Object) -> serde_json::Value {
     })
 }
 
+fn objects_response(objects: &[Option<&Object>]) -> serde_json::Value {
+    serde_json::json!({
+        "data": {
+            "multiGetObjects": objects
+                .iter()
+                .map(|object| {
+                    object.map(|object| {
+                        serde_json::json!({
+                            "address": object.id().to_string(),
+                            "version": object.version().value(),
+                            "objectBcs": FastCryptoBase64::from_bytes(
+                                &bcs::to_bytes(object).expect("object should serialize"),
+                            )
+                            .encoded(),
+                        })
+                    })
+                })
+                .collect::<Vec<_>>(),
+        }
+    })
+}
+
 async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object) {
     Mock::given(method("POST"))
         .and(path("/"))
@@ -536,6 +558,100 @@ fn test_missing_owned_index_after_local_checkpoint_advancement_fails_closed() {
         err.to_string()
             .contains("owned-object index is missing while local checkpoints have advanced")
     );
+}
+
+#[test]
+fn test_read_child_object_uses_highest_local_version_within_bound() {
+    let (_temp, store) = test_data_store();
+    let parent = ObjectID::random();
+    let child_id = ObjectID::random();
+    let child_v5 = make_gas_object(child_id, 5, Owner::ObjectOwner(parent.into()));
+    let child_v7 = make_gas_object(child_id, 7, Owner::ObjectOwner(parent.into()));
+
+    store.local().write_object(&child_v5).unwrap();
+    store.local().write_object(&child_v7).unwrap();
+
+    let child = sui_types::storage::ChildObjectResolver::read_child_object(
+        &store,
+        &parent,
+        &child_id,
+        SequenceNumber::from_u64(6),
+    )
+    .expect("bounded child read should not error")
+    .expect("child object should be found");
+
+    assert_eq!(child, child_v5);
+}
+
+#[tokio::test]
+async fn test_read_child_object_falls_back_to_remote_root_version() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let checkpoint = 42;
+    let parent = ObjectID::random();
+    let child_id = ObjectID::random();
+    let child = make_gas_object(child_id, 5, Owner::ObjectOwner(parent.into()));
+
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(serde_json::json!({
+            "variables": {
+                "keys": [
+                    {
+                        "address": child_id.to_string(),
+                        "rootVersion": 6,
+                    },
+                ],
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(objects_response(&[Some(&child)])))
+        .mount(&server)
+        .await;
+
+    let store =
+        DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), checkpoint);
+    let read = sui_types::storage::ChildObjectResolver::read_child_object(
+        &store,
+        &parent,
+        &child_id,
+        SequenceNumber::from_u64(6),
+    )
+    .expect("remote bounded child read should not error")
+    .expect("child object should be found");
+
+    assert_eq!(read, child);
+    assert_eq!(
+        store.local().get_object_at_version(&child_id, 5).unwrap(),
+        Some(child),
+    );
+}
+
+#[test]
+fn test_read_child_object_rejects_wrong_owner_after_bounded_lookup() {
+    let (_temp, store) = test_data_store();
+    let parent = ObjectID::random();
+    let other_parent = ObjectID::random();
+    let child_id = ObjectID::random();
+    let child = make_gas_object(child_id, 5, Owner::ObjectOwner(other_parent.into()));
+
+    store.local().write_object(&child).unwrap();
+
+    let err = sui_types::storage::ChildObjectResolver::read_child_object(
+        &store,
+        &parent,
+        &child_id,
+        SequenceNumber::from_u64(6),
+    )
+    .expect_err("wrong child owner should error");
+
+    assert!(matches!(
+        err.as_inner(),
+        sui_types::error::SuiErrorKind::InvalidChildObjectAccess {
+            object,
+            given_parent,
+            actual_owner,
+        } if *object == child_id && *given_parent == parent && actual_owner == &child.owner
+    ));
 }
 
 #[test]

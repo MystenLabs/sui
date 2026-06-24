@@ -100,14 +100,14 @@ async fn setup_test_env() -> TestEnv {
     let gas_object =
         Object::with_id_owner_gas_for_testing(gas_object_id, sender, GAS_VALUE_FOR_TESTING);
     let gas_object_ref = gas_object.compute_object_reference();
-    validator.insert_genesis_object(gas_object.clone()).await;
-    fullnode.insert_genesis_object(gas_object).await;
+    validator.insert_genesis_object(gas_object.clone());
+    fullnode.insert_genesis_object(gas_object);
 
     let object_id = ObjectID::random();
     let object = Object::with_id_owner_for_testing(object_id, sender);
     let object_ref = object.compute_object_reference();
-    validator.insert_genesis_object(object.clone()).await;
-    fullnode.insert_genesis_object(object).await;
+    validator.insert_genesis_object(object.clone());
+    fullnode.insert_genesis_object(object);
 
     let extra_object_id = ObjectID::random();
     let extra_object = {
@@ -138,16 +138,16 @@ async fn setup_test_env() -> TestEnv {
         )
     };
     let extra_object_ref = extra_object.compute_object_reference();
-    validator.insert_genesis_object(extra_object.clone()).await;
-    fullnode.insert_genesis_object(extra_object).await;
+    validator.insert_genesis_object(extra_object.clone());
+    fullnode.insert_genesis_object(extra_object);
 
     let mut gas_coin_refs = Vec::new();
     for _ in 0..3 {
         let id = ObjectID::random();
         let obj = Object::with_id_owner_gas_for_testing(id, sender, GAS_VALUE_FOR_TESTING);
         gas_coin_refs.push(obj.compute_object_reference());
-        validator.insert_genesis_object(obj.clone()).await;
-        fullnode.insert_genesis_object(obj).await;
+        validator.insert_genesis_object(obj.clone());
+        fullnode.insert_genesis_object(obj);
     }
 
     let other_owner = SuiAddress::random_for_testing_only();
@@ -158,10 +158,8 @@ async fn setup_test_env() -> TestEnv {
         GAS_VALUE_FOR_TESTING,
     );
     let other_owner_coin_ref = other_owner_coin.compute_object_reference();
-    validator
-        .insert_genesis_object(other_owner_coin.clone())
-        .await;
-    fullnode.insert_genesis_object(other_owner_coin).await;
+    validator.insert_genesis_object(other_owner_coin.clone());
+    fullnode.insert_genesis_object(other_owner_coin);
 
     let rgp = validator.reference_gas_price_for_testing().unwrap();
 
@@ -816,7 +814,6 @@ async fn test_bad_gas_payment_all_paths() {
     let package_ref = env
         .validator
         .get_object(&SUI_FRAMEWORK_PACKAGE_ID)
-        .await
         .unwrap()
         .compute_object_reference();
     {

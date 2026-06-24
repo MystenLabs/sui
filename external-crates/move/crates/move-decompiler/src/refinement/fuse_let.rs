@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use crate::{
     ast::Exp,
-    refinement::{Refine, utils::peek},
+    refinement::{Refine, liveness, utils::peek},
 };
 
 pub fn refine(exp: &mut Exp) -> bool {
@@ -114,7 +114,7 @@ fn classify_item(
 ) {
     // Peek through `Block` wrappers — the `Assign` we're hunting may sit inside one.
     if let Exp::Assign(targets, rhs) = peek(item) {
-        let rhs_refs = rhs.referenced_names();
+        let rhs_refs = liveness::referenced_names(rhs);
         let all_targets_pending = targets.iter().all(|t| pending.contains(t));
         let rhs_safe = !rhs_refs.iter().any(|n| pending.contains(n));
         if all_targets_pending && rhs_safe && !targets.is_empty() {
@@ -137,7 +137,7 @@ fn classify_item(
     }
 
     // Any other item: collect every name it touches and block them.
-    for n in &item.referenced_names() {
+    for n in &liveness::referenced_names(item) {
         pending.remove(n);
     }
 }

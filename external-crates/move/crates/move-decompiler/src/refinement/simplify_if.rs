@@ -3,7 +3,10 @@
 
 use crate::{
     ast::Exp,
-    refinement::{Refine, utils::negate},
+    refinement::{
+        Refine,
+        utils::{always_terminates, negate},
+    },
 };
 
 // Three local cleanups on `IfElse`:
@@ -89,20 +92,6 @@ impl Refine for SimplifyIf {
 
 // ------------------------------------------------------------------------------------------------
 // Helpers
-
-/// An expression `always_terminates` if every CFG path through it leaves the surrounding
-/// statement context — `abort`/`return`/`break`/`continue`, a `Seq` whose last item does,
-/// or an `IfElse` where both arms do.
-fn always_terminates(exp: &Exp) -> bool {
-    match exp {
-        Exp::Abort(_) | Exp::Return(_) | Exp::Break(_) | Exp::Continue(_) => true,
-        Exp::Seq(items) => items.last().is_some_and(always_terminates),
-        Exp::IfElse(_, t, alt) => {
-            always_terminates(t.as_ref()) && alt.as_ref().as_ref().is_some_and(always_terminates)
-        }
-        _ => false,
-    }
-}
 
 /// `Abort(_)` directly, or wrapped in a singleton `Seq`. Used by the abort-preference
 /// tiebreak between rules 1 and 2.

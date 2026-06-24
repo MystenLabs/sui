@@ -15,7 +15,7 @@ use prometheus::Registry;
 use tracing::{info, warn};
 
 use crate::{
-    BlockAPI as _, CommitConsumerArgs,
+    BlockAPI as _, CommitConsumerArgs, RandomnessSignatureHandler,
     authority_service::AuthorityService,
     block_manager::BlockManager,
     block_sync_service::BlockSyncService,
@@ -70,6 +70,7 @@ impl ConsensusAuthority {
         // has been running. It's useful for making decisions on whether amnesia recovery should run.
         // When `boot_counter` is 0, `ConsensusAuthority` will initiate the process of amnesia recovery if that's enabled in the parameters.
         boot_counter: u64,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) -> Self {
         match network_type {
             NetworkType::Tonic => {
@@ -85,6 +86,7 @@ impl ConsensusAuthority {
                     commit_consumer,
                     registry,
                     boot_counter,
+                    randomness_signature_handler,
                 )
                 .await;
                 Self::WithTonic(authority)
@@ -111,6 +113,12 @@ impl ConsensusAuthority {
     pub fn transaction_client(&self) -> Arc<TransactionClient> {
         match self {
             Self::WithTonic(authority) => authority.transaction_client(),
+        }
+    }
+
+    pub fn store(&self) -> Arc<RocksDBStore> {
+        match self {
+            Self::WithTonic(authority) => authority.store(),
         }
     }
 
@@ -150,6 +158,7 @@ where
     start_time: Instant,
     transaction_client: Arc<TransactionClient>,
     synchronizer: Arc<SynchronizerHandle>,
+    store: Arc<RocksDBStore>,
 
     commit_syncer_handle: CommitSyncerHandle,
     round_prober_handle: Option<RoundProberHandle>,
@@ -176,6 +185,7 @@ where
         commit_consumer: CommitConsumerArgs,
         registry: Registry,
         boot_counter: u64,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) -> Self {
         let metrics = initialise_metrics(registry);
 
@@ -270,10 +280,7 @@ where
         ));
 
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
-        let store = Arc::new(RocksDBStore::new(
-            store_path,
-            context.parameters.use_fifo_compaction,
-        ));
+        let store = Arc::new(RocksDBStore::new(store_path));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let block_verifier = Arc::new(SignedBlockVerifier::new(
@@ -453,6 +460,7 @@ where
                     transaction_vote_tracker.clone(),
                     synchronizer.clone(),
                     block_sync_service.clone(),
+                    randomness_signature_handler.clone(),
                 ));
                 network_manager
                     .start_observer_server(observer_service)
@@ -473,13 +481,16 @@ where
                 transaction_vote_tracker.clone(),
                 synchronizer.clone(),
                 block_sync_service.clone(),
+                randomness_signature_handler.clone(),
             ));
 
             let observer_subscriber = ObserverSubscriber::new(
                 context.clone(),
                 observer_client,
                 observer_service.clone(),
+                commit_vote_monitor.clone(),
                 dag_state.clone(),
+                randomness_signature_handler,
             );
 
             network_manager
@@ -517,6 +528,7 @@ where
             start_time,
             transaction_client: Arc::new(tx_client),
             synchronizer,
+            store,
             commit_syncer_handle,
             round_prober_handle,
             leader_timeout_handle,
@@ -562,6 +574,10 @@ where
 
     pub(crate) fn transaction_client(&self) -> Arc<TransactionClient> {
         self.transaction_client.clone()
+    }
+
+    pub(crate) fn store(&self) -> Arc<RocksDBStore> {
+        self.store.clone()
     }
 
     pub(crate) fn update_peer_address(
@@ -664,6 +680,7 @@ mod tests {
             commit_consumer,
             registry,
             0,
+            None,
         )
         .await;
 
@@ -705,6 +722,7 @@ mod tests {
             commit_consumer,
             registry,
             0,
+            None,
         )
         .await;
 
@@ -820,6 +838,7 @@ mod tests {
             observer_commit_consumer,
             Registry::new(),
             0,
+            None,
         )
         .await;
         // The relevant endpoints are now implemented for the synchronizer and commit_syncer components, so the Observer node should be able to catch up and
@@ -1255,6 +1274,7 @@ mod tests {
             commit_consumer,
             registry,
             boot_counter,
+            None,
         )
         .await;
 

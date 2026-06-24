@@ -266,7 +266,7 @@ impl TestCluster {
     pub async fn get_object_from_fullnode_store(&self, object_id: &ObjectID) -> Option<Object> {
         self.fullnode_handle
             .sui_node
-            .with_async(|node| async { node.state().get_object(object_id).await })
+            .with_async(|node| async { node.state().get_object(object_id) })
             .await
     }
 
@@ -875,25 +875,50 @@ impl TestCluster {
     }
 
     pub async fn wait_for_tx_settlement(&self, digests: &[TransactionDigest]) {
-        self.fullnode_handle
-            .sui_node
-            .with_async(|node| async move {
+        Self::wait_for_tx_settlement_on_handles(
+            std::slice::from_ref(&self.fullnode_handle.sui_node),
+            digests,
+        )
+        .await;
+    }
+
+    /// Like `wait_for_tx_settlement`, but waits on every node (all validators and fullnodes)
+    /// instead of only the rpc fullnode. Nodes can execute the same checkpoint at different
+    /// times, so the rpc fullnode having settled a transaction does not imply every validator
+    /// has. Use this when a subsequent step may interact with an arbitrary validator (e.g. a
+    /// soft bundle is submitted to a randomly chosen validator) and that validator must have
+    /// already applied the settlement of `digests`.
+    pub async fn wait_for_tx_settlement_all_nodes(&self, digests: &[TransactionDigest]) {
+        let handles = self.all_node_handles();
+        Self::wait_for_tx_settlement_on_handles(&handles, digests).await;
+    }
+
+    /// Waits, concurrently across `handles`, until every transaction in `digests` has settled
+    /// on that node: the transaction's checkpoint is present in the node's store and that
+    /// checkpoint has been executed (which is when the transaction's settlement is visible).
+    async fn wait_for_tx_settlement_on_handles(
+        handles: &[SuiNodeHandle],
+        digests: &[TransactionDigest],
+    ) {
+        let waits = handles.iter().map(|handle| {
+            handle.with_async(|node| async move {
                 let state = node.state();
-                // wait until the transactions are in checkpoints
+                // wait until the transactions are in checkpoints on this node
                 let checkpoint_seqs = state
                     .epoch_store_for_testing()
                     .transactions_executed_in_checkpoint_notify(digests.to_vec())
                     .await
                     .unwrap();
 
-                // then wait until the highest of the checkpoints is executed
+                // then wait until the highest of those checkpoints is executed on this node
                 let max_checkpoint_seq = checkpoint_seqs.into_iter().max().unwrap();
                 state
                     .checkpoint_store
                     .notify_read_executed_checkpoint(max_checkpoint_seq)
                     .await;
             })
-            .await;
+        });
+        join_all(waits).await;
     }
 
     /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.
@@ -935,69 +960,112 @@ impl TestCluster {
         tx: Transaction,
         client_addr: Option<SocketAddr>,
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
-        let agg = self.authority_aggregator();
-        // Pick a validator to submit to using seeded RNG for deterministic simtest selection
-        let clients = &agg.authority_clients;
-        let index = rand::thread_rng().gen_range(0..clients.len());
-        let (_, client) = clients
-            .iter()
-            .nth(index)
-            .ok_or_else(|| anyhow::anyhow!("No authority clients available"))?;
+        // The consensus position handed back on submission is the *first* one, even when the
+        // consensus adapter internally retries (e.g. the block was garbage-collected before being
+        // sequenced, which is most likely right after a reconfiguration). If we wait for effects on
+        // that stale position, the validator can neither produce effects nor expire the position
+        // within its wait window, surfacing as a timeout/`Expired`. The consensus adapter documents
+        // that clients must retry in that case, and the production `TransactionDriver` does exactly
+        // that. Mirror it here with a bounded resubmit loop so tests don't flake on this transient
+        // condition. Definite outcomes (executed / rejected) return immediately.
+        const MAX_ATTEMPTS: usize = 5;
+        let mut last_transient_err: Option<anyhow::Error> = None;
+        for attempt in 0..MAX_ATTEMPTS {
+            if attempt > 0 {
+                // Brief backoff before resubmitting to obtain a fresh consensus position.
+                sleep(Duration::from_secs(1)).await;
+            }
 
-        // Submit the transaction
-        let submit_request = SubmitTxRequest::new_transaction(tx.clone());
-        let submit_response = client
-            .submit_transaction(submit_request, client_addr)
-            .await?;
+            let agg = self.authority_aggregator();
+            // Pick a validator to submit to using seeded RNG for deterministic simtest selection
+            let clients = &agg.authority_clients;
+            let index = rand::thread_rng().gen_range(0..clients.len());
+            let (_, client) = clients
+                .iter()
+                .nth(index)
+                .ok_or_else(|| anyhow::anyhow!("No authority clients available"))?;
 
-        let mut consensus_position = None;
-        for result in submit_response.results {
-            match result {
-                SubmitTxResult::Executed { details, .. } => {
+            // Submit the transaction
+            let submit_request = SubmitTxRequest::new_transaction(tx.clone());
+            let submit_response = match client.submit_transaction(submit_request, client_addr).await
+            {
+                Ok(response) => response,
+                // Retry only transient submission failures (e.g. validator overloaded, or
+                // consensus not yet ready right after reconfiguration); surface definite errors
+                // (invalid transaction, lock conflict, internal) immediately.
+                Err(err) if err.as_inner().categorize().is_submission_retriable() => {
+                    last_transient_err = Some(err.into());
+                    continue;
+                }
+                Err(err) => return Err(err.into()),
+            };
+
+            let mut consensus_position = None;
+            for result in submit_response.results {
+                match result {
+                    SubmitTxResult::Executed { details, .. } => {
+                        let data =
+                            details.ok_or_else(|| anyhow::anyhow!("Expected execution details"))?;
+                        let events = data.events.unwrap_or_default();
+                        return Ok((data.effects, events));
+                    }
+                    SubmitTxResult::Rejected { error } => {
+                        return Err(error.into());
+                    }
+                    SubmitTxResult::Submitted {
+                        consensus_position: position,
+                    } => {
+                        consensus_position = Some(position);
+                    }
+                }
+            }
+
+            let consensus_position = consensus_position
+                .ok_or_else(|| anyhow::anyhow!("Expected submitted transaction result"))?;
+
+            // Wait for effects
+            let wait_request = WaitForEffectsRequest {
+                transaction_digest: Some(*tx.digest()),
+                consensus_position: Some(consensus_position),
+                include_details: true,
+                ping_type: None,
+            };
+
+            match client.wait_for_effects(wait_request, client_addr).await {
+                Ok(WaitForEffectsResponse::Executed { details, .. }) => {
                     let data =
                         details.ok_or_else(|| anyhow::anyhow!("Expected execution details"))?;
                     let events = data.events.unwrap_or_default();
                     return Ok((data.effects, events));
                 }
-                SubmitTxResult::Rejected { error } => {
-                    return Err(error.into());
+                Ok(WaitForEffectsResponse::Rejected { error }) => {
+                    return Err(error
+                        .unwrap_or_else(|| {
+                            SuiErrorKind::GenericAuthorityError {
+                                error: "Transaction was rejected".to_string(),
+                            }
+                            .into()
+                        })
+                        .into());
                 }
-                SubmitTxResult::Submitted {
-                    consensus_position: position,
-                } => {
-                    consensus_position = Some(position);
+                // The position we waited on was garbage-collected before being sequenced; resubmit
+                // to obtain a fresh position.
+                Ok(WaitForEffectsResponse::Expired { .. }) => {
+                    last_transient_err = Some(SuiErrorKind::TransactionExpired.into());
                 }
+                // A transient wait failure (e.g. the validator's "Timeout waiting for effects")
+                // means the watched position never resolved; resubmit for a fresh one. Surface
+                // definite errors immediately.
+                Err(err) if err.as_inner().categorize().is_submission_retriable() => {
+                    last_transient_err = Some(err.into());
+                }
+                Err(err) => return Err(err.into()),
             }
         }
 
-        let consensus_position = consensus_position
-            .ok_or_else(|| anyhow::anyhow!("Expected submitted transaction result"))?;
-
-        // Wait for effects
-        let wait_request = WaitForEffectsRequest {
-            transaction_digest: Some(*tx.digest()),
-            consensus_position: Some(consensus_position),
-            include_details: true,
-            ping_type: None,
-        };
-
-        let response = client.wait_for_effects(wait_request, client_addr).await?;
-        match response {
-            WaitForEffectsResponse::Executed { details, .. } => {
-                let data = details.ok_or_else(|| anyhow::anyhow!("Expected execution details"))?;
-                let events = data.events.unwrap_or_default();
-                Ok((data.effects, events))
-            }
-            WaitForEffectsResponse::Rejected { error } => Err(error
-                .unwrap_or_else(|| {
-                    SuiErrorKind::GenericAuthorityError {
-                        error: "Transaction was rejected".to_string(),
-                    }
-                    .into()
-                })
-                .into()),
-            WaitForEffectsResponse::Expired { .. } => Err(SuiErrorKind::TransactionExpired.into()),
-        }
+        Err(last_transient_err.unwrap_or_else(|| {
+            anyhow::anyhow!("submit_and_execute exhausted retries without a result")
+        }))
     }
 
     /// This call sends some funds from the seeded address to the funding

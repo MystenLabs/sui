@@ -98,6 +98,12 @@ rm ~/.aws/config
 
 After configuring AWS SSO, you will be redirected to login through a browser window. Choose an account and the role `AdministratorAccess`. AWS should create a profile such as `AdministratorAccess-094557288217`.
 
+:::caution
+
+`AdministratorAccess` is used here only to simplify this walkthrough. In production, do not grant broad administrator permissions: scope an IAM role to the least privilege the enclave deployment actually needs (EC2, Nitro Enclaves, and KMS as applicable). Never log AWS credentials, enclave secrets, or attestation private material, and always verify the enclave's PCRs against the values registered onchain before trusting any output it produces. See the [Nautilus](/develop/security/best-practices#nautilus) section of the Security Best Practices guide.
+
+:::
+
 ###step List existing EC2 SSH key pairwise
 
 Run the following command to list all key pairs created in your AWS account. These are used only for SSH into EC2.

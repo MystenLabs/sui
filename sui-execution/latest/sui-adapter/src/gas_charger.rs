@@ -11,14 +11,13 @@ pub mod checked {
     use crate::temporary_store::TemporaryStore;
     use either::Either;
     use indexmap::IndexMap;
+    use mysten_common::assert_reachable;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::deny_list_v2::CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS;
     use sui_types::digests::TransactionDigest;
     use sui_types::error::ExecutionErrorTrait;
     use sui_types::gas::{GasCostSummary, SuiGasStatus, deduct_gas};
-    use sui_types::gas_model::gas_predicates::{
-        charge_upgrades, dont_charge_budget_on_storage_oog, refresh_gas_payment_location,
-    };
+    use sui_types::gas_model::gas_predicates::refresh_gas_payment_location;
     use sui_types::{
         accumulator_event::AccumulatorEvent,
         base_types::{ObjectID, ObjectRef, SuiAddress},
@@ -281,14 +280,6 @@ pub mod checked {
             self.gas_status.charge_publish_package(size)
         }
 
-        pub fn charge_upgrade_package(&mut self, size: usize) -> Result<(), ExecutionError> {
-            if charge_upgrades(self.gas_model_version) {
-                self.gas_status.charge_publish_package(size)
-            } else {
-                Ok(())
-            }
-        }
-
         pub fn charge_input_objects(
             &mut self,
             temporary_store: &TemporaryStore<'_>,
@@ -346,6 +337,7 @@ pub mod checked {
         pub fn charge_gas<T, E: ExecutionErrorTrait>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
+            protocol_config: &ProtocolConfig,
             execution_result: &mut Result<T, E>,
         ) -> GasCostSummary {
             // at this point, we have done *all* charging for computation,
@@ -402,6 +394,7 @@ pub mod checked {
                 })
                 .unwrap_or(false)
                 && matches!(gas_payment_location, Some(PaymentLocation::AddressBalance(_))) {
+                    debug_assert!(!protocol_config.early_exit_on_iffw(), "Should have not reached charge gas in this case with IFFW");
                     // If we don't have enough balance to withdraw, don't charge for gas
                     // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
                     return GasCostSummary::default();
@@ -479,39 +472,10 @@ pub mod checked {
         /// If we exceed gas_budget, we set execution_result to InsufficientGas, failing the tx.
         /// If we have InsufficientGas, we determine how much gas to charge for the failed tx:
         ///
-        /// v1: we set computation_cost = gas_budget, so we charge net (gas_budget - storage_rebates)
-        /// v2: we charge (computation + storage costs for input objects - storage_rebates)
-        ///     if the gas balance is still insufficient, we fall back to set computation_cost = gas_budget
-        ///     so we charge net (gas_budget - storage_rebates)
+        /// we charge (computation + storage costs for input objects - storage_rebates)
+        /// if the gas balance is still insufficient, we fall back to set computation_cost = gas_budget
+        /// so we charge net (gas_budget - storage_rebates)
         fn compute_storage_and_rebate<T, E: ExecutionErrorTrait>(
-            &mut self,
-            temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, E>,
-        ) {
-            if dont_charge_budget_on_storage_oog(self.gas_model_version) {
-                self.handle_storage_and_rebate_v2(temporary_store, execution_result)
-            } else {
-                self.handle_storage_and_rebate_v1(temporary_store, execution_result)
-            }
-        }
-
-        fn handle_storage_and_rebate_v1<T, E: ExecutionErrorTrait>(
-            &mut self,
-            temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, E>,
-        ) {
-            if let Err(err) = self.gas_status.charge_storage_and_rebate() {
-                self.reset(temporary_store);
-                self.gas_status.adjust_computation_on_out_of_gas();
-                temporary_store.ensure_active_inputs_mutated();
-                temporary_store.collect_rebate(self);
-                if execution_result.is_ok() {
-                    *execution_result = Err(err.into());
-                }
-            }
-        }
-
-        fn handle_storage_and_rebate_v2<T, E: ExecutionErrorTrait>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
             execution_result: &mut Result<T, E>,
@@ -604,6 +568,7 @@ pub mod checked {
                 assert_ne!(location, smash_location, "Payment methods must be unique");
                 match payment_method {
                     PaymentMethod::AddressBalance(sui_address, reservation) => {
+                        assert_reachable!("smashed payment is address-balance reservation");
                         let balance_type = sui_types::balance::Balance::type_tag(
                             sui_types::gas_coin::GAS::type_tag(),
                         );
@@ -616,12 +581,14 @@ pub mod checked {
                         temporary_store.add_accumulator_event(event);
                     }
                     PaymentMethod::Coin((id, _, _)) => {
+                        assert_reachable!("smashed payment is coin object");
                         temporary_store.delete_input_object(id);
                     }
                 }
             }
             match &self.smash_target {
                 PaymentMethod::AddressBalance(sui_address, reservation) => {
+                    assert_reachable!("smash target is address-balance reservation");
                     // The reservation here is only a maximal withdrawal from this address balance
                     // We do not need to withdraw here unless necessary, which will be done during
                     // gas charging

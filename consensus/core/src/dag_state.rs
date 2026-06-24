@@ -11,7 +11,7 @@ use std::{
     vec,
 };
 
-use consensus_config::{AuthorityIndex, Stake};
+use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs, Round, TransactionIndex};
 use itertools::Itertools as _;
 use mysten_common::ZipDebugEqIteratorExt;
@@ -27,6 +27,7 @@ use crate::{
     },
     context::Context,
     leader_scoring::{ReputationScores, ScoringSubdag},
+    stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::{Store, WriteBatch},
     threshold_clock::ThresholdClock,
 };
@@ -368,12 +369,10 @@ impl DagState {
                         ancestor, block_ref
                     )
                 });
-                if block_info.children.insert(block_ref)
-                    && block_info.children_authorities.insert(block_ref.author)
-                {
-                    let child_stake = self.context.committee.stake(block_ref.author);
-                    block_info.total_children_stake += child_stake;
-                }
+                block_info.children.insert(block_ref);
+                block_info
+                    .children_stake
+                    .add_unique(block_ref.author, &self.context.committee);
             }
             self.update_round_info(block);
         }
@@ -485,6 +484,25 @@ impl DagState {
         blocks
     }
 
+    /// Gets all block infos in the slot.
+    /// Must be called on slots above gc_round, otherwise the result may be misleading due to GC eviction.
+    pub(crate) fn get_block_info_at_slot(&self, slot: Slot) -> Vec<BlockInfo> {
+        assert!(
+            slot.round > self.gc_round(),
+            "get_block_info_at_slot() should only be called for slots above gc_round: slot {}, gc_round {}",
+            slot,
+            self.gc_round()
+        );
+        let mut results = vec![];
+        for (_block_ref, block_info) in self.recent_blocks.range((
+            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
+            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
+        )) {
+            results.push(block_info.clone());
+        }
+        results
+    }
+
     /// Gets all uncommitted blocks in a slot.
     /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
     pub(crate) fn get_uncommitted_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
@@ -542,17 +560,20 @@ impl DagState {
         }
         self.recent_blocks
             .get(block_ref)
-            .map(|block_info| block_info.children_authorities.clone())
+            .map(|block_info| block_info.children_stake.authorities().clone())
     }
 
     #[cfg(test)]
-    pub(crate) fn get_block_total_children_stake(&self, block_ref: &BlockRef) -> Option<Stake> {
+    pub(crate) fn get_block_total_children_stake(
+        &self,
+        block_ref: &BlockRef,
+    ) -> Option<consensus_config::Stake> {
         if block_ref.round <= self.gc_round() {
             return None;
         }
         self.recent_blocks
             .get(block_ref)
-            .map(|block_info| block_info.total_children_stake)
+            .map(|block_info| block_info.children_stake.stake())
     }
 
     /// Gets all ancestors in the history of a block at a certain round.
@@ -935,10 +956,9 @@ impl DagState {
         self.highest_accepted_round
     }
 
-    /// Returns the `RoundInfo` for `round`, if retained. `None` if the round has
-    /// been evicted, Gc'ed or has not been reached yet.
-    #[cfg(test)]
-    pub(crate) fn round_info(&self, round: Round) -> Option<&RoundInfo> {
+    /// Returns the `RoundInfo` at `round`, if available. `None` if the round has
+    /// been evicted (<= gc_round) or has not been reached yet.
+    pub(crate) fn get_round_info(&self, round: Round) -> Option<&RoundInfo> {
         let front_round = self.round_info.front()?.round;
         if round < front_round || round <= self.gc_round() {
             return None;
@@ -977,11 +997,7 @@ impl DagState {
             "Attempted to update round info for block {block_ref} with round higher than next round {next_round}"
         );
         if block.round() == next_round {
-            self.round_info.push_back(RoundInfo {
-                round: block.round(),
-                authorities: BTreeSet::new(),
-                total_stake: 0,
-            });
+            self.round_info.push_back(RoundInfo::new(block.round()));
         }
 
         // Update the RoundInfo of the block round.
@@ -992,9 +1008,9 @@ impl DagState {
             .round;
         let index = (block.round() - front_round) as usize;
         let info = &mut self.round_info[index];
-        if info.authorities.insert(block_ref.author) {
-            info.total_stake += self.context.committee.stake(block_ref.author);
-        }
+        info.blocks.insert(block_ref);
+        info.total_stake
+            .add_unique(block_ref.author, &self.context.committee);
     }
 
     // Buffers a new commit in memory and updates last committed rounds.
@@ -1379,19 +1395,20 @@ impl DagState {
     }
 }
 
-struct BlockInfo {
-    block: VerifiedBlock,
+/// Information on a block accepted into the DAG.
+#[derive(Clone)]
+pub(crate) struct BlockInfo {
+    pub(crate) block: VerifiedBlock,
 
     /// Used in computing commits and leader schedule in Mysticeti v3.
     /// Next-round blocks which have this block as an ancestor.
-    children: BTreeSet<BlockRef>,
-    /// Distinct authorities that have authored one of the entries in `children`.
-    children_authorities: BTreeSet<AuthorityIndex>,
-    /// Sum of stake across `children_authorities`.
-    total_children_stake: Stake,
+    pub(crate) children: BTreeSet<BlockRef>,
+    /// Total stake from distinct authorities that have authored
+    /// one of the blocks in `children`.
+    pub(crate) children_stake: StakeAggregator<QuorumThreshold>,
 
     // Whether the block has been committed
-    committed: bool,
+    pub(crate) committed: bool,
     // Whether the block has been included in the causal history of an owned proposed block.
     ///
     /// There are two usages of this field:
@@ -1406,8 +1423,7 @@ impl BlockInfo {
         Self {
             block,
             children: BTreeSet::new(),
-            children_authorities: BTreeSet::new(),
-            total_children_stake: 0,
+            children_stake: StakeAggregator::new(),
             committed: false,
             included: false,
         }
@@ -1419,16 +1435,28 @@ impl BlockInfo {
 /// RoundInfo is only kept for rounds above GC round.
 pub(crate) struct RoundInfo {
     pub(crate) round: Round,
-    /// Distinct authorities that have authored at least one accepted block in `round`.
-    pub(crate) authorities: BTreeSet<AuthorityIndex>,
-    /// Sum of stake across `authorities`.
-    pub(crate) total_stake: Stake,
+    /// Blocks accepted at `round`.
+    pub(crate) blocks: BTreeSet<BlockRef>,
+    /// Total stake from distinct authorities that have authored
+    /// an accepted block in `round`.
+    pub(crate) total_stake: StakeAggregator<QuorumThreshold>,
+}
+
+impl RoundInfo {
+    fn new(round: Round) -> Self {
+        Self {
+            round,
+            blocks: BTreeSet::new(),
+            total_stake: StakeAggregator::new(),
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use std::vec;
 
+    use consensus_config::Stake;
     use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs};
     use parking_lot::RwLock;
 
@@ -2037,6 +2065,99 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_get_block_info_at_slot() {
+        let (mut context, _) = Context::new_for_test(4);
+        // Children-stake tracking is v3-only; enable it so children_stake
+        // is non-zero when round-2 blocks reference the slot.
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Use a non-own author for the slot under test so accept_block
+        // accepts the equivocating second block (the own-authority check
+        // rejects equivocations for the local validator only).
+        let author_1 = AuthorityIndex::new_for_test(1);
+        let author_2 = AuthorityIndex::new_for_test(2);
+        let slot_1_1 = Slot::new(1, author_1);
+
+        // Empty: no blocks accepted yet.
+        assert!(dag_state.get_block_info_at_slot(slot_1_1).is_empty());
+
+        // Single block at the slot: returns one entry; children_stake
+        // is still zero because no round-2 block has been accepted.
+        let block_1_1 = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+        dag_state.accept_block(block_1_1.clone());
+        let infos = dag_state.get_block_info_at_slot(slot_1_1);
+        assert_eq!(infos.len(), 1);
+        assert_eq!(infos[0].block.reference(), block_1_1.reference());
+        assert_eq!(infos[0].children_stake.stake(), 0);
+
+        // Different slot still returns empty.
+        assert!(
+            dag_state
+                .get_block_info_at_slot(Slot::new(1, author_2))
+                .is_empty()
+        );
+
+        // Equivocation: a second round-1 block authored by 1 with a different
+        // timestamp yields a different digest, so both share the same slot.
+        let block_1_1_equiv =
+            VerifiedBlock::new_for_test(TestBlock::new(1, 1).set_timestamp_ms(1).build());
+        assert_ne!(block_1_1_equiv.reference(), block_1_1.reference());
+        dag_state.accept_block(block_1_1_equiv.clone());
+
+        let infos = dag_state.get_block_info_at_slot(slot_1_1);
+        assert_eq!(infos.len(), 2);
+        let returned_refs: BTreeSet<BlockRef> = infos.iter().map(|i| i.block.reference()).collect();
+        assert_eq!(
+            returned_refs,
+            BTreeSet::from([block_1_1.reference(), block_1_1_equiv.reference()])
+        );
+
+        // Children-stake propagation: a round-2 block from author 2 referencing
+        // block_1_1 but not the equivocating block must update only the
+        // former's children_stake.
+        let block_2_2 = VerifiedBlock::new_for_test(
+            TestBlock::new(2, 2)
+                .set_ancestors(vec![block_1_1.reference()])
+                .build(),
+        );
+        dag_state.accept_block(block_2_2);
+
+        let stake_2 = context.committee.stake(author_2);
+        let by_ref: BTreeMap<BlockRef, BlockInfo> = dag_state
+            .get_block_info_at_slot(slot_1_1)
+            .into_iter()
+            .map(|i| (i.block.reference(), i))
+            .collect();
+        assert_eq!(
+            by_ref[&block_1_1.reference()].children_stake.stake(),
+            stake_2
+        );
+        assert_eq!(
+            by_ref[&block_1_1_equiv.reference()].children_stake.stake(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    #[should_panic(
+        expected = "get_block_info_at_slot() should only be called for slots above gc_round"
+    )]
+    async fn test_get_block_info_at_slot_panics_at_or_below_gc_round() {
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = DagState::new(context, store);
+
+        // gc_round() is 0 before any commit; querying round 0 fails the
+        // slot.round > gc_round() guard.
+        let _ = dag_state.get_block_info_at_slot(Slot::new(0, AuthorityIndex::new_for_test(0)));
+    }
+
+    #[tokio::test]
     async fn test_block_children_exclusion() {
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = 10;
@@ -2154,7 +2275,7 @@ mod test {
         let mut dag_state = DagState::new(context.clone(), store.clone());
 
         // Before any blocks: no round_info entries exist.
-        assert!(dag_state.round_info(1).is_none());
+        assert!(dag_state.get_round_info(1).is_none());
 
         // Accept blocks for rounds 1..=4 with full participation. Each round
         // must aggregate every authority and stake equal to total_stake.
@@ -2166,34 +2287,36 @@ mod test {
             (0..4).map(AuthorityIndex::new_for_test).collect();
         for round in 1..=4 {
             let info = dag_state
-                .round_info(round)
+                .get_round_info(round)
                 .unwrap_or_else(|| panic!("round_info missing for round {round}"));
             assert_eq!(info.round, round);
             assert_eq!(
-                info.authorities, all_authorities,
+                info.total_stake.authorities(),
+                &all_authorities,
                 "round {round} authorities mismatch"
             );
             assert_eq!(
-                info.total_stake,
+                info.total_stake.stake(),
                 context.committee.total_stake(),
                 "round {round} total_stake mismatch"
             );
         }
 
         // Beyond highest_accepted_round: no entry yet.
-        assert!(dag_state.round_info(5).is_none());
+        assert!(dag_state.get_round_info(5).is_none());
 
         // Re-accepting the same blocks must not double-count stake. The
         // contains_block early-return inside accept_block guards this.
         dag_state.accept_blocks(dag_builder.all_blocks());
         for round in 1..=4 {
-            let info = dag_state.round_info(round).unwrap();
+            let info = dag_state.get_round_info(round).unwrap();
             assert_eq!(
-                info.authorities, all_authorities,
+                info.total_stake.authorities(),
+                &all_authorities,
                 "round {round} authorities changed after re-accept"
             );
             assert_eq!(
-                info.total_stake,
+                info.total_stake.stake(),
                 context.committee.total_stake(),
                 "round {round} total_stake changed after re-accept"
             );
@@ -2213,10 +2336,18 @@ mod test {
                 .build(),
         );
         dag_state.accept_block(round_5_block);
-        let info_5 = dag_state.round_info(5).expect("round 5 entry should exist");
+        let info_5 = dag_state
+            .get_round_info(5)
+            .expect("round 5 entry should exist");
         let author_0 = AuthorityIndex::new_for_test(0);
-        assert_eq!(info_5.authorities, BTreeSet::from([author_0]));
-        assert_eq!(info_5.total_stake, context.committee.stake(author_0));
+        assert_eq!(
+            info_5.total_stake.authorities(),
+            &BTreeSet::from([author_0])
+        );
+        assert_eq!(
+            info_5.total_stake.stake(),
+            context.committee.stake(author_0)
+        );
 
         // GC boundary: commit a round-5 leader so gc_round advances to 2,
         // then flush to evict round_info entries with round <= gc_round.
@@ -2241,7 +2372,7 @@ mod test {
         // round advances, even before flush physically removes stale entries.
         for round in 1..=2 {
             assert!(
-                dag_state.round_info(round).is_none(),
+                dag_state.get_round_info(round).is_none(),
                 "round {round} should be hidden before flush after GC advances"
             );
         }
@@ -2251,22 +2382,28 @@ mod test {
         // Rounds 1..=2 are evicted; rounds 3..=5 remain with their aggregates.
         for round in 1..=2 {
             assert!(
-                dag_state.round_info(round).is_none(),
+                dag_state.get_round_info(round).is_none(),
                 "round {round} should be evicted after flush"
             );
         }
         for round in 3..=4 {
             let info = dag_state
-                .round_info(round)
+                .get_round_info(round)
                 .unwrap_or_else(|| panic!("round_info missing for round {round} after flush"));
-            assert_eq!(info.authorities, all_authorities);
-            assert_eq!(info.total_stake, context.committee.total_stake());
+            assert_eq!(info.total_stake.authorities(), &all_authorities);
+            assert_eq!(info.total_stake.stake(), context.committee.total_stake());
         }
         let info_5 = dag_state
-            .round_info(5)
+            .get_round_info(5)
             .expect("round 5 should still be present after flush");
-        assert_eq!(info_5.authorities, BTreeSet::from([author_0]));
-        assert_eq!(info_5.total_stake, context.committee.stake(author_0));
+        assert_eq!(
+            info_5.total_stake.authorities(),
+            &BTreeSet::from([author_0])
+        );
+        assert_eq!(
+            info_5.total_stake.stake(),
+            context.committee.stake(author_0)
+        );
     }
 
     #[tokio::test]

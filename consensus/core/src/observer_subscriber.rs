@@ -20,38 +20,43 @@ use tracing::{debug, info, warn};
 
 use crate::{
     block::BlockAPI,
+    commit_vote_monitor::{CommitVoteMonitor, is_commit_lagging},
     context::Context,
     dag_state::DagState,
     error::ConsensusError,
-    network::{ObserverNetworkClient, ObserverNetworkService, PeerId},
+    network::{ObserverNetworkClient, ObserverNetworkService, PeerId, RandomnessSignatureHandler},
 };
 
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
 /// taking care of retrying when subscription streams break. Blocks returned from peers are sent
 /// to the observer service for processing. The `ObserverSubscriber` can only subscribe to one peer at a time.
-#[allow(unused)]
 pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetworkService> {
     context: Arc<Context>,
     network_client: Arc<C>,
     observer_service: Arc<S>,
+    commit_vote_monitor: Arc<CommitVoteMonitor>,
     dag_state: Arc<parking_lot::RwLock<DagState>>,
     subscription: Arc<Mutex<Option<JoinHandle<()>>>>,
+    randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
 }
 
-#[allow(unused)]
 impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, S> {
     pub(crate) fn new(
         context: Arc<Context>,
         network_client: Arc<C>,
         observer_service: Arc<S>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         dag_state: Arc<parking_lot::RwLock<DagState>>,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) -> Self {
         Self {
             context,
             network_client,
             observer_service,
+            commit_vote_monitor,
             dag_state,
             subscription: Arc::new(Mutex::new(None)),
+            randomness_signature_handler,
         }
     }
 
@@ -61,7 +66,9 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         let context = self.context.clone();
         let network_client = self.network_client.clone();
         let observer_service = self.observer_service.clone();
+        let commit_vote_monitor = self.commit_vote_monitor.clone();
         let dag_state = self.dag_state.clone();
+        let randomness_signature_handler = self.randomness_signature_handler.clone();
 
         let mut subscription = self.subscription.lock();
         if let Some(handle) = subscription.take() {
@@ -71,8 +78,10 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             context,
             network_client,
             observer_service,
+            commit_vote_monitor,
             dag_state,
             peer,
+            randomness_signature_handler,
         )));
     }
 
@@ -88,8 +97,10 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         context: Arc<Context>,
         network_client: Arc<C>,
         observer_service: Arc<S>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         dag_state: Arc<parking_lot::RwLock<DagState>>,
         peer: PeerId,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
         const MIN_TIMEOUT: Duration = Duration::from_millis(500);
@@ -153,14 +164,28 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                 let _scope = monitored_scope("ObserverSubscriberStreamConsumer");
 
                 match blocks.next().await {
-                    Some(batch) => {
+                    Some(item) => {
                         context
                             .metrics
                             .node_metrics
                             .observer_subscribed_blocks_batch_size
-                            .observe(batch.len() as f64);
+                            .observe(item.blocks.len() as f64);
 
-                        for block in batch {
+                        // During catch-up (commit lagging behind quorum), drop silently --
+                        // those rounds will arrive via checkpoint sync, same as lagging validators.
+                        if let Some(handler) = &randomness_signature_handler
+                            && !is_commit_lagging(
+                                &context,
+                                dag_state.read().last_commit_index(),
+                                commit_vote_monitor.quorum_commit_index(),
+                            )
+                        {
+                            for sig in item.auxiliary_data.randomness_signatures {
+                                handler.handle_randomness_signature(sig);
+                            }
+                        }
+
+                        for block in item.blocks {
                             // Backpressure: wait if we've hit max parallelism
                             while active_tasks.load(Ordering::Acquire) >= max_parallel_tasks {
                                 // Block until a task completes instead of busy-waiting
@@ -266,7 +291,7 @@ mod tests {
         commit::{CommitRange, TrustedCommit},
         context::Context,
         error::ConsensusResult,
-        network::{NodeId, ObserverBlockStream},
+        network::{NodeId, ObserverBlockStream, ObserverStreamItem},
         storage::mem_store::MemStore,
     };
 
@@ -294,7 +319,13 @@ mod tests {
 
             let block_stream = stream::unfold(block_value, move |val| async move {
                 sleep(Duration::from_millis(1)).await;
-                Some((vec![Bytes::from(vec![val; 8])], val))
+                Some((
+                    ObserverStreamItem {
+                        blocks: vec![Bytes::from(vec![val; 8])],
+                        auxiliary_data: Default::default(),
+                    },
+                    val,
+                ))
             })
             .take(10);
             Ok(Box::pin(block_stream))
@@ -375,13 +406,16 @@ mod tests {
         let observer_service = Arc::new(ObserverSubscriberTestService::new());
         let network_client = Arc::new(ObserverSubscriberTestClient::new());
         let store = Arc::new(MemStore::new());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
 
         let subscriber = ObserverSubscriber::new(
             context.clone(),
             network_client,
             observer_service.clone(),
+            commit_vote_monitor,
             dag_state,
+            None,
         );
 
         // Subscribe to a validator peer
@@ -415,13 +449,16 @@ mod tests {
         let observer_service = Arc::new(ObserverSubscriberTestService::new());
         let network_client = Arc::new(ObserverSubscriberTestClient::new());
         let store = Arc::new(MemStore::new());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
 
         let subscriber = ObserverSubscriber::new(
             context.clone(),
             network_client,
             observer_service.clone(),
+            commit_vote_monitor,
             dag_state,
+            None,
         );
 
         // Subscribe to first peer (validator 0)

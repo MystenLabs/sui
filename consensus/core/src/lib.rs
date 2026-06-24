@@ -24,6 +24,7 @@ mod error;
 mod leader_schedule;
 mod leader_schedule_v3;
 mod leader_scoring;
+mod leader_slot_decider;
 mod leader_timeout;
 mod linearizer;
 mod metrics;
@@ -62,10 +63,13 @@ pub use block::BlockAPI;
 
 /// Exported API for testing and tools.
 pub use block::{TestBlock, Transaction, VerifiedBlock};
-pub use commit::{CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef, CommittedSubDag};
+pub use commit::{
+    CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef, CommittedSubDag, TrustedCommit,
+};
 pub use commit_consumer::{CommitConsumerArgs, CommitConsumerMonitor};
 pub use context::Clock;
 pub use metrics::Metrics;
+pub use network::RandomnessSignatureHandler;
 pub use transaction::{
     BlockStatus, ClientError, TransactionClient, TransactionVerifier, ValidationError,
 };

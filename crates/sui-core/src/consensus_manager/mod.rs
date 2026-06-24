@@ -13,6 +13,7 @@ use consensus_config::{
 };
 use consensus_core::{
     Clock, CommitConsumerArgs, CommitConsumerMonitor, CommitIndex, ConsensusAuthority, NetworkType,
+    RandomnessSignatureHandler, storage::rocksdb_store::RocksDBStore,
 };
 use core::panic;
 use fastcrypto::traits::KeyPair as _;
@@ -245,6 +246,7 @@ impl ConsensusManager {
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_handler_initializer: ConsensusHandlerInitializer,
         tx_validator: SuiTxValidator,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) {
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
@@ -299,15 +301,12 @@ impl ConsensusManager {
             CommitConsumerArgs::new(replay_after_commit_index, last_processed_commit_index);
         let monitor = commit_consumer.monitor();
 
-        let node_role = epoch_store.node_role();
-
         // Spin up the new Mysticeti consensus handler to listen for committed sub dags, before starting authority.
         let handler = MysticetiConsensusHandler::new(
             last_processed_commit_index,
             consensus_handler,
             commit_receiver,
             monitor.clone(),
-            node_role,
         );
         let mut consensus_handler = self.consensus_handler.lock().await;
         *consensus_handler = Some(handler);
@@ -349,6 +348,7 @@ impl ConsensusManager {
             commit_consumer,
             registry.clone(),
             *boot_counter,
+            randomness_signature_handler,
         )
         .await;
         let client = authority.transaction_client();
@@ -450,6 +450,10 @@ impl ConsensusManager {
 
     pub fn get_storage_base_path(&self) -> PathBuf {
         self.consensus_config.db_path().to_path_buf()
+    }
+
+    pub fn consensus_store(&self) -> Option<Arc<RocksDBStore>> {
+        self.authority.load().as_ref().map(|a| a.0.store())
     }
 
     fn get_store_path(&self, epoch: EpochId) -> PathBuf {

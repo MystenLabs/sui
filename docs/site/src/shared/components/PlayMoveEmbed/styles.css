@@ -1,0 +1,53 @@
+/*
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+*/
+
+/* Wrapper around the CodeBlock + Open in Move Playground button */
+.playmove-wrapper {
+  position: relative;
+  margin-bottom: var(--ifm-leading);
+}
+
+/* Remove the default CodeBlock bottom margin since the wrapper handles it */
+.playmove-wrapper > div {
+  margin-bottom: 0 !important;
+}
+
+/* Open in Move Playground button */
+.playmove-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 7px 16px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.playmove-open-btn:hover {
+  background: var(--ifm-color-primary);
+  color: #fff;
+  border-color: var(--ifm-color-primary);
+}
+
+.playmove-open-btn svg {
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.playmove-open-btn:hover svg {
+  opacity: 1;
+  stroke: #fff;
+}
+
+[data-theme="light"] .playmove-open-btn {
+  border-color: #d0d7de;
+}

@@ -40,6 +40,8 @@ mod object_cache;
 mod operation;
 mod package_store;
 mod pipeline;
+mod render;
+mod resolve;
 mod v2;
 mod v2alpha;
 
@@ -134,12 +136,13 @@ pub struct KvRpcServer {
     chain_id: ChainIdentifier,
     client: BigTableClient,
     server_version: Option<ServerVersion>,
-    checkpoint_bucket: Option<String>,
     service_info_watermark_pipelines: Vec<&'static str>,
     cache: Arc<RwLock<Option<GetServiceInfoResponse>>>,
     package_resolver: PackageResolver,
     metrics: Arc<KvRpcMetrics>,
     pub(crate) ledger_history: LedgerHistoryConfig,
+    pub(crate) request_bigtable_concurrency: usize,
+    pub(crate) stages: StagesConfig,
 }
 
 /// Optional configuration for the gRPC server (TLS, metrics, reflection).
@@ -156,7 +159,6 @@ impl KvRpcServer {
         instance_id: String,
         project_id: Option<String>,
         app_profile_id: Option<String>,
-        checkpoint_bucket: Option<String>,
         channel_timeout: Option<Duration>,
         server_version: Option<ServerVersion>,
         registry: &Registry,
@@ -164,6 +166,8 @@ impl KvRpcServer {
         pool_config: PoolConfig,
         service_info_watermark_pipelines: Vec<&'static str>,
         ledger_history: LedgerHistoryConfig,
+        request_bigtable_concurrency: usize,
+        stages: StagesConfig,
     ) -> anyhow::Result<Self> {
         ledger_history.validate()?;
         let mut client = BigTableClient::new_remote_with_credentials(
@@ -191,10 +195,11 @@ impl KvRpcServer {
             client,
             chain_id,
             server_version,
-            checkpoint_bucket,
             service_info_watermark_pipelines,
             metrics,
             ledger_history,
+            request_bigtable_concurrency,
+            stages,
         )
     }
 
@@ -203,7 +208,6 @@ impl KvRpcServer {
         host: String,
         instance_id: String,
         server_version: Option<ServerVersion>,
-        checkpoint_bucket: Option<String>,
     ) -> anyhow::Result<Self> {
         let client = BigTableClient::new_local(host, instance_id).await?;
         // Emulator/test path: metrics are inert (no scrape endpoint), but the
@@ -213,10 +217,11 @@ impl KvRpcServer {
             client,
             ChainIdentifier::from(sui_types::digests::CheckpointDigest::default()),
             server_version,
-            checkpoint_bucket,
             default_service_info_watermark_pipelines(false),
             metrics,
             LedgerHistoryConfig::default(),
+            KvRpcConfig::default().request_bigtable_concurrency(),
+            StagesConfig::default(),
         )
     }
 
@@ -224,10 +229,11 @@ impl KvRpcServer {
         client: BigTableClient,
         chain_id: ChainIdentifier,
         server_version: Option<ServerVersion>,
-        checkpoint_bucket: Option<String>,
         service_info_watermark_pipelines: Vec<&'static str>,
         metrics: Arc<KvRpcMetrics>,
         ledger_history: LedgerHistoryConfig,
+        request_bigtable_concurrency: usize,
+        stages: StagesConfig,
     ) -> anyhow::Result<Self> {
         ensure!(
             !service_info_watermark_pipelines.is_empty(),
@@ -246,12 +252,13 @@ impl KvRpcServer {
             chain_id,
             client,
             server_version,
-            checkpoint_bucket,
             service_info_watermark_pipelines,
             cache,
             package_resolver,
             metrics,
             ledger_history,
+            request_bigtable_concurrency,
+            stages,
         };
 
         let server_clone = server.clone();

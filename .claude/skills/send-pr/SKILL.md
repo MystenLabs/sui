@@ -120,6 +120,43 @@ If the remote branch exists and has diverged (due to rebase), force-push with `g
 
 Check if a PR already exists for this branch (`gh pr view`).
 - If a PR is open: done. Print the PR URL.
-- If no PR exists: open one in **draft** mode with `gh pr create --draft`. Write a concise title and body summarizing the branch's changes. Print the PR URL.
+- If no PR exists: open one in **draft** mode with `gh pr create --draft`. Write a title and body following the description guidelines below. Print the PR URL.
 
-Be concise in the PR description. Focus on the intent and reasons for the PR, and the functional changes that result, rather than simply listing the names of files or code structures that were modified.
+## Step 13 — Write the PR description
+
+Follow the repo template (`.github/PULL_REQUEST_TEMPLATE.md`): `## Description`, `## Test plan`, `## Release notes`.
+
+### Description
+
+A description has two possible parts: the **why** and the **what**. Write the minimum that lets a reviewer approach the diff with the right context — for many PRs this is a single sentence.
+
+1. **Why** — the motivation, problem, or bug being addressed. Almost always include this, because it is the one thing the diff usually cannot tell the reviewer. One or two sentences. If it fixes an issue or follows up another PR, link it. If the motivation is genuinely self-evident from the title alone, keep it to a few words or omit it.
+2. **What** — what the change does. **Omit this entirely when it is self-evident from the diff.** Include it only when the diff is large or non-obvious, and then only as a very concise, high-level description of the mechanics — enough to orient the reviewer, not a walkthrough. Never restate at length what a reader will see immediately on opening the diff.
+
+The test for every sentence: does it tell the reviewer something the diff does not already make obvious? If not, cut it. When in doubt, write less — a one-line description is a good outcome, not a deficiency.
+
+NEVER do these:
+- Explaining the "what" when the diff is small and self-evident. The reviewer will read the diff; do not pre-narrate it.
+- Listing the files, modules, structs, or functions that were touched. The diff already shows this.
+- Narrating the change blow-by-blow ("First we add X, then we modify Y to call Z..."). At most, summarize the mechanics in one high-level sentence.
+- Filler adjectives: "comprehensive", "robust", "cleanly", "This PR introduces a series of changes that...". Cut them.
+- Restating that the code is correct, tested, or follows best practices. Show, don't assert.
+
+Example — a PR that tightens the PR-description rules in this very skill:
+- Too verbose: a paragraph re-explaining that Claude writes verbose descriptions, what "self-evident" means, which sections were restructured, and why each rule was added.
+- Right-sized: "Claude's PR descriptions are too verbose. Tighten the description rules in the send-pr skill to push for brevity." The diff shows the rest.
+
+### Test plan
+
+Only state what a reviewer genuinely needs in order to trust the change. Do NOT restate CI blockers — "unit tests pass", "clippy clean", "cargo fmt", "CI is green" — these are assumed for every PR and add zero information.
+- If new tests were added, say which behavior they cover (one line).
+- If you verified something manually or by a non-obvious command, give the steps so a reviewer could repeat them.
+- If the change is covered entirely by existing automated tests and there is nothing else to convey, write a single short line saying so (e.g. "Covered by existing tests in `<area>`.") rather than a paragraph of boilerplate.
+
+### Release notes
+
+Check only the boxes whose surface this PR actually changes, and for each checked box write the user-visible impact and any action users must take. Leave the rest unchecked and empty. If nothing user-facing changed, leave all boxes unchecked.
+
+### Title
+
+One concise line describing the change in terms of its effect, matching the existing commit-message style of the repo. No type-prefix unless the surrounding history uses one.

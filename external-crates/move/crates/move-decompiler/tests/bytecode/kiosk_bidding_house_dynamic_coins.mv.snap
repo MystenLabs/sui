@@ -162,18 +162,11 @@ public fun accept_bid<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: &mu
     assert!(dynamic_object_field::exists_with_type(&l0.id, l2), C7);
     let NftListing { id: reg_14, seller: reg_15, kiosk_id: reg_16, nft_id: reg_17, purchase_cap: reg_18, buyout_price: reg_19, highest_bid: reg_20, highest_bidder: reg_21, status: reg_22, fee_bps: reg_23, created_at: reg_24, expires_at: reg_25, coin_type: reg_26 } = dynamic_object_field::remove(&mut l0.id, l2);
     let l11 = reg_26 : 0x1::type_name::TypeName;
-    let l14 = reg_23 : u16;
-    let l24 = reg_22 : u8;
     let l16 = reg_21 : 0x1::option::Option<address>;
-    let l15 = reg_20 : u64;
-    let l21 = reg_18 : 0x2::kiosk::PurchaseCap<T0>;
-    let l20 = reg_17 : 0x2::object::ID;
-    let l18 = reg_16 : 0x2::object::ID;
     let l23 = reg_15 : address;
-    let l17 = reg_14 : 0x2::object::UID;
     assert!(tx_context::sender(freeze(l5)) == l23, C6);
-    assert!(l24 == C0, C4);
-    assert!(object::id(freeze(l3)) == l18, C12);
+    assert!(reg_22 : u8 == C0, C4);
+    assert!(object::id(freeze(l3)) == reg_16 : 0x2::object::ID, C12);
     assert!(option::is_some(&l16), C8);
     let l10 = option::extract(&mut l16);
     let l9 = kiosk_bidding_house_dynamic_coins::create_bid_key(l2, l10);
@@ -181,20 +174,17 @@ public fun accept_bid<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: &mu
     assert!(dynamic_object_field::exists_with_type(&l0.id, l9), C8);
     let Bid { id: reg_94, bidder: reg_95, amount: reg_96, timestamp: reg_97 } = dynamic_object_field::remove(&mut l0.id, l9);
     let l7 = reg_96 : 0x2::balance::Balance<T1>;
-    let l8 = reg_94 : 0x2::object::UID;
-    let l13 = balance::value(&l7) * l14as u64 / 10000u64;
+    let l13 = balance::value(&l7) * reg_23 : u16as u64 / 10000u64;
     transfer::public_transfer(coin::from_balance(balance::split(&mut l7, l13), l5), auctionhouse::get_owner(freeze(l1)));
     transfer::public_transfer(coin::from_balance(l7, l5), l23);
-    let (reg_125, reg_126) = kiosk::purchase_with_cap(l3, l21, coin::zero(l5));
-    let l22 = reg_126;
-    let l19 = reg_125;
-    (reg_129, reg_130, reg_131) = transfer_policy::confirm_request(l4, l22);
+    let (reg_125, reg_126) = kiosk::purchase_with_cap(l3, reg_18 : 0x2::kiosk::PurchaseCap<T0>, coin::zero(l5));
+    (reg_129, reg_130, reg_131) = transfer_policy::confirm_request(l4, reg_126);
     let l12 = tx_context::epoch(freeze(l5));
-    let l6 = AcceptedBid { id: object::new(l5), listing_id: l2, bidder: l10, nft: l19, timestamp: l12, coin_type: l11 };
+    let l6 = AcceptedBid { id: object::new(l5), listing_id: l2, bidder: l10, nft: reg_125, timestamp: l12, coin_type: l11 };
     dynamic_object_field::add(&mut l0.id, l2, l6);
-    object::delete(l17);
-    object::delete(l8);
-    event::emit(BidReadyForClaim { listing_id: l2, seller: l23, bidder: l10, amount: l15, nft_id: l20, timestamp: l12, coin_type: l11 })
+    object::delete(reg_14 : 0x2::object::UID);
+    object::delete(reg_94 : 0x2::object::UID);
+    event::emit(BidReadyForClaim { listing_id: l2, seller: l23, bidder: l10, amount: reg_20 : u64, nft_id: reg_17 : 0x2::object::ID, timestamp: l12, coin_type: l11 })
 }
 
 public entry fun accept_bid_entry<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: &mut AuctionHouse, l2: ID, l3: &mut Kiosk, l4: &TransferPolicy<T0>, l5: &mut TxContext) {
@@ -208,83 +198,63 @@ public fun bid_exists<T0>(l0: &Kiosk_Bidding_Store, l1: ID, l2: address): bool {
 
 public entry fun buy_nft<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: &mut AuctionHouse, l2: ID, l3: &mut Kiosk, l4: &TransferPolicy<T0>, l5: Coin<T1>, l6: &mut TxContext) {
     let (reg_7, reg_8) = kiosk_bidding_house_dynamic_coins::buy_nft_with_request(l0, l1, l2, l3, l4, l5, l6);
-    let l8 = reg_8;
-    let l7 = reg_7;
-    (reg_11, reg_12, reg_13) = transfer_policy::confirm_request(l4, l8);
-    transfer::public_transfer(l7, tx_context::sender(freeze(l6)))
+    (reg_11, reg_12, reg_13) = transfer_policy::confirm_request(l4, reg_8);
+    transfer::public_transfer(reg_7, tx_context::sender(freeze(l6)))
 }
 
 public fun buy_nft_with_request<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: &mut AuctionHouse, l2: ID, l3: &mut Kiosk, l4: &TransferPolicy<T0>, l5: Coin<T1>, l6: &mut TxContext): ( T0, TransferRequest<T0>) {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l2), C7);
     let NftListing { id: reg_13, seller: reg_14, kiosk_id: reg_15, nft_id: reg_16, purchase_cap: reg_17, buyout_price: reg_18, highest_bid: reg_19, highest_bidder: reg_20, status: reg_21, fee_bps: reg_22, created_at: reg_23, expires_at: reg_24, coin_type: reg_25 } = dynamic_object_field::remove(&mut l0.id, l2);
     let l11 = reg_25 : 0x1::type_name::TypeName;
-    let l12 = reg_24 : u64;
-    let l14 = reg_22 : u16;
-    let l25 = reg_21 : u8;
     let l15 = reg_20 : 0x1::option::Option<address>;
     let l10 = reg_18 : u64;
-    let l22 = reg_17 : 0x2::kiosk::PurchaseCap<T0>;
-    let l19 = reg_16 : 0x2::object::ID;
-    let l17 = reg_15 : 0x2::object::ID;
     let l24 = reg_14 : address;
-    let l16 = reg_13 : 0x2::object::UID;
     assert!(l11 == type_name::get(), C22);
-    assert!(l25 == C0, C4);
-    assert!(tx_context::epoch(freeze(l6)) <= l12, C15);
-    assert!(object::id(freeze(l3)) == l17, C12);
+    assert!(reg_21 : u8 == C0, C4);
+    assert!(tx_context::epoch(freeze(l6)) <= reg_24 : u64, C15);
+    assert!(object::id(freeze(l3)) == reg_15 : 0x2::object::ID, C12);
     let l20 = coin::value(&l5);
     assert!(l20 >= l10, C13);
-    let l13 = l20 * l14as u64 / 10000u64;
+    let l13 = l20 * reg_22 : u16as u64 / 10000u64;
     transfer::public_transfer(coin::split(&mut l5, l13, l6), auctionhouse::get_owner(freeze(l1)));
     if (option::is_some(&l15)) {
         let l21 = option::extract(&mut l15);
         let l9 = kiosk_bidding_house_dynamic_coins::create_bid_key(l2, l21);
         if (dynamic_object_field::exists_with_type(&l0.id, l9)) {
             let Bid { id: reg_100, bidder: reg_101, amount: reg_102, timestamp: reg_103 } = dynamic_object_field::remove(&mut l0.id, l9);
-            let l7 = reg_102 : 0x2::balance::Balance<T1>;
-            let l8 = reg_100 : 0x2::object::UID;
-            transfer::public_transfer(coin::from_balance(l7, l6), l21);
-            object::delete(l8)
+            transfer::public_transfer(coin::from_balance(reg_102 : 0x2::balance::Balance<T1>, l6), l21);
+            object::delete(reg_100 : 0x2::object::UID)
         }
     };
-    let (reg_115, reg_116) = kiosk::purchase_with_cap(l3, l22, coin::zero(l6));
-    let l23 = reg_116;
-    let l18 = reg_115;
-    object::delete(l16);
-    event::emit(NftBoughtOut { listing_id: l2, seller: l24, buyer: tx_context::sender(freeze(l6)), amount: l10, nft_id: l19, coin_type: l11 });
+    let (reg_115, reg_116) = kiosk::purchase_with_cap(l3, reg_17 : 0x2::kiosk::PurchaseCap<T0>, coin::zero(l6));
+    object::delete(reg_13 : 0x2::object::UID);
+    event::emit(NftBoughtOut { listing_id: l2, seller: l24, buyer: tx_context::sender(freeze(l6)), amount: l10, nft_id: reg_16 : 0x2::object::ID, coin_type: l11 });
     transfer::public_transfer(l5, l24);
-    return (l18, l23)
+    return (reg_115, reg_116)
 }
 
 public fun cancel_listing<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: ID, l2: &mut Kiosk, l3: &mut TxContext) {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
     let NftListing { id: reg_12, seller: reg_13, kiosk_id: reg_14, nft_id: reg_15, purchase_cap: reg_16, buyout_price: reg_17, highest_bid: reg_18, highest_bidder: reg_19, status: reg_20, fee_bps: reg_21, created_at: reg_22, expires_at: reg_23, coin_type: reg_24 } = dynamic_object_field::remove(&mut l0.id, l1);
     let l8 = reg_24 : 0x1::type_name::TypeName;
-    let l15 = reg_20 : u8;
     let l9 = reg_19 : 0x1::option::Option<address>;
-    let l13 = reg_16 : 0x2::kiosk::PurchaseCap<T0>;
-    let l12 = reg_15 : 0x2::object::ID;
-    let l11 = reg_14 : 0x2::object::ID;
     let l14 = reg_13 : address;
-    let l10 = reg_12 : 0x2::object::UID;
     assert!(l8 == type_name::get(), C22);
     assert!(tx_context::sender(freeze(l3)) == l14, C6);
-    assert!(l15 == C0, C4);
-    assert!(object::id(freeze(l2)) == l11, C12);
+    assert!(reg_20 : u8 == C0, C4);
+    assert!(object::id(freeze(l2)) == reg_14 : 0x2::object::ID, C12);
     if (option::is_some(&l9)) {
         let l7 = option::extract(&mut l9);
         let l6 = kiosk_bidding_house_dynamic_coins::create_bid_key(l1, l7);
         if (dynamic_object_field::exists_with_type(&l0.id, l6)) {
             let Bid { id: reg_72, bidder: reg_73, amount: reg_74, timestamp: reg_75 } = dynamic_object_field::remove(&mut l0.id, l6);
-            let l4 = reg_74 : 0x2::balance::Balance<T1>;
-            let l5 = reg_72 : 0x2::object::UID;
-            transfer::public_transfer(coin::from_balance(l4, l3), l7);
-            object::delete(l5)
+            transfer::public_transfer(coin::from_balance(reg_74 : 0x2::balance::Balance<T1>, l3), l7);
+            object::delete(reg_72 : 0x2::object::UID)
         }
     };
-    kiosk::return_purchase_cap(l2, l13);
-    object::delete(l10);
-    event::emit(ListingCancelled { listing_id: l1, seller: l14, nft_id: l12, coin_type: l8 })
+    kiosk::return_purchase_cap(l2, reg_16 : 0x2::kiosk::PurchaseCap<T0>);
+    object::delete(reg_12 : 0x2::object::UID);
+    event::emit(ListingCancelled { listing_id: l1, seller: l14, nft_id: reg_15 : 0x2::object::ID, coin_type: l8 })
 }
 
 public entry fun cancel_listing_entry<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: ID, l2: &mut Kiosk, l3: &mut TxContext) {
@@ -296,11 +266,9 @@ public fun claim_accepted_bid<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1:
     let AcceptedBid { id: reg_11, listing_id: reg_12, bidder: reg_13, nft: reg_14, timestamp: reg_15, coin_type: reg_16 } = dynamic_object_field::remove(&mut l0.id, l1);
     let l6 = reg_14 : T0;
     let l3 = reg_13 : address;
-    let l5 = reg_12 : 0x2::object::ID;
-    let l4 = reg_11 : 0x2::object::UID;
     assert!(tx_context::sender(freeze(l2)) == l3, C18);
-    object::delete(l4);
-    event::emit(BidClaimed { listing_id: l5, bidder: l3, nft_id: object::id(&l6), timestamp: tx_context::epoch(freeze(l2)) });
+    object::delete(reg_11 : 0x2::object::UID);
+    event::emit(BidClaimed { listing_id: reg_12 : 0x2::object::ID, bidder: l3, nft_id: object::id(&l6), timestamp: tx_context::epoch(freeze(l2)) });
     return l6
 }
 
@@ -366,19 +334,17 @@ public entry fun create_nft_listing_with_duration<T0: key + store, T1>(l0: &mut 
 
 public entry fun create_personal_kiosk(l0: &mut TxContext) {
     let (reg_1, reg_2) = kiosk::new(l0);
-    let l2 = reg_2;
     let l1 = reg_1;
-    let l3 = personal_kiosk::new(&mut l1, l2, l0);
+    let l3 = personal_kiosk::new(&mut l1, reg_2, l0);
     transfer::public_share_object(l1);
     personal_kiosk::transfer_to_sender(l3, l0)
 }
 
 public fun create_personal_kiosk_ptb(l0: &mut TxContext): ( ID, PersonalKioskCap) {
     let (reg_1, reg_2) = kiosk::new(l0);
-    let l3 = reg_2;
     let l1 = reg_1;
     let l2 = object::id(&l1);
-    let l4 = personal_kiosk::new(&mut l1, l3, l0);
+    let l4 = personal_kiosk::new(&mut l1, reg_2, l0);
     transfer::public_share_object(l1);
     return (l2, l4)
 }
@@ -390,12 +356,10 @@ public entry fun emergency_reset_accepted_bid<T0: key + store>(l0: &mut Kiosk_Bi
         let AcceptedBid { id: reg_17, listing_id: reg_18, bidder: reg_19, nft: reg_20, timestamp: reg_21, coin_type: reg_22 } = dynamic_object_field::remove(&mut l0.id, l2);
         let l8 = reg_20 : T0;
         let l4 = reg_19 : address;
-        let l7 = reg_18 : 0x2::object::ID;
-        let l6 = reg_17 : 0x2::object::UID;
         let l9 = object::id(&l8);
         transfer::public_transfer(l8, l4);
-        object::delete(l6);
-        event::emit(BidClaimed { listing_id: l7, bidder: l4, nft_id: l9, timestamp: tx_context::epoch(freeze(l3)) })
+        object::delete(reg_17 : 0x2::object::UID);
+        event::emit(BidClaimed { listing_id: reg_18 : 0x2::object::ID, bidder: l4, nft_id: l9, timestamp: tx_context::epoch(freeze(l3)) })
     }
 }
 
@@ -404,17 +368,13 @@ public entry fun emergency_reset_listing<T0: key + store>(l0: &mut Kiosk_Bidding
     assert!(auctionhouse::is_admin(l1, l4), C14);
     if (dynamic_object_field::exists_with_type(&l0.id, l2)) {
         let NftListing { id: reg_17, seller: reg_18, kiosk_id: reg_19, nft_id: reg_20, purchase_cap: reg_21, buyout_price: reg_22, highest_bid: reg_23, highest_bidder: reg_24, status: reg_25, fee_bps: reg_26, created_at: reg_27, expires_at: reg_28, coin_type: reg_29 } = dynamic_object_field::remove(&mut l0.id, l2);
-        let l5 = reg_29 : 0x1::type_name::TypeName;
-        let l10 = reg_21 : 0x2::kiosk::PurchaseCap<T0>;
         let l8 = reg_20 : 0x2::object::ID;
         let l7 = reg_19 : 0x2::object::ID;
-        let l11 = reg_18 : address;
-        let l6 = reg_17 : 0x2::object::UID;
-        let l9 = OrphanedPurchaseCap { id: object::new(l3), cap: l10, kiosk_id: l7, orphaned_at: tx_context::epoch(freeze(l3)) };
+        let l9 = OrphanedPurchaseCap { id: object::new(l3), cap: reg_21 : 0x2::kiosk::PurchaseCap<T0>, kiosk_id: l7, orphaned_at: tx_context::epoch(freeze(l3)) };
         dynamic_object_field::add(&mut l0.orphaned_caps, l8, l9);
         event::emit(PurchaseCapOrphaned { nft_id: l8, kiosk_id: l7, timestamp: tx_context::epoch(freeze(l3)) });
-        object::delete(l6);
-        event::emit(ListingCancelled { listing_id: l2, seller: l11, nft_id: l8, coin_type: l5 })
+        object::delete(reg_17 : 0x2::object::UID);
+        event::emit(ListingCancelled { listing_id: l2, seller: reg_18 : address, nft_id: l8, coin_type: reg_29 : 0x1::type_name::TypeName })
     }
 }
 
@@ -492,8 +452,7 @@ public fun place_bid<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: ID, 
     } else {
         *(&l14.highest_bid) + *(&l14.highest_bid) * C2as u64 / 10000u64
     };
-    let l16 = l4;
-    assert!(l7 >= l16, C5);
+    assert!(l7 >= l4, C5);
     let l18 = option::none();
     let l15 = dynamic_object_field::borrow_mut(&mut l0.id, l1);
     if (option::is_some(&l15.highest_bidder)) {
@@ -506,10 +465,8 @@ public fun place_bid<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: ID, 
         let l8 = kiosk_bidding_house_dynamic_coins::create_bid_key(l1, l17);
         if (dynamic_object_field::exists_with_type(&l0.id, l8)) {
             let Bid { id: reg_118, bidder: reg_119, amount: reg_120, timestamp: reg_121 } = dynamic_object_field::remove(&mut l0.id, l8);
-            let l5 = reg_120 : 0x2::balance::Balance<T1>;
-            let l13 = reg_118 : 0x2::object::UID;
-            transfer::public_transfer(coin::from_balance(l5, l3), l17);
-            object::delete(l13)
+            transfer::public_transfer(coin::from_balance(reg_120 : 0x2::balance::Balance<T1>, l3), l17);
+            object::delete(reg_118 : 0x2::object::UID)
         }
     };
     let l6 = Bid { id: object::new(l3), bidder: l10, amount: coin::into_balance(l2), timestamp: l12 };
@@ -527,10 +484,8 @@ public entry fun recover_orphaned_cap<T0: key + store>(l0: &mut Kiosk_Bidding_St
     assert!(dynamic_object_field::exists_with_type(&l0.orphaned_caps, l3), C16);
     let OrphanedPurchaseCap { id: reg_19, cap: reg_20, kiosk_id: reg_21, orphaned_at: reg_22 } = dynamic_object_field::remove(&mut l0.orphaned_caps, l3);
     let l7 = reg_21 : 0x2::object::ID;
-    let l5 = reg_20 : 0x2::kiosk::PurchaseCap<T0>;
-    let l6 = reg_19 : 0x2::object::UID;
     assert!(object::id(freeze(l1)) == l7, C12);
-    kiosk::return_purchase_cap(l1, l5);
-    object::delete(l6);
+    kiosk::return_purchase_cap(l1, reg_20 : 0x2::kiosk::PurchaseCap<T0>);
+    object::delete(reg_19 : 0x2::object::UID);
     event::emit(OrphanedCapRecovered { nft_id: l3, kiosk_id: l7, recoverer: tx_context::sender(freeze(l4)), timestamp: tx_context::epoch(freeze(l4)) })
 }

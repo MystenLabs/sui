@@ -244,7 +244,7 @@ impl LeaderSwapTable {
         context: Arc<Context>,
         // Ignore linter warning in simtests.
         // TODO: maybe override protocol configs in tests for swap_stake_threshold, and call new().
-        #[allow(unused_variables)] swap_stake_threshold: u64,
+        #[cfg_attr(msim, allow(unused_variables))] swap_stake_threshold: u64,
         commit_index: CommitIndex,
         reputation_scores: ReputationScores,
     ) -> Self {

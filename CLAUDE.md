@@ -1,14 +1,11 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this directory.
-
 ## Crate-specific CLAUDE.md files
-Always consult CLAUDE.md files in sub-crates. Instructions in local CLAUDE.md files override instructions
-in this file when they are in conflict.
+When a sub-crate's CLAUDE.md conflicts with this file, the sub-crate's instructions win.
 
-# Individual Preferences
-Individual preferences supercede and extend project preferences:
-- @CLAUDE.local.md
+## Individual Preferences
+Individual preferences supersede and extend project preferences:
+- @CLAUDE.local.md if present.
 
 ## Essential Development Commands
 
@@ -42,7 +39,8 @@ SUI_SKIP_SIMTESTS=1 cargo nextest run
 **Important Notes for Testing:**
 - When compiling or running tests in this repository, set timeout limits to at least 10 minutes due to the large codebase size
 - For faster iteration, use -p to select only the most relevant packages for testing. Use multiple `-p` flags if necessary, e.g. `cargo nextest run -p sui-types -p sui-core`
-- Use `cargo nextest --lib` to run only library tests and skip integration tests for faster feedback
+- Use `cargo nextest run --lib` to run only library tests and skip integration tests for faster feedback
+- Use a scoped `cargo insta test` for the relevant package when snapshots are affected. Inspect the generated snapshot diffs. If they match the intended changes, update them with `cargo insta accept`. Do not accept unrelated snapshot changes.
 - Consult crate-specific CLAUDE.md files for instructions on which tests to run, when changing files in those crates
 
 ### Linting and Formatting
@@ -77,31 +75,28 @@ sui/
 │   ├── sui-indexer-alt-graphql/        # GraphQL API server
 │   └── sui-indexer-alt/                # Blockchain data indexer
 ├── consensus/                          # Consensus mechanism (Mysticeti)
-├── sui-execution/                      # Move execution layer with versions (v0, v1, v2 and latest)
-├── apps/                               # Frontend applications
+├── sui-execution/                      # Move execution layer with versions
+├── dapps/                              # Frontend applications
 └── external-crates/                    # Move compiler and VM
 ```
 
 ### Key Architectural Patterns
 
-1. **Authority System**: Sui uses a set of validators (authorities) that process transactions in parallel. Each authority maintains its own state and participates in Byzantine consensus.
+1. **Authority System**: Sui uses a set of validators (authorities) that process transactions in parallel. Each authority maintains its own state and participates in Mysticeti consensus.
 
-2. **Object Model**: Unlike account-based blockchains, Sui uses an object-centric model where:
-   - Each object has a unique ID and version
-   - Objects can be owned, shared, or immutable
+2. **Data Model**: Sui supports an object data model where each object has a unique ID and version. Accounts can also own balances.
 
 3. **Transaction Flow**:
-   - Client → Transaction Driver → Authority Client → Validator
-   - Transactions affecting only owned objects can start execution before consensus
-   - Shared object transactions require consensus ordering before execution
+   - User → Fullnode → Validators
+   - All user transactions require consensus voting and commit before execution.
+   - Pre and post-consensus fastpath executions have been removed. Surviving mentions of "fastpath" either refer to consensus transaction-voting logic, or should be removed. There is no longer a separate execution path called fastpath.
 
 4. **Storage Layer**:
    - Uses RocksDB for persistent storage
-   - Separate stores for objects, transactions, and effects
-   - Checkpointing system for state synchronization
+   - Separate stores for permanent, per-epoch, checkpoint, consensus and indexing data
 
 5. **Execution Pipeline**:
-   - Transaction validation → Certificate creation → Execution → Effects commitment
+   - Consensus output → Execution → Effects commitment
    - Move VM executes smart contracts with gas metering
    - Parallel execution for non-conflicting transactions
 
@@ -115,13 +110,15 @@ Use `#[cfg(test)]` for test-only code used within the same crate. Use `#[cfg(fea
    - Framework changes require snapshot updates
 2. **Protocol Config Changes**:
    - When modifying `crates/sui-protocol-config/src/lib.rs`, always invoke `/protocol-config` to verify changes are safe. Incorrect changes can break network consensus.
-3. **CRITICAL - Final Development Steps**:
+3. **Raising a PR**:
+   - When opening or updating a PR in this repo, always invoke the `/send-pr` skill.
+4. **CRITICAL - Final Development Steps**:
    - **ALWAYS run `cargo xclippy` after finishing development** to ensure code passes all linting checks
    - **NEVER disable or ignore tests** - all tests must pass and be enabled
    - **NEVER use `#[allow(dead_code)]`, `#[allow(unused)]`, or any other linting suppressions** - fix the underlying issues instead
    - **All unit tests must work properly** - use `#[tokio::test]` for async tests, not `#[test]`
 
-### **Comment Writing Guidelines**
+### Comment Writing Guidelines
 
 **Do NOT comment the obvious** - comments should not simply repeat what the code does.
 **When to comment**:

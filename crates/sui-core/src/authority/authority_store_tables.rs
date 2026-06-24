@@ -146,6 +146,23 @@ pub struct AuthorityPerpetualTables {
     /// This table uses epoch-prefixed keys to support efficient pruning via range delete.
     pub(crate) executed_transaction_digests: DBMap<(EpochId, TransactionDigest), ()>,
 
+    /// A singleton table recording the highest checkpoint whose transaction
+    /// outputs (objects, effects, etc.) are durably committed to this store.
+    /// It is written in the *same* atomic batch as those outputs (see
+    /// `AuthorityStore::build_db_batch` and the checkpoint executor), so it is
+    /// always consistent with the live object set even after an unclean stop.
+    ///
+    /// This differs from the checkpoint store's `highest_executed` watermark,
+    /// which is bumped in a separate write after the outputs are committed: an
+    /// abrupt stop can leave the object writes durable while `highest_executed`
+    /// still lags. Consumers that read the live object set directly (e.g. the
+    /// embedded rpc-store's bulk restore) use this watermark instead, so they
+    /// never observe objects beyond the checkpoint they think they are at.
+    ///
+    /// IMPORTANT: TideHunter keyspaces are order-sensitive once written to disk.
+    /// Keep new keyspaces append-only to preserve compatibility with existing DBs.
+    pub(crate) highest_committed_checkpoint: DBMap<(), CheckpointSequenceNumber>,
+
     /// Most recent `UpdateTransactionDenyConfig` consensus message accepted from each
     /// allowlisted peer authority. Persisted across epochs so we can rebuild the
     /// merged effective deny config after a node restart. Pruned at epoch transitions
@@ -424,6 +441,10 @@ impl AuthorityPerpetualTables {
                 ),
             ),
             (
+                "highest_committed_checkpoint".to_string(),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
+            ),
+            (
                 "shared_transaction_deny_configs".to_string(),
                 // AuthorityName encodes to 104 bytes via BCS (8-byte tuple-struct
                 // prefix + 96-byte BLS12381 pubkey), matching authority_capabilities_v2.
@@ -636,6 +657,27 @@ impl AuthorityPerpetualTables {
         Ok(())
     }
 
+    pub fn get_highest_committed_checkpoint(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
+        self.highest_committed_checkpoint.get(&())
+    }
+
+    /// Stage the highest-committed-checkpoint watermark into `wb`. Must be
+    /// called on the same batch that commits the checkpoint's transaction
+    /// outputs so the watermark and the outputs land atomically.
+    pub fn set_highest_committed_checkpoint(
+        &self,
+        wb: &mut DBBatch,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        wb.insert_batch(
+            &self.highest_committed_checkpoint,
+            [((), checkpoint_number)],
+        )?;
+        Ok(())
+    }
+
     pub fn get_transaction(
         &self,
         digest: &TransactionDigest,
@@ -644,6 +686,34 @@ impl AuthorityPerpetualTables {
             return Ok(None);
         };
         Ok(Some(transaction))
+    }
+
+    pub fn list_transactions_from(
+        &self,
+        start: Option<TransactionDigest>,
+        limit: usize,
+    ) -> Result<Vec<TransactionDigest>, typed_store::TypedStoreError> {
+        let iter = self.transactions.safe_iter_with_bounds(start, None);
+        let mut result = Vec::with_capacity(limit);
+        for item in iter.take(limit) {
+            let (digest, _) = item?;
+            result.push(digest);
+        }
+        Ok(result)
+    }
+
+    pub fn get_executed_effects_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<TransactionEffectsDigest>, typed_store::TypedStoreError> {
+        self.executed_effects.get(tx_digest)
+    }
+
+    pub fn get_effects_by_digest(
+        &self,
+        effects_digest: &TransactionEffectsDigest,
+    ) -> Result<Option<TransactionEffects>, typed_store::TypedStoreError> {
+        self.effects.get(effects_digest)
     }
 
     /// Batch insert executed transaction digests for a given epoch.
@@ -691,21 +761,6 @@ impl AuthorityPerpetualTables {
         Ok(self.executed_transactions_to_checkpoint.get(digest)?)
     }
 
-    pub fn get_newer_object_keys(
-        &self,
-        object: &(ObjectID, SequenceNumber),
-    ) -> SuiResult<Vec<ObjectKey>> {
-        let mut objects = vec![];
-        for result in self.objects.safe_iter_with_bounds(
-            Some(ObjectKey(object.0, object.1.next())),
-            Some(ObjectKey(object.0, VersionNumber::MAX)),
-        ) {
-            let (key, _) = result?;
-            objects.push(key);
-        }
-        Ok(objects)
-    }
-
     pub fn set_highest_pruned_checkpoint_without_wb(
         &self,
         checkpoint_number: CheckpointSequenceNumber,
@@ -749,13 +804,6 @@ impl AuthorityPerpetualTables {
     pub fn checkpoint_db(&self, path: &Path) -> SuiResult {
         // This checkpoints the entire db and not just objects table
         self.objects.checkpoint_db(path).map_err(Into::into)
-    }
-
-    pub fn get_root_state_hash(
-        &self,
-        epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>> {
-        Ok(self.root_state_hash_by_epoch.get(&epoch)?)
     }
 
     pub fn insert_root_state_hash(
@@ -856,13 +904,6 @@ impl LiveObject {
         match self {
             LiveObject::Normal(obj) => obj.compute_object_reference(),
             LiveObject::Wrapped(key) => (key.0, key.1, ObjectDigest::OBJECT_DIGEST_WRAPPED),
-        }
-    }
-
-    pub fn to_normal(self) -> Option<Object> {
-        match self {
-            LiveObject::Normal(object) => Some(object),
-            LiveObject::Wrapped(_) => None,
         }
     }
 }

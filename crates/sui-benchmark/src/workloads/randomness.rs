@@ -89,7 +89,9 @@ impl Payload for RandomnessTestPayload {
                 .unwrap();
         }
 
-        tx_builder.build_and_sign(self.gas.2.as_ref())
+        tx_builder
+            .ensure_unique()
+            .build_and_sign(self.gas.2.as_ref())
     }
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
         None
@@ -235,6 +237,7 @@ impl Workload<dyn Payload> for RandomnessWorkload {
         if self.counter_id.is_none() {
             let transaction = TestTransactionBuilder::new(counter_gas.1, counter_gas.0, gas_price)
                 .call_counter_create(self.basics_package_id.unwrap())
+                .ensure_unique()
                 .build_and_sign(counter_gas.2.as_ref());
             let (obj_ref, owner) = execution_proxy
                 .execute_transaction_block(transaction)

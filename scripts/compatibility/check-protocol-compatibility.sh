@@ -4,6 +4,8 @@
 
 NETWORK="$1"
 
+git fetch -q || exit 1
+
 if [ -z "$RELEASED_COMMIT" ]; then
   # check if API_USER and API_KEY env vars are set
   if [ -z "$API_USER" ] || [ -z "$API_KEY" ]; then
@@ -38,13 +40,45 @@ if [ -z "$RELEASED_COMMIT" ]; then
   echo "Found following versions on $NETWORK:"
   echo "$VERSIONS"
   echo ""
-  echo "Using most frequent version $TOP_VERSION for compatibility check"
 
-  # TOP_VERSION looks like "1.0.0-ae1212baf8", split out the commit hash
-  RELEASED_COMMIT=$(echo "$TOP_VERSION" | cut -d- -f2)
+  # Versions look like "1.0.0-ae1212baf8"; the suffix is the commit the node
+  # was built from. Use the most frequent version exactly when its commit
+  # resolves here. During a private security release that suffix is a
+  # sui-private commit that does not resolve in this repo: approximate its
+  # public base instead — the highest publicly-resolvable version that is not
+  # newer than the dominant one (ties broken by node count). The semver
+  # ceiling keeps a stray node on a newer public build from hijacking the
+  # baseline, and "highest" (rather than most frequent) tracks the private
+  # build's lineage even when an older public cohort has more nodes. This
+  # check gates the public source, so the public base carries the protocol
+  # snapshots being validated.
+  TOP_SHA=$(echo "$TOP_VERSION" | cut -d- -f2)
+  if git cat-file -e "${TOP_SHA}^{commit}" 2>/dev/null; then
+    RELEASED_COMMIT="$TOP_SHA"
+    echo "Using most frequent version $TOP_VERSION for compatibility check"
+  else
+    TOP_BASE=${TOP_VERSION%%-*}
+    while read -r semver sha count fullver; do
+      # skip versions newer than the dominant one
+      if [ "$semver" != "$TOP_BASE" ] && \
+         [ "$(printf '%s\n%s\n' "$semver" "$TOP_BASE" | sort -V | tail -n1)" = "$semver" ]; then
+        continue
+      fi
+      if git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+        RELEASED_COMMIT="$sha"
+        echo "WARNING: most frequent version $TOP_VERSION does not resolve in this repo (private release?)"
+        echo "Falling back to highest publicly-resolvable version $fullver ($count nodes) for compatibility check"
+        break
+      fi
+    done < <(echo "$VERSIONS" | awk '{split($2, a, "-"); print a[1], a[2], $1, $2}' | sort -k1,1Vr -k3,3nr)
+  fi
+
+  if [ -z "$RELEASED_COMMIT" ]; then
+    echo "Error: no version on $NETWORK resolves to a commit in this repo"
+    exit 1
+  fi
 fi
 
-git fetch -q || exit 1
 SOURCE_COMMIT=$(git rev-parse HEAD)
 SOURCE_BRANCH=$(git branch -a --contains "$SOURCE_COMMIT" | head -n 1 | cut -d' ' -f2-)
 

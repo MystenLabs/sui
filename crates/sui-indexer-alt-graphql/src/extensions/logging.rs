@@ -25,7 +25,9 @@ use async_graphql::extensions::NextRequest;
 use async_graphql::extensions::NextResolve;
 use async_graphql::extensions::NextValidation;
 use async_graphql::extensions::ResolveInfo;
+use async_graphql::parser::types::DocumentOperations;
 use async_graphql::parser::types::ExecutableDocument;
+use async_graphql::parser::types::OperationType;
 use axum::http::HeaderMap;
 use axum::http::HeaderName;
 use pin_project::pin_project;
@@ -36,9 +38,12 @@ use tracing::debug;
 use tracing::info;
 use tracing::log::Level;
 use tracing::log::log_enabled;
+use tracing::trace;
+use tracing::trace_span;
 use tracing::warn;
 use uuid::Uuid;
 
+use crate::config::LoggingConfig;
 use crate::error::code;
 use crate::error::error_codes;
 use crate::error::fill_error_code;
@@ -53,17 +58,14 @@ pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-req
 /// bucketed into `CLIENT_LABEL_OTHER`.
 const CLIENT_SDK_TYPE_HEADER: HeaderName = HeaderName::from_static("client-sdk-type");
 
-/// Header identifying the SDK version that issued the request. The value flows into the
-/// `client_sdk_version` Prometheus label, sanitized by `sanitize_sdk_version`. Values longer
-/// than `MAX_SDK_VERSION_LEN` or containing characters outside `[A-Za-z0-9._-]` are bucketed
-/// into `CLIENT_LABEL_OTHER`.
+/// Header identifying the SDK version that issued the request. The value is matched against
+/// `LoggingConfig::sdk_version_allowlist` before being used as the `client_sdk_version`
+/// Prometheus label or recorded in request log lines; versions outside the allowlist appear
+/// as `CLIENT_LABEL_OTHER`.
 const CLIENT_SDK_VERSION_HEADER: HeaderName = HeaderName::from_static("client-sdk-version");
 
 /// SDKs we accept verbatim as the `client_sdk_type` Prometheus label.
 const SDK_TYPE_WHITELIST: &[&str] = &["rust", "typescript", "python"];
-
-/// Maximum length of a `client-sdk-version` value we accept verbatim.
-const MAX_SDK_VERSION_LEN: usize = 32;
 
 /// Sentinel label value substituted when a client SDK header is present but does not match an
 /// allowed value. Distinct from the empty string we use when the header is absent, so dashboards
@@ -94,6 +96,9 @@ pub(crate) struct Logging(pub Arc<RpcMetrics>);
 struct LoggingExt {
     session: Arc<OnceLock<Session>>,
     query: Arc<OnceLock<String>>,
+    /// The client-selected operation name, stashed by `prepare_request` so `parse_query` can
+    /// classify the operation that will execute (it is not reachable from `parse_query` otherwise).
+    operation_name: Arc<OnceLock<Option<String>>>,
     metrics: Arc<RpcMetrics>,
 }
 
@@ -127,16 +132,18 @@ impl Session {
 }
 
 impl ClientInfo {
-    pub(crate) fn from_headers(headers: &HeaderMap) -> Self {
+    pub(crate) fn from_headers(headers: &HeaderMap, config: &LoggingConfig) -> Self {
+        let sdk_type = headers
+            .get(&CLIENT_SDK_TYPE_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .map(sanitize_sdk_type);
+        let sdk_version = headers
+            .get(&CLIENT_SDK_VERSION_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .map(|v| sanitize_sdk_version(sdk_type.as_deref().unwrap_or(""), v, config));
         Self {
-            sdk_type: headers
-                .get(&CLIENT_SDK_TYPE_HEADER)
-                .and_then(|v| v.to_str().ok())
-                .map(sanitize_sdk_type),
-            sdk_version: headers
-                .get(&CLIENT_SDK_VERSION_HEADER)
-                .and_then(|v| v.to_str().ok())
-                .map(sanitize_sdk_version),
+            sdk_type,
+            sdk_version,
         }
     }
 }
@@ -164,6 +171,7 @@ impl ExtensionFactory for Logging {
         Arc::new(LoggingExt {
             session: Arc::new(OnceLock::new()),
             query: Arc::new(OnceLock::new()),
+            operation_name: Arc::new(OnceLock::new()),
             metrics: self.0.clone(),
         })
     }
@@ -178,7 +186,8 @@ impl Extension for LoggingExt {
     /// Capture Session information from the Context so that the `request` handler can use it for
     /// logging, once it has finished executing. The labeled `queries_received` counter is also
     /// incremented here because `request` is called before request-level data is merged into the
-    /// context, so `Session` is not yet readable at that point.
+    /// context, so `Session` is not yet readable at that point. The request's operation name is
+    /// also stashed here so `parse_query` can classify the operation without re-parsing the query.
     async fn prepare_request(
         &self,
         ctx: &ExtensionContext<'_>,
@@ -193,10 +202,13 @@ impl Extension for LoggingExt {
             .with_label_values(&[client_sdk_type, client_sdk_version])
             .inc();
         let _ = self.session.set(session.clone());
+        let _ = self.operation_name.set(request.operation_name.clone());
         next.run(ctx, request).await
     }
 
-    /// Check for parse errors and capture the query in case we need to log it.
+    /// Check for parse errors and capture the request verbatim for replay. The framework parses the
+    /// query exactly once here; we reuse the resulting document to classify the operation rather than
+    /// re-parsing it.
     async fn parse_query(
         &self,
         ctx: &ExtensionContext<'_>,
@@ -204,10 +216,22 @@ impl Extension for LoggingExt {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
-        let doc = next.run(ctx, query, variables).await.map_err(|mut err| {
-            fill_error_code(&mut err.extensions, code::GRAPHQL_PARSE_FAILED);
-            err
-        })?;
+        // SAFETY: both are set by `prepare_request`, which the framework runs before `parse_query`
+        // (and `Logging` is the outermost extension, so its hooks fire first).
+        let uuid = self.session.get().unwrap().uuid;
+        let operation_name = self.operation_name.get().unwrap().as_deref();
+
+        let doc = match next.run(ctx, query, variables).await {
+            Ok(doc) => doc,
+            Err(mut err) => {
+                // Capture verbatim even when the query fails to parse, so it can still be replayed.
+                capture(uuid, query, variables, operation_name, None);
+                fill_error_code(&mut err.extensions, code::GRAPHQL_PARSE_FAILED);
+                return Err(err);
+            }
+        };
+
+        capture(uuid, query, variables, operation_name, Some(&doc));
 
         let query = ctx.stringify_execute_doc(&doc, variables);
         let _ = self.query.set(query);
@@ -347,32 +371,107 @@ fn sanitize_sdk_type(value: &str) -> String {
     }
 }
 
-/// Sanitize a `client-sdk-version` header value before it is used as a Prometheus label. Values
-/// longer than `MAX_SDK_VERSION_LEN` or containing characters outside `[A-Za-z0-9._-]` are
-/// bucketed to `CLIENT_LABEL_OTHER`. Build metadata (`+...`) is rejected on purpose, because
-/// per-build suffixes are exactly the cardinality vector we are trying to avoid.
-fn sanitize_sdk_version(value: &str) -> String {
-    let valid = !value.is_empty()
-        && value.len() <= MAX_SDK_VERSION_LEN
-        && value
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'));
-
-    if valid {
+/// Sanitize a `client-sdk-version` header value before it is used as a Prometheus label.
+/// Returns the value verbatim if `(sdk_type, value)` is listed in
+/// `LoggingConfig::sdk_version_allowlist`, otherwise `CLIENT_LABEL_OTHER`. Bounding label
+/// cardinality this way is what protects the metric against an adversarially-chosen version
+/// string.
+fn sanitize_sdk_version(sdk_type: &str, value: &str, config: &LoggingConfig) -> String {
+    if config
+        .sdk_version_allowlist
+        .get(sdk_type)
+        .is_some_and(|vs| vs.contains(value))
+    {
         value.to_string()
     } else {
         CLIENT_LABEL_OTHER.to_string()
     }
 }
 
+/// Log this request's original payload (query, variables, operationName) as a single JSON object on
+/// the `graphql_request` tracing target so it can be replayed later. Unlike the per-request logging
+/// in `poll` (which records a reconstructed, variables-inlined query), this captures the request
+/// verbatim. `doc` is the document the framework already parsed (`None` when the query failed to
+/// parse), so the kind is derived without re-parsing.
+///
+/// Emitted at `trace` level, so it is a no-op unless an operator opts in by enabling the target.
+/// The operation kind is recorded on the enclosing span, so an operator can capture every kind with
+/// `RUST_LOG=graphql_request=trace`, or a single kind with an `EnvFilter` span-field directive, e.g.
+/// `RUST_LOG="graphql_request[{kind=mutation}]=trace"`. Combine with `RUST_LOG_JSON=1` (and
+/// optionally `RUST_LOG_FILE`) to emit newline-delimited JSON. Payloads may contain sensitive
+/// arguments.
+fn capture(
+    uuid: Uuid,
+    query: &str,
+    variables: &Variables,
+    operation_name: Option<&str>,
+    doc: Option<&ExecutableDocument>,
+) {
+    // `kind` lives on the span (not the event) because `EnvFilter` can filter by span fields but not
+    // by an event's own fields. It is a span-macro field expression, so it is computed only when the
+    // span callsite is enabled (some `graphql_request` trace directive is active), never on the
+    // default path where trace is statically disabled.
+    let _span = trace_span!(
+        target: "graphql_request",
+        "capture",
+        kind = doc
+            .and_then(|doc| operation_kind(doc, operation_name))
+            .unwrap_or("unknown"),
+    )
+    .entered();
+
+    trace!(
+        target: "graphql_request",
+        request_id = %uuid,
+        payload = %json!({
+            "query": query,
+            "variables": variables,
+            "operationName": operation_name,
+        }),
+        "Captured request",
+    );
+}
+
+/// Return the kind of the operation that will execute (`query`, `mutation`, or `subscription`) for
+/// an already-parsed `doc`, selecting by `operation_name` for multi-operation documents. Returns
+/// `None` if the operation cannot be resolved. Reads the type straight off the parsed AST, so it
+/// performs no re-parsing.
+fn operation_kind(doc: &ExecutableDocument, operation_name: Option<&str>) -> Option<&'static str> {
+    let op = match (&doc.operations, operation_name) {
+        (DocumentOperations::Single(op), _) => op,
+        (DocumentOperations::Multiple(ops), Some(name)) => ops.get(name)?,
+        // A single named operation executes without an explicit operation name; only genuinely
+        // ambiguous documents (multiple operations, none selected) cannot be classified.
+        (DocumentOperations::Multiple(ops), None) if ops.len() == 1 => ops.values().next()?,
+        (DocumentOperations::Multiple(_), None) => return None,
+    };
+    Some(match op.node.ty {
+        OperationType::Query => "query",
+        OperationType::Mutation => "mutation",
+        OperationType::Subscription => "subscription",
+    })
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+    use std::collections::BTreeSet;
+    use std::sync::Mutex;
+
     use async_graphql::EmptyMutation;
     use async_graphql::EmptySubscription;
     use async_graphql::Object;
     use async_graphql::Schema;
+    use async_graphql::parser::parse_query;
     use axum::http::HeaderValue;
     use prometheus::Registry;
+    use tracing::field::Field;
+    use tracing::field::Visit;
+    use tracing::subscriber::with_default;
+    use tracing_subscriber::EnvFilter;
+    use tracing_subscriber::Layer;
+    use tracing_subscriber::layer::Context;
+    use tracing_subscriber::layer::SubscriberExt;
 
     use super::*;
 
@@ -385,8 +484,67 @@ mod tests {
         }
     }
 
+    /// A `tracing` layer that records the `payload` field of every event it receives, so tests can
+    /// assert which `capture` calls survived an `EnvFilter`.
+    #[derive(Clone, Default)]
+    struct CaptureLayer {
+        payloads: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl<S: tracing::Subscriber> Layer<S> for CaptureLayer {
+        fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+            let mut visitor = PayloadVisitor(None);
+            event.record(&mut visitor);
+            if let Some(payload) = visitor.0 {
+                self.payloads.lock().unwrap().push(payload);
+            }
+        }
+    }
+
+    struct PayloadVisitor(Option<String>);
+
+    impl Visit for PayloadVisitor {
+        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+            if field.name() == "payload" {
+                self.0 = Some(format!("{value:?}"));
+            }
+        }
+    }
+
+    /// Run `capture` once per operation kind under a subscriber configured with `directive`, and
+    /// return the payloads that were actually logged (i.e. passed the filter).
+    fn capture_with_filter(directive: &str) -> Vec<String> {
+        let layer = CaptureLayer::default();
+        let subscriber = tracing_subscriber::registry()
+            .with(EnvFilter::new(directive))
+            .with(layer.clone());
+
+        with_default(subscriber, || {
+            let variables = Variables::default();
+            for query in [
+                "query Q { op }",
+                "mutation M { op }",
+                "subscription S { op }",
+            ] {
+                let doc = parse_query(query).unwrap();
+                capture(Uuid::nil(), query, &variables, None, Some(&doc));
+            }
+        });
+
+        let payloads = layer.payloads.lock().unwrap();
+        payloads.clone()
+    }
+
     #[test]
-    fn client_info_extracts_sdk_headers() {
+    fn client_info_missing_headers_yield_none() {
+        let info = ClientInfo::from_headers(&HeaderMap::new(), &LoggingConfig::default());
+
+        assert!(info.sdk_type.is_none());
+        assert!(info.sdk_version.is_none());
+    }
+
+    #[test]
+    fn client_info_non_allowlisted_version_bucketed_other() {
         let mut headers = HeaderMap::new();
         headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
         headers.insert(
@@ -394,18 +552,10 @@ mod tests {
             HeaderValue::from_static("1.69.0"),
         );
 
-        let info = ClientInfo::from_headers(&headers);
+        let info = ClientInfo::from_headers(&headers, &LoggingConfig::default());
 
         assert_eq!(info.sdk_type.as_deref(), Some("rust"));
-        assert_eq!(info.sdk_version.as_deref(), Some("1.69.0"));
-    }
-
-    #[test]
-    fn client_info_missing_headers_yield_none() {
-        let info = ClientInfo::from_headers(&HeaderMap::new());
-
-        assert!(info.sdk_type.is_none());
-        assert!(info.sdk_version.is_none());
+        assert_eq!(info.sdk_version.as_deref(), Some(CLIENT_LABEL_OTHER));
     }
 
     #[test]
@@ -414,40 +564,118 @@ mod tests {
         headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("haskell"));
         headers.insert(CLIENT_SDK_VERSION_HEADER, HeaderValue::from_static("0.1.0"));
 
-        let info = ClientInfo::from_headers(&headers);
+        let info = ClientInfo::from_headers(&headers, &LoggingConfig::default());
 
         assert_eq!(info.sdk_type.as_deref(), Some(CLIENT_LABEL_OTHER));
-        assert_eq!(info.sdk_version.as_deref(), Some("0.1.0"));
+        assert_eq!(info.sdk_version.as_deref(), Some(CLIENT_LABEL_OTHER));
     }
 
     #[test]
-    fn client_info_oversized_version_bucketed_other() {
+    fn client_info_version_header_missing_yields_none() {
         let mut headers = HeaderMap::new();
-        let too_long = "1.".to_string() + &"0".repeat(MAX_SDK_VERSION_LEN);
         headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
-        headers.insert(
-            CLIENT_SDK_VERSION_HEADER,
-            HeaderValue::from_str(&too_long).unwrap(),
-        );
 
-        let info = ClientInfo::from_headers(&headers);
+        let info = ClientInfo::from_headers(&headers, &LoggingConfig::default());
 
         assert_eq!(info.sdk_type.as_deref(), Some("rust"));
-        assert_eq!(info.sdk_version.as_deref(), Some(CLIENT_LABEL_OTHER));
+        assert!(info.sdk_version.is_none());
     }
 
     #[test]
-    fn client_info_version_with_build_metadata_bucketed_other() {
+    fn client_info_allowlisted_version_kept_verbatim() {
         let mut headers = HeaderMap::new();
         headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
         headers.insert(
             CLIENT_SDK_VERSION_HEADER,
-            HeaderValue::from_static("1.0.0+abc123"),
+            HeaderValue::from_static("1.69.0"),
         );
 
-        let info = ClientInfo::from_headers(&headers);
+        let config = LoggingConfig {
+            sdk_version_allowlist: BTreeMap::from([(
+                "rust".to_string(),
+                BTreeSet::from(["1.69.0".to_string()]),
+            )]),
+        };
 
-        assert_eq!(info.sdk_version.as_deref(), Some(CLIENT_LABEL_OTHER));
+        let info = ClientInfo::from_headers(&headers, &config);
+
+        assert_eq!(info.sdk_type.as_deref(), Some("rust"));
+        assert_eq!(info.sdk_version.as_deref(), Some("1.69.0"));
+    }
+
+    #[test]
+    fn operation_kind_classifies_operations() {
+        assert_eq!(
+            operation_kind(&parse_query("{ op }").unwrap(), None),
+            Some("query"),
+        );
+        assert_eq!(
+            operation_kind(&parse_query("mutation M { op }").unwrap(), None),
+            Some("mutation"),
+        );
+        assert_eq!(
+            operation_kind(&parse_query("subscription S { op }").unwrap(), None),
+            Some("subscription"),
+        );
+    }
+
+    #[test]
+    fn operation_kind_selects_by_operation_name() {
+        let doc = parse_query("query Q { op } mutation M { op }").unwrap();
+        assert_eq!(operation_kind(&doc, Some("M")), Some("mutation"));
+        assert_eq!(operation_kind(&doc, Some("Q")), Some("query"));
+
+        // Ambiguous (multiple operations, no name) cannot be classified.
+        assert_eq!(operation_kind(&doc, None), None);
+
+        // Unparseable queries never reach `operation_kind`; they fail earlier, at `parse_query`.
+        assert!(parse_query("{ op").is_err());
+    }
+
+    #[test]
+    fn rust_log_captures_only_configured_operation_kind() {
+        let payloads = capture_with_filter("graphql_request[{kind=mutation}]=trace");
+        assert_eq!(payloads.len(), 1, "only the mutation should be captured");
+        assert!(
+            payloads[0].contains("mutation M"),
+            "captured the wrong operation: {:?}",
+            payloads[0],
+        );
+    }
+
+    #[test]
+    fn rust_log_captures_all_operation_kinds() {
+        let payloads = capture_with_filter("graphql_request=trace");
+        assert_eq!(payloads.len(), 3);
+    }
+
+    #[test]
+    fn rust_log_disabled_captures_nothing() {
+        let payloads = capture_with_filter("info");
+        assert!(payloads.is_empty());
+    }
+
+    #[test]
+    fn parse_failure_captured_as_unknown() {
+        // A request that fails to parse has no document, so it is captured verbatim and classified
+        // as `unknown`. Filtering on `kind=unknown` confirms both that capture fired and the kind.
+        let layer = CaptureLayer::default();
+        let subscriber = tracing_subscriber::registry()
+            .with(EnvFilter::new("graphql_request[{kind=unknown}]=trace"))
+            .with(layer.clone());
+
+        with_default(subscriber, || {
+            let variables = Variables::default();
+            capture(Uuid::nil(), "{ op", &variables, None, None);
+        });
+
+        let payloads = layer.payloads.lock().unwrap();
+        assert_eq!(
+            payloads.len(),
+            1,
+            "the unparseable request should be captured"
+        );
+        assert!(payloads[0].contains("{ op"));
     }
 
     #[tokio::test]

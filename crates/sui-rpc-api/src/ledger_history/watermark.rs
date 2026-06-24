@@ -179,14 +179,7 @@ mod tests {
         } else {
             sui_rpc::proto::sui::rpc::v2alpha::Ordering::Descending as i32
         };
-        QueryOptions::from_proto(
-            Some(&request),
-            100,
-            100,
-            QueryType::Transactions,
-            Option::<&sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter>::None,
-        )
-        .unwrap()
+        QueryOptions::from_proto(Some(&request), 100, 100, QueryType::Transactions).unwrap()
     }
 
     #[test]

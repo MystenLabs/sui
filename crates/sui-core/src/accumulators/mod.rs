@@ -310,10 +310,6 @@ impl AccumulatorSettlementTxBuilder {
         }
     }
 
-    pub fn num_updates(&self) -> usize {
-        self.updates.len()
-    }
-
     pub fn num_deposits(&self) -> u64 {
         self.num_deposits
     }

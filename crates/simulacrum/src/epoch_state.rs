@@ -158,7 +158,7 @@ impl EpochState {
                 self.execution_metrics.clone(),
                 false, // enable_expensive_checks
                 // TODO: Integrate with early execution error
-                ExecutionOrEarlyError::Ok(()),
+                ExecutionOrEarlyError::ok(None),
                 &self.epoch_start_state.epoch(),
                 self.epoch_start_state.epoch_start_timestamp_ms(),
                 checked_input_objects,

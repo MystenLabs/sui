@@ -18,6 +18,19 @@ concepts:
 
 This example demonstrates how to integrate [zkLogin](/sui-stack/zklogin-integration/zklogin) into a React application so users can authenticate with familiar OAuth providers (Google, Apple) and interact with the Sui blockchain without managing private keys.
 
+:::caution
+
+This is a learning demo, not a production-ready integration. It runs entirely in the frontend, uses a hardcoded salt, and calls a public development prover. Before shipping a zkLogin app to production:
+
+- Use a production prover (self-hosted or a managed service) instead of the public development endpoint, and proxy prover calls through your backend with correct CORS configuration.
+- Run a real per-user salt service with availability and backups rather than a fixed salt; a lost salt permanently locks the user out of their address.
+- Handle ephemeral keys carefully: store them in session (not local) storage, scope `maxEpoch` to a short session, and never persist them insecurely.
+- Never log JWTs, ZK proofs, or salts, as these are sensitive credentials.
+
+See [Security Best Practices](/develop/security/best-practices).
+
+:::
+
 ## When to use this pattern
 
 Use this pattern when you need to:

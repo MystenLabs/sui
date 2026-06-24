@@ -19,7 +19,7 @@ use crate::KvRpcMetrics;
 use crate::KvRpcServer;
 use crate::PackageResolver;
 use crate::bigtable_client::BigTableClient;
-use crate::config::LedgerHistoryConfig;
+use crate::config::{LedgerHistoryConfig, PipelineStage, ResolvedStageConfig, StagesConfig};
 use sui_rpc_api::ledger_history::filter::event_filter_to_query;
 use sui_rpc_api::ledger_history::filter::transaction_filter_to_query;
 
@@ -43,6 +43,8 @@ pub(crate) struct QueryContext {
     method: &'static str,
     checkpoint_hi_exclusive: u64,
     ledger_history: LedgerHistoryConfig,
+    request_bigtable_concurrency: usize,
+    stages: StagesConfig,
 }
 
 impl QueryContext {
@@ -53,6 +55,8 @@ impl QueryContext {
         method: &'static str,
         checkpoint_hi_exclusive: u64,
         ledger_history: LedgerHistoryConfig,
+        request_bigtable_concurrency: usize,
+        stages: StagesConfig,
     ) -> Self {
         Self {
             client,
@@ -61,11 +65,18 @@ impl QueryContext {
             method,
             checkpoint_hi_exclusive,
             ledger_history,
+            request_bigtable_concurrency,
+            stages,
         }
     }
 
     pub(crate) fn ledger_history(&self) -> &LedgerHistoryConfig {
         &self.ledger_history
+    }
+
+    /// Resolved tunables for one read pipeline stage (chunk size + fan-out).
+    pub(crate) fn stage(&self, stage: PipelineStage) -> ResolvedStageConfig {
+        self.stages.stage(stage)
     }
 
     pub(crate) fn client(&self) -> &BigTableClient {
@@ -81,7 +92,7 @@ impl QueryContext {
     }
 
     pub(crate) fn request_bigtable_concurrency(&self) -> usize {
-        self.ledger_history.request_bigtable_concurrency()
+        self.request_bigtable_concurrency
     }
 
     /// Per-request evaluated-bucket budget for `spec`. Handlers pass this
@@ -89,7 +100,7 @@ impl QueryContext {
     /// `BitmapScanBudget` internally and reports the resulting
     /// `BitmapScanMetrics` via the `on_metrics` callback. The budget caps
     /// evaluated buckets, not backend reads — see
-    /// `eval_bitmap_query_stream` for the (≤ leaf_count) slop at
+    /// `eval_bitmap_query_stream` for the (≤ unique_leaf_count) slop at
     /// exhaustion.
     pub(crate) fn scan_budget(&self, spec: BitmapIndexSpec) -> u64 {
         match spec.table_name {
@@ -141,10 +152,10 @@ impl QueryContext {
 }
 
 impl KvRpcServer {
-    fn limited_client(&self, operation: &'static str) -> BigTableClient {
+    pub(crate) fn limited_client(&self, operation: &'static str) -> BigTableClient {
         BigTableClient::new(
             self.client.clone(),
-            self.ledger_history.request_bigtable_concurrency(),
+            self.request_bigtable_concurrency,
             self.metrics.bigtable_limiter.clone(),
             operation,
         )
@@ -178,6 +189,8 @@ impl KvRpcServer {
             operation,
             self.cached_checkpoint_hi_exclusive().await?,
             self.ledger_history.clone(),
+            self.request_bigtable_concurrency,
+            self.stages.clone(),
         ))
     }
 

@@ -1053,7 +1053,6 @@ mod tests {
             VerifiedExecutableTransaction::new_from_consensus(transaction.clone().into_tx(), 0);
         let (executed_effects, _) = state
             .try_execute_immediately(&cert, ExecutionEnv::new(), &state.epoch_store_for_testing())
-            .await
             .unwrap();
 
         // Verify the transaction is executed.

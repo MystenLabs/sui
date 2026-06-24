@@ -22,6 +22,9 @@ jobs:
   warm-cache:
     name: Warm sccache (${{ matrix.os }})
     timeout-minutes: 240
+    permissions:
+      contents: read
+      id-token: write # mint the OIDC token to assume the sccache role
     strategy:
       matrix:
         os:
@@ -29,8 +32,6 @@ jobs:
             ubuntu-ghcloud,
             ubuntu-arm64,
             windows-ghcloud,
-            macos-latest-large,
-            macos-latest-xlarge,
           ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -48,40 +49,18 @@ jobs:
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
-      - name: Install postgres (MacOS arm64)
-        if: ${{ matrix.os == 'macos-latest-xlarge' }}
-        shell: bash
-        env:
-          PQ_LIB_DIR: "$(brew --prefix libpq)/lib"
-          LIBRARY_PATH: "/opt/homebrew/lib:$LIBRARY_PATH"
-          PKG_CONFIG_PATH: "/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
-          PATH: "/opt/homebrew/bin:$PATH"
-        run: |
-          brew install postgresql
-
       - name: Install postgres (Ubuntu arm64)
         if: ${{ matrix.os == 'ubuntu-arm64' }}
         shell: bash
         run: |
           sudo apt update && sudo apt install -y libpq-dev
 
-      - name: Remove unused apps (MacOS arm64)
-        if: ${{ matrix.os == 'macos-latest-xlarge' }}
-        continue-on-error: true
-        shell: bash
-        run: |
-          # MacOS arm64 runner only has 14GB avaialble, which is too small for our builds, so removing unused softwared.
-          df -h /
-          sudo rm -rf /Applications/Xcode*.app
-          sudo rm -rf ~/Library/Developer/Xcode/DerivedData
-          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/*
-          sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
-          df -h /
-
       - uses: ./.github/actions/setup-sccache
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # OIDC on main (scheduled run / dispatch from main). The role trusts only
+          # the protected branches, so an off-ref workflow_dispatch passes an empty
+          # role and setup-sccache falls back to a local cache instead of failing.
+          role-to-assume: ${{ github.ref == 'refs/heads/main' && 'arn:aws:iam::011083325127:role/sui-sccache-rw-github' || '' }}
           key-prefix: ${{ matrix.os }}
 
       - name: Register cargo problem matcher
@@ -176,11 +155,20 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs: [warm-cache]
+    permissions:
+      contents: read
+      id-token: write # mint the OIDC token to read bucket stats for the report
     steps:
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
+      # Read-only bucket stats via the same role (it has s3:ListBucket). Gated to
+      # main so an off-ref dispatch skips cred config; the report below then shows
+      # zeros instead of failing.
+      - name: Configure AWS credentials (OIDC)
+        if: github.ref == 'refs/heads/main'
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # pin@v5.1.1
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::011083325127:role/sui-sccache-rw-github
+          role-session-name: sui-sccache-summary-${{ github.run_id }}-${{ github.run_attempt }}
+          allowed-account-ids: '011083325127'
           aws-region: us-west-2
 
       - name: Generate cache report
@@ -190,7 +178,7 @@ jobs:
           echo "| Platform | Objects | Size | Job Status |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|---|---|" >> $GITHUB_STEP_SUMMARY
 
-          for os in ubuntu-ghcloud ubuntu-arm64 windows-ghcloud macos-latest-large macos-latest-xlarge; do
+          for os in ubuntu-ghcloud ubuntu-arm64 windows-ghcloud; do
             stats=$(aws s3 ls "s3://mystenlabs-sccache/${os}/" --summarize --recursive 2>&1 | tail -2)
             objects=$(echo "$stats" | grep 'Total Objects' | awk '{print $3}')
             bytes=$(echo "$stats" | grep 'Total Size' | awk '{print $3}')

@@ -186,6 +186,14 @@ Having access to random numbers is only one part of designing secure application
 
 To securely access randomness:
 
-- Define your function as (private) `entry`.
+- Define your function as (private) `entry` so it cannot be composed and abort-filtered by another module.
 
-- Prefer generating randomness using function-local `RandomGenerator`.
+- Prefer generating randomness using function-local `RandomGenerator`. Always create it internally from `&Random`; never accept a `RandomGenerator` as a function parameter.
+
+- Balance gas usage across all outcome paths so that winning and losing branches cost roughly the same and an attacker cannot infer the result from gas before the transaction commits.
+
+- Account for the PTB restriction: only `TransferObjects` and `MergeCoins` commands can follow a `MoveCall` that consumes `Random`, so complete the draw-and-resolve in a single Move call.
+
+- For high-stakes flows, use a commit-reveal pattern (commit and pay in one transaction, reveal the outcome in a later transaction) so no one can inspect and revert outcomes atomically.
+
+For the canonical guidance, see [Onchain randomness](/develop/security/best-practices#onchain-randomness).

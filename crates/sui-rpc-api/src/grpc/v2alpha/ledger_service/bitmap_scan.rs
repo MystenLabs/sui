@@ -8,8 +8,10 @@ use std::rc::Rc;
 use roaring::RoaringBitmap;
 use sui_inverted_index::BitmapBucketIteratorSource;
 use sui_inverted_index::BitmapQuery;
+use sui_inverted_index::IndexDimension;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::Watermarked;
+use sui_inverted_index::dense_universe_buckets;
 use sui_inverted_index::eval_bitmap_query_bucket_iter;
 use sui_types::storage::LedgerBitmapBucketIterator;
 use tokio_util::sync::CancellationToken;
@@ -360,10 +362,18 @@ impl<'a> BitmapBucketIteratorSource<'a> for RpcIndexesBitmapSource<'a> {
     }
 }
 
+/// Inner bucket source: a stored RocksDB scan, or the synthesized dense
+/// tx-universe sequence — `IndexDimension::TxUniverse` is query-only and
+/// never reaches storage.
+enum BitmapBucketIter<'a> {
+    Stored(LedgerBitmapBucketIterator<'a>),
+    Universe(Box<dyn Iterator<Item = (u64, RoaringBitmap)> + Send + 'a>),
+}
+
 struct RpcIndexesBitmapIterator<'a> {
     scan_budget: BitmapScanBudget,
     cancel: CancellationToken,
-    iter: Option<LedgerBitmapBucketIterator<'a>>,
+    iter: Option<BitmapBucketIter<'a>>,
     finished: bool,
     initial_error: Option<anyhow::Error>,
     /// This leaf has not yet charged a bucket. Its first bucket is reserved
@@ -389,6 +399,25 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
                 cancel,
                 iter: None,
                 finished: true,
+                initial_error: None,
+                first: true,
+            };
+        }
+
+        // The tx universe is dense (every tx_seq in range is real), so it is
+        // synthesized rather than read from storage. Gated on the tx kind: the
+        // key is only ever produced by the tx filter layer, and in event-space
+        // a dense universe would be semantically wrong.
+        if kind == LedgerBitmapKind::Transaction
+            && dimension_key.first() == Some(&IndexDimension::TxUniverse.tag_byte())
+        {
+            return Self {
+                scan_budget,
+                cancel,
+                finished: false,
+                iter: Some(BitmapBucketIter::Universe(Box::new(
+                    dense_universe_buckets(range, bucket_size, direction),
+                ))),
                 initial_error: None,
                 first: true,
             };
@@ -421,7 +450,7 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
             });
 
         let (iter, initial_error) = match iter {
-            Ok(iter) => (Some(iter), None),
+            Ok(iter) => (Some(BitmapBucketIter::Stored(iter)), None),
             Err(e) => (None, Some(e)),
         };
         Self {
@@ -444,7 +473,15 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
             return None;
         };
 
-        match iter.next() {
+        let next = match iter {
+            BitmapBucketIter::Stored(iter) => match iter.next() {
+                Some(Ok(bucket)) => Some(Ok((bucket.bucket_id, bucket.bitmap))),
+                Some(Err(e)) => Some(Err(anyhow::anyhow!(e.to_string()))),
+                None => None,
+            },
+            BitmapBucketIter::Universe(iter) => iter.next().map(Ok),
+        };
+        match next {
             Some(Ok(bucket)) => {
                 if self.first {
                     // Reserved: a leaf's first bucket is always allowed so it
@@ -459,7 +496,7 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
                     self.finished = true;
                     return Some(Err(e));
                 }
-                Some(Ok((bucket.bucket_id, bucket.bitmap)))
+                Some(Ok(bucket))
             }
             None => {
                 self.finished = true;
@@ -467,7 +504,7 @@ impl<'a> RpcIndexesBitmapIterator<'a> {
             }
             Some(Err(e)) => {
                 self.finished = true;
-                Some(Err(anyhow::anyhow!(e.to_string())))
+                Some(Err(e))
             }
         }
     }

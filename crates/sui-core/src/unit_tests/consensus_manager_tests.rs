@@ -43,8 +43,6 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
         Box::new(output),
         Box::new(certified_output),
         CheckpointMetrics::new_for_tests(),
-        3,
-        100_000,
     );
     checkpoint_service
         .spawn(epoch_store.clone(), None)
@@ -104,6 +102,7 @@ async fn test_consensus_manager() {
                     Arc::new(CheckpointServiceNoop {}),
                     SuiTxValidatorMetrics::new(&Registry::new()),
                 ),
+                None,
             )
             .await;
 
@@ -184,6 +183,7 @@ async fn test_consensus_manager_address_update() {
                 Arc::new(CheckpointServiceNoop {}),
                 SuiTxValidatorMetrics::new(&Registry::new()),
             ),
+            None,
         )
         .await;
 
@@ -248,6 +248,7 @@ async fn test_consensus_manager_address_update() {
                 Arc::new(CheckpointServiceNoop {}),
                 SuiTxValidatorMetrics::new(&Registry::new()),
             ),
+            None,
         )
         .await;
 

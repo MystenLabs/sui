@@ -1,0 +1,17 @@
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:3)
+    scope 0 :
+warnings:
+  Source debug info for 0x1::m::missing_from_source does not match the trace; showing disassembly for this frame.
+current frame stack:
+  function: test (m.move:3)
+    scope 0 :
+  function: missing_from_source (m.mvb:4)
+    scope 0 :
+warnings:
+  <none>
+current frame stack:
+  function: test (m.move:4)
+    scope 0 :

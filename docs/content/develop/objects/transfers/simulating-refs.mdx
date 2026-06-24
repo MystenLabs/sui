@@ -98,6 +98,12 @@ The `Borrow` object is the key to the guarantees the borrow module offers. The d
 `struct Borrow { ref: address, obj: ID }`
 which makes it such that you cannot drop or save its instance anywhere, so it must be consumed in the same transaction that retrieves it (hot potato). Moreover, fields in the `Borrow` struct make sure that the object returned is for the same `Referent` and the object that was originally held by the `Referent` instance. In other words, there is no way to either keep the object retrieved or to swap it with another object in a different `Referent`.
 
+:::tip
+
+The borrow / hot-potato pattern is a safer way to hand out an asset by value: the type system forces the borrowed object to be returned to its `Referent` within the same transaction, so it cannot be retained or swapped. When you take an object back (or finalize any hot-potato flow), validate the returned object's identity and invariants before completing the operation rather than trusting that the correct object was returned. See [Security best practices](/develop/security/best-practices).
+
+:::
+
 :::caution
 
 Using a `Referent` is a very explicit and intrusive change. Take this into consideration when designing a solution.

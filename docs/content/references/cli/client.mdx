@@ -213,6 +213,90 @@ $ sui client ptb \
 
 Use `--preview` to inspect the PTB without executing it, or `--dry-run` to simulate execution. See [Sui Client PTB CLI](/references/cli/ptb) for more PTB examples.
 
+### Send funds to an address balance
+
+Use `sui client send-funds` to send funds to a recipient's [address balance](/onchain-finance/asset-custody/address-balances/using-address-balances) (using the `sui::coin::send_funds` API) rather than transferring a coin object. The recipient's balance increases without creating a new coin object, and deposits from multiple senders merge into a single balance per coin type.
+
+Send 0.5 SUI (500,000,000 MIST) to a recipient:
+
+```sh
+$ sui client send-funds --to eloquent-amber --amount 500000000
+```
+
+Send a non-SUI coin type:
+
+```sh
+$ sui client send-funds \
+    --to eloquent-amber \
+    --amount 1000000 \
+    --coin-type 0x<PACKAGE_ID>::my_coin::MY_COIN
+```
+
+The most common options are:
+
+- `--to`: Recipient address (or its keystore alias). Required.
+- `--amount`: Amount to send in the coin's smallest unit (MIST for SUI). Required unless `--all-coins` is set.
+- `--coin-type`: Coin type to send. Defaults to `0x2::sui::SUI`.
+- `--all-coins`: Send all owned coin objects of the specified type (not address-balance funds). Conflicts with `--amount` and `--stateless`.
+- `--stateless`: Draw all funds (including gas) from the sender's address balances, producing a transaction with no owned-object inputs. Conflicts with `--all-coins`.
+
+### Transfer an object to party ownership
+
+Use `sui client party-transfer` to transfer a single object to a recipient as a [party-owned](/develop/objects/object-ownership/party) object:
+
+```sh
+$ sui client party-transfer \
+    --to eloquent-amber \
+    --object-id 0x<OBJECT_ID>
+```
+
+### Publish and upgrade ephemeral packages
+
+`sui client test-publish` and `sui client test-upgrade` publish and upgrade packages without recording the published addresses in the package's `Published.toml`. They build the package for a given environment and publish it on the current network, taking dependency addresses from an ephemeral publication file (the pubfile) and recording the new publication information back into that pubfile. This is useful for testing a package against the live network without mutating your canonical publication state. For background, see [Move Package Management](/develop/manage-packages/move-package-management).
+
+Publish a package ephemerally, building for the `testnet` environment and recording publication info in a pubfile:
+
+```sh
+$ sui client test-publish --pubfile-path Pub.testnet.toml --build-env testnet
+```
+
+Later, upgrade that same ephemeral package using the pubfile produced by `test-publish`:
+
+```sh
+$ sui client test-upgrade --pubfile-path Pub.testnet.toml --build-env testnet
+```
+
+The key options are:
+
+- `--pubfile-path`: Path to the ephemeral publication file. If omitted, defaults to `Pub.<active-env-alias>.toml` based on the active Sui environment alias.
+- `--build-env`, `-e`: Environment to build the package for.
+
+These commands do not write to `Published.toml`. Use `sui client publish` and `sui client upgrade` for normal, persistent publication.
+
+### Execute a serialized transaction
+
+Several commands that build a transaction accept `--serialize-unsigned-transaction` (to output base64 `TransactionData`) and `--serialize-signed-transaction` (to output base64 `SenderSignedData`). The `serialized-tx` and `execute-combined-signed-tx` commands consume those outputs. This is useful for [offline signing](/develop/transactions/transaction-auth/offline-signing) and multisig flows where the build, sign, and execute steps happen separately.
+
+Use `sui client serialized-tx` to dry-run, dev-inspect, or execute an already serialized `TransactionData` (base64-encoded BCS). The sender, gas payment, and gas budget are read from the serialized data:
+
+```sh
+# Inspect without executing
+$ sui client serialized-tx <TX_BYTES> --dry-run
+
+# Execute the serialized transaction
+$ sui client serialized-tx <TX_BYTES>
+```
+
+A related command, `sui client serialized-tx-kind`, takes a serialized `TransactionKind` instead and lets you supply gas payment and budget separately with `--gas` and `--gas-budget`.
+
+Use `sui client execute-combined-signed-tx` to execute a combined `SenderSignedData` blob (transaction data plus its signatures). This is the output produced by passing `--serialize-signed-transaction` to a transaction-building command:
+
+```sh
+$ sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED_TX_BYTES>
+```
+
+To execute a transaction whose data and signatures were produced separately (for example, signed with `sui keytool sign`), use `sui client execute-signed-tx --tx-bytes <TX_BYTES> --signatures <SIGNATURE>` instead.
+
 ### Replay a transaction
 
 Client commands to replay transactions have been deprecated in favor of the `sui replay` command. Learn about replaying a transaction and how it can be used for debugging or profiling in the [Transaction Replay](/references/cli/replay), [Debugging Transactions](/references/ide/debugger), and [Transaction Trace Analysis](/references/cli/trace-analysis) guides.

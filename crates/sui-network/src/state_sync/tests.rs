@@ -1352,27 +1352,21 @@ fn test_peer_score_failing_since_tracking() {
     score.update_failing_state();
     assert_eq!(score.failing_since.unwrap(), first_failing_since);
 
-    // Record a success - this should clear failing_since
+    // A single success does NOT clear failing_since while the windowed failure rate is still
+    // above the threshold (8 successes + 4 failures = 33% >= 30%, still failing).
     score.record_success(100, Duration::from_secs(1));
+    assert!(score.is_failing());
+    score.update_failing_state();
+    assert_eq!(score.failing_since.unwrap(), first_failing_since);
+
+    // failing_since is cleared only once the windowed failure rate drops back below the
+    // threshold (14 successes + 4 failures = ~22% < 30%), which update_failing_state detects.
+    for _ in 0..6 {
+        score.record_success(100, Duration::from_secs(1));
+    }
+    assert!(!score.is_failing());
+    score.update_failing_state();
     assert!(score.failing_since.is_none());
-
-    // Make failing again and verify update_failing_state doesn't clear it
-    // when is_failing() returns false due to lack of samples (not due to success)
-    let mut score2 = PeerScore::new(window, failure_rate);
-    for _ in 0..7 {
-        score2.record_success(100, Duration::from_secs(1));
-    }
-    for _ in 0..4 {
-        score2.record_failure();
-    }
-    score2.update_failing_state();
-    assert!(score2.failing_since.is_some());
-    let failing_since_before = score2.failing_since.unwrap();
-
-    // Simulate samples aging out by not adding new ones - update_failing_state
-    // should NOT clear failing_since (only record_success does that)
-    score2.update_failing_state();
-    assert_eq!(score2.failing_since, Some(failing_since_before));
 }
 
 #[test]

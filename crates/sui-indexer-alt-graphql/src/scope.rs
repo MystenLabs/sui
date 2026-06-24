@@ -64,8 +64,8 @@ pub(crate) enum DataSource {
 }
 
 /// Identifies the transaction whose effects are currently in view. Descendant resolvers default
-/// fields like `Address.asTransactionObject` to this transaction, and `*Contents::fetch` consults
-/// `contents` as a hit before falling back to streaming/kv_loader.
+/// fields like `IAddressable.asTransactionObject` to this transaction, and `*Contents::fetch`
+/// consults `contents` as a hit before falling back to streaming/kv_loader.
 ///
 /// `contents` is `Some` when the anchoring caller already had them in hand (e.g. when navigating
 /// `Transaction.effects` on a hydrated `Transaction`). `None` for digest-only anchors (e.g.
@@ -110,11 +110,11 @@ pub(crate) struct Scope {
     checkpoint_viewed_at: Option<u64>,
 
     /// The transaction whose effects descendant resolvers default to (e.g.
-    /// `Address.asTransactionObject` without an explicit `transactionDigest`). Set when a
+    /// `IAddressable.asTransactionObject` without an explicit `transactionDigest`). Set when a
     /// resolver brings a single transaction into view: indexed paths that already hold the
-    /// `TransactionContents` anchor with contents (so `*Contents::fetch` can short-circuit
-    /// via `active_transaction_contents_for`); subscription resolvers anchor digest-only and
-    /// rely on the [`DataSource::Streamed`] checkpoint for content lookups.
+    /// `TransactionContents` anchor with contents (so `*Contents::fetch` can short-circuit via
+    /// `active_transaction_contents_for`); subscription resolvers anchor digest-only and rely on
+    /// the [`DataSource::Streamed`] checkpoint for content lookups.
     ///
     /// This is *not* a "view bound" up to and including a transaction; it identifies one
     /// transaction. Object visibility is end-of-checkpoint regardless of this field.
@@ -189,7 +189,7 @@ impl Scope {
 
     /// Anchor a nested scope to a transaction whose contents the caller already holds. Lets
     /// downstream resolvers reuse the contents instead of re-fetching via kv_loader, and lets
-    /// fields like `Address.asTransactionObject` default to this transaction. Does not change
+    /// fields like `IAddressable.asTransactionObject` default to this transaction. Does not change
     /// object visibility.
     pub(crate) fn with_active_transaction_contents(
         &self,

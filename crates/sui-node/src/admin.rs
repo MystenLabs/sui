@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::SuiNode;
+use crate::db_shell::{handle_delete, handle_ls, handle_read};
 use axum::{
     Router,
     extract::{Query, State},
     http::StatusCode,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use base64::Engine;
 use fastcrypto::encoding::{Encoding, Hex};
@@ -103,13 +104,16 @@ const GET_TX_COST_ROUTE: &str = "/get-tx-cost";
 const DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE: &str = "/dump-consensus-tx-cost-estimates";
 const TRAFFIC_CONTROL: &str = "/traffic-control";
 const UPDATE_ENDPOINT: &str = "/update-endpoint";
+const DB_SHELL_LS: &str = "/db-shell/ls";
+const DB_SHELL_READ: &str = "/db-shell/read";
+const DB_SHELL_DELETE: &str = "/db-shell/delete";
 const BROADCAST_TX_DENY_CONFIG: &str = "/broadcast-transaction-deny-config";
 const WITHDRAW_TX_DENY_CONFIG: &str = "/withdraw-transaction-deny-config";
 const TX_DENY_CONFIG: &str = "/transaction-deny-config";
 
-struct AppState {
-    node: Arc<SuiNode>,
-    tracing_handle: Option<TracingHandle>,
+pub(crate) struct AppState {
+    pub(crate) node: Arc<SuiNode>,
+    pub(crate) tracing_handle: Option<TracingHandle>,
 }
 
 pub async fn run_admin_server(
@@ -159,6 +163,9 @@ pub async fn run_admin_server(
         )
         .route(TRAFFIC_CONTROL, post(traffic_control))
         .route(UPDATE_ENDPOINT, post(update_endpoint))
+        .route(DB_SHELL_LS, get(handle_ls))
+        .route(DB_SHELL_READ, get(handle_read))
+        .route(DB_SHELL_DELETE, delete(handle_delete))
         .route(
             BROADCAST_TX_DENY_CONFIG,
             post(broadcast_transaction_deny_config),

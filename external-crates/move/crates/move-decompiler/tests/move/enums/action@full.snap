@@ -17,8 +17,7 @@ public enum Action has copy {
 
 public fun destroy_action(l0: Action) {
     let l2 = l0;
-    let l1 = &l2;
-    match (l1) {
+    match (&l2) {
         Stop => {
             let Action::Stop {} = l2
         },
@@ -33,8 +32,7 @@ public fun destroy_action(l0: Action) {
 
 public fun increase_speed(l0: &mut Action, l1: u64) {
     let l3 = l0;
-    let l2 = freeze(l3);
-    match (l2) {
+    match (freeze(l3)) {
         Stop => {
             abort 0u64
         },
@@ -43,8 +41,7 @@ public fun increase_speed(l0: &mut Action, l1: u64) {
         },
         ChangeSpeed { pos0: reg_13 } => {
             let Action::ChangeSpeed { pos0: reg_15 } = &mut l3;
-            let l4 = reg_15 : &mut u64;
-            *l4 = l1;
+            *reg_15 : &mut u64 = l1;
             return
         }
     }
@@ -53,8 +50,7 @@ public fun increase_speed(l0: &mut Action, l1: u64) {
 public fun speed(l0: &Action): u64 {
     let l1;
     let l3 = l0;
-    let l2 = l3;
-    match (l2) {
+    match (l3) {
         Stop => {
             abort 0u64
         },

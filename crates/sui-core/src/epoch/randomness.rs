@@ -38,6 +38,7 @@ use crate::authority::authority_per_epoch_store::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::consensus_adapter::SubmitToConsensus;
+use crate::randomness_round_receiver::RandomnessRoundReceiverHandle;
 
 type PkG = bls12381::G2Element;
 type EncG = bls12381::G2Element;
@@ -319,6 +320,8 @@ pub struct RandomnessManager {
     // State for randomness generation.
     next_randomness_round: RandomnessRound,
     highest_completed_round: Arc<Mutex<Option<RandomnessRound>>>,
+
+    randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
 }
 
 impl RandomnessManager {
@@ -328,6 +331,7 @@ impl RandomnessManager {
         consensus_adapter: Box<dyn SubmitToConsensus>,
         network_handle: randomness::Handle,
         authority_key_pair: Option<&AuthorityKeyPair>,
+        randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
     ) -> Option<Self> {
         let epoch_store = match epoch_store_weak.upgrade() {
             Some(epoch_store) => epoch_store,
@@ -348,6 +352,11 @@ impl RandomnessManager {
             }
         };
         let protocol_config = epoch_store.protocol_config();
+        epoch_store.metrics.epoch_random_beacon_dkg_failed.set(0);
+        epoch_store
+            .metrics
+            .epoch_random_beacon_dkg_num_shares
+            .set(0);
 
         let committee = epoch_store.committee();
         let info = RandomnessManager::randomness_dkg_info_from_committee(committee);
@@ -434,64 +443,94 @@ impl RandomnessManager {
             dkg_output: OnceCell::new(),
             next_randomness_round: RandomnessRound(0),
             highest_completed_round: Arc::new(Mutex::new(highest_completed_round)),
+            randomness_receiver_handle,
         };
-        let dkg_output = tables
-            .dkg_output
+        let dkg_output = match tables
+            .dkg_output_v2
             .get(&SINGLETON_KEY)
-            .expect("typed_store should not fail");
-        if let Some(dkg_output) = dkg_output {
-            info!(
-                "random beacon: loaded existing DKG output for epoch {}",
-                committee.epoch()
-            );
-            epoch_store
-                .metrics
-                .epoch_random_beacon_dkg_num_shares
-                .set(dkg_output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
-            rm.dkg_output
-                .set(Some(dkg_output.clone()))
-                .expect("setting new OnceCell should succeed");
-            if let DkgRole::Party(party) = rm.role.as_ref() {
-                network_handle.update_epoch(
-                    committee.epoch(),
-                    rm.authority_info.clone(),
-                    dkg_output,
-                    party.t(),
-                    highest_completed_round,
-                );
-            }
-        } else {
-            info!(
-                "random beacon: no existing DKG output found for epoch {}",
-                committee.epoch()
-            );
-
-            // Load intermediate data.
-            assert!(
-                epoch_store.protocol_config().dkg_version() > 0,
-                "BUG: DKG version 0 is deprecated"
-            );
-            rm.processed_messages.extend(
-                tables
-                    .dkg_processed_messages_v2
-                    .safe_iter()
-                    .map(|result| result.expect("typed_store should not fail")),
-            );
-            if let Some(used_messages) = tables
-                .dkg_used_messages_v2
+            .expect("typed_store should not fail")
+        {
+            Some(dkg_output) => Some(dkg_output),
+            None => tables
+                .dkg_output
                 .get(&SINGLETON_KEY)
                 .expect("typed_store should not fail")
-            {
-                rm.used_messages
-                    .set(used_messages.clone())
+                .map(Some),
+        };
+        match dkg_output {
+            Some(Some(dkg_output)) => {
+                info!(
+                    "random beacon: loaded existing DKG output for epoch {}",
+                    committee.epoch()
+                );
+                epoch_store
+                    .metrics
+                    .epoch_random_beacon_dkg_num_shares
+                    .set(dkg_output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
+                rm.dkg_output
+                    .set(Some(dkg_output.clone()))
+                    .expect("setting new OnceCell should succeed");
+                // Update the randomness round receiver with the public key, so it can now
+                // verify randomness round signatures received out of consensus.
+                rm.randomness_receiver_handle
+                    .set_public_key(*dkg_output.vss_pk.c0());
+
+                if let DkgRole::Party(party) = rm.role.as_ref() {
+                    network_handle.update_epoch(
+                        committee.epoch(),
+                        rm.authority_info.clone(),
+                        dkg_output,
+                        party.t(),
+                        highest_completed_round,
+                    );
+                }
+            }
+            Some(None) => {
+                // DKG previously completed as a failure (recorded only in `dkg_output_v2`).
+                // Restore that terminal state so DKG isn't re-run and randomness stays disabled
+                // for the epoch.
+                error!(
+                    "random beacon: loaded failed DKG for epoch {}. Randomness disabled for this epoch. All randomness-using transactions will fail.",
+                    committee.epoch()
+                );
+                epoch_store.metrics.epoch_random_beacon_dkg_failed.set(1);
+                rm.dkg_output
+                    .set(None)
                     .expect("setting new OnceCell should succeed");
             }
-            rm.confirmations.extend(
-                tables
-                    .dkg_confirmations_v2
-                    .safe_iter()
-                    .map(|result| result.expect("typed_store should not fail")),
-            );
+            None => {
+                info!(
+                    "random beacon: no existing DKG output found for epoch {}",
+                    committee.epoch()
+                );
+
+                // Load intermediate data.
+                assert!(
+                    epoch_store.protocol_config().dkg_version() > 0,
+                    "BUG: DKG version 0 is deprecated"
+                );
+                rm.processed_messages.extend(
+                    tables
+                        .dkg_processed_messages_v2
+                        .safe_iter()
+                        .map(|result| result.expect("typed_store should not fail")),
+                );
+                if let Some(used_messages) = tables
+                    .dkg_used_messages_v2
+                    .get(&SINGLETON_KEY)
+                    .expect("typed_store should not fail")
+                {
+                    rm.used_messages
+                        .set(used_messages.clone())
+                        .expect("setting new OnceCell should succeed");
+                }
+                rm.confirmations.extend(
+                    tables
+                        .dkg_confirmations_v2
+                        .safe_iter()
+                        .map(|result| result.expect("typed_store should not fail")),
+                );
+            }
         }
 
         // Resume randomness generation from where we left off.
@@ -620,6 +659,7 @@ impl RandomnessManager {
             self.dkg_output
                 .set(None)
                 .expect("checked above that `dkg_output` is uninitialized");
+            consensus_output.set_dkg_output(None);
         }
 
         Ok(())
@@ -733,7 +773,10 @@ impl RandomnessManager {
                     self.dkg_output
                         .set(Some(output.clone()))
                         .expect("checked above that `dkg_output` is uninitialized");
-                    consensus_output.set_dkg_output(output.clone());
+                    consensus_output.set_dkg_output(Some(output.clone()));
+
+                    self.randomness_receiver_handle
+                        .set_public_key(*output.vss_pk.c0());
 
                     let epoch_elapsed = epoch_store.epoch_open_time.elapsed().as_millis();
                     epoch_store
@@ -1041,22 +1084,29 @@ mod tests {
         consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, MockConsensusClient},
         epoch::randomness::*,
         mock_consensus::with_block_status,
+        randomness_round_receiver::RandomnessRoundReceiverHandle,
     };
     use consensus_core::BlockStatus;
     use consensus_types::block::BlockRef;
+    use fastcrypto::groups::bls12381;
+    use fastcrypto::serde_helpers::ToFromByteArray;
+    use fastcrypto_tbls::{mocked_dkg, nodes};
     use std::num::NonZeroUsize;
     use sui_protocol_config::ProtocolConfig;
     use sui_protocol_config::{Chain, ProtocolVersion};
-    use sui_types::messages_consensus::ConsensusTransactionKind;
+    use sui_types::{base_types::AuthorityName, messages_consensus::ConsensusTransactionKind};
     use tokio::sync::mpsc;
+    use typed_store::Map;
 
     use arc_swap::Guard;
 
     /// Test harness that sets up validators (and optionally an observer) with mock consensus,
     /// ready for DKG message exchange.
     struct DkgTestSetup {
+        network_config: sui_swarm_config::network_config::NetworkConfig,
         epoch_stores: Vec<Guard<Arc<AuthorityPerEpochStore>>>,
         randomness_managers: Vec<RandomnessManager>,
+        tx_consensus: mpsc::Sender<Vec<ConsensusTransaction>>,
         rx_consensus: mpsc::Receiver<Vec<ConsensusTransaction>>,
         num_validators: usize,
     }
@@ -1117,6 +1167,7 @@ mod tests {
                     Box::new(consensus_adapter.clone()),
                     sui_network::randomness::Handle::new_stub(),
                     Some(validator.protocol_key_pair()),
+                    RandomnessRoundReceiverHandle::new_for_testing(),
                 )
                 .await
                 .unwrap();
@@ -1145,6 +1196,7 @@ mod tests {
                     Box::new(observer_adapter),
                     sui_network::randomness::Handle::new_stub(),
                     None,
+                    RandomnessRoundReceiverHandle::new_for_testing(),
                 )
                 .await
                 .unwrap();
@@ -1154,11 +1206,67 @@ mod tests {
             }
 
             Self {
+                network_config,
                 epoch_stores,
                 randomness_managers,
+                tx_consensus,
                 rx_consensus,
                 num_validators,
             }
+        }
+
+        fn consensus_adapter(&self, authority: AuthorityName) -> Arc<ConsensusAdapter> {
+            let mut mock_consensus_client = MockConsensusClient::new();
+            let tx_consensus = self.tx_consensus.clone();
+            mock_consensus_client
+                .expect_submit()
+                .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
+                    tx_consensus.try_send(transactions.to_vec()).unwrap();
+                    true
+                })
+                .returning(|_, _| {
+                    Ok((
+                        Vec::new(),
+                        with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                    ))
+                });
+
+            Arc::new(ConsensusAdapter::new(
+                Arc::new(mock_consensus_client),
+                CheckpointStore::new_for_tests(),
+                authority,
+                100_000,
+                100_000,
+                ConsensusAdapterMetrics::new_test(),
+                Arc::new(tokio::sync::Notify::new()),
+            ))
+        }
+
+        async fn recover_validator_randomness_managers(&mut self) -> usize {
+            let mut recovered_randomness_managers = Vec::new();
+            for (i, validator) in self
+                .network_config
+                .validator_configs
+                .iter()
+                .enumerate()
+                .take(self.num_validators)
+            {
+                let consensus_adapter = self.consensus_adapter(self.epoch_stores[i].name);
+                recovered_randomness_managers.push(
+                    RandomnessManager::try_new(
+                        Arc::downgrade(&self.epoch_stores[i]),
+                        Box::new(consensus_adapter),
+                        sui_network::randomness::Handle::new_stub(),
+                        Some(validator.protocol_key_pair()),
+                        RandomnessRoundReceiverHandle::new_for_testing(),
+                    )
+                    .await
+                    .unwrap(),
+                );
+            }
+            let recovered_count = recovered_randomness_managers.len();
+            self.randomness_managers = recovered_randomness_managers;
+            recovered_count
         }
 
         /// Runs start_dkg on all managers and collects the DKG messages from validators.
@@ -1188,6 +1296,16 @@ mod tests {
             dkg_messages: &[VersionedDkgMessage],
             advance_round: Round,
         ) {
+            let indexed_messages: Vec<_> = dkg_messages.iter().cloned().enumerate().collect();
+            self.distribute_indexed_messages_and_advance(&indexed_messages, advance_round)
+                .await;
+        }
+
+        async fn distribute_indexed_messages_and_advance(
+            &mut self,
+            dkg_messages: &[(usize, VersionedDkgMessage)],
+            advance_round: Round,
+        ) {
             for i in 0..self.randomness_managers.len() {
                 let mut output = ConsensusCommitOutput::new(0);
                 output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
@@ -1197,7 +1315,7 @@ mod tests {
                     },
                     ..Default::default()
                 });
-                for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
+                for (j, dkg_message) in dkg_messages.iter().cloned() {
                     self.randomness_managers[i]
                         .add_message(&self.epoch_stores[j].name, dkg_message)
                         .unwrap();
@@ -1285,6 +1403,73 @@ mod tests {
 
         for rm in &setup.randomness_managers {
             assert_eq!(DkgStatus::Failed, rm.dkg_status());
+        }
+
+        let recovered_count = setup.recover_validator_randomness_managers().await;
+        assert_eq!(setup.num_validators, recovered_count);
+
+        // Verify the failure is durably loaded on restart: RandomnessManagers reconstructed
+        // from the same epoch stores must report DKG as failed (not pending), exercising the
+        // `dkg_output_v2` failure-load path in `try_new`.
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Failed, rm.dkg_status());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dkg_recovers_processed_messages_after_restart() {
+        telemetry_subscribers::init_for_testing();
+
+        let mut setup = DkgTestSetup::new(false).await;
+        let dkg_messages = setup.start_dkg_and_collect_messages().await;
+        let processed_before_restart = 1;
+        assert!(processed_before_restart > 0);
+        assert!(processed_before_restart < setup.num_validators);
+        let pre_restart_messages: Vec<_> = dkg_messages
+            .iter()
+            .cloned()
+            .enumerate()
+            .take(processed_before_restart)
+            .collect();
+        let post_restart_messages: Vec<_> = dkg_messages
+            .iter()
+            .cloned()
+            .enumerate()
+            .skip(processed_before_restart)
+            .collect();
+
+        setup
+            .distribute_indexed_messages_and_advance(&pre_restart_messages, 0)
+            .await;
+
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Pending, rm.dkg_status());
+            assert_eq!(processed_before_restart, rm.processed_messages.len());
+            assert!(!rm.used_messages.initialized());
+        }
+
+        let recovered_count = setup.recover_validator_randomness_managers().await;
+        assert_eq!(setup.num_validators, recovered_count);
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Pending, rm.dkg_status());
+            assert_eq!(processed_before_restart, rm.processed_messages.len());
+            assert!(!rm.used_messages.initialized());
+        }
+
+        setup
+            .distribute_indexed_messages_and_advance(&post_restart_messages, 0)
+            .await;
+
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Pending, rm.dkg_status());
+            assert_eq!(setup.num_validators, rm.processed_messages.len());
+            assert!(rm.used_messages.initialized());
+        }
+
+        setup.collect_and_distribute_confirmations().await;
+
+        for rm in &setup.randomness_managers {
+            assert_eq!(DkgStatus::Successful, rm.dkg_status());
         }
     }
 
@@ -1378,6 +1563,125 @@ mod tests {
         );
         assert!(role.is_some());
         assert!(role.unwrap().is_party());
+    }
+
+    #[tokio::test]
+    async fn test_randomness_manager_crash_recovery_v1() {
+        telemetry_subscribers::init_for_testing();
+
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .committee_size(NonZeroUsize::new(4).unwrap())
+                .with_reference_gas_price(500)
+                .build();
+
+        let mut protocol_config =
+            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        protocol_config.set_random_beacon_dkg_version_for_testing(1);
+
+        let validator = &network_config.validator_configs[0];
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(protocol_config.clone())
+            .with_genesis_and_keypair(&network_config.genesis, validator.protocol_key_pair())
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let dkg_nodes = nodes::Nodes::new(
+            RandomnessManager::randomness_dkg_info_from_committee(epoch_store.committee())
+                .into_iter()
+                .map(|(id, _, pk, stake)| nodes::Node::<bls12381::G2Element> {
+                    id,
+                    pk,
+                    weight: stake.try_into().unwrap(),
+                })
+                .collect(),
+        )
+        .unwrap();
+        let threshold = epoch_store
+            .committee()
+            .validity_threshold()
+            .try_into()
+            .unwrap();
+        let party_id = epoch_store
+            .committee()
+            .authority_index(&epoch_store.name)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let expected_dkg_output = mocked_dkg::generate_mocked_output::<
+            bls12381::G2Element,
+            bls12381::G2Element,
+        >(dkg_nodes, threshold, 0, party_id);
+        let expected_dkg_output_bytes =
+            bcs::to_bytes(&expected_dkg_output).expect("DKG output serialization should not fail");
+        let expected_public_key = *expected_dkg_output.vss_pk.c0();
+
+        let tables = epoch_store.tables().unwrap();
+        tables
+            .dkg_output
+            .insert(&SINGLETON_KEY, &expected_dkg_output)
+            .unwrap();
+        tables
+            .randomness_next_round
+            .insert(&SINGLETON_KEY, &RandomnessRound(3))
+            .unwrap();
+        tables
+            .randomness_highest_completed_round
+            .insert(&SINGLETON_KEY, &RandomnessRound(1))
+            .unwrap();
+
+        let consensus_adapter = Arc::new(ConsensusAdapter::new(
+            Arc::new(MockConsensusClient::new()),
+            CheckpointStore::new_for_tests(),
+            epoch_store.name,
+            100_000,
+            100_000,
+            ConsensusAdapterMetrics::new_test(),
+            Arc::new(tokio::sync::Notify::new()),
+        ));
+        let recovered_receiver_handle = RandomnessRoundReceiverHandle::new_for_testing();
+        assert!(recovered_receiver_handle.public_key_for_testing().is_none());
+
+        let recovered_randomness_manager = RandomnessManager::try_new(
+            Arc::downgrade(&epoch_store),
+            Box::new(consensus_adapter.clone()),
+            sui_network::randomness::Handle::new_stub(),
+            Some(validator.protocol_key_pair()),
+            recovered_receiver_handle.clone(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            DkgStatus::Successful,
+            recovered_randomness_manager.dkg_status()
+        );
+        let recovered_dkg_output = recovered_randomness_manager
+            .dkg_output
+            .get()
+            .expect("recovered DKG output should be initialized")
+            .as_ref()
+            .expect("recovered DKG should be successful");
+        assert_eq!(
+            expected_dkg_output_bytes,
+            bcs::to_bytes(recovered_dkg_output).expect("DKG output serialization should not fail")
+        );
+        assert_eq!(
+            RandomnessRound(3),
+            recovered_randomness_manager.next_randomness_round
+        );
+        assert_eq!(
+            Some(RandomnessRound(1)),
+            *recovered_randomness_manager.highest_completed_round.lock()
+        );
+        let recovered_public_key = recovered_receiver_handle
+            .public_key_for_testing()
+            .expect("public key should be restored on recovery");
+        assert_eq!(
+            expected_public_key.to_byte_array(),
+            recovered_public_key.to_byte_array()
+        );
     }
 
     #[test]

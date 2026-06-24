@@ -1,0 +1,16 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/sui_mode/linter/unused_return_value_tx_context.move:10:9
+   │
+10 │         mut_ctx(ctx);
+   │         ^^^^^^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = 'TxContext' is not considered a mutable reference input for the purposes of this lint.
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

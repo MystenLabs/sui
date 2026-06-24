@@ -14,9 +14,9 @@ backoff.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 clap = { workspace = true, features = ["env"] }
-diesel = { workspace = true, features = ["chrono"] }
-diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
-diesel_migrations.workspace = true
+diesel = { workspace = true, features = ["chrono"], optional = true }
+diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"], optional = true }
+diesel_migrations = { workspace = true, optional = true }
 futures.workspace = true
 http.workspace = true
 mysten-network.workspace = true
@@ -52,7 +52,6 @@ sui-pg-db = { workspace = true, optional = true }
 [dev-dependencies]
 telemetry-subscribers.workspace = true
 wiremock.workspace = true
-sui-pg-db.workspace = true
 dashmap.workspace = true
 
 sui-indexer-alt-framework-store-traits = { workspace = true, features = ["testing"] }
@@ -61,4 +60,9 @@ sui-synthetic-ingestion.workspace = true
 [features]
 default = ["cluster"]
 cluster = ["dep:tracing-subscriber", "postgres"]
-postgres = ["dep:sui-pg-db"]
+postgres = [
+    "dep:sui-pg-db",
+    "dep:diesel",
+    "dep:diesel-async",
+    "dep:diesel_migrations",
+]

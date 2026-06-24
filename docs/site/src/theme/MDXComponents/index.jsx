@@ -18,6 +18,7 @@ import BetaTag from "@site/src/components/BetaTag";
 import EffortBox from "@site/src/components/EffortBox";
 import AgentPrompt from "@site/src/components/AgentPrompt";
 import Term from "@site/src/shared/components/Glossary/Term";
+import CodeWalkthrough, { Step } from "@site/src/shared/components/CodeWalkthrough";
 
 export default {
   ...MDXComponentsOriginal,
@@ -35,5 +36,7 @@ export default {
   BetaTag,
   EffortBox,
   AgentPrompt,
-  Term
+  Term,
+  CodeWalkthrough,
+  Step
 };

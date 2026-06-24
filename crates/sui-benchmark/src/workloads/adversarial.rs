@@ -250,6 +250,7 @@ impl AdversarialTestPayload {
                     .publish_with_data(PublishData::CompiledPackage(
                         self.max_package_published_compiled.clone(),
                     ))
+                    .ensure_unique()
                     .build_and_sign(account.key())
             }
             _ => self.state.move_call_pt(
@@ -477,6 +478,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         let transaction = TestTransactionBuilder::new(gas.1, gas.0, reference_gas_price)
             .publish_async(path)
             .await
+            .ensure_unique()
             .build_and_sign(gas.2.as_ref());
 
         let execution_result = execution_proxy.execute_transaction_block(transaction).await;

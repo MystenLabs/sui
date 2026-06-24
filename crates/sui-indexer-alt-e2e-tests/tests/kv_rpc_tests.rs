@@ -7,8 +7,10 @@ use move_core_types::ident_str;
 use sui_indexer_alt_e2e_tests::FullCluster;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
+use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::AffectedAddressFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::AffectedObjectFilter;
@@ -26,6 +28,7 @@ use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::MoveCallFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::Ordering;
+use sui_rpc::proto::sui::rpc::v2alpha::PackageWriteFilter;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions;
 use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
@@ -677,7 +680,7 @@ fn ev_or(terms: Vec<Vec<EventLiteral>>) -> EventFilter {
     ev_filter_terms(terms)
 }
 
-fn tx_missing_include_filter(addr: SuiAddress) -> TransactionFilter {
+fn tx_not_sender_only_filter(addr: SuiAddress) -> TransactionFilter {
     let mut term = TransactionTerm::default();
     term.literals = vec![tx_not_sender_literal(addr)];
     let mut filter = TransactionFilter::default();
@@ -685,7 +688,7 @@ fn tx_missing_include_filter(addr: SuiAddress) -> TransactionFilter {
     filter
 }
 
-fn ev_missing_include_filter(addr: SuiAddress) -> EventFilter {
+fn ev_not_sender_only_filter(addr: SuiAddress) -> EventFilter {
     let mut term = EventTerm::default();
     term.literals = vec![ev_not_sender_literal(addr)];
     let mut filter = EventFilter::default();
@@ -745,6 +748,12 @@ fn tx_event_stream_head_literal(stream_id: ObjectID) -> TransactionLiteral {
     tx_include(transaction_predicate::Predicate::EventStreamHead(esh))
 }
 
+fn tx_package_write_literal() -> TransactionLiteral {
+    tx_include(transaction_predicate::Predicate::PackageWrite(
+        PackageWriteFilter::default(),
+    ))
+}
+
 fn tx_sender(addr: SuiAddress) -> TransactionFilter {
     tx_filter(vec![tx_sender_literal(addr)])
 }
@@ -763,6 +772,10 @@ fn tx_event_type(path: &str) -> TransactionFilter {
 
 fn tx_event_stream_head(stream_id: ObjectID) -> TransactionFilter {
     tx_filter(vec![tx_event_stream_head_literal(stream_id)])
+}
+
+fn tx_package_write() -> TransactionFilter {
+    tx_filter(vec![tx_package_write_literal()])
 }
 
 fn tx_and(filters: Vec<TransactionFilter>) -> TransactionFilter {
@@ -1068,6 +1081,84 @@ async fn test_list_transactions_with_sender_filter() {
     assert!(
         !resp.transactions.is_empty(),
         "expected at least 1 transaction from sender"
+    );
+}
+
+#[tokio::test]
+async fn test_list_package_write_filter() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+
+    // Publish a Move package (a package write); capture its digest directly off
+    // the effects since the `publish_package` helper discards it.
+    let (publish_fx, publish_err) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(
+            TestTransactionBuilder::new(sender, gas, cluster.reference_gas_price())
+                .with_gas_budget(DEFAULT_GAS_BUDGET)
+                .publish(emit_test_event_pkg_path())
+                .build(),
+            vec![&kp],
+        ))
+        .expect("publish failed");
+    assert!(publish_err.is_none(), "publish failed: {publish_err:?}");
+    let publish_digest = publish_fx.transaction_digest().to_string();
+    let new_gas = publish_fx
+        .mutated()
+        .into_iter()
+        .find(|((id, _, _), _)| *id == gas.0)
+        .map(|((id, version, digest), _)| (id, version, digest))
+        .expect("gas mutated");
+
+    // A self-transfer writes no package; it shares the checkpoint below so the
+    // filter has a non-package-write sibling to exclude.
+    let (_transfer_digest, _) = transfer_self(&mut cluster, sender, &kp, new_gas).await;
+
+    // Seal both txns into one checkpoint and scope the query to it. This excludes
+    // genesis (which publishes the framework packages and so also matches a
+    // package-write filter), leaving our publish as the only package write in
+    // range — letting us assert an exact count.
+    let checkpoint = cluster.create_checkpoint().await;
+    let cp = checkpoint.sequence_number;
+
+    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(cp);
+    req.end_checkpoint = Some(cp + 1);
+    req.filter = Some(tx_package_write());
+    req.options = Some(query_options(100));
+    let resp = list_transactions_result(&mut client, req).await;
+    assert_transaction_cursors(&resp);
+
+    let digests: Vec<String> = resp
+        .transactions
+        .iter()
+        .filter_map(|t| t.transaction.as_ref().and_then(|tx| tx.digest.clone()))
+        .collect();
+    assert_eq!(
+        digests,
+        vec![publish_digest],
+        "package_write filter should return exactly the publish tx in this checkpoint, got {digests:?}"
+    );
+
+    // Checkpoint-level: scoped to the same range, only the publish's checkpoint
+    // matches the package-write filter.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.start_checkpoint = Some(cp);
+    req.end_checkpoint = Some(cp + 1);
+    req.filter = Some(tx_package_write());
+    req.options = Some(query_options(100));
+    let resp = list_checkpoints_result(&mut client, req).await;
+    assert_checkpoint_cursors(&resp);
+    let seqs: Vec<u64> = resp.checkpoints.iter().map(checkpoint_sequence).collect();
+    assert_eq!(
+        seqs,
+        vec![cp],
+        "package_write filter should return exactly the publish checkpoint, got {seqs:?}"
     );
 }
 
@@ -2012,6 +2103,68 @@ async fn test_list_transactions_combinator_or_not() {
 }
 
 #[tokio::test]
+async fn test_list_transactions_unanchored_negation() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+
+    let (digest_a, _) = transfer_self(&mut cluster, sender_a, &kp_a, gas_a).await;
+    let (digest_b, _) = transfer_self(&mut cluster, sender_b, &kp_b, gas_b).await;
+
+    cluster.create_checkpoint().await;
+
+    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    // Exclude-only term: `NOT sender = B` anchors on the scan-time-synthesized
+    // TxUniverse leaf and returns the dense complement — A's tx plus every
+    // other tx in range (funding transfers, genesis).
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.filter = Some(tx_not_sender_only_filter(sender_b));
+    req.options = Some(query_options(100));
+    let resp = list_transactions_result(&mut client, req).await;
+    let digests: Vec<String> = resp
+        .transactions
+        .iter()
+        .filter_map(|t| t.transaction.as_ref().and_then(|tx| tx.digest.clone()))
+        .collect();
+    assert!(
+        digests.contains(&digest_a.to_string()),
+        "A's tx should match unanchored Not(Sender=B)"
+    );
+    assert!(
+        !digests.contains(&digest_b.to_string()),
+        "B's tx should be excluded by unanchored Not(Sender=B)"
+    );
+    assert!(
+        digests.len() >= 2,
+        "complement includes funding/genesis transactions"
+    );
+
+    // Symmetric case: `NOT sender = A` returns B's tx.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.filter = Some(tx_not_sender_only_filter(sender_a));
+    req.options = Some(query_options(100));
+    let resp = list_transactions_result(&mut client, req).await;
+    let digests: Vec<String> = resp
+        .transactions
+        .iter()
+        .filter_map(|t| t.transaction.as_ref().and_then(|tx| tx.digest.clone()))
+        .collect();
+    assert!(
+        digests.contains(&digest_b.to_string()),
+        "B's tx should match unanchored Not(Sender=A)"
+    );
+    assert!(
+        !digests.contains(&digest_a.to_string()),
+        "A's tx should be excluded by unanchored Not(Sender=A)"
+    );
+}
+
+#[tokio::test]
 async fn test_list_transactions_recipient_and_affected_object() {
     let mut cluster = FullCluster::new().await.unwrap();
     let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
@@ -2308,6 +2461,90 @@ async fn test_list_events_combinator_or_not() {
     assert!(
         !digests.contains(&digest_b.to_string()),
         "B's event should be excluded by Not(Sender=B)"
+    );
+}
+
+#[tokio::test]
+async fn test_list_events_unanchored_negation() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+
+    let (pkg, gas_a) = publish_package(
+        &mut cluster,
+        sender_a,
+        &kp_a,
+        gas_a,
+        emit_test_event_pkg_path(),
+    )
+    .await;
+
+    let (digest_a, _) = call_move(
+        &mut cluster,
+        sender_a,
+        &kp_a,
+        gas_a,
+        pkg,
+        "emit_test_event",
+        "emit_test_event",
+    )
+    .await;
+    let (digest_b, _) = call_move(
+        &mut cluster,
+        sender_b,
+        &kp_b,
+        gas_b,
+        pkg,
+        "emit_test_event",
+        "emit_test_event",
+    )
+    .await;
+
+    cluster.create_checkpoint().await;
+
+    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    // Exclude-only term: `NOT sender = B` anchors on the stored EventExtant
+    // marker and returns every event whose sender is not B.
+    let mut req = ListEventsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.filter = Some(ev_not_sender_only_filter(sender_b));
+    req.options = Some(query_options(100));
+    let resp = list_events_result(&mut client, req).await;
+    let digests: Vec<String> = resp
+        .events
+        .iter()
+        .filter_map(|e| e.transaction_digest.clone())
+        .collect();
+    assert!(
+        digests.contains(&digest_a.to_string()),
+        "A's event should match unanchored Not(Sender=B)"
+    );
+    assert!(
+        !digests.contains(&digest_b.to_string()),
+        "B's event should be excluded by unanchored Not(Sender=B)"
+    );
+
+    // Symmetric case: `NOT sender = A` returns B's event.
+    let mut req = ListEventsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
+    req.filter = Some(ev_not_sender_only_filter(sender_a));
+    req.options = Some(query_options(100));
+    let resp = list_events_result(&mut client, req).await;
+    let digests: Vec<String> = resp
+        .events
+        .iter()
+        .filter_map(|e| e.transaction_digest.clone())
+        .collect();
+    assert!(
+        digests.contains(&digest_b.to_string()),
+        "B's event should match unanchored Not(Sender=A)"
+    );
+    assert!(
+        !digests.contains(&digest_a.to_string()),
+        "A's event should be excluded by unanchored Not(Sender=A)"
     );
 }
 
@@ -2735,27 +2972,11 @@ async fn test_list_filter_edge_cases() {
     req.options = Some(query_options(10));
     expect_invalid_list_transactions(&mut client, req).await;
 
-    let mut req = ListTransactionsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["digest"]));
-    req.start_checkpoint = Some(0);
-    req.end_checkpoint = Some(DEFAULT_CHECKPOINT_RANGE_END);
-    req.filter = Some(tx_missing_include_filter(sender));
-    req.options = Some(query_options(10));
-    expect_invalid_list_transactions(&mut client, req).await;
-
     let mut req = ListEventsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["event_type"]));
     req.start_checkpoint = Some(0);
     req.end_checkpoint = Some(DEFAULT_CHECKPOINT_RANGE_END);
     req.filter = Some(EventFilter::default());
-    req.options = Some(query_options(10));
-    expect_invalid_list_events(&mut client, req).await;
-
-    let mut req = ListEventsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["event_type"]));
-    req.start_checkpoint = Some(0);
-    req.end_checkpoint = Some(DEFAULT_CHECKPOINT_RANGE_END);
-    req.filter = Some(ev_missing_include_filter(sender));
     req.options = Some(query_options(10));
     expect_invalid_list_events(&mut client, req).await;
 
@@ -2782,14 +3003,6 @@ async fn test_list_filter_edge_cases() {
     req.start_checkpoint = Some(0);
     req.end_checkpoint = Some(DEFAULT_CHECKPOINT_RANGE_END);
     req.filter = Some(TransactionFilter::default());
-    req.options = Some(query_options(10));
-    expect_invalid_list_checkpoints(&mut client, req).await;
-
-    let mut req = ListCheckpointsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
-    req.start_checkpoint = Some(0);
-    req.end_checkpoint = Some(DEFAULT_CHECKPOINT_RANGE_END);
-    req.filter = Some(tx_missing_include_filter(sender));
     req.options = Some(query_options(10));
     expect_invalid_list_checkpoints(&mut client, req).await;
 }
@@ -2951,6 +3164,47 @@ async fn test_list_checkpoints_combinator_or() {
     assert!(
         !seqs.contains(&cp_c),
         "OR filter should exclude checkpoint for C"
+    );
+}
+
+#[tokio::test]
+async fn test_list_checkpoints_unanchored_negation() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+
+    transfer_in_own_checkpoint(&mut cluster, sender_a, &kp_a, gas_a).await;
+    let cp_a = cluster.latest_checkpoint().await.unwrap().unwrap();
+    transfer_in_own_checkpoint(&mut cluster, sender_b, &kp_b, gas_b).await;
+    let cp_b = cluster.latest_checkpoint().await.unwrap().unwrap();
+
+    let mut client = KvLedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    // Exclude-only term with two excludes: `NOT sender = B AND NOT sender = 0x0`.
+    // cp_b contains only B's transfer plus the system settlement/barrier txs
+    // (sender 0x0), so excluding both empties its complement and the whole
+    // checkpoint drops out — checkpoint-level negation is observable here.
+    // cp_a still matches via A's transfer and the funding transfers.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.filter = Some(tx_filter(vec![
+        tx_not_sender_literal(sender_b),
+        tx_not_sender_literal(SuiAddress::ZERO),
+    ]));
+    req.options = Some(query_options(100));
+    let resp = list_checkpoints_result(&mut client, req).await;
+    assert_checkpoint_cursors(&resp);
+    let seqs: std::collections::HashSet<u64> =
+        resp.checkpoints.iter().map(checkpoint_sequence).collect();
+    assert!(
+        seqs.contains(&cp_a),
+        "checkpoint with A's tx should match the unanchored complement, got {seqs:?}"
+    );
+    assert!(
+        !seqs.contains(&cp_b),
+        "checkpoint containing only B's and system txs should be excluded, got {seqs:?}"
     );
 }
 
@@ -3391,6 +3645,68 @@ async fn test_list_checkpoints_with_objects_read_mask() {
     assert!(
         any_transactions,
         "expected at least one tx.digest populated"
+    );
+}
+
+// GetCheckpoint hydrates transactions and objects from BigTable (the GCS
+// checkpoint-bucket dependency was removed). Without it, a `transactions`/
+// `objects` read mask silently returned empty.
+#[tokio::test]
+async fn test_get_checkpoint_with_transactions_and_objects() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    let gas_id_string = gas.0.to_canonical_string(true);
+
+    let (digest, _new_gas) = transfer_self(&mut cluster, sender, &kp, gas).await;
+    let checkpoint = cluster.create_checkpoint().await;
+    let seq = checkpoint.sequence_number;
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    let mut req = GetCheckpointRequest::default();
+    req.checkpoint_id = Some(CheckpointId::SequenceNumber(seq));
+    req.read_mask = Some(FieldMask::from_paths([
+        "sequence_number",
+        "transactions.digest",
+        "objects.objects.object_id",
+        "objects.objects.version",
+    ]));
+
+    let cp = client
+        .get_checkpoint(req)
+        .await
+        .unwrap()
+        .into_inner()
+        .checkpoint
+        .expect("checkpoint populated");
+    assert_eq!(cp.sequence_number, Some(seq));
+
+    // Transactions hydrated from BigTable.
+    let returned: std::collections::HashSet<String> = cp
+        .transactions
+        .iter()
+        .filter_map(|tx| tx.digest.clone())
+        .collect();
+    assert!(
+        returned.contains(&digest.to_string()),
+        "expected tx digest {digest} in transactions[].digest, got {returned:?}"
+    );
+
+    // Objects hydrated from BigTable: the transfer's mutated gas object appears.
+    let saw_gas_object = cp
+        .objects
+        .as_ref()
+        .map(|os| {
+            os.objects
+                .iter()
+                .any(|o| o.object_id.as_deref() == Some(gas_id_string.as_str()))
+        })
+        .unwrap_or(false);
+    assert!(
+        saw_gas_object,
+        "expected gas object {gas_id_string} in checkpoint objects[]"
     );
 }
 

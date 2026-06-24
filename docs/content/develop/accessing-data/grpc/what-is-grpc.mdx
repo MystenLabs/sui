@@ -35,6 +35,12 @@ With built-in support for code generation, you can scaffold clients in TypeScrip
 
 In addition to request-response calls, gRPC supports server-side streaming, enabling real-time data delivery without constant polling. Use gRPC when you need subscriptions, generated protobuf clients, low protocol overhead, or low-latency point lookups. For frontends, developer tools, scripts, dynamic-language clients, or flexible filtered historical queries, consider [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) first. GraphQL currently supports filtered pagination over historical transactions and events, while gRPC is the interface that currently supports streaming subscriptions.
 
+:::info Trust boundary
+
+gRPC is an API transport, not proof by itself: a response reflects what the node you queried returns, so it is only as trustworthy as that node. When you need trustless verification rather than trust in a single endpoint, use checkpoint verification, [authenticated events](/develop/accessing-data/authenticated-events), or the `SignatureVerificationService`.
+
+:::
+
 ## How gRPC fits into the application stack
 
 The following gRPC services are available on Sui. Protocol buffers define the gRPC interface. You can find the relevant `.proto` files at [`sui-apis` on GitHub](https://github.com/MystenLabs/sui-apis/tree/main/proto), which apart from the gRPC messages (request and response payloads), include the following services:

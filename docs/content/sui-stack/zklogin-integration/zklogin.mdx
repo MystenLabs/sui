@@ -28,6 +28,12 @@ The key differentiators that zkLogin brings to Sui are:
 
 If you are a builder who wants to integrate zkLogin into your application or wallet, see the [zkLogin integration guide](/sui-stack/zklogin-integration).
 
+:::info
+
+zkLogin access depends on two factors: the OpenID provider (IdP) that authenticates the user and the salt service that supplies the per-user salt. A user needs both a current JWT from the IdP and the correct salt to derive their address and sign transactions. If the salt is lost, the user permanently loses access to that address, even with a valid OAuth login; if the salt is compromised, an attacker can link the user's OAuth identifier to their Sui address (though they still cannot move funds without the OAuth credential). Plan salt persistence, backup, and recovery accordingly. See [Security Best Practices](/develop/security/best-practices).
+
+:::
+
 ## OpenID providers
 
 <ImportContent source="openid-providers" mode="snippet" />
@@ -256,6 +262,14 @@ The ZK proving service and the salt service (if maintained) can link the user id
 #### Does my zkLogin address ever change?
 
 - zkLogin address is derived from `sub`, `iss`, `aud`, and `user_salt`. The address does not change if you log in to the same wallet with the same OAuth provider, because `sub`, `iss`, `aud`, and `user_salt` remain unchanged in the JWT, even though the JWT itself might look different every time you log in. However, if you log in with different OAuth providers, your address changes because the `iss` and `aud` are defined distinctly per provider. In addition, each wallet or application maintains its own `user_salt`, so logging with the same provider for different wallets might also result in different addresses.
+
+#### Does my zkLogin address expire when the ephemeral key or `max_epoch` expires?
+
+- No. The ephemeral key pair and `max_epoch` only control how long a single login session can authorize transactions. They do not make the address temporary. Your zkLogin address stays stable as long as you log in with the same OAuth identity (`sub` and `iss`), the same application (`aud`), and the same `user_salt`. When the ephemeral key expires, log in again, generate a new ephemeral key pair and a new zero-knowledge proof, and continue using the same address.
+
+#### Can my app get the user's email from a zkLogin address?
+
+- No. zkLogin does not provide a way to recover a user's email from a Sui address, a zero-knowledge proof, or onchain data. A zkLogin address is derived from `sub`, `iss`, `aud`, and `user_salt`, and it exposes no identifying information. Your app can read the user's email only during the OAuth login flow, and only if it requests the `email` scope and the provider includes an `email` claim in the [JWT](#json-web-token-jwt). If you need the email, read it from the JWT claims at login time and store it yourself. You cannot derive it later from the address.
 
 #### Can you have multiple addresses with the same OAuth provider?
 

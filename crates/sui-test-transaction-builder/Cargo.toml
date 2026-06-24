@@ -8,6 +8,7 @@ edition = "2024"
 
 [dependencies]
 bcs.workspace = true
+rand.workspace = true
 
 shared-crypto.workspace = true
 sui-genesis-builder.workspace = true

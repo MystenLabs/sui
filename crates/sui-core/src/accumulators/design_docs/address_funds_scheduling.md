@@ -230,13 +230,15 @@ Together these two checks guarantee that the eager scheduler never schedules wit
 a version that some component (in-memory or on-disk) has already moved past, regardless of
 which path delivered the settlement.
 
-### 3.1.1 Why a latest-state read is sufficient here
+### 3.1.1 Why a root-consistent read is sufficient here
 
 This is a place where the address-funds scheduler is intentionally asking a weaker question than
 the object-funds checker asks later in the pipeline.
 
-For an untracked account, `get_latest_account_amount` returns both the latest visible balance and
-the version that balance came from. The scheduler uses that pair for two purposes only:
+For an untracked account, `get_consistent_latest_account_amount_and_version` returns a balance and
+the root accumulator version that balance is consistent with. The balance may be older than the
+latest account object amount if the account object has advanced ahead of the root. The scheduler
+uses that pair for two purposes only:
 
 1. **Staleness detection.** If storage already says "this account is at version > V", then the
    scheduler knows the request for version V is stale and returns `SkipSchedule`.

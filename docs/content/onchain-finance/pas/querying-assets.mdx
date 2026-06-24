@@ -43,7 +43,7 @@ The following example shows how to query both regular and PAS-managed balances:
 ```tsx
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { pas } from '@mysten/pas';
-const client = new SuiGrpcClient({ network: 'testnet' }).$extend(pas());
+const client = new SuiGrpcClient({ network: 'mainnet' }).$extend(pas());
 const walletAddress = '0xAlice';
 // Regular balances — query the wallet address directly
 const regularBalances = await client.core.getAllBalances({

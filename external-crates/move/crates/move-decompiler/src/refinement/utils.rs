@@ -34,6 +34,21 @@ pub(super) fn unwrap_block(exp: Exp) -> Exp {
     }
 }
 
+/// An expression `always_terminates` if every CFG path through it leaves the surrounding
+/// statement context — `abort`/`return`/`break`/`continue`, a `Seq` whose last item does, an
+/// `IfElse` whose both arms do, or a `Block` whose body does.
+pub(super) fn always_terminates(exp: &Exp) -> bool {
+    match exp {
+        Exp::Abort(_) | Exp::Return(_) | Exp::Break(_) | Exp::Continue(_) => true,
+        Exp::Seq(items) => items.last().is_some_and(always_terminates),
+        Exp::IfElse(_, t, alt) => {
+            always_terminates(t.as_ref()) && alt.as_ref().as_ref().is_some_and(always_terminates)
+        }
+        Exp::Block(_, body) => always_terminates(body),
+        _ => false,
+    }
+}
+
 /// Negate a boolean expression. Strips a single outer `!` if present, otherwise wraps in `!`.
 //
 // TODO: simplify double negation, De Morgan, etc.

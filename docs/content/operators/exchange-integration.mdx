@@ -149,6 +149,17 @@ Sui signs over the Blake2b-256 hash of the BCS serialization of an `IntentMessag
 
 For the full signature requirements, intent format, and worked examples in Rust, TypeScript, and the Sui CLI, see [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview) and [Intent Signing](/develop/transactions/transaction-auth/intent-signing). For offline custody workflows, see [Offline Signing](/develop/transactions/transaction-auth/offline-signing).
 
+:::caution
+
+Custody keys and privileged capabilities are the highest-value assets in an exchange integration. Apply the following controls:
+
+- **Never hold privileged capabilities in hot wallets.** Keep administrative capability objects (admin caps, `UpgradeCap`, `TreasuryCap`, and similar) out of online signing keys. A hot-wallet compromise must not expose the keys that can upgrade packages, mint supply, or govern your flows.
+- **Use multisig, HSM, or dedicated custody.** Hold high-privilege keys in a [multisig](/develop/transactions/transaction-auth/multisig) address, hardware security module, or dedicated custody solution, and sign their transactions through [Offline Signing](/develop/transactions/transaction-auth/offline-signing).
+- **Separate keys by role and network.** Split hot, warm, and cold keys by role so an online compromise cannot reach the most privileged keys. Keep Testnet and Mainnet keys strictly separate, so a test key can never sign a production transaction. See [user and operator key management](/develop/security/best-practices#user-and-operator-key-management).
+- **Verify transaction effects before crediting accounts.** Confirm finalized transaction effects (status and the expected object or balance changes) from a checkpoint before you credit a user account. Do not credit on transaction submission alone.
+
+:::
+
 ## SUI staking
 
 The Sui blockchain uses a Delegated Proof-of-Stake (DPoS) mechanism. SUI token holders stake to a validator's staking pool. When a user stakes, the network locks those tokens for the duration of the epoch in which the user adds the stake. New staking requests become active at the start of the next epoch. A user can request a withdrawal at any time. Stake withdrawals process immediately using the previous epoch's exchange rate and include the principal plus rewards accumulated through the previous epoch. The withdrawn stake stops contributing starting the next epoch.

@@ -103,7 +103,7 @@ The `rpc` configuration block supports additional settings. The most important o
 - `tls`: TLS configuration for the RPC server.
 - `max-json-move-value-size`: Maximum size in bytes for JSON Move values returned by the RPC server.
 
-Refer to the [full node YAML template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml) for the complete list of available `rpc` options.
+Refer to the [`RpcConfig` source](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/src/rpc_config.rs) for the complete list of available `rpc` options.
 
 You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. All applications must migrate to gRPC or [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) by July 2026. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
 
@@ -124,6 +124,21 @@ authority-store-pruning-config:
 ```
 
 Adjust the gRPC data retention period based on your full node's resource profile and whether you've disabled JSON-RPC or not. In any case, test the longer retention period for performance and scalability before using gRPC in your application or offering it to other developers.
+
+:::tip
+
+When you expose a full node endpoint publicly, harden it before you serve traffic:
+
+- **Enable TLS.** Terminate TLS for the RPC server (`https-address` and `tls` in the `rpc` config block) or at a proxy in front of the node.
+- **Restrict with a firewall.** Allow only the ports you intend to serve, and block everything else at the host and network level.
+- **Apply rate limits.** Put a rate limit in front of the public endpoint to protect against abuse and resource-exhaustion attacks.
+- **Keep admin interfaces private.** Bind the admin API (port 1337 by default) to `127.0.0.1` and never expose it to untrusted networks.
+- **Enable monitoring.** Configure [metrics monitoring](/operators/full-node/monitoring) so you can detect lag, abuse, or failures quickly.
+- **Consider archival fallback.** Use the [Archival Fallback](/operators/data-management/archives) to serve historical data the network `seed-peers` no longer retain.
+
+For the full set of operator controls, see [general network security](/develop/security/best-practices#general-network-security).
+
+:::
 
 ## Running a full node {#running-a-full-node}
 
@@ -328,3 +343,109 @@ Then update the metrics address in your `fullnode.yaml` file to use port `9180`.
 ```sh
 metrics-address: "0.0.0.0:9180"
 ```
+
+## Full node logging
+
+By default, `sui-node` writes its logs to standard error. When you run the node under systemd and do not override the output settings, `journalctl` captures these logs.
+
+The `RUST_LOG` environment variable controls the log filter. The default level is `info`. You can raise or lower the level for individual components, for example `sui_core=debug`. For more on filter syntax, see [Logging levels](/operators/observability#logging-levels) in the observability guide.
+
+### Recommended systemd unit
+
+The following unit file runs `sui-node` and sends its output to the systemd journal. Adjust the binary path, configuration path, user, and `RUST_LOG` filter for your environment.
+
+```ini title='/etc/systemd/system/sui-node.service'
+[Unit]
+Description=Sui Full Node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=sui
+ExecStart=/usr/local/bin/sui-node --config-path /opt/sui/fullnode.yaml
+Environment=RUST_LOG=info,sui_core=debug,consensus=debug,jsonrpsee=error
+StandardOutput=journal
+StandardError=journal
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+After you create or change the unit file, reload systemd and start the service:
+
+```sh
+$ sudo systemctl daemon-reload
+$ sudo systemctl enable --now sui-node
+```
+
+Follow the live log output with `journalctl`:
+
+```sh
+$ journalctl -u sui-node -f
+```
+
+### Optional file logging
+
+To write logs to a file instead of standard error, set the `RUST_LOG_FILE` environment variable to the target path:
+
+```ini
+Environment=RUST_LOG_FILE=/var/log/sui/sui-node.log
+```
+
+The `sui` user that runs the node must own the log directory and have write permission:
+
+```sh
+$ sudo mkdir -p /var/log/sui
+$ sudo chown sui:sui /var/log/sui
+```
+
+`sui-node` rotates the log file daily and appends a date suffix to the file name. Daily rotation is built in, but the node does not delete, compress, or cap the number of old files. Handle retention and compression with `journald`, `logrotate`, or your operations tooling.
+
+### Optional structured logs
+
+To emit logs as newline-delimited JSON instead of plain text, set `RUST_LOG_JSON`:
+
+```ini
+Environment=RUST_LOG_JSON=1
+```
+
+Structured logs are useful when you forward output to a log aggregation system that parses JSON.
+
+### View and update the log filter at runtime
+
+`sui-node` exposes a private admin API that reports and updates the active log filter without a restart. The admin server binds to `127.0.0.1` on port 1337 by default. You can change the port with the `admin-interface-port` field in the node configuration file.
+
+To view the current filter, send a GET request:
+
+```sh
+$ curl http://127.0.0.1:1337/logging
+```
+
+To update the filter, send a POST request with the new filter string as the request body:
+
+```sh
+$ curl -X POST http://127.0.0.1:1337/logging --data 'info,sui_core=debug'
+```
+
+A runtime update applies until the process restarts. To make a change permanent, also update `RUST_LOG` in the unit file.
+
+:::caution
+
+The admin API has no authentication. Keep it bound to `127.0.0.1` and do not expose port 1337 to untrusted networks.
+
+:::
+
+### Troubleshooting empty logs
+
+If `journalctl` or your log file shows no output, check the following:
+
+- Confirm the systemd unit name. The service might not be named `sui-node`. List the service units with `systemctl list-units --type=service | grep -i sui`.
+
+- Check the service state with `systemctl status <unit>`. Look for a failed start, a crash loop, or a missing binary.
+
+- Verify the `StandardOutput` and `StandardError` settings in the unit file. If they are not set to `journal`, `journalctl` does not capture the output.
+
+- If you expect file logging, confirm the process environment includes `RUST_LOG_FILE`. Run `systemctl show <unit> --property=Environment` to see the effective environment.
+
+- Confirm the log directory exists and the node user can write to it. A missing or unwritable directory prevents file logging.

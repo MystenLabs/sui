@@ -42,6 +42,7 @@ use crate::api::types::execution_error::ExecutionError;
 use crate::api::types::gas_effects::GasEffects;
 use crate::api::types::object_change::ObjectChange;
 use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::TransactionContents;
 use crate::api::types::unchanged_consensus_object::UnchangedConsensusObject;
 use crate::error::RpcError;
@@ -222,7 +223,7 @@ impl EffectsContents {
                 let transaction_digest = content.digest()?;
                 let timestamp_ms = content.timestamp_ms();
                 // Anchor the parent transaction (with hydrated contents) onto each yielded
-                // Event's scope, so descendant resolvers like `Address.asTransactionObject`
+                // Event's scope, so descendant resolvers like `IAddressable.asTransactionObject`
                 // default to it and `*Contents::fetch` short-circuits via the scope.
                 let event_scope = self
                     .scope
@@ -469,7 +470,7 @@ impl EffectsContents {
         after: Option<CDependency>,
         last: Option<u64>,
         before: Option<CDependency>,
-    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+    ) -> Option<Result<TransactionConnection, RpcError>> {
         let content = self.contents.as_ref()?;
 
         Some(
@@ -486,6 +487,7 @@ impl EffectsContents {
                         dependencies[i],
                     ))
                 })
+                .map(Into::into)
             }
             .await,
         )

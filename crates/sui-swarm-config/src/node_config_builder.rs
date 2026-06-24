@@ -282,6 +282,7 @@ impl ValidatorConfigBuilder {
             execution_cache: self.execution_cache_config.unwrap_or_default(),
             run_with_range: None,
             jsonrpc_server_type: None,
+            disable_json_rpc: false,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
             state_accumulator_v2: self.global_state_hash_v2,
@@ -332,6 +333,7 @@ pub struct FullnodeConfigBuilder {
     fw_config: Option<RemoteFirewallConfig>,
     data_ingestion_dir: Option<PathBuf>,
     disable_pruning: bool,
+    disable_json_rpc: bool,
     sync_post_process_one_tx: bool,
     chain_override: Option<Chain>,
     transaction_driver_config: Option<TransactionDriverConfig>,
@@ -385,6 +387,11 @@ impl FullnodeConfigBuilder {
 
     pub fn with_disable_pruning(mut self, disable_pruning: bool) -> Self {
         self.disable_pruning = disable_pruning;
+        self
+    }
+
+    pub fn with_disable_json_rpc(mut self, disable_json_rpc: bool) -> Self {
+        self.disable_json_rpc = disable_json_rpc;
         self
     }
 
@@ -666,6 +673,7 @@ impl FullnodeConfigBuilder {
             authority_overload_config: Default::default(),
             run_with_range: self.run_with_range,
             jsonrpc_server_type: None,
+            disable_json_rpc: self.disable_json_rpc,
             policy_config: self.policy_config,
             firewall_config: self.fw_config,
             execution_cache: ExecutionCacheConfig::default(),
