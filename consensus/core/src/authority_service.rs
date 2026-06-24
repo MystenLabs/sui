@@ -337,6 +337,13 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
     ) -> ConsensusResult<BlockStream> {
         fail_point_async!("consensus-rpc-response");
 
+        // Subscribe to the live broadcast BEFORE snapshotting past proposed blocks below.
+        // resubscribe() positions the receiver at the current tail, so a block proposed
+        // concurrently with the snapshot lands in both segments (a harmless duplicate that the
+        // receiving peer dedups) rather than in neither (a gap that would otherwise have to be
+        // recovered via ancestor fetch).
+        let broadcast_rx = self.rx_block_broadcast.resubscribe();
+
         // Find past proposed blocks as the initial blocks to send to the peer.
         //
         // If there are cached blocks in the range which the peer requested, send all of them.
@@ -370,10 +377,13 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             )
         };
 
+        // Validator streams carry only this validator's own proposals, and the tonic layer
+        // throttles them to min_round_delay / 2. Keep this at 1 so broadcast backpressure
+        // remains visible instead of draining extra blocks into per-subscriber buffers.
         const MAX_BLOCKS_PER_POLL: usize = 1;
         let broadcasted_blocks = BroadcastedBlockStream::new(
             PeerId::Validator(peer),
-            self.rx_block_broadcast.resubscribe(),
+            broadcast_rx,
             MAX_BLOCKS_PER_POLL,
             self.subscription_counter.clone(),
         );
@@ -497,7 +507,7 @@ impl SubscriptionCounter {
         }
     }
 
-    fn increment(&self, peer: &PeerId) -> Result<(), ConsensusError> {
+    fn increment(&self, peer: &PeerId) {
         let mut counter = self.counter.lock();
         counter.count += 1;
         *counter
@@ -524,11 +534,9 @@ impl SubscriptionCounter {
                     .inc();
             }
         }
-
-        Ok(())
     }
 
-    fn decrement(&self, peer: &PeerId) -> Result<(), ConsensusError> {
+    fn decrement(&self, peer: &PeerId) {
         let mut counter = self.counter.lock();
         counter.count -= 1;
         *counter
@@ -557,8 +565,6 @@ impl SubscriptionCounter {
                 }
             }
         }
-
-        Ok(())
     }
 }
 
@@ -592,12 +598,9 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
         subscription_counter: Arc<SubscriptionCounter>,
     ) -> Self {
         assert!(max_items_per_poll > 0, "max_items_per_poll must be > 0");
-        if let Err(err) = subscription_counter.increment(&peer) {
-            match err {
-                ConsensusError::Shutdown => {}
-                _ => panic!("Unexpected error: {err}"),
-            }
-        }
+        // Increment before storing `peer`/`subscription_counter`, so the matching decrement in
+        // Drop only ever runs for a subscription that was actually counted.
+        subscription_counter.increment(&peer);
         Self {
             peer: Some(peer),
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
@@ -666,13 +669,8 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
 
 impl<T> Drop for BroadcastStream<T> {
     fn drop(&mut self) {
-        if let (Some(counter), Some(peer)) = (&self.subscription_counter, &self.peer)
-            && let Err(err) = counter.decrement(peer)
-        {
-            match err {
-                ConsensusError::Shutdown => {}
-                _ => panic!("Unexpected error: {err}"),
-            }
+        if let (Some(counter), Some(peer)) = (&self.subscription_counter, &self.peer) {
+            counter.decrement(peer);
         }
     }
 }
@@ -849,7 +847,7 @@ mod tests {
         async fn stream_blocks(
             &self,
             _peer: crate::network::PeerId,
-            _highest_round_per_authority: Vec<u64>,
+            _highest_round_per_authority: Vec<Round>,
             _timeout: Duration,
         ) -> ConsensusResult<crate::network::ObserverBlockStream> {
             unimplemented!("Unimplemented")

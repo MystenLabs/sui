@@ -131,10 +131,9 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             // already-seen blocks.
             let highest_round_per_authority = {
                 let ds = dag_state.read();
-                let mut rounds = vec![0u64; context.committee.size()];
+                let mut rounds = vec![0u32; context.committee.size()];
                 for (authority, _) in context.committee.authorities() {
-                    rounds[authority.value()] =
-                        ds.get_last_block_for_authority(authority).round() as u64;
+                    rounds[authority.value()] = ds.get_last_block_for_authority(authority).round();
                 }
                 rounds
             };
@@ -308,7 +307,7 @@ mod tests {
         async fn stream_blocks(
             &self,
             peer: PeerId,
-            _highest_round_per_authority: Vec<u64>,
+            _highest_round_per_authority: Vec<Round>,
             _timeout: Duration,
         ) -> ConsensusResult<ObserverBlockStream> {
             // Return different block content based on peer to distinguish them in tests
@@ -374,7 +373,7 @@ mod tests {
         async fn handle_stream_blocks(
             &self,
             _peer: NodeId,
-            _highest_round_per_authority: Vec<u64>,
+            _highest_round_per_authority: Vec<Round>,
         ) -> ConsensusResult<ObserverBlockStream> {
             unimplemented!("Unimplemented")
         }
