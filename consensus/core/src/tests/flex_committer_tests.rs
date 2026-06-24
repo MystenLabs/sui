@@ -10,7 +10,7 @@ use parking_lot::RwLock;
 use crate::{
     VerifiedBlock,
     block::{BlockAPI, Slot, TestBlock},
-    commit::{CommitAPI, CommitIndex, LeaderStatus},
+    commit::{CommitAPI, CommitIndex, Decision, LeaderStatus},
     context::Context,
     dag_state::DagState,
     flex_committer::{FlexCommitter, LeaderSlot, RoundState, sort_committed_blocks},
@@ -81,9 +81,16 @@ fn round_state(round: Round, statuses: Vec<LeaderStatus>) -> RoundState {
                 LeaderStatus::Commit(block) => Slot::new(block.round(), block.author()),
                 LeaderStatus::Skip(slot) | LeaderStatus::Undecided(slot) => *slot,
             };
+            // Decided slots in the test fixture are treated as direct decisions;
+            // undecided slots carry no decision.
+            let decision = match &leader_status {
+                LeaderStatus::Commit(_) | LeaderStatus::Skip(_) => Some(Decision::Direct),
+                LeaderStatus::Undecided(_) => None,
+            };
             LeaderSlot {
                 slot,
                 leader_status,
+                decision,
             }
         })
         .collect();
@@ -126,8 +133,8 @@ fn build_blocks(rounds_x_authorities: &[(Round, u32)]) -> Vec<VerifiedBlock> {
 
 // =================== Unit tests ===================
 
-#[test]
-fn committed_blocks_are_total_ordered_and_round_major() {
+#[tokio::test]
+async fn committed_blocks_are_total_ordered_and_round_major() {
     let inputs = build_blocks(&[
         (1, 0),
         (1, 1),
@@ -166,8 +173,8 @@ fn committed_blocks_are_total_ordered_and_round_major() {
     );
 }
 
-#[test]
-fn committed_blocks_within_round_are_not_author_ascending() {
+#[tokio::test]
+async fn committed_blocks_within_round_are_not_author_ascending() {
     // With 4 distinct authorities in one round, a meaningful shuffle will
     // not leave them in author-ascending order for every seed.
     let inputs = build_blocks(&[(1, 0), (1, 1), (1, 2), (1, 3)]);
@@ -192,8 +199,8 @@ fn committed_blocks_within_round_are_not_author_ascending() {
 
 /// The within-round order must depend on the seed; a sort that ignored the seed
 /// (e.g. ordering by block digest alone) would be deterministic but seed-blind.
-#[test]
-fn committed_blocks_within_round_order_depends_on_seed() {
+#[tokio::test]
+async fn committed_blocks_within_round_order_depends_on_seed() {
     let inputs = build_blocks(&[(1, 0), (1, 1), (1, 2), (1, 3)]);
     let order_for = |seed: [u8; DIGEST_LENGTH]| {
         let mut v = inputs.clone();
@@ -208,8 +215,8 @@ fn committed_blocks_within_round_order_depends_on_seed() {
 
 /// Refreshing with the same `next_commit_index` is a no-op: the accumulated
 /// round state and existing schedule are preserved.
-#[test]
-fn maybe_refresh_is_noop_on_same_index() {
+#[tokio::test]
+async fn maybe_refresh_is_noop_on_same_index() {
     let (_context, _dag_state, mut committer) = setup(4);
     committer.maybe_refresh_pending_commit_state(schedule(1, 1, &[0]));
     committer.pending_commit_state.get_or_create_round_state(3);
@@ -231,8 +238,8 @@ fn maybe_refresh_is_noop_on_same_index() {
 }
 
 /// A higher `next_commit_index` resets the pending state and installs the new schedule.
-#[test]
-fn maybe_refresh_resets_on_higher_index() {
+#[tokio::test]
+async fn maybe_refresh_resets_on_higher_index() {
     let (_context, _dag_state, mut committer) = setup(4);
     committer.maybe_refresh_pending_commit_state(schedule(1, 1, &[0]));
     committer.pending_commit_state.get_or_create_round_state(3);
@@ -250,17 +257,17 @@ fn maybe_refresh_resets_on_higher_index() {
 }
 
 /// `next_commit_index` must move forward; a lower index panics.
-#[test]
+#[tokio::test]
 #[should_panic(expected = "next_commit_index should only move forward")]
-fn maybe_refresh_panics_on_lower_index() {
+async fn maybe_refresh_panics_on_lower_index() {
     let (_context, _dag_state, mut committer) = setup(4);
     committer.maybe_refresh_pending_commit_state(schedule(3, 1, &[0]));
     committer.maybe_refresh_pending_commit_state(schedule(1, 1, &[0]));
 }
 
 /// The first committed leader, scanning from `start_round`, becomes the anchor.
-#[test]
-fn find_anchor_block_returns_first_committed() {
+#[tokio::test]
+async fn find_anchor_block_returns_first_committed() {
     let (_context, _dag_state, mut committer) = setup(4);
     let anchor = commit_block(2, 1);
     install_rounds(
@@ -279,8 +286,8 @@ fn find_anchor_block_returns_first_committed() {
 }
 
 /// An undecided slot before any commit means no anchor is available.
-#[test]
-fn find_anchor_block_none_when_undecided_first() {
+#[tokio::test]
+async fn find_anchor_block_none_when_undecided_first() {
     let (_context, _dag_state, mut committer) = setup(4);
     install_rounds(
         &mut committer,
@@ -294,8 +301,8 @@ fn find_anchor_block_none_when_undecided_first() {
 }
 
 /// Skipped slots — within and across rounds — are passed over until a commit.
-#[test]
-fn find_anchor_block_skips_past_skipped_slots() {
+#[tokio::test]
+async fn find_anchor_block_skips_past_skipped_slots() {
     let (_context, _dag_state, mut committer) = setup(4);
     let anchor = commit_block(2, 3);
     install_rounds(
@@ -313,8 +320,8 @@ fn find_anchor_block_skips_past_skipped_slots() {
 }
 
 /// `start_round` skips earlier rounds entirely, even committed ones.
-#[test]
-fn find_anchor_block_respects_start_round() {
+#[tokio::test]
+async fn find_anchor_block_respects_start_round() {
     let (_context, _dag_state, mut committer) = setup(4);
     let later = commit_block(2, 0);
     install_rounds(
@@ -332,8 +339,8 @@ fn find_anchor_block_respects_start_round() {
 }
 
 /// All-skip rounds yield no anchor.
-#[test]
-fn find_anchor_block_none_when_all_skipped() {
+#[tokio::test]
+async fn find_anchor_block_none_when_all_skipped() {
     let (_context, _dag_state, mut committer) = setup(4);
     install_rounds(
         &mut committer,
@@ -347,8 +354,8 @@ fn find_anchor_block_none_when_all_skipped() {
 }
 
 /// An undecided slot blocks committing, even if a later round is committed.
-#[test]
-fn find_commit_leader_round_none_when_undecided() {
+#[tokio::test]
+async fn find_commit_leader_round_none_when_undecided() {
     let (_context, _dag_state, mut committer) = setup(4);
     install_rounds(
         &mut committer,
@@ -362,8 +369,8 @@ fn find_commit_leader_round_none_when_undecided() {
 }
 
 /// The earliest fully-decided round with a committed leader is the commit round.
-#[test]
-fn find_commit_leader_round_returns_first_committed_round() {
+#[tokio::test]
+async fn find_commit_leader_round_returns_first_committed_round() {
     let (_context, _dag_state, mut committer) = setup(4);
     install_rounds(
         &mut committer,
@@ -377,8 +384,8 @@ fn find_commit_leader_round_returns_first_committed_round() {
 }
 
 /// Fully-decided all-skip rounds are passed over to a later committed round.
-#[test]
-fn find_commit_leader_round_skips_all_skip_rounds() {
+#[tokio::test]
+async fn find_commit_leader_round_skips_all_skip_rounds() {
     let (_context, _dag_state, mut committer) = setup(4);
     install_rounds(
         &mut committer,
@@ -393,8 +400,8 @@ fn find_commit_leader_round_skips_all_skip_rounds() {
 }
 
 /// A later undecided round blocks committing, even past earlier all-skip rounds.
-#[test]
-fn find_commit_leader_round_none_when_later_round_undecided() {
+#[tokio::test]
+async fn find_commit_leader_round_none_when_later_round_undecided() {
     let (_context, _dag_state, mut committer) = setup(4);
     install_rounds(
         &mut committer,
@@ -408,8 +415,8 @@ fn find_commit_leader_round_none_when_later_round_undecided() {
 }
 
 /// A round with a mix of committed and undecided slots is not yet committable.
-#[test]
-fn find_commit_leader_round_none_when_round_partially_decided() {
+#[tokio::test]
+async fn find_commit_leader_round_none_when_round_partially_decided() {
     let (_context, _dag_state, mut committer) = setup(4);
     install_rounds(
         &mut committer,
