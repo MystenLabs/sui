@@ -6,6 +6,7 @@ use crate::{
     gas_charger::GasPayment,
     static_programmable_transactions::{
         env::Env,
+        linkage,
         loading::ast::{self as L, PackagePayload},
         metering::{self, translation_meter::TranslationMeter},
     },
@@ -65,7 +66,12 @@ pub fn transaction<Mode: ExecutionMode>(
         commands,
     };
     metering::loading::meter::<Mode::Error>(meter, &loaded_tx)?;
-    Ok(loaded_tx)
+    linkage::refine_linkage::<Mode>(
+        loaded_tx,
+        env.linkage_analysis,
+        env.linkable_store,
+        env.protocol_config,
+    )
 }
 
 fn input<Mode: ExecutionMode>(

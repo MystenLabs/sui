@@ -42,7 +42,7 @@ created: object(6,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 7, lines 78-80:
+task 7, line 78:
 //# view-object 6,0
 Owner: Shared( 2 )
 Version: 2
@@ -55,16 +55,17 @@ Contents: Test_DepV1::DepM1::DepObj {
     v: 42u64,
 }
 
-task 8, lines 81-85:
+task 8, lines 80-83:
 //# programmable --sender A --inputs object(6,0)
+// call functions from two different versions of the same module  -- this will fail under unified linkage.
 //> 0: Test_DepV1::DepM1::mod_obj(Input(0));
 //> 1: Test_DepV2::DepM1::mod_obj(Input(0));
-// call functions from two different versions of the same module modifying the same object
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Debug of error: InvalidLinkage at command Some(1)
 
-task 9, lines 86-87:
+task 9, lines 85-87:
 //# programmable --sender A --inputs object(6,0)
+// call functions from two different versions of the same module modifying the same object
 //> Test_DepV1::DepM1::mod_obj(Input(0));
 mutated: object(0,0), object(6,0)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256

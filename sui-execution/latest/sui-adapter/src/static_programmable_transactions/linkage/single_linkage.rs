@@ -105,43 +105,6 @@ fn analyze_command<E: ExecutionErrorTrait>(
     Ok(())
 }
 
-/// Overwrite each `MoveCall`'s per-call linkage with the unified transaction-wide linkage (pass 2).
-/// Only `MoveCall`s carry an executable linkage; the other commands need no write-back.
-fn write_back_linkage<E: ExecutionErrorTrait>(
-    command: &mut Command,
-    ptb_linkage: &ExecutableLinkage,
-) -> Result<(), E> {
-    match command {
-        Command::MoveCall(move_call) => {
-            let previous_linkage = move_call.function.linkage.clone();
-            assert_invariant!(
-                previous_linkage.0.linkage.len() <= ptb_linkage.0.linkage.len(),
-                "single linkage has fewer candidates than the per-call linkage of MoveCall"
-            );
-            // Stronger than the length check above: every package the per-call linkage resolved
-            // must still be present in the per-component linkage. Unification only ever adds
-            // packages (the key set is a union across member calls), so a dropped key signals a
-            // bug in how component constraints were folded together.
-            assert_invariant!(
-                previous_linkage
-                    .0
-                    .linkage
-                    .keys()
-                    .all(|k| ptb_linkage.0.linkage.contains_key(k)),
-                "single linkage drops a package that the per-call linkage of MoveCall had resolved"
-            );
-            move_call.function.linkage = ptb_linkage.clone();
-        }
-        Command::TransferObjects(_, _)
-        | Command::SplitCoins(_, _)
-        | Command::MergeCoins(_, _)
-        | Command::MakeMoveVec(_, _)
-        | Command::Publish(_, _, _)
-        | Command::Upgrade(_, _, _, _, _) => (),
-    };
-    Ok(())
-}
-
 /// Add a `MoveCall`'s target package and type-argument packages to the resolution table.
 ///
 /// The called package itself is pinned `exact` (we must run exactly the version being called). Its
@@ -208,5 +171,42 @@ fn add_package<E: ExecutionErrorTrait>(
     for dep_id in transitive_deps {
         add_and_unify(&dep_id, store, resolution_table, dep_resolution_fn)?;
     }
+    Ok(())
+}
+
+/// Overwrite each `MoveCall`'s per-call linkage with the unified transaction-wide linkage (pass 2).
+/// Only `MoveCall`s carry an executable linkage; the other commands need no write-back.
+fn write_back_linkage<E: ExecutionErrorTrait>(
+    command: &mut Command,
+    ptb_linkage: &ExecutableLinkage,
+) -> Result<(), E> {
+    match command {
+        Command::MoveCall(move_call) => {
+            let previous_linkage = move_call.function.linkage.clone();
+            assert_invariant!(
+                previous_linkage.0.linkage.len() <= ptb_linkage.0.linkage.len(),
+                "single linkage has fewer candidates than the per-call linkage of MoveCall"
+            );
+            // Stronger than the length check above: every package the per-call linkage resolved
+            // must still be present in the per-component linkage. Unification only ever adds
+            // packages (the key set is a union across member calls), so a dropped key signals a
+            // bug in how component constraints were folded together.
+            assert_invariant!(
+                previous_linkage
+                    .0
+                    .linkage
+                    .keys()
+                    .all(|k| ptb_linkage.0.linkage.contains_key(k)),
+                "single linkage drops a package that the per-call linkage of MoveCall had resolved"
+            );
+            move_call.function.linkage = ptb_linkage.clone();
+        }
+        Command::TransferObjects(_, _)
+        | Command::SplitCoins(_, _)
+        | Command::MergeCoins(_, _)
+        | Command::MakeMoveVec(_, _)
+        | Command::Publish(_, _, _)
+        | Command::Upgrade(_, _, _, _, _) => (),
+    };
     Ok(())
 }

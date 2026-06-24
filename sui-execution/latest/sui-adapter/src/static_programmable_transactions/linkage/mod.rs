@@ -16,6 +16,8 @@ use crate::{
 };
 use sui_protocol_config::ProtocolConfig;
 
+/// Refine the transaction's per-call linkages into a single, unified linkage for the whole
+/// transaction (when enabled by the protocol config).
 pub fn refine_linkage<Mode: ExecutionMode>(
     mut txn: loading::Transaction,
     linkage_analysis: &LinkageAnalyzer,

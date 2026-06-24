@@ -15,8 +15,8 @@ module DepV2::M1;
 public fun f1() { }
 public fun f2() { }
 
-// Public consumer; v1 pins Dep at_least 1, v2 pins Dep at_least 2.
 //# publish --upgradeable --dependencies DepV1 --sender A
+// Public consumer; v1 pins Dep at_least 1, v2 pins Dep at_least 2.
 module DepConsumerV1::M;
 public fun consume() { DepV1::M1::f1() }
 
@@ -24,9 +24,9 @@ public fun consume() { DepV1::M1::f1() }
 module DepConsumerV2::M;
 public fun consume() { DepV2::M1::f2() }
 
+//# publish --dependencies DepV1 --sender A
 // Distinct package pinning Dep at_least 1 (the at_least/at_least case needs two different packages;
 // two versions of one package would conflict on that package itself).
-//# publish --dependencies DepV1 --sender A
 module OtherConsumer::M;
 public fun consume() { DepV1::M1::f1() }
 
@@ -34,19 +34,19 @@ public fun consume() { DepV1::M1::f1() }
 module Test::M;
 fun init(_ctx: &mut TxContext) { }
 
-// exact(DepV2 v2) ~ at_least(Dep v1) => exact(v2).
 //# programmable --sender A --inputs @A
+// exact(DepV2 v2) ~ at_least(Dep v1) => exact(v2).
 //> 0: Publish(Test, [DepV2, sui, std]);
 //> 1: OtherConsumer::M::consume();
 //> TransferObjects([Result(0)], Input(0))
 
-// boundary: exact(DepV2 v2) ~ at_least(Dep v2).
 //# programmable --sender A --inputs @A
+// boundary: exact(DepV2 v2) ~ at_least(Dep v2).
 //> 0: Publish(Test, [DepV2, sui, std]);
 //> 1: DepConsumerV2::M::consume();
 //> TransferObjects([Result(0)], Input(0))
 
-// at_least(Dep v1) ~ at_least(Dep v2) => at_least(v2).
 //# programmable --sender A
+// at_least(Dep v1) ~ at_least(Dep v2) => at_least(v2).
 //> 0: OtherConsumer::M::consume();
 //> 1: DepConsumerV2::M::consume();

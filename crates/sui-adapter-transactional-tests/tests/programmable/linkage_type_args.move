@@ -10,8 +10,8 @@
 module DepV1::M1;
 public struct A has drop { }
 
-// `B` introduced in v2 => its defining id is v2 => a `B` type-arg pins Dep at_least 2.
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
+// `B` introduced in v2 => its defining id is v2 => a `B` type-arg pins Dep at_least 2.
 module DepV2::M1;
 public struct A has drop { }
 public struct B has drop { }
@@ -24,16 +24,16 @@ public fun id<T>() { }
 module Test::M;
 fun init(_ctx: &mut TxContext) { }
 
+//# programmable --sender A --inputs @A
 // publish pins DepV1 exact (v1); B type-arg pins Dep at_least 2 => exact(1) < at_least(2) =>
 // Exact/AtLeast conflict.
-//# programmable --sender A --inputs @A
 //> 0: Publish(Test, [DepV1, sui, std]);
 //> 1: Gen::m::id<DepV2::M1::B>();
 //> TransferObjects([Result(0)], Input(0))
 
+//# programmable --sender A --inputs @A
 // Same B type as MakeMoveVec element: pins Dep at_least 2 => exact(1) < at_least(2) =>
 // Exact/AtLeast conflict.
-//# programmable --sender A --inputs @A
 //> 0: Publish(Test, [DepV1, sui, std]);
 //> 1: MakeMoveVec<DepV2::M1::B>([]);
 //> TransferObjects([Result(0)], Input(0))

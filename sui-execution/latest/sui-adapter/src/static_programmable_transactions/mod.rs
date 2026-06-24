@@ -88,9 +88,6 @@ pub fn execute<Mode: ExecutionMode>(
         )
         .map_err(|e| (e, vec![]))?
     };
-    let txn =
-        linkage::refine_linkage::<Mode>(txn, &linkage_analysis, &package_store, protocol_config)
-            .map_err(|e| (e, vec![]))?;
     let txn = typing::translate_and_verify::<Mode>(&mut translation_meter, &env, txn)
         .map_err(|e| (e, vec![]))?;
     execution::interpreter::execute::<Mode>(

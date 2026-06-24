@@ -26,14 +26,14 @@ fun init(_ctx: &mut TxContext) { }
 module NoInit::M;
 public fun f() { }
 
-// Depends on DepV1, reached via a private entry fn => deps pinned exact => DepV1 (v1) exact.
 //# publish --dependencies DepV1 --sender A
+// Depends on DepV1, reached via a private entry fn => deps pinned exact => DepV1 (v1) exact.
 module V1Consumer::M;
 entry fun consume_v1() { DepV1::M1::f1() }
 
+//# publish --upgradeable --dependencies DepV1 --sender A
 // Upgradeable consumer: published vs Dep v1, upgraded to v2 (fresh publish can't depend on a
 // non-root version). Public fn => deps pinned at_least => calling v2 pins Dep at_least 2.
-//# publish --upgradeable --dependencies DepV1 --sender A
 module DepConsumerV1::M;
 public fun consume() { DepV1::M1::f1() }
 
@@ -42,59 +42,59 @@ module DepConsumerV2::M;
 public fun consume() { DepV2::M1::f2() }
 
 
-// publish pins DepV2 exact; direct call pins DepV1 exact => exact/exact conflict.
 //# programmable --sender A --inputs 10 @A
+// publish pins DepV2 exact; direct call pins DepV1 exact => exact/exact conflict.
 //> 0: Publish(Test, [DepV2, sui, std]);
 //> 1: DepV1::M1::f1();
 //> TransferObjects([Result(0)], Input(1))
 
-// As above, order independent.
 //# programmable --sender A --inputs 10 @A
+// As above, order independent.
 //> 0: DepV1::M1::f1();
 //> 1: Publish(Test, [DepV2, sui, std]);
 //> TransferObjects([Result(1)], Input(1))
 
+//# programmable --sender A --inputs 10 @A
 // Conflict via a dependency, not the root target: V1Consumer is not a transitive dep of Test, but
 // its private entry pins DepV1 exact vs publish's DepV2 exact => exact/exact conflict.
-//# programmable --sender A --inputs 10 @A
 //> 0: Publish(Test, [DepV2, sui, std]);
 //> 1: V1Consumer::M::consume_v1();
 //> TransferObjects([Result(0)], Input(1))
 
-// As above, order independent.
 //# programmable --sender A --inputs 10 @A
+// As above, order independent.
 //> 0: V1Consumer::M::consume_v1();
 //> 1: Publish(Test, [DepV2, sui, std]);
 //> TransferObjects([Result(1)], Input(1))
 
+//# programmable --sender A --inputs 10 @A
 // publish pins DepV1 exact (v1); public-fn dep pins Dep at_least 2 => exact(1) < at_least(2) =>
 // Exact/AtLeast conflict.
-//# programmable --sender A --inputs 10 @A
 //> 0: Publish(Test, [DepV1, sui, std]);
 //> 1: DepConsumerV2::M::consume();
 //> TransferObjects([Result(0)], Input(1))
 
-// As above, order independent.
 //# programmable --sender A --inputs 10 @A
+// As above, order independent.
 //> 0: DepConsumerV2::M::consume();
 //> 1: Publish(Test, [DepV1, sui, std]);
 //> TransferObjects([Result(1)], Input(1))
 
+//# programmable --sender A --inputs 10 @A
 // No `init` => publish contributes no constraint; DepV2 dep list is inert. Direct DepV1 call is the
 // sole constraint => succeeds.
-//# programmable --sender A --inputs 10 @A
 //> 0: Publish(NoInit, [DepV2, sui, std]);
 //> 1: DepV1::M1::f1();
 //> TransferObjects([Result(0)], Input(1))
 
-// Two init publishes in one PTB: DepV1 exact + DepV2 exact => exact/exact conflict.
 //# programmable --sender A --inputs @A
+// Two init publishes in one PTB: DepV1 exact + DepV2 exact => exact/exact conflict.
 //> 0: Publish(Test, [DepV1, sui, std]);
 //> 1: Publish(Test, [DepV2, sui, std]);
 //> TransferObjects([Result(0), Result(1)], Input(0))
 
-// As above but the DepV2 publish has no `init` => inert => only DepV1 exact => succeeds.
 //# programmable --sender A --inputs @A
+// As above but the DepV2 publish has no `init` => inert => only DepV1 exact => succeeds.
 //> 0: Publish(Test, [DepV1, sui, std]);
 //> 1: Publish(NoInit, [DepV2, sui, std]);
 //> TransferObjects([Result(0), Result(1)], Input(0))
