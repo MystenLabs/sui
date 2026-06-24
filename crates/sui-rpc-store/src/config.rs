@@ -263,27 +263,32 @@ impl PipelineLayer {
     /// not by this layer, so both are simply registered here:
     ///
     /// - **Live cohort** — restored to the fullnode's tip and
-    ///   following live from there: `live_objects`,
-    ///   `object_version_by_checkpoint`, `object_by_owner`,
+    ///   following live from there: `live_objects`, `object_by_owner`,
     ///   `object_by_type`, `balance`, `package_versions`.
     /// - **History cohort** — seeded to the lowest available
     ///   checkpoint and backfilling upward: `epochs`,
-    ///   `tx_seq_by_digest`, `tx_metadata_by_seq`,
-    ///   `transaction_bitmap`, `event_bitmap`. These back the
-    ///   ledger-history list APIs (the bitmaps plus the `tx_seq` <->
-    ///   digest maps needed to interpret bitmap results) and the
-    ///   per-epoch protocol/committee reads (`epochs`).
+    ///   `object_version_by_checkpoint`, `tx_seq_by_digest`,
+    ///   `tx_metadata_by_seq`, `transaction_bitmap`, `event_bitmap`.
+    ///   These back the ledger-history list APIs (the bitmaps plus the
+    ///   `tx_seq` <-> digest maps needed to interpret bitmap results)
+    ///   and the per-epoch protocol/committee reads (`epochs`).
+    ///   `object_version_by_checkpoint` is additionally restored at the
+    ///   tip for its `from_restore` floor rows (see the cohort docs in
+    ///   [`restore`](crate::indexer::restore)).
     pub fn embedded() -> Self {
         Self {
             // Live cohort: restored to the tip, follows live.
             live_objects: Some(CommitterLayer::default()),
-            object_version_by_checkpoint: Some(CommitterLayer::default()),
             object_by_owner: Some(CommitterLayer::default()),
             object_by_type: Some(CommitterLayer::default()),
             balance: Some(CommitterLayer::default()),
             package_versions: Some(CommitterLayer::default()),
             // History cohort: seeded to L, backfills upward.
+            // `object_version_by_checkpoint` is additionally restored at
+            // the tip for its floor rows (see the cohort docs in
+            // `restore.rs`).
             epochs: Some(CommitterLayer::default()),
+            object_version_by_checkpoint: Some(CommitterLayer::default()),
             tx_seq_by_digest: Some(CommitterLayer::default()),
             tx_metadata_by_seq: Some(CommitterLayer::default()),
             transaction_bitmap: Some(CommitterLayer::default()),
@@ -368,13 +373,13 @@ mod tests {
         let layer = PipelineLayer::embedded();
         // Live cohort.
         assert!(layer.live_objects.is_some());
-        assert!(layer.object_version_by_checkpoint.is_some());
         assert!(layer.object_by_owner.is_some());
         assert!(layer.object_by_type.is_some());
         assert!(layer.balance.is_some());
         assert!(layer.package_versions.is_some());
-        // History cohort.
+        // History cohort (object_version_by_checkpoint is also restored).
         assert!(layer.epochs.is_some());
+        assert!(layer.object_version_by_checkpoint.is_some());
         assert!(layer.tx_seq_by_digest.is_some());
         assert!(layer.tx_metadata_by_seq.is_some());
         assert!(layer.transaction_bitmap.is_some());
