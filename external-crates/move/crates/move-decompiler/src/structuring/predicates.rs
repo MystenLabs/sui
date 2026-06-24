@@ -35,7 +35,15 @@ use move_stackless_bytecode_2::ast::PrimitiveOp;
 use move_symbol_pool::Symbol;
 use petgraph::graph::NodeIndex;
 
-use std::collections::BTreeSet;
+use std::cell::RefCell;
+use std::collections::{BTreeSet, HashMap};
+
+thread_local! {
+    /// Memoization for `Formula::simplify`. The smart constructors canonicalize on
+    /// construction, so structurally-equal inputs hash and compare identically; hit rates
+    /// are high in the inner loops that run QM on derived guards.
+    static SIMPLIFY_CACHE: RefCell<HashMap<Formula, Formula>> = RefCell::new(HashMap::new());
+}
 
 // -------------------------------------------------------------------------------------------------
 // Type
@@ -317,7 +325,21 @@ impl Formula {
     /// `simplify()`, picks the shortest result, and lowers back. Returns the original
     /// formula unchanged if the atom count exceeds the crate's u8 variable limit (32) or
     /// if `simplify` returns an empty set.
+    ///
+    /// Memoized on a thread-local `HashMap` keyed by `self`. Smart constructors yield
+    /// canonical forms - two structurally-equal inputs hash and compare identically - so
+    /// hit rates are high in the per-Seq elide-pass loop where the same `(assumptions ∧
+    /// ¬guard)` formula gets rebuilt across refinement iterations.
     pub fn simplify(&self) -> Formula {
+        if let Some(cached) = SIMPLIFY_CACHE.with(|cell| cell.borrow().get(self).cloned()) {
+            return cached;
+        }
+        let result = self.simplify_uncached();
+        SIMPLIFY_CACHE.with(|cell| cell.borrow_mut().insert(self.clone(), result.clone()));
+        result
+    }
+
+    fn simplify_uncached(&self) -> Formula {
         use quine_mc_cluskey::Bool as Q;
 
         let atoms: Vec<Symbol> = self.atoms().into_iter().collect();
