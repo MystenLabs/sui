@@ -105,7 +105,7 @@ mod tests {
             tokio::spawn(async move { run_dummy_remote_write(dummy_remote_write_listener).await });
 
         // init the tls config and allower
-        let mut allower = SuiNodeProvider::new("".into(), Duration::from_secs(30), vec![]);
+        let mut allower = SuiNodeProvider::new("".into(), Duration::from_secs(30), vec![], None);
         let tls_config = ClientCertVerifier::new(
             allower.clone(),
             sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
@@ -216,7 +216,7 @@ mod tests {
         });
 
         // init the tls config and allower
-        let mut allower = SuiNodeProvider::new("".into(), Duration::from_secs(30), vec![]);
+        let mut allower = SuiNodeProvider::new("".into(), Duration::from_secs(30), vec![], None);
         let tls_config = ClientCertVerifier::new(
             allower.clone(),
             sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
