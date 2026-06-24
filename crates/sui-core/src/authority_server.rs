@@ -882,7 +882,11 @@ impl ValidatorService {
                     .with_label_values(&[req_type])
                     .inc();
                 results[idx] = Some(SubmitTxResult::Rejected {
-                    error: UserInputError::TransactionAlreadyExecuted { digest: tx_digest }.into(),
+                    error: SuiErrorKind::TransactionProcessing {
+                        digest: tx_digest,
+                        status: "sequenced by consensus".to_string(),
+                    }
+                    .into(),
                 });
                 debug!(
                     ?tx_digest,

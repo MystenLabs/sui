@@ -276,9 +276,7 @@ async fn test_submit_transaction_consensus_message_processed() {
             assert!(
                 matches!(
                     error.as_inner(),
-                    SuiErrorKind::UserInputError {
-                        error: UserInputError::TransactionAlreadyExecuted { digest }
-                    } if *digest == tx_digest
+                    SuiErrorKind::TransactionProcessing { digest, .. } if *digest == tx_digest
                 ),
                 "unexpected rejection error: {error}"
             );
