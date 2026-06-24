@@ -169,6 +169,26 @@ pub struct PackageVersionInfo {
     #[prost(bytes = "bytes", tag = "1")]
     pub storage_id: ::prost::bytes::Bytes,
 }
+/// The object version live as of a checkpoint, stored in
+/// `object_version_by_checkpoint` keyed by `(ObjectID, checkpoint)`.
+///
+/// `version` is the object's final version at the end of the keyed
+/// checkpoint (a live version, or the tombstone version for an object
+/// removed in that checkpoint).
+///
+/// `from_restore` is set only on rows written by the live-set restore
+/// at the restore anchor checkpoint; tip indexing and backfill leave it
+/// unset, so the common case pays no extra bytes. It lets a
+/// checkpoint-pinned read tell a static object's restore floor (the
+/// object existed before the available window) apart from an object
+/// created in the anchor checkpoint.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ObjectVersionInfo {
+    #[prost(uint64, tag = "1")]
+    pub version: u64,
+    #[prost(bool, optional, tag = "2")]
+    pub from_restore: ::core::option::Option<bool>,
+}
 /// Per-epoch metadata stored in `epochs` keyed by `EpochId`.
 ///
 /// Written as a sequence of partial records that the merge

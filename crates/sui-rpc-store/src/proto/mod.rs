@@ -18,6 +18,7 @@ pub mod sui {
 
 pub use sui::rpc_store::v1alpha::BalanceDelta;
 pub use sui::rpc_store::v1alpha::BitmapBlob;
+pub use sui::rpc_store::v1alpha::ObjectVersionInfo;
 pub use sui::rpc_store::v1alpha::PackageVersionInfo;
 pub use sui::rpc_store::v1alpha::PruningWatermarks;
 pub use sui::rpc_store::v1alpha::StoredCheckpointContents;

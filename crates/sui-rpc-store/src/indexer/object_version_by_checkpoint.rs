@@ -156,8 +156,11 @@ impl Restore for ObjectVersionByCheckpoint {
         let checkpoint = self
             .restore_checkpoint
             .context("object_version_by_checkpoint restored without a restore anchor checkpoint")?;
+        // Mark these as restore-floor rows so a checkpoint-pinned read
+        // below the anchor can tell a pre-window object (live) apart
+        // from one created in the anchor checkpoint.
         let (key, value) =
-            object_version_by_checkpoint::store(object.id(), checkpoint, object.version());
+            object_version_by_checkpoint::store_restored(object.id(), checkpoint, object.version());
         batch.put(&schema.object_version_by_checkpoint, &key, &value)?;
         Ok(())
     }
@@ -278,7 +281,9 @@ mod tests {
             .unwrap();
         batch.commit().unwrap();
 
-        // The object resolves at and after the anchor, and not before.
+        // The object resolves at and after the anchor via the floor
+        // scan, and below it via the restore fallback (it is marked
+        // `from_restore`, so it stands in as the pre-window floor).
         assert_eq!(
             schema
                 .get_object_version_at_checkpoint(object.id(), 123)
@@ -291,11 +296,11 @@ mod tests {
                 .unwrap(),
             Some(object.version()),
         );
-        assert!(
+        assert_eq!(
             schema
                 .get_object_version_at_checkpoint(object.id(), 122)
-                .unwrap()
-                .is_none()
+                .unwrap(),
+            Some(object.version()),
         );
     }
 }
