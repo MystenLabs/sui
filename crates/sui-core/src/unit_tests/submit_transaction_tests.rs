@@ -449,7 +449,22 @@ async fn test_submit_soft_bundle_transactions() {
     let test_context = TestContext::new().await;
 
     let tx1 = test_context.build_test_transaction();
-    let tx2 = test_context.build_test_transaction();
+
+    // tx2 must be distinct from tx1: a soft bundle may not repeat a transaction.
+    let gas_object2 = Object::with_owner_for_testing(test_context.sender);
+    let gas_object_ref2 = gas_object2.compute_object_reference();
+    test_context.state.insert_genesis_object(gas_object2);
+    let tx_data2 = TestTransactionBuilder::new(
+        test_context.sender,
+        gas_object_ref2,
+        test_context
+            .state
+            .reference_gas_price_for_testing()
+            .unwrap(),
+    )
+    .transfer_sui(None, test_context.sender)
+    .build();
+    let tx2 = to_sender_signed_transaction(tx_data2, &test_context.keypair);
 
     // Build request with batched transactions.
     let request = RawSubmitTxRequest {
@@ -482,6 +497,41 @@ async fn test_submit_soft_bundle_transactions() {
             _ => panic!("Expected Submitted status for all transactions"),
         }
     }
+}
+
+// A soft bundle that repeats the same transaction is rejected outright.
+#[tokio::test]
+async fn test_submit_soft_bundle_with_repeated_transaction() {
+    let test_context = TestContext::new().await;
+
+    let tx = test_context.build_test_transaction();
+    let tx_digest = *tx.digest();
+
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx).unwrap().into(),
+            bcs::to_bytes(&tx).unwrap().into(),
+        ],
+        submit_type: SubmitTxType::SoftBundle.into(),
+    };
+
+    let response = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await;
+    assert!(response.is_err());
+    let error: SuiError = response.unwrap_err().into();
+    assert!(
+        matches!(
+            error.into_inner(),
+            SuiErrorKind::UserInputError {
+                error: UserInputError::RepeatedTransactionInSoftBundle { digest }
+            } if digest == tx_digest
+        ),
+        "expected RepeatedTransactionInSoftBundle error"
+    );
 }
 
 #[tokio::test]
