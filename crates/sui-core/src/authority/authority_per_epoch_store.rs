@@ -438,7 +438,9 @@ pub struct AuthorityPerEpochStore {
     /// Inserts into `finalized_transactions_cache` are offloaded off the (single-threaded)
     /// consensus commit handler via this channel; a dedicated thread drains it. The cache is
     /// advisory (`is_recently_finalized` falls back to the executed-tx check), so a full
-    /// channel may drop a digest harmlessly.
+    /// channel may drop a digest harmlessly. Absent under msim: the simulator doesn't intercept
+    /// `std::thread::spawn`, so there we insert inline instead (perf is irrelevant in simulation).
+    #[cfg(not(msim))]
     finalized_transactions_tx: std::sync::mpsc::SyncSender<TransactionDigest>,
 
     /// The node's role for this epoch, derived from committee membership and
@@ -1177,9 +1179,14 @@ impl AuthorityPerEpochStore {
         // Drain `cache_recently_finalized_transaction` inserts on a dedicated thread: moka's
         // per-insert maintenance was ~15% of the single-threaded consensus handler at high TPS.
         // The thread exits when the epoch store (sole sender holder) is dropped.
-        let (finalized_transactions_tx, finalized_transactions_rx) =
-            std::sync::mpsc::sync_channel::<TransactionDigest>(1 << 16);
-        {
+        //
+        // Skipped under msim: it doesn't intercept `std::thread::spawn` (the thread would run in
+        // real time outside the simulator), and the perf win is irrelevant in simulation, so
+        // `cache_recently_finalized_transaction` inserts inline there instead.
+        #[cfg(not(msim))]
+        let finalized_transactions_tx = {
+            let (finalized_transactions_tx, finalized_transactions_rx) =
+                std::sync::mpsc::sync_channel::<TransactionDigest>(1 << 16);
             let cache = finalized_transactions_cache.clone();
             std::thread::Builder::new()
                 .name("finalized-tx-cache".into())
@@ -1189,7 +1196,8 @@ impl AuthorityPerEpochStore {
                     }
                 })
                 .expect("failed to spawn finalized-tx-cache thread");
-        }
+            finalized_transactions_tx
+        };
 
         let s = Arc::new(Self {
             name,
@@ -1234,6 +1242,7 @@ impl AuthorityPerEpochStore {
             tx_reject_reason_cache,
             submitted_transaction_cache,
             finalized_transactions_cache,
+            #[cfg(not(msim))]
             finalized_transactions_tx,
             node_role: NodeRole::from_committee(&committee, &name, fullnode_sync_mode),
         });
@@ -3537,7 +3546,11 @@ impl AuthorityPerEpochStore {
     /// Caches recent finalized transactions, to avoid revoting them.
     pub(crate) fn cache_recently_finalized_transaction(&self, tx_digest: TransactionDigest) {
         // Non-blocking handoff to the drainer thread; best-effort (drop if the channel is full).
+        #[cfg(not(msim))]
         let _ = self.finalized_transactions_tx.try_send(tx_digest);
+        // msim has no drainer thread (see `new`); insert inline (perf is irrelevant in simulation).
+        #[cfg(msim)]
+        self.finalized_transactions_cache.insert(tx_digest, ());
     }
 
     /// If true, transaction is recently finalized and should not be voted on.
