@@ -1739,6 +1739,15 @@ impl CheckpointBuilder {
             contents_digest = ?contents.digest(),
             "writing checkpoint",
         );
+        info!(
+            "CLAUDE: write_checkpoint seq={} contents_digest={:?} txs={:?}",
+            summary.sequence_number,
+            contents.digest(),
+            contents
+                .iter()
+                .map(|d| (d.transaction, d.effects))
+                .collect::<Vec<_>>(),
+        );
 
         if let Some(previously_computed_summary) = self
             .store
