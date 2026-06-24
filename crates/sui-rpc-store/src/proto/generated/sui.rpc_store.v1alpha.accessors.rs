@@ -52,6 +52,55 @@ mod _accessor_impls {
             self
         }
     }
+    impl super::ObjectVersionInfo {
+        pub const fn const_default() -> Self {
+            Self {
+                version: 0,
+                from_restore: None,
+            }
+        }
+        #[doc(hidden)]
+        pub fn default_instance() -> &'static Self {
+            static DEFAULT: super::ObjectVersionInfo = super::ObjectVersionInfo::const_default();
+            &DEFAULT
+        }
+        ///Returns a mutable reference to `version`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn version_mut(&mut self) -> &mut u64 {
+            &mut self.version
+        }
+        ///Sets `version` with the provided value.
+        pub fn set_version(&mut self, field: u64) {
+            self.version = field;
+        }
+        ///Sets `version` with the provided value.
+        pub fn with_version(mut self, field: u64) -> Self {
+            self.set_version(field);
+            self
+        }
+        ///If `from_restore` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn from_restore_opt_mut(&mut self) -> Option<&mut bool> {
+            self.from_restore.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `from_restore`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn from_restore_mut(&mut self) -> &mut bool {
+            self.from_restore.get_or_insert_default()
+        }
+        ///If `from_restore` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn from_restore_opt(&self) -> Option<bool> {
+            self.from_restore.as_ref().map(|field| *field)
+        }
+        ///Sets `from_restore` with the provided value.
+        pub fn set_from_restore(&mut self, field: bool) {
+            self.from_restore = Some(field);
+        }
+        ///Sets `from_restore` with the provided value.
+        pub fn with_from_restore(mut self, field: bool) -> Self {
+            self.set_from_restore(field);
+            self
+        }
+    }
     impl super::PackageVersionInfo {
         pub const fn const_default() -> Self {
             Self {

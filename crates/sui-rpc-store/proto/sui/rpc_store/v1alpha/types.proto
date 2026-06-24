@@ -180,6 +180,24 @@ message PackageVersionInfo {
   bytes storage_id = 1;
 }
 
+// The object version live as of a checkpoint, stored in
+// `object_version_by_checkpoint` keyed by `(ObjectID, checkpoint)`.
+//
+// `version` is the object's final version at the end of the keyed
+// checkpoint (a live version, or the tombstone version for an object
+// removed in that checkpoint).
+//
+// `from_restore` is set only on rows written by the live-set restore
+// at the restore anchor checkpoint; tip indexing and backfill leave it
+// unset, so the common case pays no extra bytes. It lets a
+// checkpoint-pinned read tell a static object's restore floor (the
+// object existed before the available window) apart from an object
+// created in the anchor checkpoint.
+message ObjectVersionInfo {
+  uint64 version = 1;
+  optional bool from_restore = 2;
+}
+
 // Per-epoch metadata stored in `epochs` keyed by `EpochId`.
 //
 // Written as a sequence of partial records that the merge
