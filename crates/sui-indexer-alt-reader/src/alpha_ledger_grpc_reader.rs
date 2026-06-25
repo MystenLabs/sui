@@ -71,9 +71,8 @@ impl AlphaLedgerGrpcReader {
             GrpcMetricsLayer::new(prefix.unwrap_or("ledger_grpc"), registry).layer(channel);
 
         let timeout = args.statement_timeout();
-        let max_decoding_message_size = args.max_decoding_message_size();
         let client = LedgerServiceClient::new(layered.clone())
-            .max_decoding_message_size(max_decoding_message_size);
+            .max_decoding_message_size(args.ledger_grpc_max_decoding_message_size);
 
         Ok(Self { client, timeout })
     }

@@ -21,8 +21,6 @@ use tower::Layer;
 use crate::metrics::GrpcMetricsLayer;
 use crate::metrics::GrpcMetricsService;
 
-const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
-
 #[derive(clap::Args, Debug, Clone)]
 pub struct LedgerGrpcArgs {
     /// Timeout for gRPC statements to the ledger service, in milliseconds.
@@ -30,8 +28,8 @@ pub struct LedgerGrpcArgs {
     pub ledger_grpc_statement_timeout_ms: Option<u64>,
 
     /// Maximum gRPC decoding message size for Ledger service responses, in bytes.
-    #[arg(long)]
-    pub ledger_grpc_max_decoding_message_size: Option<usize>,
+    #[arg(long, default_value_t = 32 * 1024 * 1024)]
+    pub ledger_grpc_max_decoding_message_size: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -56,14 +54,21 @@ pub struct LedgerGrpcReader {
 }
 
 impl LedgerGrpcArgs {
+    pub fn new(
+        statement_timeout_ms: Option<u64>,
+        max_decoding_message_size: Option<usize>,
+    ) -> Self {
+        let defaults = Self::default();
+        Self {
+            ledger_grpc_statement_timeout_ms: statement_timeout_ms,
+            ledger_grpc_max_decoding_message_size: max_decoding_message_size
+                .unwrap_or(defaults.ledger_grpc_max_decoding_message_size),
+        }
+    }
+
     pub fn statement_timeout(&self) -> Option<std::time::Duration> {
         self.ledger_grpc_statement_timeout_ms
             .map(Duration::from_millis)
-    }
-
-    pub fn max_decoding_message_size(&self) -> usize {
-        self.ledger_grpc_max_decoding_message_size
-            .unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE)
     }
 }
 
@@ -89,11 +94,8 @@ impl LedgerGrpcReader {
             GrpcMetricsLayer::new(prefix.unwrap_or("ledger_grpc"), registry).layer(channel);
 
         let timeout = args.statement_timeout();
-        let max_decoding_message_size = args
-            .ledger_grpc_max_decoding_message_size
-            .unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE);
-        let client =
-            LedgerServiceClient::new(layered).max_decoding_message_size(max_decoding_message_size);
+        let client = LedgerServiceClient::new(layered)
+            .max_decoding_message_size(args.ledger_grpc_max_decoding_message_size);
 
         Ok(Self { client, timeout })
     }
@@ -207,7 +209,7 @@ impl Default for LedgerGrpcArgs {
     fn default() -> Self {
         Self {
             ledger_grpc_statement_timeout_ms: None,
-            ledger_grpc_max_decoding_message_size: Some(DEFAULT_MAX_DECODING_MESSAGE_SIZE),
+            ledger_grpc_max_decoding_message_size: 32 * 1024 * 1024,
         }
     }
 }

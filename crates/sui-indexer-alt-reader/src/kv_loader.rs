@@ -226,10 +226,10 @@ impl KvArgs {
     }
 
     fn ledger_grpc_args(&self) -> LedgerGrpcArgs {
-        LedgerGrpcArgs {
-            ledger_grpc_statement_timeout_ms: self.kv_statement_timeout_ms,
-            ledger_grpc_max_decoding_message_size: self.kv_max_decoding_message_size,
-        }
+        LedgerGrpcArgs::new(
+            self.kv_statement_timeout_ms,
+            self.kv_max_decoding_message_size,
+        )
     }
 }
 
