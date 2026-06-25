@@ -820,6 +820,12 @@ pub enum SuiErrorKind {
         "Transaction was outbid by higher-gas-price transactions in the admission queue (current minimum gas price required: {min_gas_price})"
     )]
     TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: u64 },
+
+    #[error("Transaction {digest} is being processed: {status}")]
+    TransactionProcessing {
+        digest: TransactionDigest,
+        status: String,
+    },
 }
 
 #[repr(u64)]
