@@ -305,7 +305,7 @@ async fn test_congestion_control_execution_cancellation() {
     )];
     let commit = TestConsensusCommit::new(consensus_transactions, 1, 0, 0);
 
-    consensus_handler.handle_consensus_commit(commit).await;
+    consensus_handler.handle_consensus_commit_for_test(commit).await;
 
     // Wait for captured transactions to be available
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
