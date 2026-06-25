@@ -2047,6 +2047,43 @@ impl AuthorityState {
             return ExecutionOutput::RetryLater;
         }
 
+        // (test-only) Inject a fork before the effects-digest check below. Placed here so that a
+        // forked validator executing a *certified* checkpoint (expected_effects_digest is set, i.e.
+        // the checkpoint-executor path) trips the transaction-fork check. On the builder path
+        // (expected_effects_digest is None) the check is skipped, so this still produces a checkpoint
+        // fork as before.
+        fail_point_arg!("simulate_fork_during_execution", |(
+            forked_validators,
+            full_halt,
+            effects_overrides,
+            fork_probability,
+            executor_path_only,
+        ): (
+            std::sync::Arc<
+                std::sync::Mutex<std::collections::HashSet<sui_types::base_types::AuthorityName>>,
+            >,
+            bool,
+            std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, String>>>,
+            f32,
+            bool,
+        )| {
+            #[cfg(msim)]
+            // When `executor_path_only` is set, fork only while executing a certified checkpoint
+            // (expected_effects_digest is set) so the divergence trips the transaction-fork check
+            // below; otherwise fork on any path (the builder path yields a checkpoint fork).
+            if !executor_path_only || expected_effects_digest.is_some() {
+                self.simulate_fork_during_execution(
+                    certificate,
+                    epoch_store,
+                    &mut effects,
+                    forked_validators,
+                    full_halt,
+                    effects_overrides,
+                    fork_probability,
+                );
+            }
+        });
+
         if let Some(expected_effects_digest) = expected_effects_digest
             && effects.digest() != expected_effects_digest
         {
@@ -2107,31 +2144,6 @@ impl AuthorityState {
                 effects.digest()
             );
         }
-
-        fail_point_arg!("simulate_fork_during_execution", |(
-            forked_validators,
-            full_halt,
-            effects_overrides,
-            fork_probability,
-        ): (
-            std::sync::Arc<
-                std::sync::Mutex<std::collections::HashSet<sui_types::base_types::AuthorityName>>,
-            >,
-            bool,
-            std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, String>>>,
-            f32,
-        )| {
-            #[cfg(msim)]
-            self.simulate_fork_during_execution(
-                certificate,
-                epoch_store,
-                &mut effects,
-                forked_validators,
-                full_halt,
-                effects_overrides,
-                fork_probability,
-            );
-        });
 
         let unchanged_loaded_runtime_objects =
             crate::transaction_outputs::unchanged_loaded_runtime_objects(
