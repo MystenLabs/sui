@@ -1406,6 +1406,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         Option<Schedulable<VerifiedExecutableTransactionWithAliases>>,
     ) {
+        let _scope = monitored_scope("ConsensusCommitHandler::collect_transactions_to_schedule");
         let protocol_config = self.epoch_store.protocol_config();
         let epoch = self.epoch_store.epoch();
 
@@ -1553,6 +1554,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         final_round: bool,
     ) -> CheckpointHeight {
+        let _scope = monitored_scope("ConsensusCommitHandler::create_pending_checkpoints");
         let protocol_config = self.epoch_store.protocol_config();
         let epoch = self.epoch_store.epoch();
         let accumulators_enabled = self.epoch_store.accumulators_enabled();
@@ -2126,6 +2128,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         state: &mut CommitHandlerState,
         execution_time_observations: Vec<ExecutionTimeObservation>,
     ) {
+        let _scope = monitored_scope("ConsensusCommitHandler::process_execution_time_observations");
         let mut execution_time_estimator = self
             .epoch_store
             .execution_time_estimator
@@ -2442,6 +2445,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         commit_info: &ConsensusCommitInfo,
         consensus_commit: &impl ConsensusCommitAPI,
     ) -> FilteredConsensusOutput {
+        let _scope = monitored_scope("ConsensusCommitHandler::filter_consensus_txns");
         let mut transactions = Vec::new();
         let mut owned_object_locks = HashMap::new();
         let epoch = self.epoch_store.epoch();
@@ -2695,6 +2699,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         commit_info: &ConsensusCommitInfo,
         transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
     ) -> Vec<VerifiedSequencedConsensusTransaction> {
+        let _scope = monitored_scope("ConsensusCommitHandler::deduplicate_consensus_txns");
         let mut all_transactions = Vec::new();
 
         // Track occurrence counts for each transaction key within this commit.
@@ -2798,6 +2803,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &self,
         transactions: Vec<VerifiedSequencedConsensusTransaction>,
     ) -> CommitHandlerInput {
+        let _scope = monitored_scope("ConsensusCommitHandler::build_commit_handler_input");
         let epoch = self.epoch_store.epoch();
         let mut commit_handler_input = CommitHandlerInput::default();
 
