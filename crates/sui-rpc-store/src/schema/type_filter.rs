@@ -40,7 +40,7 @@ use sui_consistent_store::Encode;
 use sui_consistent_store::error::EncodeError;
 use sui_types::base_types::SuiAddress;
 
-use crate::schema::keys::write_uleb128;
+use crate::schema::primitives::write_uleb128;
 
 /// Structured form of a type-prefix filter. See the
 /// [module docs](self) for the encoding contract.

@@ -334,7 +334,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         end_exclusive: u64,
         descending: bool,
     ) -> StorageResult<LedgerTxSeqDigestIterator<'_>> {
-        use crate::schema::keys::U64Be;
+        use crate::schema::primitives::U64Be;
         let range = (
             Bound::Included(U64Be(start)),
             Bound::Excluded(U64Be(end_exclusive)),
@@ -601,8 +601,8 @@ mod tests {
     fn get_coin_info_finds_metadata_and_treasury_objects() {
         use move_core_types::language_storage::StructTag;
 
-        use crate::schema::keys::U64Varint;
         use crate::schema::object_by_type;
+        use crate::schema::primitives::U64Varint;
 
         let (_dir, db, reader) = setup();
 

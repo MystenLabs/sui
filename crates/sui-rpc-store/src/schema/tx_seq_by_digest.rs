@@ -21,7 +21,7 @@ use sui_consistent_store::error::Error;
 use sui_consistent_store::reader::Reader;
 use sui_types::digests::TransactionDigest;
 
-use crate::schema::keys::U64Varint;
+use crate::schema::primitives::U64Varint;
 
 pub const NAME: &str = "tx_seq_by_digest";
 

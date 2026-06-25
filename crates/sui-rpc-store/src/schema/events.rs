@@ -10,7 +10,7 @@ use sui_consistent_store::reader::Reader;
 use sui_types::effects::TransactionEvents;
 
 use crate::proto::StoredEvents;
-use crate::schema::keys::U64Be;
+use crate::schema::primitives::U64Be;
 
 pub const NAME: &str = "events";
 

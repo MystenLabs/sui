@@ -21,7 +21,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
 use crate::proto::StoredEpoch;
-use crate::schema::keys::U64Be;
+use crate::schema::primitives::U64Be;
 
 pub const NAME: &str = "epochs";
 

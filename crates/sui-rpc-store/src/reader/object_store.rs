@@ -57,9 +57,9 @@ mod tests {
 
     use crate::RpcStoreSchema;
     use crate::reader::RpcStoreReader;
-    use crate::schema::keys::U64Varint;
     use crate::schema::live_objects;
     use crate::schema::objects;
+    use crate::schema::primitives::U64Varint;
 
     fn open() -> (tempfile::TempDir, Db, RpcStoreSchema) {
         let dir = tempfile::tempdir().unwrap();

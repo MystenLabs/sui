@@ -33,10 +33,10 @@ use sui_types::storage::RpcStateReader;
 use crate::RpcStoreSchema;
 use crate::reader::RpcStoreReader;
 use crate::schema::checkpoint_summary;
-use crate::schema::keys::U64Be;
-use crate::schema::keys::U64Varint;
 use crate::schema::live_objects;
 use crate::schema::objects;
+use crate::schema::primitives::U64Be;
+use crate::schema::primitives::U64Varint;
 
 fn build_summary(seq: u64) -> CheckpointSummary {
     CheckpointSummary {
