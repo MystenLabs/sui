@@ -1747,7 +1747,7 @@ impl CheckpointBuilder {
             contents_digest = ?contents.digest(),
             "writing checkpoint",
         );
-        eprintln!(
+        info!(
             "CLAUDE: write_checkpoint seq={} summary={:?} contents={:?} txs={:?}",
             summary.sequence_number,
             summary.digest(),

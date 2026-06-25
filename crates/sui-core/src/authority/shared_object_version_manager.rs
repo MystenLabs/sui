@@ -409,7 +409,7 @@ impl SharedObjVerManager {
             .as_digest()
             .is_some_and(|digest| epoch_store.is_crashed_transaction(digest));
         if let Some(d) = tx_key.as_digest() {
-            eprintln!("CLAUDE: assign-cert tx={} is_dropped={}", d, is_dropped);
+            tracing::info!("CLAUDE: assign-cert tx={} is_dropped={}", d, is_dropped);
         }
         let txn_cancelled = cancellation_info.is_some();
 

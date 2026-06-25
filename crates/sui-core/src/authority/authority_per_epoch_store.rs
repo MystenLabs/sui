@@ -3310,7 +3310,7 @@ impl AuthorityPerEpochStore {
             "Assigned versions from consensus processing: {:?}",
             assigned_versions
         );
-        eprintln!(
+        info!(
             "CLAUDE: version-assign crashed_set={:?} assigned_versions {:?}",
             self.crashed_transactions, assigned_versions
         );

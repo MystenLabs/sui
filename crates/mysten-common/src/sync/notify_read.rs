@@ -209,7 +209,7 @@ impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: 
                     );
 
                     if task_name == CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME && elapsed_secs >= 60 {
-                        eprintln!(
+                        tracing::info!(
                             "CLAUDE: {} STUCK waiting for {} keys: {:?}",
                             task_name,
                             keys_vec.len(),

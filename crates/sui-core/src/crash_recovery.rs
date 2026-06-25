@@ -379,7 +379,7 @@ pub fn load_crashed_transactions(db_path: &Path) -> HashSet<TransactionDigest> {
     const LINE_LIMIT: usize = 1024 * 1024;
 
     let log_path = db_path.join(PANIC_TX_LOG_FILE);
-    eprintln!("CLAUDE: load_crashed_transactions reading {}", log_path.display());
+    info!("CLAUDE: load_crashed_transactions reading {}", log_path.display());
     let file = match fs::File::open(&log_path) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             return HashSet::new();
@@ -464,7 +464,7 @@ pub fn load_crashed_transactions(db_path: &Path) -> HashSet<TransactionDigest> {
         }
     }
 
-    eprintln!(
+    info!(
         "CLAUDE: load_crashed_transactions {} loaded {} digests: {:?}",
         log_path.display(),
         digests.len(),
