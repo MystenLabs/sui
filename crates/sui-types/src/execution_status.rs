@@ -298,6 +298,13 @@ pub enum ExecutionErrorKind {
 
     #[error("Non-exclusive write input object {id} has been modified")]
     NonExclusiveWriteInputObjectModified { id: ObjectID },
+
+    // A system object the transaction must read has not yet caught up, on this node, to the version
+    // the transaction requires. Node-local and transient: execution unwinds with it, the authority
+    // discards the effects and retries, so it never reaches committed effects. Present only so the
+    // unwind can be recognized by kind (see `TemporaryStore::check_system_object_available`).
+    #[error("System object not available locally; transaction must be retried")]
+    SystemObjectNotAvailableLocally,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

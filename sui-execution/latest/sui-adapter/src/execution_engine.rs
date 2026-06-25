@@ -150,6 +150,7 @@ mod checked {
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -182,6 +183,7 @@ mod checked {
             transaction_digest,
             protocol_config,
             *epoch_id,
+            system_object_versions,
         );
 
         // TODO: remove all `legacy` code on the next execution version cut
@@ -284,6 +286,7 @@ mod checked {
             tx_context.borrow().digest(),
             protocol_config,
             0,
+            BTreeMap::new(),
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.borrow().digest());
         SPT::execute::<execution_mode::Genesis>(
