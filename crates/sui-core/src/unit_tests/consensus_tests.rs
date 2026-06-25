@@ -382,7 +382,7 @@ async fn submit_empty_array_of_transactions_to_consensus_adapter() {
         .unwrap();
     waiter.await.unwrap();
 
-    let consensus_position = rx_consensus_position.await.unwrap();
+    let consensus_position = rx_consensus_position.await.unwrap().unwrap();
     assert_eq!(
         consensus_position,
         vec![ConsensusPosition {
