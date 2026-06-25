@@ -4,7 +4,7 @@
 use crate::{
     MoveTypeTagTrait, SUI_SYSTEM_ADDRESS,
     accumulator_event::AccumulatorEvent,
-    base_types::{ObjectID, ObjectRef, SequenceNumber},
+    base_types::{FullObjectID, ObjectID, ObjectRef, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
     error::{ExecutionError, SuiError},
     event::Event,
@@ -383,6 +383,42 @@ impl ExecutionTiming {
 }
 
 pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
+
+/// Signals that transaction execution should be retried later rather than committed. Unlike
+/// `ExecutionError`, the transaction that produced it is not committed: execution still runs to
+/// completion and produces effects, but the authority discards those effects and re-enqueues the
+/// transaction once the condition clears. An enum so more retry reasons can be added.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExecutionRetryError {
+    /// A system object the transaction needs to read had not yet been committed locally at the
+    /// version this transaction requires. The transaction should be retried once that object
+    /// reaches `version`. The signal is self-contained: it carries the full object id (including the
+    /// stable initial shared version) and the version to wait for, so the authority can register the
+    /// wait directly without re-reading the object.
+    SystemObjectUnavailable {
+        full_object_id: FullObjectID,
+        version: SequenceNumber,
+    },
+}
+
+impl std::fmt::Display for ExecutionRetryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExecutionRetryError::SystemObjectUnavailable {
+                full_object_id,
+                version,
+            } => {
+                write!(
+                    f,
+                    "system object {} not yet available at version {version}; retry requested",
+                    full_object_id.id()
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for ExecutionRetryError {}
 
 /// Captures the output of executing a transaction in the execution driver.
 #[derive(Debug)]
