@@ -5,36 +5,38 @@ expression: item
 {
   "data": {
     "transactions": {
-      "digest": "[digest]",
-      "sender": {
-        "address": "[address]"
-      },
-      "gasInput": {
-        "gasBudget": "5000000000"
-      },
-      "effects": {
-        "status": "SUCCESS",
-        "balanceChanges": {
-          "nodes": [
-            {
-              "amount": "1000",
-              "coinType": {
-                "repr": "[pkg]::sui::SUI"
+      "node": {
+        "digest": "[digest]",
+        "sender": {
+          "address": "[address]"
+        },
+        "gasInput": {
+          "gasBudget": "5000000000"
+        },
+        "effects": {
+          "status": "SUCCESS",
+          "balanceChanges": {
+            "nodes": [
+              {
+                "amount": "1000",
+                "coinType": {
+                  "repr": "[pkg]::sui::SUI"
+                },
+                "owner": {
+                  "address": "[address]"
+                }
               },
-              "owner": {
-                "address": "[address]"
+              {
+                "amount": "-2977000",
+                "coinType": {
+                  "repr": "[pkg]::sui::SUI"
+                },
+                "owner": {
+                  "address": "[address]"
+                }
               }
-            },
-            {
-              "amount": "-2977000",
-              "coinType": {
-                "repr": "[pkg]::sui::SUI"
-              },
-              "owner": {
-                "address": "[address]"
-              }
-            }
-          ]
+            ]
+          }
         }
       }
     }
