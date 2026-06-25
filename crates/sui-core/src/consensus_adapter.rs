@@ -67,6 +67,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_in_flight_submissions: IntGauge,
     pub sequencing_best_effort_timeout: IntCounterVec,
     pub recently_in_block_cache_size: IntGauge,
+    pub recently_in_block_resubmission_interval: Histogram,
     pub consensus_latency: Histogram,
     pub num_rejected_cert_in_epoch_boundary: IntCounter,
 }
@@ -144,6 +145,13 @@ impl ConsensusAdapterMetrics {
             recently_in_block_cache_size: register_int_gauge_with_registry!(
                 "consensus_adapter_recently_in_block_cache_size",
                 "Approximate number of transaction digests held in the recently-in-block duplicate-suppression cache",
+                registry,
+            )
+                .unwrap(),
+            recently_in_block_resubmission_interval: register_histogram_with_registry!(
+                "consensus_adapter_recently_in_block_resubmission_interval_seconds",
+                "Time between recording a transaction in the recently-in-block cache and a duplicate resubmission of it being suppressed",
+                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
                 .unwrap(),
@@ -227,13 +235,16 @@ pub struct ConsensusAdapter {
     /// Used by the admission queue drainer to wake up and submit more
     /// transactions.
     inflight_slot_freed_notify: Arc<Notify>,
-    /// Digests of transactions this validator has recently included in a consensus block but
-    /// that have not yet been committed.
-    recently_in_block: Cache<TransactionDigest, ()>,
+    /// Digests recently included in a block (value: when last recorded), for suppressing
+    /// duplicate resubmissions before commit.
+    recently_in_block: Cache<TransactionDigest, Instant>,
 }
 
-/// Backstop if gc / sequenced cache removals misfire
+/// Backstop in case sequenced/GC removals are missed.
 const RECENTLY_IN_BLOCK_TTL: Duration = Duration::from_secs(5);
+
+/// Eviction past this only weakens best-effort suppression, not correctness.
+const RECENTLY_IN_BLOCK_MAX_CAPACITY: u64 = 100_000;
 
 impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
@@ -257,7 +268,7 @@ impl ConsensusAdapter {
             submit_semaphore: Arc::new(Semaphore::new(max_pending_local_submissions)),
             inflight_slot_freed_notify,
             recently_in_block: Cache::builder()
-                .max_capacity(100_000)
+                .max_capacity(RECENTLY_IN_BLOCK_MAX_CAPACITY)
                 .time_to_live(RECENTLY_IN_BLOCK_TTL)
                 .build(),
         }
@@ -272,18 +283,27 @@ impl ConsensusAdapter {
     /// Used by the submission endpoint to suppress duplicate resubmissions
     /// before the transaction is committed.
     pub fn was_recently_in_block(&self, digest: &TransactionDigest) -> bool {
-        self.recently_in_block.get(digest).is_some()
+        match self.recently_in_block.get(digest) {
+            Some(recorded_at) => {
+                self.metrics
+                    .recently_in_block_resubmission_interval
+                    .observe(recorded_at.elapsed().as_secs_f64());
+                true
+            }
+            None => false,
+        }
     }
 
     /// Records that `digests` have been included in a consensus block, so subsequent
     /// resubmissions can be suppressed until the entries expire.
     fn record_in_block(&self, transaction_keys: &[SequencedConsensusTransactionKey]) {
+        let now = Instant::now();
         for key in transaction_keys {
             if let SequencedConsensusTransactionKey::External(
                 ConsensusTransactionKey::Certificate(digest),
             ) = key
             {
-                self.recently_in_block.insert(*digest, ());
+                self.recently_in_block.insert(*digest, now);
             }
         }
         self.metrics
@@ -647,7 +667,9 @@ impl ConsensusAdapter {
                                 .sequencing_certificate_status
                                 .with_label_values(&[tx_type, "sequenced"])
                                 .inc();
-                            // Consensus-rejected transactions can be retried - remove from cache.
+                            // The block is in consensus output now, so the executed-effects and
+                            // consensus-message-processed checks take over suppression; drop the
+                            // entry.
                             self.forget_in_block(&transaction_keys);
                             // Block has been sequenced. Nothing more to do, we do have guarantees that the transaction will appear in consensus output.
                             trace!(
@@ -1212,6 +1234,10 @@ mod recently_in_block_tests {
         )]);
         adapter.recently_in_block.run_pending_tasks();
 
-        assert!(!adapter.was_recently_in_block(&TransactionDigest::random()));
+        assert_eq!(
+            adapter.recently_in_block.entry_count(),
+            0,
+            "non-certificate keys must not populate the cache"
+        );
     }
 }
