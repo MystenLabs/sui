@@ -218,6 +218,60 @@ async fn submit_transaction_to_consensus_adapter() {
 }
 
 #[tokio::test]
+async fn recently_in_block_recorded_on_inclusion_and_cleared_on_sequenced() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut objects = test_gas_objects();
+    let shared_object = Object::shared_for_testing();
+    objects.push(shared_object.clone());
+    let state = init_state_with_objects(objects).await;
+    let transaction = test_user_transactions(&state, shared_object)
+        .await
+        .pop()
+        .unwrap();
+    let tx_digest = *transaction.tx().digest();
+    let epoch_store = state.epoch_store_for_testing();
+
+    // Hold the block-status sender so the transaction stays "in a block, not yet resolved"
+    // while we observe the cache.
+    let (status_tx, status_rx) = tokio::sync::oneshot::channel();
+    let adapter =
+        make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![status_rx]);
+
+    let consensus_tx =
+        ConsensusTransaction::new_user_transaction_v2_message(&state.name, transaction.into());
+
+    // The consensus positions are sent right after the digest is recorded in the cache, so
+    // awaiting them is a deterministic point at which `record_in_block` has run.
+    let (pos_tx, pos_rx) = tokio::sync::oneshot::channel();
+    let handle = adapter
+        .submit(
+            consensus_tx,
+            Some(&epoch_store.get_reconfig_state_read_lock_guard()),
+            &epoch_store,
+            Some(pos_tx),
+            None,
+        )
+        .unwrap();
+
+    pos_rx.await.unwrap();
+    assert!(
+        adapter.was_recently_in_block(&tx_digest),
+        "digest should be suppressed once included in a block"
+    );
+
+    // Sequencing the block hands off to the committed checks; the entry is dropped.
+    status_tx
+        .send(BlockStatus::Sequenced(BlockRef::MIN))
+        .unwrap();
+    handle.await.unwrap();
+    assert!(
+        !adapter.was_recently_in_block(&tx_digest),
+        "digest should no longer be suppressed once the block is sequenced"
+    );
+}
+
+#[tokio::test]
 async fn submit_multiple_transactions_to_consensus_adapter() {
     telemetry_subscribers::init_for_testing();
 

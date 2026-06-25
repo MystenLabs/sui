@@ -202,6 +202,7 @@ pub struct ValidatorServiceMetrics {
     num_rejected_tx_during_overload: IntCounterVec,
     submission_rejected_transactions: IntCounterVec,
     submission_suppressed_already_processed: IntCounterVec,
+    submission_suppressed_recently_in_block: IntCounterVec,
     connection_ip_not_found: IntCounter,
     forwarded_header_parse_error: IntCounter,
     forwarded_header_invalid: IntCounter,
@@ -301,6 +302,14 @@ impl ValidatorServiceMetrics {
                 "validator_service_submission_suppressed_already_processed",
                 "Number of submitted transactions suppressed because consensus had already \
                  processed them this epoch (re-submission of already-processed transactions)",
+                &["req_type"],
+                registry,
+            )
+            .unwrap(),
+            submission_suppressed_recently_in_block: register_int_counter_vec_with_registry!(
+                "validator_service_submission_suppressed_recently_in_block",
+                "Number of submitted transactions suppressed because this validator recently \
+                 included them in a consensus block that has not yet committed",
                 &["req_type"],
                 registry,
             )
@@ -911,6 +920,27 @@ impl ValidatorService {
                 debug!(
                     ?tx_digest,
                     "handle_submit_transaction: consensus message already processed"
+                );
+                continue;
+            }
+
+            // Suppress resubmission of a transaction this validator has very recently included in
+            // a consensus block.
+            if self.consensus_adapter.was_recently_in_block(&tx_digest) {
+                metrics
+                    .submission_suppressed_recently_in_block
+                    .with_label_values(&[req_type])
+                    .inc();
+                results[idx] = Some(SubmitTxResult::Rejected {
+                    error: SuiErrorKind::TransactionProcessing {
+                        digest: tx_digest,
+                        status: "recently included in a consensus block".to_string(),
+                    }
+                    .into(),
+                });
+                debug!(
+                    ?tx_digest,
+                    "handle_submit_transaction: recently included in a block"
                 );
                 continue;
             }

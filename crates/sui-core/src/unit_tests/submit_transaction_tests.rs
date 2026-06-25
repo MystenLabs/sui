@@ -27,6 +27,7 @@ use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
+use crate::consensus_adapter::BlockStatusReceiver;
 use crate::consensus_test_utils::make_consensus_adapter_for_test;
 use crate::mock_consensus::with_block_status;
 
@@ -43,6 +44,25 @@ struct TestContext {
 
 impl TestContext {
     async fn new() -> Self {
+        // Default mock consensus: transactions are executed and their blocks immediately
+        // sequenced. Extra responses cover tests that submit multiple transactions.
+        Self::new_with_consensus(
+            true,
+            vec![
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+            ],
+        )
+        .await
+    }
+
+    async fn new_with_consensus(
+        execute: bool,
+        block_status_receivers: Vec<BlockStatusReceiver>,
+    ) -> Self {
         telemetry_subscribers::init_for_testing();
         let (sender, keypair) = get_account_key_pair();
         let gas_object = Object::with_owner_for_testing(sender);
@@ -52,20 +72,11 @@ impl TestContext {
             .build()
             .await;
 
-        // Create a server with mocked consensus.
-        // This ensures transactions submitted to consensus will get processed.
-        // We add extra mock responses to handle multiple transactions in tests
         let adapter = make_consensus_adapter_for_test(
             authority.clone(),
             HashSet::new(),
-            true,
-            vec![
-                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
-                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
-                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
-                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
-                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
-            ],
+            execute,
+            block_status_receivers,
         );
         let server =
             AuthorityServer::new_for_test_with_consensus_adapter(authority.clone(), adapter);
@@ -128,6 +139,49 @@ async fn test_submit_transaction_success() {
         }
         _ => panic!("Expected Submitted response"),
     };
+}
+
+#[tokio::test]
+async fn test_duplicate_submission_suppressed_while_in_block() {
+    // Hold the block status unresolved so the first submission's recently-in-block entry
+    // persists. `execute = false` so the duplicate reaches the recently-in-block check rather
+    // than being short-circuited by the executed-effects path.
+    let (status_tx, status_rx) = tokio::sync::oneshot::channel();
+    let test_context = TestContext::new_with_consensus(false, vec![status_rx]).await;
+
+    let transaction = test_context.build_test_transaction();
+
+    // First submission is accepted and lands in a (not-yet-committed) block.
+    let first = test_context
+        .client
+        .submit_transaction(test_context.build_submit_request(transaction.clone()), None)
+        .await
+        .unwrap();
+    assert!(
+        matches!(first.results[0], SubmitTxResult::Submitted { .. }),
+        "first submission should be accepted, got {:?}",
+        first.results[0]
+    );
+
+    // Resubmitting the same transaction while it is still in a block is suppressed.
+    let second = test_context
+        .client
+        .submit_transaction(test_context.build_submit_request(transaction), None)
+        .await
+        .unwrap();
+    match &second.results[0] {
+        SubmitTxResult::Rejected { error } => match error.clone().into_inner() {
+            SuiErrorKind::TransactionProcessing { status, .. } => assert!(
+                status.contains("recently included in a consensus block"),
+                "unexpected rejection status: {status}"
+            ),
+            other => panic!("unexpected rejection error kind: {other:?}"),
+        },
+        other => panic!("expected duplicate submission to be rejected, got {other:?}"),
+    }
+
+    // Let the background submission task finish cleanly.
+    let _ = status_tx.send(BlockStatus::Sequenced(BlockRef::MIN));
 }
 
 #[tokio::test]
