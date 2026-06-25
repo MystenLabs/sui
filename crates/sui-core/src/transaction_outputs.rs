@@ -49,7 +49,15 @@ impl TransactionOutputs {
             runtime_packages_loaded_from_db: _,
             lamport_version,
             accumulator_running_max_withdraws: _,
+            retry_request,
         } = inner_temporary_store;
+
+        // A transaction that requested a retry is never committed: the authority discards its
+        // effects and re-enqueues it, so it must not reach the commit path.
+        debug_assert!(
+            retry_request.is_none(),
+            "a transaction requesting a retry must not be committed"
+        );
 
         let tx_digest = *transaction.digest();
 

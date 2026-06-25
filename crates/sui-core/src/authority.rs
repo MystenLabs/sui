@@ -73,6 +73,7 @@ use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
+use sui_types::execution::ExecutionRetryError;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
@@ -1879,6 +1880,7 @@ impl AuthorityState {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         kind: TransactionKind,
@@ -1903,6 +1905,7 @@ impl AuthorityState {
                 epoch_id,
                 epoch_timestamp_ms,
                 input_objects,
+                system_object_versions,
                 gas_data,
                 gas_status,
                 kind,
@@ -1919,6 +1922,47 @@ impl AuthorityState {
             timings,
             execution_error,
         )
+    }
+
+    /// Spawns a task that waits until `object_id` reaches `version` (the version this transaction
+    /// requires), then re-enqueues `certificate` for execution. Used by the retry-on-not-ready path
+    /// when execution reports that a required system object had not yet caught up to the version
+    /// this transaction was sequenced against.
+    fn wait_for_system_object_and_reenqueue(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        object_id: ObjectID,
+        version: SequenceNumber,
+        execution_env: &ExecutionEnv,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        // Recover the object's initial shared version from the epoch start config (every system
+        // object is registered there) to form the full key the object cache waits on.
+        let init_shared_version = epoch_store
+            .epoch_start_config()
+            .system_object_initial_shared_version(object_id)
+            .expect("system object must be registered in the epoch start config");
+        let full_object_id = FullObjectID::Consensus((object_id, init_shared_version));
+        let cache_reader = self.get_object_cache_reader().clone();
+        let scheduler = self.execution_scheduler.clone();
+        let cert = certificate.clone();
+        let execution_env = execution_env.clone();
+        let epoch_store = epoch_store.clone();
+        tokio::task::spawn(async move {
+            // Bound the wait to the alive epoch: reconfiguration may finish while we wait.
+            let _ = epoch_store
+                .within_alive_epoch(async move {
+                    cache_reader
+                        .notify_read_system_object_at_version(full_object_id, version)
+                        .await;
+                    scheduler.send_transaction_for_execution(
+                        &cert,
+                        execution_env,
+                        tokio::time::Instant::now(),
+                    );
+                })
+                .await;
+        });
     }
 
     /// execute_certificate validates the transaction input, and executes the certificate,
@@ -1983,6 +2027,14 @@ impl AuthorityState {
             &execution_env.funds_withdraw_status,
         );
         let accumulator_version = execution_env.assigned_versions.accumulator_version;
+        // The accumulator root is the only system object a transaction is sequenced against today.
+        // Pin its version so execution can gate reads on it and record a retry if this node has not
+        // caught up; see `TemporaryStore::is_system_object_available`. A later PR generalizes this
+        // to an arbitrary set of system objects.
+        let system_object_versions: BTreeMap<ObjectID, SequenceNumber> = accumulator_version
+            .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
+            .into_iter()
+            .collect();
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
             Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),
@@ -2023,6 +2075,7 @@ impl AuthorityState {
                     .epoch_data()
                     .epoch_start_timestamp(),
                 input_objects,
+                system_object_versions,
                 gas_data,
                 gas_status,
                 kind,
@@ -2030,6 +2083,24 @@ impl AuthorityState {
                 signer,
                 tx_digest,
             );
+
+        // Execution recorded that a system object it read had not yet caught up to the version this
+        // transaction requires. The effects it produced are not usable; discard them, wait for that
+        // object to reach the required version, then re-enqueue so execution runs again against the
+        // caught-up state.
+        if let Some(ExecutionRetryError::SystemObjectUnavailable { object_id, version }) =
+            inner_temp_store.retry_request.as_ref()
+        {
+            assert_reachable!("retry on unavailable system object");
+            self.wait_for_system_object_and_reenqueue(
+                certificate,
+                *object_id,
+                *version,
+                &execution_env,
+                epoch_store,
+            );
+            return ExecutionOutput::RetryLater;
+        }
 
         let object_funds_checker = self.object_funds_checker.load();
         if let Some(object_funds_checker) = object_funds_checker.as_ref()
