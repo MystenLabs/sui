@@ -2467,10 +2467,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         commit_info: &ConsensusCommitInfo,
         block_transactions: ParsedConsensusTransactions,
     ) -> FilteredConsensusOutput {
-        let _scope =
-            monitored_scope("ConsensusCommitHandler::handle_consensus_commit::filter_consensus_txns");
+        let _scope = monitored_scope(
+            "ConsensusCommitHandler::handle_consensus_commit::filter_consensus_txns",
+        );
         let mut transactions = Vec::new();
         let mut owned_object_locks = HashMap::new();
+        // Consensus transaction status updates are collected here and flushed in a
+        // single batched write (one lock acquisition, notifications outside the lock)
+        // at the end of the commit, rather than one write+notify per transaction.
+        let mut status_updates: Vec<(ConsensusPosition, ConsensusTxStatus)> = Vec::new();
         let epoch = self.epoch_store.epoch();
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
@@ -2480,10 +2485,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             self.last_consensus_stats.stats.inc_num_messages(author);
 
             // Set the "ping" transaction status for this block. This is necessary as there might be some ping requests waiting for the ping transaction to be certified.
-            self.epoch_store.set_consensus_tx_status(
+            status_updates.push((
                 ConsensusPosition::ping(epoch, block),
                 ConsensusTxStatus::Finalized,
-            );
+            ));
 
             for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
                 let position = ConsensusPosition {
@@ -2528,8 +2533,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 if parsed.rejected {
                     // TODO(fastpath): Add metrics for rejected transactions.
                     if parsed.transaction.is_user_transaction() {
-                        self.epoch_store
-                            .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
+                        status_updates.push((position, ConsensusTxStatus::Rejected));
                         num_rejected_user_transactions[author] += 1;
                     }
                     // Skip processing rejected transactions.
@@ -2667,14 +2671,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         Ok(new_locks) => {
                             owned_object_locks.extend(new_locks.into_iter());
                             // Lock acquisition succeeded - now set Finalized status
-                            self.epoch_store
-                                .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
+                            status_updates.push((position, ConsensusTxStatus::Finalized));
                             num_finalized_user_transactions[author] += 1;
                         }
                         Err(e) => {
                             debug!("Dropping transaction {}: {}", tx.digest(), e);
-                            self.epoch_store
-                                .set_consensus_tx_status(position, ConsensusTxStatus::Dropped);
+                            status_updates.push((position, ConsensusTxStatus::Dropped));
                             self.epoch_store.set_rejection_vote_reason(position, &e);
                             continue;
                         }
@@ -2685,6 +2687,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 transactions.push((transaction, author as u32));
             }
         }
+
+        // Flush all collected status updates in one batched write. None of the logic
+        // above reads transaction status back, so deferring visibility to here (still
+        // before dedup/processing) is equivalent to setting each status inline.
+        self.epoch_store.set_consensus_tx_statuses(status_updates);
 
         for (i, authority) in self.committee.authorities() {
             let hostname = &authority.hostname;

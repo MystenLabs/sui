@@ -3488,6 +3488,7 @@ impl AuthorityPerEpochStore {
         self.signature_verifier.clear_signature_cache();
     }
 
+    #[cfg(test)]
     pub(crate) fn set_consensus_tx_status(
         &self,
         position: ConsensusPosition,
@@ -3495,6 +3496,14 @@ impl AuthorityPerEpochStore {
     ) {
         self.consensus_tx_status_cache
             .set_transaction_status(position, status);
+    }
+
+    pub(crate) fn set_consensus_tx_statuses(
+        &self,
+        updates: Vec<(ConsensusPosition, ConsensusTxStatus)>,
+    ) {
+        self.consensus_tx_status_cache
+            .set_transaction_statuses(updates);
     }
 
     pub(crate) fn set_rejection_vote_reason(&self, position: ConsensusPosition, reason: &SuiError) {
