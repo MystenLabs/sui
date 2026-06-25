@@ -74,6 +74,7 @@ use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
+use sui_types::execution::ExecutionRetryError;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
@@ -1913,6 +1914,40 @@ impl AuthorityState {
         )
     }
 
+    /// Spawns a task that waits until `full_object_id` reaches `version` (the version this
+    /// transaction requires), then re-enqueues `certificate` for execution. Used by the
+    /// retry-on-not-ready path when execution reports that a required system object had not yet
+    /// caught up to the version this transaction was sequenced against.
+    fn wait_for_system_object_and_reenqueue(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        full_object_id: FullObjectID,
+        version: SequenceNumber,
+        execution_env: &ExecutionEnv,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        let cache_reader = self.get_object_cache_reader().clone();
+        let scheduler = self.execution_scheduler.clone();
+        let cert = certificate.clone();
+        let execution_env = execution_env.clone();
+        let epoch_store = epoch_store.clone();
+        tokio::task::spawn(async move {
+            // Bound the wait to the alive epoch: reconfiguration may finish while we wait.
+            let _ = epoch_store
+                .within_alive_epoch(async move {
+                    cache_reader
+                        .notify_read_system_object_at_version(full_object_id, version)
+                        .await;
+                    scheduler.send_transaction_for_execution(
+                        &cert,
+                        execution_env,
+                        tokio::time::Instant::now(),
+                    );
+                })
+                .await;
+        });
+    }
+
     /// execute_certificate validates the transaction input, and executes the certificate,
     /// returning transaction outputs.
     ///
@@ -2029,6 +2064,26 @@ impl AuthorityState {
                 signer,
                 tx_digest,
             );
+
+        // Execution recorded that a system object it read had not yet caught up to the version this
+        // transaction requires. The effects it produced are not usable; discard them, wait for that
+        // object to reach the required version, then re-enqueue so execution runs again against the
+        // caught-up state.
+        if let Some(ExecutionRetryError::SystemObjectUnavailable {
+            full_object_id,
+            version,
+        }) = inner_temp_store.retry_request.as_ref()
+        {
+            assert_reachable!("retry on unavailable system object");
+            self.wait_for_system_object_and_reenqueue(
+                certificate,
+                *full_object_id,
+                *version,
+                &execution_env,
+                epoch_store,
+            );
+            return ExecutionOutput::RetryLater;
+        }
 
         let object_funds_checker = self.object_funds_checker.load();
         if let Some(object_funds_checker) = object_funds_checker.as_ref()

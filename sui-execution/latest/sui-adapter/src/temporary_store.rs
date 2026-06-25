@@ -6,6 +6,7 @@ use crate::gas_charger::{GasCharger, PaymentLocation};
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
@@ -18,7 +19,8 @@ use sui_types::effects::{
     TransactionEvents,
 };
 use sui_types::execution::{
-    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
+    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, ExecutionRetryError,
+    SharedInput,
 };
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
@@ -96,6 +98,14 @@ pub struct TemporaryStore<'backing> {
     /// underlying events are also cleared. A `Vec` is sufficient because real transactions run
     /// the PTB at most a handful of times.
     ptb_emitted_accumulator_event_ranges: Vec<std::ops::Range<usize>>,
+
+    /// Recorded when execution determines the transaction must be retried later rather than
+    /// committed. Execution still runs to completion (the triggering native also raises a Move
+    /// error); this signal is carried out on `InnerTemporaryStore` so the authority can discard the
+    /// effects and re-enqueue. A `RefCell` rather than a lock: execution is single-threaded, but the
+    /// condition is detected behind `&self` (`ChildObjectResolver`), so the field must be
+    /// interior-mutable.
+    retry_request: RefCell<Option<ExecutionRetryError>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -150,6 +160,7 @@ impl<'backing> TemporaryStore<'backing> {
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             ptb_emitted_accumulator_event_ranges: Vec::new(),
+            retry_request: RefCell::new(None),
         }
     }
 
@@ -322,6 +333,7 @@ impl<'backing> TemporaryStore<'backing> {
             lamport_version: self.lamport_timestamp,
             binary_config: self.protocol_config.binary_config(None),
             accumulator_running_max_withdraws,
+            retry_request: self.retry_request.into_inner(),
         }
     }
 
