@@ -498,32 +498,33 @@ impl LocalValidatorAggregatorProxy {
     pub async fn submit_transaction_with_amplification(
         &self,
         tx: Transaction,
-        num_validators: usize,
+        _num_validators: usize,
     ) -> anyhow::Result<ExecutionEffects> {
         use sui_core::authority_client::AuthorityAPI;
         use sui_types::messages_grpc::SubmitTxRequest;
 
-        // Submit to multiple validators in parallel
-        let validators: Vec<_> = self
-            .clients
-            .values()
-            .take(num_validators)
-            .cloned()
-            .collect();
+        // PT DUPLICATE-HAMMER TEST (throwaway): flood every validator with many copies of the
+        // same transaction to mimic searcher amplification / sustained duplicate resubmission.
+        // `num_validators` is ignored; we hit the whole committee, `DUPLICATE_HAMMER_COUNT` times.
+        const DUPLICATE_HAMMER_COUNT: usize = 10;
+
+        let validators: Vec<_> = self.clients.values().cloned().collect();
         let request = SubmitTxRequest::new_transaction(tx.clone());
 
         // Fire off all submissions as spawned tasks - don't wait for responses.
-        // We just need to ensure the submissions are sent to trigger amplification.
         // Add explicit 2s timeout to prevent unbounded task pile-up under load.
-        for client in validators {
-            let req = request.clone();
-            tokio::spawn(async move {
-                let _ = tokio::time::timeout(
-                    Duration::from_secs(2),
-                    client.submit_transaction(req, None),
-                )
-                .await;
-            });
+        for _ in 0..DUPLICATE_HAMMER_COUNT {
+            for client in &validators {
+                let req = request.clone();
+                let client = client.clone();
+                tokio::spawn(async move {
+                    let _ = tokio::time::timeout(
+                        Duration::from_secs(2),
+                        client.submit_transaction(req, None),
+                    )
+                    .await;
+                });
+            }
         }
 
         // Use the normal path to get the final result

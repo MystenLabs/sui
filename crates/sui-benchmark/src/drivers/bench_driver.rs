@@ -1117,18 +1117,14 @@ async fn run_bench_worker(
                         // TODO: clone committee for each request is not ideal.
                         let committee = worker.execution_proxy.clone_committee();
 
-                        // Occasionally submit to multiple validators to test unpaid amplification deferral.
-                        // With 5% probability, submit to 3 to N validators to trigger deferral logic.
-                        let use_amplification = rand::thread_rng().gen_bool(0.05);
+                        // PT DUPLICATE-HAMMER TEST (throwaway): amplify *every* transaction to the
+                        // whole committee with a duplicate burst, to stress duplicate suppression.
+                        let use_amplification = true;
                         let committee_size = committee.num_members();
                         let proxy = worker.execution_proxy.clone_new();
                         let res = async move {
                             let res = if use_amplification {
-                                // Cap at 5 validators to limit amplification traffic and reduce latency impact
-                                let max_validators = committee_size.min(5);
-                                let min_validators = 3.min(max_validators);
-                                let num_validators = rand::thread_rng().gen_range(min_validators..=max_validators);
-                                proxy.execute_transaction_block_with_amplification(tx.clone(), num_validators).await
+                                proxy.execute_transaction_block_with_amplification(tx.clone(), committee_size).await
                             } else {
                                 proxy.execute_transaction_block(tx.clone()).await
                             };
