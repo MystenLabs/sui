@@ -10,9 +10,9 @@ pub use operations::{
     ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, AccumulatorBalanceRead,
     AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AuthenticatedEventEmit,
     CoinReservationWithdraw, INVALID_ALIAS_TX, ImmutableObjectRead, ObjectBalanceDeposit,
-    ObjectBalanceOverdraw, ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead,
-    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
-    TestCoinMint, TestCoinObjectWithdraw,
+    ObjectBalanceLargeWithdraw, ObjectBalanceOverdraw, ObjectBalanceWithdraw, OperationDescriptor,
+    RandomnessRead, SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit,
+    TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -316,6 +316,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(AddressBalanceOverdraw::NAME, 0.1);
         probabilities.insert(AccumulatorBalanceRead::NAME, 0.3);
         probabilities.insert(ObjectBalanceOverdraw::NAME, 0.1);
+        probabilities.insert(ObjectBalanceLargeWithdraw::NAME, 0.1);
         probabilities.insert(AuthenticatedEventEmit::NAME, 0.1);
         probabilities.insert(ImmutableObjectRead::NAME, 0.2);
         probabilities.insert(CoinReservationWithdraw::NAME, 0.1);
@@ -400,6 +401,7 @@ pub struct OperationPool {
     pub accumulator_root_initial_shared_version: SequenceNumber,
     pub hotness: f32,
     pub balance_pool: Option<(ObjectID, SequenceNumber)>,
+    pub empty_balance_pool: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_cap: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_type: Option<TypeTag>,
     pub chain_identifier: sui_types::digests::ChainIdentifier,
@@ -526,6 +528,7 @@ impl CompositePayload {
         let mut randomness = None;
         let mut accumulator_root = None;
         let mut balance_pool = None;
+        let mut empty_balance_pool = None;
         let mut test_coin_cap = None;
         let mut chain_identifier = None;
         let mut epoch = None;
@@ -541,6 +544,9 @@ impl CompositePayload {
                 ResourceRequest::AddressBalance => {}
                 ResourceRequest::ObjectBalance => {
                     balance_pool = pool.balance_pool;
+                }
+                ResourceRequest::EmptyBalancePool => {
+                    empty_balance_pool = pool.empty_balance_pool;
                 }
                 ResourceRequest::TestCoinCap => {
                     test_coin_cap = pool.test_coin_cap;
@@ -564,6 +570,7 @@ impl CompositePayload {
             package_id: pool.package_id,
             address_balance_amount: config.address_balance_amount,
             balance_pool,
+            empty_balance_pool,
             test_coin_cap,
             test_coin_type: pool.test_coin_type.clone(),
             immutable_object: pool.immutable_object,
@@ -591,6 +598,7 @@ impl CompositePayload {
                             r,
                             ResourceRequest::AddressBalance
                                 | ResourceRequest::ObjectBalance
+                                | ResourceRequest::EmptyBalancePool
                                 | ResourceRequest::AccumulatorRoot
                                 | ResourceRequest::CoinReservation
                         )
@@ -1118,6 +1126,16 @@ impl Payload for CompositePayload {
                     } else if effects.is_insufficient_funds() {
                         metrics.record_insufficient_funds(tx_info.op_set.clone());
                     } else if effects.is_ok() {
+                        // A withdrawal from the always-empty pool must never succeed:
+                        // there are no funds to withdraw, so it must fail with IFFW.
+                        if tx_info.op_set.contains(ObjectBalanceLargeWithdraw::NAME) {
+                            debug_fatal!(
+                                "Large object-balance withdrawal from an empty pool succeeded \
+                                 (tx {}): this indicates a balance-accounting bug. op_set: {}",
+                                result.digest,
+                                tx_info.op_set.describe()
+                            );
+                        }
                         metrics.record_success(tx_info.op_set.clone());
                     } else {
                         metrics.record_abort(tx_info.op_set.clone());
@@ -1354,6 +1372,7 @@ impl WorkloadBuilder<dyn Payload> for CompositeWorkloadBuilder {
             randomness_initial_shared_version: None,
             accumulator_root_initial_shared_version: None,
             balance_pool: None,
+            empty_balance_pool: None,
             test_coin_cap: None,
             immutable_object: None,
             init_gas,
@@ -1374,6 +1393,7 @@ pub struct CompositeWorkload {
     randomness_initial_shared_version: Option<SequenceNumber>,
     accumulator_root_initial_shared_version: Option<SequenceNumber>,
     balance_pool: Option<(ObjectID, SequenceNumber)>,
+    empty_balance_pool: Option<(ObjectID, SequenceNumber)>,
     test_coin_cap: Option<(ObjectID, SequenceNumber)>,
     immutable_object: Option<ObjectRef>,
     init_gas: Vec<Gas>,
@@ -1587,6 +1607,33 @@ impl Workload<dyn Payload> for CompositeWorkload {
             };
             self.balance_pool = Some((obj_ref.0, initial_shared_version));
             info!("Created balance pool {:?}", self.balance_pool);
+        }
+
+        if init_requirements.contains(&InitRequirement::CreateEmptyBalancePool) {
+            // This pool is deliberately never seeded, so its `Balance<T>` stays zero for
+            // every type. Withdrawals from it must always trigger IFFW.
+            info!("Creating empty balance pool for large-withdrawal operations");
+            let (multi_gas, sender, keypair) = &mut self.payload_gas[0];
+            let gas = &mut multi_gas[0];
+            let tx = TestTransactionBuilder::new(*sender, *gas, gas_price)
+                .move_call(self.package_id.unwrap(), "balance_pool", "create", vec![])
+                .ensure_unique()
+                .build_and_sign(keypair.as_ref());
+
+            let execution_result = execution_proxy.execute_transaction_block(tx).await;
+            let effects = execution_result.expect("Empty balance pool creation should succeed");
+
+            update_gas!(gas, effects);
+
+            let (obj_ref, owner) = effects.created()[0].clone();
+            let initial_shared_version = match owner {
+                Owner::Shared {
+                    initial_shared_version,
+                } => initial_shared_version,
+                _ => panic!("Empty balance pool should be shared"),
+            };
+            self.empty_balance_pool = Some((obj_ref.0, initial_shared_version));
+            info!("Created empty balance pool {:?}", self.empty_balance_pool);
         }
 
         if init_requirements.contains(&InitRequirement::SeedBalancePool) {
@@ -1924,6 +1971,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 .unwrap(),
             hotness: self.config.shared_counter_hotness,
             balance_pool: self.balance_pool,
+            empty_balance_pool: self.empty_balance_pool,
             test_coin_cap: self.test_coin_cap,
             test_coin_type,
             chain_identifier: self.chain_identifier.unwrap(),
