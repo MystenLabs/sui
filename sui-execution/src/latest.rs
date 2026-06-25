@@ -10,7 +10,8 @@ use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::{SuiAddress, TxContext},
+    accumulator_root::UnsettledObjectFundsRead,
+    base_types::{SequenceNumber, SuiAddress, TxContext},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -73,6 +74,8 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        accumulator_version: Option<SequenceNumber>,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -91,6 +94,8 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::Normal>(
                 store,
                 input_objects,
+                accumulator_version,
+                unsettled_object_funds,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -122,6 +127,8 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        accumulator_version: Option<SequenceNumber>,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -140,6 +147,8 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
                 store,
                 input_objects,
+                accumulator_version,
+                unsettled_object_funds,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -188,6 +197,10 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
+                // dev-inspect is not sequenced against an accumulator version.
+                None,
+                // dev-inspect has no unsettled object funds to account for.
+                None,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -207,6 +220,10 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
                 store,
                 input_objects,
+                // dev-inspect is not sequenced against an accumulator version.
+                None,
+                // dev-inspect has no unsettled object funds to account for.
+                None,
                 gas,
                 gas_status,
                 transaction_kind,

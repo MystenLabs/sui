@@ -9,7 +9,8 @@ use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::storage::BackingStore;
 use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::SuiAddress,
+    accumulator_root::UnsettledObjectFundsRead,
+    base_types::{SequenceNumber, SuiAddress},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -38,6 +39,10 @@ pub trait Executor {
         epoch_timestamp_ms: u64,
         // Transaction Inputs
         input_objects: CheckedInputObjects,
+        // Accumulator (settlement) version this transaction is sequenced against, if any.
+        accumulator_version: Option<SequenceNumber>,
+        // Source of unsettled object-funds withdrawals for the current consensus commit, if any.
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         // Gas related
         gas: GasData,
         gas_status: SuiGasStatus,
@@ -67,6 +72,8 @@ pub trait Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        accumulator_version: Option<SequenceNumber>,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,

@@ -217,6 +217,8 @@ impl SingleValidator {
                 &self.epoch_store.epoch(),
                 0,
                 input_objects,
+                None, // accumulator_version
+                None, // unsettled_object_funds
                 gas_data,
                 gas_status,
                 kind,

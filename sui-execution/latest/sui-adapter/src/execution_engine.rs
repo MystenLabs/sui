@@ -16,7 +16,9 @@ mod checked {
     use mysten_common::{assert_reachable, debug_fatal, in_test_configuration};
     use std::collections::BTreeMap;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
-    use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
+    use sui_types::accumulator_root::{
+        ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE, UnsettledObjectFundsRead,
+    };
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
@@ -267,6 +269,8 @@ mod checked {
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
+        accumulator_version: Option<SequenceNumber>,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         mut gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -305,6 +309,8 @@ mod checked {
             transaction_digest,
             protocol_config,
             *epoch_id,
+            accumulator_version,
+            unsettled_object_funds,
         );
 
         // Short-circuit on InsufficientFundsForWithdraw: the transaction is guaranteed to fail
@@ -547,6 +553,10 @@ mod checked {
             tx_context.borrow().digest(),
             protocol_config,
             0,
+            // Genesis reads no accumulator version for funds checks.
+            None,
+            // Genesis performs no object funds withdraws.
+            None,
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.borrow().digest());
         SPT::execute::<execution_mode::Genesis>(

@@ -733,6 +733,8 @@ mod test {
                 &epoch.epoch_id(),
                 epoch.epoch_start_timestamp(),
                 input_objects,
+                None, // accumulator_version
+                None, // unsettled_object_funds
                 gas_data,
                 SuiGasStatus::new_unmetered(),
                 kind,

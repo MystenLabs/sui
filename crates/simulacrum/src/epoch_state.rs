@@ -162,6 +162,8 @@ impl EpochState {
                 &self.epoch_start_state.epoch(),
                 self.epoch_start_state.epoch_start_timestamp_ms(),
                 checked_input_objects,
+                None, // accumulator_version
+                None, // unsettled_object_funds
                 gas_data,
                 gas_status,
                 kind,

@@ -10,7 +10,7 @@ use mysten_common::{assert_reachable, debug_fatal};
 use parking_lot::RwLock;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    accumulator_root::AccumulatorObjId,
+    accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead},
     base_types::SequenceNumber,
     effects::{TransactionEffects, TransactionEffectsAPI},
     executable_transaction::VerifiedExecutableTransaction,
@@ -70,6 +70,22 @@ struct Inner {
     unsettled_accounts: BTreeMap<SequenceNumber, BTreeSet<AccumulatorObjId>>,
 }
 
+impl UnsettledObjectFundsRead for ObjectFundsChecker {
+    fn get_unsettled_object_withdraw(
+        &self,
+        account: &AccumulatorObjId,
+        accumulator_version: SequenceNumber,
+    ) -> u128 {
+        self.inner
+            .read()
+            .unsettled_withdraws
+            .get(account)
+            .and_then(|withdraws| withdraws.get(&accumulator_version))
+            .copied()
+            .unwrap_or_default()
+    }
+}
+
 impl ObjectFundsChecker {
     pub fn new(
         starting_accumulator_version: SequenceNumber,
@@ -83,6 +99,54 @@ impl ObjectFundsChecker {
             inner: RwLock::new(Inner::default()),
             metrics,
         }
+    }
+
+    /// Records the object-funds withdrawals of a transaction that executed successfully under the
+    /// in-execution funds check, so subsequent transactions in the same consensus commit see them as
+    /// unsettled. This is the recording half of `should_commit_object_funds_withdraws`/`try_withdraw`
+    /// without the sufficiency check, which the Move VM already performed during execution. Entries
+    /// are garbage-collected by `commit_accumulator_versions` once the accumulator version settles.
+    pub fn record_object_funds_withdraws(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        accumulator_running_max_withdraws: &BTreeMap<AccumulatorObjId, u128>,
+        accumulator_version: SequenceNumber,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        if accumulator_running_max_withdraws.is_empty() {
+            return;
+        }
+        // Address-reservation withdraws are settled separately; only object withdraws (those without
+        // a funds reservation) are tracked here, mirroring `should_commit_object_funds_withdraws`.
+        let address_funds_reservations: BTreeSet<_> = certificate
+            .transaction_data()
+            .process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier())
+            .into_keys()
+            .collect();
+        let mut inner = self.inner.write();
+        for (account, amount) in accumulator_running_max_withdraws {
+            if address_funds_reservations.contains(account) {
+                continue;
+            }
+            let entry = inner
+                .unsettled_withdraws
+                .entry(*account)
+                .or_default()
+                .entry(accumulator_version)
+                .or_default();
+            *entry = entry.checked_add(*amount).unwrap();
+            inner
+                .unsettled_accounts
+                .entry(accumulator_version)
+                .or_default()
+                .insert(*account);
+        }
+        self.metrics
+            .unsettled_accounts
+            .set(inner.unsettled_withdraws.len() as i64);
+        self.metrics
+            .unsettled_versions
+            .set(inner.unsettled_accounts.len() as i64);
     }
 
     #[instrument(level = "debug", skip_all, fields(tx_digest = ?certificate.digest()))]
