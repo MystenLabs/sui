@@ -1,8 +1,10 @@
 ---
 source: crates/move-decompiler/tests/tests.rs
+assertion_line: 21
 ---
 { 0 }
 'loop_1: loop {
+    { 1 }
     if (1) {
         { 2 }
         continue 'loop_1;

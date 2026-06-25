@@ -481,7 +481,7 @@ fn count_module_refs(
     }
     // Types in signatures/fields: only the module side counts here (the type-name side, if
     // present, is handled by `type_uses`). A site whose type is already aliased contributes
-    // nothing — its rendered form drops the module prefix entirely.
+    // nothing - its rendered form drops the module prefix entirely.
     visit_module_types(module, &mut |t| {
         if let Some(k) = type_qualified(t)
             && !type_uses.contains_key(&k)

@@ -130,6 +130,25 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
         return "Expected an entry point `0`, but none was found".to_owned();
     }
     let config = crate::config::Config::default();
-    let (structured, _unemitted) = crate::structuring::structure(&config, input, 0.into());
-    structured.to_test_string()
+    // `run_structuring_test` exercises the structurer in isolation on a tiny `.stt` fixture
+    // - there's no `terms` map (term reconstruction is part of `translate.rs`, not the
+    // structurer). Pass an empty map; `bodies_equivalent` treats every block with no entry
+    // in `terms` as "no body to compare", drops them all via `filter_map`, and the resulting
+    // empty s1/s2 lists trivially compare equal - i.e., the guard is bypassed. That's the
+    // right behavior for these `.stt` shape tests: they pin the structurer's CFG-to-AST
+    // mapping, and the content-level guard would only mask the shape regressions they
+    // exist to catch.
+    let (structured, unemitted) = crate::structuring::structure(&config, input, 0.into());
+    // Surface unemitted blocks in the snapshot so a regression that silently drops blocks
+    // shows up as a snapshot diff rather than passing on shape match. Bytecode and `.move`
+    // corpus tests already render the `// Did not structure and emit blocks N, K, ...` notice
+    // as part of their function output; `.stt` fixtures pin only the structured form, so the
+    // notice goes here.
+    let body = structured.to_test_string();
+    if unemitted.is_empty() {
+        body
+    } else {
+        let notice: Vec<String> = unemitted.iter().map(|n| n.to_string()).collect();
+        format!("// unemitted blocks: {}\n{body}", notice.join(", "))
+    }
 }
