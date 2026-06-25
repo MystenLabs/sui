@@ -31,7 +31,8 @@ RUN cargo build --locked --profile ${PROFILE} \
     --bin sui-cluster-test \
     --bin sui-tool \
     --bin move-analyzer \
-    --bin sui-metric-checker
+    --bin sui-metric-checker \
+    --bin sui-fork
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
@@ -53,6 +54,7 @@ COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin/sui-clus
 COPY --from=builder /sui/target/release/sui-tool         /usr/local/bin/sui-tool
 COPY --from=builder /sui/target/release/move-analyzer    /usr/local/bin/move-analyzer
 COPY --from=builder /sui/target/release/sui-metric-checker  /usr/local/bin/sui-metric-checker
+COPY --from=builder /sui/target/release/sui-fork            /usr/local/bin/sui-fork
 
 ARG BUILD_DATE
 ARG GIT_REVISION
