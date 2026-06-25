@@ -29,7 +29,9 @@ use sui_network::{
 };
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::message_envelope::Message;
-use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
+use sui_types::messages_consensus::{
+    ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey,
+};
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxResponse, SystemStateRequest,
     TransactionInfoRequest, TransactionInfoResponse,
@@ -67,6 +69,7 @@ use crate::gasless_rate_limiter::GaslessRateLimiter;
 use crate::{
     authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, ConsensusOverloadChecker},
+    consensus_handler::SequencedConsensusTransactionKey,
     traffic_controller::{TrafficController, parse_ip, policies::TrafficTally},
 };
 use crate::{
@@ -197,6 +200,7 @@ pub struct ValidatorServiceMetrics {
 
     num_rejected_tx_during_overload: IntCounterVec,
     submission_rejected_transactions: IntCounterVec,
+    submission_suppressed_already_processed: IntCounterVec,
     connection_ip_not_found: IntCounter,
     forwarded_header_parse_error: IntCounter,
     forwarded_header_invalid: IntCounter,
@@ -289,6 +293,14 @@ impl ValidatorServiceMetrics {
                 "validator_service_submission_rejected_transactions",
                 "Number of transactions rejected during submission",
                 &["reason"],
+                registry,
+            )
+            .unwrap(),
+            submission_suppressed_already_processed: register_int_counter_vec_with_registry!(
+                "validator_service_submission_suppressed_already_processed",
+                "Number of submitted transactions suppressed because consensus had already \
+                 processed them this epoch (re-submission of already-processed transactions)",
+                &["req_type"],
                 registry,
             )
             .unwrap(),
@@ -852,6 +864,33 @@ impl ValidatorService {
                 debug!(
                     ?tx_digest,
                     "handle_submit_transaction: transaction already executed in previous epoch"
+                );
+                continue;
+            }
+
+            // Suppress resubmission of transactions consensus already processed this epoch:
+            // executed transactions whose effects details could not be reconstructed above (e.g.
+            // objects pruned), and sequenced-but-deferred transactions. Rejected is imperfect for
+            // the deferred case, but acceptable since well-behaved clients get Executed before
+            // pruning; this mainly sheds continuous resubmissions from faulty clients.
+            let consensus_key = SequencedConsensusTransactionKey::External(
+                ConsensusTransactionKey::Certificate(tx_digest),
+            );
+            if epoch_store.is_consensus_message_processed(&consensus_key)? {
+                metrics
+                    .submission_suppressed_already_processed
+                    .with_label_values(&[req_type])
+                    .inc();
+                results[idx] = Some(SubmitTxResult::Rejected {
+                    error: SuiErrorKind::TransactionProcessing {
+                        digest: tx_digest,
+                        status: "sequenced by consensus".to_string(),
+                    }
+                    .into(),
+                });
+                debug!(
+                    ?tx_digest,
+                    "handle_submit_transaction: consensus message already processed"
                 );
                 continue;
             }

@@ -249,6 +249,42 @@ async fn test_submit_transaction_already_executed() {
     };
 }
 
+// Test that a transaction already processed by consensus this epoch but not yet executed
+// (e.g. deferred) is suppressed rather than resubmitted to consensus.
+#[tokio::test]
+async fn test_submit_transaction_consensus_message_processed() {
+    let test_context = TestContext::new().await;
+
+    let transaction = test_context.build_test_transaction();
+    let tx_digest = *transaction.digest();
+    let request = test_context.build_submit_request(transaction);
+
+    // Mark the transaction as processed by consensus without executing it, simulating a
+    // sequenced-but-deferred transaction. Its gas object is still unspent, so without the
+    // is_consensus_message_processed check it would be resubmitted to consensus.
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    epoch_store.test_insert_user_signature(tx_digest, vec![]);
+
+    let response = test_context
+        .client
+        .submit_transaction(request, None)
+        .await
+        .unwrap();
+    assert_eq!(response.results.len(), 1);
+    match &response.results[0] {
+        SubmitTxResult::Rejected { error } => {
+            assert!(
+                matches!(
+                    error.as_inner(),
+                    SuiErrorKind::TransactionProcessing { digest, .. } if *digest == tx_digest
+                ),
+                "unexpected rejection error: {error}"
+            );
+        }
+        other => panic!("Expected Rejected response, got {other:?}"),
+    };
+}
+
 #[tokio::test]
 async fn test_submit_transaction_wrong_epoch() {
     let test_context = TestContext::new().await;
@@ -550,6 +586,69 @@ async fn test_submit_soft_bundle_transactions_with_already_executed() {
             // Expected: second transaction was submitted to consensus
         }
         _ => panic!("Expected Submitted status for second transaction"),
+    }
+}
+
+// Test that a transaction already processed by consensus (but not executed) is removed from a
+// soft bundle before submission, while the remaining transactions in the bundle are still
+// submitted to consensus.
+#[tokio::test]
+async fn test_submit_soft_bundle_transactions_with_consensus_message_processed() {
+    let test_context = TestContext::new().await;
+
+    // 1st transaction: mark as already processed by consensus without executing it.
+    let tx1 = test_context.build_test_transaction();
+    let tx1_digest = *tx1.digest();
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    epoch_store.test_insert_user_signature(tx1_digest, vec![]);
+
+    // 2nd transaction: a fresh, unprocessed transaction with its own gas object.
+    let gas_object2 = Object::with_owner_for_testing(test_context.sender);
+    let gas_object_ref2 = gas_object2.compute_object_reference();
+    test_context.state.insert_genesis_object(gas_object2);
+
+    let tx_data2 = TestTransactionBuilder::new(
+        test_context.sender,
+        gas_object_ref2,
+        test_context
+            .state
+            .reference_gas_price_for_testing()
+            .unwrap(),
+    )
+    .transfer_sui(None, test_context.sender)
+    .build();
+    let tx2 = to_sender_signed_transaction(tx_data2, &test_context.keypair);
+
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx1).unwrap().into(),
+            bcs::to_bytes(&tx2).unwrap().into(),
+        ],
+        submit_type: SubmitTxType::SoftBundle.into(),
+    };
+
+    let raw_response = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(raw_response.results.len(), 2);
+
+    // The already-processed transaction is rejected and excluded from the bundle submitted to
+    // consensus; the remaining transaction is still submitted.
+    match &raw_response.results[0].inner {
+        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Rejected(_)) => {}
+        other => {
+            panic!("Expected Rejected status for already-processed transaction, got {other:?}")
+        }
+    }
+    match &raw_response.results[1].inner {
+        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Submitted(_)) => {}
+        other => panic!("Expected Submitted status for remaining transaction, got {other:?}"),
     }
 }
 
