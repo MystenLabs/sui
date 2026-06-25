@@ -34,7 +34,7 @@ mysten-metrics.workspace = true
 anemo-cli.workspace = true
 anemo.workspace = true
 base64.workspace = true
-reqwest = { workspace = true, features = ["blocking"] }
+reqwest = { workspace = true, features = ["blocking", "query"] }
 rustyline = { version = "14" }
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }

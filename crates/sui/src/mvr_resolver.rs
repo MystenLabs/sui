@@ -48,7 +48,7 @@ impl MvrResolver {
             });
         }
 
-        let request = reqwest::Client::new();
+        let request = reqwest012::Client::new();
         let (url, chain) = mvr_req_url(client).await?;
         let json_body = json!(NamesRequest {
             names: self.names.clone()

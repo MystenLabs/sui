@@ -12,7 +12,7 @@ use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use regex::Regex;
-use reqwest::Client;
+use reqwest012::Client;
 use serde_json::json;
 use shared_crypto::intent::Intent;
 use std::io;

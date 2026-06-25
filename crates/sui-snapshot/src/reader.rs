@@ -161,11 +161,11 @@ impl StateSnapshotReaderV1 {
         let standard_epoch_dir = Path::from(format!("epoch_{}", epoch));
         let archive_epoch_dir = Path::from(format!("archive/epoch_{}", epoch));
 
-        let standard_manifest_path = standard_epoch_dir.child("MANIFEST");
-        let archive_manifest_path = archive_epoch_dir.child("MANIFEST");
+        let standard_manifest_path = standard_epoch_dir.clone().join("MANIFEST");
+        let archive_manifest_path = archive_epoch_dir.clone().join("MANIFEST");
 
         // We always download to local epoch dir's MANIFEST
-        let local_manifest_path = local_epoch_dir_path.child("MANIFEST");
+        let local_manifest_path = local_epoch_dir_path.clone().join("MANIFEST");
 
         let (remote_epoch_prefix, manifest_download_result) = match Self::copy_file_with_retry(
             &standard_manifest_path,

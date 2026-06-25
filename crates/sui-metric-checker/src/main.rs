@@ -54,7 +54,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let config: Config = serde_yaml::from_str(&contents)?;
 
     let client = {
-        let c = reqwest::Client::builder()
+        let c = reqwest012::Client::builder()
             .no_proxy()
             .timeout(Duration::from_secs(10))
             .build()
