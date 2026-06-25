@@ -48,7 +48,7 @@ mod checked {
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
         AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
     };
-    use sui_types::base_types::SequenceNumber;
+    use sui_types::base_types::{ObjectID, SequenceNumber};
     use sui_types::bridge::BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER;
     use sui_types::bridge::{
         BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_INIT_COMMITTEE_FUNCTION_NAME, BRIDGE_MODULE_NAME,
@@ -352,7 +352,7 @@ mod checked {
         // conservation checks and the ownership-invariant check read them from there.
         temporary_store.set_invariant_inputs(&transaction_kind, &gas_data, transaction_signer);
 
-        let (gas_cost_summary, execution_result, timings) = execute_transaction::<Mode>(
+        let (gas_cost_summary, mut execution_result, timings) = execute_transaction::<Mode>(
             store,
             &mut temporary_store,
             transaction_kind,
@@ -362,11 +362,29 @@ mod checked {
             move_vm,
             protocol_config,
             metrics.clone(),
-            enable_expensive_checks,
             execution_params,
             trace_builder_opt,
             is_gasless,
         );
+
+        // Post-execution system-invariant checks, run after gas charging: SUI conservation
+        // (recoverable) followed by object-ownership authentication (panics on violation).
+        if let Err(e) = run_invariant_checks::<Mode>(
+            &mut temporary_store,
+            &mut gas_charger,
+            transaction_digest,
+            move_vm,
+            protocol_config,
+            enable_expensive_checks,
+            &gas_cost_summary,
+            &transaction_signer,
+            &sponsor,
+            &mutable_inputs,
+            is_epoch_change,
+        ) {
+            // FIXME: we cannot fail the transaction if this is an epoch change transaction.
+            execution_result = Err(e);
+        }
 
         let status = if let Err(error) = &execution_result {
             ExecutionStatus::new_failure(error.to_execution_failure())
@@ -388,18 +406,6 @@ mod checked {
         // genesis and not written by any normal transaction - remove that from the
         // dependencies
         transaction_dependencies.remove(&TransactionDigest::genesis_marker());
-
-        if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
-            temporary_store
-                .check_ownership_invariants(
-                    &transaction_signer,
-                    &sponsor,
-                    &gas_charger,
-                    &mutable_inputs,
-                    is_epoch_change,
-                )
-                .unwrap()
-        } // else, in dev inspect mode and anything goes--don't check
 
         let (inner, effects) = temporary_store.into_effects(
             shared_object_refs,
@@ -528,7 +534,6 @@ mod checked {
         move_vm: &Arc<MoveRuntime>,
         protocol_config: &ProtocolConfig,
         metrics: Arc<ExecutionMetrics>,
-        enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
         is_gasless: bool,
@@ -543,7 +548,6 @@ mod checked {
             "No gas charges must be applied yet"
         );
 
-        let digest = tx_ctx.borrow().digest();
         let withdrawal_reservations =
             if is_gasless && protocol_config.gasless_verify_remaining_balance() {
                 gasless_withdrawal_reservations(&transaction_kind, &tx_ctx.borrow())
@@ -648,24 +652,61 @@ mod checked {
         // to the 0x5 object so that it's not lost.
         temporary_store.conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
 
-        if let Err(e) = run_conservation_checks::<Mode>(
-            temporary_store,
-            gas_charger,
-            digest,
-            move_vm,
-            protocol_config,
-            enable_expensive_checks,
-            &cost_summary,
-        ) {
-            // FIXME: we cannot fail the transaction if this is an epoch change transaction.
-            result = Err(e);
-        }
-
         (cost_summary, result, timings)
     }
 
-    /// Run the SUI-conservation and balance-accumulator invariant checks ([`invariants::run_all_checks`])
-    /// against the finalized store. On a violation, recover by dumping all writes, charging gas in
+    /// Run all post-execution system-invariant checks against the finalized (gas-charged) store.
+    ///
+    /// Two families, with deliberately different failure handling:
+    /// - SUI conservation / balance-accumulator authorization, via [`run_conservation_checks`]. A
+    ///   violation is recoverable: the tx is aborted (and conserves SUI) rather than panicking.
+    /// - Object-ownership authentication (expensive-checks only, skipped under dev-inspect). This
+    ///   is a non-recoverable assertion, so it runs *after* conservation and *outside* its
+    ///   gas-charging recovery, and panics on violation. (Folding it into the recovery would let
+    ///   the recovery's `drop_writes` mask a real violation into a silent abort.)
+    ///
+    /// Returns the conservation result so the caller can fail the transaction on a violation; an
+    /// ownership violation panics directly.
+    #[allow(clippy::too_many_arguments)]
+    fn run_invariant_checks<Mode: ExecutionMode>(
+        temporary_store: &mut TemporaryStore<'_>,
+        gas_charger: &mut GasCharger,
+        tx_digest: TransactionDigest,
+        move_vm: &Arc<MoveRuntime>,
+        protocol_config: &ProtocolConfig,
+        enable_expensive_checks: bool,
+        cost_summary: &GasCostSummary,
+        sender: &SuiAddress,
+        sponsor: &Option<SuiAddress>,
+        mutable_inputs: &HashSet<ObjectID>,
+        is_epoch_change: bool,
+    ) -> Result<(), Mode::Error> {
+        let conservation = run_conservation_checks::<Mode>(
+            temporary_store,
+            gas_charger,
+            tx_digest,
+            move_vm,
+            protocol_config,
+            enable_expensive_checks,
+            cost_summary,
+        );
+        if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
+            temporary_store
+                .check_ownership_invariants(
+                    sender,
+                    sponsor,
+                    gas_charger,
+                    mutable_inputs,
+                    is_epoch_change,
+                )
+                .unwrap()
+        } // else, in dev inspect mode and anything goes--don't check
+        conservation
+    }
+
+    /// Run the SUI-conservation and balance-accumulator invariant checks
+    /// ([`TemporaryStore::check_conservation_invariants`]) against the finalized store. On a
+    /// violation, recover by dumping all writes, charging gas in
     /// the aborted state, and re-checking; a surviving double failure means gas charging itself
     /// mints or burns SUI, which is unrecoverable, so we panic. The checks themselves are read-only;
     /// the recovery's gas-charging mutations are orchestrated here alongside the main-path charge.
