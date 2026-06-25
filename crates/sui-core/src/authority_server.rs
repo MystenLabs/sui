@@ -415,16 +415,15 @@ pub struct ValidatorService {
     client_id_source: Option<ClientIdSource>,
     gasless_limiter: GaslessRateLimiter,
     admission_queue: Option<AdmissionQueueContext>,
-    /// Digests submitted within the last `RECENT_SUBMISSION_TTL` (value: when recorded), to drop
-    /// duplicate resubmissions before they reach consensus.
+    /// Digests submitted within the last `recent_submission_window` (value: when recorded), to
+    /// drop duplicate resubmissions before they reach consensus.
     recently_submitted: Cache<TransactionDigest, Instant>,
+    /// How long a transaction is suppressed after submission (from node config).
+    recent_submission_window: Duration,
 }
 
-/// Window during which a given transaction is allowed into consensus at most once.
-const RECENT_SUBMISSION_TTL: Duration = Duration::from_secs(1);
-
-/// Eviction past this only weakens best-effort suppression, not correctness.
-const RECENT_SUBMISSION_MAX_CAPACITY: u64 = 100_000;
+/// Assumed peak distinct-submission rate, used to size the dedup cache (per window).
+const RECENT_SUBMISSION_PEAK_TPS: u64 = 50_000;
 
 impl ValidatorService {
     pub fn new(
@@ -436,6 +435,7 @@ impl ValidatorService {
     ) -> Self {
         let traffic_controller = state.traffic_controller.clone();
         let gasless_limiter = GaslessRateLimiter::new(state.consensus_gasless_counter.clone());
+        let recent_submission_window = state.config.recent_submission_dedup_window();
         Self {
             state,
             consensus_adapter,
@@ -444,14 +444,18 @@ impl ValidatorService {
             client_id_source,
             gasless_limiter,
             admission_queue,
-            recently_submitted: Self::new_recently_submitted_cache(),
+            recently_submitted: Self::new_recently_submitted_cache(recent_submission_window),
+            recent_submission_window,
         }
     }
 
-    fn new_recently_submitted_cache() -> Cache<TransactionDigest, Instant> {
+    fn new_recently_submitted_cache(window: Duration) -> Cache<TransactionDigest, Instant> {
+        // Memory backstop only; the window bounds the cache, and amplified duplicates do not add
+        // entries (they share a digest). Sized for roughly one window at peak throughput.
+        let max_capacity = window.as_secs().max(1) * RECENT_SUBMISSION_PEAK_TPS;
         Cache::builder()
-            .time_to_live(RECENT_SUBMISSION_TTL)
-            .max_capacity(RECENT_SUBMISSION_MAX_CAPACITY)
+            .time_to_live(window)
+            .max_capacity(max_capacity)
             .build()
     }
 
@@ -468,6 +472,7 @@ impl ValidatorService {
             slot_freed_notify,
         ));
         let admission_queue = Some(AdmissionQueueContext::spawn(manager, epoch_store));
+        let recent_submission_window = state.config.recent_submission_dedup_window();
         Self {
             state,
             consensus_adapter,
@@ -476,7 +481,8 @@ impl ValidatorService {
             client_id_source: None,
             gasless_limiter,
             admission_queue,
-            recently_submitted: Self::new_recently_submitted_cache(),
+            recently_submitted: Self::new_recently_submitted_cache(recent_submission_window),
+            recent_submission_window,
         }
     }
 
@@ -600,6 +606,7 @@ impl ValidatorService {
             gasless_limiter: _,
             admission_queue: _,
             recently_submitted: _,
+            recent_submission_window: _,
         } = self.clone();
 
         let submitter_client_addr = if let Some(client_id_source) = &client_id_source {
@@ -959,9 +966,11 @@ impl ValidatorService {
                 continue;
             }
 
-            // Allow a given transaction into consensus at most once per `RECENT_SUBMISSION_TTL`,
-            // dropping duplicate resubmissions (including pre-submission and in-flight) early.
-            if let Some(recorded_at) = self.recently_submitted.get(&tx_digest) {
+            // Allow a given transaction into consensus at most once per `recent_submission_window`,
+            // dropping duplicate resubmissions early.
+            if let Some(recorded_at) = self.recently_submitted.get(&tx_digest)
+                && recorded_at.elapsed() < self.recent_submission_window
+            {
                 metrics
                     .submission_suppressed_recently_submitted
                     .with_label_values(&[req_type])

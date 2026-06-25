@@ -12,6 +12,7 @@ use sui_macros::{register_fail_point_if, sim_test};
 use sui_network::default_mysten_network_config;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::ObjectRef;
 use sui_types::messages_grpc::SubmitTxRequest;
 use sui_types::transaction::Transaction;
 use test_cluster::TestClusterBuilder;
@@ -27,6 +28,15 @@ async fn make_transfer_tx_with_gas_price(
         .await
         .unwrap()
         .unwrap();
+    make_transfer_tx_with_gas(cluster, gas, gas_price).await
+}
+
+async fn make_transfer_tx_with_gas(
+    cluster: &test_cluster::TestCluster,
+    gas: ObjectRef,
+    gas_price: u64,
+) -> Transaction {
+    let sender = cluster.get_address_0();
     let tx_data = TestTransactionBuilder::new(sender, gas, gas_price)
         .transfer_sui(Some(1), sender)
         .build();
@@ -107,11 +117,18 @@ async fn test_admission_queue_eviction_and_rejection() {
 
     let rgp = cluster.get_reference_gas_price().await;
 
-    // Build transactions with different gas prices.
-    let tx1 = make_transfer_tx_with_gas_price(&cluster, rgp).await;
-    let tx2 = make_transfer_tx_with_gas_price(&cluster, rgp).await;
-    let tx_low = make_transfer_tx_with_gas_price(&cluster, rgp).await;
-    let tx_high = make_transfer_tx_with_gas_price(&cluster, rgp * 10).await;
+    // Use distinct gas objects so the transactions have distinct digests and don't conflict;
+    // identical transactions would be deduped at the submission handler before reaching the queue.
+    let sender = cluster.get_address_0();
+    let gas_objects = cluster
+        .wallet
+        .get_all_gas_objects_owned_by_address(sender)
+        .await
+        .unwrap();
+    let tx1 = make_transfer_tx_with_gas(&cluster, gas_objects[0], rgp).await;
+    let tx2 = make_transfer_tx_with_gas(&cluster, gas_objects[1], rgp).await;
+    let tx_low = make_transfer_tx_with_gas(&cluster, gas_objects[2], rgp).await;
+    let tx_high = make_transfer_tx_with_gas(&cluster, gas_objects[3], rgp * 10).await;
 
     // Fill the queue (capacity 2). submit_transaction blocks waiting for the
     // consensus position when accepted (draining is disabled), so we spawn them.
