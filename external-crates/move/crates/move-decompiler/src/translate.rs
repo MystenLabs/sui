@@ -461,6 +461,12 @@ fn collect_goto_targets_into(exp: &Exp, out: &mut HashSet<u64>) {
                 collect_goto_targets_into(e, out);
             }
         }
+        Exp::MatchLit(c, arms) => {
+            collect_goto_targets_into(c, out);
+            for (_, e) in arms {
+                collect_goto_targets_into(e, out);
+            }
+        }
         Exp::Seq(es) | Exp::Return(es) | Exp::Call(_, es) => {
             for e in es {
                 collect_goto_targets_into(e, out);
@@ -524,6 +530,12 @@ fn strip_untargeted_blocks(exp: &mut Exp, targets: &HashSet<u64>) {
         Exp::Match(c, _, arms) => {
             strip_untargeted_blocks(c, targets);
             for (_, _, e) in arms {
+                strip_untargeted_blocks(e, targets);
+            }
+        }
+        Exp::MatchLit(c, arms) => {
+            strip_untargeted_blocks(c, targets);
+            for (_, e) in arms {
                 strip_untargeted_blocks(e, targets);
             }
         }
@@ -648,6 +660,20 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
                 ]))),
             ));
             Out::Exp::Block(code, Box::new(Out::Exp::Seq(seq)))
+        }
+        D::Structured::Let(name) => Out::Exp::Declare(vec![name]),
+        D::Structured::Assign(name, value) => Out::Exp::Assign(
+            vec![name],
+            Box::new(Out::Exp::Value(
+                move_core_types::runtime_value::MoveValue::U32(value),
+            )),
+        ),
+        D::Structured::SelectorMatch(name, arms) => {
+            let translated_arms: Vec<(crate::ast::DispatchTag, Out::Exp)> = arms
+                .into_iter()
+                .map(|(tag, body)| (tag, generate_output(terms.clone(), body)))
+                .collect();
+            Out::Exp::MatchLit(Box::new(Out::Exp::Variable(name)), translated_arms)
         }
     }
 }

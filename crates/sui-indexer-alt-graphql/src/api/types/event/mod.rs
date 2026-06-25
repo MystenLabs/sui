@@ -42,14 +42,14 @@ pub(crate) mod filter;
 mod lookups;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
-pub(crate) struct EventCursor {
+pub struct EventCursor {
     #[serde(rename = "t")]
     pub tx_sequence_number: u64,
     #[serde(rename = "e")]
     pub ev_sequence_number: u64,
 }
 
-pub(crate) type CEvent = JsonCursor<EventCursor>;
+pub type CEvent = JsonCursor<EventCursor>;
 
 #[derive(Clone)]
 pub(crate) struct Event {

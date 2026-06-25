@@ -110,6 +110,12 @@ fn collect_candidates(exp: &Exp, root: &Exp, liveness: &Liveness, out: &mut Vec<
                 collect_candidates(b, root, liveness, out);
             }
         }
+        E::MatchLit(subject, arms) => {
+            collect_candidates(subject, root, liveness, out);
+            for (_, b) in arms {
+                collect_candidates(b, root, liveness, out);
+            }
+        }
         E::Primitive { args, .. } | E::Data { args, .. } => {
             for a in args {
                 collect_candidates(a, root, liveness, out);
@@ -262,6 +268,12 @@ fn apply(exp: &mut Exp, drop_set: &BTreeSet<(String, String)>, sub_map: &BTreeMa
         E::Match(subject, _, arms) => {
             apply(subject, drop_set, sub_map);
             for (_, _, b) in arms {
+                apply(b, drop_set, sub_map);
+            }
+        }
+        E::MatchLit(subject, arms) => {
+            apply(subject, drop_set, sub_map);
+            for (_, b) in arms {
                 apply(b, drop_set, sub_map);
             }
         }

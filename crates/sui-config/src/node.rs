@@ -968,6 +968,7 @@ impl NodeConfig {
             .map(|config| ArchiveReaderConfig {
                 ingestion_url: config.ingestion_url.clone(),
                 remote_store_options: config.remote_store_options.clone(),
+                remote_store_headers: config.remote_store_headers.clone(),
                 download_concurrency: NonZeroUsize::new(config.concurrency)
                     .unwrap_or(NonZeroUsize::new(5).unwrap()),
                 remote_store_config: ObjectStoreConfig::default(),
@@ -1329,6 +1330,7 @@ pub struct ArchiveReaderConfig {
     pub download_concurrency: NonZeroUsize,
     pub ingestion_url: Option<String>,
     pub remote_store_options: Vec<(String, String)>,
+    pub remote_store_headers: Vec<(String, String)>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -1345,6 +1347,11 @@ pub struct StateArchiveConfig {
         deserialize_with = "deserialize_remote_store_options"
     )]
     pub remote_store_options: Vec<(String, String)>,
+    /// Default headers (name, value) attached to every archive store request,
+    /// e.g. `x-goog-user-project` to bill a GCS requester-pays bucket. Unlike
+    /// `remote_store_options`, these are HTTP headers, not object-store config keys.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub remote_store_headers: Vec<(String, String)>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]

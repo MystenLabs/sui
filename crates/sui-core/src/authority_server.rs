@@ -17,6 +17,7 @@ use prometheus::{
     register_int_counter_with_registry,
 };
 use std::{
+    collections::HashSet,
     io,
     net::{IpAddr, SocketAddr},
     sync::Arc,
@@ -29,7 +30,9 @@ use sui_network::{
 };
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::message_envelope::Message;
-use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
+use sui_types::messages_consensus::{
+    ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey,
+};
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxResponse, SystemStateRequest,
     TransactionInfoRequest, TransactionInfoResponse,
@@ -67,6 +70,7 @@ use crate::gasless_rate_limiter::GaslessRateLimiter;
 use crate::{
     authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, ConsensusOverloadChecker},
+    consensus_handler::SequencedConsensusTransactionKey,
     traffic_controller::{TrafficController, parse_ip, policies::TrafficTally},
 };
 use crate::{
@@ -197,6 +201,7 @@ pub struct ValidatorServiceMetrics {
 
     num_rejected_tx_during_overload: IntCounterVec,
     submission_rejected_transactions: IntCounterVec,
+    submission_suppressed_already_processed: IntCounterVec,
     connection_ip_not_found: IntCounter,
     forwarded_header_parse_error: IntCounter,
     forwarded_header_invalid: IntCounter,
@@ -289,6 +294,14 @@ impl ValidatorServiceMetrics {
                 "validator_service_submission_rejected_transactions",
                 "Number of transactions rejected during submission",
                 &["reason"],
+                registry,
+            )
+            .unwrap(),
+            submission_suppressed_already_processed: register_int_counter_vec_with_registry!(
+                "validator_service_submission_suppressed_already_processed",
+                "Number of submitted transactions suppressed because consensus had already \
+                 processed them this epoch (re-submission of already-processed transactions)",
+                &["req_type"],
                 registry,
             )
             .unwrap(),
@@ -666,10 +679,17 @@ impl ValidatorService {
         let mut results: Vec<Option<SubmitTxResult>> = vec![None; request.transactions.len()];
         // Total size of all transactions in the request.
         let mut total_size_bytes = 0;
-        // Traffic control spam weight to use for the transaction.
-        let mut spam_weight = Weight::zero();
+        // Whether the request contains any gasless transaction.
+        let mut has_gasless = false;
+        // Set when a transaction duplicates an in-flight submission at admission. Tracked
+        // separately because it is detected after the per-tx results are finalized (those
+        // remain Submitted), so it cannot be derived from the results alone.
+        let mut duplicate_at_admission = false;
         // First gas price seen in this soft bundle.
         let mut expected_soft_bundle_gas_price = None;
+        // Transaction digests seen in this soft bundle, used to reject bundles that repeat a
+        // transaction. No legitimate client constructs such a bundle.
+        let mut soft_bundle_digests = HashSet::new();
 
         let req_type = if is_ping_request {
             "ping"
@@ -704,6 +724,19 @@ impl ValidatorService {
             let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
             let tx_digest = *transaction.digest();
 
+            // Soft bundles must not repeat a transaction. Fail the whole request if they do.
+            if is_soft_bundle_request {
+                fp_ensure!(
+                    soft_bundle_digests.insert(tx_digest),
+                    SuiErrorKind::UserInputError {
+                        error: UserInputError::RepeatedTransactionInSoftBundle {
+                            digest: tx_digest
+                        }
+                    }
+                    .into()
+                );
+            }
+
             // Soft bundles require all transactions to use the same gas price.
             if is_soft_bundle_request {
                 let gas_price = transaction.data().transaction_data().gas_price();
@@ -730,8 +763,7 @@ impl ValidatorService {
                 .is_gasless_transaction();
 
             if is_gasless {
-                // Gasless transactions count for traffic control, since they have no economic cost.
-                spam_weight = Weight::one();
+                has_gasless = true;
                 metrics
                     .gasless_submission_outcomes
                     .with_label_values(&["attempted"])
@@ -856,6 +888,33 @@ impl ValidatorService {
                 continue;
             }
 
+            // Suppress resubmission of transactions consensus already processed this epoch:
+            // executed transactions whose effects details could not be reconstructed above (e.g.
+            // objects pruned), and sequenced-but-deferred transactions. Rejected is imperfect for
+            // the deferred case, but acceptable since well-behaved clients get Executed before
+            // pruning; this mainly sheds continuous resubmissions from faulty clients.
+            let consensus_key = SequencedConsensusTransactionKey::External(
+                ConsensusTransactionKey::Certificate(tx_digest),
+            );
+            if epoch_store.is_consensus_message_processed(&consensus_key)? {
+                metrics
+                    .submission_suppressed_already_processed
+                    .with_label_values(&[req_type])
+                    .inc();
+                results[idx] = Some(SubmitTxResult::Rejected {
+                    error: SuiErrorKind::TransactionProcessing {
+                        digest: tx_digest,
+                        status: "sequenced by consensus".to_string(),
+                    }
+                    .into(),
+                });
+                debug!(
+                    ?tx_digest,
+                    "handle_submit_transaction: consensus message already processed"
+                );
+                continue;
+            }
+
             debug!(
                 ?tx_digest,
                 "handle_submit_transaction: waiting for fastpath dependency objects"
@@ -959,7 +1018,14 @@ impl ValidatorService {
         }
 
         if consensus_transactions.is_empty() && !is_ping_request {
-            return Ok((Self::try_from_submit_tx_response(results)?, spam_weight));
+            let spam_weight = Self::request_spam_weight(
+                &results,
+                has_gasless,
+                duplicate_at_admission,
+                is_ping_request,
+            );
+            let response = Self::try_from_submit_tx_response(results)?;
+            return Ok((response, spam_weight));
         }
 
         // Set the max bytes size of the soft bundle to be half of the consensus max transactions in block size.
@@ -1057,8 +1123,9 @@ impl ValidatorService {
                         .try_insert(gas_price, txns, submitter_client_addr)
                         .await?;
                     if !newly_inserted {
-                        // Count duplicate tx submissions towards spam tallies.
-                        spam_weight = Weight::one();
+                        // Duplicate of an in-flight submission; flag the request as spam. The
+                        // per-tx result is still Submitted, so this is tracked separately.
+                        duplicate_at_admission = true;
                     }
                     receivers.push(rx);
                 }
@@ -1094,7 +1161,48 @@ impl ValidatorService {
             }
         }
 
-        Ok((Self::try_from_submit_tx_response(results)?, spam_weight))
+        let spam_weight = Self::request_spam_weight(
+            &results,
+            has_gasless,
+            duplicate_at_admission,
+            is_ping_request,
+        );
+        let response = Self::try_from_submit_tx_response(results)?;
+        Ok((response, spam_weight))
+    }
+
+    /// Traffic-control spam weight for a whole submit request. The request is spam unless it is
+    /// entirely accepted gas-chargable work.
+    fn request_spam_weight(
+        results: &[Option<SubmitTxResult>],
+        has_gasless: bool,
+        duplicate_at_admission: bool,
+        is_ping: bool,
+    ) -> Weight {
+        if is_ping || has_gasless || duplicate_at_admission {
+            return Weight::one();
+        }
+        for result in results {
+            let Some(result) = result else {
+                // `results` is expected to be fully populated (every entry `Some`) for the
+                // request's transactions; a missing entry is a bug and is conservatively
+                // treated as spam.
+                debug_fatal!("transaction outcome unset when computing spam weight");
+                return Weight::one();
+            };
+            if Self::submission_spam_weight(result) == Weight::one() {
+                return Weight::one();
+            }
+        }
+        Weight::zero()
+    }
+
+    fn submission_spam_weight(result: &SubmitTxResult) -> Weight {
+        match result {
+            SubmitTxResult::Submitted { .. } => Weight::zero(),
+            // Non-submitted results can't be charged.
+            SubmitTxResult::Executed { .. } | SubmitTxResult::Rejected { .. } => Weight::one(),
+        }
     }
 
     fn try_from_submit_tx_response(

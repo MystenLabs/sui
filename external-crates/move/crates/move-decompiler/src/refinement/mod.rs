@@ -127,6 +127,13 @@ trait Refine {
                 }
                 changed
             }
+            E::MatchLit(e, arms) => {
+                let mut changed = self.refine(e);
+                for (_, body) in arms.iter_mut() {
+                    changed |= self.refine(body);
+                }
+                changed
+            }
             E::Return(es) => self.refine_seq(es),
             E::Assign(_, e) => self.refine(e),
             E::LetBind(_, e) => self.refine(e),

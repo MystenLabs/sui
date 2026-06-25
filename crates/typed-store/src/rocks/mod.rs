@@ -1184,6 +1184,76 @@ impl<K, V> DBMap<K, V> {
             },
         }
     }
+
+    /// Iterates the whole table as a consistent point-in-time snapshot.
+    /// Equivalent to `snapshot_iterator_with_bounds(None, None, false)`.
+    pub fn snapshot_iterator(&self) -> DbIterator<'_, (K, V)>
+    where
+        K: Serialize + DeserializeOwned,
+        V: Serialize + DeserializeOwned,
+    {
+        self.snapshot_iterator_with_bounds(None, None, false)
+    }
+
+    /// Iterates the table as a consistent point-in-time snapshot, optionally
+    /// bounded and/or reversed.
+    ///
+    /// RocksDB and in-memory iterators are already snapshot-consistent from the
+    /// moment they are created, so this delegates to the regular iterators. The
+    /// tidehunter backend's live iterator is not stable under concurrent writes,
+    /// so this opens a short-lived checkpoint and iterates that frontier instead;
+    /// the returned iterator owns the checkpoint, pinning the snapshot for its
+    /// lifetime.
+    ///
+    /// Bound semantics match the regular iterators: forward is `[lower, upper)`
+    /// (upper exclusive), reverse is `[lower, upper]` (both inclusive).
+    pub fn snapshot_iterator_with_bounds(
+        &self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+        reverse: bool,
+    ) -> DbIterator<'_, (K, V)>
+    where
+        K: Serialize + DeserializeOwned,
+        V: Serialize + DeserializeOwned,
+    {
+        #[cfg(tidehunter)]
+        if let Storage::TideHunter(db) = &self.db.storage {
+            let ColumnFamily::TideHunter((ks, prefix)) = &self.column_family else {
+                unreachable!("storage backend invariant violation");
+            };
+            // Mirror the bound computation of the regular iterators so the snapshot
+            // observes the same key range: forward via `iterator_bounds` (upper
+            // exclusive), reverse via an inclusive range.
+            let (lower, upper) = if reverse {
+                iterator_bounds_with_range::<K>((
+                    lower_bound
+                        .as_ref()
+                        .map(Bound::Included)
+                        .unwrap_or(Bound::Unbounded),
+                    upper_bound
+                        .as_ref()
+                        .map(Bound::Included)
+                        .unwrap_or(Bound::Unbounded),
+                ))
+            } else {
+                iterator_bounds(lower_bound, upper_bound)
+            };
+            let mut iter = db.checkpoint().iterator(*ks);
+            apply_range_bounds(&mut iter, lower, upper, prefix);
+            if reverse {
+                iter.reverse();
+            }
+            return Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()));
+        }
+        if reverse {
+            // Infallible across all backends; only the `Result` shape differs.
+            self.reversed_safe_iter_with_bounds(lower_bound, upper_bound)
+                .expect("reversed iterator construction is infallible")
+        } else {
+            self.safe_iter_with_bounds(lower_bound, upper_bound)
+        }
+    }
 }
 
 pub enum StorageWriteBatch {

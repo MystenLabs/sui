@@ -69,7 +69,7 @@ struct CheckpointContents {
     streamed_data: Option<Arc<ProcessedCheckpoint>>,
 }
 
-pub(crate) type CCheckpoint = JsonCursor<u64>;
+pub type CCheckpoint = JsonCursor<u64>;
 
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]

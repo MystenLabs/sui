@@ -80,6 +80,11 @@ const GRAPHQL_SUBSCRIPTIONS_PATH: &str = "/graphql/subscriptions";
 const HEALTH_PATH: &str = "/graphql/health";
 
 mod api;
+pub use crate::api::scalars::cursor::JsonCursor;
+pub use crate::api::types::checkpoint::CCheckpoint;
+pub use crate::api::types::event::CEvent;
+pub use crate::api::types::event::EventCursor;
+pub use crate::api::types::transaction::CTransaction;
 pub mod args;
 pub mod config;
 mod error;

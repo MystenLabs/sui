@@ -18,7 +18,7 @@ use serde::de::DeserializeOwned;
 ///
 /// In the GraphQL schema this will show up as a `String`.
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub(crate) struct JsonCursor<C>(C);
+pub struct JsonCursor<C>(C);
 
 /// Cursor that hides its value by serializing it to BCS and then encoding it as Base64.
 ///
@@ -27,7 +27,7 @@ pub(crate) struct JsonCursor<C>(C);
 pub(crate) struct BcsCursor<C>(C);
 
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
+pub enum Error {
     #[error("Invalid Base64")]
     BadBase64,
 
@@ -39,7 +39,7 @@ pub(crate) enum Error {
 }
 
 impl<C> JsonCursor<C> {
-    pub(crate) fn new(cursor: C) -> Self {
+    pub fn new(cursor: C) -> Self {
         Self(cursor)
     }
 }

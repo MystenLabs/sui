@@ -68,7 +68,7 @@ pub(crate) struct TransactionContents {
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
 
-pub(crate) type CTransaction = JsonCursor<u64>;
+pub type CTransaction = JsonCursor<u64>;
 
 pub(crate) struct TransactionConnection {
     pub edges: Vec<Edge<String, Transaction, EmptyFields>>,

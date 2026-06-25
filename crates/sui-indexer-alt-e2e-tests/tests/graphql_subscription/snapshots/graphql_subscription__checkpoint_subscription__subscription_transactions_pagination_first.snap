@@ -5,40 +5,42 @@ expression: item
 {
   "data": {
     "checkpoints": {
-      "sequenceNumber": "[seq]",
-      "transactions": {
-        "nodes": [
-          {
-            "digest": "[digest]",
-            "effects": {
-              "status": "SUCCESS",
-              "balanceChanges": {
-                "nodes": [
-                  {
-                    "amount": "100",
-                    "coinType": {
-                      "repr": "[pkg]::sui::SUI"
+      "node": {
+        "sequenceNumber": "[seq]",
+        "transactions": {
+          "nodes": [
+            {
+              "digest": "[digest]",
+              "effects": {
+                "status": "SUCCESS",
+                "balanceChanges": {
+                  "nodes": [
+                    {
+                      "amount": "100",
+                      "coinType": {
+                        "repr": "[pkg]::sui::SUI"
+                      }
+                    },
+                    {
+                      "amount": "-2976100",
+                      "coinType": {
+                        "repr": "[pkg]::sui::SUI"
+                      }
                     }
-                  },
-                  {
-                    "amount": "-2976100",
-                    "coinType": {
-                      "repr": "[pkg]::sui::SUI"
-                    }
-                  }
-                ]
+                  ]
+                }
               }
             }
+          ],
+          "edges": [
+            {
+              "cursor": "[cursor]"
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": true,
+            "hasPreviousPage": false
           }
-        ],
-        "edges": [
-          {
-            "cursor": "[cursor]"
-          }
-        ],
-        "pageInfo": {
-          "hasNextPage": true,
-          "hasPreviousPage": false
         }
       }
     }

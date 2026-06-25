@@ -198,6 +198,12 @@ fn rewrite_self_types(exp: &mut Exp, current_mid: ModuleId<Symbol>) {
                 rewrite_self_types(body, current_mid);
             }
         }
+        Exp::MatchLit(scrutinee, arms) => {
+            rewrite_self_types(scrutinee, current_mid);
+            for (_, body) in arms {
+                rewrite_self_types(body, current_mid);
+            }
+        }
         Exp::Unpack(t, _, e) => {
             unself(t);
             rewrite_self_types(e, current_mid);
@@ -405,6 +411,12 @@ fn count_type_refs_exp(exp: &Exp, out: &mut BTreeMap<(ModuleId<Symbol>, Symbol),
                 count_type_refs_exp(body, out);
             }
         }
+        Exp::MatchLit(scrutinee, arms) => {
+            count_type_refs_exp(scrutinee, out);
+            for (_, body) in arms {
+                count_type_refs_exp(body, out);
+            }
+        }
         Exp::Unpack(t, _, e) => {
             note(t, out);
             count_type_refs_exp(e, out);
@@ -518,6 +530,12 @@ fn count_module_refs_exp(
                 count_module_refs_exp(body, type_uses, out);
             }
         }
+        Exp::MatchLit(scrutinee, arms) => {
+            count_module_refs_exp(scrutinee, type_uses, out);
+            for (_, body) in arms {
+                count_module_refs_exp(body, type_uses, out);
+            }
+        }
         Exp::Unpack(t, _, e) => {
             note_type_module(t, out);
             count_module_refs_exp(e, type_uses, out);
@@ -594,6 +612,12 @@ fn rewrite(
             alias_type(t, uses, type_uses);
             rewrite(subject, uses, type_uses);
             for (_, _, body) in arms {
+                rewrite(body, uses, type_uses);
+            }
+        }
+        Exp::MatchLit(scrutinee, arms) => {
+            rewrite(scrutinee, uses, type_uses);
+            for (_, body) in arms {
                 rewrite(body, uses, type_uses);
             }
         }

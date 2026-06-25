@@ -64,6 +64,12 @@ impl DominatorTree {
 
         panic!("Not found")
     }
+
+    /// True iff `ancestor` dominates `descendant`, i.e. every CFG path from the dom-tree's
+    /// root to `descendant` goes through `ancestor`. A node dominates itself.
+    pub fn dominates(&self, ancestor: NodeIndex, descendant: NodeIndex) -> bool {
+        ancestor == descendant || self.get(ancestor).all_children().any(|n| n == descendant)
+    }
 }
 
 impl Node {

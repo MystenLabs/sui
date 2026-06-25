@@ -218,6 +218,12 @@ pub enum UnpackKind {
 /// whose only uses sit directly in the labeled loop's body (no nested loops in between).
 pub type Label = u64;
 
+/// Dispatch-table tag width. Multi-succ-loop dispatch synthesizes a tag at each owned-succ
+/// site (in `structure_loop`) and lowers it to `MoveValue::U32` at the runtime layer
+/// (`translate.rs`). Keeping the width as a named alias means the structurer, the post-loop
+/// `match`, and the runtime value agree by construction.
+pub type DispatchTag = u32;
+
 #[derive(Debug, Clone)]
 pub enum Exp {
     Break(Option<Label>),
@@ -243,6 +249,8 @@ pub enum Exp {
         /* enum */ TypeRef,
         /* variant x pattern-fields x rhs */ Vec<(Symbol, Vec<(Symbol, String)>, Exp)>,
     ),
+    /// Integer-literal `match` on a synthetic dispatch local.
+    MatchLit(Box<Exp>, Vec<(DispatchTag, Exp)>),
     Return(Vec<Exp>),
     // --------------------------------
     // non-control expressions
@@ -306,6 +314,7 @@ impl Exp {
             }
             Exp::Switch(_, _, cases) => cases.iter().any(|(_, e)| e.contains_break()),
             Exp::Match(_, _, cases) => cases.iter().any(|(_, _, e)| e.contains_break()),
+            Exp::MatchLit(_, arms) => arms.iter().any(|(_, e)| e.contains_break()),
             Exp::Assign(_, exp) => exp.contains_break(),
             Exp::LetBind(_, exp) => exp.contains_break(),
             Exp::Declare(_) => false,
@@ -346,6 +355,7 @@ impl Exp {
             }
             Exp::Switch(_, _, cases) => cases.iter().any(|(_, e)| e.contains_continue()),
             Exp::Match(_, _, cases) => cases.iter().any(|(_, _, e)| e.contains_continue()),
+            Exp::MatchLit(_, arms) => arms.iter().any(|(_, e)| e.contains_continue()),
             Exp::Assign(_, exp) => exp.contains_continue(),
             Exp::LetBind(_, exp) => exp.contains_continue(),
             Exp::Declare(_) => false,
@@ -453,6 +463,18 @@ impl std::fmt::Display for Exp {
                     indent(f, level)?;
                     write!(f, "}}")
                 }
+                Exp::MatchLit(scrutinee, arms) => {
+                    writeln!(f, "match ({}) {{", scrutinee)?;
+                    for (lit, body) in arms {
+                        indent(f, level + 1)?;
+                        writeln!(f, "{lit} => {{")?;
+                        fmt_block_body(f, body, level + 2)?;
+                        indent(f, level + 1)?;
+                        writeln!(f, "}},")?;
+                    }
+                    indent(f, level)?;
+                    write!(f, "}}")
+                }
                 // Non-block expressions render inline via their normal Display.
                 other => write!(f, "{}", other),
             }
@@ -497,6 +519,7 @@ impl std::fmt::Display for Exp {
                     | Exp::IfElse(_, _, _)
                     | Exp::Switch(_, _, _)
                     | Exp::Match(_, _, _)
+                    | Exp::MatchLit(_, _)
                     | Exp::Return(_)
                     | Exp::Assign(_, _)
                     | Exp::LetBind(_, _)
@@ -591,6 +614,19 @@ impl std::fmt::Display for Exp {
                         write_match_pattern(f, enum_ty, variant, fields)?;
                         writeln!(f, " => {{")?;
                         fmt_exp(f, case, level + 2)?;
+                        indent(f, level + 1)?;
+                        writeln!(f, "}},")?;
+                    }
+                    indent(f, level)?;
+                    writeln!(f, "}}")
+                }
+                Exp::MatchLit(scrutinee, arms) => {
+                    indent(f, level)?;
+                    writeln!(f, "match ({}) {{", scrutinee)?;
+                    for (lit, body) in arms {
+                        indent(f, level + 1)?;
+                        writeln!(f, "{lit} => {{")?;
+                        fmt_exp(f, body, level + 2)?;
                         indent(f, level + 1)?;
                         writeln!(f, "}},")?;
                     }
