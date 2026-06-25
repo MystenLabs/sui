@@ -405,7 +405,12 @@ impl SharedObjVerManager {
             } else {
                 None
             };
-        let is_dropped = false; // DIAGNOSTIC: version exemption disabled
+        let is_dropped = tx_key
+            .as_digest()
+            .is_some_and(|digest| epoch_store.is_crashed_transaction(digest));
+        if let Some(d) = tx_key.as_digest() {
+            eprintln!("CLAUDE: assign-cert tx={} is_dropped={}", d, is_dropped);
+        }
         let txn_cancelled = cancellation_info.is_some();
 
         let mut input_object_keys = assignable.non_shared_input_object_keys();

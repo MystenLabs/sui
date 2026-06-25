@@ -77,5 +77,15 @@ assignment (is_crashed). CRASH_PROB currently 0.02.
 - HYPOTHESIS: the crashed set present at version-assignment time does NOT actually contain FNBp9xzG
   (its one element is a different digest, or a representation mismatch), so the is_crashed-keyed
   exemption never matches the poison tx.
-- EXPERIMENT: log the crashed set CONTENTS (not just size) at version assignment; compare to the
-  poison tx digest FNBp9xzG. Run repro (seed ...002).
+- EXPERIMENT 4: log the crashed set CONTENTS (not just size) at version assignment.
+- RESULT: the crashed set DOES contain FNBp9xzG (82 calls show set={FNBp9xzG}); plumbing is fine.
+  Yet FNBp9xzG still advances 0xdf3d 5->11 (not CANCELLED_READ). Refined hypothesis: FNBp9xzG's OWN
+  commit is version-assigned only while the set is empty (before the crash) and is NOT re-assigned
+  on recovery (commit already processed/idempotent); the set={FNBp9xzG} calls are OTHER commits.
+  So the is_crashed exemption is never consulted for FNBp9xzG's commit.
+
+# iteration 5
+- HYPOTHESIS: is_dropped(FNBp9xzG) is false at the (single, pre-crash) assignment of FNBp9xzG's
+  commit, because the commit is assigned before FNBp9xzG crashes and not re-assigned afterwards.
+- EXPERIMENT 5: log, per tx at assignment, its digest + is_dropped + the crashed-set membership, so
+  we directly see is_dropped for FNBp9xzG's commit and the set at that moment.
