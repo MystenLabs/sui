@@ -205,6 +205,40 @@ pub struct StoredEpoch {
     /// captured at epoch start.
     #[prost(bytes = "bytes", optional, tag = "7")]
     pub system_state_bcs: ::core::option::Option<::prost::bytes::Bytes>,
+    /// The network's cumulative transaction count after the epoch's
+    /// final checkpoint (`CheckpointSummary::network_total_transactions`)
+    /// — an exclusive upper bound on the epoch's transaction sequence
+    /// numbers. Equivalent to postgres `kv_epoch_ends.tx_hi`.
+    #[prost(uint64, optional, tag = "8")]
+    pub tx_hi: ::core::option::Option<u64>,
+    /// Whether the epoch ended in safe mode. When `true` no
+    /// `SystemEpochInfoEvent` was emitted, so the counters below are
+    /// unset.
+    #[prost(bool, optional, tag = "9")]
+    pub safe_mode: ::core::option::Option<bool>,
+    #[prost(uint64, optional, tag = "10")]
+    pub total_stake: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "11")]
+    pub storage_fund_balance: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "12")]
+    pub storage_fund_reinvestment: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "13")]
+    pub storage_charge: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "14")]
+    pub storage_rebate: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "15")]
+    pub stake_subsidy_amount: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "16")]
+    pub total_gas_fees: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "17")]
+    pub total_stake_rewards_distributed: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "18")]
+    pub leftover_storage_fund_inflow: ::core::option::Option<u64>,
+    /// BCS-encoded
+    /// `Vec<sui_types::messages_checkpoint::CheckpointCommitment>` from
+    /// the checkpoint's end-of-epoch data.
+    #[prost(bytes = "bytes", optional, tag = "19")]
+    pub epoch_commitments: ::core::option::Option<::prost::bytes::Bytes>,
 }
 /// The lowest still-available data per axis. Drives compaction
 /// filters on the bitmap CFs and feeds `available_range` queries.
