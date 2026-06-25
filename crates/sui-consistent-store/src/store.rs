@@ -39,7 +39,7 @@
 //! pipeline's `(Watermark, Batch)` pair through the corresponding
 //! per-pipeline queue owned by the [`Synchronizer`](crate::synchronizer);
 //! the synchronizer commits the batch and coordinates with peer
-//! pipelines at stride boundaries to take cross-pipeline
+//! pipelines at each checkpoint boundary to take cross-pipeline
 //! snapshots. With no synchronizer installed, transactions commit
 //! inline.
 //!
@@ -134,8 +134,8 @@ impl<S> Store<S> {
     /// [`SequentialStore::transaction`] no longer commits inline:
     /// each transaction ships its `(Watermark, Batch)` pair through
     /// the appropriate pipeline's queue, where the synchronizer
-    /// task commits it and coordinates with peer pipelines at
-    /// stride boundaries to take cross-pipeline snapshots.
+    /// task commits it and coordinates with peer pipelines at each
+    /// checkpoint boundary to take cross-pipeline snapshots.
     ///
     /// Returns the [`JoinSet`] driving the synchronizer's tasks.
     /// Dropping the returned [`JoinSet`] does **not** stop the

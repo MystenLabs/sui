@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! [`Synchronizer`] — coordinates writes from multiple pipelines
-//! into a single [`Db`], taking
-//! cross-pipeline snapshots at stride boundaries.
+//! into a single [`Db`], taking a cross-pipeline snapshot at every
+//! checkpoint boundary.
 //!
 //! The framework's `SequentialStore::transaction` ships each
 //! pipeline's `(Watermark, Batch)` pair through a per-pipeline
 //! mpsc channel. The synchronizer's per-pipeline task receives
 //! these in checkpoint order and commits the batch against the
-//! shared database. At the snapshot frontier (a stride-aligned
-//! checkpoint boundary), every pipeline that has caught up pauses via
+//! shared database. At each checkpoint boundary (the snapshot
+//! frontier), every pipeline that has caught up pauses via
 //! a shared `SnapshotCoordinator`; the last one to arrive calls
 //! [`Db::take_snapshot`](crate::Db::take_snapshot) and releases the
 //! rest.
@@ -23,7 +23,7 @@
 //! # Dynamic membership and late join
 //!
 //! The set of pipelines a snapshot waits on is dynamic. A pipeline
-//! lagging more than a stride behind the frontier — for example a
+//! lagging behind the frontier — for example a
 //! history cohort backfilling from a low watermark while a live
 //! cohort follows the tip — commits freely without gating snapshots,
 //! and joins the snapshot cohort once it climbs to the frontier. A
@@ -46,9 +46,9 @@
 //!
 //! # Lifecycle
 //!
-//! 1. [`Synchronizer::new`] creates the service with a database,
-//!    snapshot stride, and per-pipeline channel buffer size. The
-//!    framework schema is read off `db` on demand.
+//! 1. [`Synchronizer::new`] creates the service with a database and
+//!    per-pipeline channel buffer size. The framework schema is read
+//!    off `db` on demand.
 //! 2. [`register_pipeline`](Synchronizer::register_pipeline) reads
 //!    the pipeline's existing watermark (if any) from the
 //!    framework schema and records it as that pipeline's resume
@@ -64,7 +64,6 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::num::NonZero;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -114,7 +113,6 @@ pub struct Synchronizer {
     db: Db,
     last_watermarks: HashMap<&'static str, Option<Watermark>>,
     first_checkpoint: u64,
-    stride: NonZero<u64>,
     buffer_size: usize,
 }
 
@@ -126,14 +124,9 @@ impl Synchronizer {
     /// synchronizer reads existing watermarks through it during
     /// [`register_pipeline`](Self::register_pipeline).
     ///
-    /// `stride` is the number of checkpoints between snapshots
-    /// (snapshots are taken before the write of checkpoint
-    /// `next * stride`, after every pipeline has applied
-    /// `next * stride - 1`). Typed as
-    /// [`NonZero<u64>`](std::num::NonZero) so a zero stride is
-    /// unrepresentable: it would divide by zero in the stride
-    /// arithmetic and snapshot on every checkpoint anyway is
-    /// expressed as `NonZero::new(1).unwrap()`.
+    /// A cross-pipeline snapshot is taken at every checkpoint
+    /// boundary: before the write of checkpoint `C`, after every
+    /// pipeline has applied `C - 1`.
     ///
     /// `buffer_size` is the capacity of each per-pipeline channel.
     /// Smaller values backpressure faster pipelines so they don't
@@ -142,17 +135,11 @@ impl Synchronizer {
     /// `first_checkpoint` is the starting checkpoint for brand-new
     /// pipelines that have no persisted watermark. `None` defaults
     /// to `0`.
-    pub fn new(
-        db: Db,
-        stride: NonZero<u64>,
-        buffer_size: usize,
-        first_checkpoint: Option<u64>,
-    ) -> Self {
+    pub fn new(db: Db, buffer_size: usize, first_checkpoint: Option<u64>) -> Self {
         Self {
             db,
             last_watermarks: HashMap::new(),
             first_checkpoint: first_checkpoint.unwrap_or(0),
-            stride,
             buffer_size,
         }
     }
@@ -201,36 +188,31 @@ impl Synchronizer {
             "no pipelines registered with the synchronizer",
         );
 
-        let stride = self.stride.get();
         let first_checkpoint = self.first_checkpoint;
         let buffer_size = self.buffer_size;
 
         // Figure out where the snapshot cadence should start: the
-        // next stride-aligned checkpoint after the highest
-        // already-committed checkpoint across registered pipelines.
-        // Fresh pipelines (no watermark) contribute
-        // `first_checkpoint`.
+        // checkpoint after the highest already-committed checkpoint
+        // across registered pipelines. Fresh pipelines (no watermark)
+        // contribute `first_checkpoint`.
         let init_checkpoint = self
             .last_watermarks
             .values()
             .map(|w| w.map_or(first_checkpoint, |w| w.checkpoint_hi_inclusive))
             .max()
             .expect("non-empty by ensure! above");
-        let next_snapshot_checkpoint = ((init_checkpoint / stride) + 1) * stride;
+        let next_snapshot_checkpoint = init_checkpoint + 1;
 
         // Classify each pipeline as a snapshot-cohort member or a
-        // lagging pipeline. A pipeline within one stride of the
-        // frontier (its watermark lies in the frontier's stride
-        // window) will reach `next_snapshot_checkpoint` as its first
-        // snapshot boundary, so it joins the cohort immediately. A
-        // pipeline lagging more than a stride behind (e.g. a history
-        // cohort backfilling from a low watermark) commits freely
-        // without gating snapshots and joins the cohort once it climbs
-        // to the frontier. `current_window_start` is the lower edge of
-        // the frontier's stride window.
-        let current_window_start = (init_checkpoint / stride) * stride;
+        // lagging pipeline. A pipeline caught up to the frontier (its
+        // watermark is `init_checkpoint`, the checkpoint the next
+        // snapshot captures) reaches `next_snapshot_checkpoint` as its
+        // first snapshot boundary, so it joins the cohort immediately.
+        // A pipeline lagging behind (e.g. a history cohort backfilling
+        // from a low watermark) commits freely without gating snapshots
+        // and joins the cohort once it climbs to the frontier.
         let is_member = |w: &Option<Watermark>| {
-            w.map_or(first_checkpoint, |w| w.checkpoint_hi_inclusive) >= current_window_start
+            w.map_or(first_checkpoint, |w| w.checkpoint_hi_inclusive) >= init_checkpoint
         };
         let initial_members = self
             .last_watermarks
@@ -240,7 +222,6 @@ impl Synchronizer {
 
         let coordinator = Arc::new(SnapshotCoordinator::new(
             self.db.clone(),
-            stride,
             next_snapshot_checkpoint,
             initial_members,
         ));
@@ -293,9 +274,10 @@ async fn synchronizer_task(
 
         match frontier.cmp(&next_checkpoint) {
             // Next checkpoint is below the snapshot frontier; commit it
-            // without coordinating. This is the steady state both for
-            // members between stride boundaries and for lagging
-            // pipelines backfilling toward the frontier.
+            // without coordinating. This is the steady state for
+            // lagging pipelines backfilling toward the frontier (and
+            // fires once for a fresh pipeline's first checkpoint, before
+            // it reaches the opening frontier).
             Ordering::Greater => {}
 
             // Next checkpoint is past the frontier. A member advances
@@ -386,7 +368,6 @@ async fn synchronizer_task(
 /// observes the advance — there is no lost-wakeup race.
 struct SnapshotCoordinator {
     db: Db,
-    stride: u64,
     /// Single source of truth for the current frontier; advancing it
     /// wakes every parked member.
     frontier: watch::Sender<u64>,
@@ -406,11 +387,10 @@ struct Cohort {
 }
 
 impl SnapshotCoordinator {
-    fn new(db: Db, stride: u64, frontier: u64, members: usize) -> Self {
+    fn new(db: Db, frontier: u64, members: usize) -> Self {
         let (frontier, _rx) = watch::channel(frontier);
         Self {
             db,
-            stride,
             frontier,
             cohort: Mutex::new(Cohort {
                 members,
@@ -431,15 +411,15 @@ impl SnapshotCoordinator {
         self.frontier.subscribe()
     }
 
-    /// Advance the frontier by one stride and reset the round,
-    /// releasing every parked member. Caller holds `cohort`.
+    /// Advance the frontier to the next checkpoint and reset the
+    /// round, releasing every parked member. Caller holds `cohort`.
     fn advance(&self, cohort: &mut Cohort, frontier: u64) {
         cohort.arrived = 0;
         // `send` wakes every parked member; the retained value also
         // lets a member that parks *after* this call observe the
         // advance, so there is no lost-wakeup race. `send` errors only
         // when there are no receivers, which is harmless here.
-        let _ = self.frontier.send(frontier + self.stride);
+        let _ = self.frontier.send(frontier + 1);
     }
 
     /// Arrive at `at_checkpoint` (the caller's view of the current
@@ -568,11 +548,6 @@ mod tests {
         (dir, db)
     }
 
-    /// Test-only helper: wrap a literal stride as `NonZero<u64>`.
-    fn nz(x: u64) -> NonZero<u64> {
-        NonZero::new(x).expect("test stride must be > 0")
-    }
-
     /// Test-only helper: a watermark at `checkpoint`.
     fn wm(checkpoint: u64) -> Watermark {
         Watermark::for_checkpoint(checkpoint)
@@ -594,7 +569,7 @@ mod tests {
     #[test]
     fn register_pipeline_with_no_watermark_succeeds() {
         let (_dir, db) = open();
-        let mut sync = Synchronizer::new(db, nz(8), 4, None);
+        let mut sync = Synchronizer::new(db, 4, None);
         sync.register_pipeline("p").unwrap();
     }
 
@@ -613,7 +588,7 @@ mod tests {
         wb.put(&framework.watermarks, &key, &w).unwrap();
         wb.commit().unwrap();
 
-        let mut sync = Synchronizer::new(db, nz(8), 4, None);
+        let mut sync = Synchronizer::new(db, 4, None);
         sync.register_pipeline("p").unwrap();
         assert_eq!(
             sync.last_watermarks
@@ -627,7 +602,7 @@ mod tests {
     #[test]
     fn run_refuses_no_pipelines() {
         let (_dir, db) = open();
-        let sync = Synchronizer::new(db, nz(8), 4, None);
+        let sync = Synchronizer::new(db, 4, None);
         let err = sync.run().unwrap_err();
         assert!(format!("{err:#}").contains("no pipelines registered"));
     }
@@ -635,7 +610,7 @@ mod tests {
     #[tokio::test]
     async fn run_returns_one_queue_entry_per_pipeline() {
         let (_dir, db) = open();
-        let mut sync = Synchronizer::new(db, nz(8), 4, None);
+        let mut sync = Synchronizer::new(db, 4, None);
         sync.register_pipeline("a").unwrap();
         sync.register_pipeline("b").unwrap();
         let (mut joinset, queue) = sync.run().unwrap();
@@ -651,60 +626,55 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn next_snapshot_checkpoint_computation_aligns_to_stride() {
-        // Pipeline at watermark 17, stride 5 → next snapshot at
-        // 20 (first multiple of 5 greater than 17). Verified by
-        // observing that the synchronizer task accepts checkpoint
-        // 18, 19, and then waits at the barrier for 20.
+    async fn snapshots_each_checkpoint_from_resume_watermark() {
+        // A pipeline resuming at watermark 17 opens its frontier at
+        // 18. Feeding 18 and 19 produces a snapshot at each committed
+        // checkpoint: 17 (the resume point) when the task first
+        // reaches the frontier, then 18 and 19 as they commit.
         let (_dir, db) = open();
         let framework = FrameworkSchema::new(db.clone());
         let mut wb = db.batch();
         wb.put(
             &framework.watermarks,
             &PipelineTaskKey::new("p".to_string()),
-            &Watermark {
-                checkpoint_hi_inclusive: 17,
-                ..Watermark::default()
-            },
+            &wm(17),
         )
         .unwrap();
         wb.commit().unwrap();
 
-        let mut sync = Synchronizer::new(db.clone(), nz(5), 4, None);
+        let mut sync = Synchronizer::new(db.clone(), 4, None);
         sync.register_pipeline("p").unwrap();
         let (mut joinset, queue) = sync.run().unwrap();
 
-        // Send 18, 19. Both belong to the current stride window
-        // (the next snapshot is at 20), so the task accepts both.
-        let send = |cp: u64| {
-            let batch = db.batch();
-            let w = Watermark {
-                checkpoint_hi_inclusive: cp,
-                ..Watermark::default()
-            };
-            (w, batch)
-        };
-        queue.get("p").unwrap().send(send(18)).await.unwrap();
-        queue.get("p").unwrap().send(send(19)).await.unwrap();
+        for cp in 18..=19 {
+            queue
+                .get("p")
+                .unwrap()
+                .send((wm(cp), db.batch()))
+                .await
+                .unwrap();
+        }
 
-        // Drop the queue to close the channel — the task exits
-        // after processing what's in the buffer.
+        // Drop the queue to close the channel — the task exits after
+        // processing the buffered batches (snapshotting 19 when it
+        // reaches the next frontier).
         drop(queue);
         while let Some(joined) = joinset.join_next().await {
             joined.unwrap().unwrap();
         }
 
-        // Watermark advanced to 19 in the framework schema.
-        let mut wb_check = db.batch();
-        let _ = &mut wb_check; // silence unused warnings.
-        // (The actual commit was driven by the synchronizer above;
-        // here we just confirm the framework recorded it.)
+        for cp in 17..=19 {
+            assert!(
+                db.at_snapshot(cp).is_some(),
+                "expected a snapshot at checkpoint {cp}",
+            );
+        }
     }
 
     #[tokio::test]
     async fn synchronizer_rejects_out_of_order_batch() {
         let (_dir, db) = open();
-        let mut sync = Synchronizer::new(db.clone(), nz(100), 4, None);
+        let mut sync = Synchronizer::new(db.clone(), 4, None);
         sync.register_pipeline("p").unwrap();
         let (mut joinset, queue) = sync.run().unwrap();
 
@@ -720,7 +690,8 @@ mod tests {
         );
         queue.get("p").unwrap().send(bad).await.unwrap();
 
-        // The synchronizer task ends with an out-of-order error.
+        // The synchronizer task ends with an out-of-order error
+        // (expected checkpoint 0, got 5).
         let result = joinset.join_next().await.unwrap().unwrap();
         let err = result.unwrap_err();
         assert!(format!("{err:#}").contains("Out-of-order"));
@@ -728,12 +699,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn synchronizer_takes_snapshot_at_stride_boundary() {
-        // Single pipeline with stride 1 → snapshot after every
-        // checkpoint. Send checkpoint 0, observe the snapshot
-        // buffer contain a snapshot at 0.
+    async fn synchronizer_takes_snapshot_at_each_checkpoint() {
+        // Single pipeline → a snapshot after every checkpoint. Send
+        // checkpoint 0 and observe a snapshot at 0.
         let (_dir, db) = open();
-        let mut sync = Synchronizer::new(db.clone(), nz(1), 4, None);
+        let mut sync = Synchronizer::new(db.clone(), 4, None);
         sync.register_pipeline("p").unwrap();
         let (mut joinset, queue) = sync.run().unwrap();
 
@@ -748,11 +718,8 @@ mod tests {
             joined.unwrap().unwrap();
         }
 
-        // The synchronizer should have taken a snapshot at
-        // checkpoint 0 before committing checkpoint 1 (there is
-        // none, but the barrier still fires for 0 with stride 1).
-        // With stride=1 the boundary check fires for every
-        // checkpoint, so a snapshot at the committed value lands.
+        // The synchronizer commits checkpoint 0 and then takes a
+        // snapshot at 0 when it reaches the next frontier (1).
         let range = db.snapshot_range();
         assert!(
             range.is_some(),
@@ -763,11 +730,12 @@ mod tests {
     #[tokio::test]
     async fn late_join_caught_up_cohort_snapshots_without_lagging_pipeline() {
         // Two pipelines: "live" restored to the tip (watermark 8) and
-        // "history" lagging far behind (watermark 0). With stride 4 the
-        // frontier is 12 and only "live" is in the snapshot cohort, so
-        // "live" takes a snapshot at the frontier without "history"
-        // ever climbing to it. (A fixed-size barrier would deadlock
-        // here, waiting for "history" to reach the frontier.)
+        // "history" lagging far behind (watermark 0). Every checkpoint
+        // is a snapshot boundary, so the frontier opens at 9 and only
+        // "live" is in the snapshot cohort; "live" takes snapshots at
+        // the frontier without "history" ever climbing to it. (A
+        // fixed-size barrier would deadlock here, waiting for "history"
+        // to reach the frontier.)
         let (_dir, db) = open();
         let framework = FrameworkSchema::new(db.clone());
         let mut wb = db.batch();
@@ -785,7 +753,7 @@ mod tests {
         .unwrap();
         wb.commit().unwrap();
 
-        let mut sync = Synchronizer::new(db.clone(), nz(4), 8, None);
+        let mut sync = Synchronizer::new(db.clone(), 8, None);
         sync.register_pipeline("live").unwrap();
         sync.register_pipeline("history").unwrap();
         let (mut joinset, queue) = sync.run().unwrap();
@@ -816,13 +784,13 @@ mod tests {
     #[tokio::test]
     async fn late_join_lagging_pipeline_joins_cohort_on_catch_up() {
         // Drive the SnapshotCoordinator directly to exercise a late
-        // join deterministically. Stride 4, frontier starting at 12,
-        // one initial member ("live").
+        // join deterministically. Frontier starting at 12, one initial
+        // member ("live").
         let (_dir, db) = open();
-        let coordinator = Arc::new(SnapshotCoordinator::new(db.clone(), 4, 12, 1));
+        let coordinator = Arc::new(SnapshotCoordinator::new(db.clone(), 12, 1));
 
         // "live" (a member) arrives at the frontier alone and snapshots
-        // 11 without waiting; the frontier advances to 16.
+        // 11 without waiting; the frontier advances to 13.
         {
             let mut member = true;
             let mut rx = coordinator.subscribe();
@@ -831,16 +799,16 @@ mod tests {
                 .await;
         }
         assert!(db.at_snapshot(11).is_some());
-        assert_eq!(coordinator.frontier(), 16);
+        assert_eq!(coordinator.frontier(), 13);
 
         // "history" (a laggard, not yet a member) climbs to the
-        // frontier (16), joins the cohort, and blocks until the quorum
+        // frontier (13), joins the cohort, and blocks until the quorum
         // completes.
         let c = coordinator.clone();
         let history = tokio::spawn(async move {
             let mut member = false;
             let mut rx = c.subscribe();
-            c.arrive("history", &mut member, &mut rx, 16, wm(15)).await;
+            c.arrive("history", &mut member, &mut rx, 13, wm(12)).await;
             member
         });
 
@@ -856,17 +824,17 @@ mod tests {
         }
 
         // "history" alone has not completed the two-member quorum, so no
-        // snapshot at 15 yet.
-        assert!(db.at_snapshot(15).is_none());
+        // snapshot at 12 yet.
+        assert!(db.at_snapshot(12).is_none());
 
-        // "live" arrives at the frontier (16); the quorum is now
-        // complete, so the snapshot at 15 lands and "history" is
+        // "live" arrives at the frontier (13); the quorum is now
+        // complete, so the snapshot at 12 lands and "history" is
         // released.
         {
             let mut member = true;
             let mut rx = coordinator.subscribe();
             coordinator
-                .arrive("live", &mut member, &mut rx, 16, wm(15))
+                .arrive("live", &mut member, &mut rx, 13, wm(12))
                 .await;
         }
 
@@ -874,7 +842,7 @@ mod tests {
             history.await.unwrap(),
             "history should have joined the cohort",
         );
-        assert!(db.at_snapshot(15).is_some());
-        assert_eq!(coordinator.frontier(), 20);
+        assert!(db.at_snapshot(12).is_some());
+        assert_eq!(coordinator.frontier(), 14);
     }
 }

@@ -84,8 +84,9 @@ use crate::storage::RocksDbStore;
 const RPC_STORE_DIR: &str = "rpc_store";
 
 /// Number of in-memory snapshots retained for consistent reads.
-/// Mirrors the standalone `sui-rpc-node` default; with the default
-/// stride of 1 this is roughly a 32-checkpoint consistency window.
+/// Mirrors the standalone `sui-rpc-node` default; since a snapshot is
+/// taken at every checkpoint boundary this is roughly a 32-checkpoint
+/// consistency window.
 const SNAPSHOT_CAPACITY: usize = 32;
 
 fn db_options() -> DbOptions {

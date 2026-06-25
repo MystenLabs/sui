@@ -54,8 +54,9 @@ pub struct ServiceConfig {
 /// Snapshot *retention* (how many in-memory snapshots are kept, and
 /// thus how far back consistent reads can reach) is not configured
 /// here: it is an open-time property of the database, set via
-/// [`DbOptions::snapshot_capacity`]. The effective consistent-read
-/// window is roughly `stride * snapshot_capacity` checkpoints.
+/// [`DbOptions::snapshot_capacity`]. Because a snapshot is taken at
+/// every checkpoint boundary, the effective consistent-read window
+/// is roughly `snapshot_capacity` checkpoints.
 ///
 /// [`Synchronizer`]: sui_consistent_store::Synchronizer
 /// [`DbOptions::snapshot_capacity`]: sui_consistent_store::DbOptions::snapshot_capacity
@@ -63,12 +64,6 @@ pub struct ServiceConfig {
 #[derive(Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ConsistencyConfig {
-    /// Number of checkpoints between cross-pipeline snapshots. A
-    /// stride of `1` snapshots after every checkpoint; higher
-    /// strides reduce snapshot frequency (and the load it puts on
-    /// RocksDB compaction) at the cost of read-side staleness.
-    pub stride: u64,
-
     /// Per-pipeline mpsc capacity for batches waiting to be
     /// committed. The synchronizer's slowest pipeline gates
     /// progress; this buffer absorbs short bursts of slack between
@@ -355,10 +350,7 @@ impl From<CommitterConfig> for CommitterLayer {
 
 impl Default for ConsistencyConfig {
     fn default() -> Self {
-        Self {
-            stride: 1,
-            buffer_size: 5_000,
-        }
+        Self { buffer_size: 5_000 }
     }
 }
 
