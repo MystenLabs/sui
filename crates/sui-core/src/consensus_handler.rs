@@ -53,8 +53,8 @@ use sui_types::{
     node_role::NodeRole,
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
-        InputObjectKind, SenderSignedData, TransactionDataAPI, TransactionKey, VerifiedTransaction,
-        WithAliases,
+        InputObjectKind, PlainTransactionWithClaims, SenderSignedData, TransactionDataAPI,
+        TransactionKey, VerifiedTransaction, WithAliases,
     },
 };
 use tokio::task::JoinSet;
@@ -2479,6 +2479,33 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let epoch = self.epoch_store.epoch();
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
+
+        // Prefetch the cross-commit owned-object lock state for the whole commit in one
+        // batched read. These locks are constant for the duration of a commit (new locks
+        // are only written at commit end), so this replaces the per-transaction
+        // quarantine+DB lookup that try_acquire_owned_object_locks_post_consensus used to
+        // do. Over-reading refs of transactions that are later filtered out is harmless.
+        let existing_locks = {
+            let mut prefetch_refs: Vec<ObjectRef> = Vec::new();
+            for (_block, parsed_transactions) in &block_transactions {
+                for parsed in parsed_transactions {
+                    if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
+                        &parsed.transaction.kind
+                        && let Some(refs) = owned_object_refs_to_lock(tx_with_claims)
+                    {
+                        prefetch_refs.extend(refs);
+                    }
+                }
+            }
+            prefetch_refs.sort();
+            prefetch_refs.dedup();
+            // On a read error fall back to an empty map (treat refs as unlocked) — the
+            // same lenient behavior the per-transaction read had.
+            self.epoch_store
+                .get_owned_object_locks_map(&prefetch_refs)
+                .unwrap_or_default()
+        };
+
         for (block, parsed_transactions) in block_transactions {
             let author = block.author.value();
             // TODO: consider only messages within 1~3 rounds of the leader?
@@ -2638,28 +2665,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
                     &parsed.transaction.kind
                 {
-                    let immutable_object_ids: HashSet<ObjectID> =
-                        tx_with_claims.get_immutable_objects().into_iter().collect();
                     let tx = tx_with_claims.tx();
-
-                    let Ok(input_objects) = tx.transaction_data().input_objects() else {
+                    let Some(owned_object_refs) = owned_object_refs_to_lock(tx_with_claims) else {
                         debug_fatal!("Invalid input objects for transaction {}", tx.digest());
                         continue;
                     };
-
-                    // Filter ImmOrOwnedMoveObject inputs, excluding those claimed to be immutable.
-                    // Immutable objects don't need lock acquisition as they can be used concurrently.
-                    let owned_object_refs: Vec<_> = input_objects
-                        .iter()
-                        .filter_map(|obj| match obj {
-                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
-                                if !immutable_object_ids.contains(&obj_ref.0) =>
-                            {
-                                Some(*obj_ref)
-                            }
-                            _ => None,
-                        })
-                        .collect();
 
                     match self
                         .epoch_store
@@ -2667,6 +2677,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             &owned_object_refs,
                             *tx.digest(),
                             &owned_object_locks,
+                            &existing_locks,
                         ) {
                         Ok(new_locks) => {
                             owned_object_locks.extend(new_locks.into_iter());
@@ -3195,6 +3206,36 @@ fn authenticator_state_update_transaction(
             .expect("authenticator state obj must exist"),
     );
     VerifiedExecutableTransaction::new_system(transaction, epoch)
+}
+
+/// The owned (non-immutable `ImmOrOwnedMoveObject`) object refs that a
+/// `UserTransactionV2` must lock post-consensus. Immutable objects are excluded as
+/// they can be used concurrently. Returns `None` if the transaction's input objects
+/// are invalid. Used both to prefetch existing locks for the whole commit and, per
+/// transaction, to perform conflict detection — keeping the two in sync.
+fn owned_object_refs_to_lock(
+    tx_with_claims: &PlainTransactionWithClaims,
+) -> Option<Vec<ObjectRef>> {
+    let immutable_object_ids: HashSet<ObjectID> =
+        tx_with_claims.get_immutable_objects().into_iter().collect();
+    let input_objects = tx_with_claims
+        .tx()
+        .transaction_data()
+        .input_objects()
+        .ok()?;
+    Some(
+        input_objects
+            .iter()
+            .filter_map(|obj| match obj {
+                InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
+                    if !immutable_object_ids.contains(&obj_ref.0) =>
+                {
+                    Some(*obj_ref)
+                }
+                _ => None,
+            })
+            .collect(),
+    )
 }
 
 pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
