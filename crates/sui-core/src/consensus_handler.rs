@@ -2728,12 +2728,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                             // Apply spam weight to all client addresses that submitted this transaction
                             for addr in submitter_client_addrs {
-                                traffic_controller.tally(TrafficTally::new(
-                                    Some(addr),
-                                    None,
-                                    None,
-                                    spam_weight.clone(),
-                                ));
+                                traffic_controller.tally(
+                                    TrafficTally::new(Some(addr), None, None, spam_weight.clone())
+                                        .with_method(
+                                            "consensus_submission_limit_exceeded".to_string(),
+                                        ),
+                                );
                             }
                         } else {
                             warn!(
