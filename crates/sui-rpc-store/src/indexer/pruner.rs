@@ -31,7 +31,8 @@
 //!   versions) and `all_tombstones` (deleted / wrapped markers) are
 //!   the exact `(ObjectID, version)` rows that are now dead. The
 //!   latest live version is never an input to a pruned transaction,
-//!   so it — and the `live_objects` pointer at it — is preserved.
+//!   so it — and the greatest `object_version_by_checkpoint` entry
+//!   that resolves to it — is preserved.
 //! - **`object_version_by_checkpoint`** — retracted in lockstep with
 //!   `objects` history: the same effects-driven walk issues a
 //!   per-object range delete clearing every checkpoint-pinned entry
@@ -46,9 +47,9 @@
 //!   force a compaction once the floor advances so the eviction is
 //!   prompt rather than waiting for a natural sweep.
 //!
-//! The live-set-bounded indexes (`live_objects`, `object_by_owner`,
-//! `object_by_type`, `balance`, `package_versions`) and the tiny
-//! `epochs` CF are never pruned.
+//! The live-set-bounded indexes (`object_by_owner`, `object_by_type`,
+//! `balance`, `package_versions`) and the tiny `epochs` CF are never
+//! pruned.
 //!
 //! # Floor, retention, and safety
 //!

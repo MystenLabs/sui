@@ -26,7 +26,6 @@ pub mod effects;
 pub mod epochs;
 pub mod event_bitmap;
 pub mod events;
-pub mod live_objects;
 pub mod object_by_owner;
 pub mod object_by_type;
 pub mod object_version_by_checkpoint;
@@ -164,9 +163,9 @@ pub fn checkpoint_input_objects(
 /// live at the end. Mirrors the helper of the same name in
 /// `sui-indexer-alt-consistent-store::handlers`.
 ///
-/// Used to populate the latest-version views
-/// ([`live_objects`]) and the
-/// diff-based indexes once the prior state has been retracted.
+/// Used to populate the checkpoint-pinned
+/// [`object_version_by_checkpoint`] index and the diff-based indexes
+/// once the prior state has been retracted.
 pub fn checkpoint_output_objects(
     checkpoint: &Checkpoint,
 ) -> anyhow::Result<BTreeMap<ObjectID, (&Object, ObjectDigest)>> {
@@ -385,7 +384,6 @@ impl Indexer {
             effects,
             events,
             objects,
-            live_objects,
             object_version_by_checkpoint,
             object_by_owner,
             object_by_type,
@@ -438,7 +436,6 @@ impl Indexer {
         add!(self::effects::Effects, effects);
         add!(self::events::Events, events);
         add!(self::objects::Objects, objects);
-        add!(self::live_objects::LiveObjects, live_objects);
         // `object_version_by_checkpoint` needs its restore anchor `T` so
         // its processor scopes floor candidates to the backfill window
         // `[L, T]`. The restore (if any) has already run by the time
@@ -662,7 +659,7 @@ mod tests {
     }
 
     /// `embedded` registers exactly the ten embedded-cohort
-    /// pipelines (five live + five history) and none of the
+    /// pipelines (four live + six history) and none of the
     /// deactivated raw-chain-data ones, so the synchronizer's
     /// snapshot cohort covers exactly those. Pinned to the
     /// [`LIVE_COHORT`] / [`HISTORY_COHORT`] constants (via the real
@@ -702,7 +699,6 @@ mod tests {
                 "effects",
                 "events",
                 "objects",
-                "live_objects",
                 "object_version_by_checkpoint",
                 // Indexes.
                 "object_by_owner",

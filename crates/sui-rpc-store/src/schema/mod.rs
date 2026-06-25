@@ -25,7 +25,6 @@ pub mod effects;
 pub mod epochs;
 pub mod event_bitmap;
 pub mod events;
-pub mod live_objects;
 pub mod object_by_owner;
 pub mod object_by_type;
 pub mod object_version_by_checkpoint;
@@ -95,13 +94,11 @@ pub struct RpcStoreSchema<R: Reader = Db> {
     pub events: DbMap<events::Key, events::Value, R>,
 
     /// Every version of every object that has ever existed. A
-    /// prefix scan on the object id walks all versions in
-    /// ascending order.
+    /// prefix scan on the object id walks all versions in ascending
+    /// order; a reverse prefix scan resolves the latest version (the
+    /// greatest `(id, version)` row), the way the validator perpetual
+    /// store serves "latest object" reads.
     pub objects: DbMap<objects::Key, objects::Value, R>,
-
-    /// The latest live version of each object — point lookups
-    /// avoid an iteration over the multi-version `objects` CF.
-    pub live_objects: DbMap<live_objects::Key, live_objects::Value, R>,
 
     /// An object's version as of a checkpoint: keyed by
     /// `(object id, checkpoint)`, a reverse prefix scan resolves the
@@ -168,7 +165,6 @@ impl Schema for RpcStoreSchema {
             CfDescriptor::new(effects::NAME, effects::options(opts)),
             CfDescriptor::new(events::NAME, events::options(opts)),
             CfDescriptor::new(objects::NAME, objects::options(opts)),
-            CfDescriptor::new(live_objects::NAME, live_objects::options(opts)),
             CfDescriptor::new(
                 object_version_by_checkpoint::NAME,
                 object_version_by_checkpoint::options(opts),
@@ -195,7 +191,6 @@ impl Schema for RpcStoreSchema {
             effects: DbMap::new(db.clone(), effects::NAME)?,
             events: DbMap::new(db.clone(), events::NAME)?,
             objects: DbMap::new(db.clone(), objects::NAME)?,
-            live_objects: DbMap::new(db.clone(), live_objects::NAME)?,
             object_version_by_checkpoint: DbMap::new(
                 db.clone(),
                 object_version_by_checkpoint::NAME,
@@ -225,7 +220,6 @@ impl SchemaAtSnapshot for RpcStoreSchema {
             effects: self.effects.at(snap),
             events: self.events.at(snap),
             objects: self.objects.at(snap),
-            live_objects: self.live_objects.at(snap),
             object_version_by_checkpoint: self.object_version_by_checkpoint.at(snap),
             object_by_owner: self.object_by_owner.at(snap),
             object_by_type: self.object_by_type.at(snap),
@@ -278,11 +272,7 @@ pub fn default_rocksdb_config() -> RocksDbConfig {
         bloom_filter_bits: Some(10.0),
         ..Default::default()
     };
-    for name in [
-        tx_seq_by_digest::NAME,
-        checkpoint_seq_by_digest::NAME,
-        live_objects::NAME,
-    ] {
+    for name in [tx_seq_by_digest::NAME, checkpoint_seq_by_digest::NAME] {
         column_family.insert(name.to_string(), point_lookup.clone());
     }
 
@@ -392,7 +382,7 @@ mod tests {
             Some(10.0)
         );
         assert_eq!(
-            cfg.column_family[live_objects::NAME].bloom_filter_bits,
+            cfg.column_family[checkpoint_seq_by_digest::NAME].bloom_filter_bits,
             Some(10.0)
         );
         // Bitmap CFs get a larger write buffer.

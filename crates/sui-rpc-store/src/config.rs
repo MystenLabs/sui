@@ -95,7 +95,7 @@ pub struct ConsistencyConfig {
 /// `checkpoint_seq_by_digest`), superseded-`objects`-version,
 /// checkpoint-pinned `object_version_by_checkpoint`, and
 /// ledger-history bitmap CFs. The live-set-bounded indexes
-/// (`live_objects`, `object_by_owner`, `object_by_type`, `balance`,
+/// (`object_by_owner`, `object_by_type`, `balance`,
 /// `package_versions`) and the tiny `epochs` CF are never pruned.
 #[DefaultConfig]
 #[derive(Clone)]
@@ -180,7 +180,6 @@ pub struct PipelineLayer {
     pub effects: Option<CommitterLayer>,
     pub events: Option<CommitterLayer>,
     pub objects: Option<CommitterLayer>,
-    pub live_objects: Option<CommitterLayer>,
     pub object_version_by_checkpoint: Option<CommitterLayer>,
 
     // --- Indexes ---
@@ -236,7 +235,6 @@ impl PipelineLayer {
             effects: Some(CommitterLayer::default()),
             events: Some(CommitterLayer::default()),
             objects: Some(CommitterLayer::default()),
-            live_objects: Some(CommitterLayer::default()),
             object_version_by_checkpoint: Some(CommitterLayer::default()),
             object_by_owner: Some(CommitterLayer::default()),
             object_by_type: Some(CommitterLayer::default()),
@@ -263,7 +261,7 @@ impl PipelineLayer {
     /// not by this layer, so both are simply registered here:
     ///
     /// - **Live cohort** — restored to the fullnode's tip and
-    ///   following live from there: `live_objects`, `object_by_owner`,
+    ///   following live from there: `object_by_owner`,
     ///   `object_by_type`, `balance`, `package_versions`.
     /// - **History cohort** — seeded to the lowest available
     ///   checkpoint and backfilling upward: `epochs`,
@@ -278,7 +276,6 @@ impl PipelineLayer {
     pub fn embedded() -> Self {
         Self {
             // Live cohort: restored to the tip, follows live.
-            live_objects: Some(CommitterLayer::default()),
             object_by_owner: Some(CommitterLayer::default()),
             object_by_type: Some(CommitterLayer::default()),
             balance: Some(CommitterLayer::default()),
@@ -301,8 +298,8 @@ impl PipelineLayer {
 /// Per-pipeline registration toggles for
 /// [`restore_indexes`](crate::restore_indexes).
 ///
-/// The derived-index pipelines (`live_objects`, `object_by_owner`,
-/// `object_by_type`, `balance`, `package_versions`) are always
+/// The derived-index pipelines (`object_by_owner`, `object_by_type`,
+/// `balance`, `package_versions`) are always
 /// restored — they cannot be reconstructed from anywhere else. The
 /// raw `objects` CF is conditional: the standalone deployment
 /// needs it so version-keyed reads are served by the restored
@@ -372,7 +369,6 @@ mod tests {
     fn embedded_enables_only_cohort_pipelines() {
         let layer = PipelineLayer::embedded();
         // Live cohort.
-        assert!(layer.live_objects.is_some());
         assert!(layer.object_by_owner.is_some());
         assert!(layer.object_by_type.is_some());
         assert!(layer.balance.is_some());
@@ -401,7 +397,6 @@ mod tests {
         assert!(layer.checkpoint_summary.is_some());
         assert!(layer.transactions.is_some());
         assert!(layer.objects.is_some());
-        assert!(layer.live_objects.is_some());
         assert!(layer.object_by_owner.is_some());
         assert!(layer.balance.is_some());
         assert!(layer.event_bitmap.is_some());

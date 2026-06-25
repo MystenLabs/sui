@@ -231,6 +231,36 @@ impl<R: Reader> super::RpcStoreSchema<R> {
         self.object_version_by_checkpoint
             .iter_prefix(&ObjectIdPrefix(id))
     }
+
+    /// Resolve the latest version recorded for an object via this index:
+    /// the version at its greatest-checkpoint row.
+    ///
+    /// The checkpoint-unbounded counterpart to
+    /// [`get_object_version_at_checkpoint`](Self::get_object_version_at_checkpoint):
+    /// a reverse prefix scan takes the object's highest-checkpoint row,
+    /// whose version is the one live at the tip (a restore floor for an
+    /// object that never changed in the window is itself that row). It
+    /// agrees with the `objects`-CF reverse scan that backs
+    /// [`get_object`](Self::get_object), since an object's version
+    /// increases monotonically with the checkpoints it changes in; this
+    /// is offered as a convenience for callers already working through
+    /// the checkpoint index.
+    ///
+    /// The returned version may point at a tombstone row in
+    /// [`super::objects`] (the object was deleted or wrapped and the
+    /// removal has not yet been pruned). Returns `Ok(None)` when `id` has
+    /// no row (it never existed, or its history has been fully pruned).
+    pub fn get_latest_object_version(&self, id: ObjectID) -> Result<Option<SequenceNumber>, Error> {
+        let Some(row) = self
+            .object_version_by_checkpoint
+            .iter_rev_prefix(&ObjectIdPrefix(id))?
+            .next()
+        else {
+            return Ok(None);
+        };
+        let (_key, value) = row?;
+        Ok(Some(SequenceNumber::from_u64(value.into_inner().version)))
+    }
 }
 
 #[cfg(test)]
@@ -470,5 +500,58 @@ mod tests {
             .map(|res| res.unwrap().0.checkpoint)
             .collect();
         assert_eq!(checkpoints, vec![10, 20, 30]);
+    }
+
+    #[test]
+    fn get_latest_object_version_returns_none_for_unknown_id() {
+        let (_dir, _db, schema) = fresh_db();
+        assert!(
+            schema
+                .get_latest_object_version(ObjectID::random())
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn get_latest_object_version_returns_the_greatest_checkpoint_row() {
+        let (_dir, db, schema) = fresh_db();
+        let id = ObjectID::random();
+        // The object changed at checkpoints 10, 20, and 30; the latest
+        // version is the one recorded at the greatest checkpoint.
+        put(&schema, &db, id, 10, 5);
+        put(&schema, &db, id, 30, 7);
+        put(&schema, &db, id, 20, 6);
+
+        assert_eq!(schema.get_latest_object_version(id).unwrap(), Some(seq(7)));
+    }
+
+    #[test]
+    fn get_latest_object_version_uses_the_restore_floor_when_static() {
+        let (_dir, db, schema) = fresh_db();
+        let id = ObjectID::random();
+        // A static object restored before the available window has only
+        // its `from_restore` floor row; that floor is its latest version.
+        let (k, v) = store_restored(id, 100, seq(5));
+        let mut batch = db.batch();
+        batch
+            .put(&schema.object_version_by_checkpoint, &k, &v)
+            .unwrap();
+        batch.commit().unwrap();
+
+        assert_eq!(schema.get_latest_object_version(id).unwrap(), Some(seq(5)));
+    }
+
+    #[test]
+    fn get_latest_object_version_isolates_objects_by_id() {
+        let (_dir, db, schema) = fresh_db();
+        let a = ObjectID::from_single_byte(1);
+        let b = ObjectID::from_single_byte(2);
+        put(&schema, &db, a, 30, 9);
+        put(&schema, &db, b, 10, 4);
+
+        // The reverse prefix scan must not spill across the id bound.
+        assert_eq!(schema.get_latest_object_version(a).unwrap(), Some(seq(9)));
+        assert_eq!(schema.get_latest_object_version(b).unwrap(), Some(seq(4)));
     }
 }
