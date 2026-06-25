@@ -92,6 +92,7 @@ use typed_store::{
 };
 
 const TRANSACTION_FORK_DETECTED_KEY: u8 = 0;
+const AUTO_RECOVERY_ATTEMPT_KEY: u8 = 0;
 
 pub type CheckpointHeight = u64;
 
@@ -184,6 +185,11 @@ pub struct CheckpointStoreTables {
     >,
     #[default_options_override_fn = "full_checkpoint_content_table_default_config"]
     full_checkpoint_content_v2: DBMap<CheckpointSequenceNumber, VersionedFullCheckpointContents>,
+
+    /// Records the node build version that last performed an automatic fork recovery. Used to
+    /// bound automatic recovery to one attempt per binary version: if the same binary equivocates
+    /// again after recovering, the node hangs awaiting a corrected binary instead of crash-looping.
+    pub(crate) auto_recovery_attempt: DBMap<u8, String>,
 }
 
 #[cfg(not(tidehunter))]
@@ -303,6 +309,17 @@ impl CheckpointStoreTables {
                     |sequence_number: CheckpointSequenceNumber| sequence_number,
                     true,
                 )),
+            ),
+            (
+                "auto_recovery_attempt",
+                ThConfig::new_with_config(
+                    1,
+                    1,
+                    KeyType::uniform(1),
+                    KeySpaceConfig::new()
+                        .with_value_cache_size(10)
+                        .disable_unload(),
+                ),
             ),
         ];
         Self::open_tables_read_write(
@@ -1263,6 +1280,18 @@ impl CheckpointStore {
         self.tables
             .transaction_fork_detected
             .remove(&TRANSACTION_FORK_DETECTED_KEY)
+    }
+
+    pub fn record_auto_recovery_attempt(&self, build_version: &str) -> Result<(), TypedStoreError> {
+        self.tables
+            .auto_recovery_attempt
+            .insert(&AUTO_RECOVERY_ATTEMPT_KEY, &build_version.to_string())
+    }
+
+    pub fn get_auto_recovery_attempt(&self) -> Result<Option<String>, TypedStoreError> {
+        self.tables
+            .auto_recovery_attempt
+            .get(&AUTO_RECOVERY_ATTEMPT_KEY)
     }
 }
 
