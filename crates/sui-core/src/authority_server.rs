@@ -679,8 +679,14 @@ impl ValidatorService {
         let mut results: Vec<Option<SubmitTxResult>> = vec![None; request.transactions.len()];
         // Total size of all transactions in the request.
         let mut total_size_bytes = 0;
-        // Traffic control spam weight to use for the transaction.
-        let mut spam_weight = Weight::zero();
+        // Whether the request contains any gasless transaction.
+        let mut has_gasless = false;
+        // Set when a transaction duplicates an in-flight submission at admission. Tracked
+        // separately because it is detected after the per-tx results are finalized (those
+        // remain Submitted), so it cannot be derived from the results alone.
+        let mut duplicate_at_admission = false;
+        // First gas price seen in this soft bundle.
+        let mut expected_soft_bundle_gas_price = None;
         // Transaction digests seen in this soft bundle, used to reject bundles that repeat a
         // transaction. No legitimate client constructs such a bundle.
         let mut soft_bundle_digests = HashSet::new();
@@ -731,14 +737,33 @@ impl ValidatorService {
                 );
             }
 
+            // Soft bundles require all transactions to use the same gas price.
+            if is_soft_bundle_request {
+                let gas_price = transaction.data().transaction_data().gas_price();
+                if let Some(expected) = expected_soft_bundle_gas_price {
+                    fp_ensure!(
+                        gas_price == expected,
+                        SuiErrorKind::UserInputError {
+                            error: UserInputError::GasPriceMismatchError {
+                                digest: tx_digest,
+                                expected,
+                                actual: gas_price,
+                            }
+                        }
+                        .into()
+                    );
+                } else {
+                    expected_soft_bundle_gas_price = Some(gas_price);
+                }
+            }
+
             let is_gasless = transaction
                 .data()
                 .transaction_data()
                 .is_gasless_transaction();
 
             if is_gasless {
-                // Gasless transactions count for traffic control, since they have no economic cost.
-                spam_weight = Weight::one();
+                has_gasless = true;
                 metrics
                     .gasless_submission_outcomes
                     .with_label_values(&["attempted"])
@@ -774,6 +799,12 @@ impl ValidatorService {
                     .num_rejected_tx_during_overload
                     .with_label_values(&[error.as_ref()])
                     .inc();
+                if is_gasless {
+                    metrics
+                        .gasless_submission_outcomes
+                        .with_label_values(&["rejected_overload"])
+                        .inc();
+                }
                 results[idx] = Some(SubmitTxResult::Rejected { error });
                 continue;
             }
@@ -988,7 +1019,14 @@ impl ValidatorService {
         }
 
         if consensus_transactions.is_empty() && !is_ping_request {
-            return Ok((Self::try_from_submit_tx_response(results)?, spam_weight));
+            let spam_weight = Self::request_spam_weight(
+                &results,
+                has_gasless,
+                duplicate_at_admission,
+                is_ping_request,
+            );
+            let response = Self::try_from_submit_tx_response(results)?;
+            return Ok((response, spam_weight));
         }
 
         // Set the max bytes size of the soft bundle to be half of the consensus max transactions in block size.
@@ -1086,8 +1124,9 @@ impl ValidatorService {
                         .try_insert(gas_price, txns, submitter_client_addr)
                         .await?;
                     if !newly_inserted {
-                        // Count duplicate tx submissions towards spam tallies.
-                        spam_weight = Weight::one();
+                        // Duplicate of an in-flight submission; flag the request as spam. The
+                        // per-tx result is still Submitted, so this is tracked separately.
+                        duplicate_at_admission = true;
                     }
                     receivers.push(rx);
                 }
@@ -1123,7 +1162,48 @@ impl ValidatorService {
             }
         }
 
-        Ok((Self::try_from_submit_tx_response(results)?, spam_weight))
+        let spam_weight = Self::request_spam_weight(
+            &results,
+            has_gasless,
+            duplicate_at_admission,
+            is_ping_request,
+        );
+        let response = Self::try_from_submit_tx_response(results)?;
+        Ok((response, spam_weight))
+    }
+
+    /// Traffic-control spam weight for a whole submit request. The request is spam unless it is
+    /// entirely accepted gas-chargable work.
+    fn request_spam_weight(
+        results: &[Option<SubmitTxResult>],
+        has_gasless: bool,
+        duplicate_at_admission: bool,
+        is_ping: bool,
+    ) -> Weight {
+        if is_ping || has_gasless || duplicate_at_admission {
+            return Weight::one();
+        }
+        for result in results {
+            let Some(result) = result else {
+                // `results` is expected to be fully populated (every entry `Some`) for the
+                // request's transactions; a missing entry is a bug and is conservatively
+                // treated as spam.
+                debug_fatal!("transaction outcome unset when computing spam weight");
+                return Weight::one();
+            };
+            if Self::submission_spam_weight(result) == Weight::one() {
+                return Weight::one();
+            }
+        }
+        Weight::zero()
+    }
+
+    fn submission_spam_weight(result: &SubmitTxResult) -> Weight {
+        match result {
+            SubmitTxResult::Submitted { .. } => Weight::zero(),
+            // Non-submitted results can't be charged.
+            SubmitTxResult::Executed { .. } | SubmitTxResult::Rejected { .. } => Weight::one(),
+        }
     }
 
     fn try_from_submit_tx_response(
