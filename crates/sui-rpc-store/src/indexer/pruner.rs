@@ -95,8 +95,8 @@ use crate::RpcStoreSchema;
 use crate::config::PrunerConfig;
 use crate::schema::checkpoint_seq_by_digest;
 use crate::schema::event_bitmap;
-use crate::schema::keys::U64Be;
 use crate::schema::objects;
+use crate::schema::primitives::U64Be;
 use crate::schema::pruning_watermark;
 use crate::schema::pruning_watermark::Watermarks;
 use crate::schema::transaction_bitmap;
@@ -532,7 +532,7 @@ mod tests {
 
     use super::*;
     use crate::schema::epochs;
-    use crate::schema::keys::U64Varint;
+    use crate::schema::primitives::U64Varint;
 
     fn fresh_db() -> (tempfile::TempDir, Db, RpcStoreSchema) {
         let dir = tempfile::tempdir().unwrap();

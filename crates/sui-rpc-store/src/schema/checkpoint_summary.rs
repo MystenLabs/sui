@@ -19,7 +19,7 @@ use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 
 use crate::proto::StoredCheckpointSummary;
-use crate::schema::keys::U64Be;
+use crate::schema::primitives::U64Be;
 
 pub const NAME: &str = "checkpoint_summary";
 

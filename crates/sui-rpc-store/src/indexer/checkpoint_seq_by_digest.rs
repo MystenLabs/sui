@@ -18,7 +18,7 @@ use sui_types::messages_checkpoint::CheckpointSummary;
 use crate::indexer::Schema;
 use crate::indexer::Store;
 use crate::schema::checkpoint_seq_by_digest;
-use crate::schema::keys::U64Varint;
+use crate::schema::primitives::U64Varint;
 
 /// Pipeline marker for `checkpoint_seq_by_digest`.
 pub struct CheckpointSeqByDigest;

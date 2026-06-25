@@ -34,7 +34,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use crate::indexer::Schema;
 use crate::indexer::Store;
 use crate::schema::epochs;
-use crate::schema::keys::U64Be;
+use crate::schema::primitives::U64Be;
 
 /// Pipeline marker for `epochs`.
 pub struct Epochs;

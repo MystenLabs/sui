@@ -30,7 +30,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::object::Object;
 use sui_types::object::Owner;
 
-use crate::schema::keys::U64Varint;
+use crate::schema::primitives::U64Varint;
 
 pub const NAME: &str = "object_by_owner";
 
@@ -152,7 +152,7 @@ impl Decode for Key {
         // streaming BCS parser. The parser stops at the StructTag's
         // natural end and leaves the rest of the buffer (balance
         // tag, balance payload, object id) intact.
-        let type_ = crate::schema::keys::read_struct_tag(buf)?;
+        let type_ = crate::schema::primitives::read_struct_tag(buf)?;
 
         if !buf.has_remaining() {
             return Err(DecodeError::msg(format!("{NAME} missing balance tag")));
