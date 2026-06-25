@@ -11,10 +11,10 @@ use sui::linked_table::{Self, LinkedTable};
 fun simple_all_functions() {
     let ctx = &mut tx_context::dummy();
     let mut table = linked_table::new<vector<u8>, u64>(ctx);
-    check_ordering(&table, vector[], option::none());
+    check_ordering(&table, vector[], vector[]);
     // add fields
     table.push_back("hello", 0);
-    check_ordering(&table, vector["hello"], option::some(vector[0]));
+    check_ordering(&table, vector["hello"], vector[0]);
     table.push_back("goodbye", 1);
     // check they exist
     assert!(table.contains("hello"));
@@ -30,33 +30,33 @@ fun simple_all_functions() {
     assert_eq!(table["hello"], 0);
     assert_eq!(table["goodbye"], 2);
     // check the ordering
-    check_ordering(&table, vector["hello", "goodbye"], option::some(vector[0, 2]));
+    check_ordering(&table, vector["hello", "goodbye"], vector[0, 2]);
     // add to the front
     table.push_front("!!!", 2);
-    check_ordering(&table, vector["!!!", "hello", "goodbye"], option::some(vector[2, 0, 2]));
+    check_ordering(&table, vector["!!!", "hello", "goodbye"], vector[2, 0, 2]);
     // add to the back
     table.push_back("?", 3);
     check_ordering(
         &table,
         vector["!!!", "hello", "goodbye", "?"],
-        option::some(vector[2, 0, 2, 3]),
+        vector[2, 0, 2, 3],
     );
     // pop front
     let (front_k, front_v) = table.pop_front();
     assert_eq!(front_k, "!!!");
     assert_eq!(front_v, 2);
-    check_ordering(&table, vector["hello", "goodbye", "?"], option::some(vector[0, 2, 3]));
+    check_ordering(&table, vector["hello", "goodbye", "?"], vector[0, 2, 3]);
     // remove middle
     assert_eq!(table.remove("goodbye"), 2);
-    check_ordering(&table, vector["hello", "?"], option::some(vector[0, 3]));
+    check_ordering(&table, vector["hello", "?"], vector[0, 3]);
     // pop back
     let (back_k, back_v) = table.pop_back();
     assert_eq!(back_k, "?");
     assert_eq!(back_v, 3);
-    check_ordering(&table, vector["hello"], option::some(vector[0]));
+    check_ordering(&table, vector["hello"], vector[0]);
     // remove the value and check it
     assert_eq!(table.remove("hello"), 0);
-    check_ordering(&table, vector[], option::none());
+    check_ordering(&table, vector[], vector[]);
     // verify that they are not there
     assert!(!table.contains("!!!"));
     assert!(!table.contains("goodbye"));
@@ -79,10 +79,10 @@ fun front_back_empty() {
 fun push_front_singleton() {
     let ctx = &mut tx_context::dummy();
     let mut table = linked_table::new<vector<u8>, u64>(ctx);
-    check_ordering(&table, vector[], option::none());
+    check_ordering(&table, vector[], vector[]);
     table.push_front("hello", 0u64);
     assert!(table.contains("hello"));
-    check_ordering(&table, vector["hello"], option::none());
+    check_ordering(&table, vector["hello"], vector[]);
     table.drop()
 }
 
@@ -90,10 +90,10 @@ fun push_front_singleton() {
 fun push_back_singleton() {
     let ctx = &mut tx_context::dummy();
     let mut table = linked_table::new<vector<u8>, u64>(ctx);
-    check_ordering(&table, vector[], option::none());
+    check_ordering(&table, vector[], vector[]);
     table.push_back("hello", 0u64);
     assert!(table.contains("hello"));
-    check_ordering(&table, vector["hello"], option::none());
+    check_ordering(&table, vector["hello"], vector[]);
     table.drop()
 }
 
@@ -213,7 +213,7 @@ fun insert_before_singleton() {
     let mut table = linked_table::new<vector<u8>, u64>(ctx);
     table.push_back("anchor", 1);
     table.insert_before("anchor", "new", 0);
-    check_ordering(&table, vector["new", "anchor"], option::some(vector[0, 1]));
+    check_ordering(&table, vector["new", "anchor"], vector[0, 1]);
     assert_eq!(table.length(), 2);
     assert_eq!(*table.front().borrow(), "new");
     assert_eq!(*table.back().borrow(), "anchor");
@@ -228,7 +228,7 @@ fun insert_before_head() {
     table.push_back("b", 1);
     table.push_back("c", 2);
     table.insert_before("a", "z", 99);
-    check_ordering(&table, vector["z", "a", "b", "c"], option::some(vector[99, 0, 1, 2]));
+    check_ordering(&table, vector["z", "a", "b", "c"], vector[99, 0, 1, 2]);
     assert_eq!(*table.front().borrow(), "z");
     assert_eq!(*table.back().borrow(), "c");
     assert_eq!(table.length(), 4);
@@ -243,7 +243,7 @@ fun insert_before_middle() {
     table.push_back("b", 1);
     table.push_back("c", 2);
     table.insert_before("b", "m", 50);
-    check_ordering(&table, vector["a", "m", "b", "c"], option::some(vector[0, 50, 1, 2]));
+    check_ordering(&table, vector["a", "m", "b", "c"], vector[0, 50, 1, 2]);
     assert_eq!(*table.front().borrow(), "a");
     assert_eq!(*table.back().borrow(), "c");
     table.drop();
@@ -257,7 +257,7 @@ fun insert_before_tail() {
     table.push_back("b", 1);
     table.push_back("c", 2);
     table.insert_before("c", "x", 75);
-    check_ordering(&table, vector["a", "b", "x", "c"], option::some(vector[0, 1, 75, 2]));
+    check_ordering(&table, vector["a", "b", "x", "c"], vector[0, 1, 75, 2]);
     assert_eq!(*table.front().borrow(), "a");
     assert_eq!(*table.back().borrow(), "c");
     table.drop();
@@ -269,7 +269,7 @@ fun insert_after_singleton() {
     let mut table = linked_table::new<vector<u8>, u64>(ctx);
     table.push_back("anchor", 1u64);
     table.insert_after("anchor", "new", 0);
-    check_ordering(&table, vector["anchor", "new"], option::some(vector[1, 0]));
+    check_ordering(&table, vector["anchor", "new"], vector[1, 0]);
     assert_eq!(table.length(), 2);
     assert_eq!(*table.front().borrow(), "anchor");
     assert_eq!(*table.back().borrow(), "new");
@@ -284,7 +284,7 @@ fun insert_after_head() {
     table.push_back("b", 1);
     table.push_back("c", 2);
     table.insert_after("a", "x", 25);
-    check_ordering(&table, vector["a", "x", "b", "c"], option::some(vector[0, 25, 1, 2]));
+    check_ordering(&table, vector["a", "x", "b", "c"], vector[0, 25, 1, 2]);
     assert_eq!(*table.front().borrow(), "a");
     assert_eq!(*table.back().borrow(), "c");
     table.drop();
@@ -298,7 +298,7 @@ fun insert_after_middle() {
     table.push_back("b", 1);
     table.push_back("c", 2);
     table.insert_after("b", "m", 50);
-    check_ordering(&table, vector["a", "b", "m", "c"], option::some(vector[0, 1, 50, 2]));
+    check_ordering(&table, vector["a", "b", "m", "c"], vector[0, 1, 50, 2]);
     assert_eq!(*table.front().borrow(), "a");
     assert_eq!(*table.back().borrow(), "c");
     table.drop();
@@ -312,7 +312,7 @@ fun insert_after_tail() {
     table.push_back("b", 1);
     table.push_back("c", 2);
     table.insert_after("c", "z", 99);
-    check_ordering(&table, vector["a", "b", "c", "z"], option::some(vector[0, 1, 2, 99]));
+    check_ordering(&table, vector["a", "b", "c", "z"], vector[0, 1, 2, 99]);
     assert_eq!(*table.front().borrow(), "a");
     assert_eq!(*table.back().borrow(), "z");
     table.drop();
@@ -325,11 +325,11 @@ fun push_front_after_insert_before_head() {
     table.push_back("a", 0);
     table.push_back("b", 1);
     table.insert_before("a", "z", 99);
-    check_ordering(&table, vector["z", "a", "b"], option::some(vector[99, 0, 1]));
+    check_ordering(&table, vector["z", "a", "b"], vector[99, 0, 1]);
     table.push_front("y", 100);
-    check_ordering(&table, vector["y", "z", "a", "b"], option::some(vector[100, 99, 0, 1]));
+    check_ordering(&table, vector["y", "z", "a", "b"], vector[100, 99, 0, 1]);
     table.push_back("c", 2);
-    check_ordering(&table, vector["y", "z", "a", "b", "c"], option::some(vector[100, 99, 0, 1, 2]));
+    check_ordering(&table, vector["y", "z", "a", "b", "c"], vector[100, 99, 0, 1, 2]);
     table.drop();
 }
 
@@ -340,14 +340,14 @@ fun push_back_after_insert_after_tail() {
     table.push_back("a", 0);
     table.push_back("b", 1);
     table.insert_after("b", "z", 99);
-    check_ordering(&table, vector["a", "b", "z"], option::some(vector[0, 1, 99]));
+    check_ordering(&table, vector["a", "b", "z"], vector[0, 1, 99]);
     table.push_back("y", 100);
-    check_ordering(&table, vector["a", "b", "z", "y"], option::some(vector[0, 1, 99, 100]));
+    check_ordering(&table, vector["a", "b", "z", "y"], vector[0, 1, 99, 100]);
     table.push_front("x", 101);
     check_ordering(
         &table,
         vector["x", "a", "b", "z", "y"],
-        option::some(vector[101, 0, 1, 99, 100]),
+        vector[101, 0, 1, 99, 100],
     );
     table.drop();
 }
@@ -358,20 +358,20 @@ fun push_after_insert_at_singleton_boundary() {
     let mut table = linked_table::new<vector<u8>, u64>(ctx);
     table.push_back("a", 0u64);
     table.insert_before("a", "b", 1);
-    check_ordering(&table, vector["b", "a"], option::some(vector[1, 0]));
+    check_ordering(&table, vector["b", "a"], vector[1, 0]);
     table.push_front("c", 2);
-    check_ordering(&table, vector["c", "b", "a"], option::some(vector[2, 1, 0]));
+    check_ordering(&table, vector["c", "b", "a"], vector[2, 1, 0]);
     table.push_back("d", 3);
-    check_ordering(&table, vector["c", "b", "a", "d"], option::some(vector[2, 1, 0, 3]));
+    check_ordering(&table, vector["c", "b", "a", "d"], vector[2, 1, 0, 3]);
 
     let mut table2 = linked_table::new<vector<u8>, u64>(ctx);
     table2.push_back("a", 0u64);
     table2.insert_after("a", "b", 1);
-    check_ordering(&table2, vector["a", "b"], option::none());
+    check_ordering(&table2, vector["a", "b"], vector[]);
     table2.push_back("c", 2);
-    check_ordering(&table2, vector["a", "b", "c"], option::none());
+    check_ordering(&table2, vector["a", "b", "c"], vector[]);
     table2.push_front("d", 3);
-    check_ordering(&table2, vector["d", "a", "b", "c"], option::none());
+    check_ordering(&table2, vector["d", "a", "b", "c"], vector[]);
     table.drop();
     table2.drop();
 }
@@ -384,7 +384,7 @@ fun insert_before_repeated_at_head() {
     table.insert_before("anchor", "a", 1);
     table.insert_before("a", "b", 2);
     table.insert_before("b", "c", 3);
-    check_ordering(&table, vector["c", "b", "a", "anchor"], option::some(vector[3, 2, 1, 0]));
+    check_ordering(&table, vector["c", "b", "a", "anchor"], vector[3, 2, 1, 0]);
     assert_eq!(table.length(), 4);
     table.drop();
 }
@@ -397,7 +397,7 @@ fun insert_after_repeated_at_tail() {
     table.insert_after("anchor", "a", 1);
     table.insert_after("a", "b", 2);
     table.insert_after("b", "c", 3);
-    check_ordering(&table, vector["anchor", "a", "b", "c"], option::none());
+    check_ordering(&table, vector["anchor", "a", "b", "c"], vector[]);
     assert_eq!(table.length(), 4);
     table.drop();
 }
@@ -408,17 +408,17 @@ fun insert_before_and_after_interleaved() {
     let mut table = linked_table::new<vector<u8>, u64>(ctx);
     table.push_back("m", 0);
     table.insert_before("m", "l", 1);
-    check_ordering(&table, vector["l", "m"], option::none());
+    check_ordering(&table, vector["l", "m"], vector[]);
     table.insert_after("m", "n", 2);
-    check_ordering(&table, vector["l", "m", "n"], option::none());
+    check_ordering(&table, vector["l", "m", "n"], vector[]);
     table.insert_before("l", "k", 3);
-    check_ordering(&table, vector["k", "l", "m", "n"], option::none());
+    check_ordering(&table, vector["k", "l", "m", "n"], vector[]);
     table.insert_after("n", "o", 4);
-    check_ordering(&table, vector["k", "l", "m", "n", "o"], option::none());
+    check_ordering(&table, vector["k", "l", "m", "n", "o"], vector[]);
     table.insert_after("l", "l2", 5);
-    check_ordering(&table, vector["k", "l", "l2", "m", "n", "o"], option::none());
+    check_ordering(&table, vector["k", "l", "l2", "m", "n", "o"], vector[]);
     table.insert_before("n", "m2", 6);
-    check_ordering(&table, vector["k", "l", "l2", "m", "m2", "n", "o"], option::none());
+    check_ordering(&table, vector["k", "l", "l2", "m", "m2", "n", "o"], vector[]);
     assert_eq!(table.length(), 7);
     assert_eq!(*table.front().borrow(), "k");
     assert_eq!(*table.back().borrow(), "o");
@@ -432,17 +432,17 @@ fun insert_then_remove_preserves_ordering() {
     table.push_back("a", 0);
     table.push_back("c", 2);
     table.insert_after("a", "b", 1);
-    check_ordering(&table, vector["a", "b", "c"], option::none());
+    check_ordering(&table, vector["a", "b", "c"], vector[]);
     assert_eq!(table.remove("b"), 1);
-    check_ordering(&table, vector["a", "c"], option::none());
+    check_ordering(&table, vector["a", "c"], vector[]);
     table.insert_before("c", "b", 1);
-    check_ordering(&table, vector["a", "b", "c"], option::none());
+    check_ordering(&table, vector["a", "b", "c"], vector[]);
     assert_eq!(table.remove("a"), 0);
-    check_ordering(&table, vector["b", "c"], option::none());
+    check_ordering(&table, vector["b", "c"], vector[]);
     assert_eq!(table.remove("c"), 2);
-    check_ordering(&table, vector["b"], option::none());
+    check_ordering(&table, vector["b"], vector[]);
     assert_eq!(table.remove("b"), 1);
-    check_ordering(&table, vector[], option::none());
+    check_ordering(&table, vector[], vector[]);
     table.destroy_empty();
 }
 
@@ -455,11 +455,11 @@ fun insert_before_then_pop() {
     let (k, v) = table.pop_front();
     assert_eq!(k, "a");
     assert_eq!(v, 0);
-    check_ordering(&table, vector["b"], option::none());
+    check_ordering(&table, vector["b"], vector[]);
     let (k, v) = table.pop_back();
     assert_eq!(k, "b");
     assert_eq!(v, 1);
-    check_ordering(&table, vector[], option::none());
+    check_ordering(&table, vector[], vector[]);
     table.destroy_empty();
 }
 
@@ -472,11 +472,11 @@ fun insert_after_then_pop() {
     let (k, v) = table.pop_back();
     assert_eq!(k, "b");
     assert_eq!(v, 1);
-    check_ordering(&table, vector["a"], option::some(vector[0]));
+    check_ordering(&table, vector["a"], vector[0]);
     let (k, v) = table.pop_front();
     assert_eq!(k, "a");
     assert_eq!(v, 0);
-    check_ordering(&table, vector[], option::none());
+    check_ordering(&table, vector[], vector[]);
     table.destroy_empty();
 }
 
@@ -606,7 +606,7 @@ fun build_up_and_tear_down<K: copy + drop + store, V: copy + drop + store>(
         };
     });
 
-    check_ordering(&table, order, option::none());
+    check_ordering(&table, order, vector[]);
 
     n.do!(|i| {
         let (table_k, order_k) = if (pops[i]) {
@@ -617,7 +617,7 @@ fun build_up_and_tear_down<K: copy + drop + store, V: copy + drop + store>(
             (table_k, order.pop_back())
         };
         assert_eq!(table_k, order_k);
-        check_ordering(&table, order, option::none());
+        check_ordering(&table, order, vector[]);
     });
     table.destroy_empty()
 }
@@ -625,7 +625,7 @@ fun build_up_and_tear_down<K: copy + drop + store, V: copy + drop + store>(
 fun check_ordering<K: copy + drop + store, V: copy + store + drop>(
     table: &LinkedTable<K, V>,
     keys: vector<K>,
-    values: Option<vector<V>>,
+    values: vector<V>,
 ) {
     let n = table.length();
     assert_eq!(n, keys.length());
@@ -635,12 +635,11 @@ fun check_ordering<K: copy + drop + store, V: copy + store + drop>(
         return
     };
 
-    let mut i = 0;
-    while (i < n) {
+    n.do!(|i| {
         let cur = keys[i];
-        values.do_ref!(|values| {
+        if (values.length() != 0) {
             assert_eq!(table[cur], values[i]);
-        });
+        };
 
         if (i == 0) {
             assert_eq!(*table.front().borrow(), cur);
@@ -654,6 +653,5 @@ fun check_ordering<K: copy + drop + store, V: copy + store + drop>(
         } else {
             assert_eq!(*table.next(cur).borrow(), keys[i + 1]);
         };
-        i = i + 1;
-    }
+    });
 }

@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 127;
+const MAX_PROTOCOL_VERSION: u64 = 128;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -358,6 +358,7 @@ const MAINNET_USDB: &str =
 //              Update gas prices for range proofs and ristretto group operations.
 //              Enable Ristretto255 group operations and bulletproofs verification on testnet.
 //              Enable timestamp_based_epoch_close on mainnet.
+// Version 128: Add `insert_before` and `insert_after` to `sui::linked_table`
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5028,6 +5029,7 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.timestamp_based_epoch_close = true;
                 }
+                128 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
