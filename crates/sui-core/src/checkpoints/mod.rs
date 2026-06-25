@@ -1557,6 +1557,14 @@ impl CheckpointBuilder {
                 .in_monitored_scope("CheckpointNotifyDigests")
                 .await?;
 
+            // Crash-recovered (poison) transactions never execute and produce no effects, so they
+            // are excluded from checkpoint contents. They still flow through scheduling identically
+            // on every run, so the remaining roots are reproducible across the crash boundary.
+            let root_digests: Vec<_> = root_digests
+                .into_iter()
+                .filter(|d| !self.epoch_store.is_crashed_transaction(d))
+                .collect();
+
             all_root_digests.extend(root_digests.iter().cloned());
 
             let root_effects = self
@@ -1740,8 +1748,9 @@ impl CheckpointBuilder {
             "writing checkpoint",
         );
         info!(
-            "CLAUDE: write_checkpoint seq={} contents_digest={:?} txs={:?}",
+            "CLAUDE: write_checkpoint seq={} summary={:?} contents={:?} txs={:?}",
             summary.sequence_number,
+            summary.digest(),
             contents.digest(),
             contents
                 .iter()

@@ -511,10 +511,11 @@ mod test {
         // quorum, empirically ~6% per-validator skip rate produces ~5% DKG failure per epoch.
         register_fail_point_if("rb-dkg", || thread_rng().gen_bool(0.06));
 
-        // crash-with-tx-logging is deferred to pre_load_setup so it doesn't fire during
-        // workload initialization. Setup transactions that crash and get logged would
-        // otherwise stall initialization because the init code retries the same digest.
-        const CRASH_PROB: f32 = 0.002;
+        // Only transactions that opt in (by carrying the crash-opt-in marker arg, attached by the
+        // composite workload) are eligible to be poisoned, so setup/gas transactions are never
+        // crashed and a transaction's poison status is consistent for the whole run. The crash
+        // probability can therefore be enabled before load generation begins.
+        const CRASH_PROB: f32 = 0.02;
         test_simulated_load_with_test_config(
             test_cluster,
             120,

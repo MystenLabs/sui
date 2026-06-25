@@ -620,6 +620,7 @@ impl SuiNode {
                 &registry_service.default_registry(),
             )),
             config.fullnode_sync_mode,
+            crashed_transactions,
         )?;
 
         info!("created epoch store");
@@ -891,7 +892,6 @@ impl SuiNode {
                 checkpoint_metrics.clone(),
                 node_role,
                 randomness_receiver_handle.clone(),
-                crashed_transactions,
             )
             .await?;
 
@@ -1293,7 +1293,6 @@ impl SuiNode {
         checkpoint_metrics: Arc<CheckpointMetrics>,
         node_role: NodeRole,
         randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
-        crashed_transactions: std::collections::HashSet<sui_types::digests::TransactionDigest>,
     ) -> Result<ValidatorComponents> {
         let mut config_clone = config.clone();
         let consensus_config = config_clone
@@ -1386,7 +1385,6 @@ impl SuiNode {
             sui_tx_validator_metrics,
             admission_queue,
             node_role,
-            crashed_transactions,
         )
         .await
     }
@@ -1411,7 +1409,6 @@ impl SuiNode {
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
         admission_queue: Option<AdmissionQueueContext>,
         node_role: NodeRole,
-        crashed_transactions: std::collections::HashSet<sui_types::digests::TransactionDigest>,
     ) -> Result<ValidatorComponents> {
         let checkpoint_service = Self::build_checkpoint_service(
             config,
@@ -1474,8 +1471,7 @@ impl SuiNode {
             throughput_calculator,
             backpressure_manager,
             config.congestion_log.clone(),
-        )
-        .with_crashed_transactions(crashed_transactions);
+        );
 
         info!("Starting consensus manager asynchronously");
 
@@ -1967,7 +1963,6 @@ impl SuiNode {
                             sui_tx_validator_metrics,
                             admission_queue,
                             new_role,
-                            crash_recovery::load_crashed_transactions(&self.config.db_path),
                         )
                         .await?,
                     )
@@ -2008,9 +2003,6 @@ impl SuiNode {
                         self.checkpoint_metrics.clone(),
                         new_role,
                         self.randomness_receiver_handle.clone(),
-                        // Crashed transactions are only relevant on the initial startup
-                        // after a crash; clear the denylist when reconfiguring for a new epoch.
-                        std::collections::HashSet::new(),
                     )
                     .await?;
 

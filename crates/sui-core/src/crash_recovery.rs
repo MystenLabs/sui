@@ -45,7 +45,9 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use sui_types::{base_types::AuthorityName, digests::TransactionDigest};
+use sui_types::{
+    base_types::AuthorityName, digests::TransactionDigest, transaction::TransactionData,
+};
 use tracing::{error, info, warn};
 
 macro_rules! git_revision {
@@ -108,17 +110,40 @@ pub fn crash_recovery_probability() -> Option<f64> {
     }
 }
 
-/// Return `true` if `digest` should be treated as a poison transaction.
+/// Marker pure-argument bytes (`0xdeadbeef`) that a transaction must carry to opt in to crash
+/// injection. Only transactions that attach this unused argument are eligible to be poisoned, so
+/// system and setup transactions are never crashed and a transaction's poison status is intrinsic
+/// to its contents (hence consistent across re-executions).
+pub const CRASH_OPT_IN_MARKER: &[u8] = &[0xde, 0xad, 0xbe, 0xef];
+
+/// Returns `true` if `tx_data` carries the crash-opt-in marker argument.
+fn has_crash_opt_in_marker(tx_data: &TransactionData) -> bool {
+    use sui_types::transaction::{CallArg, TransactionDataAPI as _, TransactionKind};
+    matches!(
+        tx_data.kind(),
+        TransactionKind::ProgrammableTransaction(pt)
+            if pt.inputs.iter().any(|input| matches!(
+                input,
+                CallArg::Pure(bytes) if bytes.as_slice() == CRASH_OPT_IN_MARKER
+            ))
+    )
+}
+
+/// Return `true` if `tx_data` should be treated as a poison transaction.
 ///
-/// Returns `false` if no crash probability has been set via `set_crash_recovery_probability`.
-///
-/// The decision is purely content-addressed so that independent validator processes always agree
-/// on which transactions are poison. Under msim, getrandom is intercepted and made deterministic,
-/// so this is equally reproducible there.
-pub fn should_poison_transaction(digest: &TransactionDigest) -> bool {
+/// Returns `false` unless a crash probability has been set via `set_crash_recovery_probability`
+/// AND the transaction opts in via the [`CRASH_OPT_IN_MARKER`] argument. The remaining decision is
+/// content-addressed so that independent validator processes always agree on which transactions are
+/// poison. Under msim, getrandom is intercepted and made deterministic, so this is equally
+/// reproducible there.
+pub fn should_poison_transaction(tx_data: &TransactionData) -> bool {
     let Some(prob) = crash_recovery_probability() else {
         return false;
     };
+    if !has_crash_opt_in_marker(tx_data) {
+        return false;
+    }
+    let digest = tx_data.digest();
     mysten_common::random::content_addressed_probability(digest.as_ref(), prob as f32)
 }
 
@@ -130,11 +155,11 @@ pub fn should_poison_transaction(digest: &TransactionDigest) -> bool {
 /// hook writes the digest to the crash log and the process terminates.
 /// In release builds: no-op (the `not(msim)` branch is compiled out by
 /// `in_test_configuration()` always returning false, and the msim branch is not compiled).
-pub fn maybe_crash_for_testing(digest: &TransactionDigest) {
+pub fn maybe_crash_for_testing(tx_data: &TransactionData) {
     #[cfg(msim)]
     {
         sui_macros::fail_point_if!("crash-with-tx-logging", || {
-            if should_poison_transaction(digest) {
+            if should_poison_transaction(tx_data) {
                 // Use catch_unwind to trigger the panic hook without crashing the test process.
                 let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     std::panic::panic_any(CRASH_SIM_PANIC_MSG);
@@ -144,44 +169,8 @@ pub fn maybe_crash_for_testing(digest: &TransactionDigest) {
         });
     }
     #[cfg(not(msim))]
-    if mysten_common::in_test_configuration() && should_poison_transaction(digest) {
-        panic!("crash-recovery: transaction {digest}");
-    }
-}
-
-/// Mine a non-poison digest by adding an unused pure argument to the PTB.
-///
-/// If no crash probability is set, this is a no-op. Otherwise, iterates until the signed
-/// transaction's digest is not in the poison set.
-#[cfg(msim)]
-pub fn mine_non_poison_transaction(
-    tx_data: &mut sui_types::transaction::TransactionData,
-    signer: &dyn sui_types::crypto::Signer<sui_types::crypto::Signature>,
-) {
-    use sui_types::transaction::{CallArg, TransactionDataAPI as _, TransactionKind};
-
-    if crash_recovery_probability().is_none() {
-        return;
-    }
-
-    let mut nonce: u64 = 0;
-    loop {
-        let tx = sui_types::transaction::Transaction::from_data_and_signer(
-            tx_data.clone(),
-            vec![signer],
-        );
-        if !should_poison_transaction(tx.digest()) {
-            break;
-        }
-        nonce += 1;
-        if let TransactionKind::ProgrammableTransaction(pt) = tx_data.kind_mut() {
-            if nonce == 1 {
-                pt.inputs
-                    .push(CallArg::Pure(bcs::to_bytes(&nonce).unwrap()));
-            } else {
-                *pt.inputs.last_mut().unwrap() = CallArg::Pure(bcs::to_bytes(&nonce).unwrap());
-            }
-        }
+    if mysten_common::in_test_configuration() && should_poison_transaction(tx_data) {
+        panic!("crash-recovery: transaction {}", tx_data.digest());
     }
 }
 
@@ -390,6 +379,7 @@ pub fn load_crashed_transactions(db_path: &Path) -> HashSet<TransactionDigest> {
     const LINE_LIMIT: usize = 1024 * 1024;
 
     let log_path = db_path.join(PANIC_TX_LOG_FILE);
+    eprintln!("CLAUDE: load_crashed_transactions reading {}", log_path.display());
     let file = match fs::File::open(&log_path) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             return HashSet::new();
@@ -474,5 +464,11 @@ pub fn load_crashed_transactions(db_path: &Path) -> HashSet<TransactionDigest> {
         }
     }
 
+    eprintln!(
+        "CLAUDE: load_crashed_transactions {} loaded {} digests: {:?}",
+        log_path.display(),
+        digests.len(),
+        digests
+    );
     digests
 }

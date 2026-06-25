@@ -204,15 +204,9 @@ impl Workload<dyn Payload> for AddrBalDepositWorkload {
                     vec![coin_balance, recipient_arg],
                 );
             }
-            // Seeding transactions run exactly once in init() with no retry loop, so they
-            // must not land in the crash-recovery poison set.
+            // Seeding transactions do not opt in to crash injection (they carry no crash-opt-in
+            // marker), so they can never be poisoned.
             let tx_data = tx_builder.ensure_unique().build();
-            #[cfg(msim)]
-            let tx_data = {
-                let mut d = tx_data;
-                sui_core::crash_recovery::mine_non_poison_transaction(&mut d, keypair.as_ref());
-                d
-            };
             let tx = sui_types::transaction::Transaction::from_data_and_signer(
                 tx_data,
                 vec![keypair.as_ref()],

@@ -141,6 +141,10 @@ pub async fn execution_process(
                         .execution_driver_paused_transactions
                         .inc();
                 }
+                ExecutionOutput::Dropped => {
+                    // Crash-recovered transaction dropped without executing. Terminal: not retried.
+                    warn!("Dropping previously-crashing transaction {digest:?}");
+                }
             }
         }.instrument(error_span!("execution_driver", tx_digest = ?digest))));
     }

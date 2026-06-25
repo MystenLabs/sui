@@ -880,7 +880,9 @@ async fn run_bench_worker(
                 );
                 #[cfg(msim)]
                 if sui_core::crash_recovery::crash_recovery_probability().is_some()
-                    && sui_core::crash_recovery::should_poison_transaction(transaction.digest())
+                    && sui_core::crash_recovery::should_poison_transaction(
+                        transaction.data().transaction_data(),
+                    )
                 {
                     return NextOp::Failure { payload };
                 }

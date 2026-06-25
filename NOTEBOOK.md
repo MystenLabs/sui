@@ -1,89 +1,81 @@
-# Debugging: crash-recovery self-conflict checkpoint fork
+# Debugging: crash-recovery self-conflict fork at checkpoint 216
 
-Repro (matching seed-search artifact — run the binary directly, NOT `cargo simtest --test` which
-builds a different artifact without `--package`):
+Repro (matching the seed-search build artifact — run the binary directly; `cargo simtest --test`
+without `--package` builds a DIFFERENT artifact and does not reproduce):
 
 ```
-MSIM_TEST_SEED=1782321375177 RUST_LOG=sui=debug,info \
-SIMTEST_STATIC_INIT_MOVE=$PWD/examples/move/basics \
-target/simulator/deps/simtest-f62f56c1988601e8 --test-threads 1 --no-capture \
+cargo simtest build --tests --package sui-benchmark
+cd crates/sui-benchmark
+MSIM_TEST_SEED=1782341427004 RUST_LOG=<...> \
+SIMTEST_STATIC_INIT_MOVE=$PWD/../../examples/move/basics \
+../../target/simulator/deps/simtest-<hash> --test-threads 1 --no-capture \
 --exact test::test_simulated_load_reconfig_with_crashes_and_delays
 ```
-(cwd = crates/sui-benchmark to match seed-search)
 
-Poison decision is now content-addressed (deterministic), so this is reproducible.
+Rules: logging-only changes (`info!("CLAUDE: ...")`), no functional changes. Commit logging per
+experiment. Current crash design under test: poison = opt-in marker (0xdeadbeef, attached by the
+composite `RequestCrash` op) + content-addressed; dropped at try_execute (is_crashed); crashed txs
+filtered from checkpoint roots + settlement (is_crashed); exempted from shared-object version
+assignment (is_crashed). CRASH_PROB currently 0.02.
 
 # iteration 1
 - OBSERVATIONS
-  - Fork is a SELF-CONFLICT: `checkpoints/mod.rs:1750 Checkpoint 210 was previously built with a
-    different result: previously_computed 5VGSLuf... vs current 6FWarw7...` on node 3 (k#99f25ef6),
-    epoch unknown yet.
-  - Exactly one poison tx: `FsuFdYvEpRbt5zUCRZWLtFSy4o6AiZm9n5o9ANEu7EjW`, crashed 3x.
-  - This is the SAME assertion class as the original Antithesis bug; the committed fix
-    (drop-late + lock-preservation, 352037a1d6) does NOT prevent it.
-  - seed-search log is RUST_LOG=error only -> lacks checkpoint-build detail. Need a debug rerun.
-- HYPOTHESIS: On the first execution the poison tx is not yet in `crashed_transactions`, so its
-  effects are committed and included in the locally-built+persisted checkpoint 210 (5VGSLuf). The
-  crash fires after effects are committed. On restart the tx IS in `crashed_transactions` and is
-  dropped, so checkpoint 210 rebuilds without it (6FWarw7) -> self-conflict. The drop-late fix does
-  not help because the poison tx is itself a member of the already-persisted checkpoint, not merely
-  affecting neighbors via locks.
-- EXPERIMENT: Re-run with debug logging; confirm whether FsuFdYv's effects/digest are in cp210's
-  pre-crash contents (5VGSLuf) and absent from the rebuild (6FWarw7), and locate where
-  maybe_crash_for_testing fires relative to effects-commit and checkpoint-build.
-- RESULTS (experiment_1): Hypothesis PARTIALLY REFUTED / REFINED.
-  - Both cp210 builds contain "2 transactions" (SAME count) but different contents digests
-    (pre-crash HE4HZ2Vd vs post-crash G7KdDfKw). So FsuFdYv is NOT directly added/removed from
-    cp210; the divergence is in the 2 txs' contents.
-  - FsuFdYv is an address-balance WITHDRAWAL tx. Checkpoints include an AccumulatorSettlement tx,
-    built via "early/eager settlement" at SCHEDULING time (consensus handler), not at execution.
-  - maybe_crash_for_testing fires at authority.rs:1503 — after the effects-cache check, BEFORE
-    execution. So FsuFdYv never commits its own effects; the crash is at EXECUTION time.
-  - FsuFdYv crashed twice (.616,.716) then was dropped (.816, crash_recovery.rs:441).
+  - Self-conflict on node 6: checkpoints/mod.rs "Checkpoint 216 was previously built with a
+    different result", previously_computed=369Pb7m (contents FVASy), current=6xto8v (contents 8piTGS).
+  - cp216 has 6 txs in both builds; two differ:
+    - tx1: 7CLWj4sv (persisted) vs BGczxy (rebuild) — DIFFERENT transaction.
+    - tx5 (9mMxcMaN, same digest): effects 3dko (persisted) vs AhwR (rebuild) — same tx, different
+      effects => read different input (shared) versions.
+  - Poison tx is 5xJ2pF; it produced NO effects (only "Panic while executing", no
+    write_transaction_outputs) — consistent with "crashes before producing outputs".
+  - 5xJ2pF is NOT in cp216 (neither build).
+- USER GUIDANCE: a poison tx that crashes prevents a checkpoint that depends on it from being built,
+  so drop-on-recovery should not be able to cause a divergent checkpoint. => the version-exemption
+  theory is suspect; find the real source. Do NOT call should_poison in production.
+- HYPOTHESIS (to test by logging, not by code change): cp216's two builds differ because the
+  version assignment for cp216's consensus commit differs between the first build and the rebuild.
+  Need to see, for cp216's commit, the assigned versions of tx1 and tx5 (and whether 5xJ2pF is in
+  the same commit and its is_dropped status) on each build.
+- EXPERIMENT: re-run seed 1782341427004 with the existing DEBUG "Assigned versions from consensus
+  processing" log (authority_per_epoch_store) + the CLAUDE write_checkpoint log enabled, and compare
+  the version assignment for cp216's commit across the persisted build vs the rebuild. (Logging
+  only; the "Assigned versions" log already exists.)
+- RESULT: INVALID experiment. The verbose-logging run did NOT fork, while the same functional code
+  forked under RUST_LOG=error. A deterministic msim test cannot change outcome from logging, so the
+  failure is NOT a deterministic checkpoint-content bug.
 
-# iteration 2 — ROOT CAUSE
-- ROOT CAUSE: An address-balance withdrawal that is poison contributes to the commit's
-  AccumulatorSettlement at SCHEDULING time (eager settlement, consensus handler). On the first
-  encounter the tx is not yet known-poison, so it is scheduled, its withdrawal is folded into the
-  settlement, and checkpoint 210 is built+persisted WITH that settlement (HE4HZ2Vd). The poison
-  crash then fires at EXECUTION time (after the checkpoint was built). On restart the tx is in
-  crashed_transactions and is dropped at schedulables formation, so its withdrawal is excluded
-  from the settlement and cp210 rebuilds differently (G7KdDfKw) -> self-conflict fatal.
-- The asymmetry is structural: the DROP happens at scheduling time (before settlement), but the
-  CRASH happens at execution time (after the checkpoint is built). The committed lock-preservation
-  fix does not help because the diverging side effect is the eager accumulator settlement, not an
-  owned-object lock. This is independent of (and pre-dates) that fix.
-- FIX DIRECTION (for discussion): make the crash and the drop happen at the SAME pipeline stage so
-  the poison tx never influences a built checkpoint in either timeline. Options:
-  1. Move the poison crash to the consensus handler (decide via content-addressed
-     should_poison_transaction before scheduling/settlement/checkpoint); crash there on first
-     encounter, drop there on recovery. Loses "crash mid-execution" coverage.
-  2. Exclude poison txs from checkpoint/settlement at scheduling time on BOTH encounters (keyed on
-     content-addressed should_poison), while still letting the first encounter execute->crash for
-     recovery coverage. Requires separating "scheduled for execution" from "included in checkpoint".
+# iteration 2 — non-determinism, then narrowed to shared log file
+- OBSERVATION: seed 1782341427004 forks at seed-search concurrency 12 but PASSES at concurrency 1
+  (2x), same --package binary and env. => the fork is concurrency/timing-triggered (a race), i.e.
+  real (non-simulated) state leaking across concurrent test PROCESSES.
+- USER HYPOTHESIS (most likely): concurrent test runs reuse the SAME panic-log file, so one test's
+  crashed digests leak into another -> non-deterministic is_crashed -> the is_crashed-keyed
+  checkpoint-content decisions diverge -> fork. (Single-threaded file IO itself is not
+  non-deterministic.)
+- EXPERIMENT: added eprintln logging of the panic-log path on read (load_crashed_transactions).
+- RESULT: panic-log paths are UNIQUE per test process (each .tmp dir maps to exactly one seed log).
+  Reads are consistent with writes (each validator writes its poison tx and reads back exactly that
+  set). Shared/inconsistent log file => RULED OUT.
 
-# iteration 2 — REFUTED settlement theory (user: settlement needs effects; poison tx crashes pre-exec)
-- maybe_crash fires at authority.rs:1503 BEFORE execution, so FsuFdYv produces NO effects and
-  cannot be in any settlement/checkpoint. Settlement theory is wrong.
-- EXPERIMENT 2: added `info!("CLAUDE: write_checkpoint seq=.. contents_digest=.. txs=[(tx,effects)]")`
-  at checkpoints/mod.rs write_checkpoint. Reproduced; dumped both cp210 builds.
-- RESULT (decisive): cp210 MEMBERSHIP differs by one transaction:
-    pre-crash  (5VGSLuf/HE4HZ2Vd): [7RPEEF1M (eff 3DqEToJS), 3WsLrYB7 (eff JCSRKDrp)]
-    post-crash (6FWarw7/G7KdDfKw): [6YPVs6yW (eff CCMb1D7F), 3WsLrYB7 (eff JCSRKDrp)]
-  tx2 (3WsLrYB7) identical; tx1 is a DIFFERENT user tx (7RPEEF1M -> 6YPVs6yW).
-- All three (FsuFdYv, 7RPEEF1M, 6YPVs6yW) are address-balance WITHDRAWAL user txs.
+# iteration 3 — deterministic repro found (NEW deterministic repro)
+- OBSERVATION: with a single consistent --package binary, seed 1782341427002 FAILS deterministically
+  (both concurrency 1 and 12) with `notify_read.rs:212 debug_fatal "checkpoint builder is stuck"`.
+  The earlier "004 passes@1 / fails@12" was a STALE-BINARY artifact (should_poison detour + rebuilds
+  in between). So the failure IS deterministic given a consistent binary; no real non-determinism.
+- REPRO: seed-search --package --num-seeds 1 --seed-start 1782341427001 (=> seed ...002).
 
-# iteration 3 — ROOT CAUSE (revised)
-- Dropping the poison withdrawal FsuFdYv changes WHICH competing withdrawal is admitted into
-  checkpoint 210: pre-crash FsuFdYv is scheduled and 7RPEEF1M is included; post-crash FsuFdYv is
-  dropped at schedulables formation and 6YPVs6yW is included instead. The poison tx's participation
-  in the address-funds withdraw scheduler (a SCHEDULING-TIME side effect, like owned-object locks)
-  changes the admission of other withdrawals -> the locally-persisted cp210 cannot be reproduced
-  after recovery -> self-conflict fatal.
-- This is the SAME structural class as the original bug: the poison tx has scheduling-time side
-  effects on neighbors. The committed fix preserves owned-object LOCKS but NOT address-funds
-  scheduler state, so this manifestation survives. There are likely yet more scheduling-time side
-  effects (versions, congestion) that the "preserve each side effect" approach must cover.
-- IMPLICATION for fix: rather than preserving every individual scheduling side effect, make the
-  crash fire at the SAME pipeline stage as the drop (before the tx participates in scheduling), so
-  the poison tx never influences a built checkpoint in EITHER timeline.
+# iteration 4 — builder stuck on a shared-version dependent of the dropped tx
+- OBSERVATION (added eprintln of stuck keys at notify_read:212): builder stuck on 8Lkmq + 4dAn1
+  (NOT the poison tx). Poison tx = FNBp9xzG.
+- OBSERVATION (added eprintln of assigned_versions): FNBp9xzG is assigned shared object 0xdf3d:
+  read v5, WRITE v11 (it advances the version). 8Lkmq is (hypothesised) assigned to read 0xdf3d@11,
+  which FNBp9xzG never writes (dropped) => 8Lkmq cannot execute => builder stuck.
+- OBSERVATION (added eprintln of crashed_set size): crashed set IS populated (size 1) in some
+  version-assign calls on recovery — so the epoch-store plumbing works. BUT FNBp9xzG's assignment is
+  IDENTICAL (0xdf3d read5 write11, NOT CANCELLED_READ = u64::MAX+1) in both size=0 AND size=1 calls.
+  => is_crashed_transaction(FNBp9xzG) returns FALSE even when crashed_set_size==1.
+- HYPOTHESIS: the crashed set present at version-assignment time does NOT actually contain FNBp9xzG
+  (its one element is a different digest, or a representation mismatch), so the is_crashed-keyed
+  exemption never matches the poison tx.
+- EXPERIMENT: log the crashed set CONTENTS (not just size) at version assignment; compare to the
+  poison tx digest FNBp9xzG. Run repro (seed ...002).

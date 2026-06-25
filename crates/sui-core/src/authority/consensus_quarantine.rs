@@ -95,11 +95,6 @@ pub(crate) struct ConsensusCommitOutput {
     // Owned object locks acquired post-consensus.
     owned_object_locks: HashMap<ObjectRef, LockDetails>,
 
-    // Owned object locks released because their transaction was dropped without executing (e.g. a
-    // crash-recovered poison-pill transaction). These are deleted from the lock table so the inputs
-    // become usable again for the rest of the epoch.
-    removed_owned_object_locks: Vec<ObjectRef>,
-
     // True when the checkpoint queue had no pending roots after this commit's flush.
     // Used by quarantine to determine safe commit boundaries on restart.
     checkpoint_queue_drained: bool,
@@ -270,10 +265,6 @@ impl ConsensusCommitOutput {
         self.owned_object_locks = locks;
     }
 
-    pub fn remove_owned_object_locks(&mut self, obj_refs: impl IntoIterator<Item = ObjectRef>) {
-        self.removed_owned_object_locks.extend(obj_refs);
-    }
-
     pub fn write_to_batch(
         self,
         epoch_store: &AuthorityPerEpochStore,
@@ -319,15 +310,6 @@ impl ConsensusCommitOutput {
                 self.owned_object_locks
                     .into_iter()
                     .map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
-            )?;
-        }
-
-        // Deletes ordered after inserts in the batch, so a lock both acquired and released in the
-        // same commit is correctly removed.
-        if !self.removed_owned_object_locks.is_empty() {
-            batch.delete_batch(
-                &tables.owned_object_locked_transactions,
-                &self.removed_owned_object_locks,
             )?;
         }
 
@@ -790,11 +772,6 @@ impl ConsensusOutputQuarantine {
     fn insert_owned_object_locks(&mut self, output: &ConsensusCommitOutput) {
         for (obj_ref, lock) in &output.owned_object_locks {
             self.owned_object_locks.insert(*obj_ref, *lock);
-        }
-        // Released locks are dropped from the in-memory map immediately so a later commit still in
-        // the quarantine window does not observe a stale lock. The DB row is deleted on flush.
-        for obj_ref in &output.removed_owned_object_locks {
-            self.owned_object_locks.remove(obj_ref);
         }
     }
 
