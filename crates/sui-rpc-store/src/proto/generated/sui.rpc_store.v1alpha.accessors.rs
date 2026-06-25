@@ -222,6 +222,18 @@ mod _accessor_impls {
                 start_checkpoint: None,
                 end_checkpoint: None,
                 system_state_bcs: None,
+                tx_hi: None,
+                safe_mode: None,
+                total_stake: None,
+                storage_fund_balance: None,
+                storage_fund_reinvestment: None,
+                storage_charge: None,
+                storage_rebate: None,
+                stake_subsidy_amount: None,
+                total_gas_fees: None,
+                total_stake_rewards_distributed: None,
+                leftover_storage_fund_inflow: None,
+                epoch_commitments: None,
             }
         }
         #[doc(hidden)]
@@ -378,6 +390,267 @@ mod _accessor_impls {
             field: T,
         ) -> Self {
             self.set_system_state_bcs(field.into());
+            self
+        }
+        ///If `tx_hi` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn tx_hi_opt_mut(&mut self) -> Option<&mut u64> {
+            self.tx_hi.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `tx_hi`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn tx_hi_mut(&mut self) -> &mut u64 {
+            self.tx_hi.get_or_insert_default()
+        }
+        ///If `tx_hi` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn tx_hi_opt(&self) -> Option<u64> {
+            self.tx_hi.as_ref().map(|field| *field)
+        }
+        ///Sets `tx_hi` with the provided value.
+        pub fn set_tx_hi(&mut self, field: u64) {
+            self.tx_hi = Some(field);
+        }
+        ///Sets `tx_hi` with the provided value.
+        pub fn with_tx_hi(mut self, field: u64) -> Self {
+            self.set_tx_hi(field);
+            self
+        }
+        ///If `safe_mode` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn safe_mode_opt_mut(&mut self) -> Option<&mut bool> {
+            self.safe_mode.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `safe_mode`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn safe_mode_mut(&mut self) -> &mut bool {
+            self.safe_mode.get_or_insert_default()
+        }
+        ///If `safe_mode` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn safe_mode_opt(&self) -> Option<bool> {
+            self.safe_mode.as_ref().map(|field| *field)
+        }
+        ///Sets `safe_mode` with the provided value.
+        pub fn set_safe_mode(&mut self, field: bool) {
+            self.safe_mode = Some(field);
+        }
+        ///Sets `safe_mode` with the provided value.
+        pub fn with_safe_mode(mut self, field: bool) -> Self {
+            self.set_safe_mode(field);
+            self
+        }
+        ///If `total_stake` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn total_stake_opt_mut(&mut self) -> Option<&mut u64> {
+            self.total_stake.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `total_stake`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn total_stake_mut(&mut self) -> &mut u64 {
+            self.total_stake.get_or_insert_default()
+        }
+        ///If `total_stake` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn total_stake_opt(&self) -> Option<u64> {
+            self.total_stake.as_ref().map(|field| *field)
+        }
+        ///Sets `total_stake` with the provided value.
+        pub fn set_total_stake(&mut self, field: u64) {
+            self.total_stake = Some(field);
+        }
+        ///Sets `total_stake` with the provided value.
+        pub fn with_total_stake(mut self, field: u64) -> Self {
+            self.set_total_stake(field);
+            self
+        }
+        ///If `storage_fund_balance` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn storage_fund_balance_opt_mut(&mut self) -> Option<&mut u64> {
+            self.storage_fund_balance.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `storage_fund_balance`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn storage_fund_balance_mut(&mut self) -> &mut u64 {
+            self.storage_fund_balance.get_or_insert_default()
+        }
+        ///If `storage_fund_balance` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn storage_fund_balance_opt(&self) -> Option<u64> {
+            self.storage_fund_balance.as_ref().map(|field| *field)
+        }
+        ///Sets `storage_fund_balance` with the provided value.
+        pub fn set_storage_fund_balance(&mut self, field: u64) {
+            self.storage_fund_balance = Some(field);
+        }
+        ///Sets `storage_fund_balance` with the provided value.
+        pub fn with_storage_fund_balance(mut self, field: u64) -> Self {
+            self.set_storage_fund_balance(field);
+            self
+        }
+        ///If `storage_fund_reinvestment` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn storage_fund_reinvestment_opt_mut(&mut self) -> Option<&mut u64> {
+            self.storage_fund_reinvestment.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `storage_fund_reinvestment`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn storage_fund_reinvestment_mut(&mut self) -> &mut u64 {
+            self.storage_fund_reinvestment.get_or_insert_default()
+        }
+        ///If `storage_fund_reinvestment` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn storage_fund_reinvestment_opt(&self) -> Option<u64> {
+            self.storage_fund_reinvestment.as_ref().map(|field| *field)
+        }
+        ///Sets `storage_fund_reinvestment` with the provided value.
+        pub fn set_storage_fund_reinvestment(&mut self, field: u64) {
+            self.storage_fund_reinvestment = Some(field);
+        }
+        ///Sets `storage_fund_reinvestment` with the provided value.
+        pub fn with_storage_fund_reinvestment(mut self, field: u64) -> Self {
+            self.set_storage_fund_reinvestment(field);
+            self
+        }
+        ///If `storage_charge` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn storage_charge_opt_mut(&mut self) -> Option<&mut u64> {
+            self.storage_charge.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `storage_charge`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn storage_charge_mut(&mut self) -> &mut u64 {
+            self.storage_charge.get_or_insert_default()
+        }
+        ///If `storage_charge` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn storage_charge_opt(&self) -> Option<u64> {
+            self.storage_charge.as_ref().map(|field| *field)
+        }
+        ///Sets `storage_charge` with the provided value.
+        pub fn set_storage_charge(&mut self, field: u64) {
+            self.storage_charge = Some(field);
+        }
+        ///Sets `storage_charge` with the provided value.
+        pub fn with_storage_charge(mut self, field: u64) -> Self {
+            self.set_storage_charge(field);
+            self
+        }
+        ///If `storage_rebate` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn storage_rebate_opt_mut(&mut self) -> Option<&mut u64> {
+            self.storage_rebate.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `storage_rebate`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn storage_rebate_mut(&mut self) -> &mut u64 {
+            self.storage_rebate.get_or_insert_default()
+        }
+        ///If `storage_rebate` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn storage_rebate_opt(&self) -> Option<u64> {
+            self.storage_rebate.as_ref().map(|field| *field)
+        }
+        ///Sets `storage_rebate` with the provided value.
+        pub fn set_storage_rebate(&mut self, field: u64) {
+            self.storage_rebate = Some(field);
+        }
+        ///Sets `storage_rebate` with the provided value.
+        pub fn with_storage_rebate(mut self, field: u64) -> Self {
+            self.set_storage_rebate(field);
+            self
+        }
+        ///If `stake_subsidy_amount` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn stake_subsidy_amount_opt_mut(&mut self) -> Option<&mut u64> {
+            self.stake_subsidy_amount.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `stake_subsidy_amount`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn stake_subsidy_amount_mut(&mut self) -> &mut u64 {
+            self.stake_subsidy_amount.get_or_insert_default()
+        }
+        ///If `stake_subsidy_amount` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn stake_subsidy_amount_opt(&self) -> Option<u64> {
+            self.stake_subsidy_amount.as_ref().map(|field| *field)
+        }
+        ///Sets `stake_subsidy_amount` with the provided value.
+        pub fn set_stake_subsidy_amount(&mut self, field: u64) {
+            self.stake_subsidy_amount = Some(field);
+        }
+        ///Sets `stake_subsidy_amount` with the provided value.
+        pub fn with_stake_subsidy_amount(mut self, field: u64) -> Self {
+            self.set_stake_subsidy_amount(field);
+            self
+        }
+        ///If `total_gas_fees` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn total_gas_fees_opt_mut(&mut self) -> Option<&mut u64> {
+            self.total_gas_fees.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `total_gas_fees`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn total_gas_fees_mut(&mut self) -> &mut u64 {
+            self.total_gas_fees.get_or_insert_default()
+        }
+        ///If `total_gas_fees` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn total_gas_fees_opt(&self) -> Option<u64> {
+            self.total_gas_fees.as_ref().map(|field| *field)
+        }
+        ///Sets `total_gas_fees` with the provided value.
+        pub fn set_total_gas_fees(&mut self, field: u64) {
+            self.total_gas_fees = Some(field);
+        }
+        ///Sets `total_gas_fees` with the provided value.
+        pub fn with_total_gas_fees(mut self, field: u64) -> Self {
+            self.set_total_gas_fees(field);
+            self
+        }
+        ///If `total_stake_rewards_distributed` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn total_stake_rewards_distributed_opt_mut(&mut self) -> Option<&mut u64> {
+            self.total_stake_rewards_distributed.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `total_stake_rewards_distributed`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn total_stake_rewards_distributed_mut(&mut self) -> &mut u64 {
+            self.total_stake_rewards_distributed.get_or_insert_default()
+        }
+        ///If `total_stake_rewards_distributed` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn total_stake_rewards_distributed_opt(&self) -> Option<u64> {
+            self.total_stake_rewards_distributed.as_ref().map(|field| *field)
+        }
+        ///Sets `total_stake_rewards_distributed` with the provided value.
+        pub fn set_total_stake_rewards_distributed(&mut self, field: u64) {
+            self.total_stake_rewards_distributed = Some(field);
+        }
+        ///Sets `total_stake_rewards_distributed` with the provided value.
+        pub fn with_total_stake_rewards_distributed(mut self, field: u64) -> Self {
+            self.set_total_stake_rewards_distributed(field);
+            self
+        }
+        ///If `leftover_storage_fund_inflow` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn leftover_storage_fund_inflow_opt_mut(&mut self) -> Option<&mut u64> {
+            self.leftover_storage_fund_inflow.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `leftover_storage_fund_inflow`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn leftover_storage_fund_inflow_mut(&mut self) -> &mut u64 {
+            self.leftover_storage_fund_inflow.get_or_insert_default()
+        }
+        ///If `leftover_storage_fund_inflow` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn leftover_storage_fund_inflow_opt(&self) -> Option<u64> {
+            self.leftover_storage_fund_inflow.as_ref().map(|field| *field)
+        }
+        ///Sets `leftover_storage_fund_inflow` with the provided value.
+        pub fn set_leftover_storage_fund_inflow(&mut self, field: u64) {
+            self.leftover_storage_fund_inflow = Some(field);
+        }
+        ///Sets `leftover_storage_fund_inflow` with the provided value.
+        pub fn with_leftover_storage_fund_inflow(mut self, field: u64) -> Self {
+            self.set_leftover_storage_fund_inflow(field);
+            self
+        }
+        ///If `epoch_commitments` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn epoch_commitments_opt(&self) -> Option<&[u8]> {
+            self.epoch_commitments.as_ref().map(|field| field as _)
+        }
+        ///Sets `epoch_commitments` with the provided value.
+        pub fn set_epoch_commitments<T: Into<::prost::bytes::Bytes>>(
+            &mut self,
+            field: T,
+        ) {
+            self.epoch_commitments = Some(field.into().into());
+        }
+        ///Sets `epoch_commitments` with the provided value.
+        pub fn with_epoch_commitments<T: Into<::prost::bytes::Bytes>>(
+            mut self,
+            field: T,
+        ) -> Self {
+            self.set_epoch_commitments(field.into());
             self
         }
     }
