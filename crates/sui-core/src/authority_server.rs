@@ -17,6 +17,7 @@ use prometheus::{
     register_int_counter_with_registry,
 };
 use std::{
+    collections::HashSet,
     io,
     net::{IpAddr, SocketAddr},
     sync::Arc,
@@ -680,6 +681,9 @@ impl ValidatorService {
         let mut total_size_bytes = 0;
         // Traffic control spam weight to use for the transaction.
         let mut spam_weight = Weight::zero();
+        // Transaction digests seen in this soft bundle, used to reject bundles that repeat a
+        // transaction. No legitimate client constructs such a bundle.
+        let mut soft_bundle_digests = HashSet::new();
 
         let req_type = if is_ping_request {
             "ping"
@@ -712,6 +716,21 @@ impl ValidatorService {
 
             // Ok to fail the request when any transaction is invalid.
             let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
+            let tx_digest = *transaction.digest();
+
+            // Soft bundles must not repeat a transaction. Fail the whole request if they do.
+            if is_soft_bundle_request {
+                fp_ensure!(
+                    soft_bundle_digests.insert(tx_digest),
+                    SuiErrorKind::UserInputError {
+                        error: UserInputError::RepeatedTransactionInSoftBundle {
+                            digest: tx_digest
+                        }
+                    }
+                    .into()
+                );
+            }
+
             let is_gasless = transaction
                 .data()
                 .transaction_data()
