@@ -3,6 +3,8 @@
 
 use crate::object_runtime::{fingerprint::ObjectFingerprint, get_all_uids};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::language_storage::TypeTag;
+use move_core_types::u256::U256;
 use move_core_types::{annotated_value as A, runtime_value as R, vm_status::StatusCode};
 use move_vm_runtime::execution::values::{GlobalValue, StructRef, Value};
 use std::{
@@ -11,13 +13,13 @@ use std::{
 };
 use sui_protocol_config::{LimitThresholdCrossed, ProtocolConfig, check_limit_by_meter};
 use sui_types::{
-    base_types::{MoveObjectType, ObjectID, SequenceNumber},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     committee::EpochId,
-    error::VMMemoryLimitExceededSubStatusCode,
+    error::{SuiResult, VMMemoryLimitExceededSubStatusCode},
     execution::DynamicallyLoadedObjectMetadata,
     metrics::ExecutionMetrics,
     object::{Data, MoveObject, Object, Owner},
-    storage::ChildObjectResolver,
+    storage::{ChildObjectResolver, ObjectFundsSufficiency},
 };
 
 pub(super) struct ChildObject {
@@ -433,6 +435,18 @@ impl<'a> ChildObjectStore<'a> {
             config_setting_cache: BTreeMap::new(),
             is_metered,
         }
+    }
+
+    pub(super) fn check_object_funds_sufficiency(
+        &self,
+        owner: SuiAddress,
+        type_: &TypeTag,
+        amount: U256,
+        deposited: u128,
+    ) -> SuiResult<ObjectFundsSufficiency> {
+        self.inner
+            .resolver
+            .check_object_funds_sufficiency(owner, type_, amount, deposited)
     }
 
     pub(super) fn receive_object(

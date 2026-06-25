@@ -150,3 +150,16 @@ pub fn withdraw_from_accumulator_address(
     let withdrawn = Value::struct_(Struct::pack(vec![Value::u64(amount)]));
     Ok(NativeResult::ok(context.gas_used(), smallvec![withdrawn]))
 }
+
+pub fn check_sufficient_object_funds(
+    context: &mut NativeContext,
+    _ty_args: Vec<Type>,
+    _args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    // The in-execution object-funds check is gated behind a protocol flag that only activates on a
+    // later execution version, so on this (earlier) execution version the native is never invoked
+    // with the feature enabled — the framework's `withdraw_from_object` aborts earlier when object
+    // funds withdraws are disabled. This exists only so the funds_accumulator module links; it is a
+    // no-op here.
+    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
+}
