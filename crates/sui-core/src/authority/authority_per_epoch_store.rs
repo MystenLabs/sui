@@ -18,7 +18,6 @@ use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId, OIDCProvider};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{Either, join_all};
 use itertools::Itertools;
-use moka::sync::SegmentedCache as MokaCache;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::assert_reachable;
@@ -90,6 +89,7 @@ use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::consensus_tx_status_cache::{ConsensusTxStatus, ConsensusTxStatusCache};
 use super::epoch_start_configuration::EpochStartConfigTrait;
 use super::execution_time_estimator::{ConsensusObservations, ExecutionTimeEstimator};
+use super::finalized_transactions_cache::FinalizedTransactionsCache;
 use super::shared_object_congestion_tracker::{
     CongestionPerObjectDebt, SharedObjectCongestionTracker,
 };
@@ -434,14 +434,7 @@ pub struct AuthorityPerEpochStore {
     pub(crate) submitted_transaction_cache: SubmittedTransactionCache,
 
     /// A cache which tracks recently finalized transactions.
-    pub(crate) finalized_transactions_cache: MokaCache<TransactionDigest, ()>,
-    /// Inserts into `finalized_transactions_cache` are offloaded off the (single-threaded)
-    /// consensus commit handler via this channel; a dedicated thread drains it. The cache is
-    /// advisory (`is_recently_finalized` falls back to the executed-tx check), so a full
-    /// channel may drop a digest harmlessly. Absent under msim: the simulator doesn't intercept
-    /// `std::thread::spawn`, so there we insert inline instead (perf is irrelevant in simulation).
-    #[cfg(not(msim))]
-    finalized_transactions_tx: std::sync::mpsc::SyncSender<TransactionDigest>,
+    pub(crate) finalized_transactions_cache: FinalizedTransactionsCache,
 
     /// The node's role for this epoch, derived from committee membership and
     /// the configured sync mode. Computed once at construction.
@@ -1172,32 +1165,8 @@ impl AuthorityPerEpochStore {
         let submitted_transaction_cache =
             SubmittedTransactionCache::new(None, submitted_transaction_cache_metrics);
 
-        let finalized_transactions_cache = MokaCache::builder(8)
-            .max_capacity(randomize_cache_capacity_in_tests(100_000))
-            .eviction_policy(moka::policy::EvictionPolicy::lru())
-            .build();
-        // Drain `cache_recently_finalized_transaction` inserts on a dedicated thread: moka's
-        // per-insert maintenance was ~15% of the single-threaded consensus handler at high TPS.
-        // The thread exits when the epoch store (sole sender holder) is dropped.
-        //
-        // Skipped under msim: it doesn't intercept `std::thread::spawn` (the thread would run in
-        // real time outside the simulator), and the perf win is irrelevant in simulation, so
-        // `cache_recently_finalized_transaction` inserts inline there instead.
-        #[cfg(not(msim))]
-        let finalized_transactions_tx = {
-            let (finalized_transactions_tx, finalized_transactions_rx) =
-                std::sync::mpsc::sync_channel::<TransactionDigest>(1 << 16);
-            let cache = finalized_transactions_cache.clone();
-            std::thread::Builder::new()
-                .name("finalized-tx-cache".into())
-                .spawn(move || {
-                    while let Ok(tx_digest) = finalized_transactions_rx.recv() {
-                        cache.insert(tx_digest, ());
-                    }
-                })
-                .expect("failed to spawn finalized-tx-cache thread");
-            finalized_transactions_tx
-        };
+        let finalized_transactions_cache =
+            FinalizedTransactionsCache::new(randomize_cache_capacity_in_tests(100_000));
 
         let s = Arc::new(Self {
             name,
@@ -1242,8 +1211,6 @@ impl AuthorityPerEpochStore {
             tx_reject_reason_cache,
             submitted_transaction_cache,
             finalized_transactions_cache,
-            #[cfg(not(msim))]
-            finalized_transactions_tx,
             node_role: NodeRole::from_committee(&committee, &name, fullnode_sync_mode),
         });
 
@@ -3545,19 +3512,14 @@ impl AuthorityPerEpochStore {
 
     /// Caches recent finalized transactions, to avoid revoting them.
     pub(crate) fn cache_recently_finalized_transaction(&self, tx_digest: TransactionDigest) {
-        // Non-blocking handoff to the drainer thread; best-effort (drop if the channel is full).
-        #[cfg(not(msim))]
-        let _ = self.finalized_transactions_tx.try_send(tx_digest);
-        // msim has no drainer thread (see `new`); insert inline (perf is irrelevant in simulation).
-        #[cfg(msim)]
-        self.finalized_transactions_cache.insert(tx_digest, ());
+        self.finalized_transactions_cache.insert(tx_digest);
     }
 
     /// If true, transaction is recently finalized and should not be voted on.
     /// If false, the transaction may never be finalized, or has been finalized
     /// but the info has been evicted from the cache.
     pub(crate) fn is_recently_finalized(&self, tx_digest: &TransactionDigest) -> bool {
-        self.finalized_transactions_cache.contains_key(tx_digest)
+        self.finalized_transactions_cache.contains(tx_digest)
     }
 
     /// Only used by admin API
