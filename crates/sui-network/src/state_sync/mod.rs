@@ -1616,8 +1616,11 @@ async fn sync_checkpoint_contents_from_archive_iteration<S>(
             warn!("{} can't be used as an archival fallback", ingestion_url);
             return;
         }
-        let obj_store =
-            build_object_store(ingestion_url, archive_config.remote_store_options.clone());
+        let obj_store = build_object_store(
+            ingestion_url,
+            archive_config.remote_store_options.clone(),
+            archive_config.remote_store_headers.clone(),
+        );
         let mut checkpoint_stream = futures::stream::iter(start..=end)
             .map(|seq| {
                 let obj_store = obj_store.clone();
