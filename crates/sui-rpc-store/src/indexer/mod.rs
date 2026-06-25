@@ -41,7 +41,6 @@ pub mod tx_seq_by_digest;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::btree_map::Entry;
-use std::num::NonZero;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -309,11 +308,8 @@ impl Indexer {
             .refresh_pruning_atomics()
             .context("Failed to refresh pruning watermarks")?;
 
-        let stride = NonZero::new(consistency_config.stride)
-            .context("ConsistencyConfig::stride must be non-zero")?;
         let sync = Synchronizer::new(
             store.db().clone(),
-            stride,
             consistency_config.buffer_size,
             indexer_args.first_checkpoint,
         );
