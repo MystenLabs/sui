@@ -110,11 +110,15 @@ export interface IDebugInfoFunction {
      */
     localsInfo: ILocalInfo[],
     /**
-     * Location of function definition start.
+     * Location of the function name in the definition.
+     */
+    functionNameLoc: ILoc,
+    /**
+     * Location of function range start.
      */
     startLoc: ILoc,
     /**
-     * Location of function definition start.
+     * Location of function range end.
      */
     endLoc: ILoc
 }
@@ -300,6 +304,7 @@ function readDebugInfo(
         let nameEnd = funEntry.definition_location.end;
         const nameBytes = fileInfo.content.slice(nameStart, nameEnd);
         const funName = Buffer.from(nameBytes).toString('utf8');
+        const functionNameLoc = byteOffsetToLineColumn(fileInfo, funEntry.definition_location.start);
         const pcLocs: IFileLoc[] = [];
         let prevPC = 0;
         // we need to initialize `prevFileLoc` to make the compiler happy but it's never
@@ -359,10 +364,10 @@ function readDebugInfo(
             }
             localsNames.push({ name: localsName, internalName: local[0] });
         }
-        // compute start and end of function definition
+        // compute start and end of the full function range
         const startLoc = byteOffsetToLineColumn(fileInfo, funEntry.location.start);
         const endLoc = byteOffsetToLineColumn(fileInfo, funEntry.location.end);
-        functions.set(funName, { pcLocs, localsInfo: localsNames, startLoc, endLoc });
+        functions.set(funName, { pcLocs, localsInfo: localsNames, functionNameLoc, startLoc, endLoc });
     }
     return {
         filePath: fileInfo.path,

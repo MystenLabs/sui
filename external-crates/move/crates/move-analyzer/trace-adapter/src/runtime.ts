@@ -9,6 +9,7 @@ import {
     createFileInfo,
     IFileInfo,
     ILocalInfo,
+    ILoc,
     IDebugInfo,
     readAllDebugInfos,
     computeOptimizedLines,
@@ -131,7 +132,7 @@ interface IRuntimeVariable {
  * Describes a stack frame in the runtime representing a Move function
  * call and its current state during trace viewing session.
  */
-interface IMoveCallStackFrame {
+export interface IMoveCallStackFrame {
     /**
      *  Frame identifier.
      */
@@ -164,6 +165,14 @@ interface IMoveCallStackFrame {
      * Current line in the disassembled bytecode file corresponding to currently viewed instruction.
      */
     bcodeLine?: number; // 1-based
+    /**
+     * Function name location for display before the first source instruction is processed.
+     */
+    srcFunctionNameLoc?: ILoc;
+    /**
+     * Function name location for display before the first bytecode instruction is processed.
+     */
+    bcodeFunctionNameLoc?: ILoc;
     /**
      *  Local variable types by variable frame index.
      */
@@ -367,6 +376,19 @@ export type ExecutionResult =
     | { kind: ExecutionResultKind.TraceEnd }
     | { kind: ExecutionResultKind.Breakpoint }
     | { kind: ExecutionResultKind.Exception, msg: string };
+
+/**
+ * Returns the line to display for a Move stack frame.
+ */
+export function moveStackFrameDisplayLine(frame: IMoveCallStackFrame): number {
+    // Use actual frame line unless it's set to 0 which happens at frame
+    // creation time. Then try using function name location, which creates
+    // a much better user experience.
+    if (frame.disassemblyModeTriggered) {
+        return frame.bcodeLine || frame.bcodeFunctionNameLoc?.line || 0;
+    }
+    return frame.srcLine || frame.srcFunctionNameLoc?.line || 0;
+}
 
 /**
  * The runtime for viewing traces.
@@ -608,6 +630,8 @@ export class Runtime extends EventEmitter {
                     currentEvent.bcodeFileHash,
                     currentEvent.localsTypes,
                     currentEvent.localsNames,
+                    currentEvent.srcFunctionNameLoc,
+                    currentEvent.bcodeFunctionNameLoc,
                     currentEvent.optimizedSrcLines,
                     currentEvent.optimizedBcodeLines
                 );
@@ -865,6 +889,8 @@ export class Runtime extends EventEmitter {
                         currentEvent.bcodeFileHash,
                         currentEvent.localsTypes,
                         currentEvent.localsNames,
+                        currentEvent.srcFunctionNameLoc,
+                        currentEvent.bcodeFunctionNameLoc,
                         currentEvent.optimizedSrcLines,
                         currentEvent.optimizedBcodeLines
                     );
@@ -1446,6 +1472,8 @@ export class Runtime extends EventEmitter {
         bcodeFileHash: undefined | string,
         localsTypes: string[],
         localsInfo: ILocalInfo[],
+        srcFunctionNameLoc: undefined | ILoc,
+        bcodeFunctionNameLoc: undefined | ILoc,
         optimizedSrcLines: number[],
         optimizedBcodeLines: undefined | number[]
     ): IMoveCallStackFrame {
@@ -1473,9 +1501,12 @@ export class Runtime extends EventEmitter {
             bcodeFilePath,
             srcFileHash,
             bcodeFileHash,
-            // lines will be updated when next event (Instruction) is processed
+            // Keep execution lines unset until the first instruction is processed; otherwise
+            // same-line detection could skip the first instruction when it shares the function line.
             srcLine: 0,
             bcodeLine: 0,
+            srcFunctionNameLoc,
+            bcodeFunctionNameLoc,
             localsTypes,
             localsInfo,
             locals,
@@ -1589,14 +1620,13 @@ export class Runtime extends EventEmitter {
             const fileName = frame.disassemblyModeTriggered ?
                 path.basename(frame.bcodeFilePath!) :
                 path.basename(frame.srcFilePath);
-            const line = frame.disassemblyModeTriggered ? frame.bcodeLine : frame.srcLine;
             res += tabs + this.singleTab
                 + 'function: '
                 + frame.name
                 + ' ('
                 + fileName
                 + ':'
-                + line
+                + moveStackFrameDisplayLine(frame)
                 + ')\n';
             for (let i = 0; i < frame.locals.length; i++) {
                 res += tabs + this.singleTab + this.singleTab + 'scope ' + i + ' :\n';

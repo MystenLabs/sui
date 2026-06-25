@@ -335,6 +335,8 @@ export type TraceEvent =
         localsTypes: string[],
         localsNames: ILocalInfo[],
         paramValues: RuntimeValueType[]
+        srcFunctionNameLoc?: ILoc
+        bcodeFunctionNameLoc?: ILoc
         optimizedSrcLines: number[]
         optimizedBcodeLines?: number[]
         /**
@@ -1032,6 +1034,10 @@ function translateOpenFrame(
             localsTypes,
             localsNames: srcFunEntry.localsInfo,
             paramValues,
+            // Before the first instruction in this frame, display the function name
+            // rather than the function range start, which may be optimized away.
+            srcFunctionNameLoc: srcFunEntry.functionNameLoc,
+            bcodeFunctionNameLoc: bcodeFunEntry?.functionNameLoc,
             optimizedSrcLines,
             optimizedBcodeLines,
             forceDisassembly,
