@@ -1028,7 +1028,7 @@ See <code><a href="../sui/coin.md#sui_coin_create_regulated_currency_v2">create_
 ): <a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt; {
     <b>let</b> <a href="../sui/coin.md#sui_coin_DenyCap">DenyCap</a> { id } = cap;
     id.delete();
-    <b>let</b> ty = type_name::with_original_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = type_name::with_defining_ids&lt;T&gt;().into_string().into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.migrate_v1_to_v2(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx);
     <a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a> {
         id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
@@ -1940,7 +1940,7 @@ from interacting with the specified coin type as an input to a transaction.
     addr: <b>address</b>,
     _ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> `type` = type_name::into_string(type_name::get_with_original_ids&lt;T&gt;()).into_bytes();
+    <b>let</b> `type` = type_name::into_string(type_name::with_defining_ids&lt;T&gt;()).into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v1_add(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, `type`, addr)
 }
 </code></pre>
@@ -1972,7 +1972,7 @@ Aborts with <code>ENotFrozen</code> if the address is not already in the list.
     addr: <b>address</b>,
     _ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> `type` = type_name::into_string(type_name::get_with_original_ids&lt;T&gt;()).into_bytes();
+    <b>let</b> `type` = type_name::into_string(type_name::with_defining_ids&lt;T&gt;()).into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v1_remove(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, `type`, addr)
 }
 </code></pre>
@@ -1999,7 +1999,7 @@ return false if given a non-coin type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_contains">deny_list_contains</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &DenyList, addr: <b>address</b>): bool {
-    <b>let</b> name = type_name::get_with_original_ids&lt;T&gt;();
+    <b>let</b> name = type_name::with_defining_ids&lt;T&gt;();
     <b>if</b> (type_name::is_primitive(&name)) <b>return</b> <b>false</b>;
     <b>let</b> `type` = type_name::into_string(name).into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v1_contains(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, `type`, addr)

@@ -15589,6 +15589,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
+ "bytes",
  "clap",
  "diesel",
  "diesel-async",

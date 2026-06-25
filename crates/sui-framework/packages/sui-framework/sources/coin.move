@@ -302,7 +302,7 @@ public fun migrate_regulated_currency_to_v2<T>(
 ): DenyCapV2<T> {
     let DenyCap { id } = cap;
     id.delete();
-    let ty = type_name::with_original_ids<T>().into_string().into_bytes();
+    let ty = type_name::with_defining_ids<T>().into_string().into_bytes();
     deny_list.migrate_v1_to_v2(DENY_LIST_COIN_INDEX, ty, ctx);
     DenyCapV2 {
         id: object::new(ctx),
@@ -676,7 +676,7 @@ public fun deny_list_add<T>(
     addr: address,
     _ctx: &mut TxContext,
 ) {
-    let `type` = type_name::into_string(type_name::get_with_original_ids<T>()).into_bytes();
+    let `type` = type_name::into_string(type_name::with_defining_ids<T>()).into_bytes();
     deny_list.v1_add(DENY_LIST_COIN_INDEX, `type`, addr)
 }
 
@@ -693,7 +693,7 @@ public fun deny_list_remove<T>(
     addr: address,
     _ctx: &mut TxContext,
 ) {
-    let `type` = type_name::into_string(type_name::get_with_original_ids<T>()).into_bytes();
+    let `type` = type_name::into_string(type_name::with_defining_ids<T>()).into_bytes();
     deny_list.v1_remove(DENY_LIST_COIN_INDEX, `type`, addr)
 }
 
@@ -705,7 +705,7 @@ public fun deny_list_remove<T>(
     ),
 ]
 public fun deny_list_contains<T>(deny_list: &DenyList, addr: address): bool {
-    let name = type_name::get_with_original_ids<T>();
+    let name = type_name::with_defining_ids<T>();
     if (type_name::is_primitive(&name)) return false;
 
     let `type` = type_name::into_string(name).into_bytes();

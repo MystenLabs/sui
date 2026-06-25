@@ -336,6 +336,10 @@ pub async fn start_rpc(
         .ledger_grpc_reader(Some("graphql_ledger_grpc"), registry)
         .await?;
 
+    let alpha_ledger_grpc_reader = kv_args
+        .alpha_ledger_grpc_reader(Some("graphql_alpha_ledger_grpc"), registry)
+        .await?;
+
     let pg_reader =
         PgReader::new(Some("graphql_db"), database_url.clone(), db_args, registry).await?;
 
@@ -430,6 +434,10 @@ pub async fn start_rpc(
         .data(pg_loader)
         .data(kv_loader)
         .data(package_store);
+
+    if let Some(reader) = alpha_ledger_grpc_reader {
+        rpc = rpc.data(reader);
+    }
 
     if let Some(fullnode_client) = fullnode_client {
         rpc = rpc.data(fullnode_client);
