@@ -261,6 +261,7 @@ pub mod consensus_tx_status_cache;
 pub(crate) mod epoch_marker_key;
 pub mod epoch_start_configuration;
 pub mod execution_time_estimator;
+pub mod finalized_transactions_cache;
 pub mod shared_object_congestion_tracker;
 pub mod shared_object_version_manager;
 pub mod submitted_transaction_cache;
