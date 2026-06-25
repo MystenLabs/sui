@@ -27,7 +27,6 @@ use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
-use crate::consensus_adapter::BlockStatusReceiver;
 use crate::consensus_test_utils::make_consensus_adapter_for_test;
 use crate::mock_consensus::with_block_status;
 
@@ -44,8 +43,8 @@ struct TestContext {
 
 impl TestContext {
     async fn new() -> Self {
-        // Default mock consensus: transactions are executed and their blocks immediately
-        // sequenced. Extra responses cover tests that submit multiple transactions.
+        // Default: transactions execute, blocks immediately sequenced; extra responses cover
+        // tests that submit multiple transactions.
         Self::new_with_consensus(
             true,
             vec![
@@ -61,7 +60,7 @@ impl TestContext {
 
     async fn new_with_consensus(
         execute: bool,
-        block_status_receivers: Vec<BlockStatusReceiver>,
+        block_status_receivers: Vec<crate::consensus_adapter::BlockStatusReceiver>,
     ) -> Self {
         telemetry_subscribers::init_for_testing();
         let (sender, keypair) = get_account_key_pair();
@@ -142,16 +141,18 @@ async fn test_submit_transaction_success() {
 }
 
 #[tokio::test]
-async fn test_duplicate_submission_suppressed_while_in_block() {
-    // Hold the block status unresolved so the first submission's recently-in-block entry
-    // persists. `execute = false` so the duplicate reaches the recently-in-block check rather
-    // than being short-circuited by the executed-effects path.
-    let (status_tx, status_rx) = tokio::sync::oneshot::channel();
-    let test_context = TestContext::new_with_consensus(false, vec![status_rx]).await;
+async fn test_duplicate_submission_suppressed_within_window() {
+    // `execute = false` so the duplicate reaches the recent-submission check rather than being
+    // short-circuited by the executed-effects path.
+    let test_context = TestContext::new_with_consensus(
+        false,
+        vec![with_block_status(BlockStatus::Sequenced(BlockRef::MIN))],
+    )
+    .await;
 
     let transaction = test_context.build_test_transaction();
 
-    // First submission is accepted and lands in a (not-yet-committed) block.
+    // First submission is accepted.
     let first = test_context
         .client
         .submit_transaction(test_context.build_submit_request(transaction.clone()), None)
@@ -163,7 +164,7 @@ async fn test_duplicate_submission_suppressed_while_in_block() {
         first.results[0]
     );
 
-    // Resubmitting the same transaction while it is still in a block is suppressed.
+    // Resubmitting the same transaction within the window is suppressed.
     let second = test_context
         .client
         .submit_transaction(test_context.build_submit_request(transaction), None)
@@ -172,16 +173,13 @@ async fn test_duplicate_submission_suppressed_while_in_block() {
     match &second.results[0] {
         SubmitTxResult::Rejected { error } => match error.clone().into_inner() {
             SuiErrorKind::TransactionProcessing { status, .. } => assert!(
-                status.contains("recently included in a consensus block"),
+                status.contains("recently submitted"),
                 "unexpected rejection status: {status}"
             ),
             other => panic!("unexpected rejection error kind: {other:?}"),
         },
         other => panic!("expected duplicate submission to be rejected, got {other:?}"),
     }
-
-    // Let the background submission task finish cleanly.
-    let _ = status_tx.send(BlockStatus::Sequenced(BlockRef::MIN));
 }
 
 #[tokio::test]
@@ -427,7 +425,23 @@ async fn test_submit_batched_transactions() {
     let test_context = TestContext::new().await;
 
     let tx1 = test_context.build_test_transaction();
-    let tx2 = test_context.build_test_transaction();
+
+    // Build a distinct, non-conflicting second transaction from its own gas object so both are
+    // submitted (identical transactions would be deduped as duplicate resubmissions).
+    let gas_object2 = Object::with_owner_for_testing(test_context.sender);
+    let gas_object_ref2 = gas_object2.compute_object_reference();
+    test_context.state.insert_genesis_object(gas_object2);
+    let tx_data2 = TestTransactionBuilder::new(
+        test_context.sender,
+        gas_object_ref2,
+        test_context
+            .state
+            .reference_gas_price_for_testing()
+            .unwrap(),
+    )
+    .transfer_sui(None, test_context.sender)
+    .build();
+    let tx2 = to_sender_signed_transaction(tx_data2, &test_context.keypair);
 
     // Build request with batched transactions.
     let request = RawSubmitTxRequest {

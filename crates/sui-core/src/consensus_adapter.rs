@@ -13,7 +13,6 @@ use futures::FutureExt;
 use futures::StreamExt;
 use futures::future::{self, Either, select};
 use futures::stream::FuturesUnordered;
-use moka::sync::Cache;
 use mysten_common::debug_fatal;
 use mysten_metrics::{
     GaugeGuard, InflightGuardFutureExt, LATENCY_SEC_BUCKETS, spawn_monitored_task,
@@ -31,7 +30,7 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
-use sui_types::base_types::{AuthorityName, TransactionDigest};
+use sui_types::base_types::AuthorityName;
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::fp_ensure;
 use sui_types::messages_consensus::ConsensusPosition;
@@ -66,8 +65,6 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_in_flight_semaphore_wait: IntGauge,
     pub sequencing_in_flight_submissions: IntGauge,
     pub sequencing_best_effort_timeout: IntCounterVec,
-    pub recently_in_block_cache_size: IntGauge,
-    pub recently_in_block_resubmission_interval: Histogram,
     pub consensus_latency: Histogram,
     pub num_rejected_cert_in_epoch_boundary: IntCounter,
 }
@@ -139,19 +136,6 @@ impl ConsensusAdapterMetrics {
             sequencing_in_flight_submissions: register_int_gauge_with_registry!(
                 "sequencing_in_flight_submissions",
                 "Number of transactions submitted to local consensus instance and not yet sequenced",
-                registry,
-            )
-                .unwrap(),
-            recently_in_block_cache_size: register_int_gauge_with_registry!(
-                "consensus_adapter_recently_in_block_cache_size",
-                "Approximate number of transaction digests held in the recently-in-block duplicate-suppression cache",
-                registry,
-            )
-                .unwrap(),
-            recently_in_block_resubmission_interval: register_histogram_with_registry!(
-                "consensus_adapter_recently_in_block_resubmission_interval_seconds",
-                "Time between recording a transaction in the recently-in-block cache and a duplicate resubmission of it being suppressed",
-                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
                 .unwrap(),
@@ -235,16 +219,7 @@ pub struct ConsensusAdapter {
     /// Used by the admission queue drainer to wake up and submit more
     /// transactions.
     inflight_slot_freed_notify: Arc<Notify>,
-    /// Digests recently included in a block (value: when last recorded), for suppressing
-    /// duplicate resubmissions before commit.
-    recently_in_block: Cache<TransactionDigest, Instant>,
 }
-
-/// Backstop in case sequenced/GC removals are missed.
-const RECENTLY_IN_BLOCK_TTL: Duration = Duration::from_secs(5);
-
-/// Eviction past this only weakens best-effort suppression, not correctness.
-const RECENTLY_IN_BLOCK_MAX_CAPACITY: u64 = 100_000;
 
 impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
@@ -267,64 +242,12 @@ impl ConsensusAdapter {
             metrics,
             submit_semaphore: Arc::new(Semaphore::new(max_pending_local_submissions)),
             inflight_slot_freed_notify,
-            recently_in_block: Cache::builder()
-                .max_capacity(RECENTLY_IN_BLOCK_MAX_CAPACITY)
-                .time_to_live(RECENTLY_IN_BLOCK_TTL)
-                .build(),
         }
     }
 
     /// Get the current number of in-flight transactions
     pub fn num_inflight_transactions(&self) -> u64 {
         self.num_inflight_transactions.load(Ordering::Relaxed)
-    }
-
-    /// Returns true if this validator recently included `digest` in a consensus block.
-    /// Used by the submission endpoint to suppress duplicate resubmissions
-    /// before the transaction is committed.
-    pub fn was_recently_in_block(&self, digest: &TransactionDigest) -> bool {
-        match self.recently_in_block.get(digest) {
-            Some(recorded_at) => {
-                self.metrics
-                    .recently_in_block_resubmission_interval
-                    .observe(recorded_at.elapsed().as_secs_f64());
-                true
-            }
-            None => false,
-        }
-    }
-
-    /// Records that `digests` have been included in a consensus block, so subsequent
-    /// resubmissions can be suppressed until the entries expire.
-    fn record_in_block(&self, transaction_keys: &[SequencedConsensusTransactionKey]) {
-        let now = Instant::now();
-        for key in transaction_keys {
-            if let SequencedConsensusTransactionKey::External(
-                ConsensusTransactionKey::Certificate(digest),
-            ) = key
-            {
-                self.recently_in_block.insert(*digest, now);
-            }
-        }
-        self.metrics
-            .recently_in_block_cache_size
-            .set(self.recently_in_block.entry_count() as i64);
-    }
-
-    /// Removes `transaction_keys` from the recently-in-block cache once their block's fate is
-    /// known (sequenced or garbage-collected), so resubmissions are no longer suppressed here.
-    fn forget_in_block(&self, transaction_keys: &[SequencedConsensusTransactionKey]) {
-        for key in transaction_keys {
-            if let SequencedConsensusTransactionKey::External(
-                ConsensusTransactionKey::Certificate(digest),
-            ) = key
-            {
-                self.recently_in_block.invalidate(digest);
-            }
-        }
-        self.metrics
-            .recently_in_block_cache_size
-            .set(self.recently_in_block.entry_count() as i64);
     }
 
     /// Get the maximum number of pending transactions (consensus capacity limit).
@@ -643,9 +566,6 @@ impl ConsensusAdapter {
                         .submit_inner(&transactions, epoch_store, &transaction_keys, tx_type)
                         .await;
 
-                    // Prevent resubmission of transactions that have recently been included in a block.
-                    self.record_in_block(&transaction_keys);
-
                     if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
                         tracing::Span::current().record(
                             "consensus_positions",
@@ -667,10 +587,6 @@ impl ConsensusAdapter {
                                 .sequencing_certificate_status
                                 .with_label_values(&[tx_type, "sequenced"])
                                 .inc();
-                            // The block is in consensus output now, so the executed-effects and
-                            // consensus-message-processed checks take over suppression; drop the
-                            // entry.
-                            self.forget_in_block(&transaction_keys);
                             // Block has been sequenced. Nothing more to do, we do have guarantees that the transaction will appear in consensus output.
                             trace!(
                                 "Transaction {transaction_keys:?} has been sequenced by consensus."
@@ -684,9 +600,6 @@ impl ConsensusAdapter {
                                 .sequencing_certificate_status
                                 .with_label_values(&[tx_type, "garbage_collected"])
                                 .inc();
-                            // The transactions are no longer in a block, so stop suppressing
-                            // resubmissions of them.
-                            self.forget_in_block(&transaction_keys);
                             // Block has been garbage collected and we have no guarantees that the transaction will appear in consensus output. We'll
                             // resubmit the transaction to consensus. If the transaction has been already "processed", then probably someone else has submitted
                             // the transaction and managed to get sequenced. Then this future will have been cancelled anyways so no need to check here on the processed output.
@@ -1157,87 +1070,5 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
         let epoch_store = epoch_store.clone();
         spawn_monitored_task!(epoch_store.within_alive_epoch(async_stage));
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod recently_in_block_tests {
-    use super::*;
-    use fastcrypto::traits::KeyPair;
-    use sui_types::crypto::{AuthorityKeyPair, get_key_pair};
-
-    fn test_adapter() -> ConsensusAdapter {
-        let (_, kp): (_, AuthorityKeyPair) = get_key_pair();
-        ConsensusAdapter::new(
-            Arc::new(MockConsensusClient::new()),
-            CheckpointStore::new_for_tests(),
-            kp.public().into(),
-            100_000,
-            100_000,
-            ConsensusAdapterMetrics::new_test(),
-            Arc::new(Notify::new()),
-        )
-    }
-
-    #[tokio::test]
-    async fn record_in_block_tracks_certificate_digests() {
-        let adapter = test_adapter();
-        let digest = TransactionDigest::random();
-        let other = TransactionDigest::random();
-
-        assert!(!adapter.was_recently_in_block(&digest));
-
-        adapter.record_in_block(&[SequencedConsensusTransactionKey::External(
-            ConsensusTransactionKey::Certificate(digest),
-        )]);
-        adapter.recently_in_block.run_pending_tasks();
-
-        assert!(
-            adapter.was_recently_in_block(&digest),
-            "digest seen in a block should be suppressed"
-        );
-        assert!(
-            !adapter.was_recently_in_block(&other),
-            "an unrelated digest should not be suppressed"
-        );
-    }
-
-    #[tokio::test]
-    async fn forget_in_block_clears_cache_on_garbage_collection() {
-        let adapter = test_adapter();
-        let digest = TransactionDigest::random();
-        let key = SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
-            digest,
-        ));
-
-        adapter.record_in_block(std::slice::from_ref(&key));
-        adapter.recently_in_block.run_pending_tasks();
-        assert!(adapter.was_recently_in_block(&digest));
-
-        adapter.forget_in_block(std::slice::from_ref(&key));
-        adapter.recently_in_block.run_pending_tasks();
-        assert!(
-            !adapter.was_recently_in_block(&digest),
-            "garbage-collected transaction should no longer be suppressed"
-        );
-    }
-
-    #[tokio::test]
-    async fn record_in_block_ignores_non_certificate_keys() {
-        let adapter = test_adapter();
-        let (_, kp): (_, AuthorityKeyPair) = get_key_pair();
-        let authority = kp.public().into();
-
-        // EndOfPublish is not a user certificate; it must not populate the cache.
-        adapter.record_in_block(&[SequencedConsensusTransactionKey::External(
-            ConsensusTransactionKey::EndOfPublish(authority),
-        )]);
-        adapter.recently_in_block.run_pending_tasks();
-
-        assert_eq!(
-            adapter.recently_in_block.entry_count(),
-            0,
-            "non-certificate keys must not populate the cache"
-        );
     }
 }

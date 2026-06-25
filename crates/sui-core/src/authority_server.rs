@@ -7,21 +7,22 @@ use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use futures::{TryFutureExt, future};
 use itertools::Itertools as _;
+use moka::sync::Cache;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
-    Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec, Registry,
+    Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, Registry,
     register_gauge_with_registry, register_histogram_vec_with_registry,
     register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry,
 };
 use std::{
     collections::HashSet,
     io,
     net::{IpAddr, SocketAddr},
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 use sui_network::{
     api::{Validator, ValidatorServer},
@@ -43,7 +44,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::traffic_control::{ClientIdSource, Weight};
 use sui_types::{
     base_types::ObjectID,
-    digests::TransactionEffectsDigest,
+    digests::{TransactionDigest, TransactionEffectsDigest},
     error::{SuiErrorKind, UserInputError},
 };
 use sui_types::{
@@ -202,7 +203,9 @@ pub struct ValidatorServiceMetrics {
     num_rejected_tx_during_overload: IntCounterVec,
     submission_rejected_transactions: IntCounterVec,
     submission_suppressed_already_processed: IntCounterVec,
-    submission_suppressed_recently_in_block: IntCounterVec,
+    submission_suppressed_recently_submitted: IntCounterVec,
+    recently_submitted_cache_size: IntGauge,
+    recently_submitted_resubmission_interval: Histogram,
     connection_ip_not_found: IntCounter,
     forwarded_header_parse_error: IntCounter,
     forwarded_header_invalid: IntCounter,
@@ -306,11 +309,24 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
-            submission_suppressed_recently_in_block: register_int_counter_vec_with_registry!(
-                "validator_service_submission_suppressed_recently_in_block",
-                "Number of submitted transactions suppressed because this validator recently \
-                 included them in a consensus block that has not yet committed",
+            submission_suppressed_recently_submitted: register_int_counter_vec_with_registry!(
+                "validator_service_submission_suppressed_recently_submitted",
+                "Number of submitted transactions suppressed because the same transaction was \
+                 submitted within the recent-submission window",
                 &["req_type"],
+                registry,
+            )
+            .unwrap(),
+            recently_submitted_cache_size: register_int_gauge_with_registry!(
+                "validator_service_recently_submitted_cache_size",
+                "Approximate number of transaction digests held in the recent-submission duplicate-suppression cache",
+                registry,
+            )
+            .unwrap(),
+            recently_submitted_resubmission_interval: register_histogram_with_registry!(
+                "validator_service_recently_submitted_resubmission_interval_seconds",
+                "Time between a transaction being recorded and a duplicate resubmission of it being suppressed",
+                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -399,7 +415,16 @@ pub struct ValidatorService {
     client_id_source: Option<ClientIdSource>,
     gasless_limiter: GaslessRateLimiter,
     admission_queue: Option<AdmissionQueueContext>,
+    /// Digests submitted within the last `RECENT_SUBMISSION_TTL` (value: when recorded), to drop
+    /// duplicate resubmissions before they reach consensus.
+    recently_submitted: Cache<TransactionDigest, Instant>,
 }
+
+/// Window during which a given transaction is allowed into consensus at most once.
+const RECENT_SUBMISSION_TTL: Duration = Duration::from_secs(1);
+
+/// Eviction past this only weakens best-effort suppression, not correctness.
+const RECENT_SUBMISSION_MAX_CAPACITY: u64 = 100_000;
 
 impl ValidatorService {
     pub fn new(
@@ -419,7 +444,15 @@ impl ValidatorService {
             client_id_source,
             gasless_limiter,
             admission_queue,
+            recently_submitted: Self::new_recently_submitted_cache(),
         }
+    }
+
+    fn new_recently_submitted_cache() -> Cache<TransactionDigest, Instant> {
+        Cache::builder()
+            .time_to_live(RECENT_SUBMISSION_TTL)
+            .max_capacity(RECENT_SUBMISSION_MAX_CAPACITY)
+            .build()
     }
 
     pub fn new_for_tests(
@@ -443,6 +476,7 @@ impl ValidatorService {
             client_id_source: None,
             gasless_limiter,
             admission_queue,
+            recently_submitted: Self::new_recently_submitted_cache(),
         }
     }
 
@@ -565,6 +599,7 @@ impl ValidatorService {
             client_id_source,
             gasless_limiter: _,
             admission_queue: _,
+            recently_submitted: _,
         } = self.clone();
 
         let submitter_client_addr = if let Some(client_id_source) = &client_id_source {
@@ -924,26 +959,30 @@ impl ValidatorService {
                 continue;
             }
 
-            // Suppress resubmission of a transaction this validator has very recently included in
-            // a consensus block.
-            if self.consensus_adapter.was_recently_in_block(&tx_digest) {
+            // Allow a given transaction into consensus at most once per `RECENT_SUBMISSION_TTL`,
+            // dropping duplicate resubmissions (including pre-submission and in-flight) early.
+            if let Some(recorded_at) = self.recently_submitted.get(&tx_digest) {
                 metrics
-                    .submission_suppressed_recently_in_block
+                    .submission_suppressed_recently_submitted
                     .with_label_values(&[req_type])
                     .inc();
+                metrics
+                    .recently_submitted_resubmission_interval
+                    .observe(recorded_at.elapsed().as_secs_f64());
                 results[idx] = Some(SubmitTxResult::Rejected {
                     error: SuiErrorKind::TransactionProcessing {
                         digest: tx_digest,
-                        status: "recently included in a consensus block".to_string(),
+                        status: "recently submitted".to_string(),
                     }
                     .into(),
                 });
-                debug!(
-                    ?tx_digest,
-                    "handle_submit_transaction: recently included in a block"
-                );
+                debug!(?tx_digest, "handle_submit_transaction: recently submitted");
                 continue;
             }
+            self.recently_submitted.insert(tx_digest, Instant::now());
+            metrics
+                .recently_submitted_cache_size
+                .set(self.recently_submitted.entry_count() as i64);
 
             debug!(
                 ?tx_digest,
