@@ -43,7 +43,7 @@ fi
 
 # This technically should be pulling from `.config/insta.yaml`, but we set the test runner again
 # here to be safe and explicit.
-INSTA=(cargo insta test --test-runner nextest --no-test-runner-fallback)
+INSTA=(cargo insta test --test-runner nextest)
 
 cd "$ROOT"
 UPDATE=1 cargo nextest run -p sui-framework --test build-system-packages
