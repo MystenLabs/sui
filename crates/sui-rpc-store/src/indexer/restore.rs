@@ -4,9 +4,10 @@
 //! Entry point for bulk-loading the [`RpcStoreSchema`]'s
 //! derived-index CFs from a [`RestoreSource`].
 //!
-//! Registers the five live-object-derivable pipelines
-//! ([`LiveObjects`], [`ObjectByOwner`], [`ObjectByType`],
-//! [`Balance`], [`PackageVersions`]) — and, when the caller's
+//! Registers the four live-object-derivable index pipelines
+//! ([`ObjectByOwner`], [`ObjectByType`], [`Balance`],
+//! [`PackageVersions`]) plus the checkpoint-pinned
+//! [`ObjectVersionByCheckpoint`] floor rows — and, when the caller's
 //! [`RestoreLayer`] opts in, the raw [`Objects`] CF — against a
 //! single [`RestoreDriver`] and returns a [`Service`] driving the
 //! restore through to completion. Once finished, every registered
@@ -56,7 +57,6 @@ use crate::indexer::effects::Effects;
 use crate::indexer::epochs::Epochs;
 use crate::indexer::event_bitmap::EventBitmap;
 use crate::indexer::events::Events;
-use crate::indexer::live_objects::LiveObjects;
 use crate::indexer::object_by_owner::ObjectByOwner;
 use crate::indexer::object_by_type::ObjectByType;
 use crate::indexer::object_version_by_checkpoint::ObjectVersionByCheckpoint;
@@ -81,7 +81,6 @@ use crate::schema::pruning_watermark;
 /// the `embedded_registers_only_cohort_pipelines` test pins the two
 /// together.
 pub const LIVE_COHORT: &[&str] = &[
-    LiveObjects::NAME,
     ObjectByOwner::NAME,
     ObjectByType::NAME,
     Balance::NAME,
@@ -145,7 +144,6 @@ pub fn restore_indexes<Src: RestoreSource>(
     // object to it.
     let target_checkpoint = source.target_checkpoint();
     let mut driver = RestoreDriver::new(db, schema, source, config, metrics);
-    driver.register(LiveObjects)?;
     // A history-cohort member, but its floor rows are restored from the
     // live set; the embedded history seed later rewinds its watermark so
     // it also backfills `(L, T]`.
@@ -194,7 +192,6 @@ pub fn floor_unrestored_pipelines(
 ) -> anyhow::Result<()> {
     let restored: &[&'static str] = if layer.objects {
         &[
-            LiveObjects::NAME,
             ObjectVersionByCheckpoint::NAME,
             ObjectByOwner::NAME,
             ObjectByType::NAME,
@@ -204,7 +201,6 @@ pub fn floor_unrestored_pipelines(
         ]
     } else {
         &[
-            LiveObjects::NAME,
             ObjectVersionByCheckpoint::NAME,
             ObjectByOwner::NAME,
             ObjectByType::NAME,
@@ -229,7 +225,6 @@ pub fn floor_unrestored_pipelines(
         Events::NAME,
         Objects::NAME,
         ObjectVersionByCheckpoint::NAME,
-        LiveObjects::NAME,
         ObjectByOwner::NAME,
         ObjectByType::NAME,
         Balance::NAME,
@@ -554,7 +549,7 @@ mod tests {
 
     /// End-to-end: drive a handful of address-owned objects
     /// through every registered pipeline. Verifies that the
-    /// rows we expect end up in `live_objects` and
+    /// rows we expect end up in `object_version_by_checkpoint` and
     /// `object_by_owner`, and that every pipeline's
     /// `__restore` / `__watermark` rows are set up for the
     /// tip-indexer to take over.
@@ -585,10 +580,13 @@ mod tests {
         .await
         .unwrap();
 
-        // Each object's live pointer landed.
+        // Each object's restore floor row landed in the checkpoint-pinned
+        // index at the anchor checkpoint (123).
         for o in &objects {
             assert_eq!(
-                schema.get_live_object_version(o.id()).unwrap(),
+                schema
+                    .get_object_version_at_checkpoint(o.id(), 123)
+                    .unwrap(),
                 Some(o.version()),
             );
         }
@@ -621,7 +619,7 @@ mod tests {
         // was not registered with `indexes_only`, so it has no
         // __restore row at all.
         for name in [
-            LiveObjects::NAME,
+            ObjectVersionByCheckpoint::NAME,
             ObjectByOwner::NAME,
             ObjectByType::NAME,
             Balance::NAME,
@@ -698,7 +696,7 @@ mod tests {
         // run a restore in this test). The helper must not
         // clobber them.
         for name in [
-            LiveObjects::NAME,
+            ObjectVersionByCheckpoint::NAME,
             ObjectByOwner::NAME,
             ObjectByType::NAME,
             Balance::NAME,
@@ -868,7 +866,7 @@ mod tests {
         let live: std::collections::BTreeSet<_> = LIVE_COHORT.iter().collect();
         let history: std::collections::BTreeSet<_> = HISTORY_COHORT.iter().collect();
         assert!(live.is_disjoint(&history), "cohorts must not overlap");
-        assert_eq!(live.len(), 5);
+        assert_eq!(live.len(), 4);
         assert_eq!(history.len(), 6);
     }
 }

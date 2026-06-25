@@ -5,8 +5,8 @@
 //! [`schema::object_by_owner`](crate::schema::object_by_owner)
 //! index.
 //!
-//! Like [`live_objects`](crate::indexer::live_objects), the
-//! pipeline reads the checkpoint as a diff: inputs emit a
+//! Like the other live-set-bounded indexes, the pipeline reads the
+//! checkpoint as a diff: inputs emit a
 //! `Delete` keyed by the *prior* `(kind, owner, type, balance,
 //! id)`, outputs emit a `Put` keyed by the *posterior*
 //! `(kind, owner, type, balance, id)`. For an object that was
