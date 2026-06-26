@@ -1171,13 +1171,13 @@ impl ValidatorService {
             vec![
                 transaction_indexes
                     .into_iter()
-                    .zip_debug_eq(tx_digests)
+                    .zip_eq(tx_digests)
                     .collect::<Vec<_>>(),
             ]
         } else {
             transaction_indexes
                 .into_iter()
-                .zip_debug_eq(tx_digests)
+                .zip_eq(tx_digests)
                 .map(|pair| vec![pair])
                 .collect::<Vec<_>>()
         };
@@ -1263,9 +1263,12 @@ impl ValidatorService {
                     }
                     // The transaction(s) in this group are already being processed by consensus.
                     // Report per-tx as a retriable rejection rather than failing the whole request.
-                    Err(err)
-                        if matches!(err.as_inner(), SuiErrorKind::TransactionProcessing { .. }) =>
-                    {
+                    Err(err) => {
+                        let SuiErrorKind::TransactionProcessing { status, .. } =
+                            err.as_inner().clone()
+                        else {
+                            return Err(err);
+                        };
                         for (idx, tx_digest) in txns_meta {
                             debug!(
                                 ?tx_digest,
@@ -1278,10 +1281,15 @@ impl ValidatorService {
                                 .submission_suppressed_already_processed
                                 .with_label_values(&[req_type])
                                 .inc();
-                            results[idx] = Some(SubmitTxResult::Rejected { error: err.clone() });
+                            results[idx] = Some(SubmitTxResult::Rejected {
+                                error: SuiErrorKind::TransactionProcessing {
+                                    digest: tx_digest,
+                                    status: status.clone(),
+                                }
+                                .into(),
+                            });
                         }
                     }
-                    Err(err) => return Err(err),
                 }
             }
         }
