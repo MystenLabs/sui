@@ -45,6 +45,14 @@ thread_local! {
     static SIMPLIFY_CACHE: RefCell<HashMap<Formula, Formula>> = RefCell::new(HashMap::new());
 }
 
+/// Atom-count ceiling for running Quine-McCluskey minimization on a formula. The
+/// `quine_mc_cluskey` crate is super-exponential in the atom count - 12 atoms took ~18s on
+/// pyth's `update_4`. Factoring in the smart constructors compresses formula *trees* but
+/// not atom *counts*, so this ceiling still applies even with factoring in place. Above
+/// the limit we fall through to the factored canonical form (NNF, sorted, deduped,
+/// absorbed) without running QM.
+const SIMPLIFY_ATOM_LIMIT: usize = 10;
+
 // -------------------------------------------------------------------------------------------------
 // Type
 // -------------------------------------------------------------------------------------------------
@@ -160,6 +168,23 @@ pub fn and(formulas: Vec<Formula>) -> Formula {
         return false_();
     }
     absorb_or_children(&mut out);
+    // Distributive factoring: `(A || X) && (A || Y) -> A || (X && Y)`. Find disjuncts that
+    // appear at the top level of every conjunct in `out`, strip them, and re-wrap as an Or
+    // over (common, And(stripped)). Each recursion strictly shrinks the tree (we remove at
+    // least one disjunct from each conjunct), so this terminates.
+    if out.len() >= 2 {
+        let common = common_disjuncts(&out);
+        if !common.is_empty() {
+            let stripped: Vec<Formula> = out
+                .into_iter()
+                .map(|f| strip_disjuncts(f, &common))
+                .collect();
+            let inner = and(stripped);
+            let mut wrap: Vec<Formula> = common.into_iter().collect();
+            wrap.push(inner);
+            return or(wrap);
+        }
+    }
     match out.len() {
         0 => true_(),
         1 => out.into_iter().next().unwrap(),
@@ -183,6 +208,23 @@ pub fn or(formulas: Vec<Formula>) -> Formula {
         return true_();
     }
     absorb_and_children(&mut out);
+    // Distributive factoring: `(A && X) || (A && Y) -> A && (X || Y)`. Find conjuncts that
+    // appear at the top level of every disjunct in `out`, strip them, and re-wrap as an And
+    // over (common, Or(stripped)). Each recursion strictly shrinks the tree, so this
+    // terminates.
+    if out.len() >= 2 {
+        let common = common_conjuncts(&out);
+        if !common.is_empty() {
+            let stripped: Vec<Formula> = out
+                .into_iter()
+                .map(|f| strip_conjuncts(f, &common))
+                .collect();
+            let inner = or(stripped);
+            let mut wrap: Vec<Formula> = common.into_iter().collect();
+            wrap.push(inner);
+            return and(wrap);
+        }
+    }
     match out.len() {
         0 => false_(),
         1 => out.into_iter().next().unwrap(),
@@ -205,13 +247,14 @@ fn has_complementary_pair(xs: &[Formula]) -> bool {
 /// Inside an outer `Or`: drop any `And`-child whose conjuncts include any other outer
 /// disjunct. `A || (A && X) -> A`.
 fn absorb_and_children(xs: &mut Vec<Formula>) {
+    // `xs` is sorted+deduped before we get here, so any inner conjunct that equals an
+    // outer disjunct must equal some `xs[j]` with `j != i` (a sibling). We can replace
+    // the O(N^2 * K) double-scan with a single BTreeSet lookup per conjunct.
+    let xs_set: BTreeSet<&Formula> = xs.iter().collect();
     let drop: Vec<bool> = xs
         .iter()
-        .enumerate()
-        .map(|(i, f)| match &f.0 {
-            FormulaTree::And(conjuncts) => conjuncts
-                .iter()
-                .any(|c| xs.iter().enumerate().any(|(j, x)| j != i && x == c)),
+        .map(|f| match &f.0 {
+            FormulaTree::And(conjuncts) => conjuncts.iter().any(|c| xs_set.contains(c)),
             _ => false,
         })
         .collect();
@@ -226,13 +269,11 @@ fn absorb_and_children(xs: &mut Vec<Formula>) {
 /// Inside an outer `And`: drop any `Or`-child whose disjuncts include any other outer
 /// conjunct. `A && (A || X) -> A`.
 fn absorb_or_children(xs: &mut Vec<Formula>) {
+    let xs_set: BTreeSet<&Formula> = xs.iter().collect();
     let drop: Vec<bool> = xs
         .iter()
-        .enumerate()
-        .map(|(i, f)| match &f.0 {
-            FormulaTree::Or(disjuncts) => disjuncts
-                .iter()
-                .any(|d| xs.iter().enumerate().any(|(j, x)| j != i && x == d)),
+        .map(|f| match &f.0 {
+            FormulaTree::Or(disjuncts) => disjuncts.iter().any(|d| xs_set.contains(d)),
             _ => false,
         })
         .collect();
@@ -242,6 +283,89 @@ fn absorb_or_children(xs: &mut Vec<Formula>) {
         .filter_map(|(f, drop)| if drop { None } else { Some(f) })
         .collect();
     *xs = kept;
+}
+
+/// View `f` as a set of top-level conjuncts: `And(fs)` -> its children, anything else -> `{f}`.
+fn top_conjuncts(f: &Formula) -> BTreeSet<Formula> {
+    match &f.0 {
+        FormulaTree::And(fs) => fs.iter().cloned().collect(),
+        _ => std::iter::once(f.clone()).collect(),
+    }
+}
+
+/// View `f` as a set of top-level disjuncts: `Or(fs)` -> its children, anything else -> `{f}`.
+fn top_disjuncts(f: &Formula) -> BTreeSet<Formula> {
+    match &f.0 {
+        FormulaTree::Or(fs) => fs.iter().cloned().collect(),
+        _ => std::iter::once(f.clone()).collect(),
+    }
+}
+
+/// Conjuncts that appear at the top level of every disjunct in `disjuncts`.
+fn common_conjuncts(disjuncts: &[Formula]) -> BTreeSet<Formula> {
+    let Some((first, rest)) = disjuncts.split_first() else {
+        return BTreeSet::new();
+    };
+    let mut common = top_conjuncts(first);
+    for d in rest {
+        common = common.intersection(&top_conjuncts(d)).cloned().collect();
+        if common.is_empty() {
+            return BTreeSet::new();
+        }
+    }
+    common
+}
+
+/// Disjuncts that appear at the top level of every conjunct in `conjuncts`.
+fn common_disjuncts(conjuncts: &[Formula]) -> BTreeSet<Formula> {
+    let Some((first, rest)) = conjuncts.split_first() else {
+        return BTreeSet::new();
+    };
+    let mut common = top_disjuncts(first);
+    for c in rest {
+        common = common.intersection(&top_disjuncts(c)).cloned().collect();
+        if common.is_empty() {
+            return BTreeSet::new();
+        }
+    }
+    common
+}
+
+/// Remove every member of `common` from `f`'s top-level conjuncts. An `And(fs)` becomes
+/// `And(fs \ common)` via the smart constructor (which collapses to `True` when empty); a
+/// bare formula that's in `common` becomes `True`.
+fn strip_conjuncts(f: Formula, common: &BTreeSet<Formula>) -> Formula {
+    match f.0 {
+        FormulaTree::And(fs) => {
+            let remaining: Vec<Formula> = fs.into_iter().filter(|x| !common.contains(x)).collect();
+            and(remaining)
+        }
+        _ => {
+            if common.contains(&f) {
+                true_()
+            } else {
+                f
+            }
+        }
+    }
+}
+
+/// Remove every member of `common` from `f`'s top-level disjuncts. Dual of
+/// [`strip_conjuncts`]; a bare formula in `common` becomes `False`.
+fn strip_disjuncts(f: Formula, common: &BTreeSet<Formula>) -> Formula {
+    match f.0 {
+        FormulaTree::Or(fs) => {
+            let remaining: Vec<Formula> = fs.into_iter().filter(|x| !common.contains(x)).collect();
+            or(remaining)
+        }
+        _ => {
+            if common.contains(&f) {
+                false_()
+            } else {
+                f
+            }
+        }
+    }
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -387,8 +511,8 @@ impl Formula {
 
     /// Quine-McCluskey minimization. Maps atoms to `u8` variables, runs the crate's
     /// `simplify()`, picks the shortest result, and lowers back. Returns the original
-    /// formula unchanged if the atom count exceeds the crate's u8 variable limit (32) or
-    /// if `simplify` returns an empty set.
+    /// formula unchanged if the atom count exceeds [`SIMPLIFY_ATOM_LIMIT`] or if
+    /// `simplify` returns an empty set.
     ///
     /// Memoized on a thread-local `HashMap` keyed by `self`. Smart constructors yield
     /// canonical forms - two structurally-equal inputs hash and compare identically - so
@@ -407,7 +531,7 @@ impl Formula {
         use quine_mc_cluskey::Bool as Q;
 
         let atoms: Vec<Symbol> = self.atoms().into_iter().collect();
-        if atoms.len() > 32 {
+        if atoms.len() > SIMPLIFY_ATOM_LIMIT {
             return self.clone();
         }
         let name_to_var: std::collections::BTreeMap<Symbol, u8> = atoms

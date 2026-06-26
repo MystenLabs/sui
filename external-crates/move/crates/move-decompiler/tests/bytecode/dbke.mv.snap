@@ -146,7 +146,7 @@ public fun elf<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut CBM, l2: &mut Balance
                             l34 = constants::post_only();
                         }
                     };
-                    if (!(__c172) || !(__c197)) {
+                    if (!(__c172) || (__c172 && !(__c197))) {
                         let (reg_170, reg_171) = dbke::vbac(freeze(l0), l21, l44, l23, l51, reg_32, l32, l37, l40, l29, l30, true);
                         let l24 = reg_171;
                         l28 = if (l24 != ct::e_no_error()) {

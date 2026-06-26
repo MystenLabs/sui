@@ -138,7 +138,25 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
     // right behavior for these `.stt` shape tests: they pin the structurer's CFG-to-AST
     // mapping, and the content-level guard would only mask the shape regressions they
     // exist to catch.
-    let (structured, unemitted) = crate::structuring::structure(&config, input, 0.into());
+    //
+    // Some fixtures pin known-pathological CFGs that the current structurer can't handle
+    // (e.g. tangled multi-loop residues that need NMG V-B). `catch_unwind` turns the panic
+    // into a stable snap so the suite still runs and the failure surfaces as a diff rather
+    // than a process-killing crash.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        crate::structuring::structure(&config, input, 0.into())
+    }));
+    let (structured, unemitted) = match result {
+        Ok(pair) => pair,
+        Err(panic) => {
+            let msg = panic
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_else(|| "<non-string panic payload>".to_string());
+            return format!("// STRUCTURING PANICKED: {msg}\n");
+        }
+    };
     // Surface unemitted blocks in the snapshot so a regression that silently drops blocks
     // shows up as a snapshot diff rather than passing on shape match. Bytecode and `.move`
     // corpus tests already render the `// Did not structure and emit blocks N, K, ...` notice

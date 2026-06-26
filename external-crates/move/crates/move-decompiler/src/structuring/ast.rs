@@ -197,13 +197,35 @@ impl Structured {
     }
 
     /// Build a `Seq` from a list of `(guard, body)` items. `True`-guarded items emit
-    /// bare; non-`True` guards wrap in `CondIf(g, body, None)`. Guards are simplified
-    /// at this point (and not earlier), so emission is minimal without sacrificing the
-    /// factor structure the refinement loop relied on.
+    /// bare; non-`True` guards wrap in `CondIf(g, body, None)`.
+    ///
+    /// We emit the guard in the form the smart constructors produced - NNF, sorted,
+    /// deduped, with classical absorption (`A || (A && X) -> A`), complementary collapse,
+    /// and distributive factoring (`(A && X) || (A && Y) -> A && (X || Y)`) already
+    /// applied. We use QM (`Formula::simplify`) only to detect tautologies and
+    /// contradictions - if QM returns `True` we elide the wrapper, if `False` we drop
+    /// the item, and otherwise we discard QM's output and keep the original guard. The
+    /// reason is QM's absorption-with-complement rule `A || (!A && B) <-> A || B`: sound
+    /// as a boolean function but destroys the structural conditioning the smart
+    /// constructors maintain - if `B`'s atoms are condition-block locals only assigned
+    /// along the `!A` path, the QM-collapsed output reads them on the `A` path where
+    /// they're definitely unassigned, producing invalid Move source. Restricting QM to
+    /// the True/False outcomes lets us still elide tautological wrappers (multi-atom
+    /// reach-condition disjunctions that cover the truth space) without paying that
+    /// cost on guards that should keep their structure.
     pub fn from_guarded_items(items: Vec<(Formula, Structured)>) -> Structured {
         let mut out: Vec<Structured> = Vec::with_capacity(items.len());
         for (guard, body) in items {
-            let g = guard.simplify();
+            let g = if guard == predicates::true_() || guard == predicates::false_() {
+                guard
+            } else {
+                let s = guard.simplify();
+                if s == predicates::true_() || s == predicates::false_() {
+                    s
+                } else {
+                    guard
+                }
+            };
             if g == predicates::true_() {
                 out.push(body);
             } else if g != predicates::false_() {
