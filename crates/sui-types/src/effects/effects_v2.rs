@@ -120,7 +120,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             .collect()
     }
 
-    fn input_consensus_objects(&self) -> Vec<InputConsensusObject> {
+    fn accessed_consensus_objects(&self) -> Vec<InputConsensusObject> {
         self.changed_objects
             .iter()
             .filter_map(|(id, change)| match &change.input_state {
@@ -582,16 +582,16 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
 }
 
 impl TransactionEffectsV2 {
-    /// Derive the unchanged consensus objects of a transaction from its shared inputs and the
-    /// per-epoch config objects it read, given the set of objects it changed. Callers compute
-    /// this before constructing the effects and pass the result to [`Self::new`], so additional
-    /// unchanged consensus objects can be appended before construction if needed.
+    /// Derive the unchanged consensus objects of a transaction from its shared inputs, the
+    /// per-epoch config objects it read, and the system objects it read during execution, given
+    /// the set of objects it changed.
     pub fn compute_unchanged_consensus_objects(
         shared_objects: Vec<SharedInput>,
         loaded_per_epoch_config_objects: BTreeSet<ObjectID>,
         changed_objects: &BTreeMap<ObjectID, EffectsObjectChange>,
+        loaded_system_objects: BTreeMap<ObjectID, VersionDigest>,
     ) -> Vec<(ObjectID, UnchangedConsensusKind)> {
-        shared_objects
+        let mut unchanged_consensus_objects: Vec<_> = shared_objects
             .into_iter()
             .filter_map(|shared_input| match shared_input {
                 SharedInput::Existing((id, version, digest)) => {
@@ -630,7 +630,53 @@ impl TransactionEffectsV2 {
                     .into_iter()
                     .map(|id| (id, UnchangedConsensusKind::PerEpochConfig)),
             )
-            .collect()
+            .collect();
+
+        // Record system objects read during execution (e.g. the accumulator root) as read-only
+        // consensus objects, so nodes executing from these effects (checkpoint execution, crash
+        // recovery) can reproduce the read. Skip any that already appear
+        // as a changed object or as an unchanged consensus object — those versions are already
+        // recorded. Alongside each already-recorded id, keep the version (and digest) its entry
+        // carries — the input version for a changed object, the recorded version for a read-only
+        // one — so we can check it matches what the in-execution read observed.
+        let already_recorded: BTreeMap<ObjectID, Option<VersionDigest>> = changed_objects
+            .iter()
+            .map(|(id, change)| {
+                let recorded = match &change.input_state {
+                    ObjectIn::Exist((version_digest, _)) => Some(*version_digest),
+                    _ => None,
+                };
+                (*id, recorded)
+            })
+            .chain(unchanged_consensus_objects.iter().map(|(id, kind)| {
+                let recorded = match kind {
+                    UnchangedConsensusKind::ReadOnlyRoot(version_digest) => Some(*version_digest),
+                    _ => None,
+                };
+                (*id, recorded)
+            }))
+            .collect();
+        for (id, version_digest) in loaded_system_objects {
+            match already_recorded.get(&id) {
+                None => {
+                    unchanged_consensus_objects
+                        .push((id, UnchangedConsensusKind::ReadOnlyRoot(version_digest)));
+                }
+                Some(recorded) => {
+                    // The existing entry must record the same version the in-execution read
+                    // observed — both come from the version this transaction was sequenced
+                    // against. `None` means the entry's kind carries no version to compare
+                    // (e.g. a created object or a per-epoch-config read), which no implicitly
+                    // readable system object should ever coincide with.
+                    debug_assert_eq!(
+                        *recorded,
+                        Some(version_digest),
+                        "system object {id} read at a version different from its recorded entry"
+                    );
+                }
+            }
+        }
+        unchanged_consensus_objects
     }
 
     pub fn new(
