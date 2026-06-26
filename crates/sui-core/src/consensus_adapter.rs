@@ -273,9 +273,9 @@ impl ConsensusAdapter {
                 return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
             }
 
-            // Submit to consensus and wait for position, we do not check if tx
-            // has been processed by consensus already as this method is called
-            // to get back a consensus position.
+            // Submit to consensus and wait for the position. If the transaction has
+            // already been processed via consensus output or a checkpoint, the adapter
+            // skips submission and reports `TransactionProcessing` instead of a position.
             let _metrics_guard = self.metrics.consensus_latency.start_timer();
 
             self.submit_batch(
@@ -288,11 +288,10 @@ impl ConsensusAdapter {
         }
 
         rx_consensus_positions.await.map_err(|e| {
-            SuiErrorKind::FailedToSubmitToConsensus(format!(
+            SuiError::from(SuiErrorKind::FailedToSubmitToConsensus(format!(
                 "Failed to get consensus position: {e}"
-            ))
-            .into()
-        })
+            )))
+        })?
     }
 
     pub fn recover_end_of_publish(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
@@ -317,7 +316,7 @@ impl ConsensusAdapter {
         transaction: ConsensusTransaction,
         lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        tx_consensus_position: Option<oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>>,
         submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<JoinHandle<()>> {
         self.submit_batch(
@@ -336,7 +335,7 @@ impl ConsensusAdapter {
         transactions: &[ConsensusTransaction],
         _lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        tx_consensus_position: Option<oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>>,
         submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<JoinHandle<()>> {
         if transactions.len() > 1 {
@@ -374,7 +373,7 @@ impl ConsensusAdapter {
         self: &Arc<Self>,
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        tx_consensus_position: Option<oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>>,
         submitter_client_addr: Option<IpAddr>,
     ) -> JoinHandle<()> {
         // Reconfiguration lock is dropped when pending_consensus_transactions is persisted, before it is handled by consensus
@@ -397,7 +396,7 @@ impl ConsensusAdapter {
         self: Arc<Self>,
         transactions: Vec<ConsensusTransaction>,
         epoch_store: Arc<AuthorityPerEpochStore>,
-        tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        tx_consensus_position: Option<oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>>,
         submitter_client_addr: Option<IpAddr>,
     ) {
         // When epoch_terminated signal is received all pending submit_and_wait_inner are dropped.
@@ -430,7 +429,7 @@ impl ConsensusAdapter {
         self: Arc<Self>,
         transactions: Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        mut tx_consensus_positions: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
+        mut tx_consensus_positions: Option<oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>>,
         submitter_client_addr: Option<IpAddr>,
     ) {
         if transactions.is_empty() {
@@ -444,7 +443,7 @@ impl ConsensusAdapter {
                 .await;
 
             if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
-                let _ = tx_consensus_positions.send(consensus_positions);
+                let _ = tx_consensus_positions.send(Ok(consensus_positions));
             } else {
                 debug_fatal!("Ping check must have a consensus position channel");
             }
@@ -464,11 +463,6 @@ impl ConsensusAdapter {
                 );
             }
         }
-
-        // If tx_consensus_positions channel is provided, the caller is looking for a
-        // consensus position for mfp. Therefore we will skip shortcutting submission
-        // if txes have already been processed.
-        let skip_processed_checks = tx_consensus_positions.is_some();
 
         // Current code path ensures:
         // - If transactions.len() > 1, it is a soft bundle. System transactions should have been submitted individually.
@@ -498,17 +492,34 @@ impl ConsensusAdapter {
 
         let mut guard = InflightDropGuard::acquire(&self, tx_type, transactions.len() as u64);
 
-        // Skip submission if the tx is already processed via consensus output
-        // or checkpoint state sync. `skip_processed_checks` is set by callers
-        // that need a consensus position (mfp/ping), so we must submit even
-        // if already processed.
-        let already_processed = if skip_processed_checks {
-            None
-        } else {
-            self.check_processed_via_consensus_or_checkpoint(&transaction_keys, epoch_store)
+        // Builds the error reported to a position-waiting caller (mfp) when the
+        // transaction is already being processed and we therefore skip (re)submission.
+        // The caller surfaces this as a retriable error so the client waits for
+        // effects / retries instead of receiving a meaningless consensus position.
+        let make_processing_error = |method: ProcessedMethod| -> SuiError {
+            let digest = transactions
+                .iter()
+                .find_map(|t| t.kind.as_user_transaction().map(|tx| *tx.digest()))
+                .unwrap_or_default();
+            SuiErrorKind::TransactionProcessing {
+                digest,
+                status: match method {
+                    ProcessedMethod::Consensus => "sequenced by consensus".to_string(),
+                    ProcessedMethod::Checkpoint => "executed via checkpoint".to_string(),
+                },
+            }
+            .into()
         };
-        if let Some(method) = &already_processed {
-            guard.processed_method = *method;
+
+        // Skip submission if the tx is already processed via consensus output or
+        // checkpoint state sync.
+        let already_processed =
+            self.check_processed_via_consensus_or_checkpoint(&transaction_keys, epoch_store);
+        if let Some(method) = already_processed {
+            guard.processed_method = method;
+            if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
+                let _ = tx_consensus_positions.send(Err(make_processing_error(method)));
+            }
         }
 
         // Log warnings for administrative transactions that fail to get sequenced
@@ -576,7 +587,7 @@ impl ConsensusAdapter {
                         // consensus adapter due to an error or GC. They can handle retries
                         // as needed if the consensus position does not return the desired
                         // results (e.g. not sequenced due to garbage collection).
-                        let _ = tx_consensus_positions.send(consensus_positions);
+                        let _ = tx_consensus_positions.send(Ok(consensus_positions));
                     }
 
                     match status_waiter.await {
@@ -621,27 +632,36 @@ impl ConsensusAdapter {
                 }
             };
 
-            guard.processed_method = if skip_processed_checks {
-                // When getting consensus positions, we only care about submit_fut completing.
-                submit_fut.await;
-                ProcessedMethod::Consensus
-            } else {
-                // Race `processed_notify` against the submit loop. If the tx is
-                // processed via another path (consensus output from another
-                // validator's submission, or checkpoint state sync) while we're
-                // inside the submit loop, the submission future is dropped and
-                // the retry loop is cancelled cleanly.
-                let processed_waiter = self
-                    .processed_notify(transaction_keys.clone(), epoch_store)
-                    .boxed();
-                match select(processed_waiter, submit_fut.boxed()).await {
-                    Either::Left((observed, _submit_fut)) => observed,
-                    Either::Right(((), processed_waiter)) => {
-                        debug!("Submitted {transaction_keys:?} to consensus");
-                        processed_waiter.await
-                    }
+            // Race `processed_notify` against the submit loop. If the tx is
+            // processed via another path (consensus output from another
+            // validator's submission, or checkpoint state sync) while we're
+            // inside the submit loop, the submission future is dropped and
+            // the retry loop is cancelled cleanly.
+            let processed_waiter = self
+                .processed_notify(transaction_keys.clone(), epoch_store)
+                .boxed();
+            let processed_via_notify;
+            guard.processed_method = match select(processed_waiter, submit_fut.boxed()).await {
+                Either::Left((observed, _submit_fut)) => {
+                    processed_via_notify = true;
+                    observed
+                }
+                Either::Right(((), processed_waiter)) => {
+                    debug!("Submitted {transaction_keys:?} to consensus");
+                    processed_via_notify = false;
+                    processed_waiter.await
                 }
             };
+            // If processing was observed before a position was sent to a waiting caller,
+            // report that the transaction is already processing so the caller returns a
+            // retriable error. If a position was already sent, the channel is taken and this
+            // is a no-op.
+            if processed_via_notify
+                && let Some(tx_consensus_positions) = tx_consensus_positions.take()
+            {
+                let _ =
+                    tx_consensus_positions.send(Err(make_processing_error(guard.processed_method)));
+            }
         }
         debug!("{transaction_keys:?} processed by consensus");
 

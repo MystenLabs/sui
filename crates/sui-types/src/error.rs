@@ -1053,6 +1053,11 @@ impl SuiErrorKind {
             SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { .. } => true,
             SuiErrorKind::ValidatorOverloadedRetryAfter { .. } => true,
 
+            // The transaction is already being processed by consensus, so a fresh
+            // submission is pointless. The client should retry by waiting for effects
+            // rather than resubmitting.
+            SuiErrorKind::TransactionProcessing { .. } => true,
+
             // Non retryable error
             SuiErrorKind::ExecutionError(..) => false,
             SuiErrorKind::ByzantineAuthoritySuspicion { .. } => false,
