@@ -678,33 +678,6 @@ fn generate_output_inner(
             eprintln!("GOTO[{}] -> label_{}", src.as_tag(), label);
             Out::Exp::Unstructured(vec![Out::UnstructuredNode::Goto(label)])
         }
-        D::Structured::JumpIf(src, code, then_target, else_target) => {
-            let term = terms.remove(&(code as u32).into()).unwrap();
-            let Exp::Seq(mut seq) = term else {
-                panic!("Expected Seq for JumpIf condition")
-            };
-            let cond = seq.pop().unwrap();
-
-            let then_label = then_target.index() as u64;
-            let else_label = else_target.index() as u64;
-            eprintln!(
-                "GOTO[{}] -> label_{}/label_{}",
-                src.as_tag(),
-                then_label,
-                else_label
-            );
-
-            seq.push(Out::Exp::IfElse(
-                Box::new(cond),
-                Box::new(Out::Exp::Unstructured(vec![Out::UnstructuredNode::Goto(
-                    then_label,
-                )])),
-                Box::new(Some(Out::Exp::Unstructured(vec![
-                    Out::UnstructuredNode::Goto(else_label),
-                ]))),
-            ));
-            Out::Exp::Block(code, Box::new(Out::Exp::Seq(seq)))
-        }
         D::Structured::Let(name) => Out::Exp::Declare(vec![name]),
         D::Structured::AssignTag(name, value) => Out::Exp::Assign(
             vec![name],

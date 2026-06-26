@@ -1,6 +1,5 @@
 ---
 source: crates/move-decompiler/tests/tests.rs
-assertion_line: 21
 ---
 { 0 }
 if (0) {
@@ -13,6 +12,4 @@ if (0) {
 } else {
     { 4 }
 }
-if <(!__c0 | (__c0 & __match1_2) | (__c0 & __match1_3))> {
-    { 5 }
-}
+{ 5 }

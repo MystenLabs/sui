@@ -109,10 +109,9 @@ pub fn structure_region(
     Some(body)
 }
 
-/// The body of node `n` in the projection. Synthetic sinks render according to the
-/// projection's per-sink decision (see [`region::SinkBehavior`]); real nodes emit
-/// `Block(code)` (Code/Condition/Variants) or pull the pre-structured form from
-/// `structured_blocks` (Reduced).
+/// Translate `n` into a structured AST. Synthetic sinks emit exit-jumps (or empty for
+/// whole-function); real nodes emit `Block(code)` (Code/Condition/Variants) or pull the
+/// pre-structured form from `structured_blocks` (Reduced).
 fn to_structured_ast(
     n: NodeIndex,
     proj: &AcyclicProjection,
@@ -621,9 +620,9 @@ fn collect_items_arms(
     for (variant, _) in arm_specs {
         let atom = predicates::match_atom(code, variant.as_str());
         let mut body: Option<D::Structured> = None;
-        for j in start..slots.len() {
-            if slots[j].as_ref().is_some_and(|(g, _)| *g == atom) {
-                body = Some(slots[j].take().unwrap().1);
+        for slot in slots.iter_mut().skip(start) {
+            if slot.as_ref().is_some_and(|(g, _)| *g == atom) {
+                body = Some(slot.take().unwrap().1);
                 found_any = true;
                 break;
             }
@@ -648,12 +647,12 @@ fn collect_seq_arms(
     for (variant, _) in arm_specs {
         let atom = predicates::match_atom(code, variant.as_str());
         let mut body: Option<D::Structured> = None;
-        for j in start..slots.len() {
-            let matched = matches!(slots[j].as_ref(),
+        for slot in slots.iter_mut().skip(start) {
+            let matched = matches!(slot.as_ref(),
                 Some(D::Structured::CondIf(g, _, alt))
                     if alt.as_ref().as_ref().is_none() && *g == atom);
             if matched {
-                let D::Structured::CondIf(_, b, _) = slots[j].take().unwrap() else {
+                let D::Structured::CondIf(_, b, _) = slot.take().unwrap() else {
                     unreachable!()
                 };
                 body = Some(*b);

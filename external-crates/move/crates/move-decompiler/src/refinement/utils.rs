@@ -133,7 +133,7 @@ pub(super) fn trailing_continue_label(exp: &Exp) -> Option<Option<Label>> {
 /// an enclosing `Seq` directly, or rebuild a single `Exp` via `seq_or_singleton`. The
 /// continue's identity is the caller's concern; this helper only handles structure.
 ///
-/// Recurses through nested `Seq`s the same way [`ends_with_continue`] does - they need to
+/// Recurs through nested `Seq`s the same way [`ends_with_continue`] does - they need to
 /// agree on what counts as "trailing." When `flatten_seq` hasn't yet collapsed an
 /// intermediate `Seq` (e.g., a single iteration may flatten only the outermost nesting
 /// level before `hoist_tail_continue` runs), the detector still recurs to find the

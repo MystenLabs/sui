@@ -11,9 +11,8 @@
 
 use crate::structuring::{
     StructureContext, acyclic,
-    ast::{self as D, GotoSource},
+    ast::{self as D},
     graph::Graph,
-    predicates,
     region::SinkRendering,
 };
 
@@ -313,8 +312,8 @@ fn try_structure_loop_without_dispatch(
     let body_with_breaks = insert_breaks(loop_nodes, loop_head, Some(primary), body);
     let loop_body = vec![body_with_breaks];
 
-    // Check: any residual `Jump`/`JumpIf` targeting a non-primary owned succ means the body
-    // has real per-exit divergence we can't express without a selector. Bail to dispatch.
+    // Check: any residual `Jump` targeting a non-primary owned succ means the body has
+    // real per-exit divergence we can't express without a selector. Bail to dispatch.
     let body_seq = D::Structured::Seq(loop_body);
     if has_jump_to(&body_seq, &non_primary) {
         return false;
@@ -348,13 +347,12 @@ fn try_structure_loop_without_dispatch(
     true
 }
 
-/// True if `s` contains any `Jump(_, t)` or `JumpIf(_, _, t1, t2)` with `t`/`t1`/`t2 in
-/// targets`. Recurses through every structured form including `Loop` and `Match` arms.
+/// True if `s` contains any `Jump(_, t)` with `t in targets`. Recurs through every
+/// structured form including `Loop` and `Match` arms.
 fn has_jump_to(s: &D::Structured, targets: &HashSet<NodeIndex>) -> bool {
     use D::Structured as DS;
     match s {
         DS::Jump(_, t) => targets.contains(t),
-        DS::JumpIf(_, _, t1, t2) => targets.contains(t1) || targets.contains(t2),
         DS::Seq(items) => items.iter().any(|i| has_jump_to(i, targets)),
         DS::CondIf(_, c, a) => {
             has_jump_to(c, targets)
@@ -390,19 +388,6 @@ fn rewrite_jumps_for_dispatch(
         DS::Jump(_, target) => {
             if let Some(replacement) = dispatch_for(*target) {
                 *s = replacement;
-            }
-        }
-        DS::JumpIf(src, code, then_target, else_target) => {
-            let then_dispatch = dispatch_for(*then_target);
-            let else_dispatch = dispatch_for(*else_target);
-            if then_dispatch.is_some() || else_dispatch.is_some() {
-                let then_body = then_dispatch.unwrap_or(DS::Jump(*src, *then_target));
-                let else_body = else_dispatch.unwrap_or(DS::Jump(*src, *else_target));
-                *s = DS::CondIf(
-                    predicates::cond_atom(*code),
-                    Box::new(then_body),
-                    Box::new(Some(else_body)),
-                );
             }
         }
         DS::Seq(items) => {
@@ -469,26 +454,6 @@ pub(super) fn insert_breaks(
         }
     }
 
-    fn lower_conseq(latch: LatchKind, loop_head: NodeIndex, next: NodeIndex) -> Box<DS> {
-        let conseq = match latch {
-            LatchKind::Continue => DS::Continue(loop_head),
-            LatchKind::Break => DS::Break(loop_head),
-            LatchKind::InLoop => DS::Seq(vec![]),
-            // A JumpIf arm that escapes this loop (and isn't a body fall-through).
-            // Tagged D2 because it originates inside `insert_breaks`'s JumpIf handling.
-            LatchKind::Latch => DS::Jump(GotoSource::EscapeJumpIf, next),
-        };
-        Box::new(conseq)
-    }
-
-    fn lower_alt(latch: LatchKind, loop_head: NodeIndex, next: NodeIndex) -> Box<Option<DS>> {
-        if matches!(latch, LatchKind::InLoop) {
-            Box::new(None)
-        } else {
-            Box::new(Some(*lower_conseq(latch, loop_head, next)))
-        }
-    }
-
     match node {
         DS::Block(_) => node,
         DS::Seq(nodes) => DS::Seq(
@@ -520,21 +485,6 @@ pub(super) fn insert_breaks(
             // Preserve the original creation tag: the same Jump escaping outward.
             LatchKind::Latch => DS::Jump(src, next),
         },
-        DS::JumpIf(src, code, next, other) => {
-            let next_latch = find_latch_kind(loop_nodes, loop_head, loop_successor, next);
-            let other_latch = find_latch_kind(loop_nodes, loop_head, loop_successor, other);
-            match (next_latch, other_latch) {
-                (LatchKind::Continue, LatchKind::Continue) => DS::Continue(loop_head),
-                (LatchKind::Break, LatchKind::Break) => DS::Break(loop_head),
-                (LatchKind::Latch, LatchKind::Latch) => DS::JumpIf(src, code, next, other),
-                (LatchKind::InLoop, LatchKind::InLoop) => unreachable!(),
-                (conseq_lk, alt_lk) => {
-                    let conseq = lower_conseq(conseq_lk, loop_head, next);
-                    let alt = lower_alt(alt_lk, loop_head, other);
-                    DS::CondIf(predicates::cond_atom(code), conseq, alt)
-                }
-            }
-        }
         DS::Loop(label, structured) => DS::Loop(
             label,
             Box::new(insert_breaks(
@@ -661,13 +611,11 @@ fn entry_label(s: &D::Structured) -> Option<NodeIndex> {
     match s {
         DS::Block(code) => Some(NodeIndex::new(*code as usize)),
         DS::Switch(code, _, _) => Some(NodeIndex::new(*code as usize)),
-        DS::JumpIf(_, code, _, _) => Some(NodeIndex::new(*code as usize)),
         DS::Loop(label, _) => Some(*label),
         DS::Seq(items) => items.iter().find_map(entry_label),
         DS::Break(_) | DS::Continue(_) | DS::Jump(_, _) => None,
-        // A single-atom `CondIf` (the dom-tree structurer's product) has the atom's block
-        // as its CFG entry. A compound-formula `CondIf` is a recovered boolean over multiple
-        // condition blocks - no single entry.
+        // Entry label available iff the `cond` is an Atom, otherwise it is the result of
+        // multiple condition blocks built/nested.
         DS::CondIf(cond, _, _) => cond.as_cond_atom(),
         // Dispatch synthesis nodes carry no CFG entry of their own.
         DS::Let(_) | DS::AssignTag(_, _) | DS::SelectorMatch(_, _) => None,
@@ -707,7 +655,6 @@ fn elide_tail_jump_to(s: &mut D::Structured, target: NodeIndex) {
         | DS::Break(_)
         | DS::Continue(_)
         | DS::Jump(_, _)
-        | DS::JumpIf(_, _, _, _)
         | DS::Let(_)
         | DS::AssignTag(_, _)
         | DS::SelectorMatch(_, _) => {}

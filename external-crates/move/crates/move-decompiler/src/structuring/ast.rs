@@ -36,35 +36,12 @@ pub enum Input {
     Reduced(Label, Vec<Label>),
 }
 
-/// Provenance for a surviving `Jump`/`JumpIf`. Each variant names the structurer path that
+/// Provenance for a surviving `Jump`. Each variant names the structurer path that
 /// created the goto; the tag rides through `insert_breaks` and is printed on stderr when a
 /// Jump is lowered to `Unstructured(Goto)` in `generate_output`, letting the corpus driver
 /// attribute residual gotos by source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GotoSource {
-    /// Condition whose arm targets the condition node itself (back-edge to the loop head).
-    DegenerateJumpIf,
-    /// Arm target is the loop-head's chosen successor; `insert_breaks` rewrites this to
-    /// `Break(loop_head)`.
-    LoopBreak,
-    /// Arm target sits outside `start`'s dominator subtree, or is the IfElse/Switch's join
-    /// point. Either way, the owned-children hoist may place the target as a sibling and
-    /// elide this Jump; if it survives, `insert_breaks` reclassifies for the enclosing
-    /// loop, or `generate_output` lowers to `Unstructured`.
-    ArmOutsideSubtree,
-    /// Jump emitted by `structure_code_node` when the Code block's `next` isn't its
-    /// dom-tree child - the join is owned by an enclosing scope. Without this explicit
-    /// Jump the branch would live only in the bytecode terminator, invisible to elision.
-    CodeBranch,
-    /// JumpIf emitted at a latch node by `structure_latch_node`.
-    LatchTest,
-    /// Jump emitted at a latch node's Code-input by `structure_latch_node`.
-    LatchCode,
-    /// Self-edge Jump emitted by `structure_code_node` for a code block whose `next` is
-    /// itself. Suspected unreachable in practice.
-    SelfLoop,
-    /// Escape Jump synthesized in `insert_breaks` when a JumpIf has one Latch arm.
-    EscapeJumpIf,
     /// Jump emitted by the reaching-condition structurer at a region-exit edge - either the
     /// loop-body back edge (target == loop_head, rewritten to `Continue` by `insert_breaks`)
     /// or a break-target edge (target outside the loop, rewritten to `Break`).
@@ -74,14 +51,6 @@ pub enum GotoSource {
 impl GotoSource {
     pub fn as_tag(&self) -> &'static str {
         match self {
-            GotoSource::DegenerateJumpIf => "DJI",
-            GotoSource::LoopBreak => "LB",
-            GotoSource::ArmOutsideSubtree => "AOS",
-            GotoSource::CodeBranch => "CB",
-            GotoSource::LatchTest => "LT",
-            GotoSource::LatchCode => "LC",
-            GotoSource::SelfLoop => "SL",
-            GotoSource::EscapeJumpIf => "EJI",
             GotoSource::ReachingExit => "RE",
         }
     }
@@ -118,8 +87,6 @@ pub enum Structured {
     ),
     /// Goto. `GotoSource` records which structurer path created it for instrumentation.
     Jump(GotoSource, Label),
-    /// Two-way goto. Same instrumentation as `Jump`.
-    JumpIf(GotoSource, Code, Label, Label),
     /// Synthetic declaration of a dispatch local emitted by `structure_loop` for multi-succ
     /// loops: `let <name>: u32;`. Translated to `Exp::Declare`.
     Let(String),
@@ -182,7 +149,7 @@ impl Structured {
 
     /// `Seq[a, b]` flattened: if either side is already a `Seq`, its items splice in
     /// rather than nesting. The structurer's refinement passes leave both sides clean,
-    /// so this never recurses deeper than one level.
+    /// so this never recurs deeper than one level.
     pub fn splice_seq(a: Structured, b: Structured) -> Structured {
         let mut out: Vec<Structured> = Vec::new();
         match a {
@@ -232,10 +199,7 @@ impl Structured {
     /// since their iteration / branch shapes aren't analyzed here.
     pub fn always_terminates(&self, sink_codes: &HashSet<u64>) -> bool {
         match self {
-            Structured::Break(_)
-            | Structured::Continue(_)
-            | Structured::Jump(..)
-            | Structured::JumpIf(..) => true,
+            Structured::Break(_) | Structured::Continue(_) | Structured::Jump(..) => true,
             Structured::Block(code) => sink_codes.contains(code),
             Structured::Seq(items) => items
                 .last()
@@ -404,16 +368,6 @@ impl std::fmt::Display for Structured {
                 Structured::Jump(src, node_index) => {
                     indent(f, level)?;
                     writeln!(f, "jump<{}> {:?};", src.as_tag(), node_index)
-                }
-                Structured::JumpIf(src, _, node_index, node_index1) => {
-                    indent(f, level)?;
-                    writeln!(
-                        f,
-                        "jump_if<{}> ({:?}, {:?});",
-                        src.as_tag(),
-                        node_index,
-                        node_index1
-                    )
                 }
                 Structured::Let(name) => {
                     indent(f, level)?;

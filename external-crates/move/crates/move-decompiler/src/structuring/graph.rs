@@ -114,22 +114,6 @@ impl Graph {
         out
     }
 
-    pub fn update_latch_nodes(&mut self, node: NodeIndex, latch: NodeIndex) {
-        self.update_latch_branch_nodes(node, vec![latch]);
-    }
-
-    pub fn update_latch_branch_nodes(&mut self, node: NodeIndex, latches: Vec<NodeIndex>) {
-        let latches = latches
-            .iter()
-            .filter_map(|latch| self.back_edges.remove(latch))
-            .flatten()
-            .collect::<HashSet<NodeIndex>>();
-        if !latches.is_empty() {
-            let result = self.back_edges.insert(node, latches);
-            assert!(result.is_none());
-        }
-    }
-
     pub fn update_loop_info(&mut self, loop_head: NodeIndex) {
         for (_, back_edges) in self.back_edges.iter_mut() {
             back_edges.remove(&loop_head);

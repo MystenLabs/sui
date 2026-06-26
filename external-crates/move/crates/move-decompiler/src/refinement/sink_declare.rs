@@ -174,11 +174,12 @@ fn sink_into(item: &mut Exp, name: &str) -> bool {
                 prepend_declare(then_b, name);
                 return true;
             }
-            if !then_uses && else_uses {
-                if let Some(alt) = else_b.as_mut().as_mut() {
-                    prepend_declare(alt, name);
-                    return true;
-                }
+            if !then_uses
+                && else_uses
+                && let Some(alt) = else_b.as_mut().as_mut()
+            {
+                prepend_declare(alt, name);
+                return true;
             }
             false
         }

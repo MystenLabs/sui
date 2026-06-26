@@ -35,7 +35,7 @@ use move_stackless_bytecode_2::ast::PrimitiveOp;
 use move_symbol_pool::Symbol;
 use petgraph::graph::NodeIndex;
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashSet};
 
 // -------------------------------------------------------------------------------------------------
 // Type
@@ -480,7 +480,7 @@ impl Formula {
     }
 
     /// Strip `factor` wherever it appears as a factor inside `self`. Mirror of
-    /// [`has_factor`]: recurses through `And`/`Or` so a nested `And(Or(.., X), Y)`
+    /// [`has_factor`]: recurs through `And`/`Or` so a nested `And(Or(.., X), Y)`
     /// loses its X while keeping the surrounding structure intact. Caller has
     /// verified `has_factor(factor)`.
     pub fn without_factor(&self, factor: &Formula) -> Formula {
