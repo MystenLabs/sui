@@ -254,7 +254,7 @@ pub struct NodeConfig {
 
     /// Window (ms) during which a given transaction is allowed into consensus at most once, to
     /// suppress duplicate resubmissions. Defaults to 1000ms.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recent_submission_dedup_window_ms: Option<u64>,
 
     /// Allow overriding the chain for testing purposes. For instance, it allows you to
