@@ -18,7 +18,7 @@ use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, TransactionEffects,
-    TransactionEffectsV2, TransactionEvents,
+    TransactionEffectsV2, TransactionEvents, UnchangedConsensusKind,
 };
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, ExecutionRetryError,
@@ -524,11 +524,28 @@ impl<'backing> TemporaryStore<'backing> {
         let lamport_version = self.lamport_timestamp;
         // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
         let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
-        let unchanged_consensus_objects = TransactionEffectsV2::compute_unchanged_consensus_objects(
-            shared_object_refs,
-            loaded_per_epoch_config_objects,
-            &object_changes,
-        );
+        let loaded_system_objects = self.loaded_system_objects.borrow().clone();
+        let mut unchanged_consensus_objects =
+            TransactionEffectsV2::compute_unchanged_consensus_objects(
+                shared_object_refs,
+                loaded_per_epoch_config_objects,
+                &object_changes,
+            );
+        // Record system objects read during execution (e.g. the accumulator root) as read-only
+        // consensus objects, so the read can be reproduced on replay. Skip any that already appear
+        // as a changed object or as an unchanged consensus object — those versions are already
+        // recorded.
+        let already_recorded: BTreeSet<ObjectID> = object_changes
+            .keys()
+            .chain(unchanged_consensus_objects.iter().map(|(id, _)| id))
+            .copied()
+            .collect();
+        for (id, version_digest) in loaded_system_objects {
+            if !already_recorded.contains(&id) {
+                unchanged_consensus_objects
+                    .push((id, UnchangedConsensusKind::ReadOnlyRoot(version_digest)));
+            }
+        }
         let inner = self.into_inner(accumulator_running_max_withdraws);
 
         let effects = TransactionEffects::new_from_execution_v2(
