@@ -37,9 +37,9 @@ use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
 
 /// Yield `ProcessedCheckpoint`s from `start_after + 1` onward by reading LedgerService
-/// concurrently. Exits once the scan position catches up to the live tip; the caller then
-/// hands off to the live broadcast (the receiver is subscribed by the caller partway through
-/// this scan, so it accumulates live items in parallel with the remaining drain).
+/// concurrently, toward the live tip. The caller pins a `handoff` near the tip and stops
+/// consuming this stream there (see `subscribe`), so the unfold's `last >= network_tip()` exit is
+/// just an outer bound.
 pub(super) fn scan_checkpoints<F: CheckpointFetcher + Clone + Send + 'static>(
     fetcher: F,
     broadcast: Arc<SubscriptionBroadcast>,

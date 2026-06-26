@@ -208,95 +208,85 @@ impl SubscriptionBroadcast {
 
     /// Subscribe to broadcasted checkpoints, optionally resuming from `resume_from + 1`.
     ///
-    /// When `resume_from` is `Some`, Phase 1 catches up to the live tip via LedgerService.
-    /// Partway through Phase 1, when scan gets within `RESUBSCRIBE_THRESHOLD` of the tip, we
-    /// resubscribe to the live broadcast so the receiver accumulates live items in parallel
-    /// with the remaining scan drain. Phase 2 then hands off seamlessly: any items the receiver
-    /// queued before scan finished are deduped, and subsequent broadcasts flow through to the
-    /// subscriber. `MAX_GAP_RESCANS` is a defensive cap on race-induced re-entries; in normal
-    /// operation the mid-phase resubscribe prevents the race entirely.
-    ///
-    /// Broadcast `Lagged` returns an error so the load balancer can redistribute the slow
-    /// subscriber.
+    /// Linear "catch up, then follow": Phase 1 scans toward the tip and pins a `handoff` near it,
+    /// Phase 2 follows the live broadcast from `handoff + 1`, so the phases meet with no gap. Any
+    /// anomaly disconnects (the client reconnects from its last cursor), logged by reason.
     pub(crate) fn subscribe<F: CheckpointFetcher + Clone + Send + 'static>(
         self: Arc<Self>,
         resume_from: Option<u64>,
         fetcher: F,
         config: &SubscriptionConfig,
     ) -> impl Stream<Item = Result<Arc<ProcessedCheckpoint>, RpcError>> + 'static {
-        // Defensive cap on Phase 1 re-entries triggered by a pathological race. With the
-        // mid-phase resubscribe, the race is mathematically impossible in steady state.
-        const MAX_GAP_RESCANS: u32 = 2;
-
-        // Distance from the tip at which we trigger the mid-phase resubscribe. Matches the
-        // buffered drain depth so the receiver has the same headroom as scan's in-flight items.
-        let resubscribe_threshold = config.per_subscriber_scan_max_concurrent_fetches as u64;
+        // Resubscribe and pin the handoff once the scan is within this many checkpoints of the tip.
+        // Half the buffer leaves room for checkpoints arriving during the handoff, so it won't lag.
+        let handoff_threshold = config.broadcast_buffer as u64 / 2;
 
         let config = config.clone();
 
         stream! {
             let mut last_yielded: Option<u64> = resume_from;
-            let mut gap_rescans = 0u32;
+            let mut pending_receiver: Option<CheckpointBroadcaster> = None;
+            // `resubscribe` is future-only (delivers `handoff + 1`), so Phase 1 stops exactly at
+            // `handoff` rather than chasing the tip.
+            let mut handoff: Option<u64> = None;
 
-            'recovery: loop {
-                let mut pending_receiver: Option<CheckpointBroadcaster> = None;
+            // Phase 1: scan toward the tip; within `handoff_threshold`, resubscribe + pin, stop at it.
+            if let Some(start_after) = last_yielded {
+                for await item in scan_checkpoints(fetcher, self.clone(), start_after, &config) {
+                    let processed = item?;
+                    let seq = processed.summary.sequence_number;
+                    last_yielded = Some(seq);
+                    yield Ok(processed);
 
-                // Phase 1: scan via LedgerService until caught up to the live tip. Once scan
-                // gets within `resubscribe_threshold` of the tip, subscribe to the live
-                // broadcast so it queues items in parallel with scan's remaining drain.
-                if let Some(start_after) = last_yielded {
-                    for await item in scan_checkpoints(
-                        fetcher.clone(),
-                        self.clone(),
-                        start_after,
-                        &config,
-                    ) {
-                        let processed = item?;
-                        let seq = processed.summary.sequence_number;
-                        last_yielded = Some(seq);
-                        yield Ok(processed);
+                    if pending_receiver.is_none()
+                        && self.network_tip().saturating_sub(seq) <= handoff_threshold
+                    {
+                        pending_receiver = Some(self.broadcaster.resubscribe());
+                        handoff = Some(self.network_tip());
+                    }
 
-                        if pending_receiver.is_none()
-                            && self.network_tip().saturating_sub(seq) <= resubscribe_threshold
-                        {
-                            pending_receiver = Some(self.broadcaster.resubscribe());
-                        }
+                    if handoff.is_some_and(|h| seq >= h) {
+                        break;
                     }
                 }
+            }
 
-                // Phase 2: continue from the mid-phase receiver, or subscribe now if Phase 1
-                // was skipped (e.g., resume_from > current tip).
-                let mut receiver = pending_receiver
-                    .unwrap_or_else(|| self.broadcaster.resubscribe());
-                loop {
-                    match receiver.recv().await {
-                        Ok(processed) => match last_yielded {
-                            // Receiver yielded an item already covered by scan; skip.
-                            Some(ly) if processed.summary.sequence_number <= ly => continue,
-                            // Live raced ahead between scan exit and resubscribe: re-enter
-                            // Phase 1 to bridge the gap.
-                            Some(ly) if processed.summary.sequence_number > ly + 1 => {
-                                gap_rescans += 1;
-                                if gap_rescans >= MAX_GAP_RESCANS {
-                                    yield Err(anyhow::anyhow!(
-                                        "Failed to catch up to the live tip after \
-                                         {MAX_GAP_RESCANS} re-scans; please reconnect.",
-                                    )
-                                    .into());
-                                    return;
-                                }
-                                continue 'recovery;
-                            }
-                            _ => {
-                                gap_rescans = 0;
-                                last_yielded = Some(processed.summary.sequence_number);
-                                yield Ok(processed);
-                            }
-                        },
-                        Err(e) => {
-                            yield Err(broadcast_error(e));
+            // Phase 2: follow live from the pinned receiver, or a fresh one if Phase 1 was skipped.
+            let mut receiver = pending_receiver
+                .unwrap_or_else(|| self.broadcaster.resubscribe());
+            // Tags the disconnect log: a `Lagged` before the first live item is catch-up overflow.
+            let mut delivered_live = false;
+            loop {
+                match receiver.recv().await {
+                    Ok(processed) => match last_yielded {
+                        // Already covered by the scan (resubscribe/tip race): skip.
+                        Some(ly) if processed.summary.sequence_number <= ly => continue,
+                        // Unreachable under pin-and-meet (live is contiguous with the scan; a real
+                        // lag surfaces as `Lagged`). Disconnect defensively rather than emit a hole.
+                        Some(ly) if processed.summary.sequence_number > ly + 1 => {
+                            warn!(
+                                last_yielded = ly,
+                                received = processed.summary.sequence_number,
+                                "Unexpected gap between scan and live; disconnecting"
+                            );
+                            yield Err(reconnect_error());
                             return;
                         }
+                        _ => {
+                            last_yielded = Some(processed.summary.sequence_number);
+                            delivered_live = true;
+                            yield Ok(processed);
+                        }
+                    },
+                    Err(broadcast::error::RecvError::Lagged(missed)) if !delivered_live => {
+                        warn!(missed, "Subscriber fell behind during catch-up (likely kv-rpc lag)");
+                        yield Err(reconnect_error());
+                        return;
+                    }
+                    // Slow subscriber (Lagged after going live) or closed channel: disconnect.
+                    Err(e) => {
+                        yield Err(broadcast_error(e));
+                        return;
                     }
                 }
             }
@@ -321,6 +311,16 @@ pub(crate) fn broadcast_error(e: broadcast::error::RecvError) -> RpcError {
             anyhow::anyhow!("Checkpoint stream has been shut down. Please reconnect.").into()
         }
     }
+}
+
+/// General error for a subscription interrupted by a gap or catch-up overflow. The specific reason
+/// is logged at the call site; clients only see that they should reconnect and backfill.
+fn reconnect_error() -> RpcError {
+    anyhow::anyhow!(
+        "Subscription interrupted. Please reconnect and use the query API to backfill \
+         from your last seen sequenceNumber."
+    )
+    .into()
 }
 
 /// Background service that connects to a fullnode's gRPC SubscribeCheckpoints endpoint,
