@@ -9,7 +9,6 @@ anyhow.workspace = true
 indexmap.workspace = true
 petgraph.workspace = true
 pretty_simple.workspace = true
-quine-mc_cluskey = "0.2"
 tempfile.workspace = true
 
 move-binary-format.workspace = true

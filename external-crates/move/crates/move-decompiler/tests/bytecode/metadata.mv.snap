@@ -360,11 +360,8 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
     let l36 = ascii::as_bytes(&type_name::into_string(type_name::get()));
     let l38 = l39 - C0;
     let l2 = C2;
-    let __c16 = l36 == &l2;
-    let (__c108, __c116, __c126, __c134, __c220, __c34, __c54, __c62, __c72, __c80, __c90, __c98);
-    if (__c16) {
-        __c34 = l38 == 1u32;
-        if (__c34) {
+    if (l36 == &l2) {
+        if (l38 == 1u32) {
             if (metadata::get_u8(l0, l1, 3u8) > 1u8) {
                 return false
             };
@@ -372,47 +369,36 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
         }
     } else {
         let l24 = C3;
-        __c54 = l36 == &l24;
-        if (__c54) {
-            __c62 = l38 == 1u32;
-            if (__c62) {
+        if (l36 == &l24) {
+            if (l38 == 1u32) {
                 return true
             }
         } else {
             let l31 = C4;
-            __c72 = l36 == &l31;
-            if (__c72) {
-                __c80 = l38 == 8u32;
-                if (__c80) {
+            if (l36 == &l31) {
+                if (l38 == 8u32) {
                     return true
                 }
             } else {
                 let l33 = C5;
-                __c90 = l36 == &l33;
-                if (__c90) {
-                    __c98 = l38 == 16u32;
-                    if (__c98) {
+                if (l36 == &l33) {
+                    if (l38 == 16u32) {
                         return true
                     }
                 } else {
                     let l35 = C6;
-                    __c108 = l36 == &l35;
-                    if (__c108) {
-                        __c116 = l38 == 32u32;
-                        if (__c116) {
+                    if (l36 == &l35) {
+                        if (l38 == 32u32) {
                             return true
                         }
                     } else {
                         let l4 = C7;
-                        __c126 = l36 == &l4;
-                        if (__c126) {
-                            __c134 = l38 == address::length()as u32;
-                            if (__c134) {
+                        if (l36 == &l4) {
+                            if (l38 == address::length()as u32) {
                                 return true
                             }
                         } else {
-                            __c220 = (((((l36.length() > 6u64 && l36[0u64] == 118u8) && l36[1u64] == 101u8) && l36[2u64] == 99u8) && l36[3u64] == 116u8) && l36[4u64] == 111u8) && l36[5u64] == 114u8;
-                            if (__c220) {
+                            if ((((((l36.length() > 6u64 && l36[0u64] == 118u8) && l36[1u64] == 101u8) && l36[2u64] == 99u8) && l36[3u64] == 116u8) && l36[4u64] == 111u8) && l36[5u64] == 114u8) {
                                 let l43 = 1u64;
                                 let l37 = false;
                                 if (l36[7u64] == 117u8) {
@@ -479,9 +465,7 @@ public fun has_chunk_of_type<T0>(l0: &vector<u8>, l1: u32): bool {
             }
         }
     };
-    if (((((((((((__c108 && !(__c116)) && !(__c16)) && !(__c54)) && !(__c72)) && !(__c90)) || ((((((__c126 && !(__c108)) && !(__c134)) && !(__c16)) && !(__c54)) && !(__c72)) && !(__c90))) || (__c16 && !(__c34))) || ((__c54 && !(__c16)) && !(__c62))) || (((__c72 && !(__c16)) && !(__c54)) && !(__c80))) || ((((__c90 && !(__c16)) && !(__c54)) && !(__c72)) && !(__c98))) || ((((((!(__c108) && !(__c126)) && !(__c16)) && !(__c220)) && !(__c54)) && !(__c72)) && !(__c90))) {
-        return false
-    }
+    return false
 }
 
 public fun key(l0: &vector<u8>): u32 {

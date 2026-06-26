@@ -35,23 +35,7 @@ use move_stackless_bytecode_2::ast::PrimitiveOp;
 use move_symbol_pool::Symbol;
 use petgraph::graph::NodeIndex;
 
-use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap, HashSet};
-
-thread_local! {
-    /// Memoization for `Formula::simplify`. The smart constructors canonicalize on
-    /// construction, so structurally-equal inputs hash and compare identically; hit rates
-    /// are high in the inner loops that run QM on derived guards.
-    static SIMPLIFY_CACHE: RefCell<HashMap<Formula, Formula>> = RefCell::new(HashMap::new());
-}
-
-/// Atom-count ceiling for running Quine-McCluskey minimization. The `quine_mc_cluskey`
-/// crate is super-exponential in the atom count - 12 atoms took ~18s on pyth's `update_4`.
-/// `Structured::from_guarded_items` uses [`Formula::classify`] (a ROBDD - see the `bdd`
-/// module) for its tautology/contradiction check, so the cap only affects the remaining
-/// `Formula::simplify` callers (`implied_by` and `is_disjunction_of_atoms`); above the
-/// limit those code paths return conservatively.
-const SIMPLIFY_ATOM_LIMIT: usize = 10;
 
 // -------------------------------------------------------------------------------------------------
 // Type
@@ -417,28 +401,35 @@ impl Formula {
         }
     }
 
-    /// The top-level disjuncts of `self`. `Or(fs)` returns clones of `fs`; anything else
-    /// returns `[self]`. Mirror of [`Self::conjuncts`].
-    pub fn disjuncts(&self) -> Vec<Formula> {
-        match &self.0 {
-            FormulaTree::Or(fs) => fs.clone(),
-            _ => vec![self.clone()],
-        }
-    }
-
-    /// True iff (after simplification) `self` is a disjunction whose every disjunct is an
-    /// atom in `allowed`. Used by switch recovery to recognize "this guard is reached iff
-    /// we took one of these variant arms"; generalizes to any disjunction-over-atoms test.
+    /// True iff `self` is semantically equivalent to a non-empty disjunction of atoms
+    /// drawn from `allowed`. Used by switch recovery to recognize "this guard is reached
+    /// iff we took one of these variant arms"; generalizes to any disjunction-over-atoms
+    /// test. We build `target = OR of (self's atoms ∩ allowed)` and check `self <-> target`
+    /// via [`Formula::classify`] - if the XOR is a contradiction the two sides are
+    /// equivalent.
     pub fn is_disjunction_of_atoms(&self, allowed: &HashSet<Symbol>) -> bool {
-        let simplified = self.simplify();
-        simplified
-            .disjuncts()
+        let self_atoms = self.atoms();
+        if self_atoms.is_empty() {
+            return false;
+        }
+        let allowed_atoms: Vec<Formula> = self_atoms
             .iter()
-            .all(|d| d.as_atom().is_some_and(|s| allowed.contains(&s)))
+            .filter(|a| allowed.contains(*a))
+            .map(|a| atom(*a))
+            .collect();
+        if allowed_atoms.is_empty() {
+            return false;
+        }
+        let target = or(allowed_atoms);
+        let xor = or(vec![
+            and(vec![self.clone(), not(target.clone())]),
+            and(vec![not(self.clone()), target]),
+        ]);
+        matches!(xor.classify(), Some(false))
     }
 
     /// True iff `&&(assumptions)` implies `self`. Verbatim-match shortcut, then an
-    /// atom-overlap prefilter to keep the QM input small. Used by the terminator-implication
+    /// atom-overlap prefilter to keep the BDD input small. Used by the terminator-implication
     /// pass to recognize when a sibling's guard is already forced by accumulated assumptions
     /// (so its `CondIf` wrapper can drop).
     pub fn implied_by(&self, assumptions: &[Formula]) -> bool {
@@ -461,7 +452,7 @@ impl Formula {
             return false;
         }
         conj.push(not(self.clone()));
-        and(conj).simplify() == false_()
+        matches!(and(conj).classify(), Some(false))
     }
 
     /// True iff `factor` can be pulled out of `self`. Mirrors how distribution works:
@@ -507,76 +498,6 @@ impl Formula {
     /// [`cond_var_name`] convention.
     pub fn as_cond_atom(&self) -> Option<NodeIndex> {
         self.as_atom().and_then(cond_block_from_name)
-    }
-
-    /// Quine-McCluskey minimization. Maps atoms to `u8` variables, runs the crate's
-    /// `simplify()`, picks the shortest result, and lowers back. Returns the original
-    /// formula unchanged if the atom count exceeds [`SIMPLIFY_ATOM_LIMIT`] or if
-    /// `simplify` returns an empty set.
-    ///
-    /// Memoized on a thread-local `HashMap` keyed by `self`. Smart constructors yield
-    /// canonical forms - two structurally-equal inputs hash and compare identically - so
-    /// hit rates are high in the per-Seq elide-pass loop where the same `(assumptions &&
-    /// !guard)` formula gets rebuilt across refinement iterations.
-    pub fn simplify(&self) -> Formula {
-        if let Some(cached) = SIMPLIFY_CACHE.with(|cell| cell.borrow().get(self).cloned()) {
-            return cached;
-        }
-        let result = self.simplify_uncached();
-        SIMPLIFY_CACHE.with(|cell| cell.borrow_mut().insert(self.clone(), result.clone()));
-        result
-    }
-
-    fn simplify_uncached(&self) -> Formula {
-        use quine_mc_cluskey::Bool as Q;
-
-        let atoms: Vec<Symbol> = self.atoms().into_iter().collect();
-        if atoms.len() > SIMPLIFY_ATOM_LIMIT {
-            return self.clone();
-        }
-        let name_to_var: std::collections::BTreeMap<Symbol, u8> = atoms
-            .iter()
-            .enumerate()
-            .map(|(i, s)| (*s, i as u8))
-            .collect();
-
-        fn to_q(f: &Formula, m: &std::collections::BTreeMap<Symbol, u8>) -> Q {
-            match &f.0 {
-                FormulaTree::True => Q::True,
-                FormulaTree::False => Q::False,
-                FormulaTree::Atom(s) => Q::Term(m[s]),
-                FormulaTree::Not(inner) => Q::Not(Box::new(to_q(inner, m))),
-                FormulaTree::And(fs) => Q::And(fs.iter().map(|f| to_q(f, m)).collect()),
-                FormulaTree::Or(fs) => Q::Or(fs.iter().map(|f| to_q(f, m)).collect()),
-            }
-        }
-
-        fn from_q(q: &Q, atoms: &[Symbol]) -> Formula {
-            match q {
-                Q::True => true_(),
-                Q::False => false_(),
-                Q::Term(i) => atom(atoms[*i as usize]),
-                Q::Not(inner) => not(from_q(inner, atoms)),
-                Q::And(fs) => and(fs.iter().map(|q| from_q(q, atoms)).collect()),
-                Q::Or(fs) => or(fs.iter().map(|q| from_q(q, atoms)).collect()),
-            }
-        }
-
-        let q = to_q(self, &name_to_var);
-        let simplified = q.simplify();
-        if simplified.is_empty() {
-            return self.clone();
-        }
-        // Pick the shortest minimal form by node count (operator + leaf count).
-        fn size(q: &Q) -> usize {
-            match q {
-                Q::True | Q::False | Q::Term(_) => 1,
-                Q::Not(inner) => 1 + size(inner),
-                Q::And(fs) | Q::Or(fs) => 1 + fs.iter().map(size).sum::<usize>(),
-            }
-        }
-        let best = simplified.iter().min_by_key(|q| size(q)).unwrap();
-        from_q(best, &atoms)
     }
 
     /// Lower to an `Exp`. Atoms become `Variable(name)`; the surrounding `let __c{n}`
@@ -650,9 +571,9 @@ impl std::fmt::Display for Formula {
 //
 // The `apply` operation (And/Or/Not) is O(|f| * |g|) with memoization, where |f| is the
 // number of unique BDD nodes - typically much smaller than 2^n for the formulas this
-// layer produces (reach-condition disjunctions over CFG paths). Compared to the
-// `quine_mc_cluskey` crate this gives us a tautology check that doesn't blow up beyond
-// ~10 atoms, so we can hand BDD any reach formula the structurer emits.
+// layer produces (reach-condition disjunctions over CFG paths). Polynomial in BDD size,
+// which makes this the single canonicalizer the rest of the file relies on for
+// `Formula::classify`, `implied_by`, and `is_disjunction_of_atoms`.
 mod bdd {
     use super::{Formula, FormulaTree};
     use move_symbol_pool::Symbol;
@@ -858,9 +779,8 @@ mod bdd {
 
 impl Formula {
     /// `Some(true)` if `self` is a boolean tautology, `Some(false)` if a contradiction,
-    /// `None` otherwise. Backed by a ROBDD (see the `bdd` module). Cheap enough to call
-    /// on every emitted guard at any atom count, unlike `Formula::simplify`'s
-    /// Quine-McCluskey path.
+    /// `None` otherwise. Backed by a ROBDD (see the `bdd` module); cheap enough to call
+    /// on every emitted guard at any atom count.
     pub fn classify(&self) -> Option<bool> {
         bdd::classify(self)
     }
