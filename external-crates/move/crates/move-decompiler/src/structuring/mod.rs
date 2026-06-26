@@ -50,13 +50,31 @@ pub(crate) fn structure(
 
     let mut structured_blocks: BTreeMap<D::Label, D::Structured> = BTreeMap::new();
     // Codes that haven't been emitted as a `Block(code)` yet. Every code-bearing input
-    // (Code/Condition/Variants) starts here; `to_structured_ast` removes one each time it
-    // commits a `Block(code)`. After structuring runs, anything still present is a node
-    // the structurer silently dropped - the rendered function carries a `// unstructured
-    // blocks: ...` notice listing them.
+    // (Code/Condition/Variants) *that's reachable from the entry* starts here;
+    // `to_structured_ast` removes one each time it commits a `Block(code)`. Unreachable
+    // blocks (dead code in the source) are excluded so the "// unstructured blocks ..."
+    // notice fires only on nodes the structurer should have been able to reach.
+    let reachable: HashSet<NodeIndex> = {
+        let mut visited: HashSet<NodeIndex> = HashSet::new();
+        let mut stack: Vec<NodeIndex> = vec![entry_node];
+        while let Some(n) = stack.pop() {
+            if !visited.insert(n) {
+                continue;
+            }
+            if let Some(inp) = input.get(&n) {
+                for (_, v) in inp.edges() {
+                    if !visited.contains(&v) {
+                        stack.push(v);
+                    }
+                }
+            }
+        }
+        visited
+    };
     let mut unstructured: HashSet<u64> = input
-        .values()
-        .filter_map(|inp| match inp {
+        .iter()
+        .filter(|(label, _)| reachable.contains(label))
+        .filter_map(|(_, inp)| match inp {
             D::Input::Code(_, code, _)
             | D::Input::Condition(_, code, _, _)
             | D::Input::Variants(_, code, _, _) => Some(*code),
