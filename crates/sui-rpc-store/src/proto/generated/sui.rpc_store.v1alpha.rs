@@ -168,6 +168,16 @@ pub struct PackageVersionInfo {
     /// is stored.
     #[prost(bytes = "bytes", tag = "1")]
     pub storage_id: ::prost::bytes::Bytes,
+    /// The checkpoint at which this package version was published.
+    ///
+    /// Absent on rows written by the live-set restore at the anchor
+    /// checkpoint: those versions were published before the available
+    /// window, so a checkpoint-bounded read treats them as having
+    /// always existed (a restore floor). Tip indexing and the
+    /// post-restore backfill of `\[L, T\]` set the real publish
+    /// checkpoint.
+    #[prost(uint64, optional, tag = "2")]
+    pub checkpoint: ::core::option::Option<u64>,
 }
 /// The object version live as of a checkpoint, stored in
 /// `object_version_by_checkpoint` keyed by `(ObjectID, checkpoint)`.

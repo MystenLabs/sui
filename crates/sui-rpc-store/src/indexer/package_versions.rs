@@ -6,6 +6,12 @@
 //! CF: one row per `(original_package_id, version)` published in
 //! the checkpoint.
 //!
+//! Each row records the storage id and the checkpoint at which the
+//! version was published. The live-set restore writes its rows via
+//! [`store_restored`](crate::schema::package_versions::store_restored),
+//! leaving the publish checkpoint unset (a restore floor) for
+//! versions that predate the available window.
+//!
 //! Pure puts — packages are immutable once written, so a later
 //! publish at the same `(original_id, version)` (which would
 //! itself be a chain-level error) deterministically overwrites
@@ -36,6 +42,7 @@ pub struct Row {
     pub original_id: ObjectID,
     pub version: u64,
     pub storage_id: ObjectID,
+    pub checkpoint: u64,
 }
 
 #[async_trait]
@@ -44,6 +51,7 @@ impl Processor for PackageVersions {
     type Value = Row;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Row>> {
+        let cp = checkpoint.summary.sequence_number;
         let mut rows = Vec::new();
         for (_, (object, _)) in checkpoint_output_objects(checkpoint)? {
             if let Data::Package(pkg) = &object.data {
@@ -51,6 +59,7 @@ impl Processor for PackageVersions {
                     original_id: pkg.original_package_id(),
                     version: pkg.version().value(),
                     storage_id: pkg.id(),
+                    checkpoint: cp,
                 });
             }
         }
@@ -75,8 +84,11 @@ impl Restore for PackageVersions {
         let Data::Package(pkg) = &object.data else {
             return Ok(());
         };
-        let (key, value) =
-            package_versions::store(pkg.original_package_id(), pkg.version().value(), pkg.id());
+        let (key, value) = package_versions::store_restored(
+            pkg.original_package_id(),
+            pkg.version().value(),
+            pkg.id(),
+        );
         batch.put(&schema.package_versions, &key, &value)?;
         Ok(())
     }
@@ -98,7 +110,12 @@ impl sequential::Handler for PackageVersions {
     ) -> anyhow::Result<usize> {
         let cf = &conn.store.schema().package_versions;
         for row in batch {
-            let (k, v) = package_versions::store(row.original_id, row.version, row.storage_id);
+            let (k, v) = package_versions::store(
+                row.original_id,
+                row.version,
+                row.storage_id,
+                row.checkpoint,
+            );
             conn.batch.put(cf, &k, &v)?;
         }
         Ok(batch.len())
