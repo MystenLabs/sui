@@ -31,9 +31,7 @@ use sui_network::{
 };
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::message_envelope::Message;
-use sui_types::messages_consensus::{
-    ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey,
-};
+use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxResponse, SystemStateRequest,
     TransactionInfoRequest, TransactionInfoResponse,
@@ -1165,7 +1163,30 @@ impl ValidatorService {
                 .collect()
         };
 
-        let consensus_positions: Vec<ConsensusPosition> = match submit_mode {
+        // Map each submission group back to the (result index, digest) of the transactions it
+        // contains, so a per-group outcome — consensus positions, or an "already processing"
+        // error — can be recorded against each individual transaction. Soft bundles submit as a
+        // single group; individual transactions submit one group each.
+        let group_tx_meta = if is_soft_bundle_request {
+            vec![
+                transaction_indexes
+                    .into_iter()
+                    .zip_debug_eq(tx_digests)
+                    .collect::<Vec<_>>(),
+            ]
+        } else {
+            transaction_indexes
+                .into_iter()
+                .zip_debug_eq(tx_digests)
+                .map(|pair| vec![pair])
+                .collect::<Vec<_>>()
+        };
+
+        // Collect one result per submission group WITHOUT short-circuiting. An
+        // already-processing transaction is reported per-tx as a retriable below;
+        // any other error fails the whole request, after all groups have settled.
+        // Soft bundles submit as a single group; individual transactions submit one group each.
+        let group_results = match submit_mode {
             AdmissionQueueSubmitMode::Bypass | AdmissionQueueSubmitMode::Disabled => {
                 if matches!(submit_mode, AdmissionQueueSubmitMode::Bypass) {
                     self.metrics.admission_queue_direct_bypasses.inc();
@@ -1182,11 +1203,7 @@ impl ValidatorService {
                         submitter_client_addr,
                     )
                 });
-                future::try_join_all(futures)
-                    .await?
-                    .into_iter()
-                    .flatten()
-                    .collect()
+                future::join_all(futures).await
             }
             AdmissionQueueSubmitMode::Queue => {
                 let aq = self
@@ -1207,35 +1224,65 @@ impl ValidatorService {
                     }
                     receivers.push(rx);
                 }
-                let results = future::try_join_all(receivers.into_iter().map(|rx| async move {
-                    rx.await.map_err(|_| {
-                        SuiError::from(SuiErrorKind::TooManyTransactionsPendingConsensus)
-                    })?
+                future::join_all(receivers.into_iter().map(|rx| async move {
+                    match rx.await {
+                        Ok(result) => result.map_err(SuiError::from),
+                        Err(_) => Err(SuiError::from(
+                            SuiErrorKind::TooManyTransactionsPendingConsensus,
+                        )),
+                    }
                 }))
-                .await?;
-                results.into_iter().flatten().collect()
+                .await
             }
         };
 
         if is_ping_request {
-            // For ping requests, return the special consensus position.
+            // For ping requests there is a single group returning the special consensus position.
+            let consensus_positions = group_results
+                .into_iter()
+                .next()
+                .expect("Ping request must have exactly one submission group")?;
             assert_eq!(consensus_positions.len(), 1);
             results.push(Some(SubmitTxResult::Submitted {
                 consensus_position: consensus_positions[0],
             }));
         } else {
-            // Otherwise, return the consensus position for each transaction.
-            for ((idx, tx_digest), consensus_position) in transaction_indexes
-                .into_iter()
-                .zip_debug_eq(tx_digests)
-                .zip_debug_eq(consensus_positions)
-            {
-                debug!(
-                    ?tx_digest,
-                    "handle_submit_transaction: submitted consensus transaction at {}",
-                    consensus_position,
-                );
-                results[idx] = Some(SubmitTxResult::Submitted { consensus_position });
+            for (group_result, txns_meta) in group_results.into_iter().zip_debug_eq(group_tx_meta) {
+                match group_result {
+                    Ok(consensus_positions) => {
+                        for ((idx, tx_digest), consensus_position) in
+                            txns_meta.into_iter().zip_debug_eq(consensus_positions)
+                        {
+                            debug!(
+                                ?tx_digest,
+                                "handle_submit_transaction: submitted consensus transaction at {}",
+                                consensus_position,
+                            );
+                            results[idx] = Some(SubmitTxResult::Submitted { consensus_position });
+                        }
+                    }
+                    // The transaction(s) in this group are already being processed by consensus.
+                    // Report per-tx as a retriable rejection rather than failing the whole request.
+                    Err(err)
+                        if matches!(err.as_inner(), SuiErrorKind::TransactionProcessing { .. }) =>
+                    {
+                        for (idx, tx_digest) in txns_meta {
+                            debug!(
+                                ?tx_digest,
+                                "handle_submit_transaction: transaction already processing: {err}"
+                            );
+                            // Same suppression the upfront `is_consensus_message_processed` check
+                            // records, just detected during submission instead of before it. The
+                            // two paths are mutually exclusive, so this does not double-count.
+                            metrics
+                                .submission_suppressed_already_processed
+                                .with_label_values(&[req_type])
+                                .inc();
+                            results[idx] = Some(SubmitTxResult::Rejected { error: err.clone() });
+                        }
+                    }
+                    Err(err) => return Err(err),
+                }
             }
         }
 

@@ -512,10 +512,7 @@ impl ConsensusAdapter {
         };
 
         // Skip submission if the tx is already processed via consensus output or
-        // checkpoint state sync. Unlike before, this check now also runs when a caller
-        // is waiting for a consensus position (mfp): rather than redundantly submitting
-        // an already-processed transaction, we cancel the pre-submission request and
-        // tell the caller the transaction is already processing.
+        // checkpoint state sync.
         let already_processed =
             self.check_processed_via_consensus_or_checkpoint(&transaction_keys, epoch_store);
         if let Some(method) = already_processed {
@@ -643,17 +640,9 @@ impl ConsensusAdapter {
             let processed_waiter = self
                 .processed_notify(transaction_keys.clone(), epoch_store)
                 .boxed();
-            // Whether processing was observed via `processed_notify` winning the race,
-            // rather than our own submission completing. The channel send is deferred until
-            // after the match: `submit_fut` holds a mutable borrow of `tx_consensus_positions`
-            // for as long as the `select` result (`Either`) is alive, i.e. until the match
-            // expression ends, so touching the channel inside an arm is a borrow conflict.
             let processed_via_notify;
             guard.processed_method = match select(processed_waiter, submit_fut.boxed()).await {
                 Either::Left((observed, _submit_fut)) => {
-                    // The transaction came out of consensus output (or a checkpoint) before
-                    // our submission completed. `_submit_fut` is dropped at the end of this
-                    // arm, cancelling the retry loop cleanly.
                     processed_via_notify = true;
                     observed
                 }
