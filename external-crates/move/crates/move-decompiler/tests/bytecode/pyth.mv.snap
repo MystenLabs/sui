@@ -163,11 +163,11 @@ public fun update_4(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             l21 = false;
         }
     };
-    let (__c101, __c110, __c125, __c134, __c44, __c59, __c68, __c77, __c92);
     if ((__c0 && !(__c25)) || (!(__c0) && !(__c35))) {
         l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
         l24 = option::get_with_default(&l7, l20);
-        __c44 = l22 > l19;
+        let __c44 = l22 > l19;
+        let (__c59, __c68);
         if (__c44) {
             __c59 = l22 - l19 >= l24;
             if (__c59) {
@@ -182,7 +182,8 @@ public fun update_4(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
         if ((__c44 && !(__c59)) || (!(__c44) && !(__c68))) {
             l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
             l24 = option::get_with_default(&l5, l20);
-            __c77 = l22 > l19;
+            let __c77 = l22 > l19;
+            let (__c101, __c92);
             if (__c77) {
                 __c92 = l22 - l19 >= l24;
                 if (__c92) {
@@ -197,30 +198,25 @@ public fun update_4(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             if ((__c77 && !(__c92)) || (!(__c101) && !(__c77))) {
                 l22 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
                 l24 = option::get_with_default(&l3, l20);
-                __c110 = l22 > l19;
-                if (__c110) {
-                    __c125 = l22 - l19 >= l24;
-                    if (__c125) {
+                if (l22 > l19) {
+                    if (l22 - l19 >= l24) {
                         l21 = false;
                     }
                 } else {
-                    __c134 = l19 - l22 >= l24;
-                    if (__c134) {
+                    if (l19 - l22 >= l24) {
                         l21 = false;
                     }
                 }
             }
         }
     };
-    if ((((((((((__c0 && __c25) || (((__c101 && !(__c77)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68))))) || ((((__c110 && __c125) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((__c110 && !(__c125)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((__c134 && !(__c110)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (__c35 && !(__c0))) || ((__c44 && __c59) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35))))) || ((__c68 && !(__c44)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35))))) || (((__c77 && __c92) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68))))) || ((((!(__c110) && !(__c134)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) {
-        if (!(l21)) {
-            let l25 = vaa::parse_and_verify(l10, l11, l13);
-            let l23 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l25, l13);
-            l23 = pyth::update_single_price_feed(l0, l23, l2, coin::split(l12, state::get_base_update_fee(l0), l14), l13);
-            l23 = pyth::update_single_price_feed(l0, l23, l4, coin::split(l12, state::get_base_update_fee(l0), l14), l13);
-            l23 = pyth::update_single_price_feed(l0, l23, l6, coin::split(l12, state::get_base_update_fee(l0), l14), l13);
-            hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l23, l8, coin::split(l12, state::get_base_update_fee(l0), l14), l13))
-        }
+    if (!(l21)) {
+        let l25 = vaa::parse_and_verify(l10, l11, l13);
+        let l23 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l25, l13);
+        l23 = pyth::update_single_price_feed(l0, l23, l2, coin::split(l12, state::get_base_update_fee(l0), l14), l13);
+        l23 = pyth::update_single_price_feed(l0, l23, l4, coin::split(l12, state::get_base_update_fee(l0), l14), l13);
+        l23 = pyth::update_single_price_feed(l0, l23, l6, coin::split(l12, state::get_base_update_fee(l0), l14), l13);
+        hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l23, l8, coin::split(l12, state::get_base_update_fee(l0), l14), l13))
     }
 }
 
@@ -243,11 +239,11 @@ public fun update_5(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             l24 = false;
         }
     };
-    let (__c101, __c110, __c125, __c134, __c143, __c158, __c167, __c44, __c59, __c68, __c77, __c92);
     if ((__c0 && !(__c25)) || (!(__c0) && !(__c35))) {
         l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
         l27 = option::get_with_default(&l9, l23);
-        __c44 = l25 > l22;
+        let __c44 = l25 > l22;
+        let (__c59, __c68);
         if (__c44) {
             __c59 = l25 - l22 >= l27;
             if (__c59) {
@@ -262,7 +258,8 @@ public fun update_5(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
         if ((__c44 && !(__c59)) || (!(__c44) && !(__c68))) {
             l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
             l27 = option::get_with_default(&l7, l23);
-            __c77 = l25 > l22;
+            let __c77 = l25 > l22;
+            let (__c101, __c92);
             if (__c77) {
                 __c92 = l25 - l22 >= l27;
                 if (__c92) {
@@ -277,7 +274,8 @@ public fun update_5(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             if ((__c77 && !(__c92)) || (!(__c101) && !(__c77))) {
                 l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
                 l27 = option::get_with_default(&l5, l23);
-                __c110 = l25 > l22;
+                let __c110 = l25 > l22;
+                let (__c125, __c134);
                 if (__c110) {
                     __c125 = l25 - l22 >= l27;
                     if (__c125) {
@@ -292,15 +290,12 @@ public fun update_5(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
                 if ((__c110 && !(__c125)) || (!(__c110) && !(__c134))) {
                     l25 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
                     l27 = option::get_with_default(&l3, l23);
-                    __c143 = l25 > l22;
-                    if (__c143) {
-                        __c158 = l25 - l22 >= l27;
-                        if (__c158) {
+                    if (l25 > l22) {
+                        if (l25 - l22 >= l27) {
                             l24 = false;
                         }
                     } else {
-                        __c167 = l22 - l25 >= l27;
-                        if (__c167) {
+                        if (l22 - l25 >= l27) {
                             l24 = false;
                         }
                     }
@@ -308,16 +303,14 @@ public fun update_5(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             }
         }
     };
-    if ((((((((((((__c0 && __c25) || (((__c101 && !(__c77)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68))))) || ((((__c110 && __c125) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((__c134 && !(__c110)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((__c143 && __c158) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((__c143 && !(__c158)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((__c167 && !(__c143)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (__c35 && !(__c0))) || ((__c44 && __c59) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35))))) || ((__c68 && !(__c44)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35))))) || (((__c77 && __c92) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68))))) || (((((!(__c143) && !(__c167)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) {
-        if (!(l24)) {
-            let l28 = vaa::parse_and_verify(l12, l13, l15);
-            let l26 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l28, l15);
-            l26 = pyth::update_single_price_feed(l0, l26, l2, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
-            l26 = pyth::update_single_price_feed(l0, l26, l4, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
-            l26 = pyth::update_single_price_feed(l0, l26, l6, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
-            l26 = pyth::update_single_price_feed(l0, l26, l8, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
-            hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l26, l10, coin::split(l14, state::get_base_update_fee(l0), l16), l15))
-        }
+    if (!(l24)) {
+        let l28 = vaa::parse_and_verify(l12, l13, l15);
+        let l26 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l28, l15);
+        l26 = pyth::update_single_price_feed(l0, l26, l2, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
+        l26 = pyth::update_single_price_feed(l0, l26, l4, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
+        l26 = pyth::update_single_price_feed(l0, l26, l6, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
+        l26 = pyth::update_single_price_feed(l0, l26, l8, coin::split(l14, state::get_base_update_fee(l0), l16), l15);
+        hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l26, l10, coin::split(l14, state::get_base_update_fee(l0), l16), l15))
     }
 }
 
@@ -340,11 +333,11 @@ public fun update_6(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             l27 = false;
         }
     };
-    let (__c101, __c110, __c125, __c134, __c143, __c158, __c167, __c176, __c191, __c200, __c44, __c59, __c68, __c77, __c92);
     if ((__c0 && !(__c25)) || (!(__c0) && !(__c35))) {
         l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
         l30 = option::get_with_default(&l11, l26);
-        __c44 = l28 > l25;
+        let __c44 = l28 > l25;
+        let (__c59, __c68);
         if (__c44) {
             __c59 = l28 - l25 >= l30;
             if (__c59) {
@@ -359,7 +352,8 @@ public fun update_6(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
         if ((__c44 && !(__c59)) || (!(__c44) && !(__c68))) {
             l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
             l30 = option::get_with_default(&l9, l26);
-            __c77 = l28 > l25;
+            let __c77 = l28 > l25;
+            let (__c101, __c92);
             if (__c77) {
                 __c92 = l28 - l25 >= l30;
                 if (__c92) {
@@ -374,7 +368,8 @@ public fun update_6(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             if ((__c77 && !(__c92)) || (!(__c101) && !(__c77))) {
                 l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
                 l30 = option::get_with_default(&l7, l26);
-                __c110 = l28 > l25;
+                let __c110 = l28 > l25;
+                let (__c125, __c134);
                 if (__c110) {
                     __c125 = l28 - l25 >= l30;
                     if (__c125) {
@@ -389,7 +384,8 @@ public fun update_6(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
                 if ((__c110 && !(__c125)) || (!(__c110) && !(__c134))) {
                     l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
                     l30 = option::get_with_default(&l5, l26);
-                    __c143 = l28 > l25;
+                    let __c143 = l28 > l25;
+                    let (__c158, __c167);
                     if (__c143) {
                         __c158 = l28 - l25 >= l30;
                         if (__c158) {
@@ -404,15 +400,12 @@ public fun update_6(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
                     if ((__c143 && !(__c158)) || (!(__c143) && !(__c167))) {
                         l28 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
                         l30 = option::get_with_default(&l3, l26);
-                        __c176 = l28 > l25;
-                        if (__c176) {
-                            __c191 = l28 - l25 >= l30;
-                            if (__c191) {
+                        if (l28 > l25) {
+                            if (l28 - l25 >= l30) {
                                 l27 = false;
                             }
                         } else {
-                            __c200 = l25 - l28 >= l30;
-                            if (__c200) {
+                            if (l25 - l28 >= l30) {
                                 l27 = false;
                             }
                         }
@@ -421,17 +414,15 @@ public fun update_6(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             }
         }
     };
-    if ((((((((((((((__c0 && __c25) || (((__c101 && !(__c77)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68))))) || ((((__c110 && __c125) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((__c134 && !(__c110)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((__c143 && __c158) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((__c167 && !(__c143)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((((__c176 && __c191) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((((__c176 && !(__c191)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((((__c200 && !(__c176)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (__c35 && !(__c0))) || ((__c44 && __c59) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35))))) || ((__c68 && !(__c44)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35))))) || (((__c77 && __c92) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68))))) || ((((((!(__c176) && !(__c200)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) {
-        if (!(l27)) {
-            let l31 = vaa::parse_and_verify(l14, l15, l17);
-            let l29 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l31, l17);
-            l29 = pyth::update_single_price_feed(l0, l29, l2, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
-            l29 = pyth::update_single_price_feed(l0, l29, l4, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
-            l29 = pyth::update_single_price_feed(l0, l29, l6, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
-            l29 = pyth::update_single_price_feed(l0, l29, l8, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
-            l29 = pyth::update_single_price_feed(l0, l29, l10, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
-            hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l29, l12, coin::split(l16, state::get_base_update_fee(l0), l18), l17))
-        }
+    if (!(l27)) {
+        let l31 = vaa::parse_and_verify(l14, l15, l17);
+        let l29 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l31, l17);
+        l29 = pyth::update_single_price_feed(l0, l29, l2, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
+        l29 = pyth::update_single_price_feed(l0, l29, l4, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
+        l29 = pyth::update_single_price_feed(l0, l29, l6, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
+        l29 = pyth::update_single_price_feed(l0, l29, l8, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
+        l29 = pyth::update_single_price_feed(l0, l29, l10, coin::split(l16, state::get_base_update_fee(l0), l18), l17);
+        hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l29, l12, coin::split(l16, state::get_base_update_fee(l0), l18), l17))
     }
 }
 
@@ -454,11 +445,11 @@ public fun update_7(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             l30 = false;
         }
     };
-    let (__c101, __c110, __c125, __c134, __c143, __c158, __c167, __c176, __c191, __c200, __c209, __c224, __c233, __c44, __c59, __c68, __c77, __c92);
     if ((__c0 && !(__c25)) || (!(__c0) && !(__c35))) {
         l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l12)));
         l33 = option::get_with_default(&l13, l29);
-        __c44 = l31 > l28;
+        let __c44 = l31 > l28;
+        let (__c59, __c68);
         if (__c44) {
             __c59 = l31 - l28 >= l33;
             if (__c59) {
@@ -473,7 +464,8 @@ public fun update_7(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
         if ((__c44 && !(__c59)) || (!(__c44) && !(__c68))) {
             l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
             l33 = option::get_with_default(&l11, l29);
-            __c77 = l31 > l28;
+            let __c77 = l31 > l28;
+            let (__c101, __c92);
             if (__c77) {
                 __c92 = l31 - l28 >= l33;
                 if (__c92) {
@@ -488,7 +480,8 @@ public fun update_7(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             if ((__c77 && !(__c92)) || (!(__c101) && !(__c77))) {
                 l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
                 l33 = option::get_with_default(&l9, l29);
-                __c110 = l31 > l28;
+                let __c110 = l31 > l28;
+                let (__c125, __c134);
                 if (__c110) {
                     __c125 = l31 - l28 >= l33;
                     if (__c125) {
@@ -503,7 +496,8 @@ public fun update_7(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
                 if ((__c110 && !(__c125)) || (!(__c110) && !(__c134))) {
                     l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
                     l33 = option::get_with_default(&l7, l29);
-                    __c143 = l31 > l28;
+                    let __c143 = l31 > l28;
+                    let (__c158, __c167);
                     if (__c143) {
                         __c158 = l31 - l28 >= l33;
                         if (__c158) {
@@ -518,7 +512,8 @@ public fun update_7(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
                     if ((__c143 && !(__c158)) || (!(__c143) && !(__c167))) {
                         l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
                         l33 = option::get_with_default(&l5, l29);
-                        __c176 = l31 > l28;
+                        let __c176 = l31 > l28;
+                        let (__c191, __c200);
                         if (__c176) {
                             __c191 = l31 - l28 >= l33;
                             if (__c191) {
@@ -533,15 +528,12 @@ public fun update_7(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
                         if ((__c176 && !(__c191)) || (!(__c176) && !(__c200))) {
                             l31 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
                             l33 = option::get_with_default(&l3, l29);
-                            __c209 = l31 > l28;
-                            if (__c209) {
-                                __c224 = l31 - l28 >= l33;
-                                if (__c224) {
+                            if (l31 > l28) {
+                                if (l31 - l28 >= l33) {
                                     l30 = false;
                                 }
                             } else {
-                                __c233 = l28 - l31 >= l33;
-                                if (__c233) {
+                                if (l28 - l31 >= l33) {
                                     l30 = false;
                                 }
                             }
@@ -551,18 +543,16 @@ public fun update_7(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             }
         }
     };
-    if ((((((((((((((((__c0 && __c25) || (((__c101 && !(__c77)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68))))) || ((((__c110 && __c125) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((__c134 && !(__c110)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((__c143 && __c158) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((__c167 && !(__c143)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((((__c176 && __c191) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((((__c200 && !(__c176)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((((__c209 && __c224) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c176 && !(__c191)) || (!(__c176) && !(__c200)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((((__c209 && !(__c224)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c176 && !(__c191)) || (!(__c176) && !(__c200)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((((__c233 && !(__c209)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c176 && !(__c191)) || (!(__c176) && !(__c200)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (__c35 && !(__c0))) || ((__c44 && __c59) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35))))) || ((__c68 && !(__c44)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35))))) || (((__c77 && __c92) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68))))) || (((((((!(__c209) && !(__c233)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c176 && !(__c191)) || (!(__c176) && !(__c200)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) {
-        if (!(l30)) {
-            let l34 = vaa::parse_and_verify(l16, l17, l19);
-            let l32 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l34, l19);
-            l32 = pyth::update_single_price_feed(l0, l32, l2, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
-            l32 = pyth::update_single_price_feed(l0, l32, l4, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
-            l32 = pyth::update_single_price_feed(l0, l32, l6, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
-            l32 = pyth::update_single_price_feed(l0, l32, l8, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
-            l32 = pyth::update_single_price_feed(l0, l32, l10, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
-            l32 = pyth::update_single_price_feed(l0, l32, l12, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
-            hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l32, l14, coin::split(l18, state::get_base_update_fee(l0), l20), l19))
-        }
+    if (!(l30)) {
+        let l34 = vaa::parse_and_verify(l16, l17, l19);
+        let l32 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l34, l19);
+        l32 = pyth::update_single_price_feed(l0, l32, l2, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
+        l32 = pyth::update_single_price_feed(l0, l32, l4, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
+        l32 = pyth::update_single_price_feed(l0, l32, l6, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
+        l32 = pyth::update_single_price_feed(l0, l32, l8, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
+        l32 = pyth::update_single_price_feed(l0, l32, l10, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
+        l32 = pyth::update_single_price_feed(l0, l32, l12, coin::split(l18, state::get_base_update_fee(l0), l20), l19);
+        hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l32, l14, coin::split(l18, state::get_base_update_fee(l0), l20), l19))
     }
 }
 
@@ -585,11 +575,11 @@ public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             l33 = false;
         }
     };
-    let (__c101, __c110, __c125, __c134, __c143, __c158, __c167, __c176, __c191, __c200, __c209, __c224, __c233, __c242, __c257, __c266, __c44, __c59, __c68, __c77, __c92);
     if ((__c0 && !(__c25)) || (!(__c0) && !(__c35))) {
         l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l14)));
         l36 = option::get_with_default(&l15, l32);
-        __c44 = l34 > l31;
+        let __c44 = l34 > l31;
+        let (__c59, __c68);
         if (__c44) {
             __c59 = l34 - l31 >= l36;
             if (__c59) {
@@ -604,7 +594,8 @@ public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
         if ((__c44 && !(__c59)) || (!(__c44) && !(__c68))) {
             l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l12)));
             l36 = option::get_with_default(&l13, l32);
-            __c77 = l34 > l31;
+            let __c77 = l34 > l31;
+            let (__c101, __c92);
             if (__c77) {
                 __c92 = l34 - l31 >= l36;
                 if (__c92) {
@@ -619,7 +610,8 @@ public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             if ((__c77 && !(__c92)) || (!(__c101) && !(__c77))) {
                 l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l10)));
                 l36 = option::get_with_default(&l11, l32);
-                __c110 = l34 > l31;
+                let __c110 = l34 > l31;
+                let (__c125, __c134);
                 if (__c110) {
                     __c125 = l34 - l31 >= l36;
                     if (__c125) {
@@ -634,7 +626,8 @@ public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
                 if ((__c110 && !(__c125)) || (!(__c110) && !(__c134))) {
                     l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l8)));
                     l36 = option::get_with_default(&l9, l32);
-                    __c143 = l34 > l31;
+                    let __c143 = l34 > l31;
+                    let (__c158, __c167);
                     if (__c143) {
                         __c158 = l34 - l31 >= l36;
                         if (__c158) {
@@ -649,7 +642,8 @@ public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
                     if ((__c143 && !(__c158)) || (!(__c143) && !(__c167))) {
                         l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l6)));
                         l36 = option::get_with_default(&l7, l32);
-                        __c176 = l34 > l31;
+                        let __c176 = l34 > l31;
+                        let (__c191, __c200);
                         if (__c176) {
                             __c191 = l34 - l31 >= l36;
                             if (__c191) {
@@ -664,7 +658,8 @@ public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
                         if ((__c176 && !(__c191)) || (!(__c176) && !(__c200))) {
                             l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l4)));
                             l36 = option::get_with_default(&l5, l32);
-                            __c209 = l34 > l31;
+                            let __c209 = l34 > l31;
+                            let (__c224, __c233);
                             if (__c209) {
                                 __c224 = l34 - l31 >= l36;
                                 if (__c224) {
@@ -679,15 +674,12 @@ public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
                             if ((__c209 && !(__c224)) || (!(__c209) && !(__c233))) {
                                 l34 = price::get_timestamp(&pyth::get_price_unsafe(freeze(l2)));
                                 l36 = option::get_with_default(&l3, l32);
-                                __c242 = l34 > l31;
-                                if (__c242) {
-                                    __c257 = l34 - l31 >= l36;
-                                    if (__c257) {
+                                if (l34 > l31) {
+                                    if (l34 - l31 >= l36) {
                                         l33 = false;
                                     }
                                 } else {
-                                    __c266 = l31 - l34 >= l36;
-                                    if (__c266) {
+                                    if (l31 - l34 >= l36) {
                                         l33 = false;
                                     }
                                 }
@@ -698,19 +690,17 @@ public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
             }
         }
     };
-    if ((((((((((((((((((__c0 && __c25) || (((__c101 && !(__c77)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68))))) || ((((__c110 && __c125) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((__c134 && !(__c110)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((__c143 && __c158) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((__c167 && !(__c143)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((((__c176 && __c191) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((((__c200 && !(__c176)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((((__c209 && __c224) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c176 && !(__c191)) || (!(__c176) && !(__c200)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (((((((__c233 && !(__c209)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c176 && !(__c191)) || (!(__c176) && !(__c200)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((((((__c242 && __c257) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c176 && !(__c191)) || (!(__c176) && !(__c200)))) && ((__c209 && !(__c224)) || (!(__c209) && !(__c233)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((((((__c242 && !(__c257)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c176 && !(__c191)) || (!(__c176) && !(__c200)))) && ((__c209 && !(__c224)) || (!(__c209) && !(__c233)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || ((((((((__c266 && !(__c242)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c176 && !(__c191)) || (!(__c176) && !(__c200)))) && ((__c209 && !(__c224)) || (!(__c209) && !(__c233)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) || (__c35 && !(__c0))) || ((__c44 && __c59) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35))))) || ((__c68 && !(__c44)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35))))) || (((__c77 && __c92) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68))))) || ((((((((!(__c242) && !(__c266)) && ((__c0 && !(__c25)) || (!(__c0) && !(__c35)))) && ((__c110 && !(__c125)) || (!(__c110) && !(__c134)))) && ((__c143 && !(__c158)) || (!(__c143) && !(__c167)))) && ((__c176 && !(__c191)) || (!(__c176) && !(__c200)))) && ((__c209 && !(__c224)) || (!(__c209) && !(__c233)))) && ((__c44 && !(__c59)) || (!(__c44) && !(__c68)))) && ((__c77 && !(__c92)) || (!(__c101) && !(__c77))))) {
-        if (!(l33)) {
-            let l37 = vaa::parse_and_verify(l18, l19, l21);
-            let l35 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l37, l21);
-            l35 = pyth::update_single_price_feed(l0, l35, l2, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-            l35 = pyth::update_single_price_feed(l0, l35, l4, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-            l35 = pyth::update_single_price_feed(l0, l35, l6, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-            l35 = pyth::update_single_price_feed(l0, l35, l8, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-            l35 = pyth::update_single_price_feed(l0, l35, l10, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-            l35 = pyth::update_single_price_feed(l0, l35, l12, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-            l35 = pyth::update_single_price_feed(l0, l35, l14, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
-            hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l35, l16, coin::split(l20, state::get_base_update_fee(l0), l22), l21))
-        }
+    if (!(l33)) {
+        let l37 = vaa::parse_and_verify(l18, l19, l21);
+        let l35 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l37, l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l2, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l4, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l6, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l8, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l10, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l12, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        l35 = pyth::update_single_price_feed(l0, l35, l14, coin::split(l20, state::get_base_update_fee(l0), l22), l21);
+        hot_potato_vector::destroy(pyth::update_single_price_feed(l0, l35, l16, coin::split(l20, state::get_base_update_fee(l0), l22), l21))
     }
 }
 

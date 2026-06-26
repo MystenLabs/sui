@@ -216,20 +216,10 @@ impl Structured {
     pub fn from_guarded_items(items: Vec<(Formula, Structured)>) -> Structured {
         let mut out: Vec<Structured> = Vec::with_capacity(items.len());
         for (guard, body) in items {
-            let g = if guard == predicates::true_() || guard == predicates::false_() {
-                guard
-            } else {
-                let s = guard.simplify();
-                if s == predicates::true_() || s == predicates::false_() {
-                    s
-                } else {
-                    guard
-                }
-            };
-            if g == predicates::true_() {
-                out.push(body);
-            } else if g != predicates::false_() {
-                out.push(Structured::CondIf(g, Box::new(body), Box::new(None)));
+            match guard.classify() {
+                Some(true) => out.push(body),
+                Some(false) => {}
+                None => out.push(Structured::CondIf(guard, Box::new(body), Box::new(None))),
             }
         }
         Structured::Seq(out)

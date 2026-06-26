@@ -45,12 +45,12 @@ thread_local! {
     static SIMPLIFY_CACHE: RefCell<HashMap<Formula, Formula>> = RefCell::new(HashMap::new());
 }
 
-/// Atom-count ceiling for running Quine-McCluskey minimization on a formula. The
-/// `quine_mc_cluskey` crate is super-exponential in the atom count - 12 atoms took ~18s on
-/// pyth's `update_4`. Factoring in the smart constructors compresses formula *trees* but
-/// not atom *counts*, so this ceiling still applies even with factoring in place. Above
-/// the limit we fall through to the factored canonical form (NNF, sorted, deduped,
-/// absorbed) without running QM.
+/// Atom-count ceiling for running Quine-McCluskey minimization. The `quine_mc_cluskey`
+/// crate is super-exponential in the atom count - 12 atoms took ~18s on pyth's `update_4`.
+/// `Structured::from_guarded_items` uses [`Formula::classify`] (a ROBDD - see the `bdd`
+/// module) for its tautology/contradiction check, so the cap only affects the remaining
+/// `Formula::simplify` callers (`implied_by` and `is_disjunction_of_atoms`); above the
+/// limit those code paths return conservatively.
 const SIMPLIFY_ATOM_LIMIT: usize = 10;
 
 // -------------------------------------------------------------------------------------------------
@@ -630,6 +630,241 @@ impl std::fmt::Display for Formula {
 // -------------------------------------------------------------------------------------------------
 // Tests
 // -------------------------------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------------------------------
+// BDD-based tautology/contradiction detection
+// -------------------------------------------------------------------------------------------------
+//
+// A minimal Reduced Ordered Binary Decision Diagram (ROBDD). Each non-terminal node is a
+// triple `(var, low, high)` where `low` is the BDD when `var=false` and `high` when
+// `var=true`. Two terminal nodes (FALSE_ID, TRUE_ID) sit at the leaves. The structure is:
+//
+//   - Reduced: `mk(var, low, high)` returns the existing `NodeId` whenever
+//     `(var, low, high)` has been seen, so structurally-equal sub-BDDs are shared. If
+//     `low == high`, `var` is irrelevant and `mk` returns `low` directly.
+//   - Ordered: a fixed variable ordering means any path from the root has strictly
+//     increasing variable indices.
+//
+// Given these two properties, `f` is a tautology iff its root is `TRUE_ID`, a
+// contradiction iff `FALSE_ID`. Everything else means the formula is contingent.
+//
+// The `apply` operation (And/Or/Not) is O(|f| * |g|) with memoization, where |f| is the
+// number of unique BDD nodes - typically much smaller than 2^n for the formulas this
+// layer produces (reach-condition disjunctions over CFG paths). Compared to the
+// `quine_mc_cluskey` crate this gives us a tautology check that doesn't blow up beyond
+// ~10 atoms, so we can hand BDD any reach formula the structurer emits.
+mod bdd {
+    use super::{Formula, FormulaTree};
+    use move_symbol_pool::Symbol;
+    use std::collections::HashMap;
+
+    pub type NodeId = u32;
+    pub const FALSE_ID: NodeId = 0;
+    pub const TRUE_ID: NodeId = 1;
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    struct Node {
+        var: u32,
+        low: NodeId,
+        high: NodeId,
+    }
+
+    pub struct Bdd {
+        nodes: Vec<Node>,
+        unique: HashMap<Node, NodeId>,
+        apply_cache: HashMap<(u8, NodeId, NodeId), NodeId>,
+        not_cache: HashMap<NodeId, NodeId>,
+    }
+
+    const OP_AND: u8 = 0;
+    const OP_OR: u8 = 1;
+
+    impl Bdd {
+        fn new() -> Self {
+            let f = Node {
+                var: u32::MAX,
+                low: 0,
+                high: 0,
+            };
+            let t = Node {
+                var: u32::MAX,
+                low: 1,
+                high: 1,
+            };
+            Self {
+                nodes: vec![f, t],
+                unique: HashMap::new(),
+                apply_cache: HashMap::new(),
+                not_cache: HashMap::new(),
+            }
+        }
+
+        fn mk(&mut self, var: u32, low: NodeId, high: NodeId) -> NodeId {
+            if low == high {
+                return low;
+            }
+            let key = Node { var, low, high };
+            if let Some(&id) = self.unique.get(&key) {
+                return id;
+            }
+            let id = self.nodes.len() as NodeId;
+            self.nodes.push(key);
+            self.unique.insert(key, id);
+            id
+        }
+
+        fn apply(&mut self, op: u8, a: NodeId, b: NodeId) -> NodeId {
+            // Terminal shortcuts.
+            match op {
+                OP_AND => {
+                    if a == FALSE_ID || b == FALSE_ID {
+                        return FALSE_ID;
+                    }
+                    if a == TRUE_ID {
+                        return b;
+                    }
+                    if b == TRUE_ID {
+                        return a;
+                    }
+                }
+                OP_OR => {
+                    if a == TRUE_ID || b == TRUE_ID {
+                        return TRUE_ID;
+                    }
+                    if a == FALSE_ID {
+                        return b;
+                    }
+                    if b == FALSE_ID {
+                        return a;
+                    }
+                }
+                _ => unreachable!(),
+            }
+            if a == b {
+                return a;
+            }
+            // Canonical key (op is commutative).
+            let (lo_arg, hi_arg) = if a < b { (a, b) } else { (b, a) };
+            let key = (op, lo_arg, hi_arg);
+            if let Some(&r) = self.apply_cache.get(&key) {
+                return r;
+            }
+            let va = self.nodes[a as usize].var;
+            let vb = self.nodes[b as usize].var;
+            let v = va.min(vb);
+            let (a_lo, a_hi) = if va == v {
+                (self.nodes[a as usize].low, self.nodes[a as usize].high)
+            } else {
+                (a, a)
+            };
+            let (b_lo, b_hi) = if vb == v {
+                (self.nodes[b as usize].low, self.nodes[b as usize].high)
+            } else {
+                (b, b)
+            };
+            let lo = self.apply(op, a_lo, b_lo);
+            let hi = self.apply(op, a_hi, b_hi);
+            let r = self.mk(v, lo, hi);
+            self.apply_cache.insert(key, r);
+            r
+        }
+
+        fn not(&mut self, a: NodeId) -> NodeId {
+            if a == FALSE_ID {
+                return TRUE_ID;
+            }
+            if a == TRUE_ID {
+                return FALSE_ID;
+            }
+            if let Some(&r) = self.not_cache.get(&a) {
+                return r;
+            }
+            let v = self.nodes[a as usize].var;
+            let l = self.nodes[a as usize].low;
+            let h = self.nodes[a as usize].high;
+            let nl = self.not(l);
+            let nh = self.not(h);
+            let r = self.mk(v, nl, nh);
+            self.not_cache.insert(a, r);
+            r
+        }
+
+        fn build(&mut self, f: &Formula, var_of: &HashMap<Symbol, u32>) -> NodeId {
+            match &f.0 {
+                FormulaTree::True => TRUE_ID,
+                FormulaTree::False => FALSE_ID,
+                FormulaTree::Atom(s) => {
+                    let v = var_of[s];
+                    self.mk(v, FALSE_ID, TRUE_ID)
+                }
+                FormulaTree::Not(inner) => {
+                    let id = self.build(inner, var_of);
+                    self.not(id)
+                }
+                FormulaTree::And(fs) => {
+                    let mut acc = TRUE_ID;
+                    for f in fs {
+                        let id = self.build(f, var_of);
+                        acc = self.apply(OP_AND, acc, id);
+                        if acc == FALSE_ID {
+                            return FALSE_ID;
+                        }
+                    }
+                    acc
+                }
+                FormulaTree::Or(fs) => {
+                    let mut acc = FALSE_ID;
+                    for f in fs {
+                        let id = self.build(f, var_of);
+                        acc = self.apply(OP_OR, acc, id);
+                        if acc == TRUE_ID {
+                            return TRUE_ID;
+                        }
+                    }
+                    acc
+                }
+            }
+        }
+    }
+
+    /// `Some(true)` if `f` is a tautology, `Some(false)` if a contradiction, `None` if
+    /// neither. Variables are ordered by `Symbol::Ord`; the order affects BDD *size* but
+    /// not correctness or the tautology answer.
+    pub fn classify(f: &Formula) -> Option<bool> {
+        let atoms = f.atoms();
+        if atoms.is_empty() {
+            return match &f.0 {
+                FormulaTree::True => Some(true),
+                FormulaTree::False => Some(false),
+                _ => None,
+            };
+        }
+        let var_of: HashMap<Symbol, u32> = atoms
+            .into_iter()
+            .enumerate()
+            .map(|(i, s)| (s, i as u32))
+            .collect();
+        let mut bdd = Bdd::new();
+        let root = bdd.build(f, &var_of);
+        if root == TRUE_ID {
+            Some(true)
+        } else if root == FALSE_ID {
+            Some(false)
+        } else {
+            None
+        }
+    }
+}
+
+impl Formula {
+    /// `Some(true)` if `self` is a boolean tautology, `Some(false)` if a contradiction,
+    /// `None` otherwise. Backed by a ROBDD (see the `bdd` module). Cheap enough to call
+    /// on every emitted guard at any atom count, unlike `Formula::simplify`'s
+    /// Quine-McCluskey path.
+    pub fn classify(&self) -> Option<bool> {
+        bdd::classify(self)
+    }
+}
 
 #[cfg(test)]
 mod tests {
