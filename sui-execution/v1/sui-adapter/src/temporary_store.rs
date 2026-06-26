@@ -358,6 +358,7 @@ impl<'backing> TemporaryStore<'backing> {
             shared_object_refs,
             BTreeSet::new(),
             &object_changes,
+            BTreeMap::new(),
         );
         let inner = self.into_inner();
 

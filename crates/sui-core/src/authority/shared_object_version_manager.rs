@@ -29,6 +29,19 @@ use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionK
 use sui_types::{SUI_RANDOMNESS_STATE_OBJECT_ID, base_types::SequenceNumber, error::SuiResult};
 use tracing::trace;
 
+/// System objects that a transaction may read *implicitly* during execution, i.e. without declaring
+/// them as shared inputs. Their read version is recorded in effects (as a read-only consensus
+/// object) and reproduced on the replay/state-sync path so the read resolves to the same version on
+/// every node.
+///
+/// A transaction can still also declare one of these as an explicit input (e.g. a settlement
+/// transaction mutating the accumulator root, or a user transaction that passes it in), in which
+/// case it is additionally sequenced like any other shared input. Membership here only says the
+/// object *may* be read implicitly, so its read version must be reproducible. System objects that
+/// are only ever accessed through explicit inputs (the Clock, system state, …) do not belong here.
+/// Extend this as more implicitly-read system objects arise.
+const IMPLICITLY_READ_SYSTEM_OBJECTS: &[ObjectID] = &[SUI_ACCUMULATOR_ROOT_OBJECT_ID];
+
 pub struct SharedObjVerManager {}
 
 /// Version assignments for a single transaction
@@ -362,27 +375,53 @@ impl SharedObjVerManager {
                 .into_iter()
                 .map(|input| input.into_id_and_version())
                 .collect();
-            let cert_assigned_versions: Vec<_> = effects
-                .input_consensus_objects()
+            let accessed_versions: BTreeMap<ObjectID, SequenceNumber> = effects
+                .accessed_consensus_objects()
                 .into_iter()
-                .map(|iso| {
-                    let (id, version) = iso.id_and_version();
-                    let initial_version = initial_version_map
-                        .get(&id)
-                        .expect("transaction must have all inputs from effects");
-                    ((id, *initial_version), version)
+                .map(|iso| iso.id_and_version())
+                .collect();
+            debug_assert!(
+                accessed_versions
+                    .keys()
+                    .all(|id| initial_version_map.contains_key(id)
+                        || IMPLICITLY_READ_SYSTEM_OBJECTS.contains(id)),
+                "accessed consensus object is neither a declared input nor a known system object: \
+                 accessed={accessed_versions:?} declared={initial_version_map:?}"
+            );
+            let cert_assigned_versions: Vec<_> = accessed_versions
+                .iter()
+                .filter_map(|(id, version)| {
+                    initial_version_map
+                        .get(id)
+                        .map(|initial_version| ((*id, *initial_version), *version))
                 })
                 .collect();
+            // Record the version each known implicitly-read system object was read at (from effects)
+            // so the read resolves to the same version on replay. This holds even when the
+            // transaction also declares the object as an explicit input. A cancelled transaction
+            // records special sentinel versions (e.g. CONGESTED) for its declared inputs, which are
+            // not read versions — skip them so they neither enter the map nor block the accumulator
+            // back-fill below.
+            let mut system_object_versions: BTreeMap<ObjectID, SequenceNumber> =
+                IMPLICITLY_READ_SYSTEM_OBJECTS
+                    .iter()
+                    .filter_map(|id| accessed_versions.get(id).map(|version| (*id, *version)))
+                    .filter(|(_, version)| !version.is_cancelled())
+                    .collect();
+            // The accumulator root version is needed even when the transaction doesn't read it in
+            // execution (e.g. coin-reservation rewriting), so ensure it is always present.
+            if let Some(v) = *accumulator_version {
+                system_object_versions
+                    .entry(SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                    .or_insert(v);
+            }
             let tx_key = cert.key();
             trace!(
                 ?tx_key,
                 ?cert_assigned_versions,
+                ?system_object_versions,
                 "assigned consensus object versions from effects"
             );
-            let system_object_versions: BTreeMap<ObjectID, SequenceNumber> = (*accumulator_version)
-                .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
-                .into_iter()
-                .collect();
             assigned_versions.push((
                 tx_key,
                 AssignedVersions::new(cert_assigned_versions, system_object_versions),

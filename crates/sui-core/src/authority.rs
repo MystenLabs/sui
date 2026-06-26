@@ -1864,7 +1864,7 @@ impl AuthorityState {
         self.metrics.total_effects.inc();
         self.metrics.total_certs.inc();
 
-        let consensus_object_count = effects.input_consensus_objects().len();
+        let consensus_object_count = effects.accessed_consensus_objects().len();
         if consensus_object_count > 0 {
             self.metrics.shared_obj_tx.inc();
         }
@@ -6719,7 +6719,7 @@ impl NodeStateDump {
 
         // Record all the shared objects
         let mut shared_objects = Vec::new();
-        for kind in effects.input_consensus_objects() {
+        for kind in effects.accessed_consensus_objects() {
             match kind {
                 InputConsensusObject::Mutate(obj_ref) | InputConsensusObject::ReadOnly(obj_ref) => {
                     if let Some(w) = object_store.get_object_by_key(&obj_ref.0, obj_ref.1) {
