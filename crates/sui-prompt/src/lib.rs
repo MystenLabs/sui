@@ -124,7 +124,7 @@ impl Prompt {
     pub fn execute(self) -> anyhow::Result<()> {
         match self.cmd {
             None => {
-                print!("{}", OVERVIEW);
+                print_embedded_content(OVERVIEW);
                 Ok(())
             }
             Some(PromptCommand::Categories) => {
@@ -237,7 +237,7 @@ fn print_skill(bundle: &str, list: bool, file: Option<&str>, all: bool) -> anyho
         let total: usize = entries.iter().map(|(_, n)| n).sum();
         let max_name = entries
             .iter()
-            .map(|(f, _)| f.strip_suffix(".md").unwrap_or(f).len())
+            .map(|(f, _)| display_ref_name(f).len())
             .max()
             .unwrap_or(0);
         println!(
@@ -248,7 +248,7 @@ fn print_skill(bundle: &str, list: bool, file: Option<&str>, all: bool) -> anyho
         );
         for (f, size) in &entries {
             // Display without `.md` extension so `--file <ref>` matches the printed form.
-            let display = f.strip_suffix(".md").unwrap_or(f);
+            let display = display_ref_name(f);
             println!("  {:<width$}  {:>7}", display, size, width = max_name);
         }
         return Ok(());
@@ -262,7 +262,7 @@ fn print_skill(bundle: &str, list: bool, file: Option<&str>, all: bool) -> anyho
         .find(|s| s.bundle == bundle && s.file == target_file)
     {
         Some(s) => {
-            print!("{}", s.content);
+            print_embedded_content(s.content);
             Ok(())
         }
         None => anyhow::bail!(
@@ -282,6 +282,18 @@ fn normalize_skill_file(name: &str) -> String {
     } else {
         format!("{name}.md")
     }
+}
+
+/// Display a reference filename the same way `--file` accepts it: without the
+/// optional `.md` suffix.
+fn display_ref_name(file: &str) -> &str {
+    file.strip_suffix(".md").unwrap_or(file)
+}
+
+/// Print embedded Markdown as a complete CLI response, independent of whether the
+/// source file carries a final newline.
+fn print_embedded_content(content: &str) {
+    println!("{}", content.trim_end_matches('\n'));
 }
 
 /// Print every embedded category's name + description to stdout, alphabetically.
@@ -339,7 +351,7 @@ fn print_categories() {
 fn print_category(name: &str) -> anyhow::Result<()> {
     match CATEGORIES.iter().find(|c| c.name == name) {
         Some(c) => {
-            print!("{}", c.content);
+            print_embedded_content(c.content);
             Ok(())
         }
         None => {
@@ -420,17 +432,8 @@ fn print_bundle_all(bundle: &str, bundle_prefix: Option<&str>) {
             // table ever drifts. Skip silently rather than panicking mid-stream.
             continue;
         };
-        print!("{}", s.content);
-        // Normalize to a blank line separating the file from the next `#` heading,
-        // regardless of whether the source ends with `\n`, `\n\n`, or no newline.
-        if !s.content.ends_with("\n\n") {
-            if s.content.ends_with('\n') {
-                println!();
-            } else {
-                println!();
-                println!();
-            }
-        }
+        print_embedded_content(s.content);
+        println!();
     }
 }
 
@@ -471,7 +474,7 @@ fn print_category_list(name: &str) -> anyhow::Result<()> {
         let bundle_total: usize = files.iter().map(|(_, n)| *n).sum();
         let max_name = files
             .iter()
-            .map(|(f, _)| f.strip_suffix(".md").unwrap_or(f).len())
+            .map(|(f, _)| display_ref_name(f).len())
             .max()
             .unwrap_or(0);
         println!();
@@ -484,7 +487,7 @@ fn print_category_list(name: &str) -> anyhow::Result<()> {
         for (f, size) in files {
             // `.md` stripped to match the `skill --list` convention, so `--file <ref>`
             // can be invoked with the printed form unchanged.
-            let display = f.strip_suffix(".md").unwrap_or(f);
+            let display = display_ref_name(f);
             println!("  {:<width$}  {:>7}", display, size, width = max_name);
         }
     }
