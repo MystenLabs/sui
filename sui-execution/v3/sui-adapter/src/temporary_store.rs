@@ -344,6 +344,7 @@ impl<'backing> TemporaryStore<'backing> {
             shared_object_refs,
             loaded_per_epoch_config_objects,
             &object_changes,
+            BTreeMap::new(),
         );
         let inner = self.into_inner(accumulator_running_max_withdraws);
 
