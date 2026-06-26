@@ -659,7 +659,7 @@ mod tests {
     }
 
     /// `embedded` registers exactly the ten embedded-cohort
-    /// pipelines (four live + six history) and none of the
+    /// pipelines (three live + seven history) and none of the
     /// deactivated raw-chain-data ones, so the synchronizer's
     /// snapshot cohort covers exactly those. Pinned to the
     /// [`LIVE_COHORT`] / [`HISTORY_COHORT`] constants (via the real

@@ -7,15 +7,22 @@
 //! the checkpoint.
 //!
 //! Each row records the storage id and the checkpoint at which the
-//! version was published. The live-set restore writes its rows via
+//! version was published. As a history-cohort member this CF is both
+//! restored and backfilled: the live-set restore writes its rows via
 //! [`store_restored`](crate::schema::package_versions::store_restored),
-//! leaving the publish checkpoint unset (a restore floor) for
-//! versions that predate the available window.
+//! leaving the publish checkpoint unset (a restore floor), and the
+//! embedded backfill of `(L, T]` then re-publishes every version
+//! created in that window with its real publish checkpoint, overwriting
+//! the floor. Versions that predate the available window are never
+//! re-published, so they keep their floor and read as having always
+//! existed.
 //!
 //! Pure puts — packages are immutable once written, so a later
 //! publish at the same `(original_id, version)` (which would
 //! itself be a chain-level error) deterministically overwrites
-//! the prior storage id rather than dueling with it.
+//! the prior storage id rather than dueling with it. The same
+//! overwrite is what lets the backfill replace a restore floor with
+//! the real publish checkpoint.
 
 use std::sync::Arc;
 
