@@ -362,7 +362,7 @@ impl ConsensusAdapter {
     fn check_limits(&self) -> bool {
         // First check total transactions (waiting and in submission)
         if self.num_inflight_transactions.load(Ordering::Relaxed) as usize
-            > self.max_pending_transactions
+            >= self.max_pending_transactions
         {
             return false;
         }
@@ -496,7 +496,7 @@ impl ConsensusAdapter {
         tracing::Span::current().record("tx_type", tx_type);
         tracing::Span::current().record("tx_keys", tracing::field::debug(&transaction_keys));
 
-        let mut guard = InflightDropGuard::acquire(&self, tx_type);
+        let mut guard = InflightDropGuard::acquire(&self, tx_type, transactions.len() as u64);
 
         // Skip submission if the tx is already processed via consensus output
         // or checkpoint state sync. `skip_processed_checks` is set by callers
@@ -948,6 +948,9 @@ struct InflightDropGuard<'a> {
     submitted: bool,
     tx_type: &'static str,
     processed_method: ProcessedMethod,
+    /// Number of transactions this guard accounts for.
+    /// > 1 for soft bundles.
+    inflight_count: u64,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -957,10 +960,14 @@ enum ProcessedMethod {
 }
 
 impl<'a> InflightDropGuard<'a> {
-    pub fn acquire(adapter: &'a ConsensusAdapter, tx_type: &'static str) -> Self {
+    pub fn acquire(
+        adapter: &'a ConsensusAdapter,
+        tx_type: &'static str,
+        inflight_count: u64,
+    ) -> Self {
         adapter
             .num_inflight_transactions
-            .fetch_add(1, Ordering::SeqCst);
+            .fetch_add(inflight_count, Ordering::SeqCst);
         adapter
             .metrics
             .sequencing_certificate_inflight
@@ -977,6 +984,7 @@ impl<'a> InflightDropGuard<'a> {
             submitted: false,
             tx_type,
             processed_method: ProcessedMethod::Consensus,
+            inflight_count,
         }
     }
 }
@@ -985,7 +993,7 @@ impl Drop for InflightDropGuard<'_> {
     fn drop(&mut self) {
         self.adapter
             .num_inflight_transactions
-            .fetch_sub(1, Ordering::SeqCst);
+            .fetch_sub(self.inflight_count, Ordering::SeqCst);
         self.adapter
             .metrics
             .sequencing_certificate_inflight
