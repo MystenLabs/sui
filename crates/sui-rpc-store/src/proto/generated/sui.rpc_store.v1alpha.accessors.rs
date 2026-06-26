@@ -105,6 +105,7 @@ mod _accessor_impls {
         pub const fn const_default() -> Self {
             Self {
                 storage_id: ::prost::bytes::Bytes::new(),
+                checkpoint: None,
             }
         }
         #[doc(hidden)]
@@ -122,6 +123,28 @@ mod _accessor_impls {
             field: T,
         ) -> Self {
             self.set_storage_id(field.into());
+            self
+        }
+        ///If `checkpoint` is set, returns [`Some`] with a mutable reference to the value; otherwise returns [`None`].
+        pub fn checkpoint_opt_mut(&mut self) -> Option<&mut u64> {
+            self.checkpoint.as_mut().map(|field| field as _)
+        }
+        ///Returns a mutable reference to `checkpoint`.
+        ///If the field is unset, it is first initialized with the default value.
+        pub fn checkpoint_mut(&mut self) -> &mut u64 {
+            self.checkpoint.get_or_insert_default()
+        }
+        ///If `checkpoint` is set, returns [`Some`] with the value; otherwise returns [`None`].
+        pub fn checkpoint_opt(&self) -> Option<u64> {
+            self.checkpoint.as_ref().map(|field| *field)
+        }
+        ///Sets `checkpoint` with the provided value.
+        pub fn set_checkpoint(&mut self, field: u64) {
+            self.checkpoint = Some(field);
+        }
+        ///Sets `checkpoint` with the provided value.
+        pub fn with_checkpoint(mut self, field: u64) -> Self {
+            self.set_checkpoint(field);
             self
         }
     }
