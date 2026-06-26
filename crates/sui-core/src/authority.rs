@@ -639,14 +639,14 @@ impl AuthorityMetrics {
             .unwrap(),
             consensus_handler_processed: register_int_counter_vec_with_registry!(
                 "consensus_handler_processed",
-                "Number of transactions processed by consensus handler",
-                &["class"],
+                "Number of transactions processed by consensus handler, sliced by class, commit outcome (accepted/rejected) and block author",
+                &["class", "outcome", "authority"],
                 registry
             ).unwrap(),
             consensus_handler_transaction_sizes: register_histogram_vec_with_registry!(
                 "consensus_handler_transaction_sizes",
-                "Sizes of each type of transactions processed by consensus handler",
-                &["class"],
+                "Sizes of each type of transactions processed by consensus handler, sliced by class, commit outcome (accepted/rejected) and block author",
+                &["class", "outcome", "authority"],
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry
             ).unwrap(),

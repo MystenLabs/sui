@@ -2452,6 +2452,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
         for (block, parsed_transactions) in consensus_commit.transactions() {
             let author = block.author.value();
+            let author_hostname = self.committee.authority(block.author).hostname.as_str();
             // TODO: consider only messages within 1~3 rounds of the leader?
             self.last_consensus_stats.stats.inc_num_messages(author);
 
@@ -2501,8 +2502,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
+                // Record metrics for every committed transaction, regardless of whether it was
+                // accepted or rejected by consensus, so we measure the full committed output.
+                let kind = classify(&parsed.transaction);
+                let outcome = if parsed.rejected {
+                    "rejected"
+                } else {
+                    "accepted"
+                };
+                self.metrics
+                    .consensus_handler_processed
+                    .with_label_values(&[kind, outcome, author_hostname])
+                    .inc();
+                self.metrics
+                    .consensus_handler_transaction_sizes
+                    .with_label_values(&[kind, outcome, author_hostname])
+                    .observe(parsed.serialized_len as f64);
+
                 if parsed.rejected {
-                    // TODO(fastpath): Add metrics for rejected transactions.
                     if parsed.transaction.is_user_transaction() {
                         self.epoch_store
                             .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
@@ -2512,15 +2529,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     continue;
                 }
 
-                let kind = classify(&parsed.transaction);
-                self.metrics
-                    .consensus_handler_processed
-                    .with_label_values(&[kind])
-                    .inc();
-                self.metrics
-                    .consensus_handler_transaction_sizes
-                    .with_label_values(&[kind])
-                    .observe(parsed.serialized_len as f64);
                 if parsed.transaction.is_user_transaction() {
                     self.last_consensus_stats
                         .stats
