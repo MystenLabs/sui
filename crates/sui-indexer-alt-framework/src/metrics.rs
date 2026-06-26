@@ -61,6 +61,7 @@ pub struct IngestionMetrics {
     pub total_ingested_events: IntCounter,
     pub total_ingested_objects: IntCounter,
     pub total_ingested_bytes: IntCounter,
+    pub total_dns_resolutions: IntCounter,
     pub total_ingested_transient_retries: IntCounterVec,
     pub total_ingested_not_found_retries: IntCounter,
     pub total_streamed_checkpoints: IntCounter,
@@ -207,6 +208,12 @@ impl IngestionMetrics {
             total_ingested_bytes: register_int_counter_with_registry!(
                 name("total_ingested_bytes"),
                 "Total number of bytes fetched from the remote store",
+                registry,
+            )
+            .unwrap(),
+            total_dns_resolutions: register_int_counter_with_registry!(
+                name("total_dns_resolutions"),
+                "Total number of DNS resolutions performed by the checkpoint store's HTTP client",
                 registry,
             )
             .unwrap(),

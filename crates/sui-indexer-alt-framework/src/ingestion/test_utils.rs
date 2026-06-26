@@ -24,7 +24,10 @@ const RNG_SEED: [u8; 32] = [
     179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
 ];
 
-pub(crate) fn test_checkpoint_data(cp: u64) -> Vec<u8> {
+/// Build the zstd-compressed protobuf checkpoint blob (`<cp>.binpb.zst`) the store ingestion client
+/// expects, for checkpoint sequence number `cp`. Public so integration tests can serve checkpoint
+/// payloads without a feature flag.
+pub fn test_checkpoint_data(cp: u64) -> Vec<u8> {
     let mut rng = StdRng::from_seed(RNG_SEED);
     let (keys, committee) = make_committee_key(&mut rng);
     let contents = CheckpointContents::new_with_digests_only_for_tests(vec![]);

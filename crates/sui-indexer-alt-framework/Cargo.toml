@@ -53,6 +53,11 @@ sui-pg-db = { workspace = true, optional = true }
 telemetry-subscribers.workspace = true
 wiremock.workspace = true
 dashmap.workspace = true
+hyper = { workspace = true, features = ["http1", "http2", "server"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+rcgen.workspace = true
+rustls.workspace = true
+tokio-rustls.workspace = true
 
 sui-indexer-alt-framework-store-traits = { workspace = true, features = ["testing"] }
 sui-synthetic-ingestion.workspace = true
