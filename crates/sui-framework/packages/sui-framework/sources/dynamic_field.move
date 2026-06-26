@@ -266,7 +266,7 @@ public(package) fun field_info_mut<Name: copy + drop + store>(
 }
 
 /// May abort with `EBCSSerializationFailure`.
-public(package) native fun hash_type_and_key<K: copy + drop + store>(
+public(package) native fun hash_type_and_key<K: copy + drop>(
     parent: address,
     k: K,
 ): address;
