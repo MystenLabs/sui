@@ -287,13 +287,11 @@ impl ConsensusAdapter {
             )?;
         }
 
-        rx_consensus_positions
-            .await
-            .map_err(|e| {
-                SuiError::from(SuiErrorKind::FailedToSubmitToConsensus(format!(
-                    "Failed to get consensus position: {e}"
-                )))
-            })?
+        rx_consensus_positions.await.map_err(|e| {
+            SuiError::from(SuiErrorKind::FailedToSubmitToConsensus(format!(
+                "Failed to get consensus position: {e}"
+            )))
+        })?
     }
 
     pub fn recover_end_of_publish(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
@@ -645,23 +643,36 @@ impl ConsensusAdapter {
             let processed_waiter = self
                 .processed_notify(transaction_keys.clone(), epoch_store)
                 .boxed();
+            // Whether processing was observed via `processed_notify` winning the race,
+            // rather than our own submission completing. The channel send is deferred until
+            // after the match: `submit_fut` holds a mutable borrow of `tx_consensus_positions`
+            // for as long as the `select` result (`Either`) is alive, i.e. until the match
+            // expression ends, so touching the channel inside an arm is a borrow conflict.
+            let processed_via_notify;
             guard.processed_method = match select(processed_waiter, submit_fut.boxed()).await {
-                Either::Left((observed, submit_fut)) => {
-                    // The transaction came out of consensus output (or a checkpoint)
-                    // before our submission completed. Drop the submit future to release
-                    // its borrow of `tx_consensus_positions`, then, if we have not already
-                    // sent a position to a waiting caller, report that it is processing.
-                    drop(submit_fut);
-                    if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
-                        let _ = tx_consensus_positions.send(Err(make_processing_error(observed)));
-                    }
+                Either::Left((observed, _submit_fut)) => {
+                    // The transaction came out of consensus output (or a checkpoint) before
+                    // our submission completed. `_submit_fut` is dropped at the end of this
+                    // arm, cancelling the retry loop cleanly.
+                    processed_via_notify = true;
                     observed
                 }
                 Either::Right(((), processed_waiter)) => {
                     debug!("Submitted {transaction_keys:?} to consensus");
+                    processed_via_notify = false;
                     processed_waiter.await
                 }
             };
+            // If processing was observed before a position was sent to a waiting caller,
+            // report that the transaction is already processing so the caller returns a
+            // retriable error. If a position was already sent, the channel is taken and this
+            // is a no-op.
+            if processed_via_notify
+                && let Some(tx_consensus_positions) = tx_consensus_positions.take()
+            {
+                let _ =
+                    tx_consensus_positions.send(Err(make_processing_error(guard.processed_method)));
+            }
         }
         debug!("{transaction_keys:?} processed by consensus");
 
