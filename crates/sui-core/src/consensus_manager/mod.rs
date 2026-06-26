@@ -145,8 +145,8 @@ fn apply_v3_threshold_overrides(committee: Committee) -> Committee {
     )
 }
 
-fn to_consensus_protocol_config(config: &ProtocolConfig, chain: Chain) -> ConsensusProtocolConfig {
-    let chain_type = match chain {
+fn to_consensus_protocol_config(config: &ProtocolConfig) -> ConsensusProtocolConfig {
+    let chain_type = match config.chain() {
         Chain::Mainnet => ChainType::Mainnet,
         Chain::Testnet => ChainType::Testnet,
         Chain::Unknown => ChainType::Unknown,
@@ -250,8 +250,7 @@ impl ConsensusManager {
     ) {
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
-        let consensus_protocol_config =
-            to_consensus_protocol_config(protocol_config, epoch_store.get_chain());
+        let consensus_protocol_config = to_consensus_protocol_config(protocol_config);
         let system_state = epoch_store.epoch_start_state();
         let committee = if consensus_protocol_config.enable_v3() {
             apply_v3_threshold_overrides(system_state.get_consensus_committee())

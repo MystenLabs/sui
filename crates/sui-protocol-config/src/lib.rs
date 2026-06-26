@@ -1285,6 +1285,13 @@ impl ConsensusNetwork {
 pub struct ProtocolConfig {
     pub version: ProtocolVersion,
 
+    /// The chain this config was instantiated for. Unlike the other fields, this is not a
+    /// versioned protocol constant: it identifies the network rather than describing protocol
+    /// behavior, so it is intentionally excluded from serialization (and from the config
+    /// snapshots) and is populated directly from the chain passed to `get_for_version`.
+    #[serde(skip)]
+    chain: Chain,
+
     feature_flags: FeatureFlags,
 
     // ==== Transaction input limits ====
@@ -2047,6 +2054,11 @@ pub struct AliasedAddress {
 
 // feature flags
 impl ProtocolConfig {
+    /// The chain this config was instantiated for (see the `chain` field).
+    pub fn chain(&self) -> Chain {
+        self.chain
+    }
+
     // Add checks for feature flag support here, e.g.:
     // pub fn check_new_protocol_feature_supported(&self) -> Result<(), Error> {
     //     if self.feature_flags.new_protocol_feature_supported {
@@ -2911,6 +2923,7 @@ impl ProtocolConfig {
 
         let mut ret = Self::get_for_version_impl(version, chain);
         ret.version = version;
+        ret.chain = chain;
 
         ret = Self::apply_config_override(version, ret);
 
@@ -2933,6 +2946,7 @@ impl ProtocolConfig {
         if version.0 >= ProtocolVersion::MIN.0 && version.0 <= ProtocolVersion::MAX_ALLOWED.0 {
             let mut ret = Self::get_for_version_impl(version, chain);
             ret.version = version;
+            ret.chain = chain;
             ret = Self::apply_config_override(version, ret);
             Some(ret)
         } else {
@@ -3002,6 +3016,7 @@ impl ProtocolConfig {
         let mut cfg = Self {
             // will be overwritten before being returned
             version,
+            chain,
 
             // All flags are disabled in V1
             feature_flags: Default::default(),
