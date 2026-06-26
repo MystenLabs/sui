@@ -46,12 +46,23 @@ pub(crate) fn structure(
     }
 
     let mut graph = Graph::new(config, &input, entry_node);
-    // Capture node ids up front - by the time we report `unemitted` the map has been
-    // partially drained (loop bodies, absorbed succs).
-    let all_nodes: Vec<NodeIndex> = input.keys().copied().collect();
     let ctx = StructureContext { config };
 
     let mut structured_blocks: BTreeMap<D::Label, D::Structured> = BTreeMap::new();
+    // Codes that haven't been emitted as a `Block(code)` yet. Every code-bearing input
+    // (Code/Condition/Variants) starts here; `to_structured_ast` removes one each time it
+    // commits a `Block(code)`. After structuring runs, anything still present is a node
+    // the structurer silently dropped - the rendered function carries a `// unstructured
+    // blocks: ...` notice listing them.
+    let mut unstructured: HashSet<u64> = input
+        .values()
+        .filter_map(|inp| match inp {
+            D::Input::Code(_, code, _)
+            | D::Input::Condition(_, code, _, _)
+            | D::Input::Variants(_, code, _, _) => Some(*code),
+            D::Input::Reduced(_, _) => None,
+        })
+        .collect();
 
     if config.debug_print.structuring {
         let mut post_order = DfsPostOrder::new(&graph.cfg, entry_node);
@@ -105,7 +116,14 @@ pub(crate) fn structure(
             if ctx.config.debug_print.regions {
                 println!("[region] loop entry={}", node.index());
             }
-            loops::structure_loop(ctx, &mut graph, &mut structured_blocks, node, &mut input);
+            loops::structure_loop(
+                ctx,
+                &mut graph,
+                &mut structured_blocks,
+                node,
+                &mut input,
+                &mut unstructured,
+            );
             if let Some(form) = structured_blocks.get(&node) {
                 region_bodies.insert(node, form.clone());
             }
@@ -137,6 +155,7 @@ pub(crate) fn structure(
             node,
             &members,
             SinkRendering::Function,
+            &mut unstructured,
         ) else {
             continue;
         };
@@ -164,14 +183,13 @@ pub(crate) fn structure(
         entry_node,
         &residue_members,
         SinkRendering::Function,
+        &mut unstructured,
     )
     .expect("structuring failed on top-level function residue after loop collapse");
     flatten_sequence(&mut body);
-    for n in &all_nodes {
-        graph.mark_emitted(n.index() as u64);
-    }
-    let unemitted = graph.unemitted_from(&all_nodes);
-    (body, unemitted)
+    let mut leftover: Vec<u64> = unstructured.into_iter().collect();
+    leftover.sort_unstable();
+    (body, leftover)
 }
 
 /// Post-order traversal of the function's dominator tree, rooted at `entry`. Children

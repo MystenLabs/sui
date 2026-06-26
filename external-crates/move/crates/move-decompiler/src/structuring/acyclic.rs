@@ -43,14 +43,18 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 /// Structure an acyclic region. `members` defines the region's interior; `entry` may be
 /// outside `members` (the loop-body case: head is excluded so back-edges to it fire the
 /// out-of-region rule). `rendering` picks how synthetic sinks lower (see the module-level
-/// doc). Returns `None` only when reaching conditions or topological order can't be
-/// computed - the caller treats that as a structuring bug.
+/// doc). `unstructured` tracks block codes that haven't been emitted yet; every time we
+/// commit a `Block(code)` for a real (non-sink) projection node we remove its code so the
+/// caller can report any leftover at the top of `structure()`. Returns `None` only when
+/// reaching conditions or topological order can't be computed - the caller treats that
+/// as a structuring bug.
 pub fn structure_region(
     structured_blocks: &BTreeMap<NodeIndex, D::Structured>,
     input: &BTreeMap<NodeIndex, D::Input>,
     entry: NodeIndex,
     members: &HashSet<NodeIndex>,
     rendering: SinkRendering,
+    unstructured: &mut HashSet<u64>,
 ) -> Option<D::Structured> {
     let proj = region::build_acyclic_projection(input, entry, members, rendering);
     let reach = region::reaching_conditions(&proj.input, entry)?;
@@ -87,7 +91,7 @@ pub fn structure_region(
         if guard == predicates::false_() {
             continue;
         }
-        let body = to_structured_ast(n, &proj, structured_blocks);
+        let body = to_structured_ast(n, &proj, structured_blocks, unstructured);
         items.push((guard, body));
     }
 
@@ -111,11 +115,14 @@ pub fn structure_region(
 
 /// Translate `n` into a structured AST. Synthetic sinks emit exit-jumps (or empty for
 /// whole-function); real nodes emit `Block(code)` (Code/Condition/Variants) or pull the
-/// pre-structured form from `structured_blocks` (Reduced).
+/// pre-structured form from `structured_blocks` (Reduced). Each `Block(code)` emission
+/// records the code as structured by removing it from `unstructured`; Reduced inlines
+/// don't touch the set (the inner pass that built the body did so when it ran).
 fn to_structured_ast(
     n: NodeIndex,
     proj: &AcyclicProjection,
     structured_blocks: &BTreeMap<NodeIndex, D::Structured>,
+    unstructured: &mut HashSet<u64>,
 ) -> D::Structured {
     if let Some(s) = proj.render_sink(n) {
         return s;
@@ -123,7 +130,10 @@ fn to_structured_ast(
     match proj.input.get(&n) {
         Some(D::Input::Code(_, code, _))
         | Some(D::Input::Condition(_, code, _, _))
-        | Some(D::Input::Variants(_, code, _, _)) => D::Structured::Block(*code),
+        | Some(D::Input::Variants(_, code, _, _)) => {
+            unstructured.remove(code);
+            D::Structured::Block(*code)
+        }
         Some(D::Input::Reduced(label, _)) => structured_blocks
             .get(label)
             .cloned()

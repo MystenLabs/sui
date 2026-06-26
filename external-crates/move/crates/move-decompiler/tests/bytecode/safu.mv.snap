@@ -486,48 +486,51 @@ public fun pre_exercise<T0: key + store>(l0: &Version, l1: &mut Registry, l2: u6
 }
 
 public fun raise_fund<T0>(l0: &x4b_Version, l1: &mut TypusLeaderboardRegistry, l2: &mut TypusUserRegistry, l3: &Version, l4: &mut Registry, l5: u64, l6: Balance<T0>, l7: u64, l8: u64, l9: u64, l10: &Clock, l11: &mut TxContext) {
-    version::version_check(l3);
-    assert!(!(l4.transaction_suspended), C7);
-    let l20 = clock::timestamp_ms(l10);
-    let l34 = dynamic_field::remove(&mut l4.id, ascii::string(C6));
-    let l36 = dynamic_object_field::borrow_mut(&mut l4.id, l5);
-    let l35 = tx_context::sender(freeze(l11));
-    let l25 = big_vector::length(&l36.share);
-    let l33 = big_vector::slice_size(&l36.share)as u64;
-    let l32 = 0u64;
-    let l31 = big_vector::borrow_slice(&l36.share, l32);
-    let l22 = 0u64;
-    let __dispatch_58;
-    let (l24, l29);
-    loop {
-        if (l22 < l25) {
-            if ((big_vector::borrow_from_slice(l31, l22 % l33)).user != l35) {
-                if (l22 + 1u64 < l25 && l22 + 1u64 % l33 == 0u64) {
-                    l32 = big_vector::get_slice_idx(l31) + 1u64;
-                    l31 = big_vector::borrow_slice(&l36.share, l32);
-                };
-                l22 = l22 + 1u64;
-                continue
-            }
-        };
-        if (l22 == l25) {
-            l29 = C25;
-            l24 = 0u64;
-            __dispatch_58 = 0u32;
+    // Did not structure and emit blocks 132, 464, 501, 502, 529, 531, 532, 538, 546, 547, 553, 571, 572, 578
+    {
+        version::version_check(l3);
+        assert!(!(l4.transaction_suspended), C7);
+        let l20 = clock::timestamp_ms(l10);
+        let l34 = dynamic_field::remove(&mut l4.id, ascii::string(C6));
+        let l36 = dynamic_object_field::borrow_mut(&mut l4.id, l5);
+        let l35 = tx_context::sender(freeze(l11));
+        let l25 = big_vector::length(&l36.share);
+        let l33 = big_vector::slice_size(&l36.share)as u64;
+        let l32 = 0u64;
+        let l31 = big_vector::borrow_slice(&l36.share, l32);
+        let l22 = 0u64;
+        let __dispatch_58;
+        let (l24, l29);
+        loop {
+            if (l22 < l25) {
+                if ((big_vector::borrow_from_slice(l31, l22 % l33)).user != l35) {
+                    if (l22 + 1u64 < l25 && l22 + 1u64 % l33 == 0u64) {
+                        l32 = big_vector::get_slice_idx(l31) + 1u64;
+                        l31 = big_vector::borrow_slice(&l36.share, l32);
+                    };
+                    l22 = l22 + 1u64;
+                    continue
+                }
+            };
+            if (l22 == l25) {
+                l29 = C25;
+                l24 = 0u64;
+                __dispatch_58 = 0u32;
+                break
+            };
+            __dispatch_58 = 1u32;
             break
         };
-        __dispatch_58 = 1u32;
-        break
-    };
-    match (__dispatch_58) {
-        0 => {
-            while (l24 < (&l36.reward_tokens).length()) {
-                l29.push_back(0u64);
-                l24 = l24 + 1u64;
+        match (__dispatch_58) {
+            0 => {
+                while (l24 < (&l36.reward_tokens).length()) {
+                    l29.push_back(0u64);
+                    l24 = l24 + 1u64;
+                }
+            },
+            1 => {
+                
             }
-        },
-        1 => {
-            
         }
     }
 }

@@ -628,45 +628,48 @@ fun newton_D(l0: u64, l1: u256, l2: vector<u256>, l3: u256): u256 {
 }
 
 public fun newton_y(l0: u256, l1: u256, l2: vector<u256>, l3: u256, l4: u64): u256 {
-    let l25 = l2.length();
-    assert!(l0as u64 > curved_math::get_min_amp(l25) - 1u64 && l0as u64 < curved_math::get_max_amp(l25) + 1u64, C18);
-    assert!(l1 > C2 - 1u256 && l1 < C3 + 1u256, C19);
-    assert!(l3 > math::pow_10_u256(17u8) - 1u256 && l3 < math::pow_10_u256(15u8) * C0 + 1u256, C19);
-    let l21 = 0u64;
-    let (l11, l13, l22, l26, l27);
-    loop {
-        if (l21 >= l25) {
-            l27 = l3 / l25as u256;
-            l11 = C0;
-            l13 = 0u256;
-            *(&mut (&mut l2)[l4as u64]) = 0u256;
-            l26 = math::sort_u256(l2);
-            let l17 = math::max_u256(math::max_u256((&l26)[0u64] / math::pow_10_u256(14u8), l3 / math::pow_10_u256(14u8)), 100u256);
-            l22 = l25 - 2u64;
+    // Did not structure and emit blocks 213, 367, 369, 370, 372
+    {
+        let l25 = l2.length();
+        assert!(l0as u64 > curved_math::get_min_amp(l25) - 1u64 && l0as u64 < curved_math::get_max_amp(l25) + 1u64, C18);
+        assert!(l1 > C2 - 1u256 && l1 < C3 + 1u256, C19);
+        assert!(l3 > math::pow_10_u256(17u8) - 1u256 && l3 < math::pow_10_u256(15u8) * C0 + 1u256, C19);
+        let l21 = 0u64;
+        let (l11, l13, l22, l26, l27);
+        loop {
+            if (l21 >= l25) {
+                l27 = l3 / l25as u256;
+                l11 = C0;
+                l13 = 0u256;
+                *(&mut (&mut l2)[l4as u64]) = 0u256;
+                l26 = math::sort_u256(l2);
+                let l17 = math::max_u256(math::max_u256((&l26)[0u64] / math::pow_10_u256(14u8), l3 / math::pow_10_u256(14u8)), 100u256);
+                l22 = l25 - 2u64;
+                break
+            };
+            if (l21 != l4) {
+                let l19 = math::mul_div_u256((&l2)[l21], C0, l3);
+                assert!(l19 > math::pow_10_u256(16u8) - 1u256 && l19 < math::pow_10_u256(20u8) + 1u256, C17)
+            };
+            l21 = l21 + 1u64;
+        };
+        loop {
+            if (l22 <= l25 - 2u64) {
+                let l16 = (&l26)[l22];
+                l27 = math::mul_div_u256(l27, l3, l16 * l25as u256);
+                l13 = l13 + l16;
+                if (l22 != 0u64) {
+                    l22 = l22 - 1u64;
+                    continue
+                }
+            };
+            l22 = 0u64;
             break
         };
-        if (l21 != l4) {
-            let l19 = math::mul_div_u256((&l2)[l21], C0, l3);
-            assert!(l19 > math::pow_10_u256(16u8) - 1u256 && l19 < math::pow_10_u256(20u8) + 1u256, C17)
-        };
-        l21 = l21 + 1u64;
-    };
-    loop {
-        if (l22 <= l25 - 2u64) {
-            let l16 = (&l26)[l22];
-            l27 = math::mul_div_u256(l27, l3, l16 * l25as u256);
-            l13 = l13 + l16;
-            if (l22 != 0u64) {
-                l22 = l22 - 1u64;
-                continue
-            }
-        };
-        l22 = 0u64;
-        break
-    };
-    while (l22 < l25 - 1u64) {
-        l11 = math::mul_div_u256(l11, (&l26)[l22] * l25as u256, l3);
-        l22 = l22 + 1u64;
+        while (l22 < l25 - 1u64) {
+            l11 = math::mul_div_u256(l11, (&l26)[l22] * l25as u256, l3);
+            l22 = l22 + 1u64;
+        }
     }
 }
 

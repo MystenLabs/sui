@@ -705,57 +705,60 @@ public fun update_8(l0: &x8_State, l1: vector<u8>, l2: &mut PriceInfoObject, l3:
 }
 
 public fun update_all(l0: &x8_State, l1: vector<u8>, l2: vector<PriceInfoObject>, l3: vector<Option<u64>>, l4: &State, l5: vector<u8>, l6: &mut Coin<SUI>, l7: &Clock, l8: &mut TxContext) {
-    let l14 = l2.length();
-    let l12 = 0u64;
-    let l10 = clock::timestamp_ms(l7) / 1000u64;
-    let l11 = state::get_stale_price_threshold_secs(l0);
-    let l13 = true;
-    let __dispatch_15;
-    let l16;
-    loop {
-        if (l12 < l14) {
-            let l15 = price::get_timestamp(&pyth::get_price_unsafe(&(&l2)[l12]));
-            let l17 = option::get_with_default(&(&l3)[l12], l11);
-            let __c20 = l15 > l10;
-            let (__c38, __c47);
-            if (__c20) {
-                __c38 = l15 - l10 >= l17;
-                if (__c38) {
-                    l13 = false;
-                }
-            } else {
-                __c47 = l10 - l15 < l17;
-                if (__c47) {
-                    l13 = false;
+    // Did not structure and emit blocks 87, 126, 150
+    {
+        let l14 = l2.length();
+        let l12 = 0u64;
+        let l10 = clock::timestamp_ms(l7) / 1000u64;
+        let l11 = state::get_stale_price_threshold_secs(l0);
+        let l13 = true;
+        let __dispatch_15;
+        let l16;
+        loop {
+            if (l12 < l14) {
+                let l15 = price::get_timestamp(&pyth::get_price_unsafe(&(&l2)[l12]));
+                let l17 = option::get_with_default(&(&l3)[l12], l11);
+                let __c20 = l15 > l10;
+                let (__c38, __c47);
+                if (__c20) {
+                    __c38 = l15 - l10 >= l17;
+                    if (__c38) {
+                        l13 = false;
+                    }
+                } else {
+                    __c47 = l10 - l15 < l17;
+                    if (__c47) {
+                        l13 = false;
+                    }
+                };
+                if ((__c20 && !(__c38)) || (!(__c20) && !(__c47))) {
+                    l12 = l12 + 1u64;
+                    continue
                 }
             };
-            if ((__c20 && !(__c38)) || (!(__c20) && !(__c47))) {
-                l12 = l12 + 1u64;
-                continue
-            }
-        };
-        if (l13) {
+            if (l13) {
+                l12 = 0u64;
+                __dispatch_15 = 0u32;
+                break
+            };
+            let l18 = vaa::parse_and_verify(l4, l5, l7);
+            l16 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l18, l7);
             l12 = 0u64;
-            __dispatch_15 = 0u32;
+            __dispatch_15 = 1u32;
             break
         };
-        let l18 = vaa::parse_and_verify(l4, l5, l7);
-        l16 = pyth::create_authenticated_price_infos_using_accumulator(l0, l1, l18, l7);
-        l12 = 0u64;
-        __dispatch_15 = 1u32;
-        break
-    };
-    match (__dispatch_15) {
-        0 => {
-            while (l12 < l14) {
-                transfer::public_share_object(l2.pop_back());
-                l12 = l12 + 1u64;
-            }
-        },
-        1 => {
-            while (l12 < l14) {
-                l16 = pyth::update_single_price_feed(l0, l16, &mut (&mut l2)[l12], coin::split(l6, state::get_base_update_fee(l0), l8), l7);
-                l12 = l12 + 1u64;
+        match (__dispatch_15) {
+            0 => {
+                while (l12 < l14) {
+                    transfer::public_share_object(l2.pop_back());
+                    l12 = l12 + 1u64;
+                }
+            },
+            1 => {
+                while (l12 < l14) {
+                    l16 = pyth::update_single_price_feed(l0, l16, &mut (&mut l2)[l12], coin::split(l6, state::get_base_update_fee(l0), l8), l7);
+                    l12 = l12 + 1u64;
+                }
             }
         }
     }

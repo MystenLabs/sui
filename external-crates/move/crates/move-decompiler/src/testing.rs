@@ -146,7 +146,7 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         crate::structuring::structure(&config, input, 0.into())
     }));
-    let (structured, unemitted) = match result {
+    let (structured, unstructured) = match result {
         Ok(pair) => pair,
         Err(panic) => {
             let msg = panic
@@ -157,16 +157,14 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
             return format!("// STRUCTURING PANICKED: {msg}\n");
         }
     };
-    // Surface unemitted blocks in the snapshot so a regression that silently drops blocks
-    // shows up as a snapshot diff rather than passing on shape match. Bytecode and `.move`
-    // corpus tests already render the `// Did not structure and emit blocks N, K, ...` notice
-    // as part of their function output; `.stt` fixtures pin only the structured form, so the
-    // notice goes here.
+    // Surface unstructured blocks in the snapshot so a regression that silently drops
+    // blocks shows up as a snapshot diff rather than passing on shape match. `.stt`
+    // fixtures pin only the structured form, so the notice goes here.
     let body = structured.to_test_string();
-    if unemitted.is_empty() {
+    if unstructured.is_empty() {
         body
     } else {
-        let notice: Vec<String> = unemitted.iter().map(|n| n.to_string()).collect();
-        format!("// unemitted blocks: {}\n{body}", notice.join(", "))
+        let notice: Vec<String> = unstructured.iter().map(|n| n.to_string()).collect();
+        format!("// unstructured blocks: {}\n{body}", notice.join(", "))
     }
 }

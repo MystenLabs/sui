@@ -26,6 +26,7 @@ pub(super) fn structure_loop(
     structured_blocks: &mut BTreeMap<NodeIndex, D::Structured>,
     loop_head: NodeIndex,
     input: &mut BTreeMap<D::Label, D::Input>,
+    unstructured: &mut HashSet<u64>,
 ) {
     let config = ctx.config;
     if config.debug_print.structuring {
@@ -65,6 +66,7 @@ pub(super) fn structure_loop(
         let primary = owned_succs.iter().copied().min().unwrap();
         let mut spec_absorbed: HashSet<NodeIndex> = HashSet::new();
 
+        let mut spec_unstructured = unstructured.clone();
         if try_structure_loop_without_dispatch(
             &mut spec_graph,
             &mut spec_blocks,
@@ -75,7 +77,9 @@ pub(super) fn structure_loop(
             &owned_succs,
             primary,
             &mut spec_absorbed,
+            &mut spec_unstructured,
         ) {
+            *unstructured = spec_unstructured;
             *graph = spec_graph;
             *structured_blocks = spec_blocks;
             *input = spec_input;
@@ -113,6 +117,7 @@ pub(super) fn structure_loop(
         loop_head,
         &members,
         SinkRendering::Loop,
+        unstructured,
     )
     .expect("NMG failed on loop body");
     let body_with_breaks = insert_breaks(&loop_nodes, loop_head, loop_successor, body);
@@ -282,6 +287,7 @@ fn try_structure_loop_without_dispatch(
     owned_succs: &[NodeIndex],
     primary: NodeIndex,
     absorbed_out: &mut HashSet<NodeIndex>,
+    unstructured: &mut HashSet<u64>,
 ) -> bool {
     let non_primary: HashSet<NodeIndex> = owned_succs
         .iter()
@@ -307,6 +313,7 @@ fn try_structure_loop_without_dispatch(
         loop_head,
         &members,
         SinkRendering::Loop,
+        unstructured,
     )
     .expect("NMG failed on speculative multi-succ loop body");
     let body_with_breaks = insert_breaks(loop_nodes, loop_head, Some(primary), body);
