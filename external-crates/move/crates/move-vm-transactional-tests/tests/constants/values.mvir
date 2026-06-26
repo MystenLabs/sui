@@ -1,3 +1,5 @@
+//# init --addresses Foo=0x99
+
 //# run
 // Each constant, loaded via LdConst, must equal the same value built from a
 // literal/expression at runtime. Cross-checks the constant parsing and serialization against the
@@ -11,8 +13,12 @@ mvir 0x42::m {
     const N128: u128       = 42u128;
     const N256: u256       = 42u256;
     const ADDR: address    = 0x42;
+    const ADDR_AT: address = @0x43;
+    const ADDR_NAMED: address = @Foo;
     const BYTES: vector<u8> = h"deadbeef";
     const NUMS: vector<u64> = vector(1u64, 2u64, 3u64);
+    const BOOLS: vector<bool> = vector(true, false);
+    const ADDRS: vector<address> = vector(@0x1, @0x2);
     const EMPTY: vector<u8> = vector();
     const NESTED: vector<vector<u8>> = vector(vector(1u8), vector(2u8));
 
@@ -26,10 +32,14 @@ mvir 0x42::m {
         assert(const::N128 == 42u128, 5);
         assert(const::N256 == 42u256, 6);
         assert(const::ADDR == @0x42, 7);
-        assert(const::BYTES == vector<u8; 4>(222u8, 173u8, 190u8, 239u8), 8);
-        assert(const::NUMS == vector<u64; 3>(1u64, 2u64, 3u64), 9);
-        assert(const::EMPTY == vector<u8; 0>(), 10);
-        assert(const::NESTED == vector<vector<u8>; 2>(vector<u8; 1>(1u8), vector<u8; 1>(2u8)), 11);
+        assert(const::ADDR_AT == @0x43, 8);
+        assert(const::ADDR_NAMED == @Foo, 9);
+        assert(const::BYTES == vector<u8; 4>(222u8, 173u8, 190u8, 239u8), 10);
+        assert(const::NUMS == vector<u64; 3>(1u64, 2u64, 3u64), 11);
+        assert(const::BOOLS == vector<bool; 2>(true, false), 12);
+        assert(const::ADDRS == vector<address; 2>(@0x1, @0x2), 13);
+        assert(const::EMPTY == vector<u8; 0>(), 14);
+        assert(const::NESTED == vector<vector<u8>; 2>(vector<u8; 1>(1u8), vector<u8; 1>(2u8)), 15);
         return;
     }
 }

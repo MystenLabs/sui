@@ -5,7 +5,7 @@ mvir 0x42::M {
 }
 
 //# print-bytecode
-// Structs are not yet supported as constant types.
+// Structs are not supported as constant types.
 mvir 0x42::M {
     public struct S { f: u64 }
     const C: Self::S = 1u64;

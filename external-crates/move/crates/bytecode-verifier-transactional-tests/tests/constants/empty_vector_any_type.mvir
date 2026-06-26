@@ -1,6 +1,6 @@
 //# publish
 // An empty vector serializes to a single 0x00 length byte, which is valid for
-// any vector element type — so this verifies successfully.
+// any vector element type.
 mvir 0x42::m {
     const E8: vector<u8> = vector();
     const E64: vector<u64> = vector();
