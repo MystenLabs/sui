@@ -4,13 +4,13 @@
 //! Entry point for bulk-loading the [`RpcStoreSchema`]'s
 //! derived-index CFs from a [`RestoreSource`].
 //!
-//! Registers the four live-object-derivable index pipelines
-//! ([`ObjectByOwner`], [`ObjectByType`], [`Balance`],
-//! [`PackageVersions`]) plus the checkpoint-pinned
-//! [`ObjectVersionByCheckpoint`] floor rows — and, when the caller's
-//! [`RestoreLayer`] opts in, the raw [`Objects`] CF — against a
-//! single [`RestoreDriver`] and returns a [`Service`] driving the
-//! restore through to completion. Once finished, every registered
+//! Registers the three live-object-derivable index pipelines
+//! ([`ObjectByOwner`], [`ObjectByType`], [`Balance`]) plus the
+//! [`ObjectVersionByCheckpoint`] and [`PackageVersions`] floor rows —
+//! and, when the caller's [`RestoreLayer`] opts in, the raw
+//! [`Objects`] CF — against a single [`RestoreDriver`] and returns a
+//! [`Service`] driving the restore through to completion. Once
+//! finished, every registered
 //! pipeline's `__restore` row is `Complete` and its `__watermark`
 //! row is set to the source's target, so the regular
 //! [`Indexer::add_pipelines`] path will accept them for tip
@@ -80,12 +80,7 @@ use crate::schema::pruning_watermark;
 /// [`PipelineLayer::embedded`](crate::config::PipelineLayer::embedded);
 /// the `embedded_registers_only_cohort_pipelines` test pins the two
 /// together.
-pub const LIVE_COHORT: &[&str] = &[
-    ObjectByOwner::NAME,
-    ObjectByType::NAME,
-    Balance::NAME,
-    PackageVersions::NAME,
-];
+pub const LIVE_COHORT: &[&str] = &[ObjectByOwner::NAME, ObjectByType::NAME, Balance::NAME];
 
 /// The embedded fullnode's **history cohort**: the pipelines seeded to
 /// the lowest available checkpoint `L` and backfilled upward from the
@@ -96,20 +91,24 @@ pub const LIVE_COHORT: &[&str] = &[
 /// transaction and event bitmaps) and per-epoch metadata (`epochs`) --
 /// so they are seeded, never restored.
 ///
-/// `object_version_by_checkpoint` is the exception: it is *both*
-/// restored and backfilled. [`restore_indexes`] bulk-loads its floor
-/// rows at the tip `T` (marked `from_restore`, so a read below the
-/// available window falls back to them for objects that never changed
-/// in it), and the history seed then rewinds its `__watermark` to
-/// `L-1` so it also backfills the per-checkpoint changes over `(L, T]`.
-/// The embedded bootstrap runs the restore before the seed, so the
-/// `L-1` watermark wins.
+/// `object_version_by_checkpoint` and `package_versions` are the
+/// exceptions: they are *both* restored and backfilled.
+/// [`restore_indexes`] bulk-loads their floor rows at the tip `T` (the
+/// versions live in the snapshot but predate the available window, so a
+/// checkpoint-bounded read treats them as having always existed), and
+/// the history seed then rewinds their `__watermark` to `L-1` so they
+/// also backfill the per-checkpoint detail over `(L, T]` --
+/// `object_version_by_checkpoint`'s per-checkpoint changes, and
+/// `package_versions`'s real publish checkpoint for versions published
+/// in the window. The embedded bootstrap runs the restore before the
+/// seed, so the `L-1` watermark wins.
 ///
 /// Matches the history half of
 /// [`PipelineLayer::embedded`](crate::config::PipelineLayer::embedded).
 pub const HISTORY_COHORT: &[&str] = &[
     Epochs::NAME,
     ObjectVersionByCheckpoint::NAME,
+    PackageVersions::NAME,
     TxSeqByDigest::NAME,
     TxMetadataBySeq::NAME,
     TransactionBitmap::NAME,
@@ -121,12 +120,12 @@ pub const HISTORY_COHORT: &[&str] = &[
 /// `source`, then run the resulting [`Service`].
 ///
 /// The live-cohort pipelines are always registered, plus
-/// `object_version_by_checkpoint` -- a history-cohort member whose
-/// `from_restore` floor rows are bulk-loaded from the live set here
-/// (the history seed separately rewinds its watermark so it also
-/// backfills `(L, T]`). The raw [`Objects`] pipeline is only registered
-/// when `layer.objects` is set. The returned `Service`'s primary task
-/// completes once every registered pipeline transitions to
+/// `object_version_by_checkpoint` and `package_versions` -- history-
+/// cohort members whose floor rows are bulk-loaded from the live set
+/// here (the history seed separately rewinds their watermarks so they
+/// also backfill `(L, T]`). The raw [`Objects`] pipeline is only
+/// registered when `layer.objects` is set. The returned `Service`'s
+/// primary task completes once every registered pipeline transitions to
 /// [`RestoreState::Complete`].
 ///
 /// [`Restore`]: sui_consistent_store::Restore
@@ -144,14 +143,14 @@ pub fn restore_indexes<Src: RestoreSource>(
     // object to it.
     let target_checkpoint = source.target_checkpoint();
     let mut driver = RestoreDriver::new(db, schema, source, config, metrics);
-    // A history-cohort member, but its floor rows are restored from the
-    // live set; the embedded history seed later rewinds its watermark so
-    // it also backfills `(L, T]`.
+    // History-cohort members, but their floor rows are restored from the
+    // live set; the embedded history seed later rewinds their watermarks
+    // so they also backfill `(L, T]`.
     driver.register(ObjectVersionByCheckpoint::for_restore(target_checkpoint))?;
+    driver.register(PackageVersions)?;
     driver.register(ObjectByOwner)?;
     driver.register(ObjectByType)?;
     driver.register(Balance)?;
-    driver.register(PackageVersions)?;
     if layer.objects {
         driver.register(Objects)?;
     }
@@ -866,7 +865,7 @@ mod tests {
         let live: std::collections::BTreeSet<_> = LIVE_COHORT.iter().collect();
         let history: std::collections::BTreeSet<_> = HISTORY_COHORT.iter().collect();
         assert!(live.is_disjoint(&history), "cohorts must not overlap");
-        assert_eq!(live.len(), 4);
-        assert_eq!(history.len(), 6);
+        assert_eq!(live.len(), 3);
+        assert_eq!(history.len(), 7);
     }
 }
