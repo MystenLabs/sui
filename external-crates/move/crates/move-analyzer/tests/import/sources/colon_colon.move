@@ -1,7 +1,6 @@
 module Import::colon_colon {
 
     use Import::dep;
-    use Import::another_dep;
 
     // test insertion with imports present
     public fun foo() {
@@ -13,7 +12,7 @@ module Import::colon_colon {
     }
 
     fun bak() {
-        another_dep::AnotherDepStruct
+        another_dep::
     }
 
     fun bam() {
