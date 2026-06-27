@@ -287,7 +287,6 @@ mod tests {
             0,
             GasCostSummary::default(),
             vec![],
-            std::collections::BTreeSet::new(),
             TransactionDigest::random(),
             crate::base_types::SequenceNumber::new(),
             changed_objects,
