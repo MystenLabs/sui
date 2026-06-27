@@ -124,7 +124,25 @@ pub(super) fn structure_loop(
     let loop_body = vec![body_with_breaks];
 
     let (result, absorbed_succs): (D::Structured, HashSet<NodeIndex>) = if multi_successor_mode {
-        // Dispatch absorbs every owned succ into the SelectorMatch tail.
+        // Dispatch absorbs every owned succ into the SelectorMatch tail. Each owned succ
+        // needs a `structured_blocks` entry for `structure_cascade` to find - seed raw input
+        // nodes (Code/Condition/Variants that the structurer never processed into a Reduced
+        // marker) with `Block(code)` so they don't silently drop out of the arm body.
+        for &s in &owned_succs {
+            if structured_blocks.contains_key(&s) {
+                continue;
+            }
+            let block = match input.get(&s) {
+                Some(D::Input::Code(_, code, _))
+                | Some(D::Input::Condition(_, code, _, _))
+                | Some(D::Input::Variants(_, code, _, _)) => {
+                    unstructured.remove(code);
+                    D::Structured::Block(*code)
+                }
+                _ => continue,
+            };
+            structured_blocks.insert(s, block);
+        }
         let r = emit_dispatch_arms(graph, structured_blocks, loop_head, &owned_succs, loop_body);
         (r, owned_succs.iter().copied().collect())
     } else {

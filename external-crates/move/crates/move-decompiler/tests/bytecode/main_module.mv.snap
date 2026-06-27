@@ -268,245 +268,248 @@ fun init(l0: &mut TxContext) {
 }
 
 public entry fun participate(l0: &mut InviteArchieves, l1: &mut SeatingChart, l2: u64, l3: &mut Coin<SUI>, l4: &mut Own, l5: &mut TxContext) {
-    // Did not structure and emit blocks 531, 1192
-    {
-        let l45 = tx_context::sender(freeze(l5));
-        assert!(l0.version <= C0, C7);
-        assert!(l1.version <= C0, C7);
-        assert!(table::contains(&l0.cabinet, l45), C3);
-        assert!(coin::value(freeze(l3)) >= C1 * l2, C6);
-        let l44 = table::borrow_mut(&mut l0.cabinet, l45);
-        assert!(l2 > 0u64 && l44.has_stake_number + l2 <= 50u64, C5);
-        *(&mut l44.has_stake_number) = l44.has_stake_number + l2;
-        let l28 = false;
-        if (l44.position_floor_of_seating == 0u64) {
-            l28 = true;
-            (&mut (&mut l1.seating)[l1.current_floor]).push_back(l45);
-            *(&mut l44.position_row_of_seating) = l1.current_row;
-            *(&mut l44.position_floor_of_seating) = l1.current_floor;
-            if (l1.current_row + 1u64 > 2u64) {
-                *(&mut l1.current_row) = 0u64;
-                *(&mut l1.current_floor) = l1.current_floor + 1u64;
-                (&mut l1.seating).push_back(vector[])
-            } else {
-                *(&mut l1.current_row) = l1.current_row + 1u64
-            };
-            let l20 = table::borrow_mut(&mut l0.cabinet, l44.affCode);
-            *(&mut l20.total_effective_invite_number) = l20.total_effective_invite_number + 1u64;
-            (&mut l20.invite_addresses).push_back(l45);
-            let l38 = l20.total_effective_invite_number;
-            l44 = table::borrow_mut(&mut l0.cabinet, l45);
-            *(&mut l44.position_of_aff) = l38
-        };
-        sbt::mint(l4, l45, l5);
-        event::emit(Participates { from: l45, num: l2 });
-        let l29 = C1 * l2;
-        let l12 = if (l28 == true) {
-            l29 * 3u64
+    let l45 = tx_context::sender(freeze(l5));
+    assert!(l0.version <= C0, C7);
+    assert!(l1.version <= C0, C7);
+    assert!(table::contains(&l0.cabinet, l45), C3);
+    assert!(coin::value(freeze(l3)) >= C1 * l2, C6);
+    let l44 = table::borrow_mut(&mut l0.cabinet, l45);
+    assert!(l2 > 0u64 && l44.has_stake_number + l2 <= 50u64, C5);
+    *(&mut l44.has_stake_number) = l44.has_stake_number + l2;
+    let l28 = false;
+    if (l44.position_floor_of_seating == 0u64) {
+        l28 = true;
+        (&mut (&mut l1.seating)[l1.current_floor]).push_back(l45);
+        *(&mut l44.position_row_of_seating) = l1.current_row;
+        *(&mut l44.position_floor_of_seating) = l1.current_floor;
+        if (l1.current_row + 1u64 > 2u64) {
+            *(&mut l1.current_row) = 0u64;
+            *(&mut l1.current_floor) = l1.current_floor + 1u64;
+            (&mut l1.seating).push_back(vector[])
         } else {
-            l29 * 22u64 / 10u64
+            *(&mut l1.current_row) = l1.current_row + 1u64
         };
-        *(&mut l44.could_reward) = l44.could_reward + l12;
-        transfer::public_transfer(coin::split(l3, l29 * 6u64 / 100u64, l5), (&l0.team_addresses)[53u64]);
-        transfer::public_transfer(coin::split(l3, l29 * 4u64 / 100u64, l5), (&l0.team_addresses)[52u64]);
-        l29 = l29 * 90u64 / 100u64;
-        let l21 = l29 * 50u64 / 100u64;
-        let l39 = l44.affCode;
-        if (l44.position_of_aff % 3u64 == 0u64) {
-            transfer::public_transfer(coin::split(l3, l29 * 40u64 / 100u64, l5), (&l0.team_addresses)[0u64]);
-            l21 = l29 * 10u64 / 100u64;
+        let l20 = table::borrow_mut(&mut l0.cabinet, l44.affCode);
+        *(&mut l20.total_effective_invite_number) = l20.total_effective_invite_number + 1u64;
+        (&mut l20.invite_addresses).push_back(l45);
+        let l38 = l20.total_effective_invite_number;
+        l44 = table::borrow_mut(&mut l0.cabinet, l45);
+        *(&mut l44.position_of_aff) = l38
+    };
+    sbt::mint(l4, l45, l5);
+    event::emit(Participates { from: l45, num: l2 });
+    let l29 = C1 * l2;
+    let l12 = if (l28 == true) {
+        l29 * 3u64
+    } else {
+        l29 * 22u64 / 10u64
+    };
+    *(&mut l44.could_reward) = l44.could_reward + l12;
+    transfer::public_transfer(coin::split(l3, l29 * 6u64 / 100u64, l5), (&l0.team_addresses)[53u64]);
+    transfer::public_transfer(coin::split(l3, l29 * 4u64 / 100u64, l5), (&l0.team_addresses)[52u64]);
+    l29 = l29 * 90u64 / 100u64;
+    let l21 = l29 * 50u64 / 100u64;
+    let l39 = l44.affCode;
+    if (l44.position_of_aff % 3u64 == 0u64) {
+        transfer::public_transfer(coin::split(l3, l29 * 40u64 / 100u64, l5), (&l0.team_addresses)[0u64]);
+        l21 = l29 * 10u64 / 100u64;
+    };
+    l44 = table::borrow_mut(&mut l0.cabinet, l39);
+    if (l44.could_reward <= l21) {
+        transfer::public_transfer(coin::split(l3, l21 - l44.could_reward, l5), (&l0.team_addresses)[0u64]);
+        l21 = l44.could_reward;
+    };
+    if (l21 > 0u64) {
+        transfer::public_transfer(coin::split(l3, l21, l5), l39);
+        *(&mut l44.could_reward) = l44.could_reward - l21;
+        *(&mut l44.has_reward) = l44.has_reward + l21
+    };
+    let l30 = 0u64;
+    let l22 = table::borrow_mut(&mut l0.cabinet, l45);
+    l22 = table::borrow_mut(&mut l0.cabinet, l22.affCode);
+    let __dispatch_402;
+    let (l26, l31);
+    loop {
+        if (l30 >= 10u64) {
+            __dispatch_402 = 1u32;
+            break
         };
-        l44 = table::borrow_mut(&mut l0.cabinet, l39);
-        if (l44.could_reward <= l21) {
-            transfer::public_transfer(coin::split(l3, l21 - l44.could_reward, l5), (&l0.team_addresses)[0u64]);
-            l21 = l44.could_reward;
+        l26 = l29 / 100u64;
+        let l24 = l22.affCode;
+        l31 = l30;
+        if (l22.affCode == C62) {
+            __dispatch_402 = 0u32;
+            break
         };
-        if (l21 > 0u64) {
-            transfer::public_transfer(coin::split(l3, l21, l5), l39);
-            *(&mut l44.could_reward) = l44.could_reward - l21;
-            *(&mut l44.has_reward) = l44.has_reward + l21
-        };
-        let l30 = 0u64;
-        let l22 = table::borrow_mut(&mut l0.cabinet, l45);
         l22 = table::borrow_mut(&mut l0.cabinet, l22.affCode);
-        let __dispatch_402;
-        let (l26, l31);
-        loop {
-            if (l30 >= 10u64) {
-                __dispatch_402 = 1u32;
-                break
+        if (l22.total_effective_invite_number >= 3u64) {
+            if (l22.could_reward <= l26) {
+                transfer::public_transfer(coin::split(l3, l26 - l22.could_reward, l5), (&l0.team_addresses)[l30 + 1u64]);
+                l26 = l22.could_reward;
             };
-            l26 = l29 / 100u64;
-            let l24 = l22.affCode;
-            l31 = l30;
-            if (l22.affCode == C62) {
-                __dispatch_402 = 0u32;
-                break
-            };
-            l22 = table::borrow_mut(&mut l0.cabinet, l22.affCode);
-            if (l22.total_effective_invite_number >= 3u64) {
-                if (l22.could_reward <= l26) {
-                    transfer::public_transfer(coin::split(l3, l26 - l22.could_reward, l5), (&l0.team_addresses)[l30 + 1u64]);
-                    l26 = l22.could_reward;
-                };
-                if (l26 > 0u64) {
-                    transfer::public_transfer(coin::split(l3, l26, l5), l24);
-                    *(&mut l22.could_reward) = l22.could_reward - l26;
-                    *(&mut l22.has_reward) = l22.has_reward + l26
-                }
-            } else {
-                transfer::public_transfer(coin::split(l3, l26, l5), (&l0.team_addresses)[l30 + 1u64])
-            };
-            l30 = l30 + 1u64;
-        };
-        match (__dispatch_402) {
-            0 => {
-                while (l31 < 10u64) {
-                    transfer::public_transfer(coin::split(l3, l26, l5), (&l0.team_addresses)[l31 + 1u64]);
-                    l31 = l31 + 1u64;
-                }
-            },
-            1 => {
-                
+            if (l26 > 0u64) {
+                transfer::public_transfer(coin::split(l3, l26, l5), l24);
+                *(&mut l22.could_reward) = l22.could_reward - l26;
+                *(&mut l22.has_reward) = l22.has_reward + l26
             }
+        } else {
+            transfer::public_transfer(coin::split(l3, l26, l5), (&l0.team_addresses)[l30 + 1u64])
         };
-        let __dispatch_535;
-        let (l27, l32);
-        loop {
-            if (l30 >= 5u64) {
-                __dispatch_535 = 1u32;
-                break
+        l30 = l30 + 1u64;
+    };
+    let l25;
+    match (__dispatch_402) {
+        0 => {
+            while (l31 < 10u64) {
+                transfer::public_transfer(coin::split(l3, l26, l5), (&l0.team_addresses)[l31 + 1u64]);
+                l31 = l31 + 1u64;
             };
-            l27 = l29 / 100u64;
-            let l25;
-            l22 = table::borrow_mut(&mut l0.cabinet, l25);
-            l25 = l22.affCode;
-            l22 = table::borrow_mut(&mut l0.cabinet, l22.affCode);
-            l32 = l30;
-            if (l22.affCode == C62) {
-                __dispatch_535 = 0u32;
-                break
-            };
-            let l23 = l22.position_floor_of_seating;
-            l30 = if (l23 == 0u64) {
-                let l37 = 0u64;
-                while (l37 < 3u64) {
-                    if (l30 < 3u64) {
-                        transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), (&l0.team_addresses)[l30 * 9u64 + 11u64 + l37]);
-                        transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), (&l0.team_addresses)[l30 * 9u64 + 14u64 + l37]);
-                        transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), (&l0.team_addresses)[l30 * 9u64 + 17u64 + l37])
-                    } else {
-                        transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), (&l0.team_addresses)[l30 - 3u64 * 6u64 + 38u64 + l37]);
-                        transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), (&l0.team_addresses)[l30 - 3u64 * 6u64 + 41u64 + l37])
-                    };
-                    l37 = l37 + 1u64;
+            l30 = 0u64;
+            l25 = l45;
+        },
+        1 => {
+            l30 = 0u64;
+            l25 = l45;
+        }
+    };
+    let __dispatch_535;
+    let (l27, l32);
+    loop {
+        if (l30 >= 5u64) {
+            __dispatch_535 = 1u32;
+            break
+        };
+        l27 = l29 / 100u64;
+        l22 = table::borrow_mut(&mut l0.cabinet, l25);
+        l25 = l22.affCode;
+        l22 = table::borrow_mut(&mut l0.cabinet, l22.affCode);
+        l32 = l30;
+        if (l22.affCode == C62) {
+            __dispatch_535 = 0u32;
+            break
+        };
+        let l23 = l22.position_floor_of_seating;
+        l30 = if (l23 == 0u64) {
+            let l37 = 0u64;
+            while (l37 < 3u64) {
+                if (l30 < 3u64) {
+                    transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), (&l0.team_addresses)[l30 * 9u64 + 11u64 + l37]);
+                    transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), (&l0.team_addresses)[l30 * 9u64 + 14u64 + l37]);
+                    transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), (&l0.team_addresses)[l30 * 9u64 + 17u64 + l37])
+                } else {
+                    transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), (&l0.team_addresses)[l30 - 3u64 * 6u64 + 38u64 + l37]);
+                    transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), (&l0.team_addresses)[l30 - 3u64 * 6u64 + 41u64 + l37])
                 };
-                l30 + 1u64
-            } else {
-                l32 = 0u64;
-                while (l32 < 3u64) {
-                    let l40 = if (l1.current_floor > l23 + 1u64 || (l1.current_floor == l23 + 1u64 && l1.current_row > l32)) {
-                        (&(&l1.seating)[l23 + 1u64])[l32]
+                l37 = l37 + 1u64;
+            };
+            l30 + 1u64
+        } else {
+            l32 = 0u64;
+            while (l32 < 3u64) {
+                let l40 = if (l1.current_floor > l23 + 1u64 || (l1.current_floor == l23 + 1u64 && l1.current_row > l32)) {
+                    (&(&l1.seating)[l23 + 1u64])[l32]
+                } else {
+                    C62
+                };
+                let l41 = if (l1.current_floor > l23 + 2u64 || (l1.current_floor == l23 + 2u64 && l1.current_row > l32)) {
+                    (&(&l1.seating)[l23 + 2u64])[l32]
+                } else {
+                    C62
+                };
+                let l19 = if (l30 < 3u64) {
+                    (&l0.team_addresses)[l30 * 9u64 + 11u64 + l32]
+                } else {
+                    (&l0.team_addresses)[l30 - 3u64 * 6u64 + 38u64 + l32]
+                };
+                let l7 = if (l30 < 3u64) {
+                    (&l0.team_addresses)[l30 * 9u64 + 14u64 + l32]
+                } else {
+                    (&l0.team_addresses)[l30 - 3u64 * 6u64 + 41u64 + l32]
+                };
+                if (l40 != C62) {
+                    l22 = table::borrow_mut(&mut l0.cabinet, l40);
+                    let l34 = if (l22.could_reward <= l27) {
+                        transfer::public_transfer(coin::split(l3, l27 - l22.could_reward, l5), l19);
+                        l22.could_reward
+                    } else {
+                        l27
+                    };
+                    if (l34 > 0u64) {
+                        transfer::public_transfer(coin::split(l3, l34, l5), l40);
+                        *(&mut l22.could_reward) = l22.could_reward - l34;
+                        *(&mut l22.has_reward) = l22.has_reward + l34
+                    }
+                } else {
+                    transfer::public_transfer(coin::split(l3, l27, l5), l19)
+                };
+                if (l41 != C62) {
+                    l22 = table::borrow_mut(&mut l0.cabinet, l41);
+                    let l35 = if (l22.could_reward <= l27) {
+                        transfer::public_transfer(coin::split(l3, l27 - l22.could_reward, l5), l7);
+                        l22.could_reward
+                    } else {
+                        l27
+                    };
+                    if (l35 > 0u64) {
+                        transfer::public_transfer(coin::split(l3, l35, l5), l41);
+                        *(&mut l22.could_reward) = l22.could_reward - l35;
+                        *(&mut l22.has_reward) = l22.has_reward + l35
+                    }
+                } else {
+                    transfer::public_transfer(coin::split(l3, l27, l5), l7)
+                };
+                if (l30 < 3u64) {
+                    let l42 = if (l23 - 1u64 > 0u64) {
+                        (&(&l1.seating)[l23 - 1u64])[l32]
                     } else {
                         C62
                     };
-                    let l41 = if (l1.current_floor > l23 + 2u64 || (l1.current_floor == l23 + 2u64 && l1.current_row > l32)) {
-                        (&(&l1.seating)[l23 + 2u64])[l32]
-                    } else {
-                        C62
-                    };
-                    let l19 = if (l30 < 3u64) {
-                        (&l0.team_addresses)[l30 * 9u64 + 11u64 + l32]
-                    } else {
-                        (&l0.team_addresses)[l30 - 3u64 * 6u64 + 38u64 + l32]
-                    };
-                    let l7 = if (l30 < 3u64) {
-                        (&l0.team_addresses)[l30 * 9u64 + 14u64 + l32]
-                    } else {
-                        (&l0.team_addresses)[l30 - 3u64 * 6u64 + 41u64 + l32]
-                    };
-                    if (l40 != C62) {
-                        l22 = table::borrow_mut(&mut l0.cabinet, l40);
-                        let l34 = if (l22.could_reward <= l27) {
-                            transfer::public_transfer(coin::split(l3, l27 - l22.could_reward, l5), l19);
+                    let l48 = (&l0.team_addresses)[l30 * 9u64 + 17u64 + l32];
+                    if (l42 != C62) {
+                        l22 = table::borrow_mut(&mut l0.cabinet, l42);
+                        let l36 = if (l22.could_reward <= l27) {
+                            transfer::public_transfer(coin::split(l3, l27 - l22.could_reward, l5), l48);
                             l22.could_reward
                         } else {
                             l27
                         };
-                        if (l34 > 0u64) {
-                            transfer::public_transfer(coin::split(l3, l34, l5), l40);
-                            *(&mut l22.could_reward) = l22.could_reward - l34;
-                            *(&mut l22.has_reward) = l22.has_reward + l34
+                        if (l36 > 0u64) {
+                            transfer::public_transfer(coin::split(l3, l36, l5), l42);
+                            *(&mut l22.could_reward) = l22.could_reward - l36;
+                            *(&mut l22.has_reward) = l22.has_reward + l36
                         }
                     } else {
-                        transfer::public_transfer(coin::split(l3, l27, l5), l19)
-                    };
-                    if (l41 != C62) {
-                        l22 = table::borrow_mut(&mut l0.cabinet, l41);
-                        let l35 = if (l22.could_reward <= l27) {
-                            transfer::public_transfer(coin::split(l3, l27 - l22.could_reward, l5), l7);
-                            l22.could_reward
-                        } else {
-                            l27
-                        };
-                        if (l35 > 0u64) {
-                            transfer::public_transfer(coin::split(l3, l35, l5), l41);
-                            *(&mut l22.could_reward) = l22.could_reward - l35;
-                            *(&mut l22.has_reward) = l22.has_reward + l35
-                        }
-                    } else {
-                        transfer::public_transfer(coin::split(l3, l27, l5), l7)
-                    };
-                    if (l30 < 3u64) {
-                        let l42 = if (l23 - 1u64 > 0u64) {
-                            (&(&l1.seating)[l23 - 1u64])[l32]
-                        } else {
-                            C62
-                        };
-                        let l48 = (&l0.team_addresses)[l30 * 9u64 + 17u64 + l32];
-                        if (l42 != C62) {
-                            l22 = table::borrow_mut(&mut l0.cabinet, l42);
-                            let l36 = if (l22.could_reward <= l27) {
-                                transfer::public_transfer(coin::split(l3, l27 - l22.could_reward, l5), l48);
-                                l22.could_reward
-                            } else {
-                                l27
-                            };
-                            if (l36 > 0u64) {
-                                transfer::public_transfer(coin::split(l3, l36, l5), l42);
-                                *(&mut l22.could_reward) = l22.could_reward - l36;
-                                *(&mut l22.has_reward) = l22.has_reward + l36
-                            }
-                        } else {
-                            transfer::public_transfer(coin::split(l3, l27, l5), l48)
-                        }
-                    };
-                    l32 = l32 + 1u64;
+                        transfer::public_transfer(coin::split(l3, l27, l5), l48)
+                    }
                 };
-                l30 + 1u64
+                l32 = l32 + 1u64;
             };
+            l30 + 1u64
         };
-        match (__dispatch_535) {
-            0 => {
-                while (l32 < 5u64) {
-                    let l33 = 0u64;
-                    if (l32 < 3u64) {
-                        while (l33 < 9u64) {
-                            transfer::public_transfer(coin::split(l3, l27, l5), (&l0.team_addresses)[l32 * 9u64 + 11u64 + l33]);
-                            l33 = l33 + 1u64;
-                        }
-                    } else {
-                        while (l33 < 6u64) {
-                            transfer::public_transfer(coin::split(l3, l27, l5), (&l0.team_addresses)[l32 - 3u64 * 6u64 + 38u64 + l33]);
-                            l33 = l33 + 1u64;
-                        }
-                    };
-                    l32 = l32 + 1u64;
-                }
-            },
-            1 => {
-                
-            }
+    };
+    match (__dispatch_535) {
+        0 => {
+            while (l32 < 5u64) {
+                let l33 = 0u64;
+                if (l32 < 3u64) {
+                    while (l33 < 9u64) {
+                        transfer::public_transfer(coin::split(l3, l27, l5), (&l0.team_addresses)[l32 * 9u64 + 11u64 + l33]);
+                        l33 = l33 + 1u64;
+                    }
+                } else {
+                    while (l33 < 6u64) {
+                        transfer::public_transfer(coin::split(l3, l27, l5), (&l0.team_addresses)[l32 - 3u64 * 6u64 + 38u64 + l33]);
+                        l33 = l33 + 1u64;
+                    }
+                };
+                l32 = l32 + 1u64;
+            };
+            transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), (&l0.team_addresses)[0u64]);
+            return
+        },
+        1 => {
+            transfer::public_transfer(coin::split(l3, l29 / 100u64, l5), (&l0.team_addresses)[0u64]);
+            return
         }
     }
 }

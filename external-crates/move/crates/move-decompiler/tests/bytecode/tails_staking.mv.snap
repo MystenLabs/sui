@@ -719,50 +719,48 @@ public fun unstake_tails(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: &m
 }
 
 fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tails {
-    // Did not structure and emit blocks 151
-    {
-        let l14 = bag::borrow(&l0.tails_metadata, C7);
-        let l6 = big_vector::length(&l0.staking_infos);
-        let l11 = big_vector::slice_size(&l0.staking_infos)as u64;
-        let l9 = 0u64;
-        let l8 = big_vector::borrow_slice_mut(&mut l0.staking_infos, l9);
-        let l10 = big_vector::get_slice_length(freeze(l8));
-        let l4 = 0u64;
-        let __dispatch_27;
-        let (l12, l5, l7);
-        loop {
-            if (l4 >= l6) {
-                __dispatch_27 = 1u32;
-                break
-            };
-            l12 = big_vector::borrow_from_slice_mut(l8, l4 % l11);
-            if (l12.user == l2) {
-                l5 = 0u64;
-                l7 = (&l12.tails).length();
-                __dispatch_27 = 0u32;
-                break
-            };
-            if (l4 + 1u64 < l6 && l4 + 1u64 == l9 * l11 + l10) {
-                l9 = big_vector::get_slice_idx(freeze(l8)) + 1u64;
-                l8 = big_vector::borrow_slice_mut(&mut l0.staking_infos, l9);
-                l10 = big_vector::get_slice_length(freeze(l8));
-            };
-            l4 = l4 + 1u64;
+    let l14 = bag::borrow(&l0.tails_metadata, C7);
+    let l6 = big_vector::length(&l0.staking_infos);
+    let l11 = big_vector::slice_size(&l0.staking_infos)as u64;
+    let l9 = 0u64;
+    let l8 = big_vector::borrow_slice_mut(&mut l0.staking_infos, l9);
+    let l10 = big_vector::get_slice_length(freeze(l8));
+    let l4 = 0u64;
+    let __dispatch_27;
+    let (l12, l5, l7);
+    loop {
+        if (l4 >= l6) {
+            __dispatch_27 = 1u32;
+            break
         };
-        match (__dispatch_27) {
-            0 => {
-                while (l5 < l7) {
-                    if (l14[(&l12.tails)[l5] - 1u64] == l1) {
-                        let l13 = object_table::remove(&mut l0.tails, l1);
-                        let __c70 = vector::is_empty(&l12.tails);
-                        return l13
-                    };
-                    l5 = l5 + 1u64;
-                }
-            },
-            1 => {
-                
-            }
+        l12 = big_vector::borrow_from_slice_mut(l8, l4 % l11);
+        if (l12.user == l2) {
+            l5 = 0u64;
+            l7 = (&l12.tails).length();
+            __dispatch_27 = 0u32;
+            break
+        };
+        if (l4 + 1u64 < l6 && l4 + 1u64 == l9 * l11 + l10) {
+            l9 = big_vector::get_slice_idx(freeze(l8)) + 1u64;
+            l8 = big_vector::borrow_slice_mut(&mut l0.staking_infos, l9);
+            l10 = big_vector::get_slice_length(freeze(l8));
+        };
+        l4 = l4 + 1u64;
+    };
+    match (__dispatch_27) {
+        0 => {
+            while (l5 < l7) {
+                if (l14[(&l12.tails)[l5] - 1u64] == l1) {
+                    let l13 = object_table::remove(&mut l0.tails, l1);
+                    let __c70 = vector::is_empty(&l12.tails);
+                    return l13
+                };
+                l5 = l5 + 1u64;
+            };
+            abort C12
+        },
+        1 => {
+            abort C12
         }
     }
 }

@@ -1277,92 +1277,91 @@ public entry fun transfer_art20(l0: vector<NFT>, l1: vector<address>, l2: &Colle
 }
 
 public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>, l2: vector<UserBalance>, l3: vector<u64>, l4: address, l5: &Clock, l6: &mut TxContext) {
-    // Did not structure and emit blocks 191
-    {
-        let l24 = tx_context::sender(freeze(l6));
-        let l14 = xf_ART20::get_collection_cap_id(l0);
-        let l10 = l3.length();
-        xf_ART20::validate_transfer(l0, l24, l4);
-        xf_ART20::check_deny_list_restrictions(l0, l4);
-        let l26 = vector[];
-        let l9 = vector[];
-        let l16 = 0u64;
-        let l19;
+    let l24 = tx_context::sender(freeze(l6));
+    let l14 = xf_ART20::get_collection_cap_id(l0);
+    let l10 = l3.length();
+    xf_ART20::validate_transfer(l0, l24, l4);
+    xf_ART20::check_deny_list_restrictions(l0, l4);
+    let l26 = vector[];
+    let l9 = vector[];
+    let l16 = 0u64;
+    let l19;
+    loop {
+        if (l16 >= l10) {
+            event::emit(BatchTransferEvent { from: l24, recipients: vector[l4], token_ids: l26, amounts: l9, collection_id: l14, timestamp: clock::timestamp_ms(l5) });
+            l19 = 0u64;
+            break
+        };
+        let l11 = (&l3)[l16];
+        let (reg_25, reg_26) = xf_ART20::get_nft_by_asset_id(l0, &l1, l11);
+        let l23 = reg_26;
+        let l22 = reg_25;
+        assert!(option::is_some(&l22), C15);
+        assert!(option::is_some(&l23), C3);
+        let l21 = option::extract(&mut l22);
+        assert!(option::extract(&mut l23) == l24, C3);
+        let l20 = l1.length();
+        let l17 = 0u64;
+        let l15 = false;
+        let __dispatch_81;
+        let (l13, l18);
         loop {
-            if (l16 >= l10) {
-                event::emit(BatchTransferEvent { from: l24, recipients: vector[l4], token_ids: l26, amounts: l9, collection_id: l14, timestamp: clock::timestamp_ms(l5) });
-                l19 = 0u64;
+            if (l17 >= l20) {
+                __dispatch_81 = 1u32;
                 break
             };
-            let l11 = (&l3)[l16];
-            let (reg_25, reg_26) = xf_ART20::get_nft_by_asset_id(l0, &l1, l11);
-            let l23 = reg_26;
-            let l22 = reg_25;
-            assert!(option::is_some(&l22), C15);
-            assert!(option::is_some(&l23), C3);
-            let l21 = option::extract(&mut l22);
-            assert!(option::extract(&mut l23) == l24, C3);
-            let l20 = l1.length();
-            let l17 = 0u64;
-            let l15 = false;
-            let __dispatch_81;
-            let (l13, l18);
-            loop {
-                if (l17 >= l20) {
-                    __dispatch_81 = 1u32;
-                    break
-                };
-                let l25 = &mut (&mut l1)[l17];
-                if (l25.collection_id == l14 && (l25.asset_id == l11 && !(l15))) {
-                    l13 = false;
-                    l18 = 0u64;
-                    __dispatch_81 = 0u32;
-                    break
-                };
-                l17 = l17 + 1u64;
+            let l25 = &mut (&mut l1)[l17];
+            if (l25.collection_id == l14 && (l25.asset_id == l11 && !(l15))) {
+                l13 = false;
+                l18 = 0u64;
+                __dispatch_81 = 0u32;
+                break
             };
-            match (__dispatch_81) {
-                0 => {
-                    loop {
-                        if (l18 < l2.length()) {
-                            let l12 = &mut (&mut l2)[l18];
-                            if (!(l12.collection_id == l14 && l12.balance > 0u64)) {
-                                l18 = l18 + 1u64;
-                                continue
-                            };
-                            *(&mut l12.balance) = xf_ART20::safe_sub(l12.balance, 1u64);
-                            l13 = true;
-                        };
-                        assert!(l13, C6);
-                        l26.push_back(l21);
-                        l9.push_back(1u64);
-                        transfer::transfer(vector::remove(&mut l1, l17), l4);
-                        l15 = true;
-                        break
-                    }
-                },
-                1 => {
-                    
-                }
-            };
-            abort C15;
-            l16 = l16 + 1u64;
+            l17 = l17 + 1u64;
         };
-        while (l19 < l2.length()) {
-            if ((&mut (&mut l2)[l19]).balance == 0u64) {
-                xf_ART20::cleanup_empty_balance(vector::remove(&mut l2, l19))
-            } else {
-                l19 = l19 + 1u64;
+        let __c191;
+        match (__dispatch_81) {
+            0 => {
+                loop {
+                    if (l18 < l2.length()) {
+                        let l12 = &mut (&mut l2)[l18];
+                        if (!(l12.collection_id == l14 && l12.balance > 0u64)) {
+                            l18 = l18 + 1u64;
+                            continue
+                        };
+                        *(&mut l12.balance) = xf_ART20::safe_sub(l12.balance, 1u64);
+                        l13 = true;
+                    };
+                    assert!(l13, C6);
+                    l26.push_back(l21);
+                    l9.push_back(1u64);
+                    transfer::transfer(vector::remove(&mut l1, l17), l4);
+                    l15 = true;
+                    break
+                };
+                __c191 = l15;
+            },
+            1 => {
+                __c191 = l15;
             }
         };
-        while (!(vector::is_empty(&l2))) {
-            transfer::transfer(l2.pop_back(), l24)
-        };
-        std::vector::destroy_empty(l1);
-        std::vector::destroy_empty(l2);
-        std::vector::destroy_empty(l26);
-        std::vector::destroy_empty(l9)
-    }
+        abort C15;
+        l16 = l16 + 1u64;
+    };
+    while (l19 < l2.length()) {
+        if ((&mut (&mut l2)[l19]).balance == 0u64) {
+            xf_ART20::cleanup_empty_balance(vector::remove(&mut l2, l19))
+        } else {
+            l19 = l19 + 1u64;
+        }
+    };
+    while (!(vector::is_empty(&l2))) {
+        transfer::transfer(l2.pop_back(), l24)
+    };
+    std::vector::destroy_empty(l1);
+    std::vector::destroy_empty(l2);
+    std::vector::destroy_empty(l26);
+    std::vector::destroy_empty(l9)
 }
 
 public entry fun transfer_art20_in_quantity(l0: vector<NFT>, l1: address, l2: u64, l3: &CollectionCap, l4: vector<UserBalance>, l5: &Clock, l6: &mut TxContext) {
