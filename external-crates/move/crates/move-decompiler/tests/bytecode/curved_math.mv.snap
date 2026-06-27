@@ -628,49 +628,81 @@ fun newton_D(l0: u64, l1: u256, l2: vector<u256>, l3: u256): u256 {
 }
 
 public fun newton_y(l0: u256, l1: u256, l2: vector<u256>, l3: u256, l4: u64): u256 {
-    // Did not structure and emit blocks 213, 367, 369, 370, 372
-    {
-        let l25 = l2.length();
-        assert!(l0as u64 > curved_math::get_min_amp(l25) - 1u64 && l0as u64 < curved_math::get_max_amp(l25) + 1u64, C18);
-        assert!(l1 > C2 - 1u256 && l1 < C3 + 1u256, C19);
-        assert!(l3 > math::pow_10_u256(17u8) - 1u256 && l3 < math::pow_10_u256(15u8) * C0 + 1u256, C19);
-        let l21 = 0u64;
-        let (l11, l13, l22, l26, l27);
-        loop {
-            if (l21 >= l25) {
-                l27 = l3 / l25as u256;
-                l11 = C0;
-                l13 = 0u256;
-                *(&mut (&mut l2)[l4as u64]) = 0u256;
-                l26 = math::sort_u256(l2);
-                let l17 = math::max_u256(math::max_u256((&l26)[0u64] / math::pow_10_u256(14u8), l3 / math::pow_10_u256(14u8)), 100u256);
-                l22 = l25 - 2u64;
-                break
-            };
-            if (l21 != l4) {
-                let l19 = math::mul_div_u256((&l2)[l21], C0, l3);
-                assert!(l19 > math::pow_10_u256(16u8) - 1u256 && l19 < math::pow_10_u256(20u8) + 1u256, C17)
-            };
-            l21 = l21 + 1u64;
-        };
-        loop {
-            if (l22 <= l25 - 2u64) {
-                let l16 = (&l26)[l22];
-                l27 = math::mul_div_u256(l27, l3, l16 * l25as u256);
-                l13 = l13 + l16;
-                if (l22 != 0u64) {
-                    l22 = l22 - 1u64;
-                    continue
-                }
-            };
-            l22 = 0u64;
+    let l25 = l2.length();
+    assert!(l0as u64 > curved_math::get_min_amp(l25) - 1u64 && l0as u64 < curved_math::get_max_amp(l25) + 1u64, C18);
+    assert!(l1 > C2 - 1u256 && l1 < C3 + 1u256, C19);
+    assert!(l3 > math::pow_10_u256(17u8) - 1u256 && l3 < math::pow_10_u256(15u8) * C0 + 1u256, C19);
+    let l21 = 0u64;
+    let (l11, l13, l17, l22, l26, l27);
+    loop {
+        if (l21 >= l25) {
+            l27 = l3 / l25as u256;
+            l11 = C0;
+            l13 = 0u256;
+            *(&mut (&mut l2)[l4as u64]) = 0u256;
+            l26 = math::sort_u256(l2);
+            l17 = math::max_u256(math::max_u256((&l26)[0u64] / math::pow_10_u256(14u8), l3 / math::pow_10_u256(14u8)), 100u256);
+            l22 = l25 - 2u64;
             break
         };
-        while (l22 < l25 - 1u64) {
-            l11 = math::mul_div_u256(l11, (&l26)[l22] * l25as u256, l3);
+        if (l21 != l4) {
+            let l19 = math::mul_div_u256((&l2)[l21], C0, l3);
+            assert!(l19 > math::pow_10_u256(16u8) - 1u256 && l19 < math::pow_10_u256(20u8) + 1u256, C17)
+        };
+        l21 = l21 + 1u64;
+    };
+    loop {
+        if (l22 <= l25 - 2u64) {
+            let l16 = (&l26)[l22];
+            l27 = math::mul_div_u256(l27, l3, l16 * l25as u256);
+            l13 = l13 + l16;
+            if (l22 != 0u64) {
+                l22 = l22 - 1u64;
+                continue
+            }
+        };
+        l22 = 0u64;
+        break
+    };
+    while (l22 < l25 - 1u64) {
+        l11 = math::mul_div_u256(l11, (&l26)[l22] * l25as u256, l3);
+        l22 = l22 + 1u64;
+    };
+    l22 = 0u64;
+    let l9;
+    loop {
+        assert!(l22 < 256u64, C14);
+        let l30 = l27;
+        let l10 = math::mul_div_u256(l11, l27 * l25as u256, l3);
+        let l12 = l13 + l27;
+        let l15 = math::subtract_mod_u256(l1 + C0, l10) + 1u256;
+        let l23 = math::mul_div_u256(math::mul_div_u256(math::mul_div_u256(C0, l3, l1), l15, l1), l15 * C1as u256, l0);
+        let l24 = C0 + math::mul_div_u256(l10, 2u256 * C0, l15);
+        let l31 = l27 * C0 + l12 * l24 + l23;
+        let l14 = l3 * l24;
+        if (l31 < l14) {
+            l27 = l30 / 2u256;
+        } else {
+            l31 = l31 - l14;
+            let l18 = l31 / l27;
+            let l28 = l23 / l18;
+            let l29 = l31 + l3 * C0 / l18 + math::mul_div_u256(l28, C0, l10);
+            l28 = l28 + math::mul_div_u256(l12, C0, l18);
+            l27 = if (l29 < l28) {
+                l30 / 2u256
+            } else {
+                l29 - l28
+            };
+            if (math::subtract_mod_u256(l27, l30) < math::max_u256(l17, l27 / math::pow_10_u256(14u8))) {
+                let l20 = math::mul_div_u256(l27, C0, l3);
+                l9 = l20 > math::pow_10_u256(16u8) - 1u256 && l20 < math::pow_10_u256(20u8) + 1u256;
+                break
+            };
             l22 = l22 + 1u64;
         }
-    }
+    };
+    assert!(l9, C17);
+    return l27
 }
 
 public fun query_ask_amount(l0: &Clock, l1: &CurvedPoolConfig, l2: vector<u256>, l3: u256, l4: u64, l5: u64): ( u256, u256) {

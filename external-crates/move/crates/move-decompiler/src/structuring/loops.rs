@@ -145,7 +145,11 @@ pub(super) fn structure_loop(
 /// Replace the loop's input with `Input::Reduced(loop_head, succs)` so outer scopes treat it
 /// as a single opaque block via `process_reduced`. Drains body members and `absorbed_succs`
 /// (succs already embedded into the loop's structured form by `emit_*`), excluding them from
-/// the marker's out-edges.
+/// the marker's out-edges. Each absorbed succ's own out-edges are inherited into the marker
+/// so the post-absorbed continuation stays reachable: when the absorbed succ is itself a
+/// `Reduced(_, [post])` (an earlier nested loop), `post` becomes a successor of the new
+/// marker. Without this, the chain of blocks downstream of the absorbed succ goes orphan in
+/// the residue and silently drops out.
 fn install_reduced_marker(
     input: &mut BTreeMap<D::Label, D::Input>,
     loop_head: NodeIndex,
@@ -153,6 +157,11 @@ fn install_reduced_marker(
     succ_nodes: &HashSet<NodeIndex>,
     absorbed_succs: &HashSet<NodeIndex>,
 ) {
+    let inherited_succs: HashSet<NodeIndex> = absorbed_succs
+        .iter()
+        .filter_map(|s| input.get(s))
+        .flat_map(|inp| inp.edges().into_iter().map(|(_, v)| v))
+        .collect();
     for n in loop_nodes {
         if *n != loop_head {
             input.remove(n);
@@ -164,9 +173,11 @@ fn install_reduced_marker(
     let mut succs: Vec<NodeIndex> = succ_nodes
         .iter()
         .copied()
-        .filter(|s| !absorbed_succs.contains(s))
+        .chain(inherited_succs)
+        .filter(|s| !absorbed_succs.contains(s) && !loop_nodes.contains(s))
         .collect();
     succs.sort_by_key(|n| n.index());
+    succs.dedup();
     input.insert(loop_head, D::Input::Reduced(loop_head, succs));
 }
 
