@@ -2451,6 +2451,26 @@ mod test {
             .build()
             .await
             .into();
-        test_simulated_load(test_cluster, 30).await;
+
+        // The large object-balance withdrawal operation exposes a bug present in the older
+        // execution layers this test targets, so disable it here. It is exercised against
+        // the latest execution version elsewhere.
+        let config = SimulatedLoadConfig {
+            composite_config: Some(CompositeWorkloadConfig::balanced().with_probability(
+                sui_benchmark::workloads::composite::ObjectBalanceLargeWithdraw::NAME,
+                0.0,
+            )),
+            ..Default::default()
+        };
+        test_simulated_load_with_test_config(
+            test_cluster,
+            30,
+            config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            true, // enable_surfer
+        )
+        .await;
     }
 }
