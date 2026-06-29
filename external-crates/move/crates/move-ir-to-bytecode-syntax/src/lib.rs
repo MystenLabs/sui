@@ -67,7 +67,8 @@
 //! ## Expressions
 //! ```text
 //! o ∈ VarOp ::=
-//!   | copy(x) // returns value bound to 'x'
+//!   | copy(x) // returns value bound to 'x'; if 'x' begins with an uppercase letter it instead
+//!             // names a constant and loads it (LdConst) -- see ConstantDecl below
 //!   | move(x) // moves the value out of 'x', i.e. returns the value and makes 'x' unusable
 //!
 //! r ∈ ReferenceOp ::=
@@ -86,8 +87,7 @@
 //!                                    // "constructor" for 'n'
 //!                                    // "packs" the values, binding them to the fields, and creates a new instance of 'n'
 //!                                    // 'n' must be declared in the current module
-//!   | const::c                       // load the named constant 'c' by value (LdConst)
-//!                                    // constant names live in their own 'const::' namespace
+//!   // (a named constant is loaded with copy(C), where C begins with an uppercase letter)
 //!   // boolean operators
 //!   | !e_1
 //!   | e_1 || e_2
@@ -164,7 +164,8 @@
 //!                                                 // currently `public` is the only supported visibility
 //!
 //! cdecl ∈ ConstantDecl ::=
-//!   | const c: t = v; // a named constant; the value is self-describing and is
+//!   | const C: t = v; // a named constant; 'C' must begin with an uppercase letter (locals must
+//!                     // not), and is loaded with copy(C). The value is self-describing and is
 //!                     // not checked against 't' here (the verifier does that)
 //!
 //! body ∈ ProcedureBody ::=

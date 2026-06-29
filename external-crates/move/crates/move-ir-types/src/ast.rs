@@ -1721,7 +1721,7 @@ impl fmt::Display for Exp_ {
                     ))
                 )
             }
-            Exp_::Constant(name) => write!(f, "const::{}", name.0),
+            Exp_::Constant(name) => write!(f, "copy({})", name.0),
         }
     }
 }

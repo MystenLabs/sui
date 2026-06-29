@@ -13,4 +13,4 @@ Error: ParserError: Invalid Token: unrecognized token kind NameValue
 
 task 2, lines 13-18:
 //# print-bytecode
-Error: ParserError: Invalid Token: unrecognized token kind Const
+Error: ParserError: Invalid Token: unrecognized token kind Copy

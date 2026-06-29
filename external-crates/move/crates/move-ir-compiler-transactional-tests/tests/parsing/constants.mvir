@@ -12,6 +12,6 @@ mvir 0x42::M {
 
     public fun load(): u64 {
     label b0:
-        return const::COUNT;
+        return copy(COUNT);
     }
 }

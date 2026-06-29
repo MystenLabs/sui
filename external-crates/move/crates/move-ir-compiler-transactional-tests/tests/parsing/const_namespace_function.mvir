@@ -1,6 +1,6 @@
 //# print-bytecode
-// `const::C` does not conflict with a function named `C`: `Self::C()` is the
-// call, `const::C` is the constant.
+// `copy(C)` does not conflict with a function named `C`: `Self::C()` is the
+// call, `copy(C)` is the constant.
 mvir 0x42::M {
     const C: u64 = 7u64;
     public fun C(): u64 {
@@ -9,6 +9,6 @@ mvir 0x42::M {
     }
     public fun f(): u64 {
     label b0:
-        return Self::C() + const::C;
+        return Self::C() + copy(C);
     }
 }

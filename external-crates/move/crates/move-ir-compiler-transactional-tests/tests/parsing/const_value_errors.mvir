@@ -14,5 +14,5 @@ mvir 0x42::M {
 // A constant value cannot reference another constant.
 mvir 0x42::M {
     const A: u64 = 1u64;
-    const B: u64 = const::A;
+    const B: u64 = copy(A);
 }

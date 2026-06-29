@@ -216,6 +216,27 @@ fn parse_var(tokens: &mut Lexer) -> Result<Var, ParseError<Loc, anyhow::Error>> 
     Ok(spanned(tokens.file_hash(), start_loc, end_loc, var))
 }
 
+/// A name beginning with an uppercase letter denotes a constant. Local
+/// variables and parameters must not begin with an uppercase letter.
+fn is_constant_name(name: &str) -> bool {
+    name.starts_with(|c: char| c.is_ascii_uppercase())
+}
+
+/// Parse a variable that introduces a local binding (a `let`, parameter, or
+/// unpack binding), which must not begin with an uppercase letter.
+fn parse_binding_var(tokens: &mut Lexer) -> Result<Var, ParseError<Loc, anyhow::Error>> {
+    let var = parse_var(tokens)?;
+    if is_constant_name(var.value.0.as_str()) {
+        return Err(ParseError::InvalidToken {
+            location: var.loc,
+            message: "local and parameter names must not begin with an uppercase letter \
+                      (that is reserved for constants)"
+                .to_string(),
+        });
+    }
+    Ok(var)
+}
+
 // Field: Field = {
 //     <n:Name> =>? parse_field(n),
 // };
@@ -525,6 +546,16 @@ fn parse_borrow_field_(
             Tok::ColonColon => parse_unary_exp(tokens)?,
             _ => {
                 let var = parse_var(tokens)?;
+                if is_constant_name(var.value.0.as_str()) {
+                    return Err(ParseError::InvalidToken {
+                        location: var.loc,
+                        message: if mutable {
+                            "constants cannot be mutably borrowed".to_string()
+                        } else {
+                            "borrowing constants is not yet supported".to_string()
+                        },
+                    });
+                }
                 return Ok(Exp_::BorrowLocal(mutable, var));
             }
         }
@@ -712,22 +743,46 @@ fn parse_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyhow::Error
             tokens.advance()?;
             let v = parse_var(tokens)?;
             consume_token(tokens, Tok::RParen)?;
+            if is_constant_name(v.value.0.as_str()) {
+                return Err(ParseError::InvalidToken {
+                    location: v.loc,
+                    message: "constants cannot be moved; use copy(...) to load a constant"
+                        .to_string(),
+                });
+            }
             Ok(Exp_::Move(v))
         }
         Tok::Copy => {
             tokens.advance()?;
             let v = parse_var(tokens)?;
             consume_token(tokens, Tok::RParen)?;
-            Ok(Exp_::Copy(v))
+            // `copy(C)` (uppercase) loads a named constant; `copy(c)` copies a local.
+            Ok(if is_constant_name(v.value.0.as_str()) {
+                Exp_::Constant(ConstantName(v.value.0))
+            } else {
+                Exp_::Copy(v)
+            })
         }
         Tok::AmpMut => {
             tokens.advance()?;
             let v = parse_var(tokens)?;
+            if is_constant_name(v.value.0.as_str()) {
+                return Err(ParseError::InvalidToken {
+                    location: v.loc,
+                    message: "constants cannot be mutably borrowed".to_string(),
+                });
+            }
             Ok(Exp_::BorrowLocal(true, v))
         }
         Tok::Amp => {
             tokens.advance()?;
             let v = parse_var(tokens)?;
+            if is_constant_name(v.value.0.as_str()) {
+                return Err(ParseError::InvalidToken {
+                    location: v.loc,
+                    message: "borrowing constants is not yet supported".to_string(),
+                });
+            }
             Ok(Exp_::BorrowLocal(false, v))
         }
         Tok::AccountAddressValue
@@ -754,12 +809,6 @@ fn parse_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyhow::Error
             tokens.advance()?;
             let address = parse_account_address(tokens)?;
             Ok(Exp_::address(address).value)
-        }
-        Tok::Const => {
-            tokens.advance()?;
-            consume_token(tokens, Tok::ColonColon)?;
-            let name = ConstantName(parse_name(tokens)?);
-            Ok(Exp_::Constant(name))
         }
         t => Err(ParseError::InvalidToken {
             location: current_token_loc(tokens),
@@ -933,6 +982,12 @@ fn parse_lvalue_(tokens: &mut Lexer) -> Result<LValue_, ParseError<Loc, anyhow::
     match tokens.peek() {
         Tok::NameValue => {
             let l = parse_var(tokens)?;
+            if is_constant_name(l.value.0.as_str()) {
+                return Err(ParseError::InvalidToken {
+                    location: l.loc,
+                    message: "cannot assign to a constant".to_string(),
+                });
+            }
             Ok(LValue_::Var(l))
         }
         Tok::Star => {
@@ -969,7 +1024,7 @@ fn parse_field_bindings(
     let f = parse_field(tokens)?;
     if tokens.peek() == Tok::Colon {
         tokens.advance()?; // consume the colon
-        let v = parse_var(tokens)?;
+        let v = parse_binding_var(tokens)?;
         Ok((f, v))
     } else {
         Ok((
@@ -1334,7 +1389,7 @@ fn parse_block(tokens: &mut Lexer) -> Result<Block, ParseError<Loc, anyhow::Erro
 
 fn parse_declaration(tokens: &mut Lexer) -> Result<(Var, Type), ParseError<Loc, anyhow::Error>> {
     consume_token(tokens, Tok::Let)?;
-    let v = parse_var(tokens)?;
+    let v = parse_binding_var(tokens)?;
     consume_token(tokens, Tok::Colon)?;
     let t = parse_type(tokens)?;
     consume_token(tokens, Tok::Semicolon)?;
@@ -1621,7 +1676,7 @@ fn parse_name_and_type_actuals(
 // }
 
 fn parse_arg_decl(tokens: &mut Lexer) -> Result<(Var, Type), ParseError<Loc, anyhow::Error>> {
-    let v = parse_var(tokens)?;
+    let v = parse_binding_var(tokens)?;
     consume_token(tokens, Tok::Colon)?;
     let t = parse_type(tokens)?;
     Ok((v, t))
@@ -2027,7 +2082,14 @@ fn parse_constant_decl(
     check_no_modifier(entry, "entry", "constant")?;
 
     consume_token(tokens, Tok::Const)?;
+    let name_loc = current_token_loc(tokens);
     let name = ConstantName(parse_name(tokens)?);
+    if !is_constant_name(name.0.as_str()) {
+        return Err(ParseError::InvalidToken {
+            location: name_loc,
+            message: "constant names must begin with an uppercase letter".to_string(),
+        });
+    }
     consume_token(tokens, Tok::Colon)?;
     let signature = parse_type(tokens)?;
     consume_token(tokens, Tok::Equal)?;
