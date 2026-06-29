@@ -1,0 +1,66 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[E04021]: invalid number after type inference
+  ┌─ tests/development/signed_ints/invalid/signed_int_inferred_negative_overflow.move:7:42
+  │
+7 │     fun overflow_i8()   { let _x: i8   = -129; }
+  │                                   --     ^^^^
+  │                                   │      │
+  │                                   │      Invalid numerical literal
+  │                                   │      Annotating the literal might help inference: '-129i16'
+  │                                   This literal does not fit into the type 'i8'.
+
+error[E04021]: invalid number after type inference
+  ┌─ tests/development/signed_ints/invalid/signed_int_inferred_negative_overflow.move:8:42
+  │
+8 │     fun overflow_i16()  { let _x: i16  = -32769; }
+  │                                   ---    ^^^^^^
+  │                                   │      │
+  │                                   │      Invalid numerical literal
+  │                                   │      Annotating the literal might help inference: '-32769i32'
+  │                                   This literal does not fit into the type 'i16'.
+
+error[E04021]: invalid number after type inference
+  ┌─ tests/development/signed_ints/invalid/signed_int_inferred_negative_overflow.move:9:42
+  │
+9 │     fun overflow_i32()  { let _x: i32  = -2147483649; }
+  │                                   ---    ^^^^^^^^^^^
+  │                                   │      │
+  │                                   │      Invalid numerical literal
+  │                                   │      Annotating the literal might help inference: '-2147483649i64'
+  │                                   This literal does not fit into the type 'i32'.
+
+error[E04021]: invalid number after type inference
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_negative_overflow.move:10:42
+   │
+10 │     fun overflow_i64()  { let _x: i64  = -9223372036854775809; }
+   │                                   ---    ^^^^^^^^^^^^^^^^^^^^
+   │                                   │      │
+   │                                   │      Invalid numerical literal
+   │                                   │      Annotating the literal might help inference: '-9223372036854775809i128'
+   │                                   This literal does not fit into the type 'i64'.
+
+error[E04021]: invalid number after type inference
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_negative_overflow.move:11:42
+   │
+11 │     fun overflow_i128() { let _x: i128 = -170141183460469231731687303715884105729; }
+   │                                   ----   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                                   │      │
+   │                                   │      Invalid numerical literal
+   │                                   │      Annotating the literal might help inference: '-170141183460469231731687303715884105729i256'
+   │                                   This literal does not fit into the type 'i128'.
+
+error[E04021]: invalid number after type inference
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_negative_overflow.move:12:42
+   │
+12 │     fun overflow_i256() { let _x: i256 = -57896044618658097711785492504343953926634992332820282019728792003956564819969; }
+   │                                   ----   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                                   │      │
+   │                                   │      Invalid numerical literal
+   │                                   │      Annotating the literal might help inference: '-57896044618658097711785492504343953926634992332820282019728792003956564819969i256'
+   │                                   This literal does not fit into the type 'i256'.
