@@ -58,6 +58,15 @@ module a::m {
         };
         r
     }
+
+    // A borrow alone is still a pass-through.
+    public fun borrowed_field_discarded(c: &OwnerCap) {
+        let r = &c.owns;
+        let _ = r;
+    }
+
+    // Freezing a bare root reference does not read any field.
+    public fun freeze_bare_return(c: &mut OwnerCap): &OwnerCap { freeze(c) }
 }
 
 module sui::object {

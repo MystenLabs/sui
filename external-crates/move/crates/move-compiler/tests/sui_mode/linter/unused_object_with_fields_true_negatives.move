@@ -70,6 +70,7 @@ module a::m {
     // typical accessor patterns
     public fun get(c: &OwnerCap): address { c.owns }
     public fun get_mut(c: &mut OwnerCap): &mut address { &mut c.owns }
+    public fun freeze_field_returned(c: &mut OwnerCap): &address { freeze(&mut c.owns) }
     public fun set(c: &mut OwnerCap, owns: address) { c.owns = owns; }
 
     // field cast then consumed downstream

@@ -18,28 +18,20 @@
 //! - the value is the argument of an `abort`.
 //!
 //! Pure pass-throughs that don't on their own count: `borrow`, `freeze`,
-//! `assign`, `pack` (its fields can't carry references, so any field-read
-//! into a `pack` field has already been counted via `dereference`), `let _ = e`
-//! (ignore-and-pop). In particular `borrow` is needed to access a field but
-//! is not on its own a use; the use is whatever the borrow flows into.
+//! `assign`, `pack`, and `let _ = e` (ignore-and-pop). In particular `borrow`
+//! is needed to access a field, but the use is whatever the borrow flows into.
 //!
 //! ## How the analysis tracks "unused"
 //!
-//! Each [`State`] carries a `used: BTreeSet<Var>` that records every
-//! tracked root marked as used along some path reaching the current
-//! program point. The set grows monotonically inside a block (transfer
-//! functions only add) and joins by union (see [`State::join_impl`]), so
-//! the framework's fixed-point converges. At [`SimpleAbsInt::finish`] we
-//! union `used` across every reachable block's post-state: a root in that
-//! union is used on some reachable path; a root absent from it is never
-//! used on any reachable path — those are the ones we flag.
+//! Each [`State`] carries a `used: BTreeSet<Var>` that records tracked roots
+//! marked as used along some path reaching the current program point. The set
+//! grows monotonically and joins by union. At [`SimpleAbsInt::finish`] we union
+//! every reachable post-state; roots absent from that union are flagged.
 //!
 //! Each tracked value carries a per-root [`Kind`] — `Bare` (a reference to
 //! the root param itself) or `FieldDerived` (the value went through a
-//! `Borrow`). `Borrow` lifts `Bare → FieldDerived`; join takes per-root
-//! union with [`Kind::join`] (a max on the `Bare < FieldDerived` ordering)
-//! so we conservatively treat a root as field-derived if any incoming path
-//! produced a field-derived view.
+//! `Borrow`). `Borrow` lifts `Bare -> FieldDerived`; [`Kind::join`] keeps the
+//! field-derived tag if any incoming path produced one.
 
 use crate::{
     PreCompiledProgramInfo,
@@ -86,8 +78,6 @@ pub struct UnusedObjWithFieldsAI {
     tracked_params: BTreeMap<Var, Loc>,
 }
 
-/// Per-root tag on a tracked value: how the value relates to its root.
-///
 /// Ordered so that `Bare < FieldDerived`; the lattice join is `max`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Kind {
@@ -98,8 +88,6 @@ pub enum Kind {
 }
 
 impl Kind {
-    /// Lattice join: `FieldDerived` dominates `Bare`. If any incoming path
-    /// produced a field-derived view, the merged view is field-derived.
     fn join(self, other: Self) -> Self {
         self.max(other)
     }
@@ -122,9 +110,7 @@ pub struct ExecutionContext {
 #[derive(Clone, Debug)]
 pub struct State {
     locals: BTreeMap<Var, LocalState<Value>>,
-    /// Tracked roots that some command on a path reaching this program
-    /// point has marked as used. Grows monotonically inside a block and
-    /// joins by union.
+    /// Tracked roots marked as used along a path reaching this program point.
     used: BTreeSet<Var>,
 }
 
@@ -194,8 +180,8 @@ fn always_aborts(cfg: &ImmForwardCFG) -> bool {
     has_terminal
 }
 
-/// Checks whether a parameter type is a Sui object with key ability, no type parameters,
-/// id: UID field, and at least one additional field.
+/// Checks whether a parameter type is a Sui object with key ability, no type
+/// parameters, id: UID field, and at least one additional field.
 fn is_qualifying_obj(
     info: &TypingProgramInfo,
     pre_compiled: Option<&PreCompiledProgramInfo>,
@@ -238,13 +224,8 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
         final_states: BTreeMap<Label, BlockStates<State>>,
         mut diags: Diagnostics,
     ) -> Diagnostics {
-        // Union `used` across every reachable block's post-state: a root
-        // used on any reachable path appears here. Unprocessed
-        // (unreachable) blocks have a `None` post-state and so correctly
-        // contribute nothing. The union over *all* blocks (not just
-        // terminal ones) is what makes this correct for uses that never
-        // reach a terminal block — e.g. a use on an abort branch or inside
-        // a loop body.
+        // Use all reachable post-states, not just exits, so uses in abort
+        // branches and loop bodies are not lost.
         let mut used: BTreeSet<Var> = BTreeSet::new();
         for block in final_states.values() {
             if let Some(post) = &block.post {
@@ -290,9 +271,6 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
         cmd: &Command,
     ) -> bool {
         match &cmd.value {
-            // Writing into a tracked `&mut` field counts as use of the target.
-            // The RHS is always a non-reference value (Move forbids refs to
-            // refs), so it can never be tracked and needs no special handling.
             C::Mutate(lhs, rhs) => {
                 self.exp(context, state, rhs);
                 let lhs_vals = self.exp(context, state, lhs);
@@ -319,15 +297,8 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
                 state.mark_used(&vals);
                 true
             }
-            // `Assign` propagates the RHS value to the LHS binding via the
-            // default visitor handling — letting us track values across
-            // local re-bindings without any custom work here.
             C::Assign(_, _, _) => false,
-            // `IgnoreAndPop` evaluates the sub-expression for its side
-            // effects but the value itself does not flow out — fall through
-            // and let inner uses be marked by the default traversal.
             C::IgnoreAndPop { .. } => false,
-            // Unconditional jumps and break/continue carry no values.
             C::Jump { .. } | C::Break(_) | C::Continue(_) => false,
         }
     }
@@ -340,7 +311,6 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
     ) -> Option<Vec<Value>> {
         use UnannotatedExp_ as E;
         match &e.exp.value {
-            // `&local` — propagate the local's tracked value.
             E::BorrowLocal(_, var) => match state.locals().get(var) {
                 Some(LocalState::Available(_, value)) => Some(vec![value.clone()]),
                 _ => None,
@@ -360,8 +330,8 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
                         .collect(),
                 )
             }
-            // `freeze(&mut T) -> &T` is a pure type-level coercion — pass
-            // tracking through.
+            // `freeze(&mut T) -> &T` is a type-level coercion; the consumer
+            // of the frozen reference decides whether it counts as a use.
             E::Freeze(inner) => Some(self.exp(context, state, inner)),
             // Reading the value (`*x`, `!x`, `x as U`) consumes the field.
             // The root of a tracked param can't appear directly under any
@@ -462,13 +432,8 @@ impl SimpleDomain for State {
         }
     }
 
-    /// Union the per-state `used` sets and bump `result` to `Changed` if
-    /// that introduced any new entries. Note that the diagnostics do not
-    /// depend on this propagation — a use is recorded in the post-state of
-    /// the block where it occurs, and [`SimpleAbsInt::finish`] unions all
-    /// reachable post-states. Flagging `Changed` keeps each block's
-    /// post-state self-contained ("all uses reaching the end of this
-    /// block"), so consumers of a single block's state see a complete set.
+    /// Keep each post-state self-contained: every use reaching the end of
+    /// the block appears in its `used` set.
     fn join_impl(&mut self, other: &Self, result: &mut JoinResult) {
         for v in &other.used {
             if self.used.insert(*v) {

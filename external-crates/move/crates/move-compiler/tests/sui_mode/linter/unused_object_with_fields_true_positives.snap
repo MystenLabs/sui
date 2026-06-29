@@ -84,3 +84,19 @@ warning[Lint W99012]: unused object with fields
    │                                                   ^^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
    │
    = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:63:41
+   │
+63 │     public fun borrowed_field_discarded(c: &OwnerCap) {
+   │                                         ^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_true_positives.move:69:35
+   │
+69 │     public fun freeze_bare_return(c: &mut OwnerCap): &OwnerCap { freeze(c) }
+   │                                   ^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
