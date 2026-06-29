@@ -2512,12 +2512,21 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 };
                 self.metrics
                     .consensus_handler_processed
-                    .with_label_values(&[kind, outcome, author_hostname])
+                    .with_label_values(&[kind, outcome])
                     .inc();
                 self.metrics
                     .consensus_handler_transaction_sizes
-                    .with_label_values(&[kind, outcome, author_hostname])
+                    .with_label_values(&[kind, outcome])
                     .observe(parsed.serialized_len as f64);
+                // Per-author breakdown is only tracked for user transactions, since that is where
+                // rejections and author-attributable spam are meaningful. Keeping the block author
+                // label scoped to user transactions also bounds metric cardinality.
+                if parsed.transaction.is_user_transaction() {
+                    self.metrics
+                        .consensus_handler_processed_user_transactions
+                        .with_label_values(&[outcome, author_hostname])
+                        .inc();
+                }
 
                 if parsed.rejected {
                     if parsed.transaction.is_user_transaction() {
