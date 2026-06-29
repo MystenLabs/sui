@@ -486,11 +486,15 @@ async fn filtered_checkpoint_seq_stream(
             // Read until we have a full chunk of tx_seq Items, OR a Frontier
             // marker arrives (forcing flush), OR the upstream ends.
             let mut pending_watermark: Option<u64> = None;
+            let mut upstream_done = false;
             while tx_seq_chunk.len() < chunk_max && pending_watermark.is_none() {
                 match tx_seq_stream.try_next().await? {
                     Some(Watermarked::Item(tx_seq)) => tx_seq_chunk.push(tx_seq),
                     Some(Watermarked::Watermark(p)) => pending_watermark = Some(p),
-                    None => break,
+                    None => {
+                        upstream_done = true;
+                        break;
+                    }
                 }
             }
 
@@ -528,11 +532,15 @@ async fn filtered_checkpoint_seq_stream(
             // applies the clamp at emit time.
             if let Some(tx_frontier) = pending_watermark {
                 yield Watermarked::Watermark(tx_frontier);
-                continue;
             }
 
-            // Upstream ended.
-            break;
+            // Only a genuine upstream EOF ends the scan. A full chunk that hit
+            // neither a watermark nor EOF means the current bitmap bucket holds
+            // more matching txs than one chunk; keep draining so the scan does
+            // not truncate mid-bucket and report a premature terminal reason.
+            if upstream_done {
+                break;
+            }
         }
     }
     .boxed();
