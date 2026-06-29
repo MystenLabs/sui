@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "127",
+              "maxSupportedProtocolVersion": "128",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1857,6 +1857,8 @@
                 "max_generic_instantiation_length": {
                   "u64": "32"
                 },
+                "max_generic_instantiation_type_nodes_per_function": null,
+                "max_generic_instantiation_type_nodes_per_module": null,
                 "max_input_objects": {
                   "u64": "2048"
                 },

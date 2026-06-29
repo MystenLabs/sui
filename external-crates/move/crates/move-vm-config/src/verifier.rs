@@ -39,6 +39,8 @@ pub struct VerifierConfig {
     /// If true, the verifier will run only the regex reference safety check.
     pub switch_to_regex_reference_safety: bool,
     pub disallow_jump_orphans: bool,
+    pub max_generic_instantiation_type_nodes_per_function: Option<usize>,
+    pub max_generic_instantiation_type_nodes_per_module: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -92,6 +94,8 @@ impl Default for VerifierConfig {
             disable_entry_point_signature_check: false,
             switch_to_regex_reference_safety: false,
             disallow_jump_orphans: true,
+            max_generic_instantiation_type_nodes_per_function: Some(10_000),
+            max_generic_instantiation_type_nodes_per_module: Some(500_000),
         }
     }
 }

@@ -61,6 +61,8 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             disable_entry_point_signature_check: true,
             switch_to_regex_reference_safety: false,
             disallow_jump_orphans: true,
+            max_generic_instantiation_type_nodes_per_function: Some(10_000),
+            max_generic_instantiation_type_nodes_per_module: Some(500_000),
         },
         MeterConfig::old_default(),
     )
