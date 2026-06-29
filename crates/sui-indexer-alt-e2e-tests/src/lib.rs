@@ -19,6 +19,7 @@ use prost::Message;
 use reqwest::Client;
 use serde_json::Value;
 use serde_json::json;
+use simulacrum::AdvanceEpochConfig;
 use simulacrum::Simulacrum;
 use sui_futures::service::Service;
 use sui_indexer_alt::BootstrapGenesis;
@@ -85,7 +86,9 @@ use url::Url;
 
 pub mod coin_registry;
 pub mod find;
+pub mod graphql;
 pub mod move_helpers;
+pub mod transaction;
 
 /// A simulation of the network, accompanied by off-chain services (database, indexer, RPC),
 /// connected by local data ingestion.
@@ -231,6 +234,13 @@ impl FullCluster {
     /// Execute a system transaction advancing the lock by the given `duration`.
     pub fn advance_clock(&mut self, duration: Duration) -> TransactionEffects {
         self.executor.advance_clock(duration)
+    }
+
+    /// Advance the executor into the next epoch. This executes an end-of-epoch transaction and
+    /// creates the epoch's final checkpoint, but does not wait for the off-chain services to ingest
+    /// it — follow with [`create_checkpoint`](Self::create_checkpoint) to sync.
+    pub fn advance_epoch(&mut self) {
+        self.executor.advance_epoch(AdvanceEpochConfig::default());
     }
 
     /// Create a new checkpoint containing the transactions executed since the last checkpoint that

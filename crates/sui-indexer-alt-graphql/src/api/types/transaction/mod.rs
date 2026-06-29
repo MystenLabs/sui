@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -292,13 +291,13 @@ impl Transaction {
     ) -> Result<TransactionConnection, RpcError<Error>> {
         let after = page
             .after()
-            .map(|c| bcs::from_bytes::<CursorToken>(c))
+            .map(|c| CursorToken::decode(c))
             .transpose()
             .map_err(|_| bad_user_input(Error::BadCursor))?
             .map(|c| c.position);
         let before = page
             .before()
-            .map(|c| bcs::from_bytes::<CursorToken>(c))
+            .map(|c| CursorToken::decode(c))
             .transpose()
             .map_err(|_| bad_user_input(Error::BadCursor))?
             .map(|c| c.position);
@@ -479,7 +478,7 @@ impl TransactionConnection {
 
 impl TxBoundsCursor for CTransaction {
     fn tx_sequence_number(&self) -> u64 {
-        bcs::from_bytes::<CursorToken>(self.deref())
+        CursorToken::decode(self)
             .expect("cursor already validated as ByteCursor")
             .position
     }

@@ -1,0 +1,20 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.cursor.v1;
+
+// Pagination cursor for the bitmap-backed ledger-history endpoints.
+message CursorToken {
+    // Ledger-history query this cursor was minted for. 1 = checkpoints, 2 = transactions, 3 =
+    // events.
+    uint32 query_type = 1;
+
+    // Whether `position` is a matched row returned to the client (1 = item) or a scan frontier the
+    // server reached (2 = boundary).
+    uint32 kind = 2;
+
+    uint64 checkpoint = 3;
+    uint64 position = 4;
+}

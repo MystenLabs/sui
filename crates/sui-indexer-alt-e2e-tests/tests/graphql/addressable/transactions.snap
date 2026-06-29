@@ -50,7 +50,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "AQAAAAAAAAAAAAIAAAAAAAAA",
+            "cursor": "CAIQASAC",
             "node": {
               "digest": "8VgXmZjNCVbKPgofJbWPBo9VcKKW7zhDVeoaWyvZSedZ",
               "effects": {
@@ -62,7 +62,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAQAAAAAAAAA",
+            "cursor": "CAIQASAE",
             "node": {
               "digest": "6kKARDwDrTYfW7GSuitycDTSrScADQ6emTbQcCkgJS4t",
               "effects": {
@@ -80,7 +80,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "AQAAAAAAAAAAAAIAAAAAAAAA",
+            "cursor": "CAIQASAC",
             "node": {
               "digest": "8VgXmZjNCVbKPgofJbWPBo9VcKKW7zhDVeoaWyvZSedZ",
               "effects": {
@@ -92,7 +92,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAQAAAAAAAAA",
+            "cursor": "CAIQASAE",
             "node": {
               "digest": "6kKARDwDrTYfW7GSuitycDTSrScADQ6emTbQcCkgJS4t",
               "effects": {
@@ -110,7 +110,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "AQAAAAAAAAAAAAAAAAAAAAAA",
+            "cursor": "CAIQAQ==",
             "node": {
               "digest": "GKpM9uNhR96ZtkZk6QRLW8teqPb5JYcE5icGcJVBMNtV",
               "effects": {
@@ -122,7 +122,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAIAAAAAAAAA",
+            "cursor": "CAIQASAC",
             "node": {
               "digest": "8VgXmZjNCVbKPgofJbWPBo9VcKKW7zhDVeoaWyvZSedZ",
               "effects": {
@@ -134,7 +134,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAQAAAAAAAAA",
+            "cursor": "CAIQASAE",
             "node": {
               "digest": "6kKARDwDrTYfW7GSuitycDTSrScADQ6emTbQcCkgJS4t",
               "effects": {
@@ -146,7 +146,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAYAAAAAAAAA",
+            "cursor": "CAIQASAG",
             "node": {
               "digest": "B6F3FJbimN6T17MgmNBtn7AKgDPrz4CKd96dxaWiXtgE",
               "effects": {
@@ -164,7 +164,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "AQAAAAAAAAAAAAYAAAAAAAAA",
+            "cursor": "CAIQASAG",
             "node": {
               "digest": "B6F3FJbimN6T17MgmNBtn7AKgDPrz4CKd96dxaWiXtgE",
               "effects": {
@@ -182,7 +182,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "AQAAAAAAAAAAAAAAAAAAAAAA",
+            "cursor": "CAIQAQ==",
             "node": {
               "digest": "GKpM9uNhR96ZtkZk6QRLW8teqPb5JYcE5icGcJVBMNtV",
               "effects": {
@@ -194,7 +194,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAQAAAAAAAAA",
+            "cursor": "CAIQASAE",
             "node": {
               "digest": "6kKARDwDrTYfW7GSuitycDTSrScADQ6emTbQcCkgJS4t",
               "effects": {
@@ -206,7 +206,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAYAAAAAAAAA",
+            "cursor": "CAIQASAG",
             "node": {
               "digest": "B6F3FJbimN6T17MgmNBtn7AKgDPrz4CKd96dxaWiXtgE",
               "effects": {
@@ -224,7 +224,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "AQAAAAAAAAAAAAIAAAAAAAAA",
+            "cursor": "CAIQASAC",
             "node": {
               "digest": "8VgXmZjNCVbKPgofJbWPBo9VcKKW7zhDVeoaWyvZSedZ",
               "effects": {
@@ -236,7 +236,7 @@ Response: {
             }
           },
           {
-            "cursor": "AQAAAAAAAAAAAAQAAAAAAAAA",
+            "cursor": "CAIQASAE",
             "node": {
               "digest": "6kKARDwDrTYfW7GSuitycDTSrScADQ6emTbQcCkgJS4t",
               "effects": {
@@ -255,12 +255,12 @@ Response: {
         "pageInfo": {
           "hasNextPage": true,
           "hasPreviousPage": false,
-          "startCursor": "AQAAAAAAAAAAAAAAAAAAAAAA",
-          "endCursor": "AQAAAAAAAAAAAAAAAAAAAAAA"
+          "startCursor": "CAIQAQ==",
+          "endCursor": "CAIQAQ=="
         },
         "edges": [
           {
-            "cursor": "AQAAAAAAAAAAAAAAAAAAAAAA",
+            "cursor": "CAIQAQ==",
             "node": {
               "digest": "GKpM9uNhR96ZtkZk6QRLW8teqPb5JYcE5icGcJVBMNtV"
             }
