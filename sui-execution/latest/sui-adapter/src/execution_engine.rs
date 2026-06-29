@@ -42,7 +42,8 @@ mod checked {
     use move_core_types::language_storage::TypeTag;
     use sui_move_natives::all_natives;
     use sui_protocol_config::{
-        LimitThresholdCrossed, PerObjectCongestionControlMode, ProtocolConfig, check_limit_by_meter,
+        Chain, LimitThresholdCrossed, PerObjectCongestionControlMode, ProtocolConfig,
+        check_limit_by_meter,
     };
     use sui_types::authenticator_state::{
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
@@ -142,9 +143,10 @@ mod checked {
         // the 1.72 mainnet release (where it was deployed as an ungated hotfix).
         in_test_configuration()
             || protocol_config.early_exit_on_iffw()
-            || execution_params
-                .accumulator_version()
-                .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION)
+            || (protocol_config.chain() == Chain::Mainnet
+                && execution_params
+                    .accumulator_version()
+                    .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION))
     }
 
     /// Whether to short-circuit an IFFW transaction. When an accumulator version is assigned
@@ -172,9 +174,10 @@ mod checked {
 
         // otherwise gate by accumulator version (if present) or protocol flag
         protocol_config.early_exit_on_iffw()
-            || execution_params
-                .accumulator_version()
-                .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION)
+            || (protocol_config.chain() == Chain::Mainnet
+                && execution_params.accumulator_version().is_some_and(|v| {
+                    v >= ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION
+                }))
     }
 
     fn payment_kind(
