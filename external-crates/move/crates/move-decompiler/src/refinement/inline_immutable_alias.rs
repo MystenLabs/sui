@@ -4,12 +4,12 @@
 //! Inline let-bindings whose RHS is an immutable variable.
 //!
 //! For a binding `let X = Y;` we fire when:
-//!   - `Y` is never written in the function body — its value is stable for the entire
+//!   - `Y` is never written in the function body - its value is stable for the entire
 //!     function, regardless of how many places read it;
 //!   - `X` has exactly one defining `LetBind` (this one), is never re-assigned, and is not
 //!     declared or pattern-bound elsewhere;
 //!   - if `X` has more than one syntactic read, no path reads it twice (so the substitution
-//!     doesn't change the *number* of reads on any path — relevant for non-`copy` types
+//!     doesn't change the *number* of reads on any path - relevant for non-`copy` types
 //!     where re-reading would be a use-after-move). When `X` has a single syntactic read,
 //!     the per-path check is moot.
 //!
@@ -58,7 +58,7 @@ pub fn refine(exp: &mut Exp) -> bool {
 
 fn collect_candidates(exp: &Exp, root: &Exp, liveness: &Liveness, out: &mut Vec<(String, String)>) {
     use Exp as E;
-    // Local check first, then recurse.
+    // Local check first, then recur.
     if let E::LetBind(targets, rhs) = exp
         && targets.len() == 1
         && let E::Variable(y) = rhs.as_ref()
@@ -142,19 +142,19 @@ fn is_eligible(x: &str, y: &str, root: &Exp, liveness: &Liveness) -> bool {
 
     // Soundness rests on a slot-invariance argument.
     //
-    // For `let X = Y;`, the substitution `X → Y` (drop the binding, rewrite each
+    // For `let X = Y;`, the substitution `X -> Y` (drop the binding, rewrite each
     // `Variable(X)` use site to `Variable(Y)`) preserves semantics iff *slot* `Y`'s
     // value is invariant from the LetBind to every X-use. Reason:
     //
-    //   - Slot `X` is set once by the LetBind to `V₀ := value of slot Y at binding time`.
+    //   - Slot `X` is set once by the LetBind to `V0 := value of slot Y at binding time`.
     //     The X-side guards below ensure slot `X` is never reassigned, so reads of
-    //     `Variable(X)` always return `V₀`.
+    //     `Variable(X)` always return `V0`.
     //   - Reads of `Variable(Y)` return slot `Y`'s *current* value.
-    //   - Substituting `X → Y` preserves the read result iff slot `Y`'s current value
-    //     equals `V₀` at every X-use site.
+    //   - Substituting `X -> Y` preserves the read result iff slot `Y`'s current value
+    //     equals `V0` at every X-use site.
     //
     // The two ways a slot can be mutated:
-    //   1. `Assign([Y], _)`            — direct reassignment.
+    //   1. `Assign([Y], _)`            - direct reassignment.
     //   2. `WriteRef` through a `&mut`-handle to the slot, which requires
     //      `Borrow(true, Variable(Y))` somewhere upstream (even via a chain of aliased
     //      handles, the chain must start with that `Borrow`).
@@ -162,8 +162,8 @@ fn is_eligible(x: &str, y: &str, root: &Exp, liveness: &Liveness) -> bool {
     // `assigns(Y) == 0 && mut_borrows(Y) == 0` rules both out globally. The check is
     // type-agnostic: for `&mut T`-typed `Y`, pointee mutations (`*Y = e`, `f(Y)` where
     // `f` writes through) operate on the heap rather than slot `Y`, so they're invisible
-    // to the alias relationship `X ↔ Y` we're preserving — both sides observe the same
-    // pointee at the same time. The dangerous shapes — `&mut Y` upstream of an X-use —
+    // to the alias relationship `X <-> Y` we're preserving - both sides observe the same
+    // pointee at the same time. The dangerous shapes - `&mut Y` upstream of an X-use -
     // are exactly what `mut_borrows` counts.
     if counts.assigns(y) != 0 || counts.mut_borrows(y) != 0 {
         return false;
@@ -184,7 +184,7 @@ fn is_eligible(x: &str, y: &str, root: &Exp, liveness: &Liveness) -> bool {
 
     // `x` must have at least one read (otherwise it's dead code, not our concern). When there
     // are multiple syntactic reads we additionally require that at most one runs on any given
-    // path — substituting wouldn't change `y`'s observed value, but it would change the
+    // path - substituting wouldn't change `y`'s observed value, but it would change the
     // *number* of reads on a path, which matters when the type lacks `copy`. A single
     // syntactic read inside a loop is still fine: only one Variable node, so the per-path
     // count is trivially at most one.

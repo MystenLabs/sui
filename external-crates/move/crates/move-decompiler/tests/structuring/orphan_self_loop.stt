@@ -1,8 +1,8 @@
-// An entry self-loop with an orphan self-loop node that's unreachable from the entry. Both
-// {0} and {1} are terminal SCCs of the original CFG, so `add_infinite_loop_post_dominators`
-// adds an impossible edge to each. Structuring's DFS post-order starts from node 0 and never
-// visits node 1, so the unreachable orphan is silently dropped and the output is just the
-// entry's loop.
+// An entry self-loop with an orphan self-loop node that's unreachable from the entry. The
+// structurer only walks nodes reachable from `entry`, so node 1 is invisible to it and the
+// output is just the entry's loop. The `// unstructured blocks` notice doesn't fire for
+// unreachable nodes - dead bytecode in the input is excluded from the detection set (see
+// the `reachable` filter in `mod.rs::structure`).
 //
 //   ->0     ->1
 //    \_|     \_|
