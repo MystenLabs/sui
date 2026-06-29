@@ -285,7 +285,7 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
             // use of any field.
             C::Return { exp, .. } => {
                 let vals = self.exp(context, state, exp);
-                state.mark_used_fields(&vals);
+                state.mark_field_derived_used(&vals);
                 true
             }
             // Inspecting a tracked value to drive control flow counts.
@@ -302,11 +302,11 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
             }
             C::Assign(_, ls, e) if ls.iter().any(|l| matches!(l.value, L::Ignore)) => {
                 let vals = self.exp(context, state, e);
-                let mark_ignored_fields = !is_unpack_borrow(e);
+                let mark_ignored_field_derived = !is_ref_pattern_field_borrow(e);
                 let padded = vals.into_iter().chain(std::iter::repeat(Value::default()));
                 for (l, val) in ls.iter().zip(padded) {
-                    if matches!(l.value, L::Ignore) && mark_ignored_fields {
-                        state.mark_used_fields(std::slice::from_ref(&val));
+                    if matches!(l.value, L::Ignore) && mark_ignored_field_derived {
+                        state.mark_field_derived_used(std::slice::from_ref(&val));
                     } else {
                         self.lvalue(context, state, l, val);
                     }
@@ -315,7 +315,7 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
             }
             C::IgnoreAndPop { exp, .. } => {
                 let vals = self.exp(context, state, exp);
-                state.mark_used_fields(&vals);
+                state.mark_field_derived_used(&vals);
                 true
             }
             C::Assign(_, _, _) => false,
@@ -331,10 +331,6 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
     ) -> Option<Vec<Value>> {
         use UnannotatedExp_ as E;
         match &e.exp.value {
-            E::BorrowLocal(_, var) => match state.locals().get(var) {
-                Some(LocalState::Available(_, value)) => Some(vec![value.clone()]),
-                _ => None,
-            },
             // Field borrow: result is a field-derived view of the same roots.
             // Borrow itself is not a use.
             E::Borrow(_, inner, _, _) => {
@@ -392,9 +388,9 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
     }
 }
 
-fn is_unpack_borrow(e: &Exp) -> bool {
-    // Synthetic borrows from ref-pattern destructuring do not count just
-    // because their field binding is ignored.
+fn is_ref_pattern_field_borrow(e: &Exp) -> bool {
+    // Ref-pattern destructures (`let S { f: _ } = &s`) lower to synthetic
+    // field borrows assigned to `_`; ignored fields should remain unused.
     matches!(e.exp.value, UnannotatedExp_::Borrow(_, _, _, Some(_)))
 }
 
@@ -408,10 +404,10 @@ impl State {
         }
     }
 
-    /// Like [`Self::mark_used`], but only marks roots that flow as
-    /// field-derived values. A bare root reference ([`Kind::Bare`]) is a
+    /// Like [`Self::mark_used`], but only marks roots that flow through a
+    /// field-derived value. A bare root reference ([`Kind::Bare`]) is a
     /// pass-through and does not count on its own.
-    fn mark_used_fields(&mut self, values: &[Value]) {
+    fn mark_field_derived_used(&mut self, values: &[Value]) {
         for v in values {
             if let Value::Tracked(map) = v {
                 for (k, kind) in map {

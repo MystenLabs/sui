@@ -1,19 +1,13 @@
-// Cases where the lint stays silent even though the object is, in practice,
-// not really used. Limitations of the local analysis.
+// Cases where the lint stays silent even though the object may be unused.
+// These are known blind spots.
 
 module a::m {
     use sui::object::UID;
 
-    struct OwnerCap has key { id: UID, owns: address }
+    struct GenericCap<phantom T> has key { id: UID, owns: address }
 
-    // forwarding the object to a function that ignores it is treated as
-    // use, since the lint does not look inside the callee
-    public fun forwarded_to_no_op(c: &OwnerCap) {
-        no_op(c);
-    }
-
-    #[allow(lint(unused_object_with_fields))]
-    fun no_op(_c: &OwnerCap) {}
+    // Generic object types are out of scope for this lint.
+    public fun generic_unused<T>(_c: &GenericCap<T>) {}
 }
 
 module sui::object {
