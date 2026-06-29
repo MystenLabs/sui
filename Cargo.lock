@@ -7895,7 +7895,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.0",
 ]
 
 [[package]]
@@ -8484,7 +8484,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=2e0cd5669b1b6776e204e9ad0385189a65a62236#2e0cd5669b1b6776e204e9ad0385189a65a62236"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=131e31eccdbddf5a859b8466aafda10868c2850a#131e31eccdbddf5a859b8466aafda10868c2850a"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -11680,9 +11680,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.14"
+version = "0.11.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "434b42fec591c96ef50e21e886936e66d3cc3f737104fdb9b737c40ffb94c098"
+checksum = "4fcb935c5bec503c2f0e306bdd3e58bb9029dcb14fa8d9ac76e3a5256ac0763e"
 dependencies = [
  "bytes",
  "fastbloom 0.14.1",
@@ -15297,6 +15297,7 @@ name = "sui-indexer-alt-e2e-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-graphql",
  "async-stream",
  "async-trait",
  "bcs",
@@ -15588,6 +15589,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
+ "bytes",
  "clap",
  "diesel",
  "diesel-async",
@@ -18183,7 +18185,7 @@ dependencies = [
 [[package]]
 name = "tideconsole"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=2e0cd5669b1b6776e204e9ad0385189a65a62236#2e0cd5669b1b6776e204e9ad0385189a65a62236"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=131e31eccdbddf5a859b8466aafda10868c2850a#131e31eccdbddf5a859b8466aafda10868c2850a"
 dependencies = [
  "anyhow",
  "clap",
@@ -18198,7 +18200,7 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=2e0cd5669b1b6776e204e9ad0385189a65a62236#2e0cd5669b1b6776e204e9ad0385189a65a62236"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=131e31eccdbddf5a859b8466aafda10868c2850a#131e31eccdbddf5a859b8466aafda10868c2850a"
 dependencies = [
  "arc-swap",
  "bincode 1.3.3",

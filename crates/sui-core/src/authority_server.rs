@@ -7,20 +7,22 @@ use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use futures::{TryFutureExt, future};
 use itertools::Itertools as _;
+use moka::sync::Cache;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
-    Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec, Registry,
+    Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, Registry,
     register_gauge_with_registry, register_histogram_vec_with_registry,
     register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry,
 };
 use std::{
+    collections::HashSet,
     io,
     net::{IpAddr, SocketAddr},
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 use sui_network::{
     api::{Validator, ValidatorServer},
@@ -29,7 +31,7 @@ use sui_network::{
 };
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::message_envelope::Message;
-use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
+use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxResponse, SystemStateRequest,
     TransactionInfoRequest, TransactionInfoResponse,
@@ -40,7 +42,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::traffic_control::{ClientIdSource, Weight};
 use sui_types::{
     base_types::ObjectID,
-    digests::TransactionEffectsDigest,
+    digests::{TransactionDigest, TransactionEffectsDigest},
     error::{SuiErrorKind, UserInputError},
 };
 use sui_types::{
@@ -67,6 +69,7 @@ use crate::gasless_rate_limiter::GaslessRateLimiter;
 use crate::{
     authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, ConsensusOverloadChecker},
+    consensus_handler::SequencedConsensusTransactionKey,
     traffic_controller::{TrafficController, parse_ip, policies::TrafficTally},
 };
 use crate::{
@@ -197,6 +200,10 @@ pub struct ValidatorServiceMetrics {
 
     num_rejected_tx_during_overload: IntCounterVec,
     submission_rejected_transactions: IntCounterVec,
+    submission_suppressed_already_processed: IntCounterVec,
+    submission_suppressed_recently_submitted: IntCounterVec,
+    recently_submitted_cache_size: IntGauge,
+    recently_submitted_resubmission_interval: Histogram,
     connection_ip_not_found: IntCounter,
     forwarded_header_parse_error: IntCounter,
     forwarded_header_invalid: IntCounter,
@@ -292,6 +299,35 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
+            submission_suppressed_already_processed: register_int_counter_vec_with_registry!(
+                "validator_service_submission_suppressed_already_processed",
+                "Number of submitted transactions suppressed because consensus had already \
+                 processed them this epoch (re-submission of already-processed transactions)",
+                &["req_type"],
+                registry,
+            )
+            .unwrap(),
+            submission_suppressed_recently_submitted: register_int_counter_vec_with_registry!(
+                "validator_service_submission_suppressed_recently_submitted",
+                "Number of submitted transactions suppressed because the same transaction was \
+                 submitted within the recent-submission window",
+                &["req_type"],
+                registry,
+            )
+            .unwrap(),
+            recently_submitted_cache_size: register_int_gauge_with_registry!(
+                "validator_service_recently_submitted_cache_size",
+                "Approximate number of transaction digests held in the recent-submission duplicate-suppression cache",
+                registry,
+            )
+            .unwrap(),
+            recently_submitted_resubmission_interval: register_histogram_with_registry!(
+                "validator_service_recently_submitted_resubmission_interval_seconds",
+                "Time between a transaction being recorded and a duplicate resubmission of it being suppressed",
+                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             connection_ip_not_found: register_int_counter_with_registry!(
                 "validator_service_connection_ip_not_found",
                 "Number of times connection IP was not extractable from request",
@@ -377,7 +413,15 @@ pub struct ValidatorService {
     client_id_source: Option<ClientIdSource>,
     gasless_limiter: GaslessRateLimiter,
     admission_queue: Option<AdmissionQueueContext>,
+    /// Digests submitted within the last `recent_submission_window` (value: when recorded), to
+    /// drop duplicate resubmissions before they reach consensus.
+    recently_submitted: Cache<TransactionDigest, Instant>,
+    /// How long a transaction is suppressed after submission (from node config).
+    recent_submission_window: Duration,
 }
+
+/// Assumed peak distinct-submission rate, used to size the dedup cache (per window).
+const RECENT_SUBMISSION_PEAK_TPS: u64 = 50_000;
 
 impl ValidatorService {
     pub fn new(
@@ -389,6 +433,7 @@ impl ValidatorService {
     ) -> Self {
         let traffic_controller = state.traffic_controller.clone();
         let gasless_limiter = GaslessRateLimiter::new(state.consensus_gasless_counter.clone());
+        let recent_submission_window = state.config.recent_submission_dedup_window();
         Self {
             state,
             consensus_adapter,
@@ -397,7 +442,19 @@ impl ValidatorService {
             client_id_source,
             gasless_limiter,
             admission_queue,
+            recently_submitted: Self::new_recently_submitted_cache(recent_submission_window),
+            recent_submission_window,
         }
+    }
+
+    fn new_recently_submitted_cache(window: Duration) -> Cache<TransactionDigest, Instant> {
+        // Memory backstop only; the window bounds the cache, and amplified duplicates do not add
+        // entries (they share a digest). Sized for roughly one window at peak throughput.
+        let max_capacity = window.as_secs().max(1) * RECENT_SUBMISSION_PEAK_TPS;
+        Cache::builder()
+            .time_to_live(window)
+            .max_capacity(max_capacity)
+            .build()
     }
 
     pub fn new_for_tests(
@@ -413,6 +470,7 @@ impl ValidatorService {
             slot_freed_notify,
         ));
         let admission_queue = Some(AdmissionQueueContext::spawn(manager, epoch_store));
+        let recent_submission_window = state.config.recent_submission_dedup_window();
         Self {
             state,
             consensus_adapter,
@@ -421,6 +479,8 @@ impl ValidatorService {
             client_id_source: None,
             gasless_limiter,
             admission_queue,
+            recently_submitted: Self::new_recently_submitted_cache(recent_submission_window),
+            recent_submission_window,
         }
     }
 
@@ -543,6 +603,8 @@ impl ValidatorService {
             client_id_source,
             gasless_limiter: _,
             admission_queue: _,
+            recently_submitted: _,
+            recent_submission_window: _,
         } = self.clone();
 
         let submitter_client_addr = if let Some(client_id_source) = &client_id_source {
@@ -666,10 +728,17 @@ impl ValidatorService {
         let mut results: Vec<Option<SubmitTxResult>> = vec![None; request.transactions.len()];
         // Total size of all transactions in the request.
         let mut total_size_bytes = 0;
-        // Traffic control spam weight to use for the transaction.
-        let mut spam_weight = Weight::zero();
+        // Whether the request contains any gasless transaction.
+        let mut has_gasless = false;
+        // Set when a transaction duplicates an in-flight submission at admission. Tracked
+        // separately because it is detected after the per-tx results are finalized (those
+        // remain Submitted), so it cannot be derived from the results alone.
+        let mut duplicate_at_admission = false;
         // First gas price seen in this soft bundle.
         let mut expected_soft_bundle_gas_price = None;
+        // Transaction digests seen in this soft bundle, used to reject bundles that repeat a
+        // transaction. No legitimate client constructs such a bundle.
+        let mut soft_bundle_digests = HashSet::new();
 
         let req_type = if is_ping_request {
             "ping"
@@ -704,6 +773,19 @@ impl ValidatorService {
             let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
             let tx_digest = *transaction.digest();
 
+            // Soft bundles must not repeat a transaction. Fail the whole request if they do.
+            if is_soft_bundle_request {
+                fp_ensure!(
+                    soft_bundle_digests.insert(tx_digest),
+                    SuiErrorKind::UserInputError {
+                        error: UserInputError::RepeatedTransactionInSoftBundle {
+                            digest: tx_digest
+                        }
+                    }
+                    .into()
+                );
+            }
+
             // Soft bundles require all transactions to use the same gas price.
             if is_soft_bundle_request {
                 let gas_price = transaction.data().transaction_data().gas_price();
@@ -730,8 +812,7 @@ impl ValidatorService {
                 .is_gasless_transaction();
 
             if is_gasless {
-                // Gasless transactions count for traffic control, since they have no economic cost.
-                spam_weight = Weight::one();
+                has_gasless = true;
                 metrics
                     .gasless_submission_outcomes
                     .with_label_values(&["attempted"])
@@ -856,6 +937,60 @@ impl ValidatorService {
                 continue;
             }
 
+            // Suppress resubmission of transactions consensus already processed this epoch:
+            // executed transactions whose effects details could not be reconstructed above (e.g.
+            // objects pruned), and sequenced-but-deferred transactions. Rejected is imperfect for
+            // the deferred case, but acceptable since well-behaved clients get Executed before
+            // pruning; this mainly sheds continuous resubmissions from faulty clients.
+            let consensus_key = SequencedConsensusTransactionKey::External(
+                ConsensusTransactionKey::Certificate(tx_digest),
+            );
+            if epoch_store.is_consensus_message_processed(&consensus_key)? {
+                metrics
+                    .submission_suppressed_already_processed
+                    .with_label_values(&[req_type])
+                    .inc();
+                results[idx] = Some(SubmitTxResult::Rejected {
+                    error: SuiErrorKind::TransactionProcessing {
+                        digest: tx_digest,
+                        status: "sequenced by consensus".to_string(),
+                    }
+                    .into(),
+                });
+                debug!(
+                    ?tx_digest,
+                    "handle_submit_transaction: consensus message already processed"
+                );
+                continue;
+            }
+
+            // Allow a given transaction into consensus at most once per `recent_submission_window`,
+            // dropping duplicate resubmissions early.
+            if let Some(recorded_at) = self.recently_submitted.get(&tx_digest)
+                && recorded_at.elapsed() < self.recent_submission_window
+            {
+                metrics
+                    .submission_suppressed_recently_submitted
+                    .with_label_values(&[req_type])
+                    .inc();
+                metrics
+                    .recently_submitted_resubmission_interval
+                    .observe(recorded_at.elapsed().as_secs_f64());
+                results[idx] = Some(SubmitTxResult::Rejected {
+                    error: SuiErrorKind::TransactionProcessing {
+                        digest: tx_digest,
+                        status: "recently submitted".to_string(),
+                    }
+                    .into(),
+                });
+                debug!(?tx_digest, "handle_submit_transaction: recently submitted");
+                continue;
+            }
+            self.recently_submitted.insert(tx_digest, Instant::now());
+            metrics
+                .recently_submitted_cache_size
+                .set(self.recently_submitted.entry_count() as i64);
+
             debug!(
                 ?tx_digest,
                 "handle_submit_transaction: waiting for fastpath dependency objects"
@@ -959,7 +1094,14 @@ impl ValidatorService {
         }
 
         if consensus_transactions.is_empty() && !is_ping_request {
-            return Ok((Self::try_from_submit_tx_response(results)?, spam_weight));
+            let spam_weight = Self::request_spam_weight(
+                &results,
+                has_gasless,
+                duplicate_at_admission,
+                is_ping_request,
+            );
+            let response = Self::try_from_submit_tx_response(results)?;
+            return Ok((response, spam_weight));
         }
 
         // Set the max bytes size of the soft bundle to be half of the consensus max transactions in block size.
@@ -1021,7 +1163,30 @@ impl ValidatorService {
                 .collect()
         };
 
-        let consensus_positions: Vec<ConsensusPosition> = match submit_mode {
+        // Map each submission group back to the (result index, digest) of the transactions it
+        // contains, so a per-group outcome — consensus positions, or an "already processing"
+        // error — can be recorded against each individual transaction. Soft bundles submit as a
+        // single group; individual transactions submit one group each.
+        let group_tx_meta = if is_soft_bundle_request {
+            vec![
+                transaction_indexes
+                    .into_iter()
+                    .zip_eq(tx_digests)
+                    .collect::<Vec<_>>(),
+            ]
+        } else {
+            transaction_indexes
+                .into_iter()
+                .zip_eq(tx_digests)
+                .map(|pair| vec![pair])
+                .collect::<Vec<_>>()
+        };
+
+        // Collect one result per submission group WITHOUT short-circuiting. An
+        // already-processing transaction is reported per-tx as a retriable below;
+        // any other error fails the whole request, after all groups have settled.
+        // Soft bundles submit as a single group; individual transactions submit one group each.
+        let group_results = match submit_mode {
             AdmissionQueueSubmitMode::Bypass | AdmissionQueueSubmitMode::Disabled => {
                 if matches!(submit_mode, AdmissionQueueSubmitMode::Bypass) {
                     self.metrics.admission_queue_direct_bypasses.inc();
@@ -1038,11 +1203,7 @@ impl ValidatorService {
                         submitter_client_addr,
                     )
                 });
-                future::try_join_all(futures)
-                    .await?
-                    .into_iter()
-                    .flatten()
-                    .collect()
+                future::join_all(futures).await
             }
             AdmissionQueueSubmitMode::Queue => {
                 let aq = self
@@ -1057,44 +1218,124 @@ impl ValidatorService {
                         .try_insert(gas_price, txns, submitter_client_addr)
                         .await?;
                     if !newly_inserted {
-                        // Count duplicate tx submissions towards spam tallies.
-                        spam_weight = Weight::one();
+                        // Duplicate of an in-flight submission; flag the request as spam. The
+                        // per-tx result is still Submitted, so this is tracked separately.
+                        duplicate_at_admission = true;
                     }
                     receivers.push(rx);
                 }
-                let results = future::try_join_all(receivers.into_iter().map(|rx| async move {
-                    rx.await.map_err(|_| {
-                        SuiError::from(SuiErrorKind::TooManyTransactionsPendingConsensus)
-                    })?
+                future::join_all(receivers.into_iter().map(|rx| async move {
+                    match rx.await {
+                        Ok(result) => result.map_err(SuiError::from),
+                        Err(_) => Err(SuiError::from(
+                            SuiErrorKind::TooManyTransactionsPendingConsensus,
+                        )),
+                    }
                 }))
-                .await?;
-                results.into_iter().flatten().collect()
+                .await
             }
         };
 
         if is_ping_request {
-            // For ping requests, return the special consensus position.
+            // For ping requests there is a single group returning the special consensus position.
+            let consensus_positions = group_results
+                .into_iter()
+                .next()
+                .expect("Ping request must have exactly one submission group")?;
             assert_eq!(consensus_positions.len(), 1);
             results.push(Some(SubmitTxResult::Submitted {
                 consensus_position: consensus_positions[0],
             }));
         } else {
-            // Otherwise, return the consensus position for each transaction.
-            for ((idx, tx_digest), consensus_position) in transaction_indexes
-                .into_iter()
-                .zip_debug_eq(tx_digests)
-                .zip_debug_eq(consensus_positions)
-            {
-                debug!(
-                    ?tx_digest,
-                    "handle_submit_transaction: submitted consensus transaction at {}",
-                    consensus_position,
-                );
-                results[idx] = Some(SubmitTxResult::Submitted { consensus_position });
+            for (group_result, txns_meta) in group_results.into_iter().zip_debug_eq(group_tx_meta) {
+                match group_result {
+                    Ok(consensus_positions) => {
+                        for ((idx, tx_digest), consensus_position) in
+                            txns_meta.into_iter().zip_debug_eq(consensus_positions)
+                        {
+                            debug!(
+                                ?tx_digest,
+                                "handle_submit_transaction: submitted consensus transaction at {}",
+                                consensus_position,
+                            );
+                            results[idx] = Some(SubmitTxResult::Submitted { consensus_position });
+                        }
+                    }
+                    // The transaction(s) in this group are already being processed by consensus.
+                    // Report per-tx as a retriable rejection rather than failing the whole request.
+                    Err(err) => {
+                        let SuiErrorKind::TransactionProcessing { status, .. } =
+                            err.as_inner().clone()
+                        else {
+                            return Err(err);
+                        };
+                        for (idx, tx_digest) in txns_meta {
+                            debug!(
+                                ?tx_digest,
+                                "handle_submit_transaction: transaction already processing: {err}"
+                            );
+                            // Same suppression the upfront `is_consensus_message_processed` check
+                            // records, just detected during submission instead of before it. The
+                            // two paths are mutually exclusive, so this does not double-count.
+                            metrics
+                                .submission_suppressed_already_processed
+                                .with_label_values(&[req_type])
+                                .inc();
+                            results[idx] = Some(SubmitTxResult::Rejected {
+                                error: SuiErrorKind::TransactionProcessing {
+                                    digest: tx_digest,
+                                    status: status.clone(),
+                                }
+                                .into(),
+                            });
+                        }
+                    }
+                }
             }
         }
 
-        Ok((Self::try_from_submit_tx_response(results)?, spam_weight))
+        let spam_weight = Self::request_spam_weight(
+            &results,
+            has_gasless,
+            duplicate_at_admission,
+            is_ping_request,
+        );
+        let response = Self::try_from_submit_tx_response(results)?;
+        Ok((response, spam_weight))
+    }
+
+    /// Traffic-control spam weight for a whole submit request. The request is spam unless it is
+    /// entirely accepted gas-chargable work.
+    fn request_spam_weight(
+        results: &[Option<SubmitTxResult>],
+        has_gasless: bool,
+        duplicate_at_admission: bool,
+        is_ping: bool,
+    ) -> Weight {
+        if is_ping || has_gasless || duplicate_at_admission {
+            return Weight::one();
+        }
+        for result in results {
+            let Some(result) = result else {
+                // `results` is expected to be fully populated (every entry `Some`) for the
+                // request's transactions; a missing entry is a bug and is conservatively
+                // treated as spam.
+                debug_fatal!("transaction outcome unset when computing spam weight");
+                return Weight::one();
+            };
+            if Self::submission_spam_weight(result) == Weight::one() {
+                return Weight::one();
+            }
+        }
+        Weight::zero()
+    }
+
+    fn submission_spam_weight(result: &SubmitTxResult) -> Weight {
+        match result {
+            SubmitTxResult::Submitted { .. } => Weight::zero(),
+            // Non-submitted results can't be charged.
+            SubmitTxResult::Executed { .. } | SubmitTxResult::Rejected { .. } => Weight::one(),
+        }
     }
 
     fn try_from_submit_tx_response(

@@ -762,6 +762,19 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                     .concat_space(D::parens(recur(context, subject)))
                     .concat_space(braces_block(arms_doc))
             }
+            Exp::MatchLit(scrutinee, arms) => {
+                let arms_doc = Doc::intersperse(
+                    arms.iter().map(|(lit, body)| {
+                        D::text(lit.to_string())
+                            .concat_space(D::text("=>"))
+                            .concat_space(e_block(context, body))
+                    }),
+                    D::text(",").concat(D::line()),
+                );
+                D::text("match")
+                    .concat_space(D::parens(recur(context, scrutinee)))
+                    .concat_space(braces_block(arms_doc))
+            }
             Exp::Primitive { op, args } => primitive_op_doc(context, op, args),
             Exp::Data { op, args } => data_op_doc(context, op, args),
             Exp::Unpack(struct_ty, items, exp) => {
@@ -1041,12 +1054,12 @@ fn primitive_op_doc(context: &Context, op: &PrimitiveOp, args: &[Exp]) -> Doc {
     };
 
     match op {
-        PrimitiveOp::CastU8 => exp(context, &args[0]).concat(D::text("as u8")),
-        PrimitiveOp::CastU16 => exp(context, &args[0]).concat(D::text("as u16")),
-        PrimitiveOp::CastU32 => exp(context, &args[0]).concat(D::text("as u32")),
-        PrimitiveOp::CastU64 => exp(context, &args[0]).concat(D::text("as u64")),
-        PrimitiveOp::CastU128 => exp(context, &args[0]).concat(D::text("as u128")),
-        PrimitiveOp::CastU256 => exp(context, &args[0]).concat(D::text("as u256")),
+        PrimitiveOp::CastU8 => exp(context, &args[0]).concat(D::text(" as u8")),
+        PrimitiveOp::CastU16 => exp(context, &args[0]).concat(D::text(" as u16")),
+        PrimitiveOp::CastU32 => exp(context, &args[0]).concat(D::text(" as u32")),
+        PrimitiveOp::CastU64 => exp(context, &args[0]).concat(D::text(" as u64")),
+        PrimitiveOp::CastU128 => exp(context, &args[0]).concat(D::text(" as u128")),
+        PrimitiveOp::CastU256 => exp(context, &args[0]).concat(D::text(" as u256")),
 
         PrimitiveOp::Add => bin(&args[0], "+", &args[1]),
         PrimitiveOp::Subtract => bin(&args[0], "-", &args[1]),

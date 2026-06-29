@@ -6,7 +6,9 @@
 //! `TestClusterBuilder` validator, neither of which works inside the simulator's
 //! deterministic runtime.
 
+use async_graphql::connection::CursorType;
 use serde_json::json;
+use sui_indexer_alt_graphql::CCheckpoint;
 use tokio_stream::StreamExt;
 
 use crate::testing::SubscriptionTestCluster;
@@ -23,7 +25,7 @@ async fn test_subscription_sequential() {
     let cluster = SubscriptionTestCluster::new().await;
 
     let items: Vec<_> = cluster
-        .subscribe("subscription { checkpoints { sequenceNumber } }")
+        .subscribe("subscription { checkpoints { node { sequenceNumber } } }")
         .await
         .take(3)
         .collect()
@@ -34,6 +36,25 @@ async fn test_subscription_sequential() {
 }
 
 #[tokio::test]
+async fn test_subscription_cursor() {
+    let cluster = SubscriptionTestCluster::new().await;
+
+    let items: Vec<_> = cluster
+        .subscribe("subscription { checkpoints { cursor node { sequenceNumber } } }")
+        .await
+        .take(3)
+        .collect()
+        .await;
+
+    for item in &items {
+        let edge = &item["data"]["checkpoints"];
+        let cursor = edge["cursor"].as_str().unwrap();
+        let seq = edge["node"]["sequenceNumber"].as_u64().unwrap();
+        assert_eq!(cursor, CCheckpoint::new(seq).encode_cursor());
+    }
+}
+
+#[tokio::test]
 async fn test_subscription_fields() {
     let cluster = SubscriptionTestCluster::new().await;
 
@@ -41,23 +62,25 @@ async fn test_subscription_fields() {
         .subscribe(
             r#"subscription {
                 checkpoints {
-                    sequenceNumber
-                    digest
-                    contentDigest
-                    timestamp
-                    networkTotalTransactions
-                    rollingGasSummary {
-                        computationCost
-                        storageCost
-                        storageRebate
-                        nonRefundableStorageFee
-                    }
-                    epoch {
-                        epochId
-                    }
-                    validatorSignatures {
-                        signature
-                        signersMap
+                    node {
+                        sequenceNumber
+                        digest
+                        contentDigest
+                        timestamp
+                        networkTotalTransactions
+                        rollingGasSummary {
+                            computationCost
+                            storageCost
+                            storageRebate
+                            nonRefundableStorageFee
+                        }
+                        epoch {
+                            epochId
+                        }
+                        validatorSignatures {
+                            signature
+                            signersMap
+                        }
                     }
                 }
             }"#,
@@ -81,19 +104,21 @@ async fn test_subscription_transactions() {
         .subscribe_with_variables(
             r#"subscription($sender: SuiAddress!) {
                 checkpoints {
-                    sequenceNumber
-                    transactions(filter: { sentAddress: $sender }) {
-                        nodes {
-                            digest
-                            sender { address }
-                            gasInput { gasBudget }
-                            effects {
-                                status
-                                balanceChanges {
-                                    nodes {
-                                        amount
-                                        coinType { repr }
-                                        owner { address }
+                    node {
+                        sequenceNumber
+                        transactions(filter: { sentAddress: $sender }) {
+                            nodes {
+                                digest
+                                sender { address }
+                                gasInput { gasBudget }
+                                effects {
+                                    status
+                                    balanceChanges {
+                                        nodes {
+                                            amount
+                                            coinType { repr }
+                                            owner { address }
+                                        }
                                     }
                                 }
                             }
@@ -122,22 +147,24 @@ async fn test_subscription_transactions_pagination_first() {
         .subscribe_with_variables(
             r#"subscription($sender: SuiAddress!) {
                 checkpoints {
-                    sequenceNumber
-                    transactions(first: 1, filter: { sentAddress: $sender }) {
-                        nodes {
-                            digest
-                            effects {
-                                status
-                                balanceChanges {
-                                    nodes {
-                                        amount
-                                        coinType { repr }
+                    node {
+                        sequenceNumber
+                        transactions(first: 1, filter: { sentAddress: $sender }) {
+                            nodes {
+                                digest
+                                effects {
+                                    status
+                                    balanceChanges {
+                                        nodes {
+                                            amount
+                                            coinType { repr }
+                                        }
                                     }
                                 }
                             }
+                            edges { cursor }
+                            pageInfo { hasNextPage hasPreviousPage }
                         }
-                        edges { cursor }
-                        pageInfo { hasNextPage hasPreviousPage }
                     }
                 }
             }"#,
@@ -161,22 +188,24 @@ async fn test_subscription_transactions_pagination_last() {
         .subscribe_with_variables(
             r#"subscription($sender: SuiAddress!) {
                 checkpoints {
-                    sequenceNumber
-                    transactions(last: 1, filter: { sentAddress: $sender }) {
-                        nodes {
-                            digest
-                            effects {
-                                status
-                                balanceChanges {
-                                    nodes {
-                                        amount
-                                        coinType { repr }
+                    node {
+                        sequenceNumber
+                        transactions(last: 1, filter: { sentAddress: $sender }) {
+                            nodes {
+                                digest
+                                effects {
+                                    status
+                                    balanceChanges {
+                                        nodes {
+                                            amount
+                                            coinType { repr }
+                                        }
                                     }
                                 }
                             }
+                            edges { cursor }
+                            pageInfo { hasNextPage hasPreviousPage }
                         }
-                        edges { cursor }
-                        pageInfo { hasNextPage hasPreviousPage }
                     }
                 }
             }"#,
@@ -203,27 +232,29 @@ async fn test_subscription_object_create() {
         .subscribe_with_variables(
             r#"subscription($sender: SuiAddress!) {
                 checkpoints {
-                    sequenceNumber
-                    transactions(filter: { sentAddress: $sender }) {
-                        nodes {
-                            digest
-                            effects {
-                                objectChanges {
-                                    nodes {
-                                        inputState {
-                                            address
-                                            version
-                                            digest
-                                            asMoveObject {
-                                                contents { type { repr } }
+                    node {
+                        sequenceNumber
+                        transactions(filter: { sentAddress: $sender }) {
+                            nodes {
+                                digest
+                                effects {
+                                    objectChanges {
+                                        nodes {
+                                            inputState {
+                                                address
+                                                version
+                                                digest
+                                                asMoveObject {
+                                                    contents { type { repr } }
+                                                }
                                             }
-                                        }
-                                        outputState {
-                                            address
-                                            version
-                                            digest
-                                            asMoveObject {
-                                                contents { type { repr } }
+                                            outputState {
+                                                address
+                                                version
+                                                digest
+                                                asMoveObject {
+                                                    contents { type { repr } }
+                                                }
                                             }
                                         }
                                     }
@@ -256,27 +287,29 @@ async fn test_subscription_object_lifecycle() {
         .subscribe_with_variables(
             r#"subscription($sender: SuiAddress!) {
                 checkpoints {
-                    sequenceNumber
-                    transactions(filter: { sentAddress: $sender }) {
-                        nodes {
-                            digest
-                            effects {
-                                objectChanges {
-                                    nodes {
-                                        inputState {
-                                            address
-                                            version
-                                            digest
-                                            asMoveObject {
-                                                contents { type { repr } }
+                    node {
+                        sequenceNumber
+                        transactions(filter: { sentAddress: $sender }) {
+                            nodes {
+                                digest
+                                effects {
+                                    objectChanges {
+                                        nodes {
+                                            inputState {
+                                                address
+                                                version
+                                                digest
+                                                asMoveObject {
+                                                    contents { type { repr } }
+                                                }
                                             }
-                                        }
-                                        outputState {
-                                            address
-                                            version
-                                            digest
-                                            asMoveObject {
-                                                contents { type { repr } }
+                                            outputState {
+                                                address
+                                                version
+                                                digest
+                                                asMoveObject {
+                                                    contents { type { repr } }
+                                                }
                                             }
                                         }
                                     }
@@ -323,25 +356,27 @@ async fn test_subscription_object_json() {
         .subscribe_with_variables(
             r#"subscription($sender: SuiAddress!) {
                 checkpoints {
-                    transactions(filter: { sentAddress: $sender }) {
-                        nodes {
-                            digest
-                            effects {
-                                objectChanges {
-                                    nodes {
-                                        inputState {
-                                            asMoveObject {
-                                                contents {
-                                                    type { repr }
-                                                    json
+                    node {
+                        transactions(filter: { sentAddress: $sender }) {
+                            nodes {
+                                digest
+                                effects {
+                                    objectChanges {
+                                        nodes {
+                                            inputState {
+                                                asMoveObject {
+                                                    contents {
+                                                        type { repr }
+                                                        json
+                                                    }
                                                 }
                                             }
-                                        }
-                                        outputState {
-                                            asMoveObject {
-                                                contents {
-                                                    type { repr }
-                                                    json
+                                            outputState {
+                                                asMoveObject {
+                                                    contents {
+                                                        type { repr }
+                                                        json
+                                                    }
                                                 }
                                             }
                                         }
@@ -391,7 +426,7 @@ async fn test_subscription_recovers_from_upstream_disconnect() {
     let (cluster, proxy) = SubscriptionTestCluster::new_with_disruption_proxy().await;
 
     let mut stream = cluster
-        .subscribe("subscription { checkpoints { sequenceNumber } }")
+        .subscribe("subscription { checkpoints { node { sequenceNumber } } }")
         .await;
 
     // Healthy streaming.

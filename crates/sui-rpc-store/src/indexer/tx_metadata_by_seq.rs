@@ -17,7 +17,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use crate::indexer::Schema;
 use crate::indexer::Store;
 use crate::indexer::tx_seq_at;
-use crate::schema::keys::U64Be;
+use crate::schema::primitives::U64Be;
 use crate::schema::tx_metadata_by_seq;
 use crate::schema::tx_metadata_by_seq::Metadata;
 

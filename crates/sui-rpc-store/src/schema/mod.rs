@@ -15,7 +15,7 @@
 //!
 //! [`RpcStoreSchema`] aggregates these into the schema passed to
 //! [`sui_consistent_store::Db::open`]. Keys reused across multiple
-//! CFs live in [`keys`].
+//! CFs live in [`primitives`].
 
 pub mod balance;
 pub mod checkpoint_contents;
@@ -25,12 +25,12 @@ pub mod effects;
 pub mod epochs;
 pub mod event_bitmap;
 pub mod events;
-pub mod keys;
 pub mod live_objects;
 pub mod object_by_owner;
 pub mod object_by_type;
 pub mod objects;
 pub mod package_versions;
+pub mod primitives;
 pub mod pruning_watermark;
 pub mod transaction_bitmap;
 pub mod transactions;
@@ -331,7 +331,7 @@ mod tests {
         assert!(
             schema
                 .pruning_watermark
-                .get(&keys::UnitKey)
+                .get(&primitives::UnitKey)
                 .unwrap()
                 .is_none()
         );
@@ -358,7 +358,7 @@ mod tests {
         assert!(
             schema
                 .pruning_watermark
-                .get(&keys::UnitKey)
+                .get(&primitives::UnitKey)
                 .unwrap()
                 .is_none()
         );

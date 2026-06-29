@@ -80,6 +80,11 @@ const GRAPHQL_SUBSCRIPTIONS_PATH: &str = "/graphql/subscriptions";
 const HEALTH_PATH: &str = "/graphql/health";
 
 mod api;
+pub use crate::api::scalars::cursor::JsonCursor;
+pub use crate::api::types::checkpoint::CCheckpoint;
+pub use crate::api::types::event::CEvent;
+pub use crate::api::types::event::EventCursor;
+pub use crate::api::types::transaction::CTransaction;
 pub mod args;
 pub mod config;
 mod error;
@@ -331,6 +336,10 @@ pub async fn start_rpc(
         .ledger_grpc_reader(Some("graphql_ledger_grpc"), registry)
         .await?;
 
+    let alpha_ledger_grpc_reader = kv_args
+        .alpha_ledger_grpc_reader(Some("graphql_alpha_ledger_grpc"), registry)
+        .await?;
+
     let pg_reader =
         PgReader::new(Some("graphql_db"), database_url.clone(), db_args, registry).await?;
 
@@ -425,6 +434,10 @@ pub async fn start_rpc(
         .data(pg_loader)
         .data(kv_loader)
         .data(package_store);
+
+    if let Some(reader) = alpha_ledger_grpc_reader {
+        rpc = rpc.data(reader);
+    }
 
     if let Some(fullnode_client) = fullnode_client {
         rpc = rpc.data(fullnode_client);

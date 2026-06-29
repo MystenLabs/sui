@@ -366,6 +366,9 @@ pub enum UserInputError {
 
     #[error("Transaction chain ID {provided} does not match network chain ID {expected}.")]
     InvalidChainId { provided: String, expected: String },
+
+    #[error("Transaction {digest} appears more than once in the Soft Bundle")]
+    RepeatedTransactionInSoftBundle { digest: TransactionDigest },
 }
 
 #[derive(
@@ -820,6 +823,12 @@ pub enum SuiErrorKind {
         "Transaction was outbid by higher-gas-price transactions in the admission queue (current minimum gas price required: {min_gas_price})"
     )]
     TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: u64 },
+
+    #[error("Transaction {digest} is being processed: {status}")]
+    TransactionProcessing {
+        digest: TransactionDigest,
+        status: String,
+    },
 }
 
 #[repr(u64)]
@@ -1043,6 +1052,11 @@ impl SuiErrorKind {
             SuiErrorKind::TooManyTransactionsPendingConsensus => true,
             SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { .. } => true,
             SuiErrorKind::ValidatorOverloadedRetryAfter { .. } => true,
+
+            // The transaction is already being processed by consensus, so a fresh
+            // submission is pointless. The client should retry by waiting for effects
+            // rather than resubmitting.
+            SuiErrorKind::TransactionProcessing { .. } => true,
 
             // Non retryable error
             SuiErrorKind::ExecutionError(..) => false,

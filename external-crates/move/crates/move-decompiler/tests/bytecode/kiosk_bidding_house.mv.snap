@@ -150,7 +150,7 @@ public fun accept_bid<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: &mut Au
     assert!(dynamic_object_field::exists_with_type(&l0.id, l9), C8);
     let Bid { id: reg_81, bidder: reg_82, amount: reg_83, timestamp: reg_84 } = dynamic_object_field::remove(&mut l0.id, l9);
     let l7 = reg_83 : 0x2::balance::Balance<0x2::sui::SUI>;
-    let l11 = balance::value(&l7) * reg_23 : u16as u64 / 10000u64;
+    let l11 = balance::value(&l7) * reg_23 : u16 as u64 / 10000u64;
     let l12 = balance::split(&mut l7, l11);
     auctionhouse::add_fee(l1, l12);
     transfer::public_transfer(coin::from_balance(l7, l5), l22);
@@ -214,7 +214,7 @@ public fun buy_nft_with_request<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l
     assert!(object::id(freeze(l3)) == reg_15 : 0x2::object::ID, C12);
     let l19 = coin::value(&l5);
     assert!(l19 >= l9, C13);
-    let l11 = l19 * reg_22 : u16as u64 / 10000u64;
+    let l11 = l19 * reg_22 : u16 as u64 / 10000u64;
     let l13 = coin::split(&mut l5, l11, l6);
     auctionhouse::add_fee(l1, coin::into_balance(l13));
     if (option::is_some(&l14)) {
@@ -456,7 +456,7 @@ public fun place_bid<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: ID, l2: 
     let l4 = if (*(&l11.highest_bid) == 0u64) {
         1u64
     } else {
-        *(&l11.highest_bid) + *(&l11.highest_bid) * C2as u64 / 10000u64
+        *(&l11.highest_bid) + *(&l11.highest_bid) * C2 as u64 / 10000u64
     };
     assert!(l7 >= l4, C5);
     let l15 = option::none();

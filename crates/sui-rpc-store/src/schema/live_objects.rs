@@ -26,7 +26,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::object::Object;
 
-use crate::schema::keys::U64Varint;
+use crate::schema::primitives::U64Varint;
 
 pub const NAME: &str = "live_objects";
 

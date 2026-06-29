@@ -99,6 +99,16 @@ pub enum Structured {
     Jump(GotoSource, Label),
     /// Two-way goto. Same instrumentation as `Jump`.
     JumpIf(GotoSource, Code, Label, Label),
+    /// Synthetic declaration of a dispatch local emitted by `structure_loop` for multi-succ
+    /// loops: `let <name>: u32;`. Translated to `Exp::Declare`.
+    Let(String),
+    /// Synthetic assignment of an integer tag to a dispatch local: `<name> = <value>;`.
+    /// Emitted at each exit site inside a multi-succ loop body to mark which arm to
+    /// dispatch. Translated to `Exp::Assign(name, Constant(value))`.
+    Assign(String, crate::ast::DispatchTag),
+    /// Synthetic integer-literal match emitted after a multi-succ loop:
+    /// `match (<name>) { 0 => ..., 1 => ..., }`. Translated to `Exp::MatchLit`.
+    SelectorMatch(String, Vec<(crate::ast::DispatchTag, Structured)>),
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -218,6 +228,27 @@ impl std::fmt::Display for Structured {
                         node_index,
                         node_index1
                     )
+                }
+                Structured::Let(name) => {
+                    indent(f, level)?;
+                    writeln!(f, "let {name}: u32;")
+                }
+                Structured::Assign(name, value) => {
+                    indent(f, level)?;
+                    writeln!(f, "{name} = {value};")
+                }
+                Structured::SelectorMatch(name, arms) => {
+                    indent(f, level)?;
+                    writeln!(f, "match ({name}) {{")?;
+                    for (lit, body) in arms {
+                        indent(f, level + 1)?;
+                        writeln!(f, "{lit} => {{")?;
+                        fmt_structured(body, f, level + 2)?;
+                        indent(f, level + 1)?;
+                        writeln!(f, "}},")?;
+                    }
+                    indent(f, level)?;
+                    writeln!(f, "}}")
                 }
             }
         }

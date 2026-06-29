@@ -2,13 +2,16 @@
 source: crates/move-decompiler/tests/tests.rs
 ---
 if (0) {
-    'loop_1: loop {
-        { 1 }
-        if (2) {
-            continue 'loop_1;
-        } else {
-            break 'loop_1;
-        }
+    { }
+} else {
+    jump<AOS> NodeIndex(3);
+}
+'loop_1: loop {
+    { 1 }
+    if (2) {
+        continue 'loop_1;
+    } else {
+        break 'loop_1;
     }
 }
 'loop_3: loop {

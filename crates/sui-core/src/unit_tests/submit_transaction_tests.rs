@@ -43,6 +43,25 @@ struct TestContext {
 
 impl TestContext {
     async fn new() -> Self {
+        // Default: transactions execute, blocks immediately sequenced; extra responses cover
+        // tests that submit multiple transactions.
+        Self::new_with_consensus(
+            true,
+            vec![
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+            ],
+        )
+        .await
+    }
+
+    async fn new_with_consensus(
+        execute: bool,
+        block_status_receivers: Vec<crate::consensus_adapter::BlockStatusReceiver>,
+    ) -> Self {
         telemetry_subscribers::init_for_testing();
         let (sender, keypair) = get_account_key_pair();
         let gas_object = Object::with_owner_for_testing(sender);
@@ -52,20 +71,11 @@ impl TestContext {
             .build()
             .await;
 
-        // Create a server with mocked consensus.
-        // This ensures transactions submitted to consensus will get processed.
-        // We add extra mock responses to handle multiple transactions in tests
         let adapter = make_consensus_adapter_for_test(
             authority.clone(),
             HashSet::new(),
-            true,
-            vec![
-                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
-                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
-                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
-                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
-                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
-            ],
+            execute,
+            block_status_receivers,
         );
         let server =
             AuthorityServer::new_for_test_with_consensus_adapter(authority.clone(), adapter);
@@ -128,6 +138,48 @@ async fn test_submit_transaction_success() {
         }
         _ => panic!("Expected Submitted response"),
     };
+}
+
+#[tokio::test]
+async fn test_duplicate_submission_suppressed_within_window() {
+    // `execute = false` so the duplicate reaches the recent-submission check rather than being
+    // short-circuited by the executed-effects path.
+    let test_context = TestContext::new_with_consensus(
+        false,
+        vec![with_block_status(BlockStatus::Sequenced(BlockRef::MIN))],
+    )
+    .await;
+
+    let transaction = test_context.build_test_transaction();
+
+    // First submission is accepted.
+    let first = test_context
+        .client
+        .submit_transaction(test_context.build_submit_request(transaction.clone()), None)
+        .await
+        .unwrap();
+    assert!(
+        matches!(first.results[0], SubmitTxResult::Submitted { .. }),
+        "first submission should be accepted, got {:?}",
+        first.results[0]
+    );
+
+    // Resubmitting the same transaction within the window is suppressed.
+    let second = test_context
+        .client
+        .submit_transaction(test_context.build_submit_request(transaction), None)
+        .await
+        .unwrap();
+    match &second.results[0] {
+        SubmitTxResult::Rejected { error } => match error.clone().into_inner() {
+            SuiErrorKind::TransactionProcessing { status, .. } => assert!(
+                status.contains("recently submitted"),
+                "unexpected rejection status: {status}"
+            ),
+            other => panic!("unexpected rejection error kind: {other:?}"),
+        },
+        other => panic!("expected duplicate submission to be rejected, got {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -249,6 +301,42 @@ async fn test_submit_transaction_already_executed() {
     };
 }
 
+// Test that a transaction already processed by consensus this epoch but not yet executed
+// (e.g. deferred) is suppressed rather than resubmitted to consensus.
+#[tokio::test]
+async fn test_submit_transaction_consensus_message_processed() {
+    let test_context = TestContext::new().await;
+
+    let transaction = test_context.build_test_transaction();
+    let tx_digest = *transaction.digest();
+    let request = test_context.build_submit_request(transaction);
+
+    // Mark the transaction as processed by consensus without executing it, simulating a
+    // sequenced-but-deferred transaction. Its gas object is still unspent, so without the
+    // is_consensus_message_processed check it would be resubmitted to consensus.
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    epoch_store.test_insert_user_signature(tx_digest, vec![]);
+
+    let response = test_context
+        .client
+        .submit_transaction(request, None)
+        .await
+        .unwrap();
+    assert_eq!(response.results.len(), 1);
+    match &response.results[0] {
+        SubmitTxResult::Rejected { error } => {
+            assert!(
+                matches!(
+                    error.as_inner(),
+                    SuiErrorKind::TransactionProcessing { digest, .. } if *digest == tx_digest
+                ),
+                "unexpected rejection error: {error}"
+            );
+        }
+        other => panic!("Expected Rejected response, got {other:?}"),
+    };
+}
+
 #[tokio::test]
 async fn test_submit_transaction_wrong_epoch() {
     let test_context = TestContext::new().await;
@@ -337,7 +425,23 @@ async fn test_submit_batched_transactions() {
     let test_context = TestContext::new().await;
 
     let tx1 = test_context.build_test_transaction();
-    let tx2 = test_context.build_test_transaction();
+
+    // Build a distinct, non-conflicting second transaction from its own gas object so both are
+    // submitted (identical transactions would be deduped as duplicate resubmissions).
+    let gas_object2 = Object::with_owner_for_testing(test_context.sender);
+    let gas_object_ref2 = gas_object2.compute_object_reference();
+    test_context.state.insert_genesis_object(gas_object2);
+    let tx_data2 = TestTransactionBuilder::new(
+        test_context.sender,
+        gas_object_ref2,
+        test_context
+            .state
+            .reference_gas_price_for_testing()
+            .unwrap(),
+    )
+    .transfer_sui(None, test_context.sender)
+    .build();
+    let tx2 = to_sender_signed_transaction(tx_data2, &test_context.keypair);
 
     // Build request with batched transactions.
     let request = RawSubmitTxRequest {
@@ -444,12 +548,100 @@ async fn test_submit_batched_transactions_with_already_executed() {
     }
 }
 
+// A batch containing a transaction that is already being processed by consensus must NOT fail the
+// whole request. The already-processing transaction is reported per-tx as
+// `Rejected { TransactionProcessing }` (a retriable rejection), while the rest of the batch still
+// returns its consensus position.
+#[tokio::test]
+async fn test_submit_batched_transactions_with_already_processing() {
+    let test_context = TestContext::new().await;
+    let epoch_store = test_context.state.epoch_store_for_testing();
+
+    // tx1: mark as already sequenced by consensus so the validator must not resubmit it.
+    let tx1 = test_context.build_test_transaction();
+    epoch_store.test_insert_user_signature(*tx1.digest(), vec![]);
+
+    // tx2: a distinct, fresh transaction that should be submitted normally.
+    let gas_object2 = Object::with_owner_for_testing(test_context.sender);
+    let gas_object_ref2 = gas_object2.compute_object_reference();
+    test_context.state.insert_genesis_object(gas_object2);
+    let tx_data2 = TestTransactionBuilder::new(
+        test_context.sender,
+        gas_object_ref2,
+        test_context
+            .state
+            .reference_gas_price_for_testing()
+            .unwrap(),
+    )
+    .transfer_sui(None, test_context.sender)
+    .build();
+    let tx2 = to_sender_signed_transaction(tx_data2, &test_context.keypair);
+
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx1).unwrap().into(),
+            bcs::to_bytes(&tx2).unwrap().into(),
+        ],
+        ..Default::default()
+    };
+
+    // The whole RPC must still succeed (no top-level error).
+    let raw_response = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(raw_response.results.len(), 2);
+
+    let result0: SubmitTxResult = raw_response.results[0].clone().try_into().unwrap();
+    let result1: SubmitTxResult = raw_response.results[1].clone().try_into().unwrap();
+
+    // tx1 is rejected specifically because it is already being processed by consensus.
+    match result0 {
+        SubmitTxResult::Rejected { error } => assert!(
+            matches!(
+                error.as_inner(),
+                SuiErrorKind::TransactionProcessing { digest, .. } if *digest == *tx1.digest()
+            ),
+            "expected TransactionProcessing for tx1, got: {error}"
+        ),
+        other => {
+            panic!("Expected Rejected status for already-processing transaction, got: {other:?}")
+        }
+    }
+
+    // tx2 is still submitted to consensus.
+    match result1 {
+        SubmitTxResult::Submitted { .. } => {}
+        other => panic!("Expected Submitted status for fresh transaction, got: {other:?}"),
+    }
+}
+
 #[tokio::test]
 async fn test_submit_soft_bundle_transactions() {
     let test_context = TestContext::new().await;
 
     let tx1 = test_context.build_test_transaction();
-    let tx2 = test_context.build_test_transaction();
+
+    // tx2 must be distinct from tx1: a soft bundle may not repeat a transaction.
+    let gas_object2 = Object::with_owner_for_testing(test_context.sender);
+    let gas_object_ref2 = gas_object2.compute_object_reference();
+    test_context.state.insert_genesis_object(gas_object2);
+    let tx_data2 = TestTransactionBuilder::new(
+        test_context.sender,
+        gas_object_ref2,
+        test_context
+            .state
+            .reference_gas_price_for_testing()
+            .unwrap(),
+    )
+    .transfer_sui(None, test_context.sender)
+    .build();
+    let tx2 = to_sender_signed_transaction(tx_data2, &test_context.keypair);
 
     // Build request with batched transactions.
     let request = RawSubmitTxRequest {
@@ -482,6 +674,41 @@ async fn test_submit_soft_bundle_transactions() {
             _ => panic!("Expected Submitted status for all transactions"),
         }
     }
+}
+
+// A soft bundle that repeats the same transaction is rejected outright.
+#[tokio::test]
+async fn test_submit_soft_bundle_with_repeated_transaction() {
+    let test_context = TestContext::new().await;
+
+    let tx = test_context.build_test_transaction();
+    let tx_digest = *tx.digest();
+
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx).unwrap().into(),
+            bcs::to_bytes(&tx).unwrap().into(),
+        ],
+        submit_type: SubmitTxType::SoftBundle.into(),
+    };
+
+    let response = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await;
+    assert!(response.is_err());
+    let error: SuiError = response.unwrap_err().into();
+    assert!(
+        matches!(
+            error.into_inner(),
+            SuiErrorKind::UserInputError {
+                error: UserInputError::RepeatedTransactionInSoftBundle { digest }
+            } if digest == tx_digest
+        ),
+        "expected RepeatedTransactionInSoftBundle error"
+    );
 }
 
 #[tokio::test]
@@ -550,6 +777,69 @@ async fn test_submit_soft_bundle_transactions_with_already_executed() {
             // Expected: second transaction was submitted to consensus
         }
         _ => panic!("Expected Submitted status for second transaction"),
+    }
+}
+
+// Test that a transaction already processed by consensus (but not executed) is removed from a
+// soft bundle before submission, while the remaining transactions in the bundle are still
+// submitted to consensus.
+#[tokio::test]
+async fn test_submit_soft_bundle_transactions_with_consensus_message_processed() {
+    let test_context = TestContext::new().await;
+
+    // 1st transaction: mark as already processed by consensus without executing it.
+    let tx1 = test_context.build_test_transaction();
+    let tx1_digest = *tx1.digest();
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    epoch_store.test_insert_user_signature(tx1_digest, vec![]);
+
+    // 2nd transaction: a fresh, unprocessed transaction with its own gas object.
+    let gas_object2 = Object::with_owner_for_testing(test_context.sender);
+    let gas_object_ref2 = gas_object2.compute_object_reference();
+    test_context.state.insert_genesis_object(gas_object2);
+
+    let tx_data2 = TestTransactionBuilder::new(
+        test_context.sender,
+        gas_object_ref2,
+        test_context
+            .state
+            .reference_gas_price_for_testing()
+            .unwrap(),
+    )
+    .transfer_sui(None, test_context.sender)
+    .build();
+    let tx2 = to_sender_signed_transaction(tx_data2, &test_context.keypair);
+
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&tx1).unwrap().into(),
+            bcs::to_bytes(&tx2).unwrap().into(),
+        ],
+        submit_type: SubmitTxType::SoftBundle.into(),
+    };
+
+    let raw_response = test_context
+        .client
+        .client()
+        .unwrap()
+        .submit_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(raw_response.results.len(), 2);
+
+    // The already-processed transaction is rejected and excluded from the bundle submitted to
+    // consensus; the remaining transaction is still submitted.
+    match &raw_response.results[0].inner {
+        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Rejected(_)) => {}
+        other => {
+            panic!("Expected Rejected status for already-processed transaction, got {other:?}")
+        }
+    }
+    match &raw_response.results[1].inner {
+        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Submitted(_)) => {}
+        other => panic!("Expected Submitted status for remaining transaction, got {other:?}"),
     }
 }
 

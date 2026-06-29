@@ -19,6 +19,7 @@ use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::crypto::{AccountKeyPair, deterministic_random_account_key};
+use sui_types::error::SuiErrorKind;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
@@ -381,7 +382,7 @@ async fn submit_empty_array_of_transactions_to_consensus_adapter() {
         .unwrap();
     waiter.await.unwrap();
 
-    let consensus_position = rx_consensus_position.await.unwrap();
+    let consensus_position = rx_consensus_position.await.unwrap().unwrap();
     assert_eq!(
         consensus_position,
         vec![ConsensusPosition {
@@ -390,4 +391,58 @@ async fn submit_empty_array_of_transactions_to_consensus_adapter() {
             index: PING_TRANSACTION_INDEX,
         }]
     );
+}
+
+// When a transaction that is requesting a consensus position (e.g. mfp) has already been
+// processed via consensus output, the adapter must NOT resubmit it. Instead it reports that
+// the transaction is already processing, so the caller can return a retriable error to the
+// client rather than a (now meaningless) consensus position.
+#[tokio::test]
+async fn submit_already_processed_transaction_returns_processing_error() {
+    telemetry_subscribers::init_for_testing();
+
+    // Initialize an authority with gas and a shared object, then build a user transaction.
+    let mut objects = test_gas_objects();
+    let shared_object = Object::shared_for_testing();
+    objects.push(shared_object.clone());
+    let state = init_state_with_objects(objects).await;
+    let transaction = test_user_transactions(&state, shared_object)
+        .await
+        .into_iter()
+        .next()
+        .unwrap();
+    let epoch_store = state.epoch_store_for_testing();
+    let tx_digest = *transaction.tx().digest();
+
+    // Simulate the transaction already appearing in consensus output before this submission.
+    epoch_store.test_insert_user_signature(tx_digest, vec![]);
+
+    // A mock block status receiver is provided so that, if the adapter were to (incorrectly)
+    // submit, it could complete and return positions, surfacing the regression as a failure.
+    let adapter = make_consensus_adapter_for_test(
+        state.clone(),
+        HashSet::new(),
+        false,
+        vec![with_block_status(BlockStatus::Sequenced(BlockRef::MIN))],
+    );
+
+    let consensus_tx =
+        ConsensusTransaction::new_user_transaction_v2_message(&state.name, transaction.into());
+
+    let result = adapter
+        .submit_and_get_positions(vec![consensus_tx], &epoch_store, None)
+        .await;
+
+    match result {
+        Err(err) => assert!(
+            matches!(
+                err.as_inner(),
+                SuiErrorKind::TransactionProcessing { digest, .. } if *digest == tx_digest
+            ),
+            "expected TransactionProcessing error, got: {err}"
+        ),
+        Ok(positions) => {
+            panic!("expected TransactionProcessing error, got positions: {positions:?}")
+        }
+    }
 }

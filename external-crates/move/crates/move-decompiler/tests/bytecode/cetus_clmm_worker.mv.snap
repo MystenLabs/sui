@@ -993,9 +993,9 @@ fun get_mkt_sell_amount(l0: u64, l1: u64, l2: u64): u64 {
     };
     assert!(l1 > 0u64 && l2 > 0u64, C5);
     let l4 = l0 * 9980u64;
-    let l6 = l4as u128 * l2as u128;
-    let l5 = l1as u128 * 10000u128 + l4as u128;
-    return l6 / l5as u64
+    let l6 = l4 as u128 * l2 as u128;
+    let l5 = l1 as u128 * 10000u128 + l4 as u128;
+    return l6 / l5 as u64
 }
 
 public fun get_mole_cetus_worker_addr(): address {
@@ -1026,12 +1026,12 @@ public fun health<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Pool<T0, T1>, l2
     let l3 = if (l9 == 0u128) {
         0u64
     } else {
-        mole_math::mul_div_u128(l6, reg_33as u128, l9)as u64
+        mole_math::mul_div_u128(l6, reg_33 as u128, l9) as u64
     };
     let l4 = if (l9 == 0u128) {
         0u64
     } else {
-        mole_math::mul_div_u128(l6, reg_34as u128, l9)as u64
+        mole_math::mul_div_u128(l6, reg_34 as u128, l9) as u64
     };
     return pool::calculated_swap_result_amount_out(&pool::calculate_swap_result(l1, false, true, l4)) + l3
 }
@@ -1050,12 +1050,12 @@ public fun health_reverse<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Pool<T1,
     let l3 = if (l9 == 0u128) {
         0u64
     } else {
-        mole_math::mul_div_u128(l6, reg_34as u128, l9)as u64
+        mole_math::mul_div_u128(l6, reg_34 as u128, l9) as u64
     };
     let l4 = if (l9 == 0u128) {
         0u64
     } else {
-        mole_math::mul_div_u128(l6, reg_33as u128, l9)as u64
+        mole_math::mul_div_u128(l6, reg_33 as u128, l9) as u64
     };
     return pool::calculated_swap_result_amount_out(&pool::calculate_swap_result(l1, true, true, l4)) + l3
 }
@@ -1121,7 +1121,7 @@ public fun is_stable<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &GlobalStorage
     if (reg_16 + 86400u64 <= l12) {
         return false
     };
-    let l9 = reg_6 * math::pow(10u64, 8u8)as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals))as u128 / reg_5 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals))as u128as u64;
+    let l9 = reg_6 * math::pow(10u64, 8u8) as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals)) as u128 / reg_5 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals)) as u128 as u64;
     let l10 = worker_config::get_max_price_diff(l1, l7, cetus_clmm_worker::get_mole_cetus_worker_addr());
     let l11 = worker_config::get_max_price_diff_scale();
     if (l9 * l11 > l14 * l10 || l9 * l10 < l14 * l11) {
@@ -1141,7 +1141,7 @@ public fun is_stable_reverse<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Globa
     if (reg_16 + 86400u64 <= l12) {
         return false
     };
-    let l9 = reg_5 * math::pow(10u64, 8u8)as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals))as u128 / reg_6 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals))as u128as u64;
+    let l9 = reg_5 * math::pow(10u64, 8u8) as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals)) as u128 / reg_6 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals)) as u128 as u64;
     let l10 = worker_config::get_max_price_diff(l1, l7, cetus_clmm_worker::get_mole_cetus_worker_addr());
     let l11 = worker_config::get_max_price_diff_scale();
     if (l9 * l11 > l14 * l10 || l9 * l10 < l14 * l11) {

@@ -66,7 +66,7 @@ use crate::indexer::transactions::Transactions;
 use crate::indexer::tx_metadata_by_seq::TxMetadataBySeq;
 use crate::indexer::tx_seq_by_digest::TxSeqByDigest;
 use crate::schema::epochs;
-use crate::schema::keys::U64Be;
+use crate::schema::primitives::U64Be;
 use crate::schema::pruning_watermark;
 
 /// The embedded fullnode's **live cohort**: the pipelines that

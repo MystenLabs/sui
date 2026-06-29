@@ -72,6 +72,9 @@ fn used_inside_nested_loop(exp: &Exp, target: Label) -> bool {
             Exp::Match(cond, _, arms) => {
                 go(cond, target, in_nested) || arms.iter().any(|(_, _, a)| go(a, target, in_nested))
             }
+            Exp::MatchLit(cond, arms) => {
+                go(cond, target, in_nested) || arms.iter().any(|(_, a)| go(a, target, in_nested))
+            }
             Exp::Primitive { args, .. } | Exp::Data { args, .. } => {
                 args.iter().any(|a| go(a, target, in_nested))
             }

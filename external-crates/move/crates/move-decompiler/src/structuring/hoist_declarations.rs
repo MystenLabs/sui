@@ -115,6 +115,15 @@ fn summarize_exp(e: &Exp) -> Summary {
             Summary { entries, subs }
         }
         Exp::Match(..) => unreachable!("`reconstruct_match` runs after `hoist_declarations`"),
+        Exp::MatchLit(scrutinee, arms) => {
+            let mut subs = Vec::with_capacity(1 + arms.len());
+            subs.push(summarize_exp(scrutinee));
+            for (_, body) in arms {
+                subs.push(summarize_exp(body));
+            }
+            let entries = union_entries(&subs);
+            Summary { entries, subs }
+        }
         Exp::Return(items) | Exp::Call(_, items) => {
             let subs: Vec<Summary> = items.iter().map(summarize_exp).collect();
             let entries = union_entries(&subs);
@@ -282,6 +291,26 @@ fn exp(e: Exp, summary: Summary, already_bound: &HashSet<String>) -> Exp {
             make_decls(decl, Exp::Switch(cond, enum_, new_cases))
         }
         Exp::Match(..) => unreachable!("`reconstruct_match` runs after `hoist_declarations`"),
+        Exp::MatchLit(scrutinee, arms) => {
+            let mut iter = subs.into_iter();
+            let scrut_sum = iter.next().expect("MatchLit must summarize a scrutinee");
+            let arm_sums: Vec<Summary> = iter.collect();
+            assert_eq!(arm_sums.len(), arms.len(), "MatchLit arm-count mismatch");
+
+            let child_entries: Vec<&HashSet<String>> = std::iter::once(&scrut_sum.entries)
+                .chain(arm_sums.iter().map(|s| &s.entries))
+                .collect();
+            let decl = decl_here(&child_entries, already_bound);
+            let new_bound = extend_bound(already_bound, &decl);
+
+            let scrut = Box::new(exp(*scrutinee, scrut_sum, &new_bound));
+            let new_arms: Vec<(crate::ast::DispatchTag, Exp)> = arms
+                .into_iter()
+                .zip(arm_sums)
+                .map(|((tag, body), s)| (tag, exp(body, s, &new_bound)))
+                .collect();
+            make_decls(decl, Exp::MatchLit(scrut, new_arms))
+        }
         Exp::Loop(label, body) => {
             // Loop has one sub; "≥2 children" can never fire — no decl_here at this level.
             let body_sum = expect_one(subs);

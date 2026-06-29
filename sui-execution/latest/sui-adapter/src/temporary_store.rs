@@ -34,7 +34,7 @@ use sui_types::{
     gas::GasCostSummary,
     object::Object,
     object::Owner,
-    storage::{BackingPackageStore, ChildObjectResolver, ParentSync, Storage},
+    storage::{BackingPackageStore, ChildObjectResolver, Storage},
     transaction::InputObjects,
 };
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
@@ -1749,11 +1749,5 @@ impl BackingPackageStore for TemporaryStore<'_> {
                 }
             })
         }
-    }
-}
-
-impl ParentSync for TemporaryStore<'_> {
-    fn get_latest_parent_entry_ref_deprecated(&self, _object_id: ObjectID) -> Option<ObjectRef> {
-        unreachable!("Never called in newer protocol versions")
     }
 }

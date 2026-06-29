@@ -29,8 +29,8 @@ use crate::indexer::Schema;
 use crate::indexer::Store;
 use crate::indexer::checkpoint_input_objects;
 use crate::indexer::checkpoint_output_objects;
-use crate::schema::keys::U64Varint;
 use crate::schema::object_by_owner;
+use crate::schema::primitives::U64Varint;
 
 /// Pipeline marker for `object_by_owner`.
 pub struct ObjectByOwner;

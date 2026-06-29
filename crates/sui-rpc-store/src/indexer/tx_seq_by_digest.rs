@@ -18,7 +18,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use crate::indexer::Schema;
 use crate::indexer::Store;
 use crate::indexer::tx_seq_at;
-use crate::schema::keys::U64Varint;
+use crate::schema::primitives::U64Varint;
 use crate::schema::tx_seq_by_digest;
 
 /// Pipeline marker for `tx_seq_by_digest`.

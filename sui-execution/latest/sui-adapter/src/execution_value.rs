@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_types::storage::{BackingPackageStore, ChildObjectResolver, StorageView};
+use sui_types::storage::{BackingPackageStore, ChildObjectResolver, Storage};
 
 pub trait SuiResolver: BackingPackageStore {
     fn as_backing_package_store(&self) -> &dyn BackingPackageStore;
@@ -17,13 +17,13 @@ where
 }
 
 /// Interface with the store necessary to execute a programmable transaction
-pub trait ExecutionState: StorageView + SuiResolver {
+pub trait ExecutionState: Storage + ChildObjectResolver + SuiResolver {
     fn as_child_resolver(&self) -> &dyn ChildObjectResolver;
 }
 
 impl<T> ExecutionState for T
 where
-    T: StorageView,
+    T: Storage + ChildObjectResolver,
     T: SuiResolver,
 {
     fn as_child_resolver(&self) -> &dyn ChildObjectResolver {
