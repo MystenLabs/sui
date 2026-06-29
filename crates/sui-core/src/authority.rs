@@ -323,6 +323,7 @@ pub struct AuthorityMetrics {
 
     /// Consensus commit and transaction handler metrics
     pub consensus_handler_processed: IntCounterVec,
+    pub consensus_handler_processed_user_transactions: IntCounterVec,
     pub consensus_handler_transaction_sizes: HistogramVec,
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
@@ -638,14 +639,20 @@ impl AuthorityMetrics {
             .unwrap(),
             consensus_handler_processed: register_int_counter_vec_with_registry!(
                 "consensus_handler_processed",
-                "Number of transactions processed by consensus handler",
-                &["class"],
+                "Number of transactions processed by consensus handler, sliced by class and commit outcome (accepted/rejected)",
+                &["class", "outcome"],
+                registry
+            ).unwrap(),
+            consensus_handler_processed_user_transactions: register_int_counter_vec_with_registry!(
+                "consensus_handler_processed_user_transactions",
+                "Number of user transactions processed by consensus handler, sliced by commit outcome (accepted/rejected) and block author",
+                &["outcome", "authority"],
                 registry
             ).unwrap(),
             consensus_handler_transaction_sizes: register_histogram_vec_with_registry!(
                 "consensus_handler_transaction_sizes",
-                "Sizes of each type of transactions processed by consensus handler",
-                &["class"],
+                "Sizes of each type of transactions processed by consensus handler, sliced by class and commit outcome (accepted/rejected)",
+                &["class", "outcome"],
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
