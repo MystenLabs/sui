@@ -38,7 +38,7 @@ use sui_types::{
     gas::GasCostSummary,
     object::Object,
     object::Owner,
-    storage::{BackingPackageStore, ChildObjectResolver, Storage},
+    storage::{BackingPackageStore, RuntimeObjectResolver, Storage},
     transaction::InputObjects,
 };
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
@@ -103,7 +103,7 @@ pub struct TemporaryStore<'backing> {
     /// committed. Execution still runs to completion (the triggering native also raises a Move
     /// error); this signal is carried out on `InnerTemporaryStore` so the authority can discard the
     /// effects and re-enqueue. A `RefCell` rather than a lock: execution is single-threaded, but the
-    /// condition is detected behind `&self` (`ChildObjectResolver`), so the field must be
+    /// condition is detected behind `&self` (`RuntimeObjectResolver`), so the field must be
     /// interior-mutable.
     retry_request: RefCell<Option<ExecutionRetryError>>,
 }
@@ -985,7 +985,7 @@ impl TemporaryStore<'_> {
     }
 }
 
-impl ChildObjectResolver for TemporaryStore<'_> {
+impl RuntimeObjectResolver for TemporaryStore<'_> {
     fn read_child_object(
         &self,
         parent: &ObjectID,
