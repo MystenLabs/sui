@@ -2458,6 +2458,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
     }
 
+    /// True if this consensus transaction was already processed (and therefore Finalized) in a
+    /// prior consensus commit, as recorded in the in-memory `processed_cache`. Such a transaction
+    /// will be dropped by `deduplicate_consensus_txns`, and its owned-object locks were already
+    /// acquired when it was first processed — so `filter_consensus_txns` can skip the redundant
+    /// (and, under a storage stall, expensive) owned-object lock lookup for it.
+    ///
+    /// Conservative on purpose: this is a cheap in-memory peek (no DB read) and is a strict subset
+    /// of dedup's drop decision (a hit here implies dedup's `processed_cache.put().is_some()` — or
+    /// the DB `is_consensus_message_processed` backstop — will drop the transaction). So we never
+    /// skip lock acquisition for a transaction that will actually execute. Older duplicates already
+    /// evicted from `processed_cache` simply acquire as before.
+    fn lock_acquisition_already_done(&self, transaction: &ConsensusTransaction) -> bool {
+        self.processed_cache
+            .contains(&SequencedConsensusTransactionKey::External(
+                transaction.key(),
+            ))
+    }
+
     // Filters out rejected or deprecated transactions.
     // Returns FilteredConsensusOutput containing transactions and owned_object_locks.
     #[instrument(level = "trace", skip_all)]
@@ -2489,8 +2507,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             let mut prefetch_refs: Vec<ObjectRef> = Vec::new();
             for (_block, parsed_transactions) in &block_transactions {
                 for parsed in parsed_transactions {
+                    // Skip transactions already processed in a prior commit: their locks won't be
+                    // re-acquired below, so there is no need to prefetch them.
                     if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
                         &parsed.transaction.kind
+                        && !self.lock_acquisition_already_done(&parsed.transaction)
                         && let Some(refs) = owned_object_refs_to_lock(tx_with_claims)
                     {
                         prefetch_refs.extend(refs);
@@ -2666,30 +2687,41 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     &parsed.transaction.kind
                 {
                     let tx = tx_with_claims.tx();
-                    let Some(owned_object_refs) = owned_object_refs_to_lock(tx_with_claims) else {
-                        debug_fatal!("Invalid input objects for transaction {}", tx.digest());
-                        continue;
-                    };
-
-                    match self
-                        .epoch_store
-                        .try_acquire_owned_object_locks_post_consensus(
-                            &owned_object_refs,
-                            *tx.digest(),
-                            &owned_object_locks,
-                            &existing_locks,
-                        ) {
-                        Ok(new_locks) => {
-                            owned_object_locks.extend(new_locks.into_iter());
-                            // Lock acquisition succeeded - now set Finalized status
-                            status_updates.push((position, ConsensusTxStatus::Finalized));
-                            num_finalized_user_transactions[author] += 1;
-                        }
-                        Err(e) => {
-                            debug!("Dropping transaction {}: {}", tx.digest(), e);
-                            status_updates.push((position, ConsensusTxStatus::Dropped));
-                            self.epoch_store.set_rejection_vote_reason(position, &e);
+                    if self.lock_acquisition_already_done(&parsed.transaction) {
+                        // Already Finalized in a prior commit (its owned-object lock is held);
+                        // deduplicate_consensus_txns will drop this duplicate before execution.
+                        // Skip the redundant lock lookup — under a storage stall, re-proposed
+                        // duplicates make it the dominant cost — but preserve Finalized status.
+                        self.metrics.skipped_owned_object_lock_acquisition.inc();
+                        status_updates.push((position, ConsensusTxStatus::Finalized));
+                        num_finalized_user_transactions[author] += 1;
+                    } else {
+                        let Some(owned_object_refs) = owned_object_refs_to_lock(tx_with_claims)
+                        else {
+                            debug_fatal!("Invalid input objects for transaction {}", tx.digest());
                             continue;
+                        };
+
+                        match self
+                            .epoch_store
+                            .try_acquire_owned_object_locks_post_consensus(
+                                &owned_object_refs,
+                                *tx.digest(),
+                                &owned_object_locks,
+                                &existing_locks,
+                            ) {
+                            Ok(new_locks) => {
+                                owned_object_locks.extend(new_locks.into_iter());
+                                // Lock acquisition succeeded - now set Finalized status
+                                status_updates.push((position, ConsensusTxStatus::Finalized));
+                                num_finalized_user_transactions[author] += 1;
+                            }
+                            Err(e) => {
+                                debug!("Dropping transaction {}: {}", tx.digest(), e);
+                                status_updates.push((position, ConsensusTxStatus::Dropped));
+                                self.epoch_store.set_rejection_vote_reason(position, &e);
+                                continue;
+                            }
                         }
                     }
                 }
@@ -3743,6 +3775,129 @@ mod tests {
 
         // THEN check for no inflight or suspended transactions.
         state.execution_scheduler().check_empty_for_testing().await;
+    }
+
+    #[tokio::test]
+    async fn test_skip_lock_acquisition_for_reprocessed_txns() {
+        telemetry_subscribers::init_for_testing();
+
+        let (sender, keypair) = deterministic_random_account_key();
+        // Keep the transaction count at the minimum randomized `processed_cache` capacity (2) so
+        // all re-proposed transactions are guaranteed to still be cached in the second commit.
+        let gas_objects: Vec<Object> = (0..2)
+            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
+            .collect();
+        // Owned objects so the transactions exercise the post-consensus lock-acquisition path.
+        let owned_objects: Vec<Object> = (0..2)
+            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
+            .collect();
+        let mut all_objects = gas_objects.clone();
+        all_objects.extend(owned_objects.clone());
+
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_objects(all_objects.clone())
+                .build();
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .build()
+            .await;
+
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let consensus_committee = epoch_store.epoch_start_state().get_consensus_committee();
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+        let throughput_calculator = ConsensusThroughputCalculator::new(None, metrics.clone());
+        let backpressure_manager = BackpressureManager::new_for_tests();
+        let consensus_adapter =
+            make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]);
+        let settlement_scheduler = SettlementScheduler::new(
+            state.execution_scheduler().as_ref().clone(),
+            state.get_transaction_cache_reader().clone(),
+            state.metrics.clone(),
+        );
+        let mut consensus_handler = ConsensusHandler::new(
+            epoch_store,
+            Arc::new(CheckpointServiceNoop {}),
+            settlement_scheduler,
+            consensus_adapter,
+            state.get_object_cache_reader().clone(),
+            consensus_committee.clone(),
+            metrics.clone(),
+            Arc::new(throughput_calculator),
+            backpressure_manager.subscribe(),
+            state.traffic_controller.clone(),
+            None,
+            state.consensus_gasless_counter.clone(),
+        );
+        // No backpressure for this test (suppressed by default 0,0 watermarks vs. a higher cert).
+        backpressure_manager.set_backpressure(false);
+        backpressure_manager.update_highest_certified_checkpoint(1);
+
+        let mut user_transactions = vec![];
+        for i in 0..gas_objects.len() {
+            let transaction = test_user_transaction(
+                &state,
+                sender,
+                &keypair,
+                gas_objects[i].clone(),
+                vec![owned_objects[i].clone()],
+            )
+            .await;
+            user_transactions.push(transaction);
+        }
+        let num_txns = user_transactions.len() as u64;
+
+        let make_commit = |start_round: u32, sub_dag_index: u32| {
+            let mut blocks = Vec::new();
+            for (i, consensus_transaction) in user_transactions
+                .iter()
+                .cloned()
+                .map(|t| {
+                    ConsensusTransaction::new_user_transaction_v2_message(&state.name, t.into())
+                })
+                .enumerate()
+            {
+                let transaction_bytes = bcs::to_bytes(&consensus_transaction).unwrap();
+                let block = VerifiedBlock::new_for_test(
+                    TestBlock::new(
+                        start_round + i as u32,
+                        (i % consensus_committee.size()) as u32,
+                    )
+                    .set_transactions(vec![Transaction::new(transaction_bytes)])
+                    .build(),
+                );
+                blocks.push(block);
+            }
+            let leader_block = blocks[0].clone();
+            CommittedSubDag::new(
+                leader_block.reference(),
+                blocks.clone(),
+                leader_block.timestamp_ms(),
+                CommitRef::new(sub_dag_index, CommitDigest::MIN),
+            )
+        };
+
+        // Commit 1: first time these txns are seen — locks are acquired, none skipped.
+        consensus_handler
+            .handle_consensus_commit_for_test(make_commit(100, 10))
+            .await;
+        assert_eq!(
+            metrics.skipped_owned_object_lock_acquisition.get(),
+            0,
+            "no lock acquisition should be skipped on first processing"
+        );
+
+        // Commit 2: the same transactions re-proposed at new positions. They were already
+        // finalized (recorded in processed_cache by dedup), so lock acquisition is skipped for
+        // all of them and dedup drops the duplicates.
+        consensus_handler
+            .handle_consensus_commit_for_test(make_commit(200, 11))
+            .await;
+        assert_eq!(
+            metrics.skipped_owned_object_lock_acquisition.get(),
+            num_txns,
+            "lock acquisition should be skipped for every re-proposed transaction"
+        );
     }
 
     fn to_short_strings(txs: Vec<VerifiedExecutableTransactionWithAliases>) -> Vec<String> {
