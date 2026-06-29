@@ -17,7 +17,7 @@ use move_command_line_common::{
 use move_compiler::{
     Compiler, PASS_PARSER,
     command_line::compiler::move_check_for_errors,
-    diagnostics::codes::{Category, Editions},
+    diagnostics::codes::{Category, DiagnosticsID, Editions},
     diagnostics::filter::{empty_filter_scope, unused_for_test_filter_scope},
     diagnostics::*,
     editions::{Edition, Flavor},
@@ -260,7 +260,7 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
 
     let dev_mode = path.components().any(|c| c.as_os_str() == DEV_DIR);
     if dev_mode {
-        let dev_id = (
+        let dev_id = DiagnosticsID::exact(
             None,
             Category::Editions as u8,
             Editions::FeatureInDevelopment as u8,
