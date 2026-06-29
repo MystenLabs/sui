@@ -19,22 +19,6 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_indexing: Option<bool>,
 
-    /// Use the experimental `sui-rpc-store` backend instead of the built-in
-    /// `rpc-index`.
-    ///
-    /// When set, the node builds the embedded `sui-rpc-store` indexer (the
-    /// derived-index and ledger-history column families, indexed independently
-    /// of the authority store) and serves the index read paths through it
-    /// rather than building the legacy `rpc-index`. The two are mutually
-    /// exclusive; raw chain data is still served from the perpetual store
-    /// either way.
-    ///
-    /// Experimental.
-    ///
-    /// Defaults to `false`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub use_experimental_rpc_store: Option<bool>,
-
     /// Configure the address to listen on for https
     ///
     /// Defaults to `0.0.0.0:9443` if not specified.
@@ -98,10 +82,6 @@ pub struct RpcConfig {
 impl RpcConfig {
     pub fn enable_indexing(&self) -> bool {
         self.enable_indexing.unwrap_or(false)
-    }
-
-    pub fn use_experimental_rpc_store(&self) -> bool {
-        self.use_experimental_rpc_store.unwrap_or(false)
     }
 
     pub fn https_address(&self) -> SocketAddr {
