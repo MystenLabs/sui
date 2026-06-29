@@ -5,7 +5,7 @@ info:
   edition: development
   lint: false
 ---
-error[E04021]: invalid number after type inference
+error[E04021]: numeric literal out of range
   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:7:22
   │
 7 │         let _x: i8 = 128;
@@ -15,7 +15,7 @@ error[E04021]: invalid number after type inference
   │                 │    Annotating the literal might help inference: '128i16'
   │                 This literal does not fit into the type 'i8'.
 
-error[E04021]: invalid number after type inference
+error[E04021]: numeric literal out of range
    ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:15:23
    │
 15 │         let _x: i16 = 32768;
@@ -25,7 +25,7 @@ error[E04021]: invalid number after type inference
    │                 │     Annotating the literal might help inference: '32768i32'
    │                 This literal does not fit into the type 'i16'.
 
-error[E04021]: invalid number after type inference
+error[E04021]: numeric literal out of range
    ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:23:23
    │
 23 │         let _x: i32 = 2147483648;
@@ -35,7 +35,7 @@ error[E04021]: invalid number after type inference
    │                 │     Annotating the literal might help inference: '2147483648i64'
    │                 This literal does not fit into the type 'i32'.
 
-error[E04021]: invalid number after type inference
+error[E04021]: numeric literal out of range
    ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:31:23
    │
 31 │         let _x: i64 = 9223372036854775808;
@@ -45,7 +45,7 @@ error[E04021]: invalid number after type inference
    │                 │     Annotating the literal might help inference: '9223372036854775808i128'
    │                 This literal does not fit into the type 'i64'.
 
-error[E04021]: invalid number after type inference
+error[E04021]: numeric literal out of range
    ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:39:24
    │
 39 │         let _x: i256 = 57896044618658097711785492504343953926634992332820282019728792003956564819968;
@@ -55,7 +55,7 @@ error[E04021]: invalid number after type inference
    │                 │      Annotating the literal might help inference: '57896044618658097711785492504343953926634992332820282019728792003956564819968i256'
    │                 This literal does not fit into the type 'i256'.
 
-error[E04021]: invalid number after type inference
+error[E04021]: numeric literal out of range
    ┌─ tests/development/signed_ints/invalid/signed_int_inferred_literal_bounds.move:48:24
    │
 48 │         let _x: i256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935;

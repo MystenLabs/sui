@@ -11,7 +11,7 @@ error[E13001]: feature is not supported in specified edition
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
   │                   ^ signed integer types are under development and should not be used right now.
 
-warning[W04039]: unable to determine principal type for literal
+warning[W04039]: unable to determine literal's type
   ┌─ tests/move_check/parser/expr_unary_negation.move:5:20
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
@@ -26,7 +26,7 @@ error[E13001]: feature is not supported in specified edition
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
   │                                    ^ signed integer types are under development and should not be used right now.
 
-warning[W04039]: unable to determine principal type for literal
+warning[W04039]: unable to determine literal's type
   ┌─ tests/move_check/parser/expr_unary_negation.move:5:38
   │
 5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);

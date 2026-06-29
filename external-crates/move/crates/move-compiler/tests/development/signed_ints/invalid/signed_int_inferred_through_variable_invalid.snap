@@ -5,7 +5,7 @@ info:
   edition: development
   lint: false
 ---
-error[E04021]: invalid number after type inference
+error[E04021]: numeric literal out of range
    ┌─ tests/development/signed_ints/invalid/signed_int_inferred_through_variable_invalid.move:13:22
    │
 13 │         let _x: i8 = 128;
@@ -15,7 +15,7 @@ error[E04021]: invalid number after type inference
    │                 │    Annotating the literal might help inference: '128i16'
    │                 This literal does not fit into the type 'i8'.
 
-error[E04021]: invalid number after type inference
+error[E04021]: numeric literal out of range
    ┌─ tests/development/signed_ints/invalid/signed_int_inferred_through_variable_invalid.move:18:22
    │
 17 │         let x: i16 = 0;
@@ -26,7 +26,7 @@ error[E04021]: invalid number after type inference
    │                      Invalid numerical literal
    │                      Annotating the literal might help inference: '32768i32'
 
-error[E04021]: invalid number after type inference
+error[E04021]: numeric literal out of range
    ┌─ tests/development/signed_ints/invalid/signed_int_inferred_through_variable_invalid.move:22:9
    │
 21 │     fun signed_overflow_through_return_i32(): i32 {
@@ -37,7 +37,7 @@ error[E04021]: invalid number after type inference
    │         Invalid numerical literal
    │         Annotating the literal might help inference: '2147483648i64'
 
-error[E04021]: invalid number after type inference
+error[E04021]: numeric literal out of range
    ┌─ tests/development/signed_ints/invalid/signed_int_inferred_through_variable_invalid.move:27:22
    │
 26 │         let a: i64 = 0;
@@ -48,7 +48,7 @@ error[E04021]: invalid number after type inference
    │                      Invalid numerical literal
    │                      Annotating the literal might help inference: '9223372036854775808i128'
 
-error[E04021]: invalid number after type inference
+error[E04021]: numeric literal out of range
    ┌─ tests/development/signed_ints/invalid/signed_int_inferred_through_variable_invalid.move:35:22
    │
 34 │         let x: u8 = 0;
@@ -59,7 +59,7 @@ error[E04021]: invalid number after type inference
    │                      Invalid numerical literal
    │                      Annotating the literal might help inference: '256u16'
 
-error[E04021]: invalid number after type inference
+error[E04021]: numeric literal out of range
    ┌─ tests/development/signed_ints/invalid/signed_int_inferred_through_variable_invalid.move:40:22
    │
 39 │         let x: u16 = 0;
