@@ -8,18 +8,21 @@
 //! ## What counts as a use
 //!
 //! - reading the underlying value of a field — `dereference`, `unary`,
-//!   `cast` — even if the result is dropped (`let _ = o.field`);
+//!   `cast`;
 //! - the value flows into a function call (anything passed as an argument);
 //! - either operand of a `binop` (e.g. `==`, `!=`, arithmetic);
 //! - the value is the field-derived result of `return`;
+//! - a field-derived value is explicitly discarded by `let _ = e` or
+//!   ignore-and-pop;
 //! - the value is the LHS of `mutate` and resolves to a tracked target —
 //!   i.e. the write is into a `&mut` field of an input parameter;
 //! - the value is the condition of a branch or variant switch;
 //! - the value is the argument of an `abort`.
 //!
 //! Pure pass-throughs that don't on their own count: `borrow`, `freeze`,
-//! `assign`, `pack`, and `let _ = e` (ignore-and-pop). In particular `borrow`
-//! is needed to access a field, but the use is whatever the borrow flows into.
+//! ordinary `assign`, `pack`, `let _ = e` for a bare root, and ignored fields
+//! from ref-pattern destructures. In particular `borrow` is needed to access a
+//! field, but the use is whatever the borrow flows into.
 //!
 //! ## How the analysis tracks "unused"
 //!
@@ -49,8 +52,8 @@ use crate::{
         codes::{DiagnosticInfo, Severity, custom},
     },
     hlir::ast::{
-        BaseType_, Command, Command_ as C, Exp, Label, ModuleCall, SingleType, SingleType_, Type,
-        TypeName_, UnannotatedExp_, Var,
+        BaseType_, Command, Command_ as C, Exp, LValue_ as L, Label, ModuleCall, SingleType,
+        SingleType_, Type, TypeName_, UnannotatedExp_, Var,
     },
     naming::ast::StructFields,
     parser::ast::Ability_,
@@ -297,8 +300,25 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
                 state.mark_used(&vals);
                 true
             }
+            C::Assign(_, ls, e) if ls.iter().any(|l| matches!(l.value, L::Ignore)) => {
+                let vals = self.exp(context, state, e);
+                let mark_ignored_fields = !is_unpack_borrow(e);
+                let padded = vals.into_iter().chain(std::iter::repeat(Value::default()));
+                for (l, val) in ls.iter().zip(padded) {
+                    if matches!(l.value, L::Ignore) && mark_ignored_fields {
+                        state.mark_used_fields(std::slice::from_ref(&val));
+                    } else {
+                        self.lvalue(context, state, l, val);
+                    }
+                }
+                true
+            }
+            C::IgnoreAndPop { exp, .. } => {
+                let vals = self.exp(context, state, exp);
+                state.mark_used_fields(&vals);
+                true
+            }
             C::Assign(_, _, _) => false,
-            C::IgnoreAndPop { .. } => false,
             C::Jump { .. } | C::Break(_) | C::Continue(_) => false,
         }
     }
@@ -370,6 +390,12 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
         state.mark_used(&args);
         None
     }
+}
+
+fn is_unpack_borrow(e: &Exp) -> bool {
+    // Synthetic borrows from ref-pattern destructuring do not count just
+    // because their field binding is ignored.
+    matches!(e.exp.value, UnannotatedExp_::Borrow(_, _, _, Some(_)))
 }
 
 impl State {

@@ -133,6 +133,10 @@ module a::m {
     // Reading a field counts as a use even if the result is dropped —
     // touching the field is what we care about.
     public fun field_discarded(c: &OwnerCap) { let _ = c.owns; }
+    public fun borrowed_field_discarded(c: &OwnerCap) {
+        let r = &c.owns;
+        let _ = r;
+    }
     public fun cast_discarded(c: &ValueCap) { let _ = (c.value as u128); }
     public fun binop_discarded(c: &ValueCap) { let _ = c.value + 1; }
 
