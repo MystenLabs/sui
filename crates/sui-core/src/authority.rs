@@ -1541,7 +1541,7 @@ impl AuthorityState {
             return ExecutionOutput::EpochEnded;
         }
 
-        let accumulator_version = execution_env.assigned_versions.accumulator_version;
+        let accumulator_version = execution_env.assigned_versions.accumulator_version();
 
         let (transaction_outputs, timings, execution_error_opt) = match self.process_certificate(
             &tx_guard,
@@ -2060,15 +2060,14 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
-        let accumulator_version = execution_env.assigned_versions.accumulator_version;
-        // The accumulator root is the only system object a transaction is sequenced against today.
-        // Pin its version so execution can gate reads on it and record a retry if this node has not
-        // caught up; see `TemporaryStore::check_system_object_available`. A later PR generalizes this
-        // to an arbitrary set of system objects.
-        let system_object_versions: BTreeMap<ObjectID, SequenceNumber> = accumulator_version
-            .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
-            .into_iter()
-            .collect();
+        // Versions of system objects this transaction may read during execution, each at the version
+        // it was sequenced against. Execution gates reads on these (and records a retry if an object
+        // has not caught up); see `TemporaryStore::check_system_object_available`.
+        let system_object_versions = execution_env
+            .assigned_versions
+            .system_object_versions
+            .clone();
+        let accumulator_version = execution_env.assigned_versions.accumulator_version();
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
             Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),
@@ -2082,7 +2081,7 @@ impl AuthorityState {
                 &*self.coin_reservation_resolver,
                 sender,
                 &mut kind,
-                execution_env.assigned_versions.accumulator_version,
+                execution_env.assigned_versions.accumulator_version(),
             )
             .expect("rewriting must succeed for a certified transaction")
         } else {
