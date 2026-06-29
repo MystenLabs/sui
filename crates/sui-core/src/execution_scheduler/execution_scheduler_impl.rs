@@ -221,7 +221,7 @@ impl ExecutionScheduler {
         // (which create/update accumulator account objects) execute before coin reservation
         // transactions that depend on those objects.
         if tx_data.kind().has_coin_reservations()
-            && let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version
+            && let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version()
             && let Some(initial_shared_version) =
                 (**epoch_store.epoch_start_config()).accumulator_root_obj_initial_shared_version()
         {
@@ -364,7 +364,7 @@ impl ExecutionScheduler {
             assert!(!tx_withdraws.is_empty());
             let accumulator_version = env
                 .assigned_versions
-                .accumulator_version
+                .accumulator_version()
                 .expect("accumulator_version must be set when there are withdraws");
             if let Some(prev_version) = prev_version {
                 // Transactions must be in order.
