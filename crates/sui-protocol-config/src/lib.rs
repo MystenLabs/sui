@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 128;
+const MAX_PROTOCOL_VERSION: u64 = 129;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -358,7 +358,8 @@ const MAINNET_USDB: &str =
 //              Update gas prices for range proofs and ristretto group operations.
 //              Enable Ristretto255 group operations and bulletproofs verification on testnet.
 //              Enable timestamp_based_epoch_close on mainnet.
-// Version 128: Add `insert_before` and `insert_after` to `sui::linked_table`
+// Version 128: Make some additional bounds to binary tables explicit.
+// Version 129: Add `insert_before` and `insert_after` to `sui::linked_table`
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1408,6 +1409,12 @@ pub struct ProtocolConfig {
 
     /// Maximum number of "type nodes", a metric for how big a SignatureToken will be when expanded into a fully qualified type. Enforced by the Move bytecode verifier.
     max_type_nodes: Option<u64>,
+
+    /// Maximum number of "type nodes" that can be instantiated in a single function.
+    max_generic_instantiation_type_nodes_per_function: Option<u64>,
+
+    /// Maximum number of "type nodes" that can be instantiated in a module.
+    max_generic_instantiation_type_nodes_per_module: Option<u64>,
 
     /// Maximum number of push instructions in one function. Enforced by the Move bytecode verifier.
     max_push_size: Option<u64>,
@@ -3067,6 +3074,8 @@ impl ProtocolConfig {
             max_basic_blocks: Some(1024),
             max_value_stack_size: Some(1024),
             max_type_nodes: Some(256),
+            max_generic_instantiation_type_nodes_per_function: None,
+            max_generic_instantiation_type_nodes_per_module: None,
             max_push_size: Some(10000),
             max_struct_definitions: Some(200),
             max_function_definitions: Some(1000),
@@ -5044,7 +5053,13 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.timestamp_based_epoch_close = true;
                 }
-                128 => {}
+                128 => {
+                    cfg.max_generic_instantiation_type_nodes_per_function = Some(10_000);
+                    cfg.max_generic_instantiation_type_nodes_per_module = Some(500_000);
+                    cfg.binary_enum_defs = Some(200);
+                    cfg.binary_enum_def_instantiations = Some(100);
+                }
+                129 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -5125,6 +5140,12 @@ impl ProtocolConfig {
             max_basic_blocks: Some(self.max_basic_blocks() as usize),
             max_value_stack_size: self.max_value_stack_size() as usize,
             max_type_nodes: Some(self.max_type_nodes() as usize),
+            max_generic_instantiation_type_nodes_per_function: self
+                .max_generic_instantiation_type_nodes_per_function_as_option()
+                .map(|v| v as usize),
+            max_generic_instantiation_type_nodes_per_module: self
+                .max_generic_instantiation_type_nodes_per_module_as_option()
+                .map(|v| v as usize),
             max_push_size: Some(self.max_push_size() as usize),
             max_dependency_depth: Some(self.max_dependency_depth() as usize),
             max_fields_in_struct: Some(self.max_fields_in_struct() as usize),
