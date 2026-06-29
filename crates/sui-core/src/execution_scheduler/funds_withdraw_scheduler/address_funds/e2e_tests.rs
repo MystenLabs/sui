@@ -30,7 +30,8 @@ use tokio::time::timeout;
 use super::{FundsSettlement, FundsWithdrawSchedulerType};
 use crate::{
     authority::{
-        AuthorityState, ExecutionEnv, shared_object_version_manager::Schedulable,
+        AuthorityState, ExecutionEnv,
+        shared_object_version_manager::{AssignedVersions, Schedulable},
         test_authority_builder::TestAuthorityBuilder,
     },
     execution_scheduler::{ExecutionScheduler, PendingCertificate},
@@ -136,8 +137,8 @@ impl TestEnv {
             transactions
                 .iter()
                 .map(|tx| {
-                    let mut env = ExecutionEnv::default();
-                    env.assigned_versions.accumulator_version = Some(version);
+                    let env = ExecutionEnv::default()
+                        .with_assigned_versions(AssignedVersions::new(vec![], Some(version)));
                     (Schedulable::Transaction(tx.clone()), env)
                 })
                 .collect(),
