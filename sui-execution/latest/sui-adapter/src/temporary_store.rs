@@ -4,7 +4,7 @@
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::{GasCharger, PaymentLocation};
 use move_vm_runtime::runtime::MoveRuntime;
-use mysten_common::ZipDebugEqIteratorExt;
+use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::cell::RefCell;
@@ -33,8 +33,9 @@ use sui_types::transaction::{GasData, TransactionKind};
 use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
+    digests::ObjectDigest,
     effects::EffectsObjectChange,
-    error::{ExecutionError, SuiResult},
+    error::{ExecutionError, SuiErrorKind, SuiResult},
     gas::GasCostSummary,
     object::Object,
     object::Owner,
@@ -99,6 +100,20 @@ pub struct TemporaryStore<'backing> {
     /// [`invariants::InvariantChecker`].
     invariants: InvariantChecker,
 
+    /// Versions of system objects this transaction is allowed to read, keyed by object ID. A
+    /// system object is considered "available" once its latest committed version has reached the
+    /// recorded version; `is_system_object_available` consults this map. Every system object read
+    /// during execution must appear here — querying one that is absent is an invariant violation
+    /// (the transaction was not sequenced against it), so the check errors rather than allowing it.
+    system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+
+    /// System objects read during execution that are not through input objects, keyed by object ID, with the version (and its
+    /// digest) at which they were read. Recorded by `is_system_object_available` and
+    /// emitted into the transaction effects as read-only consensus objects so the read can be
+    /// reproduced on replay. Interior-mutable because reads happen behind `&self`
+    /// (`RuntimeObjectResolver`).
+    loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
+
     /// Recorded when execution determines the transaction must be retried later rather than
     /// committed. Execution still runs to completion (the triggering native also raises a Move
     /// error); this signal is carried out on `InnerTemporaryStore` so the authority can discard the
@@ -118,6 +133,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -160,6 +176,8 @@ impl<'backing> TemporaryStore<'backing> {
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             invariants: InvariantChecker::new(),
+            system_object_versions,
+            loaded_system_objects: RefCell::new(BTreeMap::new()),
             retry_request: RefCell::new(None),
         }
     }
@@ -1029,6 +1047,70 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
             receive_object_at_version,
             epoch_id,
         )
+    }
+
+    fn is_system_object_available(&self, object_id: &ObjectID) -> SuiResult<bool> {
+        // Every system object read during execution must have an assigned version. Its absence
+        // here means the transaction is reading a system object it was not sequenced against,
+        // which is an invariant violation.
+        let Some(required_version) = self.system_object_versions.get(object_id).copied() else {
+            debug_fatal!("system object {object_id} read without an assigned version");
+            return Err(SuiErrorKind::GenericAuthorityError {
+                error: format!("system object {object_id} read without an assigned version"),
+            }
+            .into());
+        };
+        // A system object always exists.
+        // TODO: The only reason we read the latest object here is to recover its initial shared
+        // version (via `full_id()`) for the `SystemObjectUnavailable` error below, so the authority
+        // can register the wait without re-fetching. A refactor on the way will make the initial
+        // shared version available directly, removing the need for this read.
+        let object = self.store.get_object(object_id).ok_or_else(|| {
+            debug_fatal!("system object {object_id} not found locally");
+            SuiErrorKind::GenericAuthorityError {
+                error: format!("system object {object_id} not found locally"),
+            }
+        })?;
+        let object_version = object.version();
+        if object_version < required_version {
+            // Not yet caught up to the version this transaction requires: mark the transaction for
+            // retry. The retry is signaled out-of-band via this interior-mutable state (the Move VM
+            // boundary can't carry it), and surfaces as `ExecutionRetryError` on the inner temporary
+            // store. The authority then waits for `object_id` to reach `required_version` and
+            // re-enqueues. We carry the full object id so the authority can register the wait
+            // directly.
+            *self.retry_request.borrow_mut() = Some(ExecutionRetryError::SystemObjectUnavailable {
+                full_object_id: object.full_id(),
+                version: required_version,
+            });
+            return Ok(false);
+        }
+
+        // Available: record the read at `required_version` (which is what the transaction depends
+        // on and reads) so it can be emitted into effects as a read-only consensus object and
+        // reproduced on replay. The version and digest are taken at `required_version` — not the
+        // latest — so the recorded value is deterministic across nodes regardless of how far the
+        // object has since advanced.
+        let object_at_required = if object.version() == required_version {
+            object
+        } else {
+            self.store
+                .get_object_by_key(object_id, required_version)
+                .ok_or_else(|| {
+                    debug_fatal!(
+                        "system object {object_id} is already at version {object_version} but version {required_version} is not found"
+                    );
+                    SuiErrorKind::GenericAuthorityError {
+                        error: format!(
+                            "system object {object_id} not found at required version {required_version:?}"
+                        ),
+                    }
+                })?
+        };
+        self.loaded_system_objects
+            .borrow_mut()
+            .insert(*object_id, (required_version, object_at_required.digest()));
+        Ok(true)
     }
 }
 

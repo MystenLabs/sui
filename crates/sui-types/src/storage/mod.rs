@@ -195,6 +195,16 @@ pub trait RuntimeObjectResolver {
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>>;
 
+    /// Reports whether the system object `object_id` is available at the version this transaction
+    /// requires, i.e. its latest committed version has caught up to that version. `TemporaryStore`,
+    /// the execution-time resolver, knows the required versions and errors if `object_id` has none
+    /// — reading a system object the transaction was not sequenced against is an invariant
+    /// violation. Other resolvers are never the execution-time resolver, so the default reports
+    /// available.
+    fn is_system_object_available(&self, _object_id: &ObjectID) -> SuiResult<bool> {
+        Ok(true)
+    }
+
     /// `receiving_object_id` must have an `AddressOwner` ownership equal to `owner`.
     /// `get_object_received_at_version` must be the exact version at which the object will be received,
     /// and it cannot have been previously received at that version. NB: An object not existing at

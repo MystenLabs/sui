@@ -1880,6 +1880,7 @@ impl AuthorityState {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         kind: TransactionKind,
@@ -1904,6 +1905,7 @@ impl AuthorityState {
                 epoch_id,
                 epoch_timestamp_ms,
                 input_objects,
+                system_object_versions,
                 gas_data,
                 gas_status,
                 kind,
@@ -2017,6 +2019,13 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
+        // Versions of system objects this transaction may read during execution, each at the version
+        // it was sequenced against. Execution gates reads on these (and records a retry if an object
+        // has not caught up); see `is_system_object_available`.
+        let system_object_versions = execution_env
+            .assigned_versions
+            .system_object_versions
+            .clone();
         let accumulator_version = execution_env.assigned_versions.accumulator_version();
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
@@ -2058,6 +2067,7 @@ impl AuthorityState {
                     .epoch_data()
                     .epoch_start_timestamp(),
                 input_objects,
+                system_object_versions,
                 gas_data,
                 gas_status,
                 kind,
