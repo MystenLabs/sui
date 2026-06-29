@@ -41,7 +41,7 @@ use tokio::sync::{Notify, Semaphore, SemaphorePermit, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
 use tokio::time::{self};
-use tracing::{Instrument, debug, debug_span, info, instrument, trace, warn};
+use tracing::{Instrument, debug, debug_span, info, instrument, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::checkpoints::CheckpointStore;
@@ -599,7 +599,7 @@ impl ConsensusAdapter {
                                 .with_label_values(&[tx_type, "sequenced"])
                                 .inc();
                             // Block has been sequenced. Nothing more to do, we do have guarantees that the transaction will appear in consensus output.
-                            trace!(
+                            debug!(
                                 "Transaction {transaction_keys:?} has been sequenced by consensus."
                             );
                             break;
@@ -663,7 +663,11 @@ impl ConsensusAdapter {
                     tx_consensus_positions.send(Err(make_processing_error(guard.processed_method)));
             }
         }
-        debug!("{transaction_keys:?} processed by consensus");
+        let processed_via = match guard.processed_method {
+            ProcessedMethod::Consensus => "consensus output",
+            ProcessedMethod::Checkpoint => "checkpoint execution",
+        };
+        debug!("{transaction_keys:?} processed via {processed_via}");
 
         // After a user transaction or soft bundle submission,
         // send EndOfPublish if the epoch is closing.
