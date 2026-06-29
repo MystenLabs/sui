@@ -87,5 +87,31 @@ assignment (is_crashed). CRASH_PROB currently 0.02.
 # iteration 5
 - HYPOTHESIS: is_dropped(FNBp9xzG) is false at the (single, pre-crash) assignment of FNBp9xzG's
   commit, because the commit is assigned before FNBp9xzG crashes and not re-assigned afterwards.
-- EXPERIMENT 5: log, per tx at assignment, its digest + is_dropped + the crashed-set membership, so
-  we directly see is_dropped for FNBp9xzG's commit and the set at that moment.
+- EXPERIMENT 5: log per-tx is_dropped at assignment. RESULT: with the exemption restored, FNBp9xzG
+  is_dropped=false 8x (pre-crash) and true 4x (recovery) => the exemption fires INCONSISTENTLY
+  across the crash boundary. With exemption ON => forks; OFF (stray perl) => builder stuck.
+  (Also discovered: a stray `is_dropped = false` from a rejected perl edit had been disabling the
+  exemption in earlier experiments — invalidating their "never exempted" reads.)
+
+# iteration 6-7 — ROOT CAUSE (definitive)
+- Switched all probes to info! and ran at RUST_LOG=info (holistic log); seed ...002 still fails
+  deterministically (forks=2). So info logging does not change the outcome.
+- The fork is a SELF-CONFLICT at cp246 on node6. Timeline: node4/node5/node6 all first build cp246
+  = summary 3ZeASa (tx1=BX41a) — network agrees. node6 then crashes/restarts and REBUILDS cp246 =
+  23CEwN (tx1=2SkKXq) => self-conflict.
+- cp246's two builds differ in EXACTLY ONE tx: tx1 (BX41a vs 2SkKXq). All other 6 txs identical.
+  Neither poison tx (FNBp9xzG, BVRtBXjB) is in cp246. tx1 is the ConsensusCommitPrologue.
+- The ConsensusCommitPrologue commits to the commit's ConsensusDeterminedVersionAssignments. The
+  version exemption marks crash-recovered txs CANCELLED_READ (SequenceNumber 9223372036854775808 =
+  MAX+1), keyed on is_crashed_transaction — a LOCAL, MUTABLE, GROWING set
+  ({FNBp9xzG} -> {FNBp9xzG, BVRtBXjB} across restarts).
+- ROOT CAUSE: the prologue can finish building even when poison txs crash (no execution dependency),
+  so a checkpoint with prologue P1 (crashed set S1) is persisted; after the set grows to S2, the
+  rebuild commits to different version assignments => prologue P2 != P1 => fork. i.e. checkpoint
+  content (via the prologue's version-assignment commitment) is keyed on the mutable crashed set,
+  which is not a pure function of the consensus commit.
+- FIX OPTIONS: (a) key the exemption on the intrinsic content-addressed poison decision
+  (should_poison / marker) — pure, consistent — but disallowed in production. (b) remove the version
+  exemption entirely (prologue commitment stays a pure function of the commit), and instead drop the
+  poison tx at EXECUTION while producing its already-assigned shared-object versions as a no-op so
+  dependents unblock. Lean (b).
