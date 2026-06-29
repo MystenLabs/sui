@@ -307,6 +307,7 @@ pub struct AuthorityMetrics {
 
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
+    pub(crate) skipped_owned_object_lock_acquisition: IntCounter,
     pub(crate) consensus_handler_duplicate_tx_count: Histogram,
 
     pub(crate) authority_overload_status: IntGauge,
@@ -597,6 +598,14 @@ impl AuthorityMetrics {
             skipped_consensus_txns_cache_hit: register_int_counter_with_registry!(
                 "skipped_consensus_txns_cache_hit",
                 "Total number of consensus transactions skipped because of local cache hit",
+                registry,
+            )
+            .unwrap(),
+            skipped_owned_object_lock_acquisition: register_int_counter_with_registry!(
+                "skipped_owned_object_lock_acquisition",
+                "Number of consensus user transactions for which post-consensus owned-object lock \
+                 acquisition was skipped because the transaction was already processed in a prior \
+                 commit (its lock is already held and dedup will drop the duplicate)",
                 registry,
             )
             .unwrap(),
