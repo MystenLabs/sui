@@ -367,8 +367,8 @@ pub enum UserInputError {
     #[error("Transaction chain ID {provided} does not match network chain ID {expected}.")]
     InvalidChainId { provided: String, expected: String },
 
-    #[error("Transaction {digest} appears more than once in the Soft Bundle")]
-    RepeatedTransactionInSoftBundle { digest: TransactionDigest },
+    #[error("Transaction {digest} appears more than once in the request")]
+    RepeatedTransactions { digest: TransactionDigest },
 }
 
 #[derive(
