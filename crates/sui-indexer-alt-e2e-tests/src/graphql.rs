@@ -1,8 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Shared helpers for exercising the GraphQL RPC from integration tests: a thin query runner and
+//! Helpers for exercising the GraphQL RPC from integration tests: a thin query runner and
 //! generic Relay-style connection types, so individual tests only define their node-specific shape.
+//!
+//! These are conveniences, not a stable shared surface — they happen to cover the connection-style
+//! tests written so far. Reuse them when they fit, but if a test needs something different, prefer a
+//! helper local to that test's module over bending these to fit. Keeping them minimal is the point.
 
 use anyhow::Context;
 use serde::Deserialize;

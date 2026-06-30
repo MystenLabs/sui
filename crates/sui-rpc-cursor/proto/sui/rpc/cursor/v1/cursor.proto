@@ -5,15 +5,30 @@ syntax = "proto3";
 
 package sui.rpc.cursor.v1;
 
+// Ledger-history query a cursor was minted for.
+enum QueryType {
+    QUERY_TYPE_UNSPECIFIED = 0;
+    QUERY_TYPE_CHECKPOINTS = 1;
+    QUERY_TYPE_TRANSACTIONS = 2;
+    QUERY_TYPE_EVENTS = 3;
+}
+
+// Whether `position` is a matched row returned to the client or a scan frontier the server reached.
+enum CursorKind {
+    CURSOR_KIND_UNSPECIFIED = 0;
+    // A matched row returned to the client.
+    CURSOR_KIND_ITEM = 1;
+    // A scan frontier the server reached.
+    CURSOR_KIND_BOUNDARY = 2;
+}
+
 // Pagination cursor for the bitmap-backed ledger-history endpoints.
 message CursorToken {
-    // Ledger-history query this cursor was minted for. 1 = checkpoints, 2 = transactions, 3 =
-    // events.
-    uint32 query_type = 1;
+    // Ledger-history query this cursor was minted for.
+    QueryType query_type = 1;
 
-    // Whether `position` is a matched row returned to the client (1 = item) or a scan frontier the
-    // server reached (2 = boundary).
-    uint32 kind = 2;
+    // Whether `position` is a matched row or a scan frontier.
+    CursorKind kind = 2;
 
     uint64 checkpoint = 3;
     uint64 position = 4;

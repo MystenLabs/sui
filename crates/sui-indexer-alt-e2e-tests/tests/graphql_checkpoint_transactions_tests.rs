@@ -33,21 +33,19 @@ async fn transactions(
     after: Option<String>,
     before: Option<String>,
 ) -> anyhow::Result<Option<graphql::Connection<TxNode>>> {
-    let query = format!(
-        r#"query($first: Int, $last: Int, $after: String, $before: String) {{
-            checkpoint(sequenceNumber: {seq}) {{
-                transactions(first: $first, last: $last, after: $after, before: $before) {{
-                    pageInfo {{ hasNextPage hasPreviousPage }}
-                    edges {{ cursor node {{ digest sender {{ address }} }} }}
-                }}
-            }}
-        }}"#
-    );
+    let query = r#"query($sequenceNumber: UInt53, $first: Int, $last: Int, $after: String, $before: String) {
+            checkpoint(sequenceNumber: $sequenceNumber) {
+                transactions(first: $first, last: $last, after: $after, before: $before) {
+                    pageInfo { hasNextPage hasPreviousPage }
+                    edges { cursor node { digest sender { address } } }
+                }
+            }
+        }"#;
 
     let data = graphql::query(
         cluster,
-        &query,
-        json!({ "first": first, "last": last, "after": after, "before": before }),
+        query,
+        json!({ "sequenceNumber": seq, "first": first, "last": last, "after": after, "before": before }),
     )
     .await?;
 

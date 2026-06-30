@@ -38,21 +38,19 @@ async fn epoch_transactions(
     after: Option<String>,
     before: Option<String>,
 ) -> anyhow::Result<Option<graphql::Connection<TxNode>>> {
-    let query = format!(
-        r#"query($first: Int, $last: Int, $after: String, $before: String) {{
-            epoch(epochId: {epoch_id}) {{
-                transactions(first: $first, last: $last, after: $after, before: $before) {{
-                    pageInfo {{ hasNextPage hasPreviousPage }}
-                    edges {{ cursor node {{ effects {{ checkpoint {{ sequenceNumber }} }} }} }}
-                }}
-            }}
-        }}"#
-    );
+    let query = r#"query($epochId: UInt53, $first: Int, $last: Int, $after: String, $before: String) {
+            epoch(epochId: $epochId) {
+                transactions(first: $first, last: $last, after: $after, before: $before) {
+                    pageInfo { hasNextPage hasPreviousPage }
+                    edges { cursor node { effects { checkpoint { sequenceNumber } } } }
+                }
+            }
+        }"#;
 
     let data = graphql::query(
         cluster,
-        &query,
-        json!({ "first": first, "last": last, "after": after, "before": before }),
+        query,
+        json!({ "epochId": epoch_id, "first": first, "last": last, "after": after, "before": before }),
     )
     .await?;
 

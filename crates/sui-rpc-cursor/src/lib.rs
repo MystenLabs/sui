@@ -7,7 +7,9 @@ use prost::Message as _;
 
 mod proto;
 
-use proto::sui::rpc::cursor::v1::CursorToken as ProtoCursorToken;
+use proto::sui::rpc::cursor::v1::{
+    CursorKind as ProtoCursorKind, CursorToken as ProtoCursorToken, QueryType as ProtoQueryType,
+};
 
 /// Pagination cursor for the bitmap-backed ledger-history endpoints.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -77,46 +79,46 @@ impl CursorToken {
 }
 
 impl QueryType {
-    fn to_proto(self) -> u32 {
+    fn to_proto(self) -> ProtoQueryType {
         match self {
-            QueryType::Checkpoints => 1,
-            QueryType::Transactions => 2,
-            QueryType::Events => 3,
+            QueryType::Checkpoints => ProtoQueryType::Checkpoints,
+            QueryType::Transactions => ProtoQueryType::Transactions,
+            QueryType::Events => ProtoQueryType::Events,
         }
     }
 
-    fn from_proto(value: u32) -> Option<Self> {
-        Some(match value {
-            1 => QueryType::Checkpoints,
-            2 => QueryType::Transactions,
-            3 => QueryType::Events,
-            _ => return None,
-        })
+    fn from_proto(value: ProtoQueryType) -> Option<Self> {
+        match value {
+            ProtoQueryType::Checkpoints => Some(QueryType::Checkpoints),
+            ProtoQueryType::Transactions => Some(QueryType::Transactions),
+            ProtoQueryType::Events => Some(QueryType::Events),
+            ProtoQueryType::Unspecified => None,
+        }
     }
 }
 
 impl CursorKind {
-    fn to_proto(self) -> u32 {
+    fn to_proto(self) -> ProtoCursorKind {
         match self {
-            CursorKind::Item => 1,
-            CursorKind::Boundary => 2,
+            CursorKind::Item => ProtoCursorKind::Item,
+            CursorKind::Boundary => ProtoCursorKind::Boundary,
         }
     }
 
-    fn from_proto(value: u32) -> Option<Self> {
-        Some(match value {
-            1 => CursorKind::Item,
-            2 => CursorKind::Boundary,
-            _ => return None,
-        })
+    fn from_proto(value: ProtoCursorKind) -> Option<Self> {
+        match value {
+            ProtoCursorKind::Item => Some(CursorKind::Item),
+            ProtoCursorKind::Boundary => Some(CursorKind::Boundary),
+            ProtoCursorKind::Unspecified => None,
+        }
     }
 }
 
 impl From<&CursorToken> for ProtoCursorToken {
     fn from(cursor: &CursorToken) -> Self {
         Self {
-            query_type: cursor.query_type.to_proto(),
-            kind: cursor.kind.to_proto(),
+            query_type: cursor.query_type.to_proto() as i32,
+            kind: cursor.kind.to_proto() as i32,
             checkpoint: cursor.checkpoint,
             position: cursor.position,
         }
@@ -127,11 +129,17 @@ impl TryFrom<ProtoCursorToken> for CursorToken {
     type Error = anyhow::Error;
 
     fn try_from(proto: ProtoCursorToken) -> anyhow::Result<Self> {
+        let query_type = ProtoQueryType::try_from(proto.query_type)
+            .ok()
+            .and_then(QueryType::from_proto)
+            .with_context(|| format!("unknown cursor query_type: {}", proto.query_type))?;
+        let kind = ProtoCursorKind::try_from(proto.kind)
+            .ok()
+            .and_then(CursorKind::from_proto)
+            .with_context(|| format!("unknown cursor kind: {}", proto.kind))?;
         Ok(Self {
-            query_type: QueryType::from_proto(proto.query_type)
-                .with_context(|| format!("unknown cursor query_type: {}", proto.query_type))?,
-            kind: CursorKind::from_proto(proto.kind)
-                .with_context(|| format!("unknown cursor kind: {}", proto.kind))?,
+            query_type,
+            kind,
             checkpoint: proto.checkpoint,
             position: proto.position,
         })
