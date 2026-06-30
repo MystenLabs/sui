@@ -11,6 +11,7 @@
 /// All access (mutable and immutable) is controlled through the module that defines the key type
 /// `K`. The functions are gated by a `Permit<K>`, which can be granted via an
 /// `internal::Permit<K>`.
+#[allow(unused_const)]
 module sui::scratch;
 
 /// A `Permit<K>` gates access to all entries keyed by values of type `K`.
@@ -127,5 +128,6 @@ native fun read_impl<V: drop>(key: address): V;
 /// Aborts with `EEntryTypeMismatch` if there is an entry for `key` but it is not of type `V`.
 native fun remove_impl<V: drop>(key: address): V;
 
-/// Aborts with `EEntryDoesNotExist` if there is no entry for `key`.
 native fun exists_impl(key: address): bool;
+
+native fun exists_with_type_impl<V: drop>(key: address): bool;
