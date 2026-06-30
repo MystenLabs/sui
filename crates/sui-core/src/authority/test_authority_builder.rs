@@ -21,7 +21,6 @@ use crate::jsonrpc_index::IndexStore;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::randomness_round_receiver::RandomnessRoundReceiverHandle;
-use crate::rpc_index::RpcIndexStore;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
@@ -72,8 +71,6 @@ pub struct TestAuthorityBuilder<'a> {
     chain_override: Option<Chain>,
     dev_inspect_disabled: bool,
     recent_submission_dedup_window_ms: Option<u64>,
-    /// Skip full RPC index initialization (use for tests that don't need RPC endpoints)
-    skip_rpc_index_init: bool,
     /// Skip genesis owner/dynamic-field indexing (use for tests that don't query owned objects)
     skip_genesis_owner_index: bool,
 }
@@ -162,13 +159,6 @@ impl<'a> TestAuthorityBuilder<'a> {
 
     pub fn disable_indexer(mut self) -> Self {
         self.disable_indexer = true;
-        self
-    }
-
-    /// Skip full RPC index initialization. This is much faster for tests
-    /// that don't need RPC endpoint functionality.
-    pub fn skip_rpc_index_init(mut self) -> Self {
-        self.skip_rpc_index_init = true;
         self
     }
 
@@ -368,24 +358,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             )))
         };
 
-        let rpc_index = if self.disable_indexer {
-            None
-        } else if self.skip_rpc_index_init {
-            Some(Arc::new(RpcIndexStore::new_without_init(&path)))
-        } else {
-            Some(Arc::new(
-                RpcIndexStore::new(
-                    &path,
-                    &authority_store,
-                    &checkpoint_store,
-                    &epoch_store,
-                    &cache_traits.backing_package_store,
-                    sui_config::RpcConfig::default(),
-                )
-                .await,
-            ))
-        };
-
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
         let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
         let authority_overload_config = self.authority_overload_config.unwrap_or_default();
@@ -425,7 +397,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             epoch_store.clone(),
             committee_store,
             index_store,
-            rpc_index,
             None,
             checkpoint_store,
             &registry,
