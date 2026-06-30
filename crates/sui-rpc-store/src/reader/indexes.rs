@@ -81,47 +81,38 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
     {
-        let cursor_object_id = cursor.as_ref().map(|c| c.object_id);
-        let iter = match object_type.as_ref() {
-            Some(struct_tag) => {
-                let filter = TypeFilter::Type(struct_tag.clone());
-                self.schema()
-                    .iter_objects_owned_by_address_of_type(owner, filter)
-                    .map_err(sui_types::storage::error::Error::custom)?
+        use crate::schema::object_by_owner::{Key, OwnerKind};
+        let map = &self.schema().object_by_owner;
+        let kind = OwnerKind::AddressOwner(owner);
+        // When resuming, the page token carries the cursor object's full sort
+        // position -- type, balance, and id -- so the scan seeks straight to it
+        // (inclusive) and stops at the end of the prefix. No post-filtering.
+        let from = cursor.map(|c| Key {
+            kind,
+            type_: c.object_type,
+            inverted_balance: c.balance.map(|b| !b),
+            object_id: c.object_id,
+        });
+        let iter = match (object_type, &from) {
+            (Some(struct_tag), Some(from)) => {
+                map.iter_prefix_from(&(kind, TypeFilter::Type(struct_tag)), from)
             }
-            None => self
-                .schema()
-                .iter_objects_owned_by_address(owner)
-                .map_err(sui_types::storage::error::Error::custom)?,
-        };
+            (Some(struct_tag), None) => map.iter_prefix(&(kind, TypeFilter::Type(struct_tag))),
+            (None, Some(from)) => map.iter_prefix_from(&kind, from),
+            (None, None) => map.iter_prefix(&kind),
+        }
+        .map_err(sui_types::storage::error::Error::custom)?;
 
-        let mapped = iter
-            .map(move |row| {
-                let (key, value) = row.map_err(to_typed_store_err)?;
-                Ok(OwnedObjectInfo {
-                    owner,
-                    object_type: key.type_,
-                    balance: key.inverted_balance.map(|b| !b),
-                    object_id: key.object_id,
-                    version: sui_types::base_types::SequenceNumber::from_u64(value.0),
-                })
+        let mapped = iter.map(move |row| {
+            let (key, value) = row.map_err(to_typed_store_err)?;
+            Ok(OwnedObjectInfo {
+                owner,
+                object_type: key.type_,
+                balance: key.inverted_balance.map(|b| !b),
+                object_id: key.object_id,
+                version: sui_types::base_types::SequenceNumber::from_u64(value.0),
             })
-            // Skip-past-cursor: the page token is the first object of the
-            // next page (see the `list_owned_objects` handler), so drop rows
-            // until we reach it -- identified by its globally unique object id
-            // -- and then resume inclusively. The iteration restarts from the
-            // start of the owner's objects each page, so a `==` predicate here
-            // would skip nothing (the first row is never the cursor) and every
-            // page would re-yield from the beginning, duplicating objects
-            // across pages.
-            .skip_while(
-                move |entry: &Result<OwnedObjectInfo, TypedStoreError>| match entry {
-                    Ok(info) => cursor_object_id
-                        .map(|c| info.object_id != c)
-                        .unwrap_or(false),
-                    Err(_) => false,
-                },
-            );
+        });
 
         Ok(Box::new(mapped))
     }
@@ -220,55 +211,47 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         owner: &SuiAddress,
         cursor: Option<(SuiAddress, StructTag)>,
     ) -> StorageResult<BalanceIterator<'_>> {
-        let cursor_coin_type = cursor
-            .map(|(_, tag)| move_core_types::language_storage::TypeTag::Struct(Box::new(tag)));
-        let iter = self
-            .schema()
-            .iter_balances_owned_by(*owner)
-            .map_err(sui_types::storage::error::Error::custom)?;
+        use crate::schema::balance::{Key, OwnerPrefix};
+        let map = &self.schema().balance;
+        // When resuming, the page token carries the cursor's coin type -- the
+        // index's sort key after the owner -- so the scan seeks straight to it
+        // (inclusive) and stops at the end of the owner's balances.
+        let from = cursor.map(|(_, tag)| Key {
+            owner: *owner,
+            coin_type: move_core_types::language_storage::TypeTag::Struct(Box::new(tag)),
+        });
+        let iter = match &from {
+            Some(from) => map.iter_prefix_from(&OwnerPrefix(*owner), from),
+            None => map.iter_prefix(&OwnerPrefix(*owner)),
+        }
+        .map_err(sui_types::storage::error::Error::custom)?;
 
-        let mapped = iter
-            // Skip-past-cursor: the page token is the first coin type of the
-            // next page (see the `list_balances` handler), so drop the leading
-            // run of rows that precede it and resume inclusively at the exact
-            // match. As in `owned_objects_iter`, a `==`/`filter`-style predicate
-            // would not advance -- the scan restarts from the start each page,
-            // so it would re-yield earlier rows and never reach the cursor,
-            // looping forever.
-            .skip_while(move |row| match row {
-                Ok((key, _value)) => cursor_coin_type
-                    .as_ref()
-                    .map(|c| key.coin_type != *c)
-                    .unwrap_or(false),
-                Err(_) => false,
-            })
-            .filter_map(move |row| {
-                let (key, value) = match row {
-                    Ok(pair) => pair,
-                    Err(e) => return Some(Err(sui_types::storage::error::Error::custom(e))),
-                };
-                // Project the merged proto value back into the typed
-                // `Balance` view through the same decoder `get_balance`
-                // uses, so a malformed payload surfaces as an error here
-                // too rather than being silently read as zero.
-                let balance = match crate::schema::balance::Balance::from_delta(&value.into_inner())
-                {
-                    Ok(b) => b,
-                    Err(e) => return Some(Err(sui_types::storage::error::Error::custom(e))),
-                };
-                // Report the coin and address halves independently; the caller
-                // sums them for the total (reporting the total here would
-                // double-count the address half).
-                let info = BalanceInfo {
-                    coin_balance: balance.coin.clamp(0, u64::MAX as i128) as u64,
-                    address_balance: balance.address.clamp(0, u64::MAX as i128) as u64,
-                };
-                let struct_tag = match key.coin_type {
-                    move_core_types::language_storage::TypeTag::Struct(b) => *b,
-                    _ => return None,
-                };
-                Some(Ok((struct_tag, info)))
-            });
+        let mapped = iter.filter_map(move |row| {
+            let (key, value) = match row {
+                Ok(pair) => pair,
+                Err(e) => return Some(Err(sui_types::storage::error::Error::custom(e))),
+            };
+            // Project the merged proto value back into the typed
+            // `Balance` view through the same decoder `get_balance`
+            // uses, so a malformed payload surfaces as an error here
+            // too rather than being silently read as zero.
+            let balance = match crate::schema::balance::Balance::from_delta(&value.into_inner()) {
+                Ok(b) => b,
+                Err(e) => return Some(Err(sui_types::storage::error::Error::custom(e))),
+            };
+            // Report the coin and address halves independently; the caller
+            // sums them for the total (reporting the total here would
+            // double-count the address half).
+            let info = BalanceInfo {
+                coin_balance: balance.coin.clamp(0, u64::MAX as i128) as u64,
+                address_balance: balance.address.clamp(0, u64::MAX as i128) as u64,
+            };
+            let struct_tag = match key.coin_type {
+                move_core_types::language_storage::TypeTag::Struct(b) => *b,
+                _ => return None,
+            };
+            Some(Ok((struct_tag, info)))
+        });
 
         Ok(Box::new(mapped))
     }
