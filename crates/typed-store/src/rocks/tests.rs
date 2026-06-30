@@ -411,6 +411,91 @@ async fn test_delete_range() {
 }
 
 #[tokio::test]
+async fn test_schedule_delete_all_includes_last_key() {
+    let options = ReadWriteOptions::default().set_ignore_range_deletions(false);
+    let db: DBMap<i32, String> = DBMap::reopen(
+        &open_rocksdb(temp_dir(), &[rocksdb::DEFAULT_COLUMN_FAMILY_NAME]),
+        None,
+        &options,
+        false,
+    )
+    .unwrap();
+
+    let mut batch = db.batch();
+    batch
+        .insert_batch(&db, (0..101).map(|i| (i, i.to_string())))
+        .expect("Failed to batch insert");
+    batch.write().expect("Failed to execute batch");
+
+    db.schedule_delete_all().expect("Failed to delete all");
+
+    let remaining: Vec<_> = db.safe_iter().map(|item| item.unwrap()).collect();
+    assert_eq!(
+        Vec::<(i32, String)>::new(),
+        remaining,
+        "schedule_delete_all must remove every entry, including the largest key",
+    );
+}
+
+#[tokio::test]
+async fn test_schedule_delete_all_single_entry() {
+    let options = ReadWriteOptions::default().set_ignore_range_deletions(false);
+    let db: DBMap<i32, String> = DBMap::reopen(
+        &open_rocksdb(temp_dir(), &[rocksdb::DEFAULT_COLUMN_FAMILY_NAME]),
+        None,
+        &options,
+        false,
+    )
+    .unwrap();
+
+    db.insert(&42, &"only".to_string()).unwrap();
+
+    db.schedule_delete_all().expect("Failed to delete all");
+
+    assert!(
+        db.is_empty(),
+        "schedule_delete_all on a single-entry map must empty it",
+    );
+}
+
+// With the default `ignore_range_deletions = true`, a range tombstone is only
+// observable to readers after compaction. This test pins down the contract:
+// every entry must follow the same path (visible before compaction, gone after
+// it), with no asymmetry between the largest key and the rest -- a stray point
+// delete on `last_key` would surface here as the largest key vanishing before
+// compaction while everything else is still readable.
+#[tokio::test]
+async fn test_schedule_delete_all_default_read_options() {
+    let db: DBMap<i32, String> = open_map(temp_dir(), None);
+
+    let mut batch = db.batch();
+    batch
+        .insert_batch(&db, (0..101).map(|i| (i, i.to_string())))
+        .expect("Failed to batch insert");
+    batch.write().expect("Failed to execute batch");
+
+    db.schedule_delete_all()
+        .expect("Failed to schedule delete all");
+
+    for k in 0..=100 {
+        assert!(
+            db.contains_key(&k).expect("Failed to query key"),
+            "key {k} disappeared before compaction under default ReadWriteOptions",
+        );
+    }
+
+    db.flush().expect("Failed to flush");
+    db.compact_range(&0_i32, &101_i32)
+        .expect("Failed to compact range");
+
+    let remaining: Vec<_> = db.safe_iter().map(|item| item.unwrap()).collect();
+    assert!(
+        remaining.is_empty(),
+        "schedule_delete_all under default ReadWriteOptions must clear the map after compaction; remaining = {remaining:?}",
+    );
+}
+
+#[tokio::test]
 async fn test_iter_with_bounds() {
     let db = open_map(temp_dir(), None);
 
