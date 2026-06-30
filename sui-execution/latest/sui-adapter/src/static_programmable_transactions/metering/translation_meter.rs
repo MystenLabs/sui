@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::gas_charger::GasCharger;
-use crate::static_programmable_transactions::loading::ast::PackagePayload;
+use crate::static_programmable_transactions::loading::ast::{DeserializedPackage, PackagePayload};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::error::ExecutionErrorTrait;
 use sui_types::execution_status::ExecutionErrorKind;
@@ -99,10 +99,10 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
     ) -> Result<(), E> {
         match payload {
             PackagePayload::Serialized(_) => {
-                // Serialized during execution, and will be charged at that point
+                // Payload stays serialized; deserialization (and charge) happen at execution time.
                 Ok(())
             }
-            PackagePayload::Deserialized { total_bytes, .. } => {
+            PackagePayload::Deserialized(DeserializedPackage { total_bytes, .. }) => {
                 self.charger.charge_publish_package(*total_bytes)?;
                 Ok(())
             }

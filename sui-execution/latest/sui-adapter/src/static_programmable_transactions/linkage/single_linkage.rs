@@ -9,7 +9,9 @@ use crate::{
             resolution::{ResolutionTable, VersionConstraint, add_and_unify, get_package},
             resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
         },
-        loading::ast::{Command, LoadedFunction, PackagePayload, Transaction, Type},
+        loading::ast::{
+            Command, DeserializedPackage, LoadedFunction, PackagePayload, Transaction, Type,
+        },
     },
 };
 use move_binary_format::file_format::Visibility;
@@ -23,6 +25,12 @@ use sui_verifier::INIT_FN_NAME;
 ///   1. Fold every command's package and type-argument constraints into one `ResolutionTable`,
 ///      unifying as we go (an error here means the commands cannot agree on a single set of
 ///      package versions).
+///      - Top level functions are pinned `exact`, while their dependencies are
+///        pinned `exact` or `at_least` based on the visibility of the top-level function.
+///        Type-argument packages are always `at_least`.
+///      - Publishes and upgrades introduce their own constraints to the linkage, but only if
+///        they have an `init` function (otherwise they do not contribute to the linkage). See
+///        comments on each of the command arms for details on this.
 ///   2. Write the resulting unified linkage back into every `MoveCall`.
 ///
 /// Because all calls end up sharing one linkage, every package version selection is consistent
@@ -64,22 +72,28 @@ fn analyze_command<E: ExecutionErrorTrait>(
         Command::Publish(PackagePayload::Serialized(_), ..) => {
             invariant_violation!("Unexpected serialized package payload in linkage analysis")
         }
-        Command::Publish(PackagePayload::Deserialized { modules, .. }, _, resolved_linkage) => {
+        Command::Publish(
+            PackagePayload::Deserialized(DeserializedPackage {
+                deserialized_modules,
+                ..
+            }),
+            _,
+            resolved_linkage,
+        ) => {
             // A publish only affects the transaction's linkage if the package has an `init`
             // function: `init` runs as part of the publish, so its dependencies must be resolvable
             // in this transaction. Without an `init` the freshly published package is not called
             // and contributes nothing.
             //
             // NB: We presuppose here that if there is a function with the name "init" in the
-            // modules being published, then it is the init function for the package. This holds
-            // because we presuppose that the sui-verifier `entry_points_verifier` has already run
-            // and verified that there is at most one function named "init" in the package and that
-            // it has the correct signature. Additionally, even if it has not, it will eventually
-            // run after this and raise an error if the "init" function does not have the correct
-            // signature.
+            // modules being published, then it is the init function for the package.
+            //
+            // If for some reason it is not (i.e., does not conform to `init` function signature
+            // requirements), the entry points verifier will the publish later, and the transaction
+            // as a whole will error.
             //
             // `modules` is guaranteed to be non-empty by the `deserialize_modules` function.
-            let has_init_fn = modules.iter().any(|module| {
+            let has_init_fn = deserialized_modules.iter().any(|module| {
                 module.function_defs().iter().any(|func_def| {
                     let handle = module.function_handle_at(func_def.function);
                     let name = module.identifier_at(handle.name);
@@ -182,15 +196,14 @@ fn write_back_linkage<E: ExecutionErrorTrait>(
 ) -> Result<(), E> {
     match command {
         Command::MoveCall(move_call) => {
-            let previous_linkage = move_call.function.linkage.clone();
-            assert_invariant!(
-                previous_linkage.0.linkage.len() <= ptb_linkage.0.linkage.len(),
-                "single linkage has fewer candidates than the per-call linkage of MoveCall"
-            );
+            let previous_linkage = &move_call.function.linkage;
             // Stronger than the length check above: every package the per-call linkage resolved
             // must still be present in the per-component linkage. Unification only ever adds
             // packages (the key set is a union across member calls), so a dropped key signals a
             // bug in how component constraints were folded together.
+            //
+            // Since `linkage`'s keys are a set, this check also implies that
+            // `previous_linkage.0.linkage.len() <= ptb_linkage.0.linkage.len()`.
             assert_invariant!(
                 previous_linkage
                     .0
@@ -198,6 +211,10 @@ fn write_back_linkage<E: ExecutionErrorTrait>(
                     .keys()
                     .all(|k| ptb_linkage.0.linkage.contains_key(k)),
                 "single linkage drops a package that the per-call linkage of MoveCall had resolved"
+            );
+            debug_assert!(
+                previous_linkage.0.linkage.len() <= ptb_linkage.0.linkage.len(),
+                "single linkage has fewer candidates than the per-call linkage of MoveCall"
             );
             move_call.function.linkage = ptb_linkage.clone();
         }

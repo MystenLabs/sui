@@ -285,13 +285,8 @@ fn command<Mode: ExecutionMode>(
                 .linkage_analysis
                 .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
             let payload = if env.protocol_config.enable_unified_linkage() {
-                let (modules, total_bytes, computed_digest) =
-                    env.deserialize_modules(&items, &dep_ids)?;
-                PackagePayload::Deserialized {
-                    modules,
-                    total_bytes,
-                    computed_digest,
-                }
+                let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
+                PackagePayload::Deserialized(deserialized_pkg)
             } else {
                 PackagePayload::Serialized(items)
             };
@@ -302,13 +297,8 @@ fn command<Mode: ExecutionMode>(
                 .linkage_analysis
                 .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
             let payload = if env.protocol_config.enable_unified_linkage() {
-                let (modules, total_bytes, computed_digest) =
-                    env.deserialize_modules(&items, &dep_ids)?;
-                PackagePayload::Deserialized {
-                    modules,
-                    total_bytes,
-                    computed_digest,
-                }
+                let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
+                PackagePayload::Deserialized(deserialized_pkg)
             } else {
                 PackagePayload::Serialized(items)
             };
