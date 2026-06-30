@@ -14005,6 +14005,7 @@ dependencies = [
  "sui-package-alt",
  "sui-package-management",
  "sui-pg-db",
+ "sui-prompt",
  "sui-protocol-config",
  "sui-replay-2",
  "sui-rpc",
@@ -16515,6 +16516,16 @@ dependencies = [
  "quote",
  "sui-enum-compat-util",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "sui-prompt"
+version = "1.75.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_yaml 0.8.26",
 ]
 
 [[package]]

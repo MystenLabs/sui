@@ -69,6 +69,7 @@ use sui_move_build::BuildConfig as SuiBuildConfig;
 use sui_package_alt::{SuiFlavor, find_environment};
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::{LocalDatabase, get_available_port};
+use sui_prompt::{self, execute_prompt_command};
 use sui_protocol_config::Chain;
 use sui_replay_2 as SR2;
 use sui_rpc_api::Client;
@@ -378,6 +379,10 @@ pub enum SuiCommand {
         #[clap(subcommand)]
         cmd: sui_move::Command,
     },
+
+    /// Expert Sui and Move knowledge for AI agents (run `sui prompt` to start).
+    #[clap(name = "prompt")]
+    Prompt(sui_prompt::Prompt),
 
     /// Command to initialize the bridge committee, usually used when
     /// running local bridge cluster.
@@ -713,6 +718,10 @@ impl SuiCommand {
                         .await
                     }
                 }
+            }
+            SuiCommand::Prompt(prompt) => {
+                execute_prompt_command(prompt)?;
+                Ok(())
             }
             SuiCommand::BridgeInitialize {
                 network_config,
